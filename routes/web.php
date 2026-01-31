@@ -178,6 +178,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::resource('users', \App\Http\Controllers\Admin\UserController::class);
         Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
 
+    });
+
+    // Faqat admin uchun sinxronizatsiya route'lari
+    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':admin'])->group(function () {
         Route::get('/synchronizes', [DashboardController::class, 'indexSynchronizes'])->name('synchronizes');
         Route::post('/synchronize', [DashboardController::class, 'importSchedulesPartialy'])->name('synchronize');
         Route::post('/synchronize/curricula', [DashboardController::class, 'importCurricula'])->name('synchronize.curricula');

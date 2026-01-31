@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Schedule;
+use App\Models\Student;
 use Illuminate\Support\Carbon;
 
 class StudentGradeService
@@ -63,6 +65,21 @@ class StudentGradeService
         if (!$firstGrade)
             return null;
 
+        $studentId = $firstGrade->student_hemis_id;
+        $subjectId = $firstGrade->subject_id;
+
+        $student = Student::where('hemis_id', $studentId)->first();
+        $groupId = $student ? $student->group_id : null;
+
+        // Original logic: get scheduled days count from Schedule table
+        $scheduledDaysCount = Schedule::where('subject_id', $subjectId)
+            ->where('group_id', $groupId)
+            ->where('semester_code', $semester_code)
+            ->whereNotIn('training_type_code', config('app.training_type_code'))
+            ->where('lesson_date', '<=', $currentDate)
+            ->distinct('lesson_date')
+            ->count();
+
         $gradesByDate = collect($gradesList)->groupBy(function ($grade) {
             return $grade->lesson_date_tashkent;
         });
@@ -83,11 +100,14 @@ class StudentGradeService
         if ($daysWithGrades === 0)
             return null;
 
-        // Use actual days with grades count instead of Schedule-based count
-        // This ensures grades are displayed even if Schedule table is incomplete
+        // Fallback: if Schedule is empty, use actual days with grades
+        if ($scheduledDaysCount === 0) {
+            $scheduledDaysCount = $daysWithGrades;
+        }
+
         return [
-            'average' => round($totalAverage / $daysWithGrades, 2),
-            'days' => $daysWithGrades
+            'average' => round($totalAverage / $scheduledDaysCount, 2),
+            'days' => $scheduledDaysCount
         ];
 
     }

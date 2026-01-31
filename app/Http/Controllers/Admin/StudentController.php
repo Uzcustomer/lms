@@ -418,17 +418,30 @@ class StudentController extends Controller
                     }
                 }
             } else {
-                // Get dates directly from StudentGrade instead of Schedule
-                // to ensure we show dates where grades actually exist
-                $lessonDates = StudentGrade::whereIn('student_hemis_id', $studentIds)
-                    ->where('subject_id', $subject->subject_id)
+                // First try to get dates from Schedule table (original logic)
+                $lessonDates = Schedule::where('subject_id', $subject->subject_id)
+                    ->where('group_id', $group->group_hemis_id)
                     ->where('semester_code', $semester->code)
                     ->whereNotIn('training_type_code', config('app.training_type_code'))
-                    ->distinct()
+                    ->distinct('lesson_date')
                     ->pluck('lesson_date')
                     ->map(function ($date) {
                         return Carbon::parse($date);
                     })->unique()->sort();
+
+                // Fallback: if Schedule is empty, get dates from StudentGrade
+                if ($lessonDates->isEmpty()) {
+                    $lessonDates = StudentGrade::whereIn('student_hemis_id', $studentIds)
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('semester_code', $semester->code)
+                        ->whereNotIn('training_type_code', config('app.training_type_code'))
+                        ->distinct()
+                        ->pluck('lesson_date')
+                        ->map(function ($date) {
+                            return Carbon::parse($date);
+                        })->unique()->sort();
+                }
+
                 $dates = $lessonDates;
                 $startDate = $dates->first();
                 $endDate = $dates->last();

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Specialty;
 use App\Models\Department;
+use App\Services\TelegramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
@@ -31,13 +32,16 @@ class ImportSpecialtiesDepartments extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(TelegramService $telegram)
     {
+        $telegram->notify("🟢 Mutaxassislik va kafedralar importi boshlandi");
         $this->info('Fetching specialties and departments data from HEMIS API...');
 
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
+        $totalDepartments = 0;
+        $totalSpecialties = 0;
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/department-list?limit=$pageSize&page=$page");
@@ -62,12 +66,14 @@ class ImportSpecialtiesDepartments extends Command
                             'active' => $departmentData['active'],
                         ]
                     );
+                    $totalDepartments++;
 
                     $this->info("Imported department: {$departmentData['name']}");
                 }
 
                 $page++;
             } else {
+                $telegram->notify("❌ Kafedralar importida xatolik yuz berdi (API)");
                 $this->error('Failed to fetch data from the API for departments.');
                 break;
             }
@@ -107,17 +113,20 @@ class ImportSpecialtiesDepartments extends Command
                             'ordinature_specialty_name' => $specialtyData['ordinatureSpecialty']['name'] ?? null,
                         ]
                     );
+                    $totalSpecialties++;
 
                     $this->info("Imported specialty: {$specialtyData['name']}");
                 }
 
                 $page++;
             } else {
+                $telegram->notify("❌ Mutaxassisliklar importida xatolik yuz berdi (API)");
                 $this->error('Failed to fetch data from the API for specialties.');
                 break;
             }
         } while ($page <= $totalPages);
 
+        $telegram->notify("✅ Mutaxassislik va kafedralar importi tugadi. Kafedralar: {$totalDepartments} ta, Mutaxassisliklar: {$totalSpecialties} ta");
         $this->info('Specialties and departments import completed successfully.');
     }
 }

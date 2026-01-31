@@ -1,0 +1,86 @@
+<?php
+
+namespace App\Console\Commands;
+
+use App\Models\CurriculumWeek;
+use App\Models\Semester;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
+
+class ImportSemesters extends Command
+{
+    /**
+     * The name and signature of the console command.
+     *
+     * @var string
+     */
+    protected $signature = 'import:semesters';
+
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Import semesters and curriculum weeks from HEMIS API';
+
+    /**
+     * Execute the console command.
+     */
+    public function handle()
+    {
+        $this->info('Fetching semesters data from HEMIS API...');
+
+        $token = config('services.hemis.token');
+        $page = 1;
+        $pageSize = 50;
+
+        do {
+            $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/semester-list?limit=$pageSize&page=$page");
+
+            if ($response->successful()) {
+                $data = $response->json()['data'];
+                $semesters = $data['items'];
+                $totalPages = $data['pagination']['pageCount'];
+                $this->info("Processing page $page of $totalPages for semesters...");
+
+                foreach ($semesters as $semesterData) {
+                    $semester = Semester::updateOrCreate(
+                        ['semester_hemis_id' => $semesterData['id']],
+                        [
+                            'code' => $semesterData['code'],
+                            'name' => $semesterData['name'],
+                            'curriculum_hemis_id' => $semesterData['_curriculum'],
+                            'education_year' => $semesterData['_education_year'],
+                            'level_code' => $semesterData['level']['code'] ?? null,
+                            'level_name' => $semesterData['level']['name'] ?? null,
+                            'current' => $semesterData['current'],
+                        ]
+                    );
+
+                    foreach ($semesterData['curriculumWeeks'] as $weekData) {
+                        CurriculumWeek::updateOrCreate(
+                            ['curriculum_week_hemis_id' => $weekData['id']],
+                            [
+                                'semester_hemis_id' => $semester->semester_hemis_id,
+                                'current' => $weekData['current'],
+                                'start_date' => date('Y-m-d H:i:s', $weekData['start_date']),
+                                'end_date' => date('Y-m-d H:i:s', $weekData['end_date']),
+                                'start_date_formatted' => $weekData['start_date_f'],
+                                'end_date_formatted' => $weekData['end_date_f'],
+                            ]
+                        );
+                    }
+
+                    $this->info("Imported semester: {$semesterData['name']} with {$semester->curriculumWeeks->count()} weeks");
+                }
+
+                $page++;
+            } else {
+                $this->error('Failed to fetch data from the API for semesters.');
+                break;
+            }
+        } while ($page <= $totalPages);
+
+        $this->info('Semesters and curriculum weeks import completed successfully.');
+    }
+}

@@ -1,0 +1,1 @@
+../../../../../../javascript/codemirror/mode/sql/sql.js

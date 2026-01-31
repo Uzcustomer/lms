@@ -1,0 +1,32 @@
+
+//dublikatlarni aniqlash
+SELECT
+  hemis_id,
+  COUNT(*) AS cnt
+FROM student_grades
+WHERE hemis_id NOT IN (111, 888888888, 77777777, 999999999)
+  AND lesson_date >= '2025-02-01'
+GROUP BY hemis_id
+HAVING cnt > 1;
+
+//index
+ALTER TABLE student_grades
+  ADD INDEX idx_hid_date_id (hemis_id, lesson_date, id);
+
+//dublikatlarni o'chirish
+DELETE sg
+FROM student_grades AS sg
+INNER JOIN (
+  SELECT
+    hemis_id,
+    MAX(id) AS keep_id
+  FROM student_grades
+  WHERE
+    hemis_id NOT IN (111,888888888,77777777,999999999)
+    AND lesson_date >= '2025-02-01'
+  GROUP BY hemis_id
+  HAVING COUNT(*) > 1
+) AS grp
+  ON sg.hemis_id = grp.hemis_id
+WHERE
+  sg.id <> grp.keep_id;

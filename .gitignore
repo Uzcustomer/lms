@@ -1,0 +1,60 @@
+/.phpunit.cache
+/node_modules
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/vendor
+.env
+.env.backup
+.env.production
+.phpactor.json
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+auth.json
+npm-debug.log
+yarn-error.log
+/.fleet
+/.idea
+/.vscode
+/.zed
+
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Laravel specific directories that should be ignored
+/bootstrap/cache/*
+/storage/app/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+
+# But keep .gitignore files in these directories
+!.gitignore
+
+# Composer
+composer.phar
+
+# Laravel Mix
+/public/css
+/public/js
+/mix-manifest.json
+
+
+# Logs
+*.log
+
+# User-specific files
+*.sublime-project
+*.sublime-workspace
+*.komodoproject
+.komodotools
+*.tmproj
+*.tmproject
+tmtags
+
+/mysql_data

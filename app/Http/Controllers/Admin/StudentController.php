@@ -418,12 +418,13 @@ class StudentController extends Controller
                     }
                 }
             } else {
-                // whereHas('studentGrades')->
-                $lessonDates = Schedule::where('subject_id', $subject->subject_id)
-                    ->where('group_id', $group->group_hemis_id)
+                // Get dates directly from StudentGrade instead of Schedule
+                // to ensure we show dates where grades actually exist
+                $lessonDates = StudentGrade::whereIn('student_hemis_id', $studentIds)
+                    ->where('subject_id', $subject->subject_id)
                     ->where('semester_code', $semester->code)
                     ->whereNotIn('training_type_code', config('app.training_type_code'))
-                    ->distinct('lesson_date')
+                    ->distinct()
                     ->pluck('lesson_date')
                     ->map(function ($date) {
                         return Carbon::parse($date);

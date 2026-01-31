@@ -42,6 +42,8 @@ class ImportTeachers extends Command
         $page = 1;
         $pageSize = 40;
         $totalImported = 0;
+        $totalPages = 1;
+        $startTime = microtime(true);
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/employee-list?limit=$pageSize&type=all&page=$page");
@@ -50,6 +52,11 @@ class ImportTeachers extends Command
                 $data = $response->json()['data'];
                 $teachers = $data['items'];
                 $totalPages = $data['pagination']['pageCount'];
+
+                if ($page === 1) {
+                    $telegram->notify("📄 O'qituvchilar: Jami {$totalPages} sahifa");
+                }
+
                 $this->info("Processing page $page of $totalPages...");
 
                 foreach ($teachers as $teacherData) {
@@ -114,6 +121,13 @@ class ImportTeachers extends Command
                     $totalImported++;
 
                     $this->info("Imported teacher: {$teacher->full_name}");
+                }
+
+                if ($page % 5 === 0 || $page === $totalPages) {
+                    $elapsed = microtime(true) - $startTime;
+                    $remaining = max(0, $totalPages - $page);
+                    $eta = $page > 0 ? round(($elapsed / $page) * $remaining) : 0;
+                    $telegram->notify("⌛ O'qituvchilar: {$page}/{$totalPages} sahifa, ~{$eta} soniya qoldi");
                 }
 
                 $page++;

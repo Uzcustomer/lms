@@ -42,7 +42,10 @@ class ImportSpecialtiesDepartments extends Command
         $pageSize = 40;
         $totalDepartments = 0;
         $totalSpecialties = 0;
+        $totalPages = 1;
+        $startTime = microtime(true);
 
+        // Kafedralar import
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/department-list?limit=$pageSize&page=$page");
 
@@ -50,6 +53,11 @@ class ImportSpecialtiesDepartments extends Command
                 $data = $response->json()['data'];
                 $departments = $data['items'];
                 $totalPages = $data['pagination']['pageCount'];
+
+                if ($page === 1) {
+                    $telegram->notify("📄 Kafedralar: Jami {$totalPages} sahifa");
+                }
+
                 $this->info("Processing page $page of $totalPages for departments...");
 
                 foreach ($departments as $departmentData) {
@@ -71,6 +79,13 @@ class ImportSpecialtiesDepartments extends Command
                     $this->info("Imported department: {$departmentData['name']}");
                 }
 
+                if ($page % 5 === 0 || $page === $totalPages) {
+                    $elapsed = microtime(true) - $startTime;
+                    $remaining = max(0, $totalPages - $page);
+                    $eta = $page > 0 ? round(($elapsed / $page) * $remaining) : 0;
+                    $telegram->notify("⌛ Kafedralar: {$page}/{$totalPages} sahifa, ~{$eta} soniya qoldi");
+                }
+
                 $page++;
             } else {
                 $telegram->notify("❌ Kafedralar importida xatolik yuz berdi (API)");
@@ -79,7 +94,9 @@ class ImportSpecialtiesDepartments extends Command
             }
         } while ($page <= $totalPages);
 
+        // Mutaxassisliklar import
         $page = 1;
+        $startTime = microtime(true);
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/specialty-list?limit=$pageSize&page=$page");
@@ -88,6 +105,11 @@ class ImportSpecialtiesDepartments extends Command
                 $data = $response->json()['data'];
                 $specialties = $data['items'];
                 $totalPages = $data['pagination']['pageCount'];
+
+                if ($page === 1) {
+                    $telegram->notify("📄 Mutaxassisliklar: Jami {$totalPages} sahifa");
+                }
+
                 $this->info("Processing page $page of $totalPages for specialties...");
 
                 foreach ($specialties as $specialtyData) {
@@ -116,6 +138,13 @@ class ImportSpecialtiesDepartments extends Command
                     $totalSpecialties++;
 
                     $this->info("Imported specialty: {$specialtyData['name']}");
+                }
+
+                if ($page % 5 === 0 || $page === $totalPages) {
+                    $elapsed = microtime(true) - $startTime;
+                    $remaining = max(0, $totalPages - $page);
+                    $eta = $page > 0 ? round(($elapsed / $page) * $remaining) : 0;
+                    $telegram->notify("⌛ Mutaxassisliklar: {$page}/{$totalPages} sahifa, ~{$eta} soniya qoldi");
                 }
 
                 $page++;

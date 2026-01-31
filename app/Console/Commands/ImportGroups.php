@@ -35,6 +35,8 @@ class ImportGroups extends Command
         $page = 1;
         $pageSize = 40;
         $totalImported = 0;
+        $totalPages = 1;
+        $startTime = microtime(true);
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/group-list?limit=$pageSize&page=$page");
@@ -43,6 +45,11 @@ class ImportGroups extends Command
                 $data = $response->json()['data'];
                 $groups = $data['items'];
                 $totalPages = $data['pagination']['pageCount'];
+
+                if ($page === 1) {
+                    $telegram->notify("📄 Guruhlar: Jami {$totalPages} sahifa");
+                }
+
                 $this->info("Processing page $page of $totalPages for groups...");
 
                 foreach ($groups as $groupData) {
@@ -69,6 +76,13 @@ class ImportGroups extends Command
                     $totalImported++;
 
                     $this->info("Imported group: {$groupData['name']}");
+                }
+
+                if ($page % 5 === 0 || $page === $totalPages) {
+                    $elapsed = microtime(true) - $startTime;
+                    $remaining = max(0, $totalPages - $page);
+                    $eta = $page > 0 ? round(($elapsed / $page) * $remaining) : 0;
+                    $telegram->notify("⌛ Guruhlar: {$page}/{$totalPages} sahifa, ~{$eta} soniya qoldi");
                 }
 
                 $page++;

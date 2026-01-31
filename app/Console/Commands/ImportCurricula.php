@@ -42,6 +42,8 @@ class ImportCurricula extends Command
         $page = 1;
         $pageSize = 40;
         $totalImported = 0;
+        $totalPages = 1;
+        $startTime = microtime(true);
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/curriculum-list?limit=$pageSize&page=$page");
@@ -50,6 +52,11 @@ class ImportCurricula extends Command
                 $data = $response->json()['data'];
                 $curricula = $data['items'];
                 $totalPages = $data['pagination']['pageCount'];
+
+                if ($page === 1) {
+                    $telegram->notify("📄 O'quv rejalar: Jami {$totalPages} sahifa");
+                }
+
                 $this->info("Processing page $page of $totalPages for curricula...");
 
                 foreach ($curricula as $curriculumData) {
@@ -77,6 +84,14 @@ class ImportCurricula extends Command
                     $totalImported++;
 
                     $this->info("Imported curriculum: {$curriculumData['name']}");
+                }
+
+                // Progress notification every 5 pages or on last page
+                if ($page % 5 === 0 || $page === $totalPages) {
+                    $elapsed = microtime(true) - $startTime;
+                    $remaining = max(0, $totalPages - $page);
+                    $eta = $page > 0 ? round(($elapsed / $page) * $remaining) : 0;
+                    $telegram->notify("⌛ O'quv rejalar: {$page}/{$totalPages} sahifa, ~{$eta} soniya qoldi");
                 }
 
                 $page++;

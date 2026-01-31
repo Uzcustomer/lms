@@ -14,11 +14,13 @@ class HemisService
 {
     protected string $baseUrl;
     protected string $token;
+    protected TelegramService $telegram;
 
-    public function __construct()
+    public function __construct(TelegramService $telegram)
     {
         $this->baseUrl = config('services.hemis.base_url');
         $this->token = config('services.hemis.token');
+        $this->telegram = $telegram;
     }
 
     public function importStudents(): int
@@ -26,21 +28,37 @@ class HemisService
         $page = 1;
         $hasMore = true;
         $totalImported = 0;
+        $totalPages = 1;
+        $startTime = microtime(true);
 
         while ($hasMore) {
             $response = $this->fetchStudents($page);
 
             if ($response['success']) {
+                $pagination = $response['data']['pagination'];
+                $totalPages = $pagination['pageCount'];
+
+                if ($page === 1) {
+                    $this->telegram->notify("📄 Talabalar: Jami {$totalPages} sahifa");
+                }
+
                 foreach ($response['data']['items'] as $studentData) {
                     $this->updateOrCreateStudent($studentData);
                     $totalImported++;
                 }
 
-                $pagination = $response['data']['pagination'];
+                if ($page % 10 === 0 || $page === $totalPages) {
+                    $elapsed = microtime(true) - $startTime;
+                    $remaining = max(0, $totalPages - $page);
+                    $eta = $page > 0 ? round(($elapsed / $page) * $remaining) : 0;
+                    $this->telegram->notify("⌛ Talabalar: {$page}/{$totalPages} sahifa, ~{$eta} soniya qoldi");
+                }
+
                 $hasMore = $pagination['page'] < $pagination['pageCount'];
                 $page++;
             } else {
                 Log::error('Failed to fetch students from HEMIS', $response);
+                $this->telegram->notify("❌ Talabalar importida xatolik yuz berdi (API)");
                 break;
             }
         }

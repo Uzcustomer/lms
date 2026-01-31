@@ -36,6 +36,8 @@ class ImportSemesters extends Command
         $page = 1;
         $pageSize = 50;
         $totalImported = 0;
+        $totalPages = 1;
+        $startTime = microtime(true);
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/semester-list?limit=$pageSize&page=$page");
@@ -44,6 +46,11 @@ class ImportSemesters extends Command
                 $data = $response->json()['data'];
                 $semesters = $data['items'];
                 $totalPages = $data['pagination']['pageCount'];
+
+                if ($page === 1) {
+                    $telegram->notify("📄 Semestrlar: Jami {$totalPages} sahifa");
+                }
+
                 $this->info("Processing page $page of $totalPages for semesters...");
 
                 foreach ($semesters as $semesterData) {
@@ -76,6 +83,13 @@ class ImportSemesters extends Command
                     $totalImported++;
 
                     $this->info("Imported semester: {$semesterData['name']} with {$semester->curriculumWeeks->count()} weeks");
+                }
+
+                if ($page % 10 === 0 || $page === $totalPages) {
+                    $elapsed = microtime(true) - $startTime;
+                    $remaining = max(0, $totalPages - $page);
+                    $eta = $page > 0 ? round(($elapsed / $page) * $remaining) : 0;
+                    $telegram->notify("⌛ Semestrlar: {$page}/{$totalPages} sahifa, ~{$eta} soniya qoldi");
                 }
 
                 $page++;

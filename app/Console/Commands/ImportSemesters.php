@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\CurriculumWeek;
 use App\Models\Semester;
+use App\Services\TelegramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
@@ -26,13 +27,15 @@ class ImportSemesters extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(TelegramService $telegram)
     {
+        $telegram->notify("🟢 Semestrlar importi boshlandi");
         $this->info('Fetching semesters data from HEMIS API...');
 
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 50;
+        $totalImported = 0;
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/semester-list?limit=$pageSize&page=$page");
@@ -70,17 +73,20 @@ class ImportSemesters extends Command
                             ]
                         );
                     }
+                    $totalImported++;
 
                     $this->info("Imported semester: {$semesterData['name']} with {$semester->curriculumWeeks->count()} weeks");
                 }
 
                 $page++;
             } else {
+                $telegram->notify("❌ Semestrlar importida xatolik yuz berdi (API)");
                 $this->error('Failed to fetch data from the API for semesters.');
                 break;
             }
         } while ($page <= $totalPages);
 
+        $telegram->notify("✅ Semestrlar importi tugadi. Jami: {$totalImported} ta");
         $this->info('Semesters and curriculum weeks import completed successfully.');
     }
 }

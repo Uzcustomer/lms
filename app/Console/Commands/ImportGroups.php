@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Group;
+use App\Services\TelegramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
@@ -25,13 +26,15 @@ class ImportGroups extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(TelegramService $telegram)
     {
+        $telegram->notify("🟢 Guruhlar importi boshlandi");
         $this->info('Fetching groups data from HEMIS API...');
 
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
+        $totalImported = 0;
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/group-list?limit=$pageSize&page=$page");
@@ -63,17 +66,20 @@ class ImportGroups extends Command
                             'curriculum_hemis_id' => $groupData['_curriculum'],
                         ]
                     );
+                    $totalImported++;
 
                     $this->info("Imported group: {$groupData['name']}");
                 }
 
                 $page++;
             } else {
+                $telegram->notify("❌ Guruhlar importida xatolik yuz berdi (API)");
                 $this->error('Failed to fetch data from the API for groups.');
                 break;
             }
         } while ($page <= $totalPages);
 
+        $telegram->notify("✅ Guruhlar importi tugadi. Jami: {$totalImported} ta");
         $this->info('Groups import completed successfully.');
     }
 }

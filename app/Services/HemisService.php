@@ -21,10 +21,11 @@ class HemisService
         $this->token = config('services.hemis.token');
     }
 
-    public function importStudents()
+    public function importStudents(): int
     {
         $page = 1;
         $hasMore = true;
+        $totalImported = 0;
 
         while ($hasMore) {
             $response = $this->fetchStudents($page);
@@ -32,6 +33,7 @@ class HemisService
             if ($response['success']) {
                 foreach ($response['data']['items'] as $studentData) {
                     $this->updateOrCreateStudent($studentData);
+                    $totalImported++;
                 }
 
                 $pagination = $response['data']['pagination'];
@@ -42,6 +44,8 @@ class HemisService
                 break;
             }
         }
+
+        return $totalImported;
     }
 
     protected function fetchStudents($page)

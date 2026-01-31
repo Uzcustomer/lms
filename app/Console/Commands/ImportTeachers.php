@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Group;
 use App\Models\Teacher;
+use App\Services\TelegramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -32,14 +33,15 @@ class ImportTeachers extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(TelegramService $telegram)
     {
-        //
+        $telegram->notify("🟢 O'qituvchilar importi boshlandi");
         $this->info('Fetching teacher data from HEMIS API...');
 
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
+        $totalImported = 0;
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/employee-list?limit=$pageSize&type=all&page=$page");
@@ -109,18 +111,21 @@ class ImportTeachers extends Command
                     } else {
                         $teacher->groups()->detach();
                     }
+                    $totalImported++;
 
                     $this->info("Imported teacher: {$teacher->full_name}");
                 }
 
                 $page++;
             } else {
+                $telegram->notify("❌ O'qituvchilar importida xatolik yuz berdi (API)");
                 $this->error('Failed to fetch data from the API.');
                 break;
             }
 
         } while ($page <= $totalPages);
 
-        //        $this->info('Teacher import completed successfully.');
+        $telegram->notify("✅ O'qituvchilar importi tugadi. Jami: {$totalImported} ta");
+        $this->info('Teacher import completed successfully.');
     }
 }

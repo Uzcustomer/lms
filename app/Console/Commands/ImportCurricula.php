@@ -6,7 +6,9 @@ use Illuminate\Console\Command;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\Specialty;
+use App\Services\TelegramService;
 use Illuminate\Support\Facades\Http;
+
 class ImportCurricula extends Command
 {
     /**
@@ -31,13 +33,15 @@ class ImportCurricula extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(TelegramService $telegram)
     {
+        $telegram->notify("🟢 O'quv rejalar importi boshlandi");
         $this->info('Fetching curricula data from HEMIS API...');
 
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
+        $totalImported = 0;
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/curriculum-list?limit=$pageSize&page=$page");
@@ -70,17 +74,20 @@ class ImportCurricula extends Command
                             'education_period' => $curriculumData['education_period'],
                         ]
                     );
+                    $totalImported++;
 
                     $this->info("Imported curriculum: {$curriculumData['name']}");
                 }
 
                 $page++;
             } else {
+                $telegram->notify("❌ O'quv rejalar importida xatolik yuz berdi (API)");
                 $this->error('Failed to fetch data from the API for curricula.');
                 break;
             }
         } while ($page <= $totalPages);
 
+        $telegram->notify("✅ O'quv rejalar importi tugadi. Jami: {$totalImported} ta");
         $this->info('Curricula import completed successfully.');
     }
 }

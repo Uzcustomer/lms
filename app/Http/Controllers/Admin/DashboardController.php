@@ -9,6 +9,7 @@ use App\Models\Student;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 
 class DashboardController extends Controller
 {
@@ -78,5 +79,47 @@ class DashboardController extends Controller
 
         return back()->with('success', 'Sinxronizatsiya boshlandi, bu jarayon fon rejimida ishlaydi. Jarayon yakuniga yetmaguncha Baholarni ko\'rish va yuklash jarayonida muammolar bo\'lishi mumkun. Jarayon vaqti tanlangan vaqt oralig\'iga qarab farq qiladi!
         ');
+    }
+
+    public function importCurricula(): RedirectResponse
+    {
+        Artisan::queue('import:curricula');
+        return back()->with('success', 'O\'quv rejalarini import qilish boshlandi (fon rejimida).');
+    }
+
+    public function importCurriculumSubjects(): RedirectResponse
+    {
+        Artisan::queue('import:curriculum-subjects');
+        return back()->with('success', 'O\'quv reja fanlarini import qilish boshlandi (fon rejimida).');
+    }
+
+    public function importGroups(): RedirectResponse
+    {
+        Artisan::queue('import:groups');
+        return back()->with('success', 'Guruhlarni import qilish boshlandi (fon rejimida).');
+    }
+
+    public function importSemesters(): RedirectResponse
+    {
+        Artisan::queue('import:semesters');
+        return back()->with('success', 'Semestrlarni import qilish boshlandi (fon rejimida).');
+    }
+
+    public function importSpecialtiesDepartments(): RedirectResponse
+    {
+        Artisan::queue('import:specialties-departments');
+        return back()->with('success', 'Mutaxassislik va kafedralarni import qilish boshlandi (fon rejimida).');
+    }
+
+    public function importStudents(): RedirectResponse
+    {
+        Artisan::queue('students:import');
+        return back()->with('success', 'Talabalarni import qilish boshlandi (fon rejimida).');
+    }
+
+    public function importTeachers(): RedirectResponse
+    {
+        Artisan::queue('import:teachers');
+        return back()->with('success', 'O\'qituvchilarni import qilish boshlandi (fon rejimida).');
     }
 }

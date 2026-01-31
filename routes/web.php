@@ -180,6 +180,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/synchronizes', [DashboardController::class, 'indexSynchronizes'])->name('synchronizes');
         Route::post('/synchronize', [DashboardController::class, 'importSchedulesPartialy'])->name('synchronize');
+        Route::post('/synchronize/curricula', [DashboardController::class, 'importCurricula'])->name('synchronize.curricula');
+        Route::post('/synchronize/curriculum-subjects', [DashboardController::class, 'importCurriculumSubjects'])->name('synchronize.curriculum-subjects');
+        Route::post('/synchronize/groups', [DashboardController::class, 'importGroups'])->name('synchronize.groups');
+        Route::post('/synchronize/semesters', [DashboardController::class, 'importSemesters'])->name('synchronize.semesters');
+        Route::post('/synchronize/specialties-departments', [DashboardController::class, 'importSpecialtiesDepartments'])->name('synchronize.specialties-departments');
+        Route::post('/synchronize/students', [DashboardController::class, 'importStudents'])->name('synchronize.students');
+        Route::post('/synchronize/teachers', [DashboardController::class, 'importTeachers'])->name('synchronize.teachers');
     });
 });
 

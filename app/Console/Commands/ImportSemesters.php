@@ -7,6 +7,7 @@ use App\Models\Semester;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 
 class ImportSemesters extends Command
 {
@@ -29,10 +30,19 @@ class ImportSemesters extends Command
      */
     public function handle(TelegramService $telegram)
     {
-        $telegram->notify("🟢 Semestrlar importi boshlandi");
-        $this->info('Fetching semesters data from HEMIS API...');
+        $lock = Cache::lock('import:semesters', 3600);
 
-        $token = config('services.hemis.token');
+        if (!$lock->get()) {
+            $telegram->notify("⚠️ Semestrlar importi allaqachon ishlayapti");
+            $this->warn('Import already running, skipping...');
+            return 1;
+        }
+
+        try {
+            $telegram->notify("🟢 Semestrlar importi boshlandi");
+            $this->info('Fetching semesters data from HEMIS API...');
+
+            $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 50;
         $totalImported = 0;
@@ -100,7 +110,10 @@ class ImportSemesters extends Command
             }
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ Semestrlar importi tugadi. Jami: {$totalImported} ta");
-        $this->info('Semesters and curriculum weeks import completed successfully.');
+            $telegram->notify("✅ Semestrlar importi tugadi. Jami: {$totalImported} ta");
+            $this->info('Semesters and curriculum weeks import completed successfully.');
+        } finally {
+            $lock->release();
+        }
     }
 }

@@ -6,6 +6,7 @@ use App\Models\Group;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 
 class ImportGroups extends Command
 {
@@ -28,10 +29,19 @@ class ImportGroups extends Command
      */
     public function handle(TelegramService $telegram)
     {
-        $telegram->notify("🟢 Guruhlar importi boshlandi");
-        $this->info('Fetching groups data from HEMIS API...');
+        $lock = Cache::lock('import:groups', 3600);
 
-        $token = config('services.hemis.token');
+        if (!$lock->get()) {
+            $telegram->notify("⚠️ Guruhlar importi allaqachon ishlayapti");
+            $this->warn('Import already running, skipping...');
+            return 1;
+        }
+
+        try {
+            $telegram->notify("🟢 Guruhlar importi boshlandi");
+            $this->info('Fetching groups data from HEMIS API...');
+
+            $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
         $totalImported = 0;
@@ -93,7 +103,10 @@ class ImportGroups extends Command
             }
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ Guruhlar importi tugadi. Jami: {$totalImported} ta");
-        $this->info('Groups import completed successfully.');
+            $telegram->notify("✅ Guruhlar importi tugadi. Jami: {$totalImported} ta");
+            $this->info('Groups import completed successfully.');
+        } finally {
+            $lock->release();
+        }
     }
 }

@@ -8,6 +8,7 @@ use App\Services\TelegramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 
 class ImportTeachers extends Command
 {
@@ -35,10 +36,19 @@ class ImportTeachers extends Command
      */
     public function handle(TelegramService $telegram)
     {
-        $telegram->notify("🟢 O'qituvchilar importi boshlandi");
-        $this->info('Fetching teacher data from HEMIS API...');
+        $lock = Cache::lock('import:teachers', 3600);
 
-        $token = config('services.hemis.token');
+        if (!$lock->get()) {
+            $telegram->notify("⚠️ O'qituvchilar importi allaqachon ishlayapti");
+            $this->warn('Import already running, skipping...');
+            return 1;
+        }
+
+        try {
+            $telegram->notify("🟢 O'qituvchilar importi boshlandi");
+            $this->info('Fetching teacher data from HEMIS API...');
+
+            $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
         $totalImported = 0;
@@ -139,7 +149,10 @@ class ImportTeachers extends Command
 
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ O'qituvchilar importi tugadi. Jami: {$totalImported} ta");
-        $this->info('Teacher import completed successfully.');
+            $telegram->notify("✅ O'qituvchilar importi tugadi. Jami: {$totalImported} ta");
+            $this->info('Teacher import completed successfully.');
+        } finally {
+            $lock->release();
+        }
     }
 }

@@ -8,6 +8,7 @@ use App\Models\CurriculumSubject;
 use App\Models\Specialty;
 use App\Services\TelegramService;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 
 class ImportCurricula extends Command
 {
@@ -35,10 +36,19 @@ class ImportCurricula extends Command
      */
     public function handle(TelegramService $telegram)
     {
-        $telegram->notify("🟢 O'quv rejalar importi boshlandi");
-        $this->info('Fetching curricula data from HEMIS API...');
+        $lock = Cache::lock('import:curricula', 3600);
 
-        $token = config('services.hemis.token');
+        if (!$lock->get()) {
+            $telegram->notify("⚠️ O'quv rejalar importi allaqachon ishlayapti");
+            $this->warn('Import already running, skipping...');
+            return 1;
+        }
+
+        try {
+            $telegram->notify("🟢 O'quv rejalar importi boshlandi");
+            $this->info('Fetching curricula data from HEMIS API...');
+
+            $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
         $totalImported = 0;
@@ -102,7 +112,10 @@ class ImportCurricula extends Command
             }
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ O'quv rejalar importi tugadi. Jami: {$totalImported} ta");
-        $this->info('Curricula import completed successfully.');
+            $telegram->notify("✅ O'quv rejalar importi tugadi. Jami: {$totalImported} ta");
+            $this->info('Curricula import completed successfully.');
+        } finally {
+            $lock->release();
+        }
     }
 }

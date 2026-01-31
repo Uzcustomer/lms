@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 
 class ImportSpecialtiesDepartments extends Command
 {
@@ -34,10 +35,19 @@ class ImportSpecialtiesDepartments extends Command
      */
     public function handle(TelegramService $telegram)
     {
-        $telegram->notify("🟢 Mutaxassislik va kafedralar importi boshlandi");
-        $this->info('Fetching specialties and departments data from HEMIS API...');
+        $lock = Cache::lock('import:specialties-departments', 3600);
 
-        $token = config('services.hemis.token');
+        if (!$lock->get()) {
+            $telegram->notify("⚠️ Mutaxassislik va kafedralar importi allaqachon ishlayapti");
+            $this->warn('Import already running, skipping...');
+            return 1;
+        }
+
+        try {
+            $telegram->notify("🟢 Mutaxassislik va kafedralar importi boshlandi");
+            $this->info('Fetching specialties and departments data from HEMIS API...');
+
+            $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
         $totalDepartments = 0;
@@ -155,7 +165,10 @@ class ImportSpecialtiesDepartments extends Command
             }
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ Mutaxassislik va kafedralar importi tugadi. Kafedralar: {$totalDepartments} ta, Mutaxassisliklar: {$totalSpecialties} ta");
-        $this->info('Specialties and departments import completed successfully.');
+            $telegram->notify("✅ Mutaxassislik va kafedralar importi tugadi. Kafedralar: {$totalDepartments} ta, Mutaxassisliklar: {$totalSpecialties} ta");
+            $this->info('Specialties and departments import completed successfully.');
+        } finally {
+            $lock->release();
+        }
     }
 }

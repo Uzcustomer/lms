@@ -45,6 +45,22 @@
         }
         .sidebar-menu {
             padding: 10px 0;
+            overflow-y: auto;
+            max-height: calc(100vh - 200px);
+            padding-bottom: 80px;
+        }
+        .sidebar-menu::-webkit-scrollbar {
+            width: 6px;
+        }
+        .sidebar-menu::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.1);
+        }
+        .sidebar-menu::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 3px;
+        }
+        .sidebar-menu::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.5);
         }
         .sidebar-menu a {
             display: flex;

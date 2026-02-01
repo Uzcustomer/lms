@@ -42,6 +42,12 @@
                     </x-nav-link>
                 </div>
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                    <x-nav-link :href="route('admin.journal.index')"
+                        :active="request()->routeIs('admin.journal.*')">
+                        {{ __('Jurnal') }}
+                    </x-nav-link>
+                </div>
+                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <div class="flex items-center">
                         <x-dropdown align="right" width="48">
                             <x-slot name="trigger">
@@ -209,6 +215,10 @@
             <x-responsive-nav-link :href="route('admin.student-grades-week')"
                 :active="request()->routeIs('admin.student-grades-week')">
                 {{ __('Baholar') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('admin.journal.index')"
+                :active="request()->routeIs('admin.journal.*')">
+                {{ __('Jurnal') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('admin.independent.index')"
                 :active="request()->routeIs('admin.independent.index')">

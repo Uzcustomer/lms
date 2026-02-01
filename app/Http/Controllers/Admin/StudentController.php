@@ -359,7 +359,11 @@ class StudentController extends Controller
         }
         if (isset($request->level_code)) {
             $level_code = $request->level_code;
-            $group_ids = Student::where('level_code', $level_code)->pluck('group_id')->unique()->toArray();
+            $group_ids = Student::where('level_code', $level_code)
+                ->where('student_status_code', '11') // faqat "O'qimoqda" statusidagi talabalar
+                ->pluck('group_id')
+                ->unique()
+                ->toArray();
             if ($groups->isNotEmpty() && count($groups)) {
                 $groups = $groups->whereIn('group_hemis_id', $group_ids);
             }else{
@@ -660,7 +664,11 @@ class StudentController extends Controller
     }
     public function getLevelCodes(Request $request)
     {
-        $group_hemis_ids = Student::where('level_code', $request->level_code)->pluck('group_id')->unique()->toArray();
+        $group_hemis_ids = Student::where('level_code', $request->level_code)
+            ->where('student_status_code', '11') // faqat "O'qimoqda" statusidagi talabalar
+            ->pluck('group_id')
+            ->unique()
+            ->toArray();
         $groups = Group::when($request->department_id, function ($query) use($request){
             $department = Department::findOrFail($request->department_id);
             $query->where('department_hemis_id', $department->department_hemis_id);

@@ -421,6 +421,32 @@
                 allowClear: true
             });
         });
+
+        // Sidebar scroll pozitsiyasini saqlash va tiklash
+        document.addEventListener('DOMContentLoaded', function() {
+            var sidebarMenu = document.querySelector('.sidebar-menu');
+
+            // Saqlangan pozitsiyani tiklash
+            var savedScrollPos = localStorage.getItem('sidebarScrollPos');
+            if (savedScrollPos && sidebarMenu) {
+                sidebarMenu.scrollTop = parseInt(savedScrollPos);
+            }
+
+            // Scroll pozitsiyasini saqlash
+            if (sidebarMenu) {
+                sidebarMenu.addEventListener('scroll', function() {
+                    localStorage.setItem('sidebarScrollPos', sidebarMenu.scrollTop);
+                });
+            }
+
+            // Link bosilganda pozitsiyani saqlash
+            var sidebarLinks = document.querySelectorAll('.sidebar-menu a');
+            sidebarLinks.forEach(function(link) {
+                link.addEventListener('click', function() {
+                    localStorage.setItem('sidebarScrollPos', sidebarMenu.scrollTop);
+                });
+            });
+        });
     </script>
     @stack('scripts')
 </body>

@@ -310,5 +310,33 @@
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+        <script>
+            // Sidebar scroll pozitsiyasini saqlash va tiklash
+            document.addEventListener('DOMContentLoaded', function() {
+                var sidebarMenu = document.querySelector('.sidebar-menu');
+
+                // Saqlangan pozitsiyani tiklash
+                var savedScrollPos = localStorage.getItem('sidebarScrollPos');
+                if (savedScrollPos && sidebarMenu) {
+                    sidebarMenu.scrollTop = parseInt(savedScrollPos);
+                }
+
+                // Scroll pozitsiyasini saqlash
+                if (sidebarMenu) {
+                    sidebarMenu.addEventListener('scroll', function() {
+                        localStorage.setItem('sidebarScrollPos', sidebarMenu.scrollTop);
+                    });
+                }
+
+                // Link bosilganda pozitsiyani saqlash
+                var sidebarLinks = document.querySelectorAll('.sidebar-menu a');
+                sidebarLinks.forEach(function(link) {
+                    link.addEventListener('click', function() {
+                        localStorage.setItem('sidebarScrollPos', sidebarMenu.scrollTop);
+                    });
+                });
+            });
+        </script>
     </body>
 </html>

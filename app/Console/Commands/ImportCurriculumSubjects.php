@@ -17,7 +17,7 @@ class ImportCurriculumSubjects extends Command
      *
      * @var string
      */
-    protected $signature = 'import:curriculum-subjects';
+    protected $signature = 'import:curriculum-subjects {--fresh : Boshidan boshlash}';
 
     /**
      * The console command description.
@@ -45,15 +45,27 @@ class ImportCurriculumSubjects extends Command
         }
 
         try {
-            $telegram->notify("🟢 O'quv reja fanlari importi boshlandi");
-            $this->info('Fetching curriculum subjects data from HEMIS API...');
+            $token = config('services.hemis.token');
+            $pageSize = 40;
+            $totalImported = 0;
+            $startTime = microtime(true);
 
-        $token = config('services.hemis.token');
-        $page = 1;
-        $pageSize = 40;
-        $totalImported = 0;
-        $totalPages = 1;
-        $startTime = microtime(true);
+            // Davom ettirish yoki boshidan boshlash
+            $progressKey = 'import:curriculum-subjects:progress';
+            $savedProgress = Cache::get($progressKey);
+
+            if ($this->option('fresh') || !$savedProgress) {
+                $page = 1;
+                $totalPages = 1;
+                Cache::forget($progressKey);
+                $telegram->notify("🟢 O'quv reja fanlari importi boshlandi");
+            } else {
+                $page = $savedProgress['page'];
+                $totalPages = $savedProgress['totalPages'];
+                $telegram->notify("🔄 O'quv reja fanlari importi davom etmoqda ({$page}/{$totalPages} sahifadan)");
+            }
+
+            $this->info('Fetching curriculum subjects data from HEMIS API...');
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/curriculum-subject-list?limit=$pageSize&page=$page");
@@ -102,14 +114,19 @@ class ImportCurriculumSubjects extends Command
                     $this->info("Imported curriculum subject: {$subjectData['subject']['name']}");
                 }
 
-                if ($page % 10 === 0 || $page === $totalPages) {
-                    $elapsed = microtime(true) - $startTime;
-                    $remaining = max(0, $totalPages - $page);
-                    $eta = $page > 0 ? round(($elapsed / $page) * $remaining) : 0;
-                    $telegram->notify("⌛ O'quv reja fanlari: {$page}/{$totalPages} sahifa, ~{$eta} soniya qoldi");
-                }
-
+                // Progressni saqlash (7200 soniya = 2 soat)
                 $page++;
+                Cache::put($progressKey, [
+                    'page' => $page,
+                    'totalPages' => $totalPages,
+                ], 7200);
+
+                if (($page - 1) % 10 === 0 || $page > $totalPages) {
+                    $elapsed = microtime(true) - $startTime;
+                    $remaining = max(0, $totalPages - $page + 1);
+                    $eta = ($page - 1) > 0 ? round(($elapsed / ($page - 1)) * $remaining) : 0;
+                    $telegram->notify("⌛ O'quv reja fanlari: " . ($page - 1) . "/{$totalPages} sahifa, ~{$eta} soniya qoldi");
+                }
             } else {
                 $telegram->notify("❌ O'quv reja fanlari importida xatolik yuz berdi (API)");
                 $this->error('Failed to fetch data from the API for curriculum subjects.');
@@ -117,6 +134,8 @@ class ImportCurriculumSubjects extends Command
             }
         } while ($page <= $totalPages);
 
+            // Import tugadi - progressni tozalash
+            Cache::forget($progressKey);
             $telegram->notify("✅ O'quv reja fanlari importi tugadi. Jami: {$totalImported} ta");
             $this->info('Curriculum subjects import completed successfully.');
         } finally {

@@ -6,7 +6,7 @@
     </x-slot>
 
     <div class="py-8 ">
-        <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+        <div class="max-w-6xl px-4 sm:px-6 lg:px-8">
             <div class="bg-white rounded-lg shadow-md overflow-hidden">
                 <div class="p-6">
                     <h2 class="text-lg font-semibold mb-6 text-gray-800 border-b pb-2">Dars jadvalini sinxronlash</h2>
@@ -109,7 +109,7 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                         <!-- O'quv rejalar -->
                         <form method="POST" action="{{ route('admin.synchronize.curricula') }}">
                             @csrf

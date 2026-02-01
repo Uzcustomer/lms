@@ -20,6 +20,7 @@ use App\Http\Controllers\Teacher\TeacherMainController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
+use App\Http\Controllers\Admin\JurnalController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -166,6 +167,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/student-grades-week/export-box', [AdminStudentController::class, 'exportStudentGradesBox'])->name('student-grades-week.export-box');
         Route::post('/student-grades-update-via-excel/import', [AdminStudentController::class, 'import'])->name('student-import-grades');
 
+        // Jurnal routes
+        Route::prefix('jurnal')->name('jurnal.')->group(function () {
+            Route::get('/', [JurnalController::class, 'index'])->name('index');
+            Route::get('/get-groups', [JurnalController::class, 'getGroups'])->name('get-groups');
+            Route::get('/get-semesters', [JurnalController::class, 'getSemesters'])->name('get-semesters');
+            Route::get('/get-subjects', [JurnalController::class, 'getSubjects'])->name('get-subjects');
+        });
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 

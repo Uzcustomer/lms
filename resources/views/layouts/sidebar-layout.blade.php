@@ -69,6 +69,23 @@
             background: rgba(255,255,255,0.25);
             border-left: 3px solid white;
         }
+        .sidebar-divider {
+            padding: 15px 20px 8px;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.5);
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        .sidebar-menu a.yordam-btn {
+            background: #10b981 !important;
+            margin: 15px 10px;
+            border-radius: 8px;
+            justify-content: center;
+        }
+        .sidebar-menu a.yordam-btn:hover {
+            background: #059669 !important;
+        }
         .sidebar-user {
             position: absolute;
             bottom: 0;
@@ -262,23 +279,89 @@
         </div>
 
         <nav class="sidebar-menu">
+            <!-- Asosiy -->
+            <a href="{{ route('admin.dashboard') }}" class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
+                <i class="fas fa-tachometer-alt"></i>
+                Dashboard
+            </a>
             <a href="{{ route('admin.jurnal.index') }}" class="{{ request()->routeIs('admin.jurnal.*') ? 'active' : '' }}">
                 <i class="fas fa-book"></i>
                 Jurnal
             </a>
+            <a href="{{ route('admin.students.index') }}" class="{{ request()->routeIs('admin.students.*') ? 'active' : '' }}">
+                <i class="fas fa-user-graduate"></i>
+                Talabalar
+            </a>
+
+            @if(auth()->user()->hasRole(['admin']))
+            <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
+                <i class="fas fa-users-cog"></i>
+                Foydalanuvchilar
+            </a>
             <a href="{{ route('admin.teachers.index') }}" class="{{ request()->routeIs('admin.teachers.*') ? 'active' : '' }}">
-                <i class="fas fa-users"></i>
-                O'qituvchilar ro'yxati
+                <i class="fas fa-chalkboard-teacher"></i>
+                O'qituvchilar
             </a>
-            <a href="#" class="">
-                <i class="fas fa-calendar-alt"></i>
-                Tematik rejalar
+            <a href="{{ route('admin.student-grades-week') }}" class="{{ request()->routeIs('admin.student-grades-week') ? 'active' : '' }}">
+                <i class="fas fa-chart-line"></i>
+                Baholar
             </a>
-            <a href="#" class="">
-                <i class="fas fa-book-open"></i>
-                Fanlar
+
+            <!-- Qo'shimcha bo'limi -->
+            <div class="sidebar-divider">Qo'shimcha</div>
+            <a href="{{ route('admin.independent.index') }}" class="{{ request()->routeIs('admin.independent.*') ? 'active' : '' }}">
+                <i class="fas fa-tasks"></i>
+                Mustaqil ta'lim
             </a>
-            <a href="#" class="active" style="background: #10b981 !important; margin: 10px; border-radius: 8px;">
+            <a href="{{ route('admin.oraliqnazorat.index') }}" class="{{ request()->routeIs('admin.oraliqnazorat.*') ? 'active' : '' }}">
+                <i class="fas fa-clipboard-check"></i>
+                Oraliq nazorat
+            </a>
+            <a href="{{ route('admin.oski.index') }}" class="{{ request()->routeIs('admin.oski.*') ? 'active' : '' }}">
+                <i class="fas fa-file-alt"></i>
+                OSKI
+            </a>
+            <a href="{{ route('admin.examtest.index') }}" class="{{ request()->routeIs('admin.examtest.*') ? 'active' : '' }}">
+                <i class="fas fa-question-circle"></i>
+                Test
+            </a>
+            <a href="{{ route('admin.vedomost.index') }}" class="{{ request()->routeIs('admin.vedomost.*') ? 'active' : '' }}">
+                <i class="fas fa-table"></i>
+                Vedomost
+            </a>
+
+            <!-- Darslar bo'limi -->
+            <div class="sidebar-divider">Darslar</div>
+            <a href="{{ route('admin.lessons.create') }}" class="{{ request()->routeIs('admin.lessons.*') ? 'active' : '' }}">
+                <i class="fas fa-plus-circle"></i>
+                Dars yaratish
+            </a>
+            <a href="{{ route('admin.lesson.histories-index') }}" class="{{ request()->routeIs('admin.lesson.histories-index') ? 'active' : '' }}">
+                <i class="fas fa-history"></i>
+                Dars tarixi
+            </a>
+            @endif
+
+            <a href="{{ route('admin.qaytnoma.index') }}" class="{{ request()->routeIs('admin.qaytnoma.*') ? 'active' : '' }}">
+                <i class="fas fa-file-signature"></i>
+                YN oldi qaydnoma
+            </a>
+
+            @if(auth()->user()->hasRole(['admin']))
+            <!-- Sozlamalar -->
+            <div class="sidebar-divider">Sozlamalar</div>
+            <a href="{{ route('admin.deadlines') }}" class="{{ request()->routeIs('admin.deadlines') ? 'active' : '' }}">
+                <i class="fas fa-clock"></i>
+                Deadline
+            </a>
+            <a href="{{ route('admin.synchronizes') }}" class="{{ request()->routeIs('admin.synchronizes') ? 'active' : '' }}">
+                <i class="fas fa-sync"></i>
+                Sinxronizatsiya
+            </a>
+            @endif
+
+            <!-- Yordam -->
+            <a href="https://t.me/your_support_bot" target="_blank" class="yordam-btn">
                 <i class="fab fa-telegram-plane"></i>
                 Yordam
             </a>

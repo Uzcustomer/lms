@@ -17,57 +17,77 @@ class JournalController extends Controller
     public function index(Request $request)
     {
         // Get filter options for dropdowns
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $educationYears = Curriculum::select('education_year_code', 'education_year_name')
+            ->whereNotNull('education_year_code')
+            ->groupBy('education_year_code', 'education_year_name')
+            ->orderBy('education_year_code', 'desc')
+            ->get();
+
         $faculties = Department::where('structure_type_code', 11)
             ->orderBy('name')
             ->get();
 
-        // Build query from student_grades - get unique group/subject/semester combinations
-        $query = DB::table('student_grades as sg')
-            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-            ->join('groups as g', 'g.group_hemis_id', '=', 'st.group_id')
+        $levelCodes = Semester::select('level_code', 'level_name')
+            ->whereNotNull('level_code')
+            ->groupBy('level_code', 'level_name')
+            ->orderBy('level_code')
+            ->get();
+
+        // Build query from curriculum_subjects
+        $query = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->leftJoin('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
             ->leftJoin('departments as d', 'd.department_hemis_id', '=', 'g.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
-            ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
-            ->leftJoin('semesters as s', function ($join) {
-                $join->on('s.curriculum_hemis_id', '=', 'g.curriculum_hemis_id')
-                    ->on('s.code', '=', 'sg.semester_code');
-            })
             ->select([
+                'cs.id',
+                'cs.curriculum_subject_hemis_id',
+                'cs.subject_id',
+                'cs.subject_name',
+                'cs.semester_code',
+                'cs.semester_name',
+                'c.curricula_hemis_id',
+                'c.education_type_code',
+                'c.education_type_name',
+                'c.education_year_code',
+                'c.education_year_name',
                 'g.id as group_id',
                 'g.group_hemis_id',
                 'g.name as group_name',
-                'sg.subject_id',
-                'sg.subject_name',
-                'sg.semester_code',
-                'sg.semester_name',
                 'd.id as department_id',
                 'd.department_hemis_id',
                 'd.name as department_name',
                 'sp.specialty_hemis_id',
                 'sp.name as specialty_name',
-                'c.education_type_code',
-                'c.education_type_name',
-                'c.education_year_code',
-                'c.education_year_name',
                 's.level_code',
                 's.level_name',
-                DB::raw('COUNT(DISTINCT sg.id) as grades_count'),
-                DB::raw('COUNT(DISTINCT st.id) as students_count'),
             ])
-            ->groupBy(
-                'g.id', 'g.group_hemis_id', 'g.name',
-                'sg.subject_id', 'sg.subject_name',
-                'sg.semester_code', 'sg.semester_name',
-                'd.id', 'd.department_hemis_id', 'd.name',
-                'sp.specialty_hemis_id', 'sp.name',
-                'c.education_type_code', 'c.education_type_name',
-                'c.education_year_code', 'c.education_year_name',
-                's.level_code', 's.level_name'
-            );
+            ->distinct();
 
         // Apply filters
+        if ($request->filled('education_type')) {
+            $query->where('c.education_type_code', $request->education_type);
+        }
+
+        if ($request->filled('education_year')) {
+            $query->where('c.education_year_code', $request->education_year);
+        }
+
         if ($request->filled('faculty')) {
             $query->where('d.id', $request->faculty);
+        }
+
+        if ($request->filled('specialty')) {
+            $query->where('sp.specialty_hemis_id', $request->specialty);
         }
 
         if ($request->filled('level_code')) {
@@ -75,11 +95,11 @@ class JournalController extends Controller
         }
 
         if ($request->filled('semester_code')) {
-            $query->where('sg.semester_code', $request->semester_code);
+            $query->where('cs.semester_code', $request->semester_code);
         }
 
         if ($request->filled('subject')) {
-            $query->where('sg.subject_id', $request->subject);
+            $query->where('cs.subject_id', $request->subject);
         }
 
         if ($request->filled('group')) {
@@ -87,16 +107,12 @@ class JournalController extends Controller
         }
 
         $perPage = $request->get('per_page', 50);
-        $journals = $query->orderBy('g.name')->orderBy('sg.subject_name')->paginate($perPage)->appends($request->query());
-
-        // Get level codes for filter
-        $levelCodes = Semester::select('level_code', 'level_name')
-            ->groupBy('level_code', 'level_name')
-            ->orderBy('level_code')
-            ->get();
+        $journals = $query->orderBy('g.name')->orderBy('cs.subject_name')->paginate($perPage)->appends($request->query());
 
         return view('admin.journal.index', compact(
             'journals',
+            'educationTypes',
+            'educationYears',
             'faculties',
             'levelCodes'
         ));

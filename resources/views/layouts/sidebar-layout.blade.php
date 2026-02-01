@@ -17,7 +17,7 @@
 
     <style>
         .sidebar {
-            background: linear-gradient(180deg, #1e40af 0%, #3b82f6 100%);
+            background: linear-gradient(180deg, #1a4a7c 0%, #2c5aa0 100%);
             min-height: 100vh;
             width: 220px;
             position: fixed;
@@ -31,11 +31,10 @@
             border-bottom: 1px solid rgba(255,255,255,0.1);
         }
         .sidebar-logo img {
-            width: 60px;
-            height: 60px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
-            background: white;
-            padding: 5px;
+            object-fit: cover;
         }
         .sidebar-logo h2 {
             color: white;
@@ -290,7 +289,7 @@
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-logo">
-            <img src="{{ asset('images/logo.png') }}" alt="Logo" onerror="this.src='https://via.placeholder.com/60'">
+            <img src="{{ asset('logo.png') }}" alt="Logo">
             <h2>Jurnal</h2>
         </div>
 

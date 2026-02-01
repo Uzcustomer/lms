@@ -26,6 +26,7 @@ class HemisService
         $page = 1;
         $hasMore = true;
         $totalImported = 0;
+        $importedHemisIds = [];
 
         while ($hasMore) {
             $response = $this->fetchStudents($page);
@@ -33,6 +34,7 @@ class HemisService
             if ($response['success']) {
                 foreach ($response['data']['items'] as $studentData) {
                     $this->updateOrCreateStudent($studentData);
+                    $importedHemisIds[] = $studentData['id'];
                     $totalImported++;
                 }
 
@@ -43,6 +45,18 @@ class HemisService
                 Log::error('Failed to fetch students from HEMIS', $response);
                 break;
             }
+        }
+
+        // HEMIS da yo'q talabalarni "Chetlashgan" deb belgilash
+        if (!empty($importedHemisIds)) {
+            $deactivatedCount = Student::whereNotIn('hemis_id', $importedHemisIds)
+                ->where('student_status_code', '!=', '60')
+                ->update([
+                    'student_status_code' => '60',
+                    'student_status_name' => 'Chetlashgan (HEMIS da yo\'q)',
+                ]);
+
+            Log::info("Deactivated {$deactivatedCount} students not found in HEMIS");
         }
 
         return $totalImported;

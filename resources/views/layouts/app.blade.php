@@ -163,6 +163,7 @@
             }
             .main-body {
                 padding: 20px 25px;
+                overflow-x: auto;
             }
             @media (max-width: 768px) {
                 .sidebar {

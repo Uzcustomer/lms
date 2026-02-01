@@ -5,8 +5,8 @@
         </h2>
     </x-slot>
 
-    <div class="py-8 ">
-        <div class="max-w-6xl px-4 sm:px-6 lg:px-8">
+    <div class="py-6">
+        <div class="px-4">
             <div class="bg-white rounded-lg shadow-md overflow-hidden">
                 <div class="p-6">
                     <h2 class="text-lg font-semibold mb-6 text-gray-800 border-b pb-2">Dars jadvalini sinxronlash</h2>

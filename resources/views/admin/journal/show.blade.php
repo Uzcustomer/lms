@@ -1,14 +1,32 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between">
-            <a href="{{ route('admin.journal.index') }}" class="flex items-center justify-center w-10 h-10 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-            </a>
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                Jurnal tafsilotlari
-            </h2>
+            <div class="flex items-center gap-3">
+                <a href="{{ route('admin.journal.index') }}" class="flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-800">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h2 class="text-lg font-semibold text-gray-800">Jurnal tafsilotlari</h2>
+            </div>
+            <div class="flex items-center gap-6 text-sm">
+                <div>
+                    <span class="text-gray-500">Guruh:</span>
+                    <span class="font-semibold text-blue-600 ml-1">{{ $group->name }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Fan:</span>
+                    <span class="font-semibold text-gray-800 ml-1">{{ $subject->subject_name }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Semestr:</span>
+                    <span class="font-semibold text-gray-800 ml-1">{{ $semester->name ?? $subject->semester_name }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Talabalar soni:</span>
+                    <span class="font-semibold text-blue-600 ml-1">{{ $students->count() }}</span>
+                </div>
+            </div>
         </div>
     </x-slot>
 
@@ -37,6 +55,13 @@
             color: #2563eb;
             font-weight: 600;
         }
+        /* Auto-fit table */
+        .journal-table {
+            width: auto;
+        }
+        .journal-table th, .journal-table td {
+            white-space: nowrap;
+        }
     </style>
 
     <div class="py-6">
@@ -57,28 +82,6 @@
                 </button>
             </div>
 
-            <!-- Info Panel (connected to tabs) -->
-            <div class="p-4 bg-white shadow-sm">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-500">Guruh:</span>
-                        <span class="font-semibold text-blue-600 ml-1">{{ $group->name }}</span>
-                    </div>
-                    <div>
-                        <span class="text-gray-500">Fan:</span>
-                        <span class="font-semibold text-gray-800 ml-1">{{ $subject->subject_name }}</span>
-                    </div>
-                    <div>
-                        <span class="text-gray-500">Semestr:</span>
-                        <span class="font-semibold text-gray-800 ml-1">{{ $semester->name ?? $subject->semester_name }}</span>
-                    </div>
-                    <div>
-                        <span class="text-gray-500">Talabalar soni:</span>
-                        <span class="font-semibold text-gray-800 ml-1">{{ $students->count() }}</span>
-                    </div>
-                </div>
-            </div>
-
             <!-- Ma'ruza Tab Content -->
             <div id="content-maruza" class="tab-content hidden">
                 <div class="overflow-hidden bg-white shadow-xl rounded-b-lg">
@@ -88,13 +91,13 @@
                                 <p>Bu guruhda talabalar mavjud emas.</p>
                             </div>
                         @else
-                            <table class="min-w-full border-collapse border border-gray-300 journal-table">
+                            <table class="border-collapse border border-gray-300 journal-table">
                                 <thead>
                                     <tr class="bg-gray-50">
-                                        <th rowspan="2" class="px-1 py-2 text-xs font-medium text-gray-700 border border-gray-300 w-10">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             №<br>T/R
                                         </th>
-                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-left text-gray-700 border border-gray-300 min-w-[250px]">
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             Talabaning F.I.SH.
                                         </th>
                                         <th colspan="15" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
@@ -112,10 +115,13 @@
                                         <th colspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             Yakuniy nazorat (%)
                                         </th>
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                            Davomat (%)
+                                        </th>
                                     </tr>
                                     <tr class="bg-gray-50">
                                         @for ($i = 1; $i <= 15; $i++)
-                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[35px]">
+                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300">
                                             </th>
                                         @endfor
                                         <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
@@ -129,7 +135,7 @@
                                 <tbody>
                                     @foreach ($students as $index => $student)
                                         <tr>
-                                            <td class="px-1 py-2 text-sm text-center text-gray-900 border border-gray-300 w-10">
+                                            <td class="px-2 py-2 text-sm text-center text-gray-900 border border-gray-300">
                                                 {{ $index + 1 }}
                                             </td>
                                             <td class="px-3 py-2 text-sm text-gray-900 border border-gray-300 uppercase">
@@ -144,6 +150,8 @@
                                             </td>
                                             <td class="px-2 py-2 text-sm text-center border border-gray-300">
                                                 <span class="text-blue-600 font-medium">{{ $student->mt_average ? round($student->mt_average, 0) : 0 }}</span>
+                                            </td>
+                                            <td class="px-2 py-2 text-sm text-center border border-gray-300">
                                             </td>
                                             <td class="px-2 py-2 text-sm text-center border border-gray-300">
                                             </td>
@@ -169,13 +177,13 @@
                                 <p>Bu guruhda talabalar mavjud emas.</p>
                             </div>
                         @else
-                            <table class="min-w-full border-collapse border border-gray-300 journal-table">
+                            <table class="border-collapse border border-gray-300 journal-table">
                                 <thead>
                                     <tr class="bg-gray-50">
-                                        <th rowspan="2" class="px-1 py-2 text-xs font-medium text-gray-700 border border-gray-300 w-10">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             №<br>T/R
                                         </th>
-                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-left text-gray-700 border border-gray-300 min-w-[250px]">
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             Talabaning F.I.SH.
                                         </th>
                                         <th colspan="15" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
@@ -193,10 +201,13 @@
                                         <th colspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             Yakuniy nazorat (%)
                                         </th>
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                            Davomat (%)
+                                        </th>
                                     </tr>
                                     <tr class="bg-gray-50">
                                         @for ($i = 1; $i <= 15; $i++)
-                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[35px]">
+                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300">
                                             </th>
                                         @endfor
                                         <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
@@ -210,7 +221,7 @@
                                 <tbody>
                                     @foreach ($students as $index => $student)
                                         <tr>
-                                            <td class="px-1 py-2 text-sm text-center text-gray-900 border border-gray-300 w-10">
+                                            <td class="px-2 py-2 text-sm text-center text-gray-900 border border-gray-300">
                                                 {{ $index + 1 }}
                                             </td>
                                             <td class="px-3 py-2 text-sm text-gray-900 border border-gray-300 uppercase">
@@ -225,6 +236,8 @@
                                             </td>
                                             <td class="px-2 py-2 text-sm text-center border border-gray-300">
                                                 <span class="text-blue-600 font-medium">{{ $student->mt_average ? round($student->mt_average, 0) : 0 }}</span>
+                                            </td>
+                                            <td class="px-2 py-2 text-sm text-center border border-gray-300">
                                             </td>
                                             <td class="px-2 py-2 text-sm text-center border border-gray-300">
                                             </td>
@@ -250,13 +263,13 @@
                                 <p>Bu guruhda talabalar mavjud emas.</p>
                             </div>
                         @else
-                            <table class="min-w-full border-collapse border border-gray-300 journal-table">
+                            <table class="border-collapse border border-gray-300 journal-table">
                                 <thead>
                                     <tr class="bg-gray-50">
-                                        <th rowspan="2" class="px-1 py-2 text-xs font-medium text-gray-700 border border-gray-300 w-10">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             №<br>T/R
                                         </th>
-                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-left text-gray-700 border border-gray-300 min-w-[250px]">
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             Talabaning F.I.SH.
                                         </th>
                                         <th colspan="15" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
@@ -268,7 +281,7 @@
                                     </tr>
                                     <tr class="bg-gray-50">
                                         @for ($i = 1; $i <= 15; $i++)
-                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[35px]">
+                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300">
                                             </th>
                                         @endfor
                                     </tr>
@@ -276,7 +289,7 @@
                                 <tbody>
                                     @foreach ($students as $index => $student)
                                         <tr>
-                                            <td class="px-1 py-2 text-sm text-center text-gray-900 border border-gray-300 w-10">
+                                            <td class="px-2 py-2 text-sm text-center text-gray-900 border border-gray-300">
                                                 {{ $index + 1 }}
                                             </td>
                                             <td class="px-3 py-2 text-sm text-gray-900 border border-gray-300 uppercase">

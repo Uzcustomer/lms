@@ -12,28 +12,53 @@
         </div>
     </x-slot>
 
+    <style>
+        /* Zebra striping */
+        .journal-table tbody tr:nth-child(odd) {
+            background-color: #ffffff;
+        }
+        .journal-table tbody tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+        /* Hover effect for entire row */
+        .journal-table tbody tr:hover td {
+            background-color: #e5e7eb !important;
+        }
+        /* Tab styling */
+        .tab-inactive {
+            background-color: #e5e7eb;
+            color: #6b7280;
+        }
+        .tab-inactive:hover {
+            background-color: #d1d5db;
+        }
+        .tab-active {
+            background-color: #ffffff;
+            color: #2563eb;
+            font-weight: 600;
+        }
+    </style>
+
     <div class="py-6">
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
             <!-- Tabs -->
-            <div class="mb-4 bg-white rounded-lg shadow-sm">
-                <nav class="flex">
-                    <button id="tab-maruza" onclick="switchTab('maruza')"
-                        class="tab-btn flex-1 py-3 px-4 text-center font-medium text-sm rounded-tl-lg border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
-                        Ma'ruza
-                    </button>
-                    <button id="tab-amaliyot" onclick="switchTab('amaliyot')"
-                        class="tab-btn flex-1 py-3 px-4 text-center font-medium text-sm border-b-2 border-blue-500 text-blue-600 bg-blue-50 transition-colors">
-                        Amaliyot
-                    </button>
-                    <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
-                        class="tab-btn flex-1 py-3 px-4 text-center font-medium text-sm rounded-tr-lg border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
-                        Mustaqil ta'lim
-                    </button>
-                </nav>
+            <div class="flex rounded-t-lg overflow-hidden shadow-sm">
+                <button id="tab-maruza" onclick="switchTab('maruza')"
+                    class="tab-btn flex-1 py-3 px-4 text-center text-sm transition-colors tab-inactive">
+                    Ma'ruza
+                </button>
+                <button id="tab-amaliyot" onclick="switchTab('amaliyot')"
+                    class="tab-btn flex-1 py-3 px-4 text-center text-sm transition-colors tab-active">
+                    Amaliyot
+                </button>
+                <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
+                    class="tab-btn flex-1 py-3 px-4 text-center text-sm transition-colors tab-inactive">
+                    Mustaqil ta'lim
+                </button>
             </div>
 
-            <!-- Info Panel -->
-            <div class="mb-4 p-4 bg-white rounded-lg shadow-sm">
+            <!-- Info Panel (connected to tabs) -->
+            <div class="p-4 bg-white shadow-sm">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                         <span class="text-gray-500">Guruh:</span>
@@ -56,14 +81,14 @@
 
             <!-- Ma'ruza Tab Content -->
             <div id="content-maruza" class="tab-content hidden">
-                <div class="overflow-hidden bg-white shadow-xl sm:rounded-lg">
+                <div class="overflow-hidden bg-white shadow-xl rounded-b-lg">
                     <div class="overflow-x-auto">
                         @if($students->isEmpty())
                             <div class="p-6 text-center text-gray-500">
                                 <p>Bu guruhda talabalar mavjud emas.</p>
                             </div>
                         @else
-                            <table class="min-w-full border-collapse border border-gray-300">
+                            <table class="min-w-full border-collapse border border-gray-300 journal-table">
                                 <thead>
                                     <tr class="bg-gray-50">
                                         <th rowspan="2" class="px-1 py-2 text-xs font-medium text-gray-700 border border-gray-300 w-10">
@@ -75,13 +100,13 @@
                                         <th colspan="15" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             Davomat va joriy yil natijalari (baholash 100% hisobidan)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                             JN o'rtacha (%)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                             TMI o'rtacha (%)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                             Oraliq nazorat (%)
                                         </th>
                                         <th colspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
@@ -90,7 +115,7 @@
                                     </tr>
                                     <tr class="bg-gray-50">
                                         @for ($i = 1; $i <= 15; $i++)
-                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 bg-white min-w-[35px]">
+                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[35px]">
                                             </th>
                                         @endfor
                                         <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
@@ -103,7 +128,7 @@
                                 </thead>
                                 <tbody>
                                     @foreach ($students as $index => $student)
-                                        <tr class="hover:bg-gray-50">
+                                        <tr>
                                             <td class="px-1 py-2 text-sm text-center text-gray-900 border border-gray-300 w-10">
                                                 {{ $index + 1 }}
                                             </td>
@@ -111,7 +136,7 @@
                                                 {{ $student->full_name }}
                                             </td>
                                             @for ($i = 1; $i <= 15; $i++)
-                                                <td class="px-1 py-2 text-sm text-center text-gray-500 border border-gray-300 bg-white">
+                                                <td class="px-1 py-2 text-sm text-center text-gray-500 border border-gray-300">
                                                 </td>
                                             @endfor
                                             <td class="px-2 py-2 text-sm text-center border border-gray-300">
@@ -137,14 +162,14 @@
 
             <!-- Amaliyot Tab Content -->
             <div id="content-amaliyot" class="tab-content">
-                <div class="overflow-hidden bg-white shadow-xl sm:rounded-lg">
+                <div class="overflow-hidden bg-white shadow-xl rounded-b-lg">
                     <div class="overflow-x-auto">
                         @if($students->isEmpty())
                             <div class="p-6 text-center text-gray-500">
                                 <p>Bu guruhda talabalar mavjud emas.</p>
                             </div>
                         @else
-                            <table class="min-w-full border-collapse border border-gray-300">
+                            <table class="min-w-full border-collapse border border-gray-300 journal-table">
                                 <thead>
                                     <tr class="bg-gray-50">
                                         <th rowspan="2" class="px-1 py-2 text-xs font-medium text-gray-700 border border-gray-300 w-10">
@@ -156,13 +181,13 @@
                                         <th colspan="15" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             Davomat va joriy yil natijalari (baholash 100% hisobidan)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                             JN o'rtacha (%)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                             TMI o'rtacha (%)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                             Oraliq nazorat (%)
                                         </th>
                                         <th colspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
@@ -171,7 +196,7 @@
                                     </tr>
                                     <tr class="bg-gray-50">
                                         @for ($i = 1; $i <= 15; $i++)
-                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 bg-white min-w-[35px]">
+                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[35px]">
                                             </th>
                                         @endfor
                                         <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
@@ -184,7 +209,7 @@
                                 </thead>
                                 <tbody>
                                     @foreach ($students as $index => $student)
-                                        <tr class="hover:bg-gray-50">
+                                        <tr>
                                             <td class="px-1 py-2 text-sm text-center text-gray-900 border border-gray-300 w-10">
                                                 {{ $index + 1 }}
                                             </td>
@@ -192,7 +217,7 @@
                                                 {{ $student->full_name }}
                                             </td>
                                             @for ($i = 1; $i <= 15; $i++)
-                                                <td class="px-1 py-2 text-sm text-center text-gray-500 border border-gray-300 bg-white">
+                                                <td class="px-1 py-2 text-sm text-center text-gray-500 border border-gray-300">
                                                 </td>
                                             @endfor
                                             <td class="px-2 py-2 text-sm text-center border border-gray-300">
@@ -218,14 +243,14 @@
 
             <!-- Mustaqil ta'lim Tab Content -->
             <div id="content-mustaqil" class="tab-content hidden">
-                <div class="overflow-hidden bg-white shadow-xl sm:rounded-lg">
+                <div class="overflow-hidden bg-white shadow-xl rounded-b-lg">
                     <div class="overflow-x-auto">
                         @if($students->isEmpty())
                             <div class="p-6 text-center text-gray-500">
                                 <p>Bu guruhda talabalar mavjud emas.</p>
                             </div>
                         @else
-                            <table class="min-w-full border-collapse border border-gray-300">
+                            <table class="min-w-full border-collapse border border-gray-300 journal-table">
                                 <thead>
                                     <tr class="bg-gray-50">
                                         <th rowspan="2" class="px-1 py-2 text-xs font-medium text-gray-700 border border-gray-300 w-10">
@@ -237,20 +262,20 @@
                                         <th colspan="15" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
                                             Mustaqil ta'lim natijalari (baholash 100% hisobidan)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                             MT o'rtacha (%)
                                         </th>
                                     </tr>
                                     <tr class="bg-gray-50">
                                         @for ($i = 1; $i <= 15; $i++)
-                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 bg-white min-w-[35px]">
+                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[35px]">
                                             </th>
                                         @endfor
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach ($students as $index => $student)
-                                        <tr class="hover:bg-gray-50">
+                                        <tr>
                                             <td class="px-1 py-2 text-sm text-center text-gray-900 border border-gray-300 w-10">
                                                 {{ $index + 1 }}
                                             </td>
@@ -258,7 +283,7 @@
                                                 {{ $student->full_name }}
                                             </td>
                                             @for ($i = 1; $i <= 15; $i++)
-                                                <td class="px-1 py-2 text-sm text-center text-gray-500 border border-gray-300 bg-white">
+                                                <td class="px-1 py-2 text-sm text-center text-gray-500 border border-gray-300">
                                                 </td>
                                             @endfor
                                             <td class="px-2 py-2 text-sm text-center border border-gray-300">
@@ -282,19 +307,19 @@
                 content.classList.add('hidden');
             });
 
-            // Remove active class from all tabs
+            // Reset all tabs to inactive
             document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('border-blue-500', 'text-blue-600', 'bg-blue-50');
-                btn.classList.add('border-transparent', 'text-gray-500');
+                btn.classList.remove('tab-active');
+                btn.classList.add('tab-inactive');
             });
 
             // Show selected content
             document.getElementById('content-' + tabName).classList.remove('hidden');
 
-            // Add active class to selected tab
+            // Set active tab
             const activeTab = document.getElementById('tab-' + tabName);
-            activeTab.classList.remove('border-transparent', 'text-gray-500');
-            activeTab.classList.add('border-blue-500', 'text-blue-600', 'bg-blue-50');
+            activeTab.classList.remove('tab-inactive');
+            activeTab.classList.add('tab-active');
         }
     </script>
 </x-app-layout>

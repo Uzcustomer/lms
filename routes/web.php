@@ -126,6 +126,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-semesters', [JournalController::class, 'getSemesters'])->name('get-semesters');
             Route::get('/get-subjects', [JournalController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/get-groups', [JournalController::class, 'getGroups'])->name('get-groups');
+            Route::get('/get-faculties', [JournalController::class, 'getFaculties'])->name('get-faculties');
+            Route::get('/get-education-years', [JournalController::class, 'getEducationYears'])->name('get-education-years');
+            Route::get('/get-filter-options', [JournalController::class, 'getFilterOptions'])->name('get-filter-options');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');

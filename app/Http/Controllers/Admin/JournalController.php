@@ -115,6 +115,17 @@ class JournalController extends Controller
             ->where('code', $semesterCode)
             ->first();
 
+        // Get available groups with same curriculum for filter
+        $availableGroups = Group::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+            ->orderBy('name')
+            ->get();
+
+        // Get available subjects for this semester for filter
+        $availableSubjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
+            ->where('semester_code', $semesterCode)
+            ->orderBy('subject_name')
+            ->get();
+
         // Get students with their grades for this subject
         $students = DB::table('students as st')
             ->where('st.group_id', $group->group_hemis_id)
@@ -144,7 +155,9 @@ class JournalController extends Controller
             'subject',
             'curriculum',
             'semester',
-            'students'
+            'students',
+            'availableGroups',
+            'availableSubjects'
         ));
     }
 

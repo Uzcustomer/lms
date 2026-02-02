@@ -88,11 +88,15 @@
                                     <!-- Second header row (for date columns and yakuniy nazorat sub-columns) -->
                                     <tr class="bg-gray-50">
                                         <!-- Date columns - placeholder for now -->
-                                        @for ($i = 1; $i <= 10; $i++)
-                                            <th class="px-2 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[40px]">
-                                                {{-- Kunlar shu yerda ko'rinadi --}}
+                                        @forelse ($lessonDates as $lessonDate)
+                                            <th class="px-2 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[70px]">
+                                                {{ $lessonDate->format('d.m.Y') }}
                                             </th>
-                                        @endfor
+                                        @empty
+                                            <th class="px-2 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[70px]">
+                                                —
+                                            </th>
+                                        @endforelse
                                         <!-- Yakuniy nazorat sub-columns -->
                                         <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 whitespace-nowrap" style="writing-mode: vertical-rl; transform: rotate(180deg);">
                                             OSKI/OSI
@@ -114,11 +118,19 @@
                                                 {{ $student->full_name }}
                                             </td>
                                             <!-- Davomat - kunlar (placeholder for now) -->
-                                            @for ($i = 1; $i <= 10; $i++)
-                                                <td class="px-2 py-2 text-sm text-center text-gray-500 border border-gray-300">
-                                                    {{-- Baholar shu yerda --}}
+                                            @forelse ($lessonDates as $lessonDate)
+                                                @php
+                                                    $dateKey = $lessonDate->format('Y-m-d');
+                                                    $gradeValue = data_get($gradesByStudentDate, $student->hemis_id . '.' . $dateKey);
+                                                @endphp
+                                                <td class="px-2 py-2 text-sm text-center text-gray-700 border border-gray-300">
+                                                    {{ $gradeValue !== null ? round($gradeValue, 0) : '' }}
                                                 </td>
-                                            @endfor
+                                            @empty
+                                                <td class="px-2 py-2 text-sm text-center text-gray-500 border border-gray-300">
+                                                    —
+                                                </td>
+                                            @endforelse
                                             <!-- JN o'rtacha -->
                                             <td class="px-2 py-2 text-sm text-center border border-gray-300">
                                                 <span class="text-blue-600 font-medium">{{ $student->jb_average ? round($student->jb_average, 0) : 0 }}</span>

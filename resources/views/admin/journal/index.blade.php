@@ -117,64 +117,63 @@
 
                             function sortIcon($column, $currentSort, $currentDirection) {
                                 if ($currentSort !== $column) {
-                                    return '<svg style="width:14px;height:14px;opacity:0.3;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>';
+                                    return '<svg style="width:14px;height:14px;opacity:0.4;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>';
                                 }
                                 if ($currentDirection === 'asc') {
-                                    return '<svg style="width:14px;height:14px;color:#3B82F6;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>';
+                                    return '<svg style="width:14px;height:14px;color:#EF4444;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>';
                                 }
-                                return '<svg style="width:14px;height:14px;color:#3B82F6;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+                                return '<svg style="width:14px;height:14px;color:#EF4444;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
                             }
                         @endphp
                         <table class="min-w-full text-sm">
-                            <thead class="bg-gray-100">
+                            <thead style="background: #2563EB;">
                                 <tr>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">#</th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
-                                        <a href="{{ sortUrl('education_type', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                    <th style="padding: 10px 12px; font-size: 12px; font-weight: 500; text-align: left; color: white;">#</th>
+                                    <th style="padding: 10px 12px; font-size: 12px; font-weight: 500; text-align: left; color: white;">
+                                        <a href="{{ sortUrl('education_type', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: white;">
                                             Ta'lim turi {!! sortIcon('education_type', $sortColumn, $sortDirection) !!}
                                         </a>
                                     </th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
-                                        <a href="{{ sortUrl('education_year', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                    <th style="padding: 10px 12px; font-size: 12px; font-weight: 500; text-align: left; color: white;">
+                                        <a href="{{ sortUrl('education_year', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: white;">
                                             O'quv yili {!! sortIcon('education_year', $sortColumn, $sortDirection) !!}
                                         </a>
                                     </th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
-                                        <a href="{{ sortUrl('faculty', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                    <th style="padding: 10px 12px; font-size: 12px; font-weight: 500; text-align: left; color: white;">
+                                        <a href="{{ sortUrl('faculty', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: white;">
                                             Fakultet {!! sortIcon('faculty', $sortColumn, $sortDirection) !!}
                                         </a>
                                     </th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
-                                        <a href="{{ sortUrl('specialty', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                    <th style="padding: 10px 12px; font-size: 12px; font-weight: 500; text-align: left; color: white;">
+                                        <a href="{{ sortUrl('specialty', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: white;">
                                             Yo'nalish {!! sortIcon('specialty', $sortColumn, $sortDirection) !!}
                                         </a>
                                     </th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
-                                        <a href="{{ sortUrl('level', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                    <th style="padding: 10px 12px; font-size: 12px; font-weight: 500; text-align: left; color: white;">
+                                        <a href="{{ sortUrl('level', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: white;">
                                             Kurs {!! sortIcon('level', $sortColumn, $sortDirection) !!}
                                         </a>
                                     </th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
-                                        <a href="{{ sortUrl('semester', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                    <th style="padding: 10px 12px; font-size: 12px; font-weight: 500; text-align: left; color: white;">
+                                        <a href="{{ sortUrl('semester', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: white;">
                                             Semestr {!! sortIcon('semester', $sortColumn, $sortDirection) !!}
                                         </a>
                                     </th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
-                                        <a href="{{ sortUrl('subject', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                    <th style="padding: 10px 12px; font-size: 12px; font-weight: 500; text-align: left; color: white;">
+                                        <a href="{{ sortUrl('subject', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: white;">
                                             Fan {!! sortIcon('subject', $sortColumn, $sortDirection) !!}
                                         </a>
                                     </th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
-                                        <a href="{{ sortUrl('group_name', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                    <th style="padding: 10px 12px; font-size: 12px; font-weight: 500; text-align: left; color: white;">
+                                        <a href="{{ sortUrl('group_name', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: white;">
                                             Guruh {!! sortIcon('group_name', $sortColumn, $sortDirection) !!}
                                         </a>
                                     </th>
-                                    <th class="px-3 py-2 text-xs font-medium text-center text-gray-600">Amal</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100">
                                 @foreach ($journals as $index => $journal)
-                                    <tr class="hover:bg-blue-50 transition-colors">
+                                    <tr onclick="window.location='{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code]) }}'" class="clickable-row">
                                         <td class="px-3 py-2 text-gray-700">{{ $journals->firstItem() + $index }}</td>
                                         <td class="px-3 py-2 text-gray-700">{{ $journal->education_type_name ?? '-' }}</td>
                                         <td class="px-3 py-2 text-gray-700">{{ $journal->education_year_name ?? '-' }}</td>
@@ -184,16 +183,6 @@
                                         <td class="px-3 py-2 text-gray-700">{{ $journal->semester_name ?? '-' }}</td>
                                         <td class="px-3 py-2 text-gray-700" title="{{ $journal->subject_name }}">{{ Str::limit($journal->subject_name ?? '-', 30) }}</td>
                                         <td class="px-3 py-2 text-gray-700 font-medium">{{ $journal->group_name ?? '-' }}</td>
-                                        <td class="px-3 py-2 text-center">
-                                            <a href="{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code]) }}"
-                                               class="inline-flex items-center px-2 py-1 text-xs text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors">
-                                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                </svg>
-                                                Ko'rish
-                                            </a>
-                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -223,7 +212,7 @@
                 $('#filter-form').submit();
             }
 
-            // Initialize Select2 with compact styling
+            // Initialize Select2 with compact styling and auto-focus search
             $('.filter-select').each(function () {
                 $(this).select2({
                     theme: 'classic',
@@ -231,8 +220,15 @@
                     allowClear: true,
                     placeholder: 'Tanlang',
                     dropdownAutoWidth: true,
-                    minimumResultsForSearch: 10
+                    minimumResultsForSearch: 0
                 });
+            });
+
+            // Auto-focus search field when dropdown opens
+            $(document).on('select2:open', function() {
+                setTimeout(function() {
+                    document.querySelector('.select2-container--open .select2-search__field').focus();
+                }, 0);
             });
 
             const selectedSpecialty = @json(request('specialty'));
@@ -422,6 +418,17 @@
         }
         .select2-container--classic .select2-results__option--highlighted.select2-results__option--selectable {
             background-color: #3B82F6 !important;
+        }
+        /* Clickable rows */
+        .clickable-row {
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .clickable-row:hover {
+            background-color: #DBEAFE !important;
+        }
+        .clickable-row:hover td {
+            color: #1E40AF;
         }
     </style>
 </x-app-layout>

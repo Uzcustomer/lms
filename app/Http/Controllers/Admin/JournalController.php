@@ -91,14 +91,35 @@ class JournalController extends Controller
             $query->where('g.id', $request->group);
         }
 
+        // Sorting
+        $sortColumn = $request->get('sort', 'group_name');
+        $sortDirection = $request->get('direction', 'asc');
+
+        // Map sort columns to actual database columns
+        $sortMap = [
+            'education_type' => 'c.education_type_name',
+            'education_year' => 'c.education_year_name',
+            'faculty' => 'd.name',
+            'specialty' => 'sp.name',
+            'level' => 's.level_name',
+            'semester' => 'cs.semester_name',
+            'subject' => 'cs.subject_name',
+            'group_name' => 'g.name',
+        ];
+
+        $orderColumn = $sortMap[$sortColumn] ?? 'g.name';
+        $query->orderBy($orderColumn, $sortDirection);
+
         $perPage = $request->get('per_page', 50);
-        $journals = $query->orderBy('g.name')->paginate($perPage)->appends($request->query());
+        $journals = $query->paginate($perPage)->appends($request->query());
 
         return view('admin.journal.index', compact(
             'journals',
             'educationTypes',
             'educationYears',
-            'faculties'
+            'faculties',
+            'sortColumn',
+            'sortDirection'
         ));
     }
 

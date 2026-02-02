@@ -106,18 +106,69 @@
                             <p>Hozircha ma'lumot mavjud emas.</p>
                         </div>
                     @else
+                        @php
+                            $sortColumn = $sortColumn ?? 'group_name';
+                            $sortDirection = $sortDirection ?? 'asc';
+
+                            function sortUrl($column, $currentSort, $currentDirection) {
+                                $direction = ($currentSort === $column && $currentDirection === 'asc') ? 'desc' : 'asc';
+                                return request()->fullUrlWithQuery(['sort' => $column, 'direction' => $direction]);
+                            }
+
+                            function sortIcon($column, $currentSort, $currentDirection) {
+                                if ($currentSort !== $column) {
+                                    return '<svg style="width:14px;height:14px;opacity:0.3;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>';
+                                }
+                                if ($currentDirection === 'asc') {
+                                    return '<svg style="width:14px;height:14px;color:#3B82F6;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>';
+                                }
+                                return '<svg style="width:14px;height:14px;color:#3B82F6;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+                            }
+                        @endphp
                         <table class="min-w-full text-sm">
                             <thead class="bg-gray-100">
                                 <tr>
                                     <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">#</th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">Ta'lim turi</th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">O'quv yili</th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">Fakultet</th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">Yo'nalish</th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">Kurs</th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">Semestr</th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">Fan</th>
-                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">Guruh</th>
+                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
+                                        <a href="{{ sortUrl('education_type', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                            Ta'lim turi {!! sortIcon('education_type', $sortColumn, $sortDirection) !!}
+                                        </a>
+                                    </th>
+                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
+                                        <a href="{{ sortUrl('education_year', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                            O'quv yili {!! sortIcon('education_year', $sortColumn, $sortDirection) !!}
+                                        </a>
+                                    </th>
+                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
+                                        <a href="{{ sortUrl('faculty', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                            Fakultet {!! sortIcon('faculty', $sortColumn, $sortDirection) !!}
+                                        </a>
+                                    </th>
+                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
+                                        <a href="{{ sortUrl('specialty', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                            Yo'nalish {!! sortIcon('specialty', $sortColumn, $sortDirection) !!}
+                                        </a>
+                                    </th>
+                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
+                                        <a href="{{ sortUrl('level', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                            Kurs {!! sortIcon('level', $sortColumn, $sortDirection) !!}
+                                        </a>
+                                    </th>
+                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
+                                        <a href="{{ sortUrl('semester', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                            Semestr {!! sortIcon('semester', $sortColumn, $sortDirection) !!}
+                                        </a>
+                                    </th>
+                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
+                                        <a href="{{ sortUrl('subject', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                            Fan {!! sortIcon('subject', $sortColumn, $sortDirection) !!}
+                                        </a>
+                                    </th>
+                                    <th class="px-3 py-2 text-xs font-medium text-left text-gray-600">
+                                        <a href="{{ sortUrl('group_name', $sortColumn, $sortDirection) }}" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; text-decoration: none; color: inherit;">
+                                            Guruh {!! sortIcon('group_name', $sortColumn, $sortDirection) !!}
+                                        </a>
+                                    </th>
                                     <th class="px-3 py-2 text-xs font-medium text-center text-gray-600">Amal</th>
                                 </tr>
                             </thead>

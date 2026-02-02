@@ -19,110 +19,82 @@
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
             <div class="overflow-hidden bg-white shadow-sm sm:rounded-lg">
                 <!-- Compact Filters -->
-                <form id="filter-form" method="GET" action="{{ route('admin.journal.index') }}" class="px-4 py-3 bg-gray-50 border-b">
+                <form id="filter-form" method="GET" action="{{ route('admin.journal.index') }}" style="padding: 12px 16px; background: #F9FAFB; border-bottom: 1px solid #E5E7EB;">
                     <!-- First Row -->
-                    <div class="grid grid-cols-5 gap-3 mb-3">
-                        <!-- Ta'lim turi -->
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 10px;">
                         <div>
-                            <label class="block text-xs text-gray-500 mb-1">Ta'lim turi</label>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 3px;">Ta'lim turi</label>
                             <select name="education_type" id="education_type" class="filter-select">
                                 <option value="">Barchasi</option>
                                 @foreach($educationTypes as $type)
-                                    <option value="{{ $type->education_type_code }}" {{ request('education_type') == $type->education_type_code ? 'selected' : '' }}>
-                                        {{ $type->education_type_name }}
-                                    </option>
+                                    <option value="{{ $type->education_type_code }}" {{ request('education_type') == $type->education_type_code ? 'selected' : '' }}>{{ $type->education_type_name }}</option>
                                 @endforeach
                             </select>
                         </div>
-
-                        <!-- O'quv yili -->
                         <div>
-                            <label class="block text-xs text-gray-500 mb-1">O'quv yili</label>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 3px;">O'quv yili</label>
                             <select name="education_year" id="education_year" class="filter-select">
                                 <option value="">Barchasi</option>
                                 @foreach($educationYears as $year)
-                                    <option value="{{ $year->education_year_code }}" {{ request('education_year') == $year->education_year_code ? 'selected' : '' }}>
-                                        {{ $year->education_year_name }}
-                                    </option>
+                                    <option value="{{ $year->education_year_code }}" {{ request('education_year') == $year->education_year_code ? 'selected' : '' }}>{{ $year->education_year_name }}</option>
                                 @endforeach
                             </select>
                         </div>
-
-                        <!-- Fakultet -->
                         <div>
-                            <label class="block text-xs text-gray-500 mb-1">Fakultet</label>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 3px;">Fakultet</label>
                             <select name="faculty" id="faculty" class="filter-select">
                                 <option value="">Barchasi</option>
                                 @foreach($faculties as $faculty)
-                                    <option value="{{ $faculty->id }}" {{ request('faculty') == $faculty->id ? 'selected' : '' }}>
-                                        {{ $faculty->name }}
-                                    </option>
+                                    <option value="{{ $faculty->id }}" {{ request('faculty') == $faculty->id ? 'selected' : '' }}>{{ $faculty->name }}</option>
                                 @endforeach
                             </select>
                         </div>
-
-                        <!-- Yo'nalish -->
                         <div>
-                            <label class="block text-xs text-gray-500 mb-1">Yo'nalish</label>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 3px;">Yo'nalish</label>
                             <select name="specialty" id="specialty" class="filter-select">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
-
-                        <!-- Guruh -->
                         <div>
-                            <label class="block text-xs text-gray-500 mb-1">Guruh</label>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 3px;">Guruh</label>
                             <select name="group" id="group" class="filter-select">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
                     </div>
-
                     <!-- Second Row -->
-                    <div class="grid grid-cols-5 gap-3">
-                        <!-- Kurs -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 2fr 1fr 60px; gap: 12px; align-items: end;">
                         <div>
-                            <label class="block text-xs text-gray-500 mb-1">Kurs</label>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 3px;">Kurs</label>
                             <select name="level_code" id="level_code" class="filter-select">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
-
-                        <!-- Semestr -->
                         <div>
-                            <label class="block text-xs text-gray-500 mb-1">Semestr</label>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 3px;">Semestr</label>
                             <select name="semester_code" id="semester_code" class="filter-select">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
-
-                        <!-- Fan -->
-                        <div class="col-span-2">
-                            <label class="block text-xs text-gray-500 mb-1">Fan</label>
+                        <div>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 3px;">Fan</label>
                             <select name="subject" id="subject" class="filter-select">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
-
-                        <!-- Per page + Loading -->
-                        <div class="flex items-end gap-2">
-                            <div class="flex-1">
-                                <label class="block text-xs text-gray-500 mb-1">Soni</label>
-                                <select id="per_page" name="per_page" class="filter-select">
-                                    @foreach([10, 25, 50, 100] as $pageSize)
-                                        <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>
-                                            {{ $pageSize }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <!-- Loading indicator -->
-                            <div id="filter-loading" class="hidden items-center text-blue-500 pb-2">
-                                <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                            </div>
+                        <div>
+                            <label style="display: block; font-size: 11px; color: #6B7280; margin-bottom: 3px;">Soni</label>
+                            <select id="per_page" name="per_page" class="filter-select">
+                                @foreach([10, 25, 50, 100] as $pageSize)
+                                    <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>{{ $pageSize }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div id="filter-loading" style="display: none; align-items: center; justify-content: center; padding-bottom: 6px;">
+                            <svg style="animation: spin 1s linear infinite; height: 20px; width: 20px; color: #3B82F6;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
                         </div>
                     </div>
                 </form>
@@ -196,7 +168,7 @@
             // Auto-submit function
             function autoSubmitForm() {
                 if (isInitialLoad) return;
-                $('#filter-loading').removeClass('hidden').addClass('flex');
+                $('#filter-loading').css('display', 'flex');
                 $('#filter-form').submit();
             }
 

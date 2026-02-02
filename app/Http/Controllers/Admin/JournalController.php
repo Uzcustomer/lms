@@ -44,25 +44,16 @@ class JournalController extends Controller
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->select([
                 'cs.id',
-                'cs.curriculum_subject_hemis_id',
                 'cs.subject_id',
                 'cs.subject_name',
                 'cs.semester_code',
                 'cs.semester_name',
-                'c.curricula_hemis_id',
-                'c.education_type_code',
                 'c.education_type_name',
-                'c.education_year_code',
                 'c.education_year_name',
                 'g.id as group_id',
-                'g.group_hemis_id',
                 'g.name as group_name',
-                'd.id as department_id',
-                'd.department_hemis_id',
                 'd.name as department_name',
-                'sp.specialty_hemis_id',
                 'sp.name as specialty_name',
-                's.level_code',
                 's.level_name',
             ])
             ->distinct();
@@ -127,6 +118,7 @@ class JournalController extends Controller
         // Get students with their grades for this subject
         $students = DB::table('students as st')
             ->where('st.group_id', $group->group_hemis_id)
+            ->where('st.is_active', true)
             ->leftJoin('student_grades as sg', function ($join) use ($subjectId, $semesterCode) {
                 $join->on('sg.student_hemis_id', '=', 'st.hemis_id')
                     ->where('sg.subject_id', '=', $subjectId)

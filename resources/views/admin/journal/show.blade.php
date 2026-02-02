@@ -1,125 +1,240 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between">
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                Jurnal: {{ $group->name }} - {{ $subject->subject_name }}
-            </h2>
-            <a href="{{ route('admin.journal.index') }}" class="inline-flex items-center px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        <div class="flex items-center gap-4">
+            <a href="{{ route('admin.journal.index') }}" class="flex items-center justify-center w-10 h-10 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
-                Orqaga
             </a>
+            <h2 class="text-xl font-semibold leading-tight text-gray-800">
+                Jurnal tafsilotlari
+            </h2>
         </div>
     </x-slot>
 
-    <div class="py-12">
+    <div class="py-6">
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
-            <!-- Info Cards -->
-            <div class="grid grid-cols-1 gap-4 mb-6 md:grid-cols-2 lg:grid-cols-4">
-                <div class="p-4 bg-white rounded-lg shadow">
-                    <div class="text-sm font-medium text-gray-500">Guruh</div>
-                    <div class="mt-1 text-lg font-semibold text-gray-900">{{ $group->name }}</div>
-                </div>
-                <div class="p-4 bg-white rounded-lg shadow">
-                    <div class="text-sm font-medium text-gray-500">Fan</div>
-                    <div class="mt-1 text-lg font-semibold text-gray-900">{{ $subject->subject_name }}</div>
-                </div>
-                <div class="p-4 bg-white rounded-lg shadow">
-                    <div class="text-sm font-medium text-gray-500">Semestr</div>
-                    <div class="mt-1 text-lg font-semibold text-gray-900">{{ $semester->name ?? $subject->semester_name }}</div>
-                </div>
-                <div class="p-4 bg-white rounded-lg shadow">
-                    <div class="text-sm font-medium text-gray-500">Talabalar soni</div>
-                    <div class="mt-1 text-lg font-semibold text-gray-900">{{ $students->count() }}</div>
+            <!-- Tabs -->
+            <div class="mb-4 border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8">
+                    <button id="tab-amaliyot" onclick="switchTab('amaliyot')"
+                        class="tab-btn active whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600">
+                        Amaliyot
+                    </button>
+                    <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
+                        class="tab-btn whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        Mustaqil ta'lim
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Info Panel -->
+            <div class="mb-4 p-4 bg-white rounded-lg shadow-sm">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                        <span class="text-gray-500">Guruh:</span>
+                        <span class="font-medium ml-1">{{ $group->name }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">Fan:</span>
+                        <span class="font-medium ml-1">{{ $subject->subject_name }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">Semestr:</span>
+                        <span class="font-medium ml-1">{{ $semester->name ?? $subject->semester_name }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">Talabalar soni:</span>
+                        <span class="font-medium ml-1">{{ $students->count() }}</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- Students Table -->
-            <div class="overflow-hidden bg-white shadow-xl sm:rounded-lg">
-                <div class="overflow-x-auto">
-                    @if($students->isEmpty())
-                        <div class="p-6 text-center text-gray-500">
-                            <p>Bu guruhda talabalar mavjud emas.</p>
-                        </div>
-                    @else
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">T/R</th>
-                                    <th class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Talaba</th>
-                                    <th class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">ID raqam</th>
-                                    <th class="px-4 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">JB</th>
-                                    <th class="px-4 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">MT</th>
-                                    <th class="px-4 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">ON</th>
-                                    <th class="px-4 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">OSKI</th>
-                                    <th class="px-4 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">Test</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                @foreach ($students as $index => $student)
-                                    <tr class="hover:bg-gray-50">
-                                        <td class="px-4 py-4 text-sm text-gray-900 whitespace-nowrap">
-                                            {{ $index + 1 }}
-                                        </td>
-                                        <td class="px-4 py-4 text-sm text-gray-900 whitespace-nowrap">
-                                            {{ $student->full_name }}
-                                        </td>
-                                        <td class="px-4 py-4 text-sm text-gray-500 whitespace-nowrap">
-                                            {{ $student->student_id_number ?? '-' }}
-                                        </td>
-                                        <td class="px-4 py-4 text-sm text-center whitespace-nowrap">
-                                            @if($student->jb_average)
-                                                <span class="px-2 py-1 text-xs font-semibold rounded {{ $student->jb_average >= 60 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                                    {{ round($student->jb_average, 1) }}
-                                                </span>
-                                            @else
-                                                <span class="text-gray-400">-</span>
-                                            @endif
-                                        </td>
-                                        <td class="px-4 py-4 text-sm text-center whitespace-nowrap">
-                                            @if($student->mt_average)
-                                                <span class="px-2 py-1 text-xs font-semibold rounded {{ $student->mt_average >= 60 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                                    {{ round($student->mt_average, 1) }}
-                                                </span>
-                                            @else
-                                                <span class="text-gray-400">-</span>
-                                            @endif
-                                        </td>
-                                        <td class="px-4 py-4 text-sm text-center whitespace-nowrap">
-                                            @if($student->on_average)
-                                                <span class="px-2 py-1 text-xs font-semibold rounded {{ $student->on_average >= 60 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                                    {{ round($student->on_average, 1) }}
-                                                </span>
-                                            @else
-                                                <span class="text-gray-400">-</span>
-                                            @endif
-                                        </td>
-                                        <td class="px-4 py-4 text-sm text-center whitespace-nowrap">
-                                            @if($student->oski_average)
-                                                <span class="px-2 py-1 text-xs font-semibold rounded {{ $student->oski_average >= 60 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                                    {{ round($student->oski_average, 1) }}
-                                                </span>
-                                            @else
-                                                <span class="text-gray-400">-</span>
-                                            @endif
-                                        </td>
-                                        <td class="px-4 py-4 text-sm text-center whitespace-nowrap">
-                                            @if($student->test_average)
-                                                <span class="px-2 py-1 text-xs font-semibold rounded {{ $student->test_average >= 60 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                                    {{ round($student->test_average, 1) }}
-                                                </span>
-                                            @else
-                                                <span class="text-gray-400">-</span>
-                                            @endif
-                                        </td>
+            <!-- Amaliyot Tab Content -->
+            <div id="content-amaliyot" class="tab-content">
+                <div class="overflow-hidden bg-white shadow-xl sm:rounded-lg">
+                    <div class="overflow-x-auto">
+                        @if($students->isEmpty())
+                            <div class="p-6 text-center text-gray-500">
+                                <p>Bu guruhda talabalar mavjud emas.</p>
+                            </div>
+                        @else
+                            <table class="min-w-full border-collapse border border-gray-300">
+                                <thead>
+                                    <!-- First header row -->
+                                    <tr class="bg-gray-50">
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-gray-700 border border-gray-300 whitespace-nowrap">
+                                            №<br>T/R
+                                        </th>
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-left text-gray-700 border border-gray-300 min-w-[250px]">
+                                            Talabaning F.I.SH.
+                                        </th>
+                                        <th colspan="10" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
+                                            Davomat va joriy yil natijalari (baholash 100% hisobidan)
+                                        </th>
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 whitespace-nowrap" style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                                            JN o'rtacha (%)
+                                        </th>
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 whitespace-nowrap" style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                                            TMI o'rtacha (%)
+                                        </th>
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 whitespace-nowrap" style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                                            Oraliq nazorat (%)
+                                        </th>
+                                        <th colspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
+                                            Yakuniy nazorat (%)
+                                        </th>
                                     </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    @endif
+                                    <!-- Second header row (for date columns and yakuniy nazorat sub-columns) -->
+                                    <tr class="bg-gray-50">
+                                        <!-- Date columns - placeholder for now -->
+                                        @for ($i = 1; $i <= 10; $i++)
+                                            <th class="px-2 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[40px]">
+                                                {{-- Kunlar shu yerda ko'rinadi --}}
+                                            </th>
+                                        @endfor
+                                        <!-- Yakuniy nazorat sub-columns -->
+                                        <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 whitespace-nowrap" style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                                            OSKI/OSI
+                                        </th>
+                                        <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 whitespace-nowrap" style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                                            Komp. (yazma)
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($students as $index => $student)
+                                        <tr class="hover:bg-gray-50">
+                                            <!-- T/R -->
+                                            <td class="px-3 py-2 text-sm text-center text-gray-900 border border-gray-300">
+                                                {{ $index + 1 }}
+                                            </td>
+                                            <!-- F.I.SH. -->
+                                            <td class="px-3 py-2 text-sm text-gray-900 border border-gray-300">
+                                                {{ $student->full_name }}
+                                            </td>
+                                            <!-- Davomat - kunlar (placeholder for now) -->
+                                            @for ($i = 1; $i <= 10; $i++)
+                                                <td class="px-2 py-2 text-sm text-center text-gray-500 border border-gray-300">
+                                                    {{-- Baholar shu yerda --}}
+                                                </td>
+                                            @endfor
+                                            <!-- JN o'rtacha -->
+                                            <td class="px-2 py-2 text-sm text-center border border-gray-300">
+                                                <span class="text-blue-600 font-medium">{{ $student->jb_average ? round($student->jb_average, 0) : 0 }}</span>
+                                            </td>
+                                            <!-- TMI o'rtacha -->
+                                            <td class="px-2 py-2 text-sm text-center border border-gray-300">
+                                                <span class="text-blue-600 font-medium">{{ $student->mt_average ? round($student->mt_average, 0) : 0 }}</span>
+                                            </td>
+                                            <!-- Oraliq nazorat -->
+                                            <td class="px-2 py-2 text-sm text-center border border-gray-300">
+                                                {{-- ON qiymati --}}
+                                            </td>
+                                            <!-- OSKI/OSI -->
+                                            <td class="px-2 py-2 text-sm text-center border border-gray-300">
+                                                {{-- OSKI qiymati --}}
+                                            </td>
+                                            <!-- Komp. (yazma) -->
+                                            <td class="px-2 py-2 text-sm text-center border border-gray-300">
+                                                {{-- Komp qiymati --}}
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        @endif
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mustaqil ta'lim Tab Content -->
+            <div id="content-mustaqil" class="tab-content hidden">
+                <div class="overflow-hidden bg-white shadow-xl sm:rounded-lg">
+                    <div class="overflow-x-auto">
+                        @if($students->isEmpty())
+                            <div class="p-6 text-center text-gray-500">
+                                <p>Bu guruhda talabalar mavjud emas.</p>
+                            </div>
+                        @else
+                            <table class="min-w-full border-collapse border border-gray-300">
+                                <thead>
+                                    <!-- First header row -->
+                                    <tr class="bg-gray-50">
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-gray-700 border border-gray-300 whitespace-nowrap">
+                                            №<br>T/R
+                                        </th>
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-left text-gray-700 border border-gray-300 min-w-[250px]">
+                                            Talabaning F.I.SH.
+                                        </th>
+                                        <th colspan="10" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300">
+                                            Mustaqil ta'lim natijalari (baholash 100% hisobidan)
+                                        </th>
+                                        <th rowspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 whitespace-nowrap" style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                                            MT o'rtacha (%)
+                                        </th>
+                                    </tr>
+                                    <!-- Second header row (for assignment columns) -->
+                                    <tr class="bg-gray-50">
+                                        @for ($i = 1; $i <= 10; $i++)
+                                            <th class="px-2 py-2 text-xs font-medium text-center text-gray-600 border border-gray-300 min-w-[40px]">
+                                                {{-- Topshiriqlar shu yerda --}}
+                                            </th>
+                                        @endfor
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($students as $index => $student)
+                                        <tr class="hover:bg-gray-50">
+                                            <!-- T/R -->
+                                            <td class="px-3 py-2 text-sm text-center text-gray-900 border border-gray-300">
+                                                {{ $index + 1 }}
+                                            </td>
+                                            <!-- F.I.SH. -->
+                                            <td class="px-3 py-2 text-sm text-gray-900 border border-gray-300">
+                                                {{ $student->full_name }}
+                                            </td>
+                                            <!-- Mustaqil ta'lim (placeholder) -->
+                                            @for ($i = 1; $i <= 10; $i++)
+                                                <td class="px-2 py-2 text-sm text-center text-gray-500 border border-gray-300">
+                                                    {{-- Baholar --}}
+                                                </td>
+                                            @endfor
+                                            <!-- MT o'rtacha -->
+                                            <td class="px-2 py-2 text-sm text-center border border-gray-300">
+                                                <span class="text-blue-600 font-medium">{{ $student->mt_average ? round($student->mt_average, 0) : 0 }}</span>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <script>
+        function switchTab(tabName) {
+            // Hide all content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-blue-500', 'text-blue-600');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+
+            // Show selected content
+            document.getElementById('content-' + tabName).classList.remove('hidden');
+
+            // Add active class to selected tab
+            const activeTab = document.getElementById('tab-' + tabName);
+            activeTab.classList.remove('border-transparent', 'text-gray-500');
+            activeTab.classList.add('border-blue-500', 'text-blue-600');
+        }
+    </script>
 </x-app-layout>

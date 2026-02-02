@@ -11,7 +11,6 @@ use App\Models\Semester;
 use App\Models\Specialty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
 
 class JournalController extends Controller
 {
@@ -116,45 +115,6 @@ class JournalController extends Controller
             ->where('code', $semesterCode)
             ->first();
 
-        $excludedTrainingTypes = [
-            'Ma’ruza',
-            "Mustaqil ta'lim",
-            'Oraliq nazorat',
-            'Oski',
-            'Yakuniy test',
-        ];
-        $excludedTrainingTypesSql = collect($excludedTrainingTypes)
-            ->map(fn ($type) => "'" . str_replace("'", "''", $type) . "'")
-            ->implode(', ');
-
-        $lessonDates = DB::table('student_grades as sg')
-            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-            ->where('st.group_id', $group->group_hemis_id)
-            ->where('sg.subject_id', $subjectId)
-            ->where('sg.semester_code', $semesterCode)
-            ->whereNotIn('sg.training_type_name', $excludedTrainingTypes)
-            ->selectRaw('DATE(sg.lesson_date) as lesson_date')
-            ->distinct()
-            ->orderBy('lesson_date')
-            ->pluck('lesson_date')
-            ->map(fn ($date) => Carbon::parse($date));
-
-        $gradesByStudentDate = DB::table('student_grades as sg')
-            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-            ->where('st.group_id', $group->group_hemis_id)
-            ->where('sg.subject_id', $subjectId)
-            ->where('sg.semester_code', $semesterCode)
-            ->whereNotIn('sg.training_type_name', $excludedTrainingTypes)
-            ->selectRaw('sg.student_hemis_id, DATE(sg.lesson_date) as lesson_date, AVG(sg.grade) as grade')
-            ->groupBy('sg.student_hemis_id', 'lesson_date')
-            ->get()
-            ->groupBy('student_hemis_id')
-            ->map(function ($items) {
-                return $items->mapWithKeys(function ($item) {
-                    return [Carbon::parse($item->lesson_date)->format('Y-m-d') => $item->grade];
-                });
-            });
-
         // Get students with their grades for this subject
         $students = DB::table('students as st')
             ->where('st.group_id', $group->group_hemis_id)
@@ -169,7 +129,7 @@ class JournalController extends Controller
                 'st.hemis_id',
                 'st.full_name',
                 'st.student_id_number',
-                DB::raw("AVG(CASE WHEN sg.training_type_name NOT IN ($excludedTrainingTypesSql) THEN sg.grade END) as jb_average"),
+                DB::raw('AVG(CASE WHEN sg.training_type_code NOT IN (99, 100, 101, 102) THEN sg.grade END) as jb_average'),
                 DB::raw('AVG(CASE WHEN sg.training_type_code = 99 THEN sg.grade END) as mt_average'),
                 DB::raw('AVG(CASE WHEN sg.training_type_code = 100 THEN sg.grade END) as on_average'),
                 DB::raw('AVG(CASE WHEN sg.training_type_code = 101 THEN sg.grade END) as oski_average'),
@@ -184,9 +144,7 @@ class JournalController extends Controller
             'subject',
             'curriculum',
             'semester',
-            'students',
-            'lessonDates',
-            'gradesByStudentDate'
+            'students'
         ));
     }
 

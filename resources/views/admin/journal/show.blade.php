@@ -90,7 +90,7 @@
                                                     JN o'rtacha (%)
                                                 </th>
                                                 <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
-                                                    TMI o'rtacha (%)
+                                                    MT o'rtacha (%)
                                                 </th>
                                                 <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                                     Oraliq nazorat (%)
@@ -108,10 +108,10 @@
                                                     </th>
                                                 @endfor
                                                 <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
-                                                    OSKI/OSI
+                                                    OSKI
                                                 </th>
                                                 <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
-                                                    Komp. (yazma)
+                                                    Test
                                                 </th>
                                             </tr>
                                         </thead>
@@ -176,7 +176,7 @@
                                                     JN o'rtacha (%)
                                                 </th>
                                                 <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
-                                                    TMI o'rtacha (%)
+                                                    MT o'rtacha (%)
                                                 </th>
                                                 <th rowspan="2" class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300 bg-gray-50" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                                     Oraliq nazorat (%)
@@ -194,10 +194,10 @@
                                                     </th>
                                                 @endfor
                                                 <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
-                                                    OSKI/OSI
+                                                    OSKI
                                                 </th>
                                                 <th class="px-2 py-2 text-xs font-medium text-center text-gray-700 border border-gray-300" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
-                                                    Komp. (yazma)
+                                                    Test
                                                 </th>
                                             </tr>
                                         </thead>

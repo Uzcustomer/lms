@@ -211,17 +211,12 @@
     <script>
         $(document).ready(function () {
             let isInitialLoad = true;
-            let autoSubmitTimeout = null;
 
-            // Debounced auto-submit function
+            // Auto-submit function - submits immediately
             function autoSubmitForm() {
                 if (isInitialLoad) return;
-
-                clearTimeout(autoSubmitTimeout);
-                autoSubmitTimeout = setTimeout(function() {
-                    $('#filter-loading').removeClass('hidden').addClass('flex');
-                    $('#filter-form').submit();
-                }, 300);
+                $('#filter-loading').removeClass('hidden').addClass('flex');
+                $('#filter-form').submit();
             }
 
             $('.select2').each(function () {
@@ -257,13 +252,8 @@
                 });
             }
 
-            // Auto-submit for simple filters (education_type, per_page)
-            $('#education_type, #per_page').on('change', function() {
-                autoSubmitForm();
-            });
-
-            // Auto-submit for subject and group (final selections)
-            $('#subject, #group').on('change', function() {
+            // Auto-submit for ALL filters immediately
+            $('#education_type, #per_page, #subject, #group').on('change', function() {
                 autoSubmitForm();
             });
 
@@ -279,9 +269,8 @@
                     populateDropdown('{{ route("admin.journal.get-groups") }}', { faculty_id: facultyId }, '#group', () => {
                         if (selectedGroup) $('#group').val(selectedGroup).trigger('change.select2');
                     });
-                } else {
-                    autoSubmitForm();
                 }
+                autoSubmitForm();
             });
 
             $('#specialty').change(function () {
@@ -292,11 +281,9 @@
                 if (specialtyId || facultyId) {
                     populateDropdown('{{ route("admin.journal.get-groups") }}', { faculty_id: facultyId, specialty_id: specialtyId }, '#group', () => {
                         if (selectedGroup) $('#group').val(selectedGroup).trigger('change.select2');
-                        else autoSubmitForm();
                     });
-                } else {
-                    autoSubmitForm();
                 }
+                autoSubmitForm();
             });
 
             $('#education_year').change(function () {
@@ -309,9 +296,8 @@
                     populateDropdown('{{ route("admin.journal.get-level-codes") }}', { education_year: educationYear }, '#level_code', () => {
                         if (selectedLevelCode) $('#level_code').val(selectedLevelCode).trigger('change');
                     });
-                } else {
-                    autoSubmitForm();
                 }
+                autoSubmitForm();
             });
 
             $('#level_code').change(function () {
@@ -323,9 +309,8 @@
                     populateDropdown('{{ route("admin.journal.get-semesters") }}', { level_code: levelCode }, '#semester_code', () => {
                         if (selectedSemesterCode) $('#semester_code').val(selectedSemesterCode).trigger('change');
                     });
-                } else {
-                    autoSubmitForm();
                 }
+                autoSubmitForm();
             });
 
             $('#semester_code').change(function () {
@@ -335,11 +320,9 @@
                 if (semesterCode) {
                     populateDropdown('{{ route("admin.journal.get-subjects") }}', { semester_code: semesterCode }, '#subject', () => {
                         if (selectedSubject) $('#subject').val(selectedSubject).trigger('change.select2');
-                        else autoSubmitForm();
                     });
-                } else {
-                    autoSubmitForm();
                 }
+                autoSubmitForm();
             });
 
             @if(request('faculty'))
@@ -350,10 +333,10 @@
                 $('#education_year').trigger('change');
             @endif
 
-            // Mark initial load as complete after a short delay
+            // Mark initial load as complete after dropdowns are populated
             setTimeout(function() {
                 isInitialLoad = false;
-            }, 1000);
+            }, 1500);
         });
     </script>
 

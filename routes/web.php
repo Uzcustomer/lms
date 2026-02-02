@@ -19,6 +19,7 @@ use App\Http\Controllers\Teacher\TeacherMainController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
+use App\Http\Controllers\Admin\JournalController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -115,6 +116,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/delete/{id}', [VedomostController::class, 'delete'])->name('delete');
 
         });
+
+        Route::prefix('journal')->name('journal.')->group(function () {
+            Route::get('', [JournalController::class, 'index'])->name('index');
+            Route::get('/show/{groupId}/{subjectId}/{semesterCode}', [JournalController::class, 'show'])->name('show');
+            Route::get('/get-specialties', [JournalController::class, 'getSpecialties'])->name('get-specialties');
+            Route::get('/get-level-codes', [JournalController::class, 'getLevelCodes'])->name('get-level-codes');
+            Route::get('/get-semesters', [JournalController::class, 'getSemesters'])->name('get-semesters');
+            Route::get('/get-subjects', [JournalController::class, 'getSubjects'])->name('get-subjects');
+            Route::get('/get-groups', [JournalController::class, 'getGroups'])->name('get-groups');
+        });
+
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');
         Route::get('/get-curricula', [AdminStudentController::class, 'getCurricula'])->name('get-curricula');
         Route::get('/get-subjects', [AdminStudentController::class, 'getSubjects'])->name('get-subjects');

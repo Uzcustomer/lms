@@ -20,9 +20,10 @@
             <div class="overflow-hidden bg-white shadow-sm sm:rounded-lg">
                 <!-- Compact Filters -->
                 <form id="filter-form" method="GET" action="{{ route('admin.journal.index') }}" class="px-4 py-3 bg-gray-50 border-b">
-                    <div class="flex flex-wrap items-end gap-2">
+                    <!-- First Row -->
+                    <div class="grid grid-cols-5 gap-3 mb-3">
                         <!-- Ta'lim turi -->
-                        <div class="w-28">
+                        <div>
                             <label class="block text-xs text-gray-500 mb-1">Ta'lim turi</label>
                             <select name="education_type" id="education_type" class="filter-select">
                                 <option value="">Barchasi</option>
@@ -35,7 +36,7 @@
                         </div>
 
                         <!-- O'quv yili -->
-                        <div class="w-28">
+                        <div>
                             <label class="block text-xs text-gray-500 mb-1">O'quv yili</label>
                             <select name="education_year" id="education_year" class="filter-select">
                                 <option value="">Barchasi</option>
@@ -48,7 +49,7 @@
                         </div>
 
                         <!-- Fakultet -->
-                        <div class="w-40">
+                        <div>
                             <label class="block text-xs text-gray-500 mb-1">Fakultet</label>
                             <select name="faculty" id="faculty" class="filter-select">
                                 <option value="">Barchasi</option>
@@ -61,15 +62,26 @@
                         </div>
 
                         <!-- Yo'nalish -->
-                        <div class="w-44">
+                        <div>
                             <label class="block text-xs text-gray-500 mb-1">Yo'nalish</label>
                             <select name="specialty" id="specialty" class="filter-select">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
 
+                        <!-- Guruh -->
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Guruh</label>
+                            <select name="group" id="group" class="filter-select">
+                                <option value="">Barchasi</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Second Row -->
+                    <div class="grid grid-cols-5 gap-3">
                         <!-- Kurs -->
-                        <div class="w-24">
+                        <div>
                             <label class="block text-xs text-gray-500 mb-1">Kurs</label>
                             <select name="level_code" id="level_code" class="filter-select">
                                 <option value="">Barchasi</option>
@@ -77,7 +89,7 @@
                         </div>
 
                         <!-- Semestr -->
-                        <div class="w-28">
+                        <div>
                             <label class="block text-xs text-gray-500 mb-1">Semestr</label>
                             <select name="semester_code" id="semester_code" class="filter-select">
                                 <option value="">Barchasi</option>
@@ -85,39 +97,32 @@
                         </div>
 
                         <!-- Fan -->
-                        <div class="w-48">
+                        <div class="col-span-2">
                             <label class="block text-xs text-gray-500 mb-1">Fan</label>
                             <select name="subject" id="subject" class="filter-select">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
 
-                        <!-- Guruh -->
-                        <div class="w-28">
-                            <label class="block text-xs text-gray-500 mb-1">Guruh</label>
-                            <select name="group" id="group" class="filter-select">
-                                <option value="">Barchasi</option>
-                            </select>
-                        </div>
-
-                        <!-- Per page -->
-                        <div class="w-16">
-                            <label class="block text-xs text-gray-500 mb-1">Soni</label>
-                            <select id="per_page" name="per_page" class="filter-select">
-                                @foreach([10, 25, 50, 100] as $pageSize)
-                                    <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>
-                                        {{ $pageSize }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <!-- Loading indicator -->
-                        <div id="filter-loading" class="hidden items-center text-blue-500 ml-2">
-                            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
+                        <!-- Per page + Loading -->
+                        <div class="flex items-end gap-2">
+                            <div class="flex-1">
+                                <label class="block text-xs text-gray-500 mb-1">Soni</label>
+                                <select id="per_page" name="per_page" class="filter-select">
+                                    @foreach([10, 25, 50, 100] as $pageSize)
+                                        <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>
+                                            {{ $pageSize }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <!-- Loading indicator -->
+                            <div id="filter-loading" class="hidden items-center text-blue-500 pb-2">
+                                <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -347,36 +352,53 @@
             min-width: 100% !important;
         }
         .select2-container--classic .select2-selection--single {
-            height: 30px !important;
+            height: 32px !important;
             border: 1px solid #D1D5DB !important;
-            border-radius: 4px !important;
+            border-radius: 6px !important;
             background: white !important;
         }
         .select2-container--classic .select2-selection--single .select2-selection__rendered {
-            line-height: 28px !important;
-            padding-left: 8px !important;
-            padding-right: 20px !important;
+            line-height: 30px !important;
+            padding-left: 10px !important;
+            padding-right: 40px !important;
             color: #374151 !important;
-            font-size: 12px !important;
+            font-size: 13px !important;
         }
         .select2-container--classic .select2-selection--single .select2-selection__arrow {
-            height: 28px !important;
-            width: 20px !important;
+            height: 30px !important;
+            width: 24px !important;
             background: transparent !important;
             border: none !important;
+            right: 1px !important;
         }
         .select2-container--classic .select2-selection--single .select2-selection__arrow b {
             border-color: #6B7280 transparent transparent transparent !important;
-        }
-        .select2-dropdown {
-            font-size: 12px !important;
-        }
-        .select2-results__option {
-            padding: 4px 8px !important;
+            margin-top: -2px !important;
         }
         .select2-container--classic .select2-selection--single .select2-selection__clear {
-            margin-right: 4px !important;
-            font-size: 14px !important;
+            position: absolute !important;
+            right: 24px !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            font-size: 16px !important;
+            font-weight: bold !important;
+            color: #9CA3AF !important;
+            cursor: pointer !important;
+            padding: 0 4px !important;
+            line-height: 1 !important;
+        }
+        .select2-container--classic .select2-selection--single .select2-selection__clear:hover {
+            color: #EF4444 !important;
+        }
+        .select2-dropdown {
+            font-size: 13px !important;
+            border-radius: 6px !important;
+        }
+        .select2-results__option {
+            padding: 6px 10px !important;
+        }
+        .select2-container--classic .select2-results__option--highlighted.select2-results__option--selectable {
+            background-color: #3B82F6 !important;
         }
     </style>
 </x-app-layout>

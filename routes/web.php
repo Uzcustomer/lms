@@ -170,6 +170,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Jurnal routes
         Route::prefix('jurnal')->name('jurnal.')->group(function () {
             Route::get('/', [JurnalController::class, 'index'])->name('index');
+            Route::get('/show', [JurnalController::class, 'show'])->name('show');
             Route::get('/get-groups', [JurnalController::class, 'getGroups'])->name('get-groups');
             Route::get('/get-semesters', [JurnalController::class, 'getSemesters'])->name('get-semesters');
             Route::get('/get-subjects', [JurnalController::class, 'getSubjects'])->name('get-subjects');

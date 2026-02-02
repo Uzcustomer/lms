@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\IndependentController;
+use App\Http\Controllers\Admin\JournalController;
 use App\Http\Controllers\Admin\OraliqNazoratController;
 use App\Http\Controllers\Admin\OskiController;
 use App\Http\Controllers\ExamTestController;

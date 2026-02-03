@@ -23,12 +23,13 @@
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
             <div class="overflow-hidden bg-white shadow-sm sm:rounded-lg">
                 <!-- Filters -->
-                <form id="filter-form" method="GET" action="{{ route('admin.journal.index') }}" class="p-4 bg-gray-50 border-b">
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                <form id="filter-form" method="GET" action="{{ route('admin.journal.index') }}" class="p-3 bg-gray-50 border-b">
+                    <!-- Row 1: Short filters -->
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
                         <!-- Ta'lim turi -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Ta'lim turi</label>
-                            <select name="education_type" id="education_type" class="w-full text-sm rounded select2">
+                        <div style="width: 110px;">
+                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Ta'lim turi</label>
+                            <select name="education_type" id="education_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                                 @foreach($educationTypes as $type)
                                     <option value="{{ $type->education_type_code }}" {{ request('education_type') == $type->education_type_code ? 'selected' : '' }}>
@@ -39,9 +40,9 @@
                         </div>
 
                         <!-- O'quv yili -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">O'quv yili</label>
-                            <select name="education_year" id="education_year" class="w-full text-sm rounded select2">
+                        <div style="width: 110px;">
+                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">O'quv yili</label>
+                            <select name="education_year" id="education_year" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                                 @foreach($educationYears as $year)
                                     <option value="{{ $year->education_year_code }}" {{ request('education_year') == $year->education_year_code ? 'selected' : '' }}>
@@ -51,10 +52,52 @@
                             </select>
                         </div>
 
+                        <!-- Kurs -->
+                        <div style="width: 80px;">
+                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Kurs</label>
+                            <select name="level_code" id="level_code" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                            </select>
+                        </div>
+
+                        <!-- Semestr -->
+                        <div style="width: 90px;">
+                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Semestr</label>
+                            <select name="semester_code" id="semester_code" class="select2" style="width: 100%;">
+                                <option value="">Tanlang</option>
+                            </select>
+                        </div>
+
+                        <!-- Sahifada -->
+                        <div style="width: 70px;">
+                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Sahifada</label>
+                            <select id="per_page" name="per_page" class="select2" style="width: 100%;">
+                                @foreach([10, 25, 50, 100] as $pageSize)
+                                    <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>
+                                        {{ $pageSize }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <!-- Loading indicator -->
+                        <div style="display: flex; align-items: flex-end; padding-bottom: 4px;">
+                            <div id="filter-loading" class="hidden" style="display: none; align-items: center; color: #2563eb;">
+                                <svg class="animate-spin" style="height: 16px; width: 16px; margin-right: 4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span style="font-size: 11px;">Yuklanmoqda...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Wide filters -->
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <!-- Fakultet -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Fakultet</label>
-                            <select name="faculty" id="faculty" class="w-full text-sm rounded select2">
+                        <div style="flex: 1; min-width: 150px;">
+                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Fakultet</label>
+                            <select name="faculty" id="faculty" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                                 @foreach($faculties as $faculty)
                                     <option value="{{ $faculty->id }}" {{ request('faculty') == $faculty->id ? 'selected' : '' }}>
@@ -65,72 +108,33 @@
                         </div>
 
                         <!-- Yo'nalish -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Yo'nalish</label>
-                            <select name="specialty" id="specialty" class="w-full text-sm rounded select2">
-                                <option value="">Tanlang</option>
-                            </select>
-                        </div>
-
-                        <!-- Kurs -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Kurs</label>
-                            <select name="level_code" id="level_code" class="w-full text-sm rounded select2">
-                                <option value="">Barchasi</option>
-                            </select>
-                        </div>
-
-                        <!-- Semestr -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Semestr</label>
-                            <select name="semester_code" id="semester_code" class="w-full text-sm rounded select2">
+                        <div style="flex: 1; min-width: 150px;">
+                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Yo'nalish</label>
+                            <select name="specialty" id="specialty" class="select2" style="width: 100%;">
                                 <option value="">Tanlang</option>
                             </select>
                         </div>
 
                         <!-- Fan -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Fan</label>
-                            <select name="subject" id="subject" class="w-full text-sm rounded select2">
+                        <div style="flex: 1; min-width: 150px;">
+                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Fan</label>
+                            <select name="subject" id="subject" class="select2" style="width: 100%;">
                                 <option value="">Tanlang</option>
                             </select>
                         </div>
 
                         <!-- Guruh -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Guruh</label>
-                            <select name="group" id="group" class="w-full text-sm rounded select2">
+                        <div style="width: 120px;">
+                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Guruh</label>
+                            <select name="group" id="group" class="select2" style="width: 100%;">
                                 <option value="">Tanlang</option>
                             </select>
-                        </div>
-
-                        <!-- Har bir sahifada -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Sahifada</label>
-                            <select id="per_page" name="per_page" class="w-full text-sm rounded select2">
-                                @foreach([10, 25, 50, 100] as $pageSize)
-                                    <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>
-                                        {{ $pageSize }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <!-- Loading indicator -->
-                        <div class="flex items-end pb-1">
-                            <div id="filter-loading" class="hidden items-center text-blue-600">
-                                <svg class="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span class="text-xs">Yuklanmoqda...</span>
-                            </div>
                         </div>
                     </div>
                 </form>
 
                 <!-- Table -->
-                <div class="overflow-x-auto">
+                <div style="max-height: calc(100vh - 280px); overflow-y: auto; overflow-x: auto;">
                     @if($journals->isEmpty())
                         <div class="p-6 text-center text-gray-500">
                             <p>Hozircha ma'lumot mavjud emas.</p>
@@ -141,7 +145,7 @@
                             $sortDirection = $sortDirection ?? 'asc';
                         @endphp
                         <table class="min-w-full divide-y divide-gray-200" style="font-size: 13px;">
-                            <thead style="background-color: #f8fafc;">
+                            <thead style="background-color: #f8fafc; position: sticky; top: 0; z-index: 10;">
                                 <tr>
                                     <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">#</th>
                                     @php

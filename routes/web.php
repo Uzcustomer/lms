@@ -20,7 +20,6 @@ use App\Http\Controllers\Teacher\TeacherMainController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
-use App\Http\Controllers\Admin\JournalController;
 
 Route::get('/', function () {
     return view('welcome');

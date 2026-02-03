@@ -136,7 +136,69 @@ class JournalController extends Controller
             ->where('code', $semesterCode)
             ->first();
 
-        // Get students with their grades for this subject
+        // Get student hemis IDs for this group
+        $studentHemisIds = DB::table('students')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('is_graduate', false)
+            ->pluck('hemis_id');
+
+        // Get distinct lesson dates for JB (Joriy baho) - training_type_code NOT IN (99, 100, 101, 102)
+        $jbLessonDates = DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotIn('training_type_code', [99, 100, 101, 102])
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date')
+            ->distinct()
+            ->orderBy('lesson_date')
+            ->pluck('lesson_date')
+            ->toArray();
+
+        // Get distinct lesson dates for MT (Mustaqil ta'lim) - training_type_code = 99
+        $mtLessonDates = DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date')
+            ->distinct()
+            ->orderBy('lesson_date')
+            ->pluck('lesson_date')
+            ->toArray();
+
+        // Get all individual grades for JB (Joriy baho)
+        $jbGrades = DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotIn('training_type_code', [99, 100, 101, 102])
+            ->whereNotNull('lesson_date')
+            ->select('student_hemis_id', 'lesson_date', 'grade')
+            ->get()
+            ->groupBy('student_hemis_id')
+            ->map(function ($grades) {
+                return $grades->pluck('grade', 'lesson_date')->toArray();
+            })
+            ->toArray();
+
+        // Get all individual grades for MT (Mustaqil ta'lim)
+        $mtGrades = DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNotNull('lesson_date')
+            ->select('student_hemis_id', 'lesson_date', 'grade')
+            ->get()
+            ->groupBy('student_hemis_id')
+            ->map(function ($grades) {
+                return $grades->pluck('grade', 'lesson_date')->toArray();
+            })
+            ->toArray();
+
+        // Get students with their average grades for this subject
         $students = DB::table('students as st')
             ->where('st.group_id', $group->group_hemis_id)
             ->where('st.is_graduate', false)
@@ -165,7 +227,11 @@ class JournalController extends Controller
             'subject',
             'curriculum',
             'semester',
-            'students'
+            'students',
+            'jbLessonDates',
+            'mtLessonDates',
+            'jbGrades',
+            'mtGrades'
         ));
     }
 

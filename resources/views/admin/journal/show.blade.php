@@ -70,9 +70,15 @@
                                         <th rowspan="2" class="px-3 py-3 text-xs font-medium text-gray-500 border-b border-gray-200 text-left align-bottom" style="min-width: 280px;">
                                             Talabaning F.I.SH.
                                         </th>
-                                        <th colspan="10" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200">
-                                            Davomat va joriy yil natijalari (baholash 100% hisobidan)
-                                        </th>
+                                        @if(count($jbLessonDates) > 0)
+                                            <th colspan="{{ count($jbLessonDates) }}" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200">
+                                                Davomat va joriy yil natijalari (baholash 100% hisobidan)
+                                            </th>
+                                        @else
+                                            <th colspan="1" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200">
+                                                Davomat va joriy yil natijalari (baholash 100% hisobidan)
+                                            </th>
+                                        @endif
                                         <th rowspan="2" class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 100px;">
                                             JN o'rtacha (%)
                                         </th>
@@ -86,13 +92,19 @@
                                             Yakuniy nazorat (%)
                                         </th>
                                     </tr>
-                                    <!-- Second header row -->
+                                    <!-- Second header row with lesson dates -->
                                     <tr>
-                                        @for ($i = 1; $i <= 10; $i++)
+                                        @if(count($jbLessonDates) > 0)
+                                            @foreach($jbLessonDates as $lessonDate)
+                                                <th class="px-1 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200" style="min-width: 40px; writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                                    {{ \Carbon\Carbon::parse($lessonDate)->format('d.m') }}
+                                                </th>
+                                            @endforeach
+                                        @else
                                             <th class="px-1 py-2 text-xs font-medium text-center text-gray-400 border-b border-gray-200" style="min-width: 36px;">
-                                                {{-- Sana --}}
+                                                -
                                             </th>
-                                        @endfor
+                                        @endif
                                         <th class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                             OSKI
                                         </th>
@@ -110,11 +122,24 @@
                                             <td class="px-3 py-3 text-sm text-gray-900 border-b border-gray-100 uppercase">
                                                 {{ $student->full_name }}
                                             </td>
-                                            @for ($i = 1; $i <= 10; $i++)
-                                                <td class="px-1 py-3 text-sm text-center text-gray-500 border-b border-gray-100">
-                                                    {{-- Baho --}}
+                                            @if(count($jbLessonDates) > 0)
+                                                @foreach($jbLessonDates as $lessonDate)
+                                                    <td class="px-1 py-3 text-sm text-center border-b border-gray-100">
+                                                        @php
+                                                            $grade = isset($jbGrades[$student->hemis_id][$lessonDate]) ? $jbGrades[$student->hemis_id][$lessonDate] : null;
+                                                        @endphp
+                                                        @if($grade !== null)
+                                                            <span class="text-gray-900 font-medium">{{ round($grade, 0) }}</span>
+                                                        @else
+                                                            <span class="text-gray-300">-</span>
+                                                        @endif
+                                                    </td>
+                                                @endforeach
+                                            @else
+                                                <td class="px-1 py-3 text-sm text-center text-gray-300 border-b border-gray-100">
+                                                    -
                                                 </td>
-                                            @endfor
+                                            @endif
                                             <td class="px-2 py-3 text-sm text-center border-b border-gray-100">
                                                 <span class="text-blue-600 font-medium">{{ $student->jb_average ? round($student->jb_average, 0) : 0 }}</span>
                                             </td>
@@ -157,19 +182,31 @@
                                         <th rowspan="2" class="px-3 py-3 text-xs font-medium text-gray-500 border-b border-gray-200 text-left align-bottom" style="min-width: 280px;">
                                             Talabaning F.I.SH.
                                         </th>
-                                        <th colspan="10" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200">
-                                            Mustaqil ta'lim natijalari (baholash 100% hisobidan)
-                                        </th>
+                                        @if(count($mtLessonDates) > 0)
+                                            <th colspan="{{ count($mtLessonDates) }}" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200">
+                                                Mustaqil ta'lim natijalari (baholash 100% hisobidan)
+                                            </th>
+                                        @else
+                                            <th colspan="1" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200">
+                                                Mustaqil ta'lim natijalari (baholash 100% hisobidan)
+                                            </th>
+                                        @endif
                                         <th rowspan="2" class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 100px;">
                                             MT o'rtacha (%)
                                         </th>
                                     </tr>
                                     <tr>
-                                        @for ($i = 1; $i <= 10; $i++)
+                                        @if(count($mtLessonDates) > 0)
+                                            @foreach($mtLessonDates as $lessonDate)
+                                                <th class="px-1 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200" style="min-width: 40px; writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                                    {{ \Carbon\Carbon::parse($lessonDate)->format('d.m') }}
+                                                </th>
+                                            @endforeach
+                                        @else
                                             <th class="px-1 py-2 text-xs font-medium text-center text-gray-400 border-b border-gray-200" style="min-width: 36px;">
-                                                {{-- Topshiriq --}}
+                                                -
                                             </th>
-                                        @endfor
+                                        @endif
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -181,11 +218,24 @@
                                             <td class="px-3 py-3 text-sm text-gray-900 border-b border-gray-100 uppercase">
                                                 {{ $student->full_name }}
                                             </td>
-                                            @for ($i = 1; $i <= 10; $i++)
-                                                <td class="px-1 py-3 text-sm text-center text-gray-500 border-b border-gray-100">
-                                                    {{-- Baho --}}
+                                            @if(count($mtLessonDates) > 0)
+                                                @foreach($mtLessonDates as $lessonDate)
+                                                    <td class="px-1 py-3 text-sm text-center border-b border-gray-100">
+                                                        @php
+                                                            $grade = isset($mtGrades[$student->hemis_id][$lessonDate]) ? $mtGrades[$student->hemis_id][$lessonDate] : null;
+                                                        @endphp
+                                                        @if($grade !== null)
+                                                            <span class="text-gray-900 font-medium">{{ round($grade, 0) }}</span>
+                                                        @else
+                                                            <span class="text-gray-300">-</span>
+                                                        @endif
+                                                    </td>
+                                                @endforeach
+                                            @else
+                                                <td class="px-1 py-3 text-sm text-center text-gray-300 border-b border-gray-100">
+                                                    -
                                                 </td>
-                                            @endfor
+                                            @endif
                                             <td class="px-2 py-3 text-sm text-center border-b border-gray-100">
                                                 <span class="text-blue-600 font-medium">{{ $student->mt_average ? round($student->mt_average, 0) : 0 }}</span>
                                             </td>

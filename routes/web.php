@@ -25,6 +25,10 @@ Route::get('/', function () {
     return view('welcome');
 })->name('welcome');
 
+Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':admin|teacher|examiner|dekan'])->get('/dashboard', function () {
+    return redirect()->route('admin.dashboard');
+})->name('dashboard');
+
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {

@@ -118,7 +118,7 @@ class JournalController extends Controller
         // Get students with their grades for this subject
         $students = DB::table('students as st')
             ->where('st.group_id', $group->group_hemis_id)
-            ->where('st.is_active', true)
+            ->where('st.is_graduate', false)
             ->leftJoin('student_grades as sg', function ($join) use ($subjectId, $semesterCode) {
                 $join->on('sg.student_hemis_id', '=', 'st.hemis_id')
                     ->where('sg.subject_id', '=', $subjectId)

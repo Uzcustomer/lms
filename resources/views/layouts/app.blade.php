@@ -26,8 +26,6 @@
             <x-admin-sidebar />
 
             <div class="flex-1 overflow-x-hidden overflow-y-auto">
-                @include('layouts.navigation')
-
                 <!-- Page Heading -->
                 @isset($header)
                     <header class="bg-white dark:bg-gray-800 shadow">

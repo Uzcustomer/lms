@@ -171,6 +171,7 @@ class JournalController extends Controller
             ->get();
 
         // Helper function to get effective grade based on status
+        // Returns array: ['grade' => value, 'is_retake' => bool] or null
         $getEffectiveGrade = function ($row) {
             // status = pending → null (skip)
             if ($row->status === 'pending') {
@@ -182,35 +183,47 @@ class JournalController extends Controller
             }
             // status = recorded → use grade
             if ($row->status === 'recorded') {
-                return $row->grade;
+                return ['grade' => $row->grade, 'is_retake' => false];
             }
             // status = closed (except teacher_victim case above) → use grade
             if ($row->status === 'closed') {
-                return $row->grade;
+                return ['grade' => $row->grade, 'is_retake' => false];
             }
             // All other statuses → use retake_grade
-            return $row->retake_grade;
+            if ($row->retake_grade !== null) {
+                return ['grade' => $row->retake_grade, 'is_retake' => true];
+            }
+            return null;
         };
 
-        // Build unique date+pair columns for detailed view (JB)
-        $jbColumns = $jbGradesRaw->map(function ($g) {
+        // Build unique date+pair columns for detailed view (JB) - only for pairs that have grades
+        $jbColumns = $jbGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
+            return $getEffectiveGrade($g) !== null;
+        })->map(function ($g) {
             return ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code];
         })->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
         // Build unique date+pair columns for detailed view (MT)
-        $mtColumns = $mtGradesRaw->map(function ($g) {
+        $mtColumns = $mtGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
+            return $getEffectiveGrade($g) !== null;
+        })->map(function ($g) {
             return ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code];
         })->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
         // Get distinct dates for compact view
-        $jbLessonDates = $jbGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
-        $mtLessonDates = $mtGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $jbLessonDates = $jbGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
+            return $getEffectiveGrade($g) !== null;
+        })->pluck('lesson_date')->unique()->sort()->values()->toArray();
 
-        // Build grades data structure: student_hemis_id => date => pair => grade (with effective grade calculation)
+        $mtLessonDates = $mtGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
+            return $getEffectiveGrade($g) !== null;
+        })->pluck('lesson_date')->unique()->sort()->values()->toArray();
+
+        // Build grades data structure: student_hemis_id => date => pair => ['grade' => value, 'is_retake' => bool]
         $jbGrades = [];
         foreach ($jbGradesRaw as $g) {
             $effectiveGrade = $getEffectiveGrade($g);
@@ -248,7 +261,7 @@ class JournalController extends Controller
         foreach ($otherGradesRaw as $g) {
             $effectiveGrade = $getEffectiveGrade($g);
             if ($effectiveGrade !== null) {
-                $otherGrades[$g->student_hemis_id][$g->training_type_code][] = $effectiveGrade;
+                $otherGrades[$g->student_hemis_id][$g->training_type_code][] = $effectiveGrade['grade'];
             }
         }
         // Calculate averages
@@ -266,6 +279,19 @@ class JournalController extends Controller
             $otherGrades[$studentId] = $result;
         }
 
+        // Get attendance data for each student
+        $attendanceData = DB::table('attendances')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
+            ->groupBy('student_hemis_id')
+            ->pluck('total_absent_off', 'student_hemis_id')
+            ->toArray();
+
+        // Get total academic load from curriculum subject
+        $totalAcload = $subject->total_acload ?? 0;
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
@@ -278,7 +304,9 @@ class JournalController extends Controller
             'mtGrades',
             'jbColumns',
             'mtColumns',
-            'otherGrades'
+            'otherGrades',
+            'attendanceData',
+            'totalAcload'
         ));
     }
 

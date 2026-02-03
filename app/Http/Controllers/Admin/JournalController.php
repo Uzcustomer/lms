@@ -142,31 +142,55 @@ class JournalController extends Controller
             ->where('is_graduate', false)
             ->pluck('hemis_id');
 
-        // Get all JB grades with lesson_pair info
+        // Excluded training type names for Amaliyot (JB)
+        $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test"];
+
+        // Get all JB grades with lesson_pair info and status fields
         $jbGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->whereNotIn('training_type_name', $excludedTrainingTypes)
             ->whereNotIn('training_type_code', [99, 100, 101, 102])
             ->whereNotNull('lesson_date')
-            ->whereNotNull('grade')
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
 
-        // Get all MT grades with lesson_pair info
+        // Get all MT grades with lesson_pair info and status fields
         $mtGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
-            ->whereNotNull('grade')
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
+
+        // Helper function to get effective grade based on status
+        $getEffectiveGrade = function ($row) {
+            // status = pending → null (skip)
+            if ($row->status === 'pending') {
+                return null;
+            }
+            // status = closed AND reason = teacher_victim AND grade == 0 AND retake_grade === null → null
+            if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+                return null;
+            }
+            // status = recorded → use grade
+            if ($row->status === 'recorded') {
+                return $row->grade;
+            }
+            // status = closed (except teacher_victim case above) → use grade
+            if ($row->status === 'closed') {
+                return $row->grade;
+            }
+            // All other statuses → use retake_grade
+            return $row->retake_grade;
+        };
 
         // Build unique date+pair columns for detailed view (JB)
         $jbColumns = $jbGradesRaw->map(function ($g) {
@@ -186,15 +210,21 @@ class JournalController extends Controller
         $jbLessonDates = $jbGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
         $mtLessonDates = $mtGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
 
-        // Build grades data structure: student_hemis_id => date => pair => grade
+        // Build grades data structure: student_hemis_id => date => pair => grade (with effective grade calculation)
         $jbGrades = [];
         foreach ($jbGradesRaw as $g) {
-            $jbGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = $g->grade;
+            $effectiveGrade = $getEffectiveGrade($g);
+            if ($effectiveGrade !== null) {
+                $jbGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
+            }
         }
 
         $mtGrades = [];
         foreach ($mtGradesRaw as $g) {
-            $mtGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = $g->grade;
+            $effectiveGrade = $getEffectiveGrade($g);
+            if ($effectiveGrade !== null) {
+                $mtGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
+            }
         }
 
         // Get students basic info
@@ -205,26 +235,36 @@ class JournalController extends Controller
             ->orderBy('full_name')
             ->get();
 
-        // Get other averages (ON, OSKI, Test)
-        $otherGrades = DB::table('student_grades')
+        // Get other averages (ON, OSKI, Test) with status-based grade calculation
+        $otherGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->whereIn('training_type_code', [100, 101, 102])
-            ->select('student_hemis_id', 'training_type_code', DB::raw('AVG(grade) as avg_grade'))
-            ->groupBy('student_hemis_id', 'training_type_code')
-            ->get()
-            ->groupBy('student_hemis_id')
-            ->map(function ($grades) {
-                $result = ['on' => null, 'oski' => null, 'test' => null];
-                foreach ($grades as $g) {
-                    if ($g->training_type_code == 100) $result['on'] = $g->avg_grade;
-                    if ($g->training_type_code == 101) $result['oski'] = $g->avg_grade;
-                    if ($g->training_type_code == 102) $result['test'] = $g->avg_grade;
-                }
-                return $result;
-            })
-            ->toArray();
+            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->get();
+
+        $otherGrades = [];
+        foreach ($otherGradesRaw as $g) {
+            $effectiveGrade = $getEffectiveGrade($g);
+            if ($effectiveGrade !== null) {
+                $otherGrades[$g->student_hemis_id][$g->training_type_code][] = $effectiveGrade;
+            }
+        }
+        // Calculate averages
+        foreach ($otherGrades as $studentId => $types) {
+            $result = ['on' => null, 'oski' => null, 'test' => null];
+            if (isset($types[100]) && count($types[100]) > 0) {
+                $result['on'] = array_sum($types[100]) / count($types[100]);
+            }
+            if (isset($types[101]) && count($types[101]) > 0) {
+                $result['oski'] = array_sum($types[101]) / count($types[101]);
+            }
+            if (isset($types[102]) && count($types[102]) > 0) {
+                $result['test'] = array_sum($types[102]) / count($types[102]);
+            }
+            $otherGrades[$studentId] = $result;
+        }
 
         return view('admin.journal.show', compact(
             'group',

@@ -171,6 +171,33 @@
             <span style="color: #ffffff;">YN oldi qaydnoma</span>
         </a>
 
+        <!-- SOZLAMALAR Section -->
+        @if(auth()->user()->hasRole(['admin']))
+        <div class="px-4 py-3 mt-4" style="color: rgba(255,255,255,0.6); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">Sozlamalar</div>
+
+        <a href="{{ route('admin.deadlines') }}"
+           class="flex items-center px-4 py-3 mb-1 rounded-lg"
+           style="color: #ffffff; {{ request()->routeIs('admin.deadlines*') ? 'background-color: rgba(255,255,255,0.2); font-weight: 600;' : '' }}"
+           onmouseover="this.style.backgroundColor='rgba(255,255,255,0.15)'"
+           onmouseout="this.style.backgroundColor='{{ request()->routeIs('admin.deadlines*') ? 'rgba(255,255,255,0.2)' : 'transparent' }}'">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <span style="color: #ffffff;">Deadline</span>
+        </a>
+
+        <a href="{{ route('admin.synchronizes') }}"
+           class="flex items-center px-4 py-3 mb-1 rounded-lg"
+           style="color: #ffffff; {{ request()->routeIs('admin.synchronizes*') ? 'background-color: rgba(255,255,255,0.2); font-weight: 600;' : '' }}"
+           onmouseover="this.style.backgroundColor='rgba(255,255,255,0.15)'"
+           onmouseout="this.style.backgroundColor='{{ request()->routeIs('admin.synchronizes*') ? 'rgba(255,255,255,0.2)' : 'transparent' }}'">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span style="color: #ffffff;">Sinxronizatsiya</span>
+        </a>
+        @endif
+
         @if(auth()->user()->hasRole(['examiner']))
         <a href="{{ route('admin.examtest.index') }}"
            class="flex items-center px-4 py-3 mb-1 rounded-lg"

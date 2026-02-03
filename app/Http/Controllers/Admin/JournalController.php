@@ -142,85 +142,89 @@ class JournalController extends Controller
             ->where('is_graduate', false)
             ->pluck('hemis_id');
 
-        // Get distinct lesson dates for JB (Joriy baho) - training_type_code NOT IN (99, 100, 101, 102)
-        $jbLessonDates = DB::table('student_grades')
+        // Get all JB grades with lesson_pair info
+        $jbGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->whereNotIn('training_type_code', [99, 100, 101, 102])
             ->whereNotNull('lesson_date')
-            ->select('lesson_date')
-            ->distinct()
+            ->whereNotNull('grade')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade')
             ->orderBy('lesson_date')
-            ->pluck('lesson_date')
-            ->toArray();
-
-        // Get distinct lesson dates for MT (Mustaqil ta'lim) - training_type_code = 99
-        $mtLessonDates = DB::table('student_grades')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->where('training_type_code', 99)
-            ->whereNotNull('lesson_date')
-            ->select('lesson_date')
-            ->distinct()
-            ->orderBy('lesson_date')
-            ->pluck('lesson_date')
-            ->toArray();
-
-        // Get all individual grades for JB (Joriy baho)
-        $jbGrades = DB::table('student_grades')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->whereNotIn('training_type_code', [99, 100, 101, 102])
-            ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'lesson_date', 'grade')
-            ->get()
-            ->groupBy('student_hemis_id')
-            ->map(function ($grades) {
-                return $grades->pluck('grade', 'lesson_date')->toArray();
-            })
-            ->toArray();
-
-        // Get all individual grades for MT (Mustaqil ta'lim)
-        $mtGrades = DB::table('student_grades')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->where('training_type_code', 99)
-            ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'lesson_date', 'grade')
-            ->get()
-            ->groupBy('student_hemis_id')
-            ->map(function ($grades) {
-                return $grades->pluck('grade', 'lesson_date')->toArray();
-            })
-            ->toArray();
-
-        // Get students with their average grades for this subject
-        $students = DB::table('students as st')
-            ->where('st.group_id', $group->group_hemis_id)
-            ->where('st.is_graduate', false)
-            ->leftJoin('student_grades as sg', function ($join) use ($subjectId, $semesterCode) {
-                $join->on('sg.student_hemis_id', '=', 'st.hemis_id')
-                    ->where('sg.subject_id', '=', $subjectId)
-                    ->where('sg.semester_code', '=', $semesterCode);
-            })
-            ->select([
-                'st.id',
-                'st.hemis_id',
-                'st.full_name',
-                'st.student_id_number',
-                DB::raw('AVG(CASE WHEN sg.training_type_code NOT IN (99, 100, 101, 102) THEN sg.grade END) as jb_average'),
-                DB::raw('AVG(CASE WHEN sg.training_type_code = 99 THEN sg.grade END) as mt_average'),
-                DB::raw('AVG(CASE WHEN sg.training_type_code = 100 THEN sg.grade END) as on_average'),
-                DB::raw('AVG(CASE WHEN sg.training_type_code = 101 THEN sg.grade END) as oski_average'),
-                DB::raw('AVG(CASE WHEN sg.training_type_code = 102 THEN sg.grade END) as test_average'),
-            ])
-            ->groupBy('st.id', 'st.hemis_id', 'st.full_name', 'st.student_id_number')
-            ->orderBy('st.full_name')
+            ->orderBy('lesson_pair_code')
             ->get();
+
+        // Get all MT grades with lesson_pair info
+        $mtGradesRaw = DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('grade')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
+        // Build unique date+pair columns for detailed view (JB)
+        $jbColumns = $jbGradesRaw->map(function ($g) {
+            return ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code];
+        })->unique(function ($item) {
+            return $item['date'] . '_' . $item['pair'];
+        })->values()->toArray();
+
+        // Build unique date+pair columns for detailed view (MT)
+        $mtColumns = $mtGradesRaw->map(function ($g) {
+            return ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code];
+        })->unique(function ($item) {
+            return $item['date'] . '_' . $item['pair'];
+        })->values()->toArray();
+
+        // Get distinct dates for compact view
+        $jbLessonDates = $jbGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtLessonDates = $mtGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
+
+        // Build grades data structure: student_hemis_id => date => pair => grade
+        $jbGrades = [];
+        foreach ($jbGradesRaw as $g) {
+            $jbGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = $g->grade;
+        }
+
+        $mtGrades = [];
+        foreach ($mtGradesRaw as $g) {
+            $mtGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = $g->grade;
+        }
+
+        // Get students basic info
+        $students = DB::table('students')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('is_graduate', false)
+            ->select('id', 'hemis_id', 'full_name', 'student_id_number')
+            ->orderBy('full_name')
+            ->get();
+
+        // Get other averages (ON, OSKI, Test)
+        $otherGrades = DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereIn('training_type_code', [100, 101, 102])
+            ->select('student_hemis_id', 'training_type_code', DB::raw('AVG(grade) as avg_grade'))
+            ->groupBy('student_hemis_id', 'training_type_code')
+            ->get()
+            ->groupBy('student_hemis_id')
+            ->map(function ($grades) {
+                $result = ['on' => null, 'oski' => null, 'test' => null];
+                foreach ($grades as $g) {
+                    if ($g->training_type_code == 100) $result['on'] = $g->avg_grade;
+                    if ($g->training_type_code == 101) $result['oski'] = $g->avg_grade;
+                    if ($g->training_type_code == 102) $result['test'] = $g->avg_grade;
+                }
+                return $result;
+            })
+            ->toArray();
 
         return view('admin.journal.show', compact(
             'group',
@@ -231,7 +235,10 @@ class JournalController extends Controller
             'jbLessonDates',
             'mtLessonDates',
             'jbGrades',
-            'mtGrades'
+            'mtGrades',
+            'jbColumns',
+            'mtColumns',
+            'otherGrades'
         ));
     }
 

@@ -140,10 +140,10 @@
                             $sortColumn = $sortColumn ?? 'group_name';
                             $sortDirection = $sortDirection ?? 'asc';
                         @endphp
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
+                        <table class="min-w-full divide-y divide-gray-200" style="font-size: 13px;">
+                            <thead style="background-color: #f8fafc;">
                                 <tr>
-                                    <th class="px-3 py-2 text-xs font-medium tracking-wider text-left text-blue-600 uppercase">T/R</th>
+                                    <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;">#</th>
                                     @php
                                         $columns = [
                                             'education_type' => "Ta'lim turi",
@@ -162,56 +162,56 @@
                                             $newDirection = ($isActive && $sortDirection === 'asc') ? 'desc' : 'asc';
                                             $sortUrl = request()->fullUrlWithQuery(['sort' => $column, 'direction' => $newDirection]);
                                         @endphp
-                                        <th class="px-3 py-2 text-xs font-medium tracking-wider text-left uppercase">
-                                            <a href="{{ $sortUrl }}" class="flex items-center gap-1 text-blue-600 hover:text-blue-800">
+                                        <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; white-space: nowrap;">
+                                            <a href="{{ $sortUrl }}" style="display: inline-flex; align-items: center; gap: 4px; color: #1e40af; text-decoration: none;">
                                                 {{ $label }}
                                                 @if($isActive)
-                                                    <svg class="w-3 h-3 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                    <span style="color: #dc2626; font-size: 10px;">
                                                         @if($sortDirection === 'asc')
-                                                            <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
+                                                            &#9650;
                                                         @else
-                                                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                                            &#9660;
                                                         @endif
-                                                    </svg>
+                                                    </span>
                                                 @else
-                                                    <svg class="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fill-rule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L10 5.414 7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 0L10 14.586l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                                    </svg>
+                                                    <span style="color: #94a3b8; font-size: 8px;">&#9650;&#9660;</span>
                                                 @endif
                                             </a>
                                         </th>
                                     @endforeach
                                 </tr>
                             </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
+                            <tbody style="background-color: #ffffff;">
                                 @foreach ($journals as $index => $journal)
-                                    <tr class="cursor-pointer transition-colors hover:bg-blue-50"
+                                    <tr style="border-bottom: 1px solid #e2e8f0; cursor: pointer; transition: background-color 0.15s;"
+                                        onmouseover="this.style.backgroundColor='#f0f9ff'"
+                                        onmouseout="this.style.backgroundColor='#ffffff'"
                                         onclick="window.location='{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code]) }}'">
-                                        <td class="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                                        <td style="padding: 10px 16px; color: #1e40af; font-weight: 500;">
                                             {{ $journals->firstItem() + $index }}
                                         </td>
-                                        <td class="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                                        <td style="padding: 10px 16px; color: #334155;">
                                             {{ $journal->education_type_name ?? '-' }}
                                         </td>
-                                        <td class="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                                        <td style="padding: 10px 16px; color: #334155;">
                                             {{ $journal->education_year_name ?? '-' }}
                                         </td>
-                                        <td class="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                                        <td style="padding: 10px 16px; color: #334155;">
                                             {{ $journal->department_name ?? '-' }}
                                         </td>
-                                        <td class="px-3 py-2 text-sm text-gray-900 whitespace-nowrap" title="{{ $journal->specialty_name ?? '-' }}">
+                                        <td style="padding: 10px 16px; color: #0891b2;" title="{{ $journal->specialty_name ?? '-' }}">
                                             {{ Str::limit($journal->specialty_name ?? '-', 25) }}
                                         </td>
-                                        <td class="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                                        <td style="padding: 10px 16px; color: #334155;">
                                             {{ $journal->level_name ?? '-' }}
                                         </td>
-                                        <td class="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                                        <td style="padding: 10px 16px; color: #334155;">
                                             {{ $journal->semester_name ?? '-' }}
                                         </td>
-                                        <td class="px-3 py-2 text-sm text-gray-900" title="{{ $journal->subject_name ?? '-' }}">
+                                        <td style="padding: 10px 16px; color: #0891b2;" title="{{ $journal->subject_name ?? '-' }}">
                                             {{ Str::limit($journal->subject_name ?? '-', 30) }}
                                         </td>
-                                        <td class="px-3 py-2 text-sm text-gray-900 whitespace-nowrap">
+                                        <td style="padding: 10px 16px; color: #334155;">
                                             {{ $journal->group_name ?? '-' }}
                                         </td>
                                     </tr>

@@ -288,9 +288,14 @@
             </div>
 
             <div class="mt-3 space-y-1">
-                {{--                <x-responsive-nav-link :href="route('profile.edit')">--}}
-                {{--                    {{ __('Profile') }}--}}
-                {{--                </x-responsive-nav-link>--}}
+                @if( auth()->user()->hasRole(['admin']))
+                <x-responsive-nav-link :href="route('admin.deadlines')">
+                    {{ __('Deadline') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.synchronizes')">
+                    {{ __('Sinxronizatsiya') }}
+                </x-responsive-nav-link>
+                @endif
 
                 <!-- Authentication -->
                 <form method="POST" action="{{ route('admin.logout') }}">

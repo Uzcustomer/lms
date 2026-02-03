@@ -59,44 +59,44 @@
                             <p>Bu guruhda talabalar mavjud emas.</p>
                         </div>
                     @else
-                        <div class="overflow-x-auto">
+                        <div class="overflow-auto max-h-[calc(100vh-220px)]">
                             <table class="journal-table w-full border-collapse">
-                                <thead>
+                                <thead class="sticky top-0 z-10">
                                     <!-- First header row -->
-                                    <tr>
-                                        <th rowspan="2" class="px-3 py-3 text-xs font-medium text-gray-500 border-b border-gray-200 text-left align-bottom" style="width: 50px;">
+                                    <tr class="bg-white">
+                                        <th rowspan="2" class="px-3 py-3 text-xs font-medium text-gray-500 border-b border-gray-200 text-left align-bottom bg-white" style="width: 50px;">
                                             №<br>T/R
                                         </th>
-                                        <th rowspan="2" class="px-3 py-3 text-xs font-medium text-gray-500 border-b border-gray-200 text-left align-bottom" style="min-width: 280px;">
+                                        <th rowspan="2" class="px-3 py-3 text-xs font-medium text-gray-500 border-b border-gray-200 text-left align-bottom bg-white" style="min-width: 280px;">
                                             Talabaning F.I.SH.
                                         </th>
-                                        <th colspan="10" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200">
+                                        <th colspan="10" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200 bg-white">
                                             Davomat va joriy yil natijalari (baholash 100% hisobidan)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 100px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom bg-white" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 100px;">
                                             JN o'rtacha (%)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 100px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom bg-white" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 100px;">
                                             MT o'rtacha (%)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 100px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom bg-white" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 100px;">
                                             Oraliq nazorat (%)
                                         </th>
-                                        <th colspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200">
+                                        <th colspan="2" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200 bg-white">
                                             Yakuniy nazorat (%)
                                         </th>
                                     </tr>
                                     <!-- Second header row -->
-                                    <tr>
+                                    <tr class="bg-white">
                                         @for ($i = 1; $i <= 10; $i++)
-                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-400 border-b border-gray-200" style="min-width: 36px;">
+                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-400 border-b border-gray-200 bg-white" style="min-width: 36px;">
                                                 {{-- Sana --}}
                                             </th>
                                         @endfor
-                                        <th class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                        <th class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom bg-white" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                             OSKI
                                         </th>
-                                        <th class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
+                                        <th class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom bg-white" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 80px;">
                                             Test
                                         </th>
                                     </tr>
@@ -147,26 +147,26 @@
                             <p>Bu guruhda talabalar mavjud emas.</p>
                         </div>
                     @else
-                        <div class="overflow-x-auto">
+                        <div class="overflow-auto max-h-[calc(100vh-220px)]">
                             <table class="journal-table w-full border-collapse">
-                                <thead>
-                                    <tr>
-                                        <th rowspan="2" class="px-3 py-3 text-xs font-medium text-gray-500 border-b border-gray-200 text-left align-bottom" style="width: 50px;">
+                                <thead class="sticky top-0 z-10">
+                                    <tr class="bg-white">
+                                        <th rowspan="2" class="px-3 py-3 text-xs font-medium text-gray-500 border-b border-gray-200 text-left align-bottom bg-white" style="width: 50px;">
                                             №<br>T/R
                                         </th>
-                                        <th rowspan="2" class="px-3 py-3 text-xs font-medium text-gray-500 border-b border-gray-200 text-left align-bottom" style="min-width: 280px;">
+                                        <th rowspan="2" class="px-3 py-3 text-xs font-medium text-gray-500 border-b border-gray-200 text-left align-bottom bg-white" style="min-width: 280px;">
                                             Talabaning F.I.SH.
                                         </th>
-                                        <th colspan="10" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200">
+                                        <th colspan="10" class="px-3 py-2 text-xs font-medium text-center text-gray-500 border-b border-gray-200 bg-white">
                                             Mustaqil ta'lim natijalari (baholash 100% hisobidan)
                                         </th>
-                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 100px;">
+                                        <th rowspan="2" class="px-2 py-2 text-xs font-medium text-gray-500 border-b border-gray-200 align-bottom bg-white" style="writing-mode: vertical-rl; transform: rotate(180deg); height: 100px;">
                                             MT o'rtacha (%)
                                         </th>
                                     </tr>
-                                    <tr>
+                                    <tr class="bg-white">
                                         @for ($i = 1; $i <= 10; $i++)
-                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-400 border-b border-gray-200" style="min-width: 36px;">
+                                            <th class="px-1 py-2 text-xs font-medium text-center text-gray-400 border-b border-gray-200 bg-white" style="min-width: 36px;">
                                                 {{-- Topshiriq --}}
                                             </th>
                                         @endfor

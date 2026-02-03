@@ -24,9 +24,10 @@
             <div class="overflow-hidden bg-white shadow-sm sm:rounded-lg">
                 <!-- Filters -->
                 <form id="filter-form" method="GET" action="{{ route('admin.journal.index') }}" class="p-4 bg-gray-50 border-b">
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    <!-- 1-qator: Qisqa filtrlar -->
+                    <div class="flex flex-wrap gap-3 mb-3">
                         <!-- Ta'lim turi -->
-                        <div>
+                        <div class="w-28">
                             <label class="block mb-1 text-xs font-medium text-gray-600">Ta'lim turi</label>
                             <select name="education_type" id="education_type" class="w-full text-sm rounded select2">
                                 <option value="">Barchasi</option>
@@ -39,7 +40,7 @@
                         </div>
 
                         <!-- O'quv yili -->
-                        <div>
+                        <div class="w-32">
                             <label class="block mb-1 text-xs font-medium text-gray-600">O'quv yili</label>
                             <select name="education_year" id="education_year" class="w-full text-sm rounded select2">
                                 <option value="">Barchasi</option>
@@ -51,29 +52,8 @@
                             </select>
                         </div>
 
-                        <!-- Fakultet -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Fakultet</label>
-                            <select name="faculty" id="faculty" class="w-full text-sm rounded select2">
-                                <option value="">Barchasi</option>
-                                @foreach($faculties as $faculty)
-                                    <option value="{{ $faculty->id }}" {{ request('faculty') == $faculty->id ? 'selected' : '' }}>
-                                        {{ $faculty->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <!-- Yo'nalish -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Yo'nalish</label>
-                            <select name="specialty" id="specialty" class="w-full text-sm rounded select2">
-                                <option value="">Tanlang</option>
-                            </select>
-                        </div>
-
                         <!-- Kurs -->
-                        <div>
+                        <div class="w-20">
                             <label class="block mb-1 text-xs font-medium text-gray-600">Kurs</label>
                             <select name="level_code" id="level_code" class="w-full text-sm rounded select2">
                                 <option value="">Barchasi</option>
@@ -81,32 +61,16 @@
                         </div>
 
                         <!-- Semestr -->
-                        <div>
+                        <div class="w-24">
                             <label class="block mb-1 text-xs font-medium text-gray-600">Semestr</label>
                             <select name="semester_code" id="semester_code" class="w-full text-sm rounded select2">
                                 <option value="">Tanlang</option>
                             </select>
                         </div>
 
-                        <!-- Fan -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Fan</label>
-                            <select name="subject" id="subject" class="w-full text-sm rounded select2">
-                                <option value="">Tanlang</option>
-                            </select>
-                        </div>
-
-                        <!-- Guruh -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Guruh</label>
-                            <select name="group" id="group" class="w-full text-sm rounded select2">
-                                <option value="">Tanlang</option>
-                            </select>
-                        </div>
-
                         <!-- Har bir sahifada -->
-                        <div>
-                            <label class="block mb-1 text-xs font-medium text-gray-600">Sahifada</label>
+                        <div class="w-16">
+                            <label class="block mb-1 text-xs font-medium text-gray-600">Sahifa</label>
                             <select id="per_page" name="per_page" class="w-full text-sm rounded select2">
                                 @foreach([10, 25, 50, 100] as $pageSize)
                                     <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>
@@ -127,10 +91,50 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- 2-qator: Uzun filtrlar -->
+                    <div class="flex flex-wrap gap-3">
+                        <!-- Fakultet -->
+                        <div class="w-48">
+                            <label class="block mb-1 text-xs font-medium text-gray-600">Fakultet</label>
+                            <select name="faculty" id="faculty" class="w-full text-sm rounded select2">
+                                <option value="">Barchasi</option>
+                                @foreach($faculties as $faculty)
+                                    <option value="{{ $faculty->id }}" {{ request('faculty') == $faculty->id ? 'selected' : '' }}>
+                                        {{ $faculty->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <!-- Yo'nalish -->
+                        <div class="w-56">
+                            <label class="block mb-1 text-xs font-medium text-gray-600">Yo'nalish</label>
+                            <select name="specialty" id="specialty" class="w-full text-sm rounded select2">
+                                <option value="">Tanlang</option>
+                            </select>
+                        </div>
+
+                        <!-- Fan -->
+                        <div class="w-56">
+                            <label class="block mb-1 text-xs font-medium text-gray-600">Fan</label>
+                            <select name="subject" id="subject" class="w-full text-sm rounded select2">
+                                <option value="">Tanlang</option>
+                            </select>
+                        </div>
+
+                        <!-- Guruh -->
+                        <div class="w-32">
+                            <label class="block mb-1 text-xs font-medium text-gray-600">Guruh</label>
+                            <select name="group" id="group" class="w-full text-sm rounded select2">
+                                <option value="">Tanlang</option>
+                            </select>
+                        </div>
+                    </div>
                 </form>
 
                 <!-- Table -->
-                <div class="overflow-x-auto">
+                <div class="overflow-auto max-h-[calc(100vh-280px)]">
                     @if($journals->isEmpty())
                         <div class="p-6 text-center text-gray-500">
                             <p>Hozircha ma'lumot mavjud emas.</p>
@@ -141,9 +145,9 @@
                             $sortDirection = $sortDirection ?? 'asc';
                         @endphp
                         <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
+                            <thead class="bg-gray-50 sticky top-0 z-10">
                                 <tr>
-                                    <th class="px-3 py-2 text-xs font-medium tracking-wider text-left text-blue-600 uppercase">T/R</th>
+                                    <th class="px-3 py-2 text-xs font-medium tracking-wider text-left text-blue-600 uppercase bg-gray-50">T/R</th>
                                     @php
                                         $columns = [
                                             'education_type' => "Ta'lim turi",
@@ -162,7 +166,7 @@
                                             $newDirection = ($isActive && $sortDirection === 'asc') ? 'desc' : 'asc';
                                             $sortUrl = request()->fullUrlWithQuery(['sort' => $column, 'direction' => $newDirection]);
                                         @endphp
-                                        <th class="px-3 py-2 text-xs font-medium tracking-wider text-left uppercase">
+                                        <th class="px-3 py-2 text-xs font-medium tracking-wider text-left uppercase bg-gray-50">
                                             <a href="{{ $sortUrl }}" class="flex items-center gap-1 text-blue-600 hover:text-blue-800">
                                                 {{ $label }}
                                                 @if($isActive)

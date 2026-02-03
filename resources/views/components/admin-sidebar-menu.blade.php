@@ -1,12 +1,12 @@
-<aside class="w-64 flex flex-col min-h-screen fixed left-0 top-0 overflow-y-auto shadow-xl z-50" style="background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%);">
-    <!-- Logo Section -->
-    <div class="p-6 flex flex-col items-center" style="background-color: #172554; border-bottom: 1px solid rgba(255,255,255,0.1);">
-        <img src="{{ asset('logo.png') }}" alt="Logo" class="w-20 h-20 rounded-full mb-3" style="border: 3px solid rgba(255,255,255,0.3); box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-        <h1 style="color: #ffffff; font-size: 1.5rem; font-weight: 700; letter-spacing: 0.05em;">LMS</h1>
+<aside class="w-64 flex flex-col fixed left-0 top-0 shadow-xl z-50" style="background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%); height: 100vh;">
+    <!-- Logo Section (Fixed at top) -->
+    <div class="p-4 flex flex-col items-center flex-shrink-0" style="background-color: #172554; border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <img src="{{ asset('logo.png') }}" alt="Logo" class="w-16 h-16 rounded-full mb-2" style="border: 3px solid rgba(255,255,255,0.3); box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+        <h1 style="color: #ffffff; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.05em;">LMS</h1>
     </div>
 
-    <!-- Navigation Menu -->
-    <nav class="flex-1 py-4 px-3">
+    <!-- Navigation Menu (Scrollable) -->
+    <nav class="flex-1 py-3 px-3 overflow-y-auto" style="scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.3) transparent;">
         <a href="{{ route('admin.dashboard') }}"
            class="flex items-center px-4 py-3 mb-1 rounded-lg"
            style="color: #ffffff; {{ request()->routeIs('admin.dashboard') ? 'background-color: rgba(255,255,255,0.2); font-weight: 600;' : '' }}"
@@ -185,20 +185,20 @@
         @endif
     </nav>
 
-    <!-- User Section -->
-    <div class="p-4" style="background-color: #172554; border-top: 1px solid rgba(255,255,255,0.1);">
-        <div class="flex items-center mb-3 px-2">
-            <div class="w-10 h-10 rounded-full flex items-center justify-center mr-3" style="background-color: rgba(255,255,255,0.2);">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #ffffff;">
+    <!-- User Section (Fixed at bottom) -->
+    <div class="p-3 flex-shrink-0" style="background-color: #172554; border-top: 1px solid rgba(255,255,255,0.1);">
+        <div class="flex items-center mb-2 px-2">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center mr-2" style="background-color: rgba(255,255,255,0.2);">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #ffffff;">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                 </svg>
             </div>
-            <span style="color: #ffffff; font-weight: 500;">{{ Auth::user()->name }}</span>
+            <span style="color: #ffffff; font-weight: 500; font-size: 0.875rem;">{{ Auth::user()->name }}</span>
         </div>
         <form method="POST" action="{{ route('admin.logout') }}">
             @csrf
-            <button type="submit" class="w-full px-4 py-2.5 rounded-lg flex items-center justify-center" style="background-color: #dc2626; color: #ffffff; font-size: 0.875rem; font-weight: 600;">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #ffffff;">
+            <button type="submit" class="w-full px-3 py-2 rounded-lg flex items-center justify-center" style="background-color: #dc2626; color: #ffffff; font-size: 0.8rem; font-weight: 600;">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #ffffff;">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                 </svg>
                 Chiqish

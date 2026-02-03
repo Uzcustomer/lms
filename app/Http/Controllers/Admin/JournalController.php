@@ -91,35 +91,14 @@ class JournalController extends Controller
             $query->where('g.id', $request->group);
         }
 
-        // Sorting
-        $sortColumn = $request->get('sort', 'group_name');
-        $sortDirection = $request->get('direction', 'asc');
-
-        // Map sort columns to actual database columns
-        $sortMap = [
-            'education_type' => 'c.education_type_name',
-            'education_year' => 'c.education_year_name',
-            'faculty' => 'd.name',
-            'specialty' => 'sp.name',
-            'level' => 's.level_name',
-            'semester' => 'cs.semester_name',
-            'subject' => 'cs.subject_name',
-            'group_name' => 'g.name',
-        ];
-
-        $orderByColumn = $sortMap[$sortColumn] ?? 'g.name';
-        $query->orderBy($orderByColumn, $sortDirection);
-
         $perPage = $request->get('per_page', 50);
-        $journals = $query->paginate($perPage)->appends($request->query());
+        $journals = $query->orderBy('g.name')->paginate($perPage)->appends($request->query());
 
         return view('admin.journal.index', compact(
             'journals',
             'educationTypes',
             'educationYears',
-            'faculties',
-            'sortColumn',
-            'sortDirection'
+            'faculties'
         ));
     }
 
@@ -251,62 +230,5 @@ class JournalController extends Controller
             ->orderBy('name')
             ->get()
             ->pluck('name', 'id');
-    }
-
-    // Ikki tomonlama bog'liq filtrlar
-    public function getFacultiesBySpecialty(Request $request)
-    {
-        if (!$request->filled('specialty_id')) {
-            return Department::where('structure_type_code', 11)
-                ->orderBy('name')
-                ->pluck('name', 'id');
-        }
-
-        $specialty = Specialty::where('specialty_hemis_id', $request->specialty_id)->first();
-        if (!$specialty) {
-            return [];
-        }
-
-        return Department::where('structure_type_code', 11)
-            ->where('department_hemis_id', $specialty->department_hemis_id)
-            ->orderBy('name')
-            ->pluck('name', 'id');
-    }
-
-    public function getLevelCodesBySemester(Request $request)
-    {
-        if (!$request->filled('semester_code')) {
-            return Semester::select('level_code', 'level_name')
-                ->groupBy('level_code', 'level_name')
-                ->orderBy('level_code')
-                ->pluck('level_name', 'level_code');
-        }
-
-        return Semester::where('code', $request->semester_code)
-            ->select('level_code', 'level_name')
-            ->groupBy('level_code', 'level_name')
-            ->orderBy('level_code')
-            ->pluck('level_name', 'level_code');
-    }
-
-    public function getEducationYearsByLevel(Request $request)
-    {
-        if (!$request->filled('level_code')) {
-            return Curriculum::select('education_year_code', 'education_year_name')
-                ->whereNotNull('education_year_code')
-                ->groupBy('education_year_code', 'education_year_name')
-                ->orderBy('education_year_code', 'desc')
-                ->pluck('education_year_name', 'education_year_code');
-        }
-
-        $semesterCurriculumIds = Semester::where('level_code', $request->level_code)
-            ->pluck('curriculum_hemis_id');
-
-        return Curriculum::select('education_year_code', 'education_year_name')
-            ->whereNotNull('education_year_code')
-            ->whereIn('curricula_hemis_id', $semesterCurriculumIds)
-            ->groupBy('education_year_code', 'education_year_name')
-            ->orderBy('education_year_code', 'desc')
-            ->pluck('education_year_name', 'education_year_code');
     }
 }

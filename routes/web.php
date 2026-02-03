@@ -125,10 +125,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-semesters', [JournalController::class, 'getSemesters'])->name('get-semesters');
             Route::get('/get-subjects', [JournalController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/get-groups', [JournalController::class, 'getGroups'])->name('get-groups');
-            // Ikki tomonlama bog'liq filtrlar
-            Route::get('/get-faculties-by-specialty', [JournalController::class, 'getFacultiesBySpecialty'])->name('get-faculties-by-specialty');
-            Route::get('/get-level-codes-by-semester', [JournalController::class, 'getLevelCodesBySemester'])->name('get-level-codes-by-semester');
-            Route::get('/get-education-years-by-level', [JournalController::class, 'getEducationYearsByLevel'])->name('get-education-years-by-level');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');

@@ -16,13 +16,10 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="font-sans antialiased">
-<div class="flex h-screen bg-gray-100">
-    <!-- Sidebar -->
-    <x-admin-sidebar />
+<div x-data="{ sidebarOpen: false }" class="min-h-screen flex bg-gray-100">
+    <x-sidebar x-bind:class="{ 'hidden sm:block': !sidebarOpen, 'block': sidebarOpen }" />
 
-    <!-- Main Content -->
     <div class="flex-1 overflow-x-hidden overflow-y-auto">
-        <!-- Page Heading -->
         @if (isset($header))
             <header class="bg-white shadow">
                 <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
@@ -31,7 +28,6 @@
             </header>
         @endif
 
-        <!-- Page Content -->
         <main class="p-6">
             {{ $slot }}
         </main>

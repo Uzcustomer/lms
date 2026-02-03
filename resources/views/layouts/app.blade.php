@@ -27,7 +27,7 @@
             <x-admin-sidebar-menu />
 
             <!-- Main Content -->
-            <div class="flex-1 ml-64 overflow-x-hidden overflow-y-auto">
+            <div class="flex-1 overflow-x-hidden overflow-y-auto" style="margin-left: 256px;">
                 <!-- Page Heading -->
                 @isset($header)
                     <header class="bg-white dark:bg-gray-800 shadow">

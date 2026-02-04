@@ -8,8 +8,12 @@ use App\Models\CurriculumSubject;
 use App\Models\Department;
 use App\Models\Group;
 use App\Models\Semester;
+use App\Models\Deadline;
 use App\Models\Specialty;
+use App\Models\StudentGrade;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class JournalController extends Controller
@@ -136,7 +140,11 @@ class JournalController extends Controller
             ->where('code', $semesterCode)
             ->first();
 
-        // Get students with their grades for this subject
+        // Deadline days for retake eligibility check
+        $deadline = $semester ? Deadline::where('level_code', $semester->level_code)->first() : null;
+        $deadlineDays = $deadline ? $deadline->deadline_days : 0;
+
+        // Students with aggregated averages (retake_grade considered)
         $students = DB::table('students as st')
             ->where('st.group_id', $group->group_hemis_id)
             ->where('st.is_graduate', false)
@@ -150,8 +158,8 @@ class JournalController extends Controller
                 'st.hemis_id',
                 'st.full_name',
                 'st.student_id_number',
-                DB::raw('AVG(CASE WHEN sg.training_type_code NOT IN (99, 100, 101, 102) THEN sg.grade END) as jb_average'),
-                DB::raw('AVG(CASE WHEN sg.training_type_code = 99 THEN sg.grade END) as mt_average'),
+                DB::raw("AVG(CASE WHEN sg.training_type_code NOT IN (99, 100, 101, 102) THEN (CASE WHEN sg.retake_grade IS NOT NULL AND sg.retake_grade > 0 THEN sg.retake_grade ELSE sg.grade END) END) as jb_average"),
+                DB::raw("AVG(CASE WHEN sg.training_type_code = 99 THEN (CASE WHEN sg.retake_grade IS NOT NULL AND sg.retake_grade > 0 THEN sg.retake_grade ELSE sg.grade END) END) as mt_average"),
                 DB::raw('AVG(CASE WHEN sg.training_type_code = 100 THEN sg.grade END) as on_average'),
                 DB::raw('AVG(CASE WHEN sg.training_type_code = 101 THEN sg.grade END) as oski_average'),
                 DB::raw('AVG(CASE WHEN sg.training_type_code = 102 THEN sg.grade END) as test_average'),
@@ -160,13 +168,116 @@ class JournalController extends Controller
             ->orderBy('st.full_name')
             ->get();
 
+        // All individual grade records for per-cell display
+        $allGrades = DB::table('student_grades as sg')
+            ->join('students as st', 'sg.student_hemis_id', '=', 'st.hemis_id')
+            ->where('st.group_id', $group->group_hemis_id)
+            ->where('sg.subject_id', $subjectId)
+            ->where('sg.semester_code', $semesterCode)
+            ->select([
+                'sg.id',
+                'sg.student_hemis_id',
+                'sg.grade',
+                'sg.retake_grade',
+                'sg.status',
+                'sg.reason',
+                'sg.training_type_code',
+                DB::raw("DATE_FORMAT(sg.lesson_date, '%Y-%m-%d') as lesson_date"),
+            ])
+            ->orderBy('sg.lesson_date')
+            ->get();
+
+        // Distinct sorted dates for Amaliyot (joriy) tab
+        $amaliyotDates = $allGrades
+            ->filter(fn($g) => !in_array((int) $g->training_type_code, [99, 100, 101, 102]))
+            ->pluck('lesson_date')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        // Distinct sorted dates for Mustaqil ta'lim tab
+        $mtDates = $allGrades
+            ->filter(fn($g) => (int) $g->training_type_code === 99)
+            ->pluck('lesson_date')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        // Build lookup maps: map[student_hemis_id][date] = gradeRecord
+        $amaliyotMap = [];
+        $mtMap = [];
+        foreach ($allGrades as $g) {
+            $hemis = (string) $g->student_hemis_id;
+            if ((int) $g->training_type_code === 99) {
+                if (!isset($mtMap[$hemis][$g->lesson_date])) {
+                    $mtMap[$hemis][$g->lesson_date] = $g;
+                }
+            } elseif (!in_array((int) $g->training_type_code, [99, 100, 101, 102])) {
+                if (!isset($amaliyotMap[$hemis][$g->lesson_date])) {
+                    $amaliyotMap[$hemis][$g->lesson_date] = $g;
+                }
+            }
+        }
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
             'curriculum',
             'semester',
-            'students'
+            'students',
+            'amaliyotDates',
+            'mtDates',
+            'amaliyotMap',
+            'mtMap',
+            'deadlineDays'
         ));
+    }
+
+    public function retakeGradeUpdate(Request $request, $gradeId)
+    {
+        $request->validate([
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        $grade = StudentGrade::findOrFail($gradeId);
+
+        if ($grade->retake_grade !== null) {
+            return response()->json(['error' => 'Bu baho allaqachon qayta topshirilgan.'], 422);
+        }
+
+        if ($grade->grade !== null && (float) $grade->grade >= 60) {
+            return response()->json(['error' => 'Bu baho qayta topshirish uchun eligible emas.'], 422);
+        }
+
+        // Deadline check for non-admin users
+        if (!Auth::user()->hasRole('admin')) {
+            $student = $grade->student;
+            if ($student) {
+                $semester = Semester::where('curriculum_hemis_id', $student->curriculum_id)
+                    ->where('code', $grade->semester_code)
+                    ->first();
+                if ($semester) {
+                    $deadlineRecord = Deadline::where('level_code', $semester->level_code)->first();
+                    if ($deadlineRecord && $deadlineRecord->deadline_days) {
+                        $lessonDate = Carbon::parse($grade->lesson_date);
+                        if ($lessonDate->copy()->addDays($deadlineRecord->deadline_days)->isPast()) {
+                            return response()->json(['error' => 'Muddati o\'tgan. Qayta topshirish mumkin emas.'], 422);
+                        }
+                    }
+                }
+            }
+        }
+
+        $grade->update([
+            'retake_grade' => $request->grade,
+            'status' => 'retake',
+            'graded_by_user_id' => Auth::user()->id,
+            'retake_graded_at' => Carbon::now(),
+        ]);
+
+        return response()->json(['success' => true, 'retake_grade' => (float) $grade->retake_grade]);
     }
 
     // AJAX endpoints for cascading dropdowns

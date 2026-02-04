@@ -91,6 +91,11 @@ class JournalController extends Controller
             $query->where('g.id', $request->group);
         }
 
+        // Joriy semestr filtri (default ON)
+        if ($request->get('current_semester', '1') == '1') {
+            $query->where('s.current', true);
+        }
+
         // Sorting
         $sortColumn = $request->get('sort', 'group_name');
         $sortDirection = $request->get('direction', 'asc');

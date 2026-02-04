@@ -381,100 +381,138 @@
                             <p>Bu guruhda talabalar mavjud emas.</p>
                         </div>
                     @else
-                        @php
-                            $totalMtDays = count($mtLessonDates);
-                        @endphp
-                        <!-- Compact View (Ixcham) -->
-                        <div id="mt-compact-view" class="overflow-x-auto">
+                        <!-- Manual Grade Entry Table -->
+                        <div class="overflow-x-auto">
                             <table class="journal-table border-collapse text-xs">
                                 <thead>
                                     <tr>
-                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
-                                        @if($totalMtDays > 0)
-                                            <th colspan="{{ $totalMtDays }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Mustaqil ta'lim (kunlik o'rtacha)</th>
-                                        @else
-                                            <th colspan="1" class="px-1 py-1 font-bold text-gray-700 text-center">MT</th>
-                                        @endif
-                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
-                                    </tr>
-                                    <tr>
-                                        @forelse($mtLessonDates as $idx => $date)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 45px; writing-mode: vertical-rl; transform: rotate(180deg); height: 50px;">
-                                                {{ \Carbon\Carbon::parse($date)->format('d.m.y') }}
-                                            </th>
-                                        @empty
-                                            <th class="px-1 py-1 text-gray-400 text-center">-</th>
-                                        @endforelse
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 80px;">Baho</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 60px;">Saqlash</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach ($students as $index => $student)
                                         @php
-                                            $studentMtGrades = $mtGrades[$student->hemis_id] ?? [];
-                                            $dailyAverages = [];
-                                            $dailySum = 0;
-                                            $hasRetakeInDay = [];
-                                            foreach ($mtLessonDates as $date) {
-                                                $dayGrades = $studentMtGrades[$date] ?? [];
-                                                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
-                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
-                                                $gradeSum = array_sum($gradeValues);
-                                                $dailyAverages[$date] = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                                                $dailySum += $dailyAverages[$date];
-                                                $hasRetakeInDay[$date] = count($dayGrades) > 0 && collect($dayGrades)->contains(fn($g) => $g['is_retake']);
-                                            }
-                                            $mtAverage = $totalMtDays > 0
-                                                ? round($dailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
-                                                : 0;
+                                            // Get existing manual MT grade (without lesson_date)
+                                            $manualGrade = $manualMtGrades[$student->hemis_id] ?? null;
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
                                             <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
-                                            @forelse($mtLessonDates as $idx => $date)
-                                                @php
-                                                    $dayGrades = $studentMtGrades[$date] ?? [];
-                                                    $dayAvg = $dailyAverages[$date];
-                                                    $hasGrades = count($dayGrades) > 0;
-                                                    $gradeValues = $hasGrades ? array_map(fn($g) => round($g['grade'], 0), $dayGrades) : [];
-                                                    $gradesText = implode(', ', $gradeValues);
-                                                    $uniqueGrades = array_unique($gradeValues);
-                                                    $isInconsistent = count($uniqueGrades) > 1;
-                                                    $isRetake = $hasRetakeInDay[$date] ?? false;
-                                                @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
-                                                    @if($hasGrades)
-                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ $dayAvg }}</span>
-                                                        @if(count($dayGrades) > 1)
-                                                            <span class="tooltip-content">{{ $gradesText }}</span>
-                                                        @endif
-                                                    @else
-                                                        <span class="text-gray-300">-</span>
-                                                    @endif
-                                                </td>
-                                            @empty
-                                                <td class="px-1 py-1 text-center text-gray-300">-</td>
-                                            @endforelse
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalMtDays }})</span></td>
+                                            <td class="px-1 py-1 text-center">
+                                                <input type="number"
+                                                    id="mt-grade-{{ $student->hemis_id }}"
+                                                    class="mt-grade-input w-16 px-1 py-0.5 text-center text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                                                    min="0" max="100" step="1"
+                                                    value="{{ $manualGrade !== null ? round($manualGrade) : '' }}"
+                                                    data-student-id="{{ $student->hemis_id }}"
+                                                    placeholder="0-100">
+                                            </td>
+                                            <td class="px-1 py-1 text-center">
+                                                <button type="button"
+                                                    onclick="saveMtGrade('{{ $student->hemis_id }}')"
+                                                    class="save-btn px-2 py-0.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none">
+                                                    Saqlash
+                                                </button>
+                                            </td>
                                         </tr>
                                     @endforeach
                                 </tbody>
                             </table>
                         </div>
 
-                        <!-- Detailed View (Batafsil) -->
-                        <div id="mt-detailed-view" class="overflow-x-auto hidden">
-                            <table class="journal-table border-collapse text-xs">
-                                <thead>
-                                    <tr>
-                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
-                                        @if(count($mtColumns) > 0)
-                                            <th colspan="{{ count($mtColumns) }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Mustaqil ta'lim (har bir dars)</th>
-                                        @else
-                                            <th colspan="1" class="px-1 py-1 font-bold text-gray-700 text-center">MT</th>
-                                        @endif
-                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
+                        @php
+                            $totalMtDays = count($mtLessonDates);
+                        @endphp
+
+                        @if($totalMtDays > 0)
+                        <div class="mt-4 border-t pt-4">
+                            <h4 class="text-sm font-bold text-gray-700 mb-2">API'dan kelgan baholar</h4>
+                            <!-- Compact View (Ixcham) -->
+                            <div id="mt-compact-view" class="overflow-x-auto">
+                                <table class="journal-table border-collapse text-xs">
+                                    <thead>
+                                        <tr>
+                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
+                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                            <th colspan="{{ $totalMtDays }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Mustaqil ta'lim (kunlik o'rtacha)</th>
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
+                                        </tr>
+                                        <tr>
+                                            @foreach($mtLessonDates as $idx => $date)
+                                                <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 45px; writing-mode: vertical-rl; transform: rotate(180deg); height: 50px;">
+                                                    {{ \Carbon\Carbon::parse($date)->format('d.m.y') }}
+                                                </th>
+                                            @endforeach
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($students as $index => $student)
+                                            @php
+                                                $studentMtGrades = $mtGrades[$student->hemis_id] ?? [];
+                                                $dailyAverages = [];
+                                                $dailySum = 0;
+                                                $hasRetakeInDay = [];
+                                                foreach ($mtLessonDates as $date) {
+                                                    $dayGrades = $studentMtGrades[$date] ?? [];
+                                                    $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                                                    $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                    $gradeSum = array_sum($gradeValues);
+                                                    $dailyAverages[$date] = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                                                    $dailySum += $dailyAverages[$date];
+                                                    $hasRetakeInDay[$date] = count($dayGrades) > 0 && collect($dayGrades)->contains(fn($g) => $g['is_retake']);
+                                                }
+                                                $mtAverage = $totalMtDays > 0
+                                                    ? round($dailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                                                    : 0;
+                                            @endphp
+                                            <tr>
+                                                <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
+                                                <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                                @foreach($mtLessonDates as $idx => $date)
+                                                    @php
+                                                        $dayGrades = $studentMtGrades[$date] ?? [];
+                                                        $dayAvg = $dailyAverages[$date];
+                                                        $hasGrades = count($dayGrades) > 0;
+                                                        $gradeValues = $hasGrades ? array_map(fn($g) => round($g['grade'], 0), $dayGrades) : [];
+                                                        $gradesText = implode(', ', $gradeValues);
+                                                        $uniqueGrades = array_unique($gradeValues);
+                                                        $isInconsistent = count($uniqueGrades) > 1;
+                                                        $isRetake = $hasRetakeInDay[$date] ?? false;
+                                                    @endphp
+                                                    <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
+                                                        @if($hasGrades)
+                                                            <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ $dayAvg }}</span>
+                                                            @if(count($dayGrades) > 1)
+                                                                <span class="tooltip-content">{{ $gradesText }}</span>
+                                                            @endif
+                                                        @else
+                                                            <span class="text-gray-300">-</span>
+                                                        @endif
+                                                    </td>
+                                                @endforeach
+                                                <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalMtDays }})</span></td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Detailed View (Batafsil) -->
+                            <div id="mt-detailed-view" class="overflow-x-auto hidden">
+                                <table class="journal-table border-collapse text-xs">
+                                    <thead>
+                                        <tr>
+                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
+                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                            @if(count($mtColumns) > 0)
+                                                <th colspan="{{ count($mtColumns) }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Mustaqil ta'lim (har bir dars)</th>
+                                            @else
+                                                <th colspan="1" class="px-1 py-1 font-bold text-gray-700 text-center">MT</th>
+                                            @endif
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
                                     </tr>
                                     <tr>
                                         @php $prevDate = null; @endphp
@@ -542,6 +580,8 @@
                                 </tbody>
                             </table>
                         </div>
+                        </div>
+                        @endif
                     @endif
                 </div>
             </div>
@@ -549,6 +589,68 @@
     </div>
 
     <script>
+        // MT Grade save configuration
+        const mtGradeConfig = {
+            url: '{{ route("admin.journal.save-mt-grade") }}',
+            subjectId: '{{ $subjectId }}',
+            semesterCode: '{{ $semesterCode }}',
+            csrfToken: '{{ csrf_token() }}'
+        };
+
+        function saveMtGrade(studentHemisId) {
+            const input = document.getElementById('mt-grade-' + studentHemisId);
+            const grade = input.value;
+
+            if (grade === '' || isNaN(grade) || grade < 0 || grade > 100) {
+                alert('Iltimos, 0 dan 100 gacha baho kiriting');
+                return;
+            }
+
+            const button = input.closest('tr').querySelector('.save-btn');
+            const originalText = button.textContent;
+            button.textContent = '...';
+            button.disabled = true;
+
+            fetch(mtGradeConfig.url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': mtGradeConfig.csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    student_hemis_id: studentHemisId,
+                    subject_id: mtGradeConfig.subjectId,
+                    semester_code: mtGradeConfig.semesterCode,
+                    grade: parseFloat(grade)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    button.textContent = 'OK!';
+                    button.classList.remove('bg-blue-500');
+                    button.classList.add('bg-green-500');
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.classList.remove('bg-green-500');
+                        button.classList.add('bg-blue-500');
+                        button.disabled = false;
+                    }, 1500);
+                } else {
+                    alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
+                button.textContent = originalText;
+                button.disabled = false;
+            });
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
             document.querySelectorAll('.tab-btn').forEach(btn => {

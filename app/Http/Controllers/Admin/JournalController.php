@@ -144,6 +144,8 @@ class JournalController extends Controller
 
         // Excluded training type names for Amaliyot (JB)
         $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test"];
+        // Excluded training type codes: 11=Ma'ruza, 99=MT, 100=ON, 101=Oski, 102=Test
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         // Get all JB grades with lesson_pair info and status fields
         $jbGradesRaw = DB::table('student_grades')
@@ -151,7 +153,7 @@ class JournalController extends Controller
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->whereNotIn('training_type_name', $excludedTrainingTypes)
-            ->whereNotIn('training_type_code', [99, 100, 101, 102])
+            ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->whereNotNull('lesson_date')
             ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
@@ -307,6 +309,16 @@ class JournalController extends Controller
             ->pluck('total_absent_off', 'student_hemis_id')
             ->toArray();
 
+        // Get manual MT grades (entries without lesson_date)
+        $manualMtGrades = DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNull('lesson_date')
+            ->pluck('grade', 'student_hemis_id')
+            ->toArray();
+
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
 
@@ -326,8 +338,98 @@ class JournalController extends Controller
             'mtPairsPerDay',
             'otherGrades',
             'attendanceData',
-            'totalAcload'
+            'manualMtGrades',
+            'totalAcload',
+            'groupId',
+            'subjectId',
+            'semesterCode'
         ));
+    }
+
+    /**
+     * Save manual MT grade for a student
+     */
+    public function saveMtGrade(Request $request)
+    {
+        $request->validate([
+            'student_hemis_id' => 'required',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        $studentHemisId = $request->student_hemis_id;
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $grade = $request->grade;
+
+        // Get student info
+        $student = DB::table('students')
+            ->where('hemis_id', $studentHemisId)
+            ->first();
+
+        if (!$student) {
+            return response()->json(['success' => false, 'message' => 'Student not found'], 404);
+        }
+
+        // Get subject info
+        $subject = CurriculumSubject::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+
+        if (!$subject) {
+            return response()->json(['success' => false, 'message' => 'Subject not found'], 404);
+        }
+
+        // Check if a manual MT grade already exists for this student/subject/semester
+        $existingGrade = DB::table('student_grades')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNull('lesson_date')
+            ->first();
+
+        $now = now();
+
+        if ($existingGrade) {
+            // Update existing grade
+            DB::table('student_grades')
+                ->where('id', $existingGrade->id)
+                ->update([
+                    'grade' => $grade,
+                    'updated_at' => $now,
+                ]);
+        } else {
+            // Insert new manual grade
+            DB::table('student_grades')->insert([
+                'hemis_id' => 0, // Manual entry
+                'student_id' => $student->id,
+                'student_hemis_id' => $studentHemisId,
+                'semester_code' => $semesterCode,
+                'semester_name' => $subject->semester_name ?? '',
+                'subject_schedule_id' => 0,
+                'subject_id' => $subjectId,
+                'subject_name' => $subject->subject_name ?? '',
+                'subject_code' => $subject->subject_code ?? '',
+                'training_type_code' => 99, // MT
+                'training_type_name' => "Mustaqil ta'lim",
+                'employee_id' => 0,
+                'employee_name' => 'Manual Entry',
+                'lesson_pair_code' => '1',
+                'lesson_pair_name' => 'Manual',
+                'lesson_pair_start_time' => '00:00',
+                'lesson_pair_end_time' => '00:00',
+                'grade' => $grade,
+                'lesson_date' => null, // Manual entries have no lesson date
+                'created_at_api' => $now,
+                'status' => 'recorded',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Grade saved successfully']);
     }
 
     // AJAX endpoints for cascading dropdowns

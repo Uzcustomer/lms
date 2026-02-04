@@ -223,6 +223,24 @@ class JournalController extends Controller
             return $getEffectiveGrade($g) !== null;
         })->pluck('lesson_date')->unique()->sort()->values()->toArray();
 
+        // Count pairs per day for JB (for correct daily average calculation)
+        $jbPairsPerDay = [];
+        foreach ($jbColumns as $col) {
+            if (!isset($jbPairsPerDay[$col['date']])) {
+                $jbPairsPerDay[$col['date']] = 0;
+            }
+            $jbPairsPerDay[$col['date']]++;
+        }
+
+        // Count pairs per day for MT
+        $mtPairsPerDay = [];
+        foreach ($mtColumns as $col) {
+            if (!isset($mtPairsPerDay[$col['date']])) {
+                $mtPairsPerDay[$col['date']] = 0;
+            }
+            $mtPairsPerDay[$col['date']]++;
+        }
+
         // Build grades data structure: student_hemis_id => date => pair => ['grade' => value, 'is_retake' => bool]
         $jbGrades = [];
         foreach ($jbGradesRaw as $g) {
@@ -304,6 +322,8 @@ class JournalController extends Controller
             'mtGrades',
             'jbColumns',
             'mtColumns',
+            'jbPairsPerDay',
+            'mtPairsPerDay',
             'otherGrades',
             'attendanceData',
             'totalAcload'

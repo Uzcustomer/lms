@@ -2,10 +2,13 @@
     <style>
         .journal-table {
             border: 1px solid #e5e7eb;
+            width: auto;
+            table-layout: auto;
         }
         .journal-table th,
         .journal-table td {
             border: 1px solid #e5e7eb;
+            white-space: nowrap;
         }
         .journal-table tbody tr:nth-child(odd) {
             background-color: #ffffff;
@@ -144,7 +147,7 @@
                         @endphp
                         <!-- Compact View (Ixcham) -->
                         <div id="jb-compact-view" class="overflow-x-auto">
-                            <table class="journal-table w-full border-collapse text-xs">
+                            <table class="journal-table border-collapse text-xs">
                                 <thead>
                                     <tr>
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
@@ -180,16 +183,13 @@
                                             $hasRetakeInDay = [];
                                             foreach ($jbLessonDates as $date) {
                                                 $dayGrades = $studentJbGrades[$date] ?? [];
-                                                if (count($dayGrades) > 0) {
-                                                    $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
-                                                    $avg = array_sum($gradeValues) / count($gradeValues);
-                                                    $dailyAverages[$date] = round($avg, 0, PHP_ROUND_HALF_UP);
-                                                    $dailySum += $dailyAverages[$date];
-                                                    $hasRetakeInDay[$date] = collect($dayGrades)->contains(fn($g) => $g['is_retake']);
-                                                } else {
-                                                    $dailyAverages[$date] = 0;
-                                                    $hasRetakeInDay[$date] = false;
-                                                }
+                                                $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                $gradeSum = array_sum($gradeValues);
+                                                // Divide by total pairs in day, not just student's grades
+                                                $dailyAverages[$date] = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                                                $dailySum += $dailyAverages[$date];
+                                                $hasRetakeInDay[$date] = count($dayGrades) > 0 && collect($dayGrades)->contains(fn($g) => $g['is_retake']);
                                             }
                                             $jnAverage = $totalJbDays > 0
                                                 ? round($dailySum / $totalJbDays, 0, PHP_ROUND_HALF_UP)
@@ -199,11 +199,10 @@
                                             $mtDailySum = 0;
                                             foreach ($mtLessonDates as $date) {
                                                 $dayGrades = $studentMtGrades[$date] ?? [];
-                                                if (count($dayGrades) > 0) {
-                                                    $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
-                                                    $avg = array_sum($gradeValues) / count($gradeValues);
-                                                    $mtDailySum += round($avg, 0, PHP_ROUND_HALF_UP);
-                                                }
+                                                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                $gradeSum = array_sum($gradeValues);
+                                                $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                             }
                                             $mtAverage = $totalMtDays > 0
                                                 ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
@@ -211,9 +210,9 @@
 
                                             $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null];
 
-                                            // Calculate attendance percentage
+                                            // Calculate attendance percentage with 2 decimal places
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
-                                            $davomatPercent = $totalAcload > 0 ? round(($absentOff / $totalAcload) * 100, 0) : 0;
+                                            $davomatPercent = $totalAcload > 0 ? round(($absentOff / $totalAcload) * 100, 2) : 0;
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
@@ -247,7 +246,7 @@
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ $davomatPercent }}</span></td>
+                                            <td class="px-1 py-1 text-center"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}</span></td>
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -264,7 +263,7 @@
                                     $dateGroups[$col['date']][] = $idx;
                                 }
                             @endphp
-                            <table class="journal-table w-full border-collapse text-xs">
+                            <table class="journal-table border-collapse text-xs">
                                 <thead>
                                     <tr>
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
@@ -304,11 +303,10 @@
                                             $dailySum = 0;
                                             foreach ($jbLessonDates as $date) {
                                                 $dayGrades = $studentJbGrades[$date] ?? [];
-                                                if (count($dayGrades) > 0) {
-                                                    $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
-                                                    $avg = array_sum($gradeValues) / count($gradeValues);
-                                                    $dailySum += round($avg, 0, PHP_ROUND_HALF_UP);
-                                                }
+                                                $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                $gradeSum = array_sum($gradeValues);
+                                                $dailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                             }
                                             $jnAverage = $totalJbDays > 0
                                                 ? round($dailySum / $totalJbDays, 0, PHP_ROUND_HALF_UP)
@@ -318,11 +316,10 @@
                                             $mtDailySum = 0;
                                             foreach ($mtLessonDates as $date) {
                                                 $dayGrades = $studentMtGrades[$date] ?? [];
-                                                if (count($dayGrades) > 0) {
-                                                    $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
-                                                    $avg = array_sum($gradeValues) / count($gradeValues);
-                                                    $mtDailySum += round($avg, 0, PHP_ROUND_HALF_UP);
-                                                }
+                                                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                $gradeSum = array_sum($gradeValues);
+                                                $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                             }
                                             $mtAverage = $totalMtDays > 0
                                                 ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
@@ -331,7 +328,7 @@
                                             $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null];
 
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
-                                            $davomatPercent = $totalAcload > 0 ? round(($absentOff / $totalAcload) * 100, 0) : 0;
+                                            $davomatPercent = $totalAcload > 0 ? round(($absentOff / $totalAcload) * 100, 2) : 0;
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
@@ -366,7 +363,7 @@
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ $davomatPercent }}</span></td>
+                                            <td class="px-1 py-1 text-center"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}</span></td>
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -389,7 +386,7 @@
                         @endphp
                         <!-- Compact View (Ixcham) -->
                         <div id="mt-compact-view" class="overflow-x-auto">
-                            <table class="journal-table w-full border-collapse text-xs">
+                            <table class="journal-table border-collapse text-xs">
                                 <thead>
                                     <tr>
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
@@ -420,16 +417,12 @@
                                             $hasRetakeInDay = [];
                                             foreach ($mtLessonDates as $date) {
                                                 $dayGrades = $studentMtGrades[$date] ?? [];
-                                                if (count($dayGrades) > 0) {
-                                                    $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
-                                                    $avg = array_sum($gradeValues) / count($gradeValues);
-                                                    $dailyAverages[$date] = round($avg, 0, PHP_ROUND_HALF_UP);
-                                                    $dailySum += $dailyAverages[$date];
-                                                    $hasRetakeInDay[$date] = collect($dayGrades)->contains(fn($g) => $g['is_retake']);
-                                                } else {
-                                                    $dailyAverages[$date] = 0;
-                                                    $hasRetakeInDay[$date] = false;
-                                                }
+                                                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                $gradeSum = array_sum($gradeValues);
+                                                $dailyAverages[$date] = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                                                $dailySum += $dailyAverages[$date];
+                                                $hasRetakeInDay[$date] = count($dayGrades) > 0 && collect($dayGrades)->contains(fn($g) => $g['is_retake']);
                                             }
                                             $mtAverage = $totalMtDays > 0
                                                 ? round($dailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
@@ -471,7 +464,7 @@
 
                         <!-- Detailed View (Batafsil) -->
                         <div id="mt-detailed-view" class="overflow-x-auto hidden">
-                            <table class="journal-table w-full border-collapse text-xs">
+                            <table class="journal-table border-collapse text-xs">
                                 <thead>
                                     <tr>
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
@@ -506,11 +499,10 @@
                                             $dailySum = 0;
                                             foreach ($mtLessonDates as $date) {
                                                 $dayGrades = $studentMtGrades[$date] ?? [];
-                                                if (count($dayGrades) > 0) {
-                                                    $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
-                                                    $avg = array_sum($gradeValues) / count($gradeValues);
-                                                    $dailySum += round($avg, 0, PHP_ROUND_HALF_UP);
-                                                }
+                                                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                $gradeSum = array_sum($gradeValues);
+                                                $dailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                             }
                                             $mtAverage = $totalMtDays > 0
                                                 ? round($dailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)

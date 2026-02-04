@@ -130,6 +130,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-faculties-by-specialty', [JournalController::class, 'getFacultiesBySpecialty'])->name('get-faculties-by-specialty');
             Route::get('/get-level-codes-by-semester', [JournalController::class, 'getLevelCodesBySemester'])->name('get-level-codes-by-semester');
             Route::get('/get-education-years-by-level', [JournalController::class, 'getEducationYearsByLevel'])->name('get-education-years-by-level');
+            Route::get('/get-faculties-by-group', [JournalController::class, 'getFacultiesByGroup'])->name('get-faculties-by-group');
+            Route::get('/get-specialties-by-group', [JournalController::class, 'getSpecialtiesByGroup'])->name('get-specialties-by-group');
+            Route::get('/get-filters-by-subject', [JournalController::class, 'getFiltersBySubject'])->name('get-filters-by-subject');
+            Route::get('/get-filters-by-group', [JournalController::class, 'getFiltersByGroup'])->name('get-filters-by-group');
+            Route::get('/get-filters-by-semester', [JournalController::class, 'getFiltersBySemester'])->name('get-filters-by-semester');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');

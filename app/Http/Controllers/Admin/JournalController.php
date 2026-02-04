@@ -572,4 +572,183 @@ class JournalController extends Controller
             ->orderBy('education_year_code', 'desc')
             ->pluck('education_year_name', 'education_year_code');
     }
+
+    // Guruh bo'yicha fakultet va yo'nalishni olish
+    public function getFacultiesByGroup(Request $request)
+    {
+        if (!$request->filled('group_id')) {
+            return Department::where('structure_type_code', 11)
+                ->orderBy('name')
+                ->pluck('name', 'id');
+        }
+
+        $group = Group::find($request->group_id);
+        if (!$group) {
+            return [];
+        }
+
+        return Department::where('structure_type_code', 11)
+            ->where('department_hemis_id', $group->department_hemis_id)
+            ->orderBy('name')
+            ->pluck('name', 'id');
+    }
+
+    public function getSpecialtiesByGroup(Request $request)
+    {
+        if (!$request->filled('group_id')) {
+            return Specialty::select('specialty_hemis_id', 'name')
+                ->orderBy('name')
+                ->pluck('name', 'specialty_hemis_id');
+        }
+
+        $group = Group::find($request->group_id);
+        if (!$group) {
+            return [];
+        }
+
+        return Specialty::where('specialty_hemis_id', $group->specialty_hemis_id)
+            ->select('specialty_hemis_id', 'name')
+            ->orderBy('name')
+            ->pluck('name', 'specialty_hemis_id');
+    }
+
+    // Fan bo'yicha boshqa filtrlarni olish
+    public function getFiltersBySubject(Request $request)
+    {
+        if (!$request->filled('subject_id')) {
+            return [
+                'faculties' => [],
+                'specialties' => [],
+                'groups' => [],
+                'semesters' => [],
+            ];
+        }
+
+        $subjectId = $request->subject_id;
+
+        // Fan mavjud bo'lgan curriculum_subjects dan ma'lumot olish
+        $curriculumSubjects = CurriculumSubject::where('subject_id', $subjectId)->get();
+
+        $curriculaHemisIds = $curriculumSubjects->pluck('curricula_hemis_id')->unique();
+        $semesterCodes = $curriculumSubjects->pluck('semester_code')->unique();
+
+        // Guruhlar
+        $groups = Group::whereIn('curriculum_hemis_id', $curriculaHemisIds)
+            ->select('id', 'name', 'department_hemis_id', 'specialty_hemis_id')
+            ->orderBy('name')
+            ->get();
+
+        // Fakultetlar
+        $departmentHemisIds = $groups->pluck('department_hemis_id')->unique();
+        $faculties = Department::where('structure_type_code', 11)
+            ->whereIn('department_hemis_id', $departmentHemisIds)
+            ->orderBy('name')
+            ->pluck('name', 'id');
+
+        // Yo'nalishlar
+        $specialtyHemisIds = $groups->pluck('specialty_hemis_id')->unique();
+        $specialties = Specialty::whereIn('specialty_hemis_id', $specialtyHemisIds)
+            ->orderBy('name')
+            ->pluck('name', 'specialty_hemis_id');
+
+        // Semestrlar
+        $semesters = Semester::whereIn('code', $semesterCodes)
+            ->select('code', 'name')
+            ->groupBy('code', 'name')
+            ->orderBy('code')
+            ->pluck('name', 'code');
+
+        return [
+            'faculties' => $faculties,
+            'specialties' => $specialties,
+            'groups' => $groups->pluck('name', 'id'),
+            'semesters' => $semesters,
+        ];
+    }
+
+    // Guruh bo'yicha boshqa filtrlarni olish
+    public function getFiltersByGroup(Request $request)
+    {
+        if (!$request->filled('group_id')) {
+            return [
+                'faculties' => [],
+                'specialties' => [],
+                'subjects' => [],
+                'semesters' => [],
+            ];
+        }
+
+        $group = Group::find($request->group_id);
+        if (!$group) {
+            return [
+                'faculties' => [],
+                'specialties' => [],
+                'subjects' => [],
+                'semesters' => [],
+            ];
+        }
+
+        // Fakultet
+        $faculties = Department::where('structure_type_code', 11)
+            ->where('department_hemis_id', $group->department_hemis_id)
+            ->orderBy('name')
+            ->pluck('name', 'id');
+
+        // Yo'nalish
+        $specialties = Specialty::where('specialty_hemis_id', $group->specialty_hemis_id)
+            ->orderBy('name')
+            ->pluck('name', 'specialty_hemis_id');
+
+        // Fanlar va semestrlar (guruhning curriculum_hemis_id dan)
+        $curriculumSubjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)->get();
+
+        $subjects = $curriculumSubjects->pluck('subject_name', 'subject_id')->unique();
+        $semesterCodes = $curriculumSubjects->pluck('semester_code')->unique();
+
+        $semesters = Semester::whereIn('code', $semesterCodes)
+            ->where('curriculum_hemis_id', $group->curriculum_hemis_id)
+            ->select('code', 'name')
+            ->groupBy('code', 'name')
+            ->orderBy('code')
+            ->pluck('name', 'code');
+
+        return [
+            'faculties' => $faculties,
+            'specialties' => $specialties,
+            'subjects' => $subjects,
+            'semesters' => $semesters,
+        ];
+    }
+
+    // Semestr bo'yicha boshqa filtrlarni olish
+    public function getFiltersBySemester(Request $request)
+    {
+        if (!$request->filled('semester_code')) {
+            return [
+                'subjects' => [],
+                'level_codes' => [],
+            ];
+        }
+
+        $semesterCode = $request->semester_code;
+
+        // Fanlar
+        $subjects = CurriculumSubject::where('semester_code', $semesterCode)
+            ->select('subject_id', 'subject_name')
+            ->groupBy('subject_id', 'subject_name')
+            ->orderBy('subject_name')
+            ->pluck('subject_name', 'subject_id');
+
+        // Kurslar
+        $levelCodes = Semester::where('code', $semesterCode)
+            ->select('level_code', 'level_name')
+            ->groupBy('level_code', 'level_name')
+            ->orderBy('level_code')
+            ->pluck('level_name', 'level_code');
+
+        return [
+            'subjects' => $subjects,
+            'level_codes' => $levelCodes,
+        ];
+    }
 }

@@ -25,10 +25,10 @@
                 <!-- Filters -->
                 <form id="filter-form" method="GET" action="{{ route('admin.journal.index') }}" class="p-3 bg-gray-50 border-b">
                     <!-- Row 1: Ta'lim turi, O'quv yili, Fakultet, Yo'nalish, Kurs -->
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end;">
                         <!-- Ta'lim turi -->
-                        <div style="width: 110px;">
-                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Ta'lim turi</label>
+                        <div style="min-width: 130px;">
+                            <label class="filter-label">Ta'lim turi</label>
                             <select name="education_type" id="education_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                                 @foreach($educationTypes as $type)
@@ -40,8 +40,8 @@
                         </div>
 
                         <!-- O'quv yili -->
-                        <div style="width: 110px;">
-                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">O'quv yili</label>
+                        <div style="min-width: 130px;">
+                            <label class="filter-label">O'quv yili</label>
                             <select name="education_year" id="education_year" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                                 @foreach($educationYears as $year)
@@ -53,8 +53,8 @@
                         </div>
 
                         <!-- Fakultet -->
-                        <div style="flex: 1; min-width: 180px;">
-                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Fakultet</label>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label class="filter-label">Fakultet</label>
                             <select name="faculty" id="faculty" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                                 @foreach($faculties as $faculty)
@@ -66,51 +66,51 @@
                         </div>
 
                         <!-- Yo'nalish -->
-                        <div style="flex: 1; min-width: 180px;">
-                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Yo'nalish</label>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label class="filter-label">Yo'nalish</label>
                             <select name="specialty" id="specialty" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
 
                         <!-- Kurs -->
-                        <div style="width: 80px;">
-                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Kurs</label>
+                        <div style="min-width: 100px;">
+                            <label class="filter-label">Kurs</label>
                             <select name="level_code" id="level_code" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
                     </div>
 
-                    <!-- Row 2: Semestr, Guruh, Fan, Sahifada -->
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+                    <!-- Row 2: Semestr, Guruh, Fan, Sahifada, Joriy semestr toggle -->
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
                         <!-- Semestr -->
-                        <div style="width: 100px;">
-                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Semestr</label>
+                        <div style="min-width: 120px;">
+                            <label class="filter-label">Semestr</label>
                             <select name="semester_code" id="semester_code" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
 
                         <!-- Guruh -->
-                        <div style="width: 120px;">
-                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Guruh</label>
+                        <div style="min-width: 140px;">
+                            <label class="filter-label">Guruh</label>
                             <select name="group" id="group" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
 
                         <!-- Fan -->
-                        <div style="flex: 1; min-width: 200px;">
-                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Fan</label>
+                        <div style="flex: 1; min-width: 220px;">
+                            <label class="filter-label">Fan</label>
                             <select name="subject" id="subject" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
 
                         <!-- Sahifada -->
-                        <div style="width: 70px;">
-                            <label style="display: block; margin-bottom: 2px; font-size: 11px; font-weight: 500; color: #6b7280;">Sahifada</label>
+                        <div style="min-width: 90px;">
+                            <label class="filter-label">Sahifada</label>
                             <select id="per_page" name="per_page" class="select2" style="width: 100%;">
                                 @foreach([10, 25, 50, 100] as $pageSize)
                                     <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>
@@ -120,8 +120,20 @@
                             </select>
                         </div>
 
+                        <!-- Joriy semestr toggle -->
+                        <div style="min-width: 130px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <input type="hidden" name="current_semester" id="current_semester_input" value="{{ request('current_semester', '1') }}">
+                            <button type="button" id="current-semester-toggle"
+                                class="toggle-btn {{ request('current_semester', '1') == '1' ? 'active' : '' }}"
+                                onclick="toggleCurrentSemester()">
+                                <span class="toggle-indicator"></span>
+                                <span class="toggle-text">Joriy semestr</span>
+                            </button>
+                        </div>
+
                         <!-- Loading indicator -->
-                        <div style="display: flex; align-items: flex-end; padding-bottom: 4px;">
+                        <div style="display: flex; align-items: flex-end; padding-bottom: 6px;">
                             <div id="filter-loading" class="hidden" style="display: none; align-items: center; color: #2563eb;">
                                 <svg class="animate-spin" style="height: 16px; width: 16px; margin-right: 4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -134,7 +146,7 @@
                 </form>
 
                 <!-- Table -->
-                <div style="max-height: calc(100vh - 280px); overflow-y: auto; overflow-x: auto;">
+                <div style="max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: auto;">
                     @if($journals->isEmpty())
                         <div class="p-6 text-center text-gray-500">
                             <p>Hozircha ma'lumot mavjud emas.</p>
@@ -237,20 +249,40 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
+        function toggleCurrentSemester() {
+            const btn = document.getElementById('current-semester-toggle');
+            const input = document.getElementById('current_semester_input');
+            const isActive = btn.classList.contains('active');
+
+            if (isActive) {
+                btn.classList.remove('active');
+                input.value = '0';
+            } else {
+                btn.classList.add('active');
+                input.value = '1';
+            }
+
+            // Trigger form submit
+            setTimeout(function() {
+                document.getElementById('filter-loading').classList.remove('hidden');
+                document.getElementById('filter-loading').style.display = 'flex';
+                document.getElementById('filter-form').submit();
+            }, 100);
+        }
+
         $(document).ready(function () {
             let isInitialLoad = true;
             let autoSubmitTimeout = null;
-            let isUpdatingFilters = false;
 
             // Debounced auto-submit function
             function autoSubmitForm() {
-                if (isInitialLoad || isUpdatingFilters) return;
+                if (isInitialLoad) return;
 
                 clearTimeout(autoSubmitTimeout);
                 autoSubmitTimeout = setTimeout(function() {
-                    $('#filter-loading').removeClass('hidden').addClass('flex');
+                    $('#filter-loading').removeClass('hidden').css('display', 'flex');
                     $('#filter-form').submit();
-                }, 300);
+                }, 400);
             }
 
             // Initialize Select2 with focus on search
@@ -262,7 +294,8 @@
                     placeholder: $(this).find('option:first').text()
                 }).on('select2:open', function() {
                     setTimeout(function() {
-                        document.querySelector('.select2-container--open .select2-search__field').focus();
+                        const searchField = document.querySelector('.select2-container--open .select2-search__field');
+                        if (searchField) searchField.focus();
                     }, 10);
                 });
             });
@@ -274,14 +307,34 @@
             const selectedGroup = @json(request('group'));
             const selectedFaculty = @json(request('faculty'));
             const selectedEducationYear = @json(request('education_year'));
+            const currentSemester = @json(request('current_semester', '1'));
 
             function resetDropdown(element, placeholder) {
-                const currentVal = $(element).val();
                 $(element).empty().append(`<option value="">${placeholder}</option>`);
-                return currentVal;
             }
 
-            function populateDropdown(url, params, element, callback, preserveValue = null) {
+            function populateDropdownUnique(url, params, element, callback) {
+                $.ajax({
+                    url: url,
+                    type: 'GET',
+                    data: params,
+                    success: function (data) {
+                        // Bir xil nomlarni birlashtiramiz
+                        const uniqueNames = {};
+                        $.each(data, function (key, value) {
+                            if (!uniqueNames[value]) {
+                                uniqueNames[value] = key;
+                            }
+                        });
+                        $.each(uniqueNames, function (name, key) {
+                            $(element).append(`<option value="${key}">${name}</option>`);
+                        });
+                        if (callback) callback(data);
+                    }
+                });
+            }
+
+            function populateDropdown(url, params, element, callback) {
                 $.ajax({
                     url: url,
                     type: 'GET',
@@ -290,57 +343,36 @@
                         $.each(data, function (key, value) {
                             $(element).append(`<option value="${key}">${value}</option>`);
                         });
-                        if (preserveValue) {
-                            $(element).val(preserveValue).trigger('change.select2');
-                        }
                         if (callback) callback(data);
                     }
                 });
             }
 
             // Auto-submit for simple filters
-            $('#education_type, #per_page').on('change', function() {
+            $('#education_type, #per_page, #education_year').on('change', function() {
                 autoSubmitForm();
             });
 
-            // Fakultet tanlash -> yo'nalishlar va guruhlarni yuklash
+            // Fakultet tanlash
             $('#faculty').change(function () {
-                if (isUpdatingFilters) return;
                 const facultyId = $(this).val();
                 resetDropdown('#specialty', 'Barchasi');
                 resetDropdown('#group', 'Barchasi');
 
                 if (facultyId) {
-                    populateDropdown('{{ route("admin.journal.get-specialties") }}', { faculty_id: facultyId }, '#specialty');
+                    populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', { faculty_id: facultyId }, '#specialty');
                     populateDropdown('{{ route("admin.journal.get-groups") }}', { faculty_id: facultyId }, '#group');
                 }
                 autoSubmitForm();
             });
 
-            // Yo'nalish tanlash -> fakultetni (ikki tomonlama) va guruhlarni yangilash
+            // Yo'nalish tanlash
             $('#specialty').change(function () {
-                if (isUpdatingFilters) return;
                 const specialtyId = $(this).val();
                 const facultyId = $('#faculty').val();
                 resetDropdown('#group', 'Barchasi');
 
                 if (specialtyId) {
-                    // Ikki tomonlama: yo'nalishga mos fakultetlarni ko'rsatish
-                    if (!facultyId) {
-                        isUpdatingFilters = true;
-                        $.ajax({
-                            url: '{{ route("admin.journal.get-faculties-by-specialty") }}',
-                            type: 'GET',
-                            data: { specialty_id: specialtyId },
-                            success: function (data) {
-                                resetDropdown('#faculty', 'Barchasi');
-                                $.each(data, function (key, value) {
-                                    $('#faculty').append(`<option value="${key}">${value}</option>`);
-                                });
-                                isUpdatingFilters = false;
-                            }
-                        });
-                    }
                     populateDropdown('{{ route("admin.journal.get-groups") }}', { faculty_id: facultyId, specialty_id: specialtyId }, '#group');
                 } else if (facultyId) {
                     populateDropdown('{{ route("admin.journal.get-groups") }}', { faculty_id: facultyId }, '#group');
@@ -348,200 +380,82 @@
                 autoSubmitForm();
             });
 
-            // Kurs tanlash -> semestrlarni yuklash va o'quv yilini (ikki tomonlama)
+            // Kurs tanlash
             $('#level_code').change(function () {
-                if (isUpdatingFilters) return;
                 const levelCode = $(this).val();
                 resetDropdown('#semester_code', 'Barchasi');
 
                 if (levelCode) {
-                    // Ikki tomonlama: kursga mos o'quv yillarini ko'rsatish
-                    if (!$('#education_year').val()) {
-                        isUpdatingFilters = true;
-                        $.ajax({
-                            url: '{{ route("admin.journal.get-education-years-by-level") }}',
-                            type: 'GET',
-                            data: { level_code: levelCode },
-                            success: function (data) {
-                                resetDropdown('#education_year', 'Barchasi');
-                                $.each(data, function (key, value) {
-                                    $('#education_year').append(`<option value="${key}">${value}</option>`);
-                                });
-                                isUpdatingFilters = false;
-                            }
-                        });
-                    }
                     populateDropdown('{{ route("admin.journal.get-semesters") }}', { level_code: levelCode }, '#semester_code');
                 }
                 autoSubmitForm();
             });
 
-            // Semestr tanlash -> fanlarni yuklash va kursni (ikki tomonlama)
+            // Semestr tanlash
             $('#semester_code').change(function () {
-                if (isUpdatingFilters) return;
                 const semesterCode = $(this).val();
+                resetDropdown('#subject', 'Barchasi');
 
                 if (semesterCode) {
-                    // Ikki tomonlama: semestr bo'yicha kurs va fanlarni olish
-                    $.ajax({
-                        url: '{{ route("admin.journal.get-filters-by-semester") }}',
-                        type: 'GET',
-                        data: { semester_code: semesterCode },
-                        success: function (data) {
-                            // Kurs (agar tanlanmagan bo'lsa)
-                            if (!$('#level_code').val() && data.level_codes) {
-                                isUpdatingFilters = true;
-                                resetDropdown('#level_code', 'Barchasi');
-                                $.each(data.level_codes, function (key, value) {
-                                    $('#level_code').append(`<option value="${key}">${value}</option>`);
-                                });
-                                isUpdatingFilters = false;
-                            }
-                            // Fanlar
-                            if (data.subjects) {
-                                resetDropdown('#subject', 'Barchasi');
-                                $.each(data.subjects, function (key, value) {
-                                    $('#subject').append(`<option value="${key}">${value}</option>`);
-                                });
-                            }
-                        }
-                    });
-                } else {
-                    resetDropdown('#subject', 'Barchasi');
+                    populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', { semester_code: semesterCode }, '#subject');
                 }
                 autoSubmitForm();
             });
 
-            // Guruh tanlash -> fakultet, yo'nalish, fan, semestr (ikki tomonlama)
+            // Guruh tanlash - to'g'ridan to'g'ri autosubmit
             $('#group').change(function () {
-                if (isUpdatingFilters) return;
-                const groupId = $(this).val();
-
-                if (groupId) {
-                    isUpdatingFilters = true;
-                    $.ajax({
-                        url: '{{ route("admin.journal.get-filters-by-group") }}',
-                        type: 'GET',
-                        data: { group_id: groupId },
-                        success: function (data) {
-                            // Fakultet (agar tanlanmagan bo'lsa)
-                            if (!$('#faculty').val() && data.faculties && Object.keys(data.faculties).length > 0) {
-                                resetDropdown('#faculty', 'Barchasi');
-                                $.each(data.faculties, function (key, value) {
-                                    $('#faculty').append(`<option value="${key}">${value}</option>`);
-                                });
-                            }
-                            // Yo'nalish (agar tanlanmagan bo'lsa)
-                            if (!$('#specialty').val() && data.specialties && Object.keys(data.specialties).length > 0) {
-                                resetDropdown('#specialty', 'Barchasi');
-                                $.each(data.specialties, function (key, value) {
-                                    $('#specialty').append(`<option value="${key}">${value}</option>`);
-                                });
-                            }
-                            // Semestrlar (agar tanlanmagan bo'lsa)
-                            if (!$('#semester_code').val() && data.semesters && Object.keys(data.semesters).length > 0) {
-                                resetDropdown('#semester_code', 'Barchasi');
-                                $.each(data.semesters, function (key, value) {
-                                    $('#semester_code').append(`<option value="${key}">${value}</option>`);
-                                });
-                            }
-                            // Fanlar (agar tanlanmagan bo'lsa)
-                            if (!$('#subject').val() && data.subjects && Object.keys(data.subjects).length > 0) {
-                                resetDropdown('#subject', 'Barchasi');
-                                $.each(data.subjects, function (key, value) {
-                                    $('#subject').append(`<option value="${key}">${value}</option>`);
-                                });
-                            }
-                            isUpdatingFilters = false;
-                        }
-                    });
-                }
                 autoSubmitForm();
             });
 
-            // Fan tanlash -> fakultet, yo'nalish, guruh, semestr (ikki tomonlama)
+            // Fan tanlash -> guruh listini filtrlash
             $('#subject').change(function () {
-                if (isUpdatingFilters) return;
                 const subjectId = $(this).val();
 
                 if (subjectId) {
-                    isUpdatingFilters = true;
+                    // Fanga tegishli guruhlarni olish
                     $.ajax({
                         url: '{{ route("admin.journal.get-filters-by-subject") }}',
                         type: 'GET',
                         data: { subject_id: subjectId },
                         success: function (data) {
-                            // Fakultet (agar tanlanmagan bo'lsa)
-                            if (!$('#faculty').val() && data.faculties && Object.keys(data.faculties).length > 0) {
-                                resetDropdown('#faculty', 'Barchasi');
-                                $.each(data.faculties, function (key, value) {
-                                    $('#faculty').append(`<option value="${key}">${value}</option>`);
-                                });
-                            }
-                            // Yo'nalish (agar tanlanmagan bo'lsa)
-                            if (!$('#specialty').val() && data.specialties && Object.keys(data.specialties).length > 0) {
-                                resetDropdown('#specialty', 'Barchasi');
-                                $.each(data.specialties, function (key, value) {
-                                    $('#specialty').append(`<option value="${key}">${value}</option>`);
-                                });
-                            }
-                            // Guruhlar (agar tanlanmagan bo'lsa)
-                            if (!$('#group').val() && data.groups && Object.keys(data.groups).length > 0) {
+                            // Guruhlarni yangilash (fanga tegishli)
+                            if (data.groups && Object.keys(data.groups).length > 0) {
                                 resetDropdown('#group', 'Barchasi');
                                 $.each(data.groups, function (key, value) {
                                     $('#group').append(`<option value="${key}">${value}</option>`);
                                 });
                             }
-                            // Semestrlar (agar tanlanmagan bo'lsa)
-                            if (!$('#semester_code').val() && data.semesters && Object.keys(data.semesters).length > 0) {
-                                resetDropdown('#semester_code', 'Barchasi');
-                                $.each(data.semesters, function (key, value) {
-                                    $('#semester_code').append(`<option value="${key}">${value}</option>`);
-                                });
-                            }
-                            isUpdatingFilters = false;
+                            autoSubmitForm();
                         }
                     });
+                } else {
+                    autoSubmitForm();
                 }
-                autoSubmitForm();
-            });
-
-            // O'quv yili tanlash -> kurslarni yuklash
-            $('#education_year').change(function () {
-                if (isUpdatingFilters) return;
-                const educationYear = $(this).val();
-                resetDropdown('#level_code', 'Barchasi');
-                resetDropdown('#semester_code', 'Barchasi');
-
-                if (educationYear) {
-                    populateDropdown('{{ route("admin.journal.get-level-codes") }}', { education_year: educationYear }, '#level_code');
-                }
-                autoSubmitForm();
             });
 
             // Initial load - populate dropdowns
             function initializeFilters() {
-                // Load all specialties
-                populateDropdown('{{ route("admin.journal.get-specialties") }}', {}, '#specialty', () => {
+                // Load specialties
+                populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', {}, '#specialty', () => {
                     if (selectedSpecialty) $('#specialty').val(selectedSpecialty).trigger('change.select2');
                 });
 
-                // Load all levels
+                // Load levels
                 populateDropdown('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code', () => {
                     if (selectedLevelCode) $('#level_code').val(selectedLevelCode).trigger('change.select2');
                 });
 
-                // Load all semesters
+                // Load semesters
                 populateDropdown('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code', () => {
                     if (selectedSemesterCode) $('#semester_code').val(selectedSemesterCode).trigger('change.select2');
                 });
 
-                // Load all subjects
-                populateDropdown('{{ route("admin.journal.get-subjects") }}', {}, '#subject', () => {
+                // Load subjects (bir xil nomlarni birlashtirish)
+                populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', {}, '#subject', () => {
                     if (selectedSubject) $('#subject').val(selectedSubject).trigger('change.select2');
                 });
 
-                // Load all groups
+                // Load groups
                 populateDropdown('{{ route("admin.journal.get-groups") }}', {}, '#group', () => {
                     if (selectedGroup) $('#group').val(selectedGroup).trigger('change.select2');
                 });
@@ -549,7 +463,7 @@
 
             initializeFilters();
 
-            // Mark initial load as complete after a short delay
+            // Mark initial load as complete after delay
             setTimeout(function() {
                 isInitialLoad = false;
             }, 1500);
@@ -557,29 +471,94 @@
     </script>
 
     <style>
+        .filter-label {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #6b7280;
+        }
+
+        /* Select2 styling */
         .select2-container--classic .select2-selection--single {
-            height: 32px;
+            height: 36px;
             border: 1px solid #D1D5DB;
-            border-radius: 0.25rem;
+            border-radius: 0.375rem;
             background: white;
         }
         .select2-container--classic .select2-selection--single .select2-selection__rendered {
-            line-height: 30px;
-            padding-left: 8px;
+            line-height: 34px;
+            padding-left: 10px;
+            padding-right: 35px;
             color: #374151;
             font-size: 0.875rem;
         }
         .select2-container--classic .select2-selection--single .select2-selection__arrow {
-            height: 30px;
+            height: 34px;
+            width: 24px;
             background: transparent;
+            border-left: none;
         }
         .select2-container--classic .select2-selection--single .select2-selection__clear {
-            margin-right: 20px;
-            font-size: 1rem;
+            position: absolute;
+            right: 25px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 18px;
+            font-weight: bold;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 0 5px;
+            z-index: 1;
+        }
+        .select2-container--classic .select2-selection--single .select2-selection__clear:hover {
+            color: #ef4444;
         }
         .select2-dropdown {
             font-size: 0.875rem;
+            border-radius: 0.375rem;
         }
+        .select2-container--classic .select2-results__option--highlighted {
+            background-color: #3b82f6;
+        }
+
+        /* Toggle button styling */
+        .toggle-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border: 1px solid #D1D5DB;
+            border-radius: 0.375rem;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+            color: #6b7280;
+            transition: all 0.2s;
+            height: 36px;
+        }
+        .toggle-btn:hover {
+            border-color: #9ca3af;
+        }
+        .toggle-btn.active {
+            background: #dbeafe;
+            border-color: #3b82f6;
+            color: #1d4ed8;
+        }
+        .toggle-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #D1D5DB;
+            transition: all 0.2s;
+        }
+        .toggle-btn.active .toggle-indicator {
+            background: #3b82f6;
+        }
+        .toggle-text {
+            white-space: nowrap;
+        }
+
         tbody tr:hover {
             background-color: #EBF5FF !important;
         }

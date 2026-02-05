@@ -244,12 +244,23 @@ class JournalController extends Controller
             return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
-        // Get distinct dates for compact view from schedules (calendar source)
-        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
-        // Get distinct dates for compact view - barcha kunlarni ko'rsatish
-        $jbLessonDates = $jbGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        // Get distinct dates for compact view from schedules (calendar source).
+        // Merge grade dates as a fallback for old data where schedule rows might be missing.
+        $jbLessonDates = $jbScheduleRows
+            ->pluck('lesson_date')
+            ->merge($jbGradesRaw->pluck('lesson_date'))
+            ->unique()
+            ->sort()
+            ->values()
+            ->toArray();
 
-        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtLessonDates = $mtScheduleRows
+            ->pluck('lesson_date')
+            ->merge($mtGradesRaw->pluck('lesson_date'))
+            ->unique()
+            ->sort()
+            ->values()
+            ->toArray();
 
         // Count pairs per day for JB (for correct daily average calculation)
         $jbPairsPerDay = [];

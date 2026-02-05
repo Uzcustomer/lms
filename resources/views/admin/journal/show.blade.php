@@ -119,11 +119,11 @@
             <div class="mb-0 flex justify-between items-center">
                 <nav class="flex space-x-4">
                     <button id="tab-maruza" onclick="switchTab('maruza')"
-                        class="tab-btn active">
+                        class="tab-btn">
                         Ma'ruza
                     </button>
                     <button id="tab-amaliyot" onclick="switchTab('amaliyot')"
-                        class="tab-btn">
+                        class="tab-btn active">
                         Amaliyot
                     </button>
                     <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
@@ -162,7 +162,7 @@
 
 
             <!-- Ma'ruza Tab Content -->
-            <div id="content-maruza" class="tab-content">
+            <div id="content-maruza" class="tab-content hidden">
                 <div class="bg-white">
                     @if($students->isEmpty())
                         <div class="p-4 text-center text-gray-500">
@@ -280,7 +280,7 @@
             </div>
 
             <!-- Amaliyot Tab Content -->
-            <div id="content-amaliyot" class="tab-content hidden">
+            <div id="content-amaliyot" class="tab-content">
                 <div class="bg-white">
                     @if($students->isEmpty())
                         <div class="p-4 text-center text-gray-500">
@@ -511,10 +511,45 @@
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
+                                                    @php
+                                                        $canRate = auth()->user()->hasRole('admin');
+                                                        $showRatingInput = false;
+                                                        $gradeRecordId = null;
+                                                        $hasRetake = false;
+
+                                                        if ($isAbsent && isset($jbAbsences[$student->hemis_id][$col['date']][$col['pair']])) {
+                                                            $absenceData = $jbAbsences[$student->hemis_id][$col['date']][$col['pair']];
+                                                            $gradeRecordId = $absenceData['id'];
+                                                            $hasRetake = $absenceData['retake_grade'] !== null;
+                                                            $showRatingInput = $canRate && !$hasRetake;
+                                                        } elseif ($grade !== null && round($grade, 0) < 60 && $gradeData) {
+                                                            $gradeRecordId = $gradeData['id'];
+                                                            $hasRetake = $gradeData['retake_grade'] !== null;
+                                                            $showRatingInput = $canRate && !$hasRetake;
+                                                        }
+                                                    @endphp
                                                     @if($grade !== null)
-                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                        <div class="flex items-center justify-center gap-1">
+                                                            <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                            @if($showRatingInput)
+                                                                <button onclick="showRetakeInput({{ $gradeRecordId }}, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}')" class="text-blue-500 hover:text-blue-700 text-xs" title="Retake bahosi qo'yish">
+                                                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
+                                                                </button>
+                                                            @elseif($hasRetake)
+                                                                <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan">✓</span>
+                                                            @endif
+                                                        </div>
                                                     @elseif($isAbsent)
-                                                        <span class="text-red-600 font-medium">NB</span>
+                                                        <div class="flex items-center justify-center gap-1">
+                                                            <span class="text-red-600 font-medium">NB</span>
+                                                            @if($showRatingInput)
+                                                                <button onclick="showRetakeInput({{ $gradeRecordId }}, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}')" class="text-blue-500 hover:text-blue-700 text-xs" title="Retake bahosi qo'yish">
+                                                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
+                                                                </button>
+                                                            @elseif($hasRetake)
+                                                                <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan">✓</span>
+                                                            @endif
+                                                        </div>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -849,6 +884,56 @@
                 document.getElementById('mt-compact-view')?.classList.add('hidden');
                 document.getElementById('mt-detailed-view')?.classList.remove('hidden');
             }
+        }
+
+        // Retake grade functionality
+        function showRetakeInput(gradeId, studentHemisId, date, pair) {
+            const grade = prompt('Retake uchun baho kiriting (0-100):');
+
+            if (grade === null) {
+                return; // User cancelled
+            }
+
+            const gradeNum = parseFloat(grade);
+            if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
+                alert('Iltimos, 0 dan 100 gacha baho kiriting');
+                return;
+            }
+
+            // Confirm the action
+            if (!confirm(`Retake bahosi: ${gradeNum}\n\nDavom etishni xohlaysizmi?`)) {
+                return;
+            }
+
+            saveRetakeGrade(gradeId, gradeNum);
+        }
+
+        function saveRetakeGrade(gradeId, grade) {
+            fetch('{{ route("admin.journal.save-retake-grade") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    grade_id: gradeId,
+                    grade: parseFloat(grade)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Muvaffaqiyat! Retake bahosi: ${data.retake_grade} (${data.percentage}%)`);
+                    location.reload(); // Reload to show updated data
+                } else {
+                    alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
+            });
         }
     </script>
 </x-app-layout>

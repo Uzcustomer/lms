@@ -198,7 +198,7 @@ class JournalController extends Controller
             ->whereNotIn('training_type_name', $excludedTrainingTypes)
             ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -210,7 +210,7 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -304,12 +304,18 @@ class JournalController extends Controller
             $mtPairsPerDay[$col['date']]++;
         }
 
-        // Build grades data structure: student_hemis_id => date => pair => ['grade' => value, 'is_retake' => bool]
+        // Build grades data structure: student_hemis_id => date => pair => ['grade' => value, 'is_retake' => bool, 'id' => id, 'status' => status, 'retake_grade' => retake_grade, 'reason' => reason]
         $jbGrades = [];
         foreach ($jbGradesRaw as $g) {
             $effectiveGrade = $getEffectiveGrade($g);
             if ($effectiveGrade !== null) {
-                $jbGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
+                $jbGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = array_merge($effectiveGrade, [
+                    'id' => $g->id,
+                    'status' => $g->status,
+                    'retake_grade' => $g->retake_grade,
+                    'reason' => $g->reason,
+                    'original_grade' => $g->grade
+                ]);
             }
         }
 
@@ -317,7 +323,13 @@ class JournalController extends Controller
         foreach ($mtGradesRaw as $g) {
             $effectiveGrade = $getEffectiveGrade($g);
             if ($effectiveGrade !== null) {
-                $mtGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
+                $mtGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = array_merge($effectiveGrade, [
+                    'id' => $g->id,
+                    'status' => $g->status,
+                    'retake_grade' => $g->retake_grade,
+                    'reason' => $g->reason,
+                    'original_grade' => $g->grade
+                ]);
             }
         }
 
@@ -327,14 +339,20 @@ class JournalController extends Controller
         $jbAbsences = [];
         foreach ($jbGradesRaw as $g) {
             if ($g->reason === 'absent' && $g->status === 'pending') {
-                $jbAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = true;
+                $jbAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = [
+                    'id' => $g->id,
+                    'retake_grade' => $g->retake_grade
+                ];
             }
         }
 
         $mtAbsences = [];
         foreach ($mtGradesRaw as $g) {
             if ($g->reason === 'absent' && $g->status === 'pending') {
-                $mtAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = true;
+                $mtAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = [
+                    'id' => $g->id,
+                    'retake_grade' => $g->retake_grade
+                ];
             }
         }
 
@@ -359,6 +377,42 @@ class JournalController extends Controller
                 continue;
             }
             $lectureAttendance[$row->student_hemis_id][$row->lesson_date][$row->lesson_pair_code] = $status;
+        }
+
+        // Get JB (Amaliyot) attendance to check for excused absences
+        $jbAttendanceRaw = DB::table('attendances')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+            ->whereNotNull('lesson_date')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
+            ->get();
+
+        $jbAttendance = [];
+        foreach ($jbAttendanceRaw as $row) {
+            $jbAttendance[$row->student_hemis_id][$row->lesson_date][$row->lesson_pair_code] = [
+                'absent_on' => $row->absent_on
+            ];
+        }
+
+        // Get MT (Mustaqil ta'lim) attendance to check for excused absences
+        $mtAttendanceRaw = DB::table('attendances')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNotNull('lesson_date')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
+            ->get();
+
+        $mtAttendance = [];
+        foreach ($mtAttendanceRaw as $row) {
+            $mtAttendance[$row->student_hemis_id][$row->lesson_date][$row->lesson_pair_code] = [
+                'absent_on' => $row->absent_on
+            ];
         }
 
         // Get students basic info
@@ -439,6 +493,8 @@ class JournalController extends Controller
             'mtGrades',
             'jbAbsences',
             'mtAbsences',
+            'jbAttendance',
+            'mtAttendance',
             'jbColumns',
             'mtColumns',
             'jbPairsPerDay',
@@ -537,6 +593,75 @@ class JournalController extends Controller
         }
 
         return response()->json(['success' => true, 'message' => 'Grade saved successfully']);
+    }
+
+    /**
+     * Save retake grade for a student from journal
+     */
+    public function saveRetakeGrade(Request $request)
+    {
+        // Check admin role
+        if (!auth()->user()->hasRole('admin')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'grade_id' => 'required|integer',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        $gradeId = $request->grade_id;
+        $enteredGrade = $request->grade;
+
+        // Get the student grade record
+        $studentGrade = DB::table('student_grades')
+            ->where('id', $gradeId)
+            ->first();
+
+        if (!$studentGrade) {
+            return response()->json(['success' => false, 'message' => 'Grade record not found'], 404);
+        }
+
+        // Check if retake grade already exists
+        if ($studentGrade->retake_grade !== null) {
+            return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
+        }
+
+        // Check if there's an attendance record to determine if absence was excused
+        $attendance = DB::table('attendances')
+            ->where('student_hemis_id', $studentGrade->student_hemis_id)
+            ->where('subject_id', $studentGrade->subject_id)
+            ->where('semester_code', $studentGrade->semester_code)
+            ->where('lesson_date', $studentGrade->lesson_date)
+            ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
+            ->first();
+
+        // Determine the percentage to apply
+        $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
+        $percentage = $isExcused ? 1.0 : 0.8; // 100% if excused, 80% otherwise
+
+        // Calculate final retake grade
+        $retakeGrade = round($enteredGrade * $percentage, 2);
+
+        $now = now();
+
+        // Update the grade record with retake information
+        DB::table('student_grades')
+            ->where('id', $gradeId)
+            ->update([
+                'retake_grade' => $retakeGrade,
+                'status' => 'retake',
+                'graded_by_user_id' => auth()->id(),
+                'retake_graded_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Retake bahosi muvaffaqiyatli saqlandi',
+            'retake_grade' => $retakeGrade,
+            'percentage' => $percentage * 100
+        ]);
     }
 
     // AJAX endpoints for cascading dropdowns

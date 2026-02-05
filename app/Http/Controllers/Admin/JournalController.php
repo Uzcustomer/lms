@@ -155,6 +155,19 @@ class JournalController extends Controller
         // Excluded training type codes: 11=Ma'ruza, 99=MT, 100=ON, 101=Oski, 102=Test
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
+        // Barcha dars kunlarini olish (dars turi ahamiyatsiz) - ustunlar uchun
+        $allLessonDates = DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotIn('training_type_code', [99, 100, 101, 102]) // MT, ON, Oski, Test emas
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date', 'lesson_pair_code')
+            ->distinct()
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
         // Get all JB grades with lesson_pair info and status fields
         $jbGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
@@ -206,11 +219,9 @@ class JournalController extends Controller
             return null;
         };
 
-        // Build unique date+pair columns for detailed view (JB) - barcha kunlarni ko'rsatish
-        $jbColumns = $jbGradesRaw->map(function ($g) {
+        // Build unique date+pair columns for detailed view (JB) - barcha dars kunlarini ko'rsatish
+        $jbColumns = $allLessonDates->map(function ($g) {
             return ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code];
-        })->unique(function ($item) {
-            return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
         // Build unique date+pair columns for detailed view (MT)
@@ -220,8 +231,8 @@ class JournalController extends Controller
             return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
-        // Get distinct dates for compact view - barcha kunlarni ko'rsatish
-        $jbLessonDates = $jbGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        // Get distinct dates for compact view - barcha dars kunlarini ko'rsatish
+        $jbLessonDates = $allLessonDates->pluck('lesson_date')->unique()->sort()->values()->toArray();
 
         $mtLessonDates = $mtGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
 

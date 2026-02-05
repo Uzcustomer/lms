@@ -348,35 +348,66 @@
                 });
             }
 
-            // Auto-submit for simple filters
-            $('#education_type, #per_page, #education_year').on('change', function() {
+            // Hozirgi barcha filtr qiymatlarini olish
+            function getFilterParams() {
+                return {
+                    education_type: $('#education_type').val() || '',
+                    education_year: $('#education_year').val() || '',
+                    faculty_id: $('#faculty').val() || '',
+                    specialty_id: $('#specialty').val() || '',
+                    level_code: $('#level_code').val() || '',
+                    semester_code: $('#semester_code').val() || '',
+                    subject_id: $('#subject').val() || '',
+                };
+            }
+
+            // Bog'liq dropdown'larni yangilash
+            function refreshGroups() {
+                resetDropdown('#group', 'Barchasi');
+                populateDropdown('{{ route("admin.journal.get-groups") }}', getFilterParams(), '#group');
+            }
+
+            function refreshSubjects() {
+                resetDropdown('#subject', 'Barchasi');
+                populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', getFilterParams(), '#subject');
+            }
+
+            function refreshSpecialties() {
+                resetDropdown('#specialty', 'Barchasi');
+                populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', getFilterParams(), '#specialty');
+            }
+
+            // Ta'lim turi tanlash - barcha bog'liq filtrlarni yangilash
+            $('#education_type').change(function () {
+                refreshSpecialties();
+                refreshSubjects();
+                refreshGroups();
+                autoSubmitForm();
+            });
+
+            // O'quv yili tanlash
+            $('#education_year').change(function () {
+                refreshSubjects();
+                refreshGroups();
+                autoSubmitForm();
+            });
+
+            // Sahifada
+            $('#per_page').on('change', function() {
                 autoSubmitForm();
             });
 
             // Fakultet tanlash
             $('#faculty').change(function () {
-                const facultyId = $(this).val();
-                resetDropdown('#specialty', 'Barchasi');
-                resetDropdown('#group', 'Barchasi');
-
-                if (facultyId) {
-                    populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', { faculty_id: facultyId }, '#specialty');
-                    populateDropdown('{{ route("admin.journal.get-groups") }}', { faculty_id: facultyId }, '#group');
-                }
+                refreshSpecialties();
+                refreshSubjects();
+                refreshGroups();
                 autoSubmitForm();
             });
 
             // Yo'nalish tanlash
             $('#specialty').change(function () {
-                const specialtyId = $(this).val();
-                const facultyId = $('#faculty').val();
-                resetDropdown('#group', 'Barchasi');
-
-                if (specialtyId) {
-                    populateDropdown('{{ route("admin.journal.get-groups") }}', { faculty_id: facultyId, specialty_id: specialtyId }, '#group');
-                } else if (facultyId) {
-                    populateDropdown('{{ route("admin.journal.get-groups") }}', { faculty_id: facultyId }, '#group');
-                }
+                refreshGroups();
                 autoSubmitForm();
             });
 
@@ -388,55 +419,35 @@
                 if (levelCode) {
                     populateDropdown('{{ route("admin.journal.get-semesters") }}', { level_code: levelCode }, '#semester_code');
                 }
+                refreshSubjects();
+                refreshGroups();
                 autoSubmitForm();
             });
 
             // Semestr tanlash
             $('#semester_code').change(function () {
-                const semesterCode = $(this).val();
-                resetDropdown('#subject', 'Barchasi');
-
-                if (semesterCode) {
-                    populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', { semester_code: semesterCode }, '#subject');
-                }
+                refreshSubjects();
+                refreshGroups();
                 autoSubmitForm();
             });
 
-            // Guruh tanlash - to'g'ridan to'g'ri autosubmit
+            // Guruh tanlash
             $('#group').change(function () {
                 autoSubmitForm();
             });
 
-            // Fan tanlash -> guruh listini filtrlash
+            // Fan tanlash
             $('#subject').change(function () {
-                const subjectId = $(this).val();
-
-                if (subjectId) {
-                    // Fanga tegishli guruhlarni olish
-                    $.ajax({
-                        url: '{{ route("admin.journal.get-filters-by-subject") }}',
-                        type: 'GET',
-                        data: { subject_id: subjectId },
-                        success: function (data) {
-                            // Guruhlarni yangilash (fanga tegishli)
-                            if (data.groups && Object.keys(data.groups).length > 0) {
-                                resetDropdown('#group', 'Barchasi');
-                                $.each(data.groups, function (key, value) {
-                                    $('#group').append(`<option value="${key}">${value}</option>`);
-                                });
-                            }
-                            autoSubmitForm();
-                        }
-                    });
-                } else {
-                    autoSubmitForm();
-                }
+                refreshGroups();
+                autoSubmitForm();
             });
 
             // Initial load - populate dropdowns
             function initializeFilters() {
+                const initParams = getFilterParams();
+
                 // Load specialties
-                populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', {}, '#specialty', () => {
+                populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', initParams, '#specialty', () => {
                     if (selectedSpecialty) $('#specialty').val(selectedSpecialty).trigger('change.select2');
                 });
 
@@ -450,13 +461,13 @@
                     if (selectedSemesterCode) $('#semester_code').val(selectedSemesterCode).trigger('change.select2');
                 });
 
-                // Load subjects (bir xil nomlarni birlashtirish)
-                populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', {}, '#subject', () => {
+                // Load subjects
+                populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', initParams, '#subject', () => {
                     if (selectedSubject) $('#subject').val(selectedSubject).trigger('change.select2');
                 });
 
                 // Load groups
-                populateDropdown('{{ route("admin.journal.get-groups") }}', {}, '#group', () => {
+                populateDropdown('{{ route("admin.journal.get-groups") }}', initParams, '#group', () => {
                     if (selectedGroup) $('#group').val(selectedGroup).trigger('change.select2');
                 });
             }

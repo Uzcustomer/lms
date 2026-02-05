@@ -456,6 +456,14 @@ class JournalController extends Controller
             }
         }
 
+        // Ta'lim turi bo'yicha filtrlash (curriculum -> specialty orqali)
+        if ($request->filled('education_type')) {
+            $specialtyHemisIds = Curriculum::where('education_type_code', $request->education_type)
+                ->pluck('specialty_hemis_id')
+                ->unique();
+            $query->whereIn('specialty_hemis_id', $specialtyHemisIds);
+        }
+
         return $query->select('specialty_hemis_id', 'name')
             ->orderBy('name')
             ->get()
@@ -495,14 +503,48 @@ class JournalController extends Controller
     public function getSubjects(Request $request)
     {
         // Faqat faol guruhlar bilan bog'liq fanlarni olish
-        $activeCurriculaIds = Group::where('department_active', true)->where('active', true)
-            ->pluck('curriculum_hemis_id')
-            ->unique();
+        $activeGroupsQuery = Group::where('department_active', true)->where('active', true);
+
+        // Fakultet bo'yicha filtrlash
+        if ($request->filled('faculty_id')) {
+            $faculty = Department::find($request->faculty_id);
+            if ($faculty) {
+                $activeGroupsQuery->where('department_hemis_id', $faculty->department_hemis_id);
+            }
+        }
+
+        // Yo'nalish bo'yicha filtrlash
+        if ($request->filled('specialty_id')) {
+            $activeGroupsQuery->where('specialty_hemis_id', $request->specialty_id);
+        }
+
+        // Ta'lim turi bo'yicha filtrlash
+        if ($request->filled('education_type')) {
+            $curriculaIds = Curriculum::where('education_type_code', $request->education_type)
+                ->pluck('curricula_hemis_id');
+            $activeGroupsQuery->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // O'quv yili bo'yicha filtrlash
+        if ($request->filled('education_year')) {
+            $curriculaIds = Curriculum::where('education_year_code', $request->education_year)
+                ->pluck('curricula_hemis_id');
+            $activeGroupsQuery->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        $activeCurriculaIds = $activeGroupsQuery->pluck('curriculum_hemis_id')->unique();
 
         $query = CurriculumSubject::whereIn('curricula_hemis_id', $activeCurriculaIds);
 
         if ($request->filled('semester_code')) {
             $query->where('semester_code', $request->semester_code);
+        }
+
+        // Kurs bo'yicha filtrlash (semestr orqali)
+        if ($request->filled('level_code')) {
+            $semesterCodes = Semester::where('level_code', $request->level_code)
+                ->pluck('code');
+            $query->whereIn('semester_code', $semesterCodes);
         }
 
         return $query->select('subject_id', 'subject_name')
@@ -525,6 +567,41 @@ class JournalController extends Controller
 
         if ($request->filled('specialty_id')) {
             $query->where('specialty_hemis_id', $request->specialty_id);
+        }
+
+        // Ta'lim turi bo'yicha filtrlash (curriculum orqali)
+        if ($request->filled('education_type')) {
+            $curriculaIds = Curriculum::where('education_type_code', $request->education_type)
+                ->pluck('curricula_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // O'quv yili bo'yicha filtrlash
+        if ($request->filled('education_year')) {
+            $curriculaIds = Curriculum::where('education_year_code', $request->education_year)
+                ->pluck('curricula_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // Semestr bo'yicha filtrlash
+        if ($request->filled('semester_code')) {
+            $curriculaIds = Semester::where('code', $request->semester_code)
+                ->pluck('curriculum_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // Kurs bo'yicha filtrlash
+        if ($request->filled('level_code')) {
+            $curriculaIds = Semester::where('level_code', $request->level_code)
+                ->pluck('curriculum_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // Fan bo'yicha filtrlash
+        if ($request->filled('subject_id')) {
+            $curriculaIds = CurriculumSubject::where('subject_id', $request->subject_id)
+                ->pluck('curricula_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
         return $query->select('id', 'name')

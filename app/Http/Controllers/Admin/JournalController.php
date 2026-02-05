@@ -58,7 +58,8 @@ class JournalController extends Controller
                 's.level_name',
             ])
             ->distinct()
-            ->where('g.department_active', true);
+            ->where('g.department_active', true)
+            ->where('g.active', true);
 
         // Apply filters
         if ($request->filled('education_type')) {
@@ -510,7 +511,7 @@ class JournalController extends Controller
     public function getSubjects(Request $request)
     {
         // Faqat faol guruhlar bilan bog'liq fanlarni olish
-        $activeCurriculaIds = Group::where('department_active', true)
+        $activeCurriculaIds = Group::where('department_active', true)->where('active', true)
             ->pluck('curriculum_hemis_id')
             ->unique();
 
@@ -529,7 +530,7 @@ class JournalController extends Controller
 
     public function getGroups(Request $request)
     {
-        $query = Group::where('department_active', true);
+        $query = Group::where('department_active', true)->where('active', true);
 
         if ($request->filled('faculty_id')) {
             $faculty = Department::find($request->faculty_id);
@@ -675,6 +676,7 @@ class JournalController extends Controller
         // Guruhlar (faqat faol)
         $groups = Group::whereIn('curriculum_hemis_id', $curriculaHemisIds)
             ->where('department_active', true)
+            ->where('active', true)
             ->select('id', 'name', 'department_hemis_id', 'specialty_hemis_id')
             ->orderBy('name')
             ->get();
@@ -775,7 +777,7 @@ class JournalController extends Controller
         $semesterCode = $request->semester_code;
 
         // Fanlar (faqat faol guruhlar bilan bog'liq)
-        $activeCurriculaIds = Group::where('department_active', true)
+        $activeCurriculaIds = Group::where('department_active', true)->where('active', true)
             ->pluck('curriculum_hemis_id')
             ->unique();
 

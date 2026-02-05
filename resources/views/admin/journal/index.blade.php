@@ -27,7 +27,7 @@
                     <!-- Row 1: Ta'lim turi, O'quv yili, Fakultet, Yo'nalish, Kurs -->
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end;">
                         <!-- Ta'lim turi -->
-                        <div style="min-width: 130px;">
+                        <div style="min-width: 160px;">
                             <label class="filter-label">Ta'lim turi</label>
                             <select name="education_type" id="education_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -40,7 +40,7 @@
                         </div>
 
                         <!-- O'quv yili -->
-                        <div style="min-width: 130px;">
+                        <div style="min-width: 160px;">
                             <label class="filter-label">O'quv yili</label>
                             <select name="education_year" id="education_year" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -66,7 +66,7 @@
                         </div>
 
                         <!-- Yo'nalish -->
-                        <div style="flex: 1; min-width: 200px;">
+                        <div style="flex: 1; min-width: 240px;">
                             <label class="filter-label">Yo'nalish</label>
                             <select name="specialty" id="specialty" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -74,7 +74,7 @@
                         </div>
 
                         <!-- Kurs -->
-                        <div style="min-width: 100px;">
+                        <div style="min-width: 140px;">
                             <label class="filter-label">Kurs</label>
                             <select name="level_code" id="level_code" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -85,7 +85,7 @@
                     <!-- Row 2: Semestr, Guruh, Fan, Sahifada, Joriy semestr toggle -->
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
                         <!-- Semestr -->
-                        <div style="min-width: 120px;">
+                        <div style="min-width: 160px;">
                             <label class="filter-label">Semestr</label>
                             <select name="semester_code" id="semester_code" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -93,7 +93,7 @@
                         </div>
 
                         <!-- Guruh -->
-                        <div style="min-width: 140px;">
+                        <div style="min-width: 170px;">
                             <label class="filter-label">Guruh</label>
                             <select name="group" id="group" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -101,7 +101,7 @@
                         </div>
 
                         <!-- Fan -->
-                        <div style="flex: 1; min-width: 220px;">
+                        <div style="flex: 1; min-width: 280px;">
                             <label class="filter-label">Fan</label>
                             <select name="subject" id="subject" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -358,6 +358,7 @@
                     level_code: $('#level_code').val() || '',
                     semester_code: $('#semester_code').val() || '',
                     subject_id: $('#subject').val() || '',
+                    current_semester: $('#current_semester_input').val() || '1',
                 };
             }
 
@@ -500,7 +501,7 @@
         .select2-container--classic .select2-selection--single .select2-selection__rendered {
             line-height: 34px;
             padding-left: 10px;
-            padding-right: 35px;
+            padding-right: 45px;
             color: #374151;
             font-size: 0.875rem;
         }

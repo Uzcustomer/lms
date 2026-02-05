@@ -206,32 +206,24 @@ class JournalController extends Controller
             return null;
         };
 
-        // Build unique date+pair columns for detailed view (JB) - only for pairs that have grades
-        $jbColumns = $jbGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
-            return $getEffectiveGrade($g) !== null;
-        })->map(function ($g) {
+        // Build unique date+pair columns for detailed view (JB) - barcha kunlarni ko'rsatish
+        $jbColumns = $jbGradesRaw->map(function ($g) {
             return ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code];
         })->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
         // Build unique date+pair columns for detailed view (MT)
-        $mtColumns = $mtGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
-            return $getEffectiveGrade($g) !== null;
-        })->map(function ($g) {
+        $mtColumns = $mtGradesRaw->map(function ($g) {
             return ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code];
         })->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
-        // Get distinct dates for compact view
-        $jbLessonDates = $jbGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
-            return $getEffectiveGrade($g) !== null;
-        })->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        // Get distinct dates for compact view - barcha kunlarni ko'rsatish
+        $jbLessonDates = $jbGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
 
-        $mtLessonDates = $mtGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
-            return $getEffectiveGrade($g) !== null;
-        })->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtLessonDates = $mtGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
 
         // Count pairs per day for JB (for correct daily average calculation)
         $jbPairsPerDay = [];
@@ -545,6 +537,15 @@ class JournalController extends Controller
             $semesterCodes = Semester::where('level_code', $request->level_code)
                 ->pluck('code');
             $query->whereIn('semester_code', $semesterCodes);
+        }
+
+        // Joriy semestr bo'yicha filtrlash
+        if ($request->get('current_semester') == '1') {
+            $currentSemesterCodes = Semester::where('current', true)
+                ->whereIn('curriculum_hemis_id', $activeCurriculaIds)
+                ->pluck('code')
+                ->unique();
+            $query->whereIn('semester_code', $currentSemesterCodes);
         }
 
         return $query->select('subject_id', 'subject_name')

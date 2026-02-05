@@ -20,6 +20,7 @@ class Group extends Model
         'department_locality_type_code',
         'department_locality_type_name',
         'department_active',
+        'active',
         'specialty_hemis_id',
         'specialty_code',
         'specialty_name',
@@ -30,6 +31,7 @@ class Group extends Model
 
     protected $casts = [
         'department_active' => 'boolean',
+        'active' => 'boolean',
     ];
 
     public function department()

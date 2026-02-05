@@ -349,7 +349,10 @@ class JournalController extends Controller
             ->get();
 
         $lectureAttendance = [];
+        $lectureMarkedPairs = [];
         foreach ($lectureAttendanceRaw as $row) {
+            $lectureMarkedPairs[$row->lesson_date][$row->lesson_pair_code] = true;
+
             $status = ((int) $row->absent_on) > 0 ? 'NB' : '+';
             $existing = $lectureAttendance[$row->student_hemis_id][$row->lesson_date][$row->lesson_pair_code] ?? null;
             if ($existing === 'NB') {
@@ -429,6 +432,7 @@ class JournalController extends Controller
             'lectureLessonDates',
             'lectureColumns',
             'lectureAttendance',
+            'lectureMarkedPairs',
             'jbLessonDates',
             'mtLessonDates',
             'jbGrades',

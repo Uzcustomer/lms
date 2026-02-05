@@ -148,6 +148,10 @@
                     @else
                         @php
                             $totalLectureDays = count($lectureLessonDates);
+                            $lecturePairsByDate = collect($lectureColumns)
+                                ->groupBy('date')
+                                ->map(fn($items) => $items->pluck('pair')->values()->toArray())
+                                ->toArray();
                         @endphp
 
                         <div id="mz-compact-view" class="overflow-x-auto">
@@ -173,14 +177,24 @@
                                             <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
                                             @forelse($lectureLessonDates as $idx => $date)
                                                 @php
-                                                    $pairStatuses = array_values($studentLecture[$date] ?? []);
-                                                    $hasAttendance = count($pairStatuses) > 0;
-                                                    $isAbsent = in_array('NB', $pairStatuses, true);
+                                                    $scheduledPairs = $lecturePairsByDate[$date] ?? [];
+                                                    $isDayMarked = false;
+                                                    $isAbsent = false;
+
+                                                    foreach ($scheduledPairs as $pair) {
+                                                        if (isset($lectureMarkedPairs[$date][$pair])) {
+                                                            $isDayMarked = true;
+                                                            if (($studentLecture[$date][$pair] ?? null) === 'NB') {
+                                                                $isAbsent = true;
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}">
                                                     @if($isAbsent)
                                                         <span class="text-red-600 font-medium">NB</span>
-                                                    @elseif($hasAttendance)
+                                                    @elseif($isDayMarked)
                                                         <span class="text-green-600 font-bold">+</span>
                                                     @else
                                                         <span>&nbsp;</span>
@@ -217,11 +231,14 @@
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
                                             <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
                                             @forelse($lectureColumns as $idx => $col)
-                                                @php $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null; @endphp
+                                                @php
+                                                    $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null;
+                                                    $isMarkedPair = isset($lectureMarkedPairs[$col['date']][$col['pair']]);
+                                                @endphp
                                                 <td class="px-1 py-1 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'date-separator' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'date-end' : '' }}">
-                                                    @if($lectureMark === 'NB')
+                                                    @if($isMarkedPair && $lectureMark === 'NB')
                                                         <span class="text-red-600 font-medium">NB</span>
-                                                    @elseif($lectureMark === '+')
+                                                    @elseif($isMarkedPair)
                                                         <span class="text-green-600 font-bold">+</span>
                                                     @else
                                                         <span>&nbsp;</span>

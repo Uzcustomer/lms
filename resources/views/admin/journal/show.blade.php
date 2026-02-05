@@ -1,14 +1,16 @@
 <x-app-layout>
     <style>
         .journal-table {
-            border: 1px solid #e5e7eb;
+            border: 1px solid #000;
             width: auto;
             table-layout: auto;
         }
         .journal-table th,
         .journal-table td {
-            border: 1px solid #e5e7eb;
+            border: 1px solid #000;
             white-space: nowrap;
+            text-align: center;
+            vertical-align: middle;
         }
         .journal-table tbody tr:nth-child(odd) {
             background-color: #ffffff;
@@ -21,6 +23,21 @@
         }
         .journal-table thead th {
             background-color: #f3f4f6;
+        }
+        .tab-btn {
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            border: 1px solid #000;
+            border-radius: 6px;
+            background: #fff;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            border: 2px solid #000;
+            color: #2563eb;
+            font-weight: 700;
         }
         .view-btn {
             padding: 4px 12px;
@@ -74,10 +91,16 @@
             border-top-color: #1f2937;
         }
         .date-separator {
-            border-left: 1px solid #9ca3af !important;
+            border-left: 1px solid #000 !important;
         }
         .date-end {
-            border-right: 1px solid #9ca3af !important;
+            border-right: 1px solid #000 !important;
+        }
+        .detailed-date-start {
+            border-left: 3px double #000 !important;
+        }
+        .detailed-date-end {
+            border-right: 3px double #000 !important;
         }
         .inconsistent-grade {
             background-color: #fef3c7 !important;
@@ -96,15 +119,15 @@
             <div class="mb-0 flex justify-between items-center">
                 <nav class="flex space-x-4">
                     <button id="tab-maruza" onclick="switchTab('maruza')"
-                        class="tab-btn px-2 py-1 text-sm font-medium border-b-2 border-blue-500 text-blue-600">
+                        class="tab-btn active">
                         Ma'ruza
                     </button>
                     <button id="tab-amaliyot" onclick="switchTab('amaliyot')"
-                        class="tab-btn px-2 py-1 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        class="tab-btn">
                         Amaliyot
                     </button>
                     <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
-                        class="tab-btn px-2 py-1 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        class="tab-btn">
                         Mustaqil ta'lim
                     </button>
                 </nav>
@@ -159,10 +182,10 @@
                                 <thead>
                                     <tr>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
-                                        <th class="px-2 py-1 font-bold text-gray-700 text-left" style="min-width: 180px;">F.I.SH.</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center" style="min-width: 180px;">F.I.SH.</th>
                                         @forelse($lectureLessonDates as $idx => $date)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 45px; writing-mode: vertical-rl; transform: rotate(180deg); height: 50px;">
-                                                {{ \Carbon\Carbon::parse($date)->format('d.m.y') }}
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 58px;">
+                                                {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">Bo'sh</th>
@@ -214,10 +237,10 @@
                                 <thead>
                                     <tr>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
-                                        <th class="px-2 py-1 font-bold text-gray-700 text-left" style="min-width: 180px;">F.I.SH.</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center" style="min-width: 180px;">F.I.SH.</th>
                                         @forelse($lectureColumns as $idx => $col)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'date-separator' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'date-end' : '' }}" style="min-width: 45px; writing-mode: vertical-rl; transform: rotate(180deg); height: 60px;">
-                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.y') }}({{ $col['pair'] }})
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 68px;">
+                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">Bo'sh</th>
@@ -235,7 +258,7 @@
                                                     $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null;
                                                     $isMarkedPair = isset($lectureMarkedPairs[$col['date']][$col['pair']]);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'date-separator' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'date-end' : '' }}">
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }}">
                                                     @if($isMarkedPair && $lectureMark === 'NB')
                                                         <span class="text-red-600 font-medium">NB</span>
                                                     @elseif($isMarkedPair)
@@ -280,7 +303,7 @@
                                 <thead>
                                     <tr>
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         @if($totalJbDays > 0)
                                             <th colspan="{{ $totalJbDays }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Joriy nazorat (kunlik o'rtacha)</th>
                                         @else
@@ -295,8 +318,8 @@
                                     </tr>
                                     <tr>
                                         @forelse($jbLessonDates as $idx => $date)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 45px; writing-mode: vertical-rl; transform: rotate(180deg); height: 50px;">
-                                                {{ \Carbon\Carbon::parse($date)->format('d.m.y') }}
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 58px;">
+                                                {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -402,7 +425,7 @@
                                 <thead>
                                     <tr>
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         @if(count($jbColumns) > 0)
                                             <th colspan="{{ count($jbColumns) }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Joriy nazorat (har bir dars)</th>
                                         @else
@@ -423,8 +446,8 @@
                                                 $isLastOfDate = !isset($jbColumns[$colIndex + 1]) || $jbColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
                                             @endphp
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }}" style="min-width: 40px; writing-mode: vertical-rl; transform: rotate(180deg); height: 60px;">
-                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.y') }}({{ $col['pair'] }})
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 68px;">
+                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -487,7 +510,7 @@
                                                     $uniqueGrades = array_unique($gradeValues);
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
+                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @if($grade !== null)
                                                         <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
                                                     @elseif($isAbsent)
@@ -528,7 +551,7 @@
                                 <thead>
                                     <tr>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                        <th class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 80px;">Baho</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 60px;">Saqlash</th>
                                     </tr>
@@ -577,14 +600,14 @@
                                     <thead>
                                         <tr>
                                             <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                             <th colspan="{{ $totalMtDays }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Mustaqil ta'lim (kunlik o'rtacha)</th>
                                             <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
                                         </tr>
                                         <tr>
                                             @foreach($mtLessonDates as $idx => $date)
-                                                <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 45px; writing-mode: vertical-rl; transform: rotate(180deg); height: 50px;">
-                                                    {{ \Carbon\Carbon::parse($date)->format('d.m.y') }}
+                                                <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 58px;">
+                                                    {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                                 </th>
                                             @endforeach
                                         </tr>
@@ -651,7 +674,7 @@
                                     <thead>
                                         <tr>
                                             <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                             @if(count($mtColumns) > 0)
                                                 <th colspan="{{ count($mtColumns) }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Mustaqil ta'lim (har bir dars)</th>
                                             @else
@@ -667,8 +690,8 @@
                                                 $isLastOfDate = !isset($mtColumns[$colIndex + 1]) || $mtColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
                                             @endphp
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }}" style="min-width: 40px; writing-mode: vertical-rl; transform: rotate(180deg); height: 60px;">
-                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.y') }}({{ $col['pair'] }})
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 68px;">
+                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -710,7 +733,7 @@
                                                     $uniqueGrades = array_unique($gradeValues);
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
+                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @if($grade !== null)
                                                         <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
                                                     @elseif($isAbsent)
@@ -801,14 +824,10 @@
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('border-blue-500', 'text-blue-600');
-                btn.classList.add('border-transparent', 'text-gray-500');
-            });
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('content-' + tabName).classList.remove('hidden');
             const activeTab = document.getElementById('tab-' + tabName);
-            activeTab.classList.remove('border-transparent', 'text-gray-500');
-            activeTab.classList.add('border-blue-500', 'text-blue-600');
+            activeTab.classList.add('active');
         }
 
         function switchView(viewType) {

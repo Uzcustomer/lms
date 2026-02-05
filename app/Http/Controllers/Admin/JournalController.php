@@ -297,6 +297,23 @@ class JournalController extends Controller
             }
         }
 
+        // Track absence markers (NB) separately from grades:
+        // - absent row with pending status => NB
+        // - real numeric grade (including 0) still has priority in cell rendering
+        $jbAbsences = [];
+        foreach ($jbGradesRaw as $g) {
+            if ($g->reason === 'absent' && $g->status === 'pending') {
+                $jbAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = true;
+            }
+        }
+
+        $mtAbsences = [];
+        foreach ($mtGradesRaw as $g) {
+            if ($g->reason === 'absent' && $g->status === 'pending') {
+                $mtAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = true;
+            }
+        }
+
         // Get students basic info
         $students = DB::table('students')
             ->where('group_id', $group->group_hemis_id)
@@ -369,6 +386,8 @@ class JournalController extends Controller
             'mtLessonDates',
             'jbGrades',
             'mtGrades',
+            'jbAbsences',
+            'mtAbsences',
             'jbColumns',
             'mtColumns',
             'jbPairsPerDay',

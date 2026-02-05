@@ -664,6 +664,115 @@ class JournalController extends Controller
         ]);
     }
 
+    /**
+     * Create a new retake grade for empty cells
+     */
+    public function createRetakeGrade(Request $request)
+    {
+        // Check admin role
+        if (!auth()->user()->hasRole('admin')) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'student_hemis_id' => 'required',
+            'lesson_date' => 'required|date',
+            'lesson_pair_code' => 'required',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        $studentHemisId = $request->student_hemis_id;
+        $lessonDate = $request->lesson_date;
+        $lessonPairCode = $request->lesson_pair_code;
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $enteredGrade = $request->grade;
+
+        // Get student info
+        $student = DB::table('students')
+            ->where('hemis_id', $studentHemisId)
+            ->first();
+
+        if (!$student) {
+            return response()->json(['success' => false, 'message' => 'Student not found'], 404);
+        }
+
+        // Get subject info
+        $subject = CurriculumSubject::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+
+        if (!$subject) {
+            return response()->json(['success' => false, 'message' => 'Subject not found'], 404);
+        }
+
+        // Get schedule info for training type
+        $schedule = DB::table('schedules')
+            ->where('subject_id', $subjectId)
+            ->where('lesson_date', $lessonDate)
+            ->where('lesson_pair_code', $lessonPairCode)
+            ->first();
+
+        // Check if there's an attendance record to determine if absence was excused
+        $attendance = DB::table('attendances')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('lesson_date', $lessonDate)
+            ->where('lesson_pair_code', $lessonPairCode)
+            ->first();
+
+        // Determine the percentage to apply
+        // For empty cells, default to 80% unless it's an excused absence
+        $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
+        $percentage = $isExcused ? 1.0 : 0.8; // 100% if excused, 80% otherwise
+
+        // Calculate final retake grade
+        $retakeGrade = round($enteredGrade * $percentage, 2);
+
+        $now = now();
+
+        // Create new student_grades record
+        DB::table('student_grades')->insert([
+            'hemis_id' => 0, // Manual entry
+            'student_id' => $student->id,
+            'student_hemis_id' => $studentHemisId,
+            'semester_code' => $semesterCode,
+            'semester_name' => $subject->semester_name ?? '',
+            'subject_schedule_id' => $schedule->id ?? 0,
+            'subject_id' => $subjectId,
+            'subject_name' => $subject->subject_name ?? '',
+            'subject_code' => $subject->subject_code ?? '',
+            'training_type_code' => $schedule->training_type_code ?? 10,
+            'training_type_name' => $schedule->training_type_name ?? 'Amaliyot',
+            'employee_id' => $schedule->employee_id ?? 0,
+            'employee_name' => $schedule->employee_name ?? 'Manual',
+            'lesson_pair_code' => $lessonPairCode,
+            'lesson_pair_name' => $schedule->lesson_pair_name ?? '',
+            'lesson_pair_start_time' => $schedule->lesson_pair_start_time ?? '00:00',
+            'lesson_pair_end_time' => $schedule->lesson_pair_end_time ?? '00:00',
+            'grade' => 0,
+            'retake_grade' => $retakeGrade,
+            'lesson_date' => $lessonDate,
+            'created_at_api' => $now,
+            'status' => 'retake',
+            'reason' => 'low_grade',
+            'graded_by_user_id' => auth()->id(),
+            'retake_graded_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Retake bahosi muvaffaqiyatli saqlandi',
+            'retake_grade' => $retakeGrade,
+            'percentage' => $percentage * 100
+        ]);
+    }
+
     // AJAX endpoints for cascading dropdowns
     public function getSpecialties(Request $request)
     {

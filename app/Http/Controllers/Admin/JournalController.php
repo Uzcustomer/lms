@@ -244,12 +244,23 @@ class JournalController extends Controller
             return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
-        // Get distinct dates for compact view from schedules (calendar source)
-        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
-        // Get distinct dates for compact view - barcha kunlarni ko'rsatish
-        $jbLessonDates = $jbGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        // Get distinct dates for compact view from schedules (calendar source).
+        // Merge grade dates as a fallback for old data where schedule rows might be missing.
+        $jbLessonDates = $jbScheduleRows
+            ->pluck('lesson_date')
+            ->merge($jbGradesRaw->pluck('lesson_date'))
+            ->unique()
+            ->sort()
+            ->values()
+            ->toArray();
 
-        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtLessonDates = $mtScheduleRows
+            ->pluck('lesson_date')
+            ->merge($mtGradesRaw->pluck('lesson_date'))
+            ->unique()
+            ->sort()
+            ->values()
+            ->toArray();
 
         // Count pairs per day for JB (for correct daily average calculation)
         $jbPairsPerDay = [];
@@ -283,6 +294,23 @@ class JournalController extends Controller
             $effectiveGrade = $getEffectiveGrade($g);
             if ($effectiveGrade !== null) {
                 $mtGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
+            }
+        }
+
+        // Track absence markers (NB) separately from grades:
+        // - absent row with pending status => NB
+        // - real numeric grade (including 0) still has priority in cell rendering
+        $jbAbsences = [];
+        foreach ($jbGradesRaw as $g) {
+            if ($g->reason === 'absent' && $g->status === 'pending') {
+                $jbAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = true;
+            }
+        }
+
+        $mtAbsences = [];
+        foreach ($mtGradesRaw as $g) {
+            if ($g->reason === 'absent' && $g->status === 'pending') {
+                $mtAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = true;
             }
         }
 
@@ -358,6 +386,8 @@ class JournalController extends Controller
             'mtLessonDates',
             'jbGrades',
             'mtGrades',
+            'jbAbsences',
+            'mtAbsences',
             'jbColumns',
             'mtColumns',
             'jbPairsPerDay',

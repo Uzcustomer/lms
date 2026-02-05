@@ -144,6 +144,12 @@
                         @php
                             $totalJbDays = count($jbLessonDates);
                             $totalMtDays = count($mtLessonDates);
+                            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+                            $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
+                                return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
+                            }));
+                            $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
+                            $totalJbDaysForAverage = count($jbLessonDatesForAverage);
                         @endphp
                         <!-- Compact View (Ixcham) -->
                         <div id="jb-compact-view" class="overflow-x-auto">
@@ -188,11 +194,13 @@
                                                 $gradeSum = array_sum($gradeValues);
                                                 // Divide by total pairs in day, not just student's grades
                                                 $dailyAverages[$date] = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                                                $dailySum += $dailyAverages[$date];
+                                                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                                                    $dailySum += $dailyAverages[$date];
+                                                }
                                                 $hasRetakeInDay[$date] = count($dayGrades) > 0 && collect($dayGrades)->contains(fn($g) => $g['is_retake']);
                                             }
-                                            $jnAverage = $totalJbDays > 0
-                                                ? round($dailySum / $totalJbDays, 0, PHP_ROUND_HALF_UP)
+                                            $jnAverage = $totalJbDaysForAverage > 0
+                                                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                                                 : 0;
 
                                             $studentMtGrades = $mtGrades[$student->hemis_id] ?? [];
@@ -220,8 +228,10 @@
                                             @forelse($jbLessonDates as $idx => $date)
                                                 @php
                                                     $dayGrades = $studentJbGrades[$date] ?? [];
+                                                    $dayAbsences = $jbAbsences[$student->hemis_id][$date] ?? [];
                                                     $dayAvg = $dailyAverages[$date];
                                                     $hasGrades = count($dayGrades) > 0;
+                                                    $hasAbsenceNoGrade = !$hasGrades && count($dayAbsences) > 0;
                                                     $gradeValues = $hasGrades ? array_map(fn($g) => round($g['grade'], 0), $dayGrades) : [];
                                                     $gradesText = implode(', ', $gradeValues);
                                                     $uniqueGrades = array_unique($gradeValues);
@@ -234,6 +244,8 @@
                                                         @if(count($dayGrades) > 1)
                                                             <span class="tooltip-content">{{ $gradesText }}</span>
                                                         @endif
+                                                    @elseif($hasAbsenceNoGrade)
+                                                        <span class="text-red-600 font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -241,7 +253,7 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDays }})</span></td>
+                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
@@ -306,10 +318,13 @@
                                                 $pairsInDay = $jbPairsPerDay[$date] ?? 1;
                                                 $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
                                                 $gradeSum = array_sum($gradeValues);
-                                                $dailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                                                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                                                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                                                    $dailySum += $dayAverage;
+                                                }
                                             }
-                                            $jnAverage = $totalJbDays > 0
-                                                ? round($dailySum / $totalJbDays, 0, PHP_ROUND_HALF_UP)
+                                            $jnAverage = $totalJbDaysForAverage > 0
+                                                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                                                 : 0;
 
                                             $studentMtGrades = $mtGrades[$student->hemis_id] ?? [];
@@ -339,6 +354,7 @@
                                                     $gradeData = $studentJbGrades[$col['date']][$col['pair']] ?? null;
                                                     $grade = $gradeData ? $gradeData['grade'] : null;
                                                     $isRetake = $gradeData ? $gradeData['is_retake'] : false;
+                                                    $isAbsent = isset($jbAbsences[$student->hemis_id][$col['date']][$col['pair']]);
                                                     $isFirstOfDate = $prevDate !== $col['date'];
                                                     $isLastOfDate = !isset($jbColumns[$colIndex + 1]) || $jbColumns[$colIndex + 1]['date'] !== $col['date'];
                                                     $prevDate = $col['date'];
@@ -351,6 +367,8 @@
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @if($grade !== null)
                                                         <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                    @elseif($isAbsent)
+                                                        <span class="text-red-600 font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -358,7 +376,7 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDays }})</span></td>
+                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
@@ -474,8 +492,10 @@
                                                 @foreach($mtLessonDates as $idx => $date)
                                                     @php
                                                         $dayGrades = $studentMtGrades[$date] ?? [];
+                                                        $dayAbsences = $mtAbsences[$student->hemis_id][$date] ?? [];
                                                         $dayAvg = $dailyAverages[$date];
                                                         $hasGrades = count($dayGrades) > 0;
+                                                        $hasAbsenceNoGrade = !$hasGrades && count($dayAbsences) > 0;
                                                         $gradeValues = $hasGrades ? array_map(fn($g) => round($g['grade'], 0), $dayGrades) : [];
                                                         $gradesText = implode(', ', $gradeValues);
                                                         $uniqueGrades = array_unique($gradeValues);
@@ -488,6 +508,8 @@
                                                             @if(count($dayGrades) > 1)
                                                                 <span class="tooltip-content">{{ $gradesText }}</span>
                                                             @endif
+                                                        @elseif($hasAbsenceNoGrade)
+                                                            <span class="text-red-600 font-medium">NB</span>
                                                         @else
                                                             <span class="text-gray-300">-</span>
                                                         @endif
@@ -555,6 +577,7 @@
                                                     $gradeData = $studentMtGrades[$col['date']][$col['pair']] ?? null;
                                                     $grade = $gradeData ? $gradeData['grade'] : null;
                                                     $isRetake = $gradeData ? $gradeData['is_retake'] : false;
+                                                    $isAbsent = isset($mtAbsences[$student->hemis_id][$col['date']][$col['pair']]);
                                                     $isFirstOfDate = $prevDate !== $col['date'];
                                                     $isLastOfDate = !isset($mtColumns[$colIndex + 1]) || $mtColumns[$colIndex + 1]['date'] !== $col['date'];
                                                     $prevDate = $col['date'];
@@ -567,6 +590,8 @@
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @if($grade !== null)
                                                         <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                    @elseif($isAbsent)
+                                                        <span class="text-red-600 font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif

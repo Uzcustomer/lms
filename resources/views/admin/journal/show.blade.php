@@ -220,8 +220,10 @@
                                             @forelse($jbLessonDates as $idx => $date)
                                                 @php
                                                     $dayGrades = $studentJbGrades[$date] ?? [];
+                                                    $dayAbsences = $jbAbsences[$student->hemis_id][$date] ?? [];
                                                     $dayAvg = $dailyAverages[$date];
                                                     $hasGrades = count($dayGrades) > 0;
+                                                    $hasAbsenceNoGrade = !$hasGrades && count($dayAbsences) > 0;
                                                     $gradeValues = $hasGrades ? array_map(fn($g) => round($g['grade'], 0), $dayGrades) : [];
                                                     $gradesText = implode(', ', $gradeValues);
                                                     $uniqueGrades = array_unique($gradeValues);
@@ -234,6 +236,8 @@
                                                         @if(count($dayGrades) > 1)
                                                             <span class="tooltip-content">{{ $gradesText }}</span>
                                                         @endif
+                                                    @elseif($hasAbsenceNoGrade)
+                                                        <span class="text-red-600 font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -339,6 +343,7 @@
                                                     $gradeData = $studentJbGrades[$col['date']][$col['pair']] ?? null;
                                                     $grade = $gradeData ? $gradeData['grade'] : null;
                                                     $isRetake = $gradeData ? $gradeData['is_retake'] : false;
+                                                    $isAbsent = isset($jbAbsences[$student->hemis_id][$col['date']][$col['pair']]);
                                                     $isFirstOfDate = $prevDate !== $col['date'];
                                                     $isLastOfDate = !isset($jbColumns[$colIndex + 1]) || $jbColumns[$colIndex + 1]['date'] !== $col['date'];
                                                     $prevDate = $col['date'];
@@ -351,6 +356,8 @@
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @if($grade !== null)
                                                         <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                    @elseif($isAbsent)
+                                                        <span class="text-red-600 font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -474,8 +481,10 @@
                                                 @foreach($mtLessonDates as $idx => $date)
                                                     @php
                                                         $dayGrades = $studentMtGrades[$date] ?? [];
+                                                        $dayAbsences = $mtAbsences[$student->hemis_id][$date] ?? [];
                                                         $dayAvg = $dailyAverages[$date];
                                                         $hasGrades = count($dayGrades) > 0;
+                                                        $hasAbsenceNoGrade = !$hasGrades && count($dayAbsences) > 0;
                                                         $gradeValues = $hasGrades ? array_map(fn($g) => round($g['grade'], 0), $dayGrades) : [];
                                                         $gradesText = implode(', ', $gradeValues);
                                                         $uniqueGrades = array_unique($gradeValues);
@@ -488,6 +497,8 @@
                                                             @if(count($dayGrades) > 1)
                                                                 <span class="tooltip-content">{{ $gradesText }}</span>
                                                             @endif
+                                                        @elseif($hasAbsenceNoGrade)
+                                                            <span class="text-red-600 font-medium">NB</span>
                                                         @else
                                                             <span class="text-gray-300">-</span>
                                                         @endif
@@ -555,6 +566,7 @@
                                                     $gradeData = $studentMtGrades[$col['date']][$col['pair']] ?? null;
                                                     $grade = $gradeData ? $gradeData['grade'] : null;
                                                     $isRetake = $gradeData ? $gradeData['is_retake'] : false;
+                                                    $isAbsent = isset($mtAbsences[$student->hemis_id][$col['date']][$col['pair']]);
                                                     $isFirstOfDate = $prevDate !== $col['date'];
                                                     $isLastOfDate = !isset($mtColumns[$colIndex + 1]) || $mtColumns[$colIndex + 1]['date'] !== $col['date'];
                                                     $prevDate = $col['date'];
@@ -567,6 +579,8 @@
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @if($grade !== null)
                                                         <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                    @elseif($isAbsent)
+                                                        <span class="text-red-600 font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif

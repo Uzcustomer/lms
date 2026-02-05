@@ -144,8 +144,11 @@
                         @php
                             $totalJbDays = count($jbLessonDates);
                             $totalMtDays = count($mtLessonDates);
-                            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->toDateString();
-                            $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, fn($date) => $date <= $gradingCutoffDate));
+                            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+                            $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
+                                return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
+                            }));
+                            $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
                             $totalJbDaysForAverage = count($jbLessonDatesForAverage);
                         @endphp
                         <!-- Compact View (Ixcham) -->
@@ -191,7 +194,7 @@
                                                 $gradeSum = array_sum($gradeValues);
                                                 // Divide by total pairs in day, not just student's grades
                                                 $dailyAverages[$date] = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                                                if (in_array($date, $jbLessonDatesForAverage, true)) {
+                                                if (isset($jbLessonDatesForAverageLookup[$date])) {
                                                     $dailySum += $dailyAverages[$date];
                                                 }
                                                 $hasRetakeInDay[$date] = count($dayGrades) > 0 && collect($dayGrades)->contains(fn($g) => $g['is_retake']);
@@ -316,7 +319,7 @@
                                                 $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
                                                 $gradeSum = array_sum($gradeValues);
                                                 $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                                                if (in_array($date, $jbLessonDatesForAverage, true)) {
+                                                if (isset($jbLessonDatesForAverageLookup[$date])) {
                                                     $dailySum += $dayAverage;
                                                 }
                                             }

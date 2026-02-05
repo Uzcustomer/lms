@@ -111,6 +111,32 @@
         .grade-retake {
             color: #7c3aed !important;
         }
+        .editable-cell {
+            position: relative;
+            min-height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .editable-cell:hover {
+            background-color: #dbeafe !important;
+            cursor: cell;
+            border: 1px solid #3b82f6;
+        }
+        .editable-cell::after {
+            content: '✎';
+            position: absolute;
+            top: 1px;
+            right: 2px;
+            font-size: 10px;
+            color: #3b82f6;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .editable-cell:hover::after {
+            opacity: 0.7;
+        }
     </style>
 
     <div class="py-2">
@@ -529,27 +555,31 @@
                                                         }
                                                     @endphp
                                                     @if($grade !== null)
-                                                        <div class="flex items-center justify-center gap-1">
+                                                        @if($showRatingInput)
+                                                            <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
+                                                                <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                            </div>
+                                                        @elseif($hasRetake)
+                                                            <div class="flex items-center justify-center gap-1">
+                                                                <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                                <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan">✓</span>
+                                                            </div>
+                                                        @else
                                                             <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
-                                                            @if($showRatingInput)
-                                                                <button onclick="showRetakeInput({{ $gradeRecordId }}, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}')" class="text-blue-500 hover:text-blue-700 text-xs" title="Retake bahosi qo'yish">
-                                                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
-                                                                </button>
-                                                            @elseif($hasRetake)
-                                                                <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan">✓</span>
-                                                            @endif
-                                                        </div>
+                                                        @endif
                                                     @elseif($isAbsent)
-                                                        <div class="flex items-center justify-center gap-1">
-                                                            <span class="text-red-600 font-medium">NB</span>
-                                                            @if($showRatingInput)
-                                                                <button onclick="showRetakeInput({{ $gradeRecordId }}, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}')" class="text-blue-500 hover:text-blue-700 text-xs" title="Retake bahosi qo'yish">
-                                                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
-                                                                </button>
-                                                            @elseif($hasRetake)
+                                                        @if($showRatingInput)
+                                                            <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
+                                                                <span class="text-red-600 font-medium">NB</span>
+                                                            </div>
+                                                        @elseif($hasRetake)
+                                                            <div class="flex items-center justify-center gap-1">
+                                                                <span class="text-red-600 font-medium">NB</span>
                                                                 <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan">✓</span>
-                                                            @endif
-                                                        </div>
+                                                            </div>
+                                                        @else
+                                                            <span class="text-red-600 font-medium">NB</span>
+                                                        @endif
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -886,29 +916,71 @@
             }
         }
 
-        // Retake grade functionality
-        function showRetakeInput(gradeId, studentHemisId, date, pair) {
-            const grade = prompt('Retake uchun baho kiriting (0-100):');
+        // Retake grade functionality - Excel-like inline editing
+        let currentEditingCell = null;
 
-            if (grade === null) {
-                return; // User cancelled
-            }
-
-            const gradeNum = parseFloat(grade);
-            if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
-                alert('Iltimos, 0 dan 100 gacha baho kiriting');
+        function makeEditable(cellDiv, gradeId) {
+            // Prevent multiple edits at once
+            if (currentEditingCell) {
                 return;
             }
 
-            // Confirm the action
-            if (!confirm(`Retake bahosi: ${gradeNum}\n\nDavom etishni xohlaysizmi?`)) {
-                return;
-            }
+            currentEditingCell = cellDiv;
+            const originalContent = cellDiv.innerHTML;
 
-            saveRetakeGrade(gradeId, gradeNum);
+            // Create input field
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.max = '100';
+            input.value = '';
+            input.className = 'w-full text-center border border-blue-500 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-300';
+            input.style.width = '50px';
+            input.style.height = '28px';
+
+            // Replace cell content with input
+            cellDiv.innerHTML = '';
+            cellDiv.appendChild(input);
+            input.focus();
+            input.select();
+
+            // Save on Enter key
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveInlineGrade(gradeId, input.value, cellDiv, originalContent);
+                } else if (e.key === 'Escape') {
+                    // Cancel editing
+                    cellDiv.innerHTML = originalContent;
+                    currentEditingCell = null;
+                }
+            });
+
+            // Save on blur (clicking outside)
+            input.addEventListener('blur', function() {
+                if (input.value.trim() !== '') {
+                    saveInlineGrade(gradeId, input.value, cellDiv, originalContent);
+                } else {
+                    // Cancel if empty
+                    cellDiv.innerHTML = originalContent;
+                    currentEditingCell = null;
+                }
+            });
         }
 
-        function saveRetakeGrade(gradeId, grade) {
+        function saveInlineGrade(gradeId, gradeValue, cellDiv, originalContent) {
+            const gradeNum = parseFloat(gradeValue);
+
+            if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
+                alert('Iltimos, 0 dan 100 gacha baho kiriting');
+                cellDiv.innerHTML = originalContent;
+                currentEditingCell = null;
+                return;
+            }
+
+            // Show loading
+            cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
+
             fetch('{{ route("admin.journal.save-retake-grade") }}', {
                 method: 'POST',
                 headers: {
@@ -918,21 +990,38 @@
                 },
                 body: JSON.stringify({
                     grade_id: gradeId,
-                    grade: parseFloat(grade)
+                    grade: gradeNum
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert(`Muvaffaqiyat! Retake bahosi: ${data.retake_grade} (${data.percentage}%)`);
-                    location.reload(); // Reload to show updated data
+                    // Show success with calculated grade
+                    cellDiv.innerHTML = `<div class="flex items-center justify-center gap-1">
+                        <span class="grade-retake font-medium">${Math.round(data.retake_grade)}</span>
+                        <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan: ${data.percentage}%">✓</span>
+                    </div>`;
+
+                    // Show success notification briefly
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
+                    notification.textContent = `Saqlandi: ${Math.round(data.retake_grade)} (${data.percentage}%)`;
+                    document.body.appendChild(notification);
+
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 3000);
                 } else {
                     alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
+                    cellDiv.innerHTML = originalContent;
                 }
+                currentEditingCell = null;
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
+                cellDiv.innerHTML = originalContent;
+                currentEditingCell = null;
             });
         }
     </script>

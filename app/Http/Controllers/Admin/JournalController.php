@@ -152,7 +152,31 @@ class JournalController extends Controller
         // Excluded training type codes: 11=Ma'ruza, 99=MT, 100=ON, 101=Oski, 102=Test
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
-        // Get all JB grades with lesson_pair info and status fields
+        // Calendar source: get scheduled lesson date/pair columns for JB and MT
+        $jbScheduleRows = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotIn('training_type_name', $excludedTrainingTypes)
+            ->whereNotIn('training_type_code', $excludedTrainingCodes)
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date', 'lesson_pair_code')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
+        $mtScheduleRows = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date', 'lesson_pair_code')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
+        // Data source: get all JB grades with lesson_pair info and status fields
         $jbGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
@@ -203,32 +227,24 @@ class JournalController extends Controller
             return null;
         };
 
-        // Build unique date+pair columns for detailed view (JB) - only for pairs that have grades
-        $jbColumns = $jbGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
-            return $getEffectiveGrade($g) !== null;
-        })->map(function ($g) {
-            return ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code];
+        // Build unique date+pair columns for detailed view from schedules (calendar source)
+        $jbColumns = $jbScheduleRows->map(function ($schedule) {
+            return ['date' => $schedule->lesson_date, 'pair' => $schedule->lesson_pair_code];
         })->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
-        // Build unique date+pair columns for detailed view (MT)
-        $mtColumns = $mtGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
-            return $getEffectiveGrade($g) !== null;
-        })->map(function ($g) {
-            return ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code];
+        // Build unique date+pair columns for detailed view from schedules (calendar source)
+        $mtColumns = $mtScheduleRows->map(function ($schedule) {
+            return ['date' => $schedule->lesson_date, 'pair' => $schedule->lesson_pair_code];
         })->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
-        // Get distinct dates for compact view
-        $jbLessonDates = $jbGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
-            return $getEffectiveGrade($g) !== null;
-        })->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        // Get distinct dates for compact view from schedules (calendar source)
+        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
 
-        $mtLessonDates = $mtGradesRaw->filter(function ($g) use ($getEffectiveGrade) {
-            return $getEffectiveGrade($g) !== null;
-        })->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
 
         // Count pairs per day for JB (for correct daily average calculation)
         $jbPairsPerDay = [];

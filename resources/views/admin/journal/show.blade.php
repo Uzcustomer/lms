@@ -25,24 +25,26 @@
             background-color: #f3f4f6;
         }
         .tab-btn {
-            padding: 8px 16px;
+            padding: 10px 22px;
             font-size: 14px;
             font-weight: 500;
-            border: 1px solid #000;
-            border-radius: 6px;
+            border: 1.5px solid #000;
+            border-radius: 10px;
             background: #fff;
-            color: #6b7280;
+            color: #4b5563;
             transition: all 0.2s;
+            line-height: 1.1;
         }
         .tab-btn.active {
-            border: 2px solid #000;
+            border: 3px solid #000;
             color: #2563eb;
             font-weight: 700;
+            box-shadow: inset 0 0 0 1px #fff;
         }
         .view-btn {
-            padding: 4px 12px;
+            padding: 5px 14px;
             font-size: 12px;
-            border: 1px solid #d1d5db;
+            border: 1.5px solid #000;
             background: #fff;
             cursor: pointer;
             transition: all 0.2s;
@@ -57,7 +59,8 @@
         .view-btn.active {
             background: #2563eb;
             color: #fff;
-            border-color: #2563eb;
+            border-color: #000;
+            font-weight: 700;
         }
         .tooltip-cell {
             position: relative;
@@ -102,6 +105,28 @@
         .detailed-date-end {
             border-right: 3px double #000 !important;
         }
+        .date-header-compact {
+            min-width: 66px;
+            width: 66px;
+            height: 64px;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            overflow: hidden;
+            text-overflow: clip;
+            font-size: 12px;
+            line-height: 1;
+        }
+        .date-header-detailed {
+            min-width: 76px;
+            width: 76px;
+            height: 78px;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            overflow: hidden;
+            text-overflow: clip;
+            font-size: 12px;
+            line-height: 1;
+        }
         .inconsistent-grade {
             background-color: #fef3c7 !important;
         }
@@ -116,8 +141,8 @@
     <div class="py-2">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Tabs and View Toggle -->
-            <div class="mb-0 flex justify-between items-center">
-                <nav class="flex space-x-4">
+            <div class="mb-1 flex justify-between items-center">
+                <nav class="flex space-x-4 items-center">
                     <button id="tab-maruza" onclick="switchTab('maruza')"
                         class="tab-btn">
                         Ma'ruza
@@ -184,7 +209,7 @@
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="min-width: 180px;">F.I.SH.</th>
                                         @forelse($lectureLessonDates as $idx => $date)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 58px;">
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }} date-header-compact">
                                                 {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                             </th>
                                         @empty
@@ -239,7 +264,7 @@
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="min-width: 180px;">F.I.SH.</th>
                                         @forelse($lectureColumns as $idx => $col)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 68px;">
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }} date-header-detailed">
                                                 {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty
@@ -318,7 +343,7 @@
                                     </tr>
                                     <tr>
                                         @forelse($jbLessonDates as $idx => $date)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 58px;">
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} date-header-compact">
                                                 {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                             </th>
                                         @empty
@@ -446,7 +471,7 @@
                                                 $isLastOfDate = !isset($jbColumns[$colIndex + 1]) || $jbColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
                                             @endphp
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 68px;">
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} date-header-detailed">
                                                 {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty
@@ -641,7 +666,7 @@
                                         </tr>
                                         <tr>
                                             @foreach($mtLessonDates as $idx => $date)
-                                                <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 58px;">
+                                                <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }} date-header-compact">
                                                     {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                                 </th>
                                             @endforeach
@@ -725,7 +750,7 @@
                                                 $isLastOfDate = !isset($mtColumns[$colIndex + 1]) || $mtColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
                                             @endphp
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 68px;">
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} date-header-detailed">
                                                 {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty

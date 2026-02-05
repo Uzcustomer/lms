@@ -542,6 +542,7 @@
                                                         $showRatingInput = false;
                                                         $gradeRecordId = null;
                                                         $hasRetake = false;
+                                                        $isEmpty = false;
 
                                                         if ($isAbsent && isset($jbAbsences[$student->hemis_id][$col['date']][$col['pair']])) {
                                                             $absenceData = $jbAbsences[$student->hemis_id][$col['date']][$col['pair']];
@@ -552,6 +553,10 @@
                                                             $gradeRecordId = $gradeData['id'];
                                                             $hasRetake = $gradeData['retake_grade'] !== null;
                                                             $showRatingInput = $canRate && !$hasRetake;
+                                                        } elseif (!$isAbsent && $grade === null) {
+                                                            // Empty cell - allow creating new grade
+                                                            $isEmpty = true;
+                                                            $showRatingInput = $canRate;
                                                         }
                                                     @endphp
                                                     @if($grade !== null)
@@ -581,7 +586,15 @@
                                                             <span class="text-red-600 font-medium">NB</span>
                                                         @endif
                                                     @else
-                                                        <span class="text-gray-300">-</span>
+                                                        @if($canRate && $isEmpty)
+                                                            <div class="editable-cell cursor-pointer hover:bg-blue-50"
+                                                                 onclick="makeEditableEmpty(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}')"
+                                                                 title="Bosib baho kiriting">
+                                                                <span class="text-gray-400">-</span>
+                                                            </div>
+                                                        @else
+                                                            <span class="text-gray-300">-</span>
+                                                        @endif
                                                     @endif
                                                 </td>
                                             @empty
@@ -965,6 +978,116 @@
                     cellDiv.innerHTML = originalContent;
                     currentEditingCell = null;
                 }
+            });
+        }
+
+        function makeEditableEmpty(cellDiv, studentHemisId, lessonDate, lessonPair, subjectId, semesterCode) {
+            // Prevent multiple edits at once
+            if (currentEditingCell) {
+                return;
+            }
+
+            currentEditingCell = cellDiv;
+            const originalContent = cellDiv.innerHTML;
+
+            // Create input field
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.max = '100';
+            input.value = '';
+            input.className = 'w-full text-center border border-blue-500 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-300';
+            input.style.width = '50px';
+            input.style.height = '28px';
+
+            // Replace cell content with input
+            cellDiv.innerHTML = '';
+            cellDiv.appendChild(input);
+            input.focus();
+            input.select();
+
+            // Save on Enter key
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveEmptyGrade(studentHemisId, lessonDate, lessonPair, subjectId, semesterCode, input.value, cellDiv, originalContent);
+                } else if (e.key === 'Escape') {
+                    // Cancel editing
+                    cellDiv.innerHTML = originalContent;
+                    currentEditingCell = null;
+                }
+            });
+
+            // Save on blur (clicking outside)
+            input.addEventListener('blur', function() {
+                if (input.value.trim() !== '') {
+                    saveEmptyGrade(studentHemisId, lessonDate, lessonPair, subjectId, semesterCode, input.value, cellDiv, originalContent);
+                } else {
+                    // Cancel if empty
+                    cellDiv.innerHTML = originalContent;
+                    currentEditingCell = null;
+                }
+            });
+        }
+
+        function saveEmptyGrade(studentHemisId, lessonDate, lessonPair, subjectId, semesterCode, gradeValue, cellDiv, originalContent) {
+            const gradeNum = parseFloat(gradeValue);
+
+            if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
+                alert('Iltimos, 0 dan 100 gacha baho kiriting');
+                cellDiv.innerHTML = originalContent;
+                currentEditingCell = null;
+                return;
+            }
+
+            // Show loading
+            cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
+
+            fetch('{{ route("admin.journal.create-retake-grade") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    student_hemis_id: studentHemisId,
+                    lesson_date: lessonDate,
+                    lesson_pair_code: lessonPair,
+                    subject_id: subjectId,
+                    semester_code: semesterCode,
+                    grade: gradeNum
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success with calculated grade
+                    cellDiv.innerHTML = `<div class="flex items-center justify-center gap-1">
+                        <span class="grade-retake font-medium">${Math.round(data.retake_grade)}</span>
+                        <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan: ${data.percentage}%">✓</span>
+                    </div>`;
+
+                    // Show success notification briefly
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
+                    notification.textContent = `Saqlandi: ${Math.round(data.retake_grade)} (${data.percentage}%)`;
+                    document.body.appendChild(notification);
+
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 3000);
+                } else {
+                    alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
+                    cellDiv.innerHTML = originalContent;
+                }
+                currentEditingCell = null;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
+                cellDiv.innerHTML = originalContent;
+                currentEditingCell = null;
             });
         }
 

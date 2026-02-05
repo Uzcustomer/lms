@@ -122,6 +122,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/show/{groupId}/{subjectId}/{semesterCode}', [JournalController::class, 'show'])->name('show');
             Route::post('/save-mt-grade', [JournalController::class, 'saveMtGrade'])->name('save-mt-grade');
             Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade');
+            Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
             Route::get('/get-specialties', [JournalController::class, 'getSpecialties'])->name('get-specialties');
             Route::get('/get-level-codes', [JournalController::class, 'getLevelCodes'])->name('get-level-codes');
             Route::get('/get-semesters', [JournalController::class, 'getSemesters'])->name('get-semesters');

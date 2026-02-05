@@ -179,6 +179,17 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
+        $lectureScheduleRows = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 11)
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date', 'lesson_pair_code')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
         // Data source: get all JB grades with lesson_pair info and status fields
         $jbGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
@@ -244,12 +255,36 @@ class JournalController extends Controller
             return $item['date'] . '_' . $item['pair'];
         })->values()->toArray();
 
-        // Get distinct dates for compact view from schedules (calendar source)
-        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
-        // Get distinct dates for compact view - barcha kunlarni ko'rsatish
-        $jbLessonDates = $jbGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        // Get distinct dates for compact view from schedules (calendar source).
+        // Merge grade dates as a fallback for old data where schedule rows might be missing.
+        $jbLessonDates = $jbScheduleRows
+            ->pluck('lesson_date')
+            ->merge($jbGradesRaw->pluck('lesson_date'))
+            ->unique()
+            ->sort()
+            ->values()
+            ->toArray();
 
-        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtLessonDates = $mtScheduleRows
+            ->pluck('lesson_date')
+            ->merge($mtGradesRaw->pluck('lesson_date'))
+            ->unique()
+            ->sort()
+            ->values()
+            ->toArray();
+
+        $lectureColumns = $lectureScheduleRows->map(function ($schedule) {
+            return ['date' => $schedule->lesson_date, 'pair' => $schedule->lesson_pair_code];
+        })->unique(function ($item) {
+            return $item['date'] . '_' . $item['pair'];
+        })->values()->toArray();
+
+        $lectureLessonDates = collect($lectureColumns)
+            ->pluck('date')
+            ->unique()
+            ->sort()
+            ->values()
+            ->toArray();
 
         // Count pairs per day for JB (for correct daily average calculation)
         $jbPairsPerDay = [];
@@ -284,6 +319,46 @@ class JournalController extends Controller
             if ($effectiveGrade !== null) {
                 $mtGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
             }
+        }
+
+        // Track absence markers (NB) separately from grades:
+        // - absent row with pending status => NB
+        // - real numeric grade (including 0) still has priority in cell rendering
+        $jbAbsences = [];
+        foreach ($jbGradesRaw as $g) {
+            if ($g->reason === 'absent' && $g->status === 'pending') {
+                $jbAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = true;
+            }
+        }
+
+        $mtAbsences = [];
+        foreach ($mtGradesRaw as $g) {
+            if ($g->reason === 'absent' && $g->status === 'pending') {
+                $mtAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = true;
+            }
+        }
+
+        $lectureAttendanceRaw = DB::table('attendances')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 11)
+            ->whereNotNull('lesson_date')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
+            ->get();
+
+        $lectureAttendance = [];
+        $lectureMarkedPairs = [];
+        foreach ($lectureAttendanceRaw as $row) {
+            $lectureMarkedPairs[$row->lesson_date][$row->lesson_pair_code] = true;
+
+            $status = ((int) $row->absent_on) > 0 ? 'NB' : '+';
+            $existing = $lectureAttendance[$row->student_hemis_id][$row->lesson_date][$row->lesson_pair_code] ?? null;
+            if ($existing === 'NB') {
+                continue;
+            }
+            $lectureAttendance[$row->student_hemis_id][$row->lesson_date][$row->lesson_pair_code] = $status;
         }
 
         // Get students basic info
@@ -354,10 +429,16 @@ class JournalController extends Controller
             'curriculum',
             'semester',
             'students',
+            'lectureLessonDates',
+            'lectureColumns',
+            'lectureAttendance',
+            'lectureMarkedPairs',
             'jbLessonDates',
             'mtLessonDates',
             'jbGrades',
             'mtGrades',
+            'jbAbsences',
+            'mtAbsences',
             'jbColumns',
             'mtColumns',
             'jbPairsPerDay',

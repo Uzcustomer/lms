@@ -246,6 +246,8 @@ class JournalController extends Controller
 
         // Get distinct dates for compact view from schedules (calendar source)
         $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        // Get distinct dates for compact view - barcha kunlarni ko'rsatish
+        $jbLessonDates = $jbGradesRaw->pluck('lesson_date')->unique()->sort()->values()->toArray();
 
         $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
 

@@ -58,6 +58,7 @@ class ImportGroups extends Command
                             'department_locality_type_code' => $groupData['department']['localityType']['code'],
                             'department_locality_type_name' => $groupData['department']['localityType']['name'],
                             'department_active' => $groupData['department']['active'],
+                            'active' => $groupData['active'] ?? true,
                             'specialty_hemis_id' => $groupData['specialty']['id'],
                             'specialty_code' => $groupData['specialty']['code'],
                             'specialty_name' => $groupData['specialty']['name'],

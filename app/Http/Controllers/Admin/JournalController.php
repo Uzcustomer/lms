@@ -29,6 +29,7 @@ class JournalController extends Controller
             ->get();
 
         $faculties = Department::where('structure_type_code', 11)
+            ->where('active', true)
             ->orderBy('name')
             ->get();
 
@@ -56,7 +57,9 @@ class JournalController extends Controller
                 'sp.name as specialty_name',
                 's.level_name',
             ])
-            ->distinct();
+            ->distinct()
+            ->where('g.department_active', true)
+            ->where('g.active', true);
 
         // Apply filters
         if ($request->filled('education_type')) {
@@ -440,13 +443,25 @@ class JournalController extends Controller
     // AJAX endpoints for cascading dropdowns
     public function getSpecialties(Request $request)
     {
-        $query = Specialty::query();
+        // Faqat faol bo'limlar bilan bog'liq yo'nalishlarni olish
+        $activeDepartmentHemisIds = Department::where('active', true)
+            ->pluck('department_hemis_id');
+
+        $query = Specialty::whereIn('department_hemis_id', $activeDepartmentHemisIds);
 
         if ($request->filled('faculty_id')) {
             $faculty = Department::find($request->faculty_id);
             if ($faculty) {
                 $query->where('department_hemis_id', $faculty->department_hemis_id);
             }
+        }
+
+        // Ta'lim turi bo'yicha filtrlash (curriculum -> specialty orqali)
+        if ($request->filled('education_type')) {
+            $specialtyHemisIds = Curriculum::where('education_type_code', $request->education_type)
+                ->pluck('specialty_hemis_id')
+                ->unique();
+            $query->whereIn('specialty_hemis_id', $specialtyHemisIds);
         }
 
         return $query->select('specialty_hemis_id', 'name')
@@ -487,10 +502,49 @@ class JournalController extends Controller
 
     public function getSubjects(Request $request)
     {
-        $query = CurriculumSubject::query();
+        // Faqat faol guruhlar bilan bog'liq fanlarni olish
+        $activeGroupsQuery = Group::where('department_active', true)->where('active', true);
+
+        // Fakultet bo'yicha filtrlash
+        if ($request->filled('faculty_id')) {
+            $faculty = Department::find($request->faculty_id);
+            if ($faculty) {
+                $activeGroupsQuery->where('department_hemis_id', $faculty->department_hemis_id);
+            }
+        }
+
+        // Yo'nalish bo'yicha filtrlash
+        if ($request->filled('specialty_id')) {
+            $activeGroupsQuery->where('specialty_hemis_id', $request->specialty_id);
+        }
+
+        // Ta'lim turi bo'yicha filtrlash
+        if ($request->filled('education_type')) {
+            $curriculaIds = Curriculum::where('education_type_code', $request->education_type)
+                ->pluck('curricula_hemis_id');
+            $activeGroupsQuery->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // O'quv yili bo'yicha filtrlash
+        if ($request->filled('education_year')) {
+            $curriculaIds = Curriculum::where('education_year_code', $request->education_year)
+                ->pluck('curricula_hemis_id');
+            $activeGroupsQuery->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        $activeCurriculaIds = $activeGroupsQuery->pluck('curriculum_hemis_id')->unique();
+
+        $query = CurriculumSubject::whereIn('curricula_hemis_id', $activeCurriculaIds);
 
         if ($request->filled('semester_code')) {
             $query->where('semester_code', $request->semester_code);
+        }
+
+        // Kurs bo'yicha filtrlash (semestr orqali)
+        if ($request->filled('level_code')) {
+            $semesterCodes = Semester::where('level_code', $request->level_code)
+                ->pluck('code');
+            $query->whereIn('semester_code', $semesterCodes);
         }
 
         return $query->select('subject_id', 'subject_name')
@@ -502,7 +556,7 @@ class JournalController extends Controller
 
     public function getGroups(Request $request)
     {
-        $query = Group::query();
+        $query = Group::where('department_active', true)->where('active', true);
 
         if ($request->filled('faculty_id')) {
             $faculty = Department::find($request->faculty_id);
@@ -513,6 +567,41 @@ class JournalController extends Controller
 
         if ($request->filled('specialty_id')) {
             $query->where('specialty_hemis_id', $request->specialty_id);
+        }
+
+        // Ta'lim turi bo'yicha filtrlash (curriculum orqali)
+        if ($request->filled('education_type')) {
+            $curriculaIds = Curriculum::where('education_type_code', $request->education_type)
+                ->pluck('curricula_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // O'quv yili bo'yicha filtrlash
+        if ($request->filled('education_year')) {
+            $curriculaIds = Curriculum::where('education_year_code', $request->education_year)
+                ->pluck('curricula_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // Semestr bo'yicha filtrlash
+        if ($request->filled('semester_code')) {
+            $curriculaIds = Semester::where('code', $request->semester_code)
+                ->pluck('curriculum_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // Kurs bo'yicha filtrlash
+        if ($request->filled('level_code')) {
+            $curriculaIds = Semester::where('level_code', $request->level_code)
+                ->pluck('curriculum_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // Fan bo'yicha filtrlash
+        if ($request->filled('subject_id')) {
+            $curriculaIds = CurriculumSubject::where('subject_id', $request->subject_id)
+                ->pluck('curricula_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
         return $query->select('id', 'name')
@@ -526,6 +615,7 @@ class JournalController extends Controller
     {
         if (!$request->filled('specialty_id')) {
             return Department::where('structure_type_code', 11)
+                ->where('active', true)
                 ->orderBy('name')
                 ->pluck('name', 'id');
         }
@@ -536,6 +626,7 @@ class JournalController extends Controller
         }
 
         return Department::where('structure_type_code', 11)
+            ->where('active', true)
             ->where('department_hemis_id', $specialty->department_hemis_id)
             ->orderBy('name')
             ->pluck('name', 'id');
@@ -583,6 +674,7 @@ class JournalController extends Controller
     {
         if (!$request->filled('group_id')) {
             return Department::where('structure_type_code', 11)
+                ->where('active', true)
                 ->orderBy('name')
                 ->pluck('name', 'id');
         }
@@ -593,6 +685,7 @@ class JournalController extends Controller
         }
 
         return Department::where('structure_type_code', 11)
+            ->where('active', true)
             ->where('department_hemis_id', $group->department_hemis_id)
             ->orderBy('name')
             ->pluck('name', 'id');
@@ -601,7 +694,11 @@ class JournalController extends Controller
     public function getSpecialtiesByGroup(Request $request)
     {
         if (!$request->filled('group_id')) {
-            return Specialty::select('specialty_hemis_id', 'name')
+            $activeDepartmentHemisIds = Department::where('active', true)
+                ->pluck('department_hemis_id');
+
+            return Specialty::whereIn('department_hemis_id', $activeDepartmentHemisIds)
+                ->select('specialty_hemis_id', 'name')
                 ->orderBy('name')
                 ->pluck('name', 'specialty_hemis_id');
         }
@@ -637,15 +734,18 @@ class JournalController extends Controller
         $curriculaHemisIds = $curriculumSubjects->pluck('curricula_hemis_id')->unique();
         $semesterCodes = $curriculumSubjects->pluck('semester_code')->unique();
 
-        // Guruhlar
+        // Guruhlar (faqat faol)
         $groups = Group::whereIn('curriculum_hemis_id', $curriculaHemisIds)
+            ->where('department_active', true)
+            ->where('active', true)
             ->select('id', 'name', 'department_hemis_id', 'specialty_hemis_id')
             ->orderBy('name')
             ->get();
 
-        // Fakultetlar
+        // Fakultetlar (faqat faol)
         $departmentHemisIds = $groups->pluck('department_hemis_id')->unique();
         $faculties = Department::where('structure_type_code', 11)
+            ->where('active', true)
             ->whereIn('department_hemis_id', $departmentHemisIds)
             ->orderBy('name')
             ->pluck('name', 'id');
@@ -737,8 +837,13 @@ class JournalController extends Controller
 
         $semesterCode = $request->semester_code;
 
-        // Fanlar
+        // Fanlar (faqat faol guruhlar bilan bog'liq)
+        $activeCurriculaIds = Group::where('department_active', true)->where('active', true)
+            ->pluck('curriculum_hemis_id')
+            ->unique();
+
         $subjects = CurriculumSubject::where('semester_code', $semesterCode)
+            ->whereIn('curricula_hemis_id', $activeCurriculaIds)
             ->select('subject_id', 'subject_name')
             ->groupBy('subject_id', 'subject_name')
             ->orderBy('subject_name')

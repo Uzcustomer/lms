@@ -1,14 +1,16 @@
 <x-app-layout>
     <style>
         .journal-table {
-            border: 1px solid #e5e7eb;
+            border: 1px solid #000;
             width: auto;
             table-layout: auto;
         }
         .journal-table th,
         .journal-table td {
-            border: 1px solid #e5e7eb;
+            border: 1px solid #000;
             white-space: nowrap;
+            text-align: center;
+            vertical-align: middle;
         }
         .journal-table tbody tr:nth-child(odd) {
             background-color: #ffffff;
@@ -22,10 +24,27 @@
         .journal-table thead th {
             background-color: #f3f4f6;
         }
+        .tab-btn {
+            padding: 10px 22px;
+            font-size: 14px;
+            font-weight: 500;
+            border: 1.5px solid #000;
+            border-radius: 10px;
+            background: #fff;
+            color: #4b5563;
+            transition: all 0.2s;
+            line-height: 1.1;
+        }
+        .tab-btn.active {
+            border: 3px solid #000;
+            color: #2563eb;
+            font-weight: 700;
+            box-shadow: inset 0 0 0 1px #fff;
+        }
         .view-btn {
-            padding: 4px 12px;
+            padding: 5px 14px;
             font-size: 12px;
-            border: 1px solid #d1d5db;
+            border: 1.5px solid #000;
             background: #fff;
             cursor: pointer;
             transition: all 0.2s;
@@ -40,7 +59,8 @@
         .view-btn.active {
             background: #2563eb;
             color: #fff;
-            border-color: #2563eb;
+            border-color: #000;
+            font-weight: 700;
         }
         .tooltip-cell {
             position: relative;
@@ -74,10 +94,38 @@
             border-top-color: #1f2937;
         }
         .date-separator {
-            border-left: 1px solid #9ca3af !important;
+            border-left: 1px solid #000 !important;
         }
         .date-end {
-            border-right: 1px solid #9ca3af !important;
+            border-right: 1px solid #000 !important;
+        }
+        .detailed-date-start {
+            border-left: 3px double #000 !important;
+        }
+        .detailed-date-end {
+            border-right: 3px double #000 !important;
+        }
+        .date-header-compact {
+            min-width: 66px;
+            width: 66px;
+            height: 64px;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            overflow: hidden;
+            text-overflow: clip;
+            font-size: 12px;
+            line-height: 1;
+        }
+        .date-header-detailed {
+            min-width: 76px;
+            width: 76px;
+            height: 78px;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            overflow: hidden;
+            text-overflow: clip;
+            font-size: 12px;
+            line-height: 1;
         }
         .inconsistent-grade {
             background-color: #fef3c7 !important;
@@ -93,14 +141,18 @@
     <div class="py-2">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Tabs and View Toggle -->
-            <div class="mb-0 flex justify-between items-center">
-                <nav class="flex space-x-4">
+            <div class="mb-1 flex justify-between items-center">
+                <nav class="flex space-x-4 items-center">
+                    <button id="tab-maruza" onclick="switchTab('maruza')"
+                        class="tab-btn active">
+                        Ma'ruza
+                    </button>
                     <button id="tab-amaliyot" onclick="switchTab('amaliyot')"
-                        class="tab-btn px-2 py-1 text-sm font-medium border-b-2 border-blue-500 text-blue-600">
+                        class="tab-btn">
                         Amaliyot
                     </button>
                     <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
-                        class="tab-btn px-2 py-1 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        class="tab-btn">
                         Mustaqil ta'lim
                     </button>
                 </nav>
@@ -133,8 +185,127 @@
                 </div>
             </div>
 
+
+            <!-- Ma'ruza Tab Content -->
+            <div id="content-maruza" class="tab-content">
+                <div class="bg-white">
+                    @if($students->isEmpty())
+                        <div class="p-4 text-center text-gray-500">
+                            <p>Bu guruhda talabalar mavjud emas.</p>
+                        </div>
+                    @else
+                        @php
+                            $totalLectureDays = count($lectureLessonDates);
+                            $lecturePairsByDate = collect($lectureColumns)
+                                ->groupBy('date')
+                                ->map(fn($items) => $items->pluck('pair')->values()->toArray())
+                                ->toArray();
+                        @endphp
+
+                        <div id="mz-compact-view" class="overflow-x-auto">
+                            <table class="journal-table border-collapse text-xs">
+                                <thead>
+                                    <tr>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center" style="min-width: 180px;">F.I.SH.</th>
+                                        @forelse($lectureLessonDates as $idx => $date)
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }} date-header-compact">
+                                                {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
+                                            </th>
+                                        @empty
+                                            <th class="px-1 py-1 text-gray-400 text-center">Bo'sh</th>
+                                        @endforelse
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($students as $index => $student)
+                                        @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
+                                        <tr>
+                                            <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
+                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            @forelse($lectureLessonDates as $idx => $date)
+                                                @php
+                                                    $scheduledPairs = $lecturePairsByDate[$date] ?? [];
+                                                    $isDayMarked = false;
+                                                    $isAbsent = false;
+
+                                                    foreach ($scheduledPairs as $pair) {
+                                                        if (isset($lectureMarkedPairs[$date][$pair])) {
+                                                            $isDayMarked = true;
+                                                            if (($studentLecture[$date][$pair] ?? null) === 'NB') {
+                                                                $isAbsent = true;
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}">
+                                                    @if($isAbsent)
+                                                        <span class="text-red-600 font-medium">NB</span>
+                                                    @elseif($isDayMarked)
+                                                        <span class="text-green-600 font-bold">+</span>
+                                                    @else
+                                                        <span>&nbsp;</span>
+                                                    @endif
+                                                </td>
+                                            @empty
+                                                <td class="px-1 py-1 text-center"><span>&nbsp;</span></td>
+                                            @endforelse
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div id="mz-detailed-view" class="overflow-x-auto hidden mt-4 border-t pt-4">
+                            <table class="journal-table border-collapse text-xs">
+                                <thead>
+                                    <tr>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center" style="min-width: 180px;">F.I.SH.</th>
+                                        @forelse($lectureColumns as $idx => $col)
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }} date-header-detailed">
+                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
+                                            </th>
+                                        @empty
+                                            <th class="px-1 py-1 text-gray-400 text-center">Bo'sh</th>
+                                        @endforelse
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($students as $index => $student)
+                                        @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
+                                        <tr>
+                                            <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
+                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            @forelse($lectureColumns as $idx => $col)
+                                                @php
+                                                    $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null;
+                                                    $isMarkedPair = isset($lectureMarkedPairs[$col['date']][$col['pair']]);
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }}">
+                                                    @if($isMarkedPair && $lectureMark === 'NB')
+                                                        <span class="text-red-600 font-medium">NB</span>
+                                                    @elseif($isMarkedPair)
+                                                        <span class="text-green-600 font-bold">+</span>
+                                                    @else
+                                                        <span>&nbsp;</span>
+                                                    @endif
+                                                </td>
+                                            @empty
+                                                <td class="px-1 py-1 text-center"><span>&nbsp;</span></td>
+                                            @endforelse
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
             <!-- Amaliyot Tab Content -->
-            <div id="content-amaliyot" class="tab-content">
+            <div id="content-amaliyot" class="tab-content hidden">
                 <div class="bg-white">
                     @if($students->isEmpty())
                         <div class="p-4 text-center text-gray-500">
@@ -144,6 +315,12 @@
                         @php
                             $totalJbDays = count($jbLessonDates);
                             $totalMtDays = count($mtLessonDates);
+                            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+                            $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
+                                return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
+                            }));
+                            $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
+                            $totalJbDaysForAverage = count($jbLessonDatesForAverage);
                         @endphp
                         <!-- Compact View (Ixcham) -->
                         <div id="jb-compact-view" class="overflow-x-auto">
@@ -151,7 +328,7 @@
                                 <thead>
                                     <tr>
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         @if($totalJbDays > 0)
                                             <th colspan="{{ $totalJbDays }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Joriy nazorat (kunlik o'rtacha)</th>
                                         @else
@@ -166,8 +343,8 @@
                                     </tr>
                                     <tr>
                                         @forelse($jbLessonDates as $idx => $date)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 45px; writing-mode: vertical-rl; transform: rotate(180deg); height: 50px;">
-                                                {{ \Carbon\Carbon::parse($date)->format('d.m.y') }}
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} date-header-compact">
+                                                {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -188,11 +365,13 @@
                                                 $gradeSum = array_sum($gradeValues);
                                                 // Divide by total pairs in day, not just student's grades
                                                 $dailyAverages[$date] = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                                                $dailySum += $dailyAverages[$date];
+                                                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                                                    $dailySum += $dailyAverages[$date];
+                                                }
                                                 $hasRetakeInDay[$date] = count($dayGrades) > 0 && collect($dayGrades)->contains(fn($g) => $g['is_retake']);
                                             }
-                                            $jnAverage = $totalJbDays > 0
-                                                ? round($dailySum / $totalJbDays, 0, PHP_ROUND_HALF_UP)
+                                            $jnAverage = $totalJbDaysForAverage > 0
+                                                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                                                 : 0;
 
                                             $studentMtGrades = $mtGrades[$student->hemis_id] ?? [];
@@ -220,8 +399,10 @@
                                             @forelse($jbLessonDates as $idx => $date)
                                                 @php
                                                     $dayGrades = $studentJbGrades[$date] ?? [];
+                                                    $dayAbsences = $jbAbsences[$student->hemis_id][$date] ?? [];
                                                     $dayAvg = $dailyAverages[$date];
                                                     $hasGrades = count($dayGrades) > 0;
+                                                    $hasAbsenceNoGrade = !$hasGrades && count($dayAbsences) > 0;
                                                     $gradeValues = $hasGrades ? array_map(fn($g) => round($g['grade'], 0), $dayGrades) : [];
                                                     $gradesText = implode(', ', $gradeValues);
                                                     $uniqueGrades = array_unique($gradeValues);
@@ -234,6 +415,8 @@
                                                         @if(count($dayGrades) > 1)
                                                             <span class="tooltip-content">{{ $gradesText }}</span>
                                                         @endif
+                                                    @elseif($hasAbsenceNoGrade)
+                                                        <span class="text-red-600 font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -241,7 +424,7 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDays }})</span></td>
+                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
@@ -267,7 +450,7 @@
                                 <thead>
                                     <tr>
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                        <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         @if(count($jbColumns) > 0)
                                             <th colspan="{{ count($jbColumns) }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Joriy nazorat (har bir dars)</th>
                                         @else
@@ -288,8 +471,8 @@
                                                 $isLastOfDate = !isset($jbColumns[$colIndex + 1]) || $jbColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
                                             @endphp
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }}" style="min-width: 40px; writing-mode: vertical-rl; transform: rotate(180deg); height: 60px;">
-                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.y') }}({{ $col['pair'] }})
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} date-header-detailed">
+                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -306,10 +489,13 @@
                                                 $pairsInDay = $jbPairsPerDay[$date] ?? 1;
                                                 $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
                                                 $gradeSum = array_sum($gradeValues);
-                                                $dailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                                                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                                                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                                                    $dailySum += $dayAverage;
+                                                }
                                             }
-                                            $jnAverage = $totalJbDays > 0
-                                                ? round($dailySum / $totalJbDays, 0, PHP_ROUND_HALF_UP)
+                                            $jnAverage = $totalJbDaysForAverage > 0
+                                                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                                                 : 0;
 
                                             $studentMtGrades = $mtGrades[$student->hemis_id] ?? [];
@@ -339,6 +525,7 @@
                                                     $gradeData = $studentJbGrades[$col['date']][$col['pair']] ?? null;
                                                     $grade = $gradeData ? $gradeData['grade'] : null;
                                                     $isRetake = $gradeData ? $gradeData['is_retake'] : false;
+                                                    $isAbsent = isset($jbAbsences[$student->hemis_id][$col['date']][$col['pair']]);
                                                     $isFirstOfDate = $prevDate !== $col['date'];
                                                     $isLastOfDate = !isset($jbColumns[$colIndex + 1]) || $jbColumns[$colIndex + 1]['date'] !== $col['date'];
                                                     $prevDate = $col['date'];
@@ -348,9 +535,11 @@
                                                     $uniqueGrades = array_unique($gradeValues);
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
+                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @if($grade !== null)
                                                         <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                    @elseif($isAbsent)
+                                                        <span class="text-red-600 font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -358,7 +547,7 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDays }})</span></td>
+                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
@@ -387,7 +576,7 @@
                                 <thead>
                                     <tr>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                        <th class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 80px;">Baho</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 60px;">Saqlash</th>
                                     </tr>
@@ -436,14 +625,14 @@
                                     <thead>
                                         <tr>
                                             <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                             <th colspan="{{ $totalMtDays }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Mustaqil ta'lim (kunlik o'rtacha)</th>
                                             <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
                                         </tr>
                                         <tr>
                                             @foreach($mtLessonDates as $idx => $date)
-                                                <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 45px; writing-mode: vertical-rl; transform: rotate(180deg); height: 50px;">
-                                                    {{ \Carbon\Carbon::parse($date)->format('d.m.y') }}
+                                                <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }} date-header-compact">
+                                                    {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                                 </th>
                                             @endforeach
                                         </tr>
@@ -474,8 +663,10 @@
                                                 @foreach($mtLessonDates as $idx => $date)
                                                     @php
                                                         $dayGrades = $studentMtGrades[$date] ?? [];
+                                                        $dayAbsences = $mtAbsences[$student->hemis_id][$date] ?? [];
                                                         $dayAvg = $dailyAverages[$date];
                                                         $hasGrades = count($dayGrades) > 0;
+                                                        $hasAbsenceNoGrade = !$hasGrades && count($dayAbsences) > 0;
                                                         $gradeValues = $hasGrades ? array_map(fn($g) => round($g['grade'], 0), $dayGrades) : [];
                                                         $gradesText = implode(', ', $gradeValues);
                                                         $uniqueGrades = array_unique($gradeValues);
@@ -488,6 +679,8 @@
                                                             @if(count($dayGrades) > 1)
                                                                 <span class="tooltip-content">{{ $gradesText }}</span>
                                                             @endif
+                                                        @elseif($hasAbsenceNoGrade)
+                                                            <span class="text-red-600 font-medium">NB</span>
                                                         @else
                                                             <span class="text-gray-300">-</span>
                                                         @endif
@@ -506,7 +699,7 @@
                                     <thead>
                                         <tr>
                                             <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
-                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-left align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                            <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                             @if(count($mtColumns) > 0)
                                                 <th colspan="{{ count($mtColumns) }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Mustaqil ta'lim (har bir dars)</th>
                                             @else
@@ -522,8 +715,8 @@
                                                 $isLastOfDate = !isset($mtColumns[$colIndex + 1]) || $mtColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
                                             @endphp
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }}" style="min-width: 40px; writing-mode: vertical-rl; transform: rotate(180deg); height: 60px;">
-                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.y') }}({{ $col['pair'] }})
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} date-header-detailed">
+                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -555,6 +748,7 @@
                                                     $gradeData = $studentMtGrades[$col['date']][$col['pair']] ?? null;
                                                     $grade = $gradeData ? $gradeData['grade'] : null;
                                                     $isRetake = $gradeData ? $gradeData['is_retake'] : false;
+                                                    $isAbsent = isset($mtAbsences[$student->hemis_id][$col['date']][$col['pair']]);
                                                     $isFirstOfDate = $prevDate !== $col['date'];
                                                     $isLastOfDate = !isset($mtColumns[$colIndex + 1]) || $mtColumns[$colIndex + 1]['date'] !== $col['date'];
                                                     $prevDate = $col['date'];
@@ -564,9 +758,11 @@
                                                     $uniqueGrades = array_unique($gradeValues);
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'date-separator' : '' }} {{ $isLastOfDate ? 'date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
+                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @if($grade !== null)
                                                         <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                    @elseif($isAbsent)
+                                                        <span class="text-red-600 font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -653,14 +849,10 @@
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('border-blue-500', 'text-blue-600');
-                btn.classList.add('border-transparent', 'text-gray-500');
-            });
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('content-' + tabName).classList.remove('hidden');
             const activeTab = document.getElementById('tab-' + tabName);
-            activeTab.classList.remove('border-transparent', 'text-gray-500');
-            activeTab.classList.add('border-blue-500', 'text-blue-600');
+            activeTab.classList.add('active');
         }
 
         function switchView(viewType) {
@@ -668,15 +860,19 @@
             document.getElementById('view-' + viewType).classList.add('active');
 
             if (viewType === 'compact') {
-                document.getElementById('jb-compact-view').classList.remove('hidden');
-                document.getElementById('jb-detailed-view').classList.add('hidden');
-                document.getElementById('mt-compact-view').classList.remove('hidden');
-                document.getElementById('mt-detailed-view').classList.add('hidden');
+                document.getElementById('mz-compact-view')?.classList.remove('hidden');
+                document.getElementById('mz-detailed-view')?.classList.add('hidden');
+                document.getElementById('jb-compact-view')?.classList.remove('hidden');
+                document.getElementById('jb-detailed-view')?.classList.add('hidden');
+                document.getElementById('mt-compact-view')?.classList.remove('hidden');
+                document.getElementById('mt-detailed-view')?.classList.add('hidden');
             } else {
-                document.getElementById('jb-compact-view').classList.add('hidden');
-                document.getElementById('jb-detailed-view').classList.remove('hidden');
-                document.getElementById('mt-compact-view').classList.add('hidden');
-                document.getElementById('mt-detailed-view').classList.remove('hidden');
+                document.getElementById('mz-compact-view')?.classList.add('hidden');
+                document.getElementById('mz-detailed-view')?.classList.remove('hidden');
+                document.getElementById('jb-compact-view')?.classList.add('hidden');
+                document.getElementById('jb-detailed-view')?.classList.remove('hidden');
+                document.getElementById('mt-compact-view')?.classList.add('hidden');
+                document.getElementById('mt-detailed-view')?.classList.remove('hidden');
             }
         }
     </script>

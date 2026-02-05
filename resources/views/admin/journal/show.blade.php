@@ -144,6 +144,9 @@
                         @php
                             $totalJbDays = count($jbLessonDates);
                             $totalMtDays = count($mtLessonDates);
+                            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->toDateString();
+                            $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, fn($date) => $date <= $gradingCutoffDate));
+                            $totalJbDaysForAverage = count($jbLessonDatesForAverage);
                         @endphp
                         <!-- Compact View (Ixcham) -->
                         <div id="jb-compact-view" class="overflow-x-auto">
@@ -188,11 +191,13 @@
                                                 $gradeSum = array_sum($gradeValues);
                                                 // Divide by total pairs in day, not just student's grades
                                                 $dailyAverages[$date] = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                                                $dailySum += $dailyAverages[$date];
+                                                if (in_array($date, $jbLessonDatesForAverage, true)) {
+                                                    $dailySum += $dailyAverages[$date];
+                                                }
                                                 $hasRetakeInDay[$date] = count($dayGrades) > 0 && collect($dayGrades)->contains(fn($g) => $g['is_retake']);
                                             }
-                                            $jnAverage = $totalJbDays > 0
-                                                ? round($dailySum / $totalJbDays, 0, PHP_ROUND_HALF_UP)
+                                            $jnAverage = $totalJbDaysForAverage > 0
+                                                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                                                 : 0;
 
                                             $studentMtGrades = $mtGrades[$student->hemis_id] ?? [];
@@ -245,7 +250,7 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDays }})</span></td>
+                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
@@ -310,10 +315,13 @@
                                                 $pairsInDay = $jbPairsPerDay[$date] ?? 1;
                                                 $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
                                                 $gradeSum = array_sum($gradeValues);
-                                                $dailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                                                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                                                if (in_array($date, $jbLessonDatesForAverage, true)) {
+                                                    $dailySum += $dayAverage;
+                                                }
                                             }
-                                            $jnAverage = $totalJbDays > 0
-                                                ? round($dailySum / $totalJbDays, 0, PHP_ROUND_HALF_UP)
+                                            $jnAverage = $totalJbDaysForAverage > 0
+                                                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                                                 : 0;
 
                                             $studentMtGrades = $mtGrades[$student->hemis_id] ?? [];
@@ -365,7 +373,7 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDays }})</span></td>
+                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>

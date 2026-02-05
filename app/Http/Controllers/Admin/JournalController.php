@@ -563,6 +563,15 @@ class JournalController extends Controller
             $query->whereIn('semester_code', $semesterCodes);
         }
 
+        // Joriy semestr bo'yicha filtrlash
+        if ($request->get('current_semester') == '1') {
+            $currentSemesterCodes = Semester::where('current', true)
+                ->whereIn('curriculum_hemis_id', $activeCurriculaIds)
+                ->pluck('code')
+                ->unique();
+            $query->whereIn('semester_code', $currentSemesterCodes);
+        }
+
         return $query->select('subject_id', 'subject_name')
             ->groupBy('subject_id', 'subject_name')
             ->orderBy('subject_name')

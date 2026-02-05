@@ -95,8 +95,12 @@
             <!-- Tabs and View Toggle -->
             <div class="mb-0 flex justify-between items-center">
                 <nav class="flex space-x-4">
-                    <button id="tab-amaliyot" onclick="switchTab('amaliyot')"
+                    <button id="tab-maruza" onclick="switchTab('maruza')"
                         class="tab-btn px-2 py-1 text-sm font-medium border-b-2 border-blue-500 text-blue-600">
+                        Ma'ruza
+                    </button>
+                    <button id="tab-amaliyot" onclick="switchTab('amaliyot')"
+                        class="tab-btn px-2 py-1 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
                         Amaliyot
                     </button>
                     <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
@@ -133,8 +137,110 @@
                 </div>
             </div>
 
+
+            <!-- Ma'ruza Tab Content -->
+            <div id="content-maruza" class="tab-content">
+                <div class="bg-white">
+                    @if($students->isEmpty())
+                        <div class="p-4 text-center text-gray-500">
+                            <p>Bu guruhda talabalar mavjud emas.</p>
+                        </div>
+                    @else
+                        @php
+                            $totalLectureDays = count($lectureLessonDates);
+                        @endphp
+
+                        <div id="mz-compact-view" class="overflow-x-auto">
+                            <table class="journal-table border-collapse text-xs">
+                                <thead>
+                                    <tr>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-left" style="min-width: 180px;">F.I.SH.</th>
+                                        @forelse($lectureLessonDates as $idx => $date)
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 45px; writing-mode: vertical-rl; transform: rotate(180deg); height: 50px;">
+                                                {{ \Carbon\Carbon::parse($date)->format('d.m.y') }}
+                                            </th>
+                                        @empty
+                                            <th class="px-1 py-1 text-gray-400 text-center">Bo'sh</th>
+                                        @endforelse
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($students as $index => $student)
+                                        @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
+                                        <tr>
+                                            <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
+                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            @forelse($lectureLessonDates as $idx => $date)
+                                                @php
+                                                    $pairStatuses = array_values($studentLecture[$date] ?? []);
+                                                    $hasAttendance = count($pairStatuses) > 0;
+                                                    $isAbsent = in_array('NB', $pairStatuses, true);
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}">
+                                                    @if($isAbsent)
+                                                        <span class="text-red-600 font-medium">NB</span>
+                                                    @elseif($hasAttendance)
+                                                        <span class="text-green-600 font-bold">+</span>
+                                                    @else
+                                                        <span>&nbsp;</span>
+                                                    @endif
+                                                </td>
+                                            @empty
+                                                <td class="px-1 py-1 text-center"><span>&nbsp;</span></td>
+                                            @endforelse
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div id="mz-detailed-view" class="overflow-x-auto hidden mt-4 border-t pt-4">
+                            <table class="journal-table border-collapse text-xs">
+                                <thead>
+                                    <tr>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-left" style="min-width: 180px;">F.I.SH.</th>
+                                        @forelse($lectureColumns as $idx => $col)
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'date-separator' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'date-end' : '' }}" style="min-width: 45px; writing-mode: vertical-rl; transform: rotate(180deg); height: 60px;">
+                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.y') }}({{ $col['pair'] }})
+                                            </th>
+                                        @empty
+                                            <th class="px-1 py-1 text-gray-400 text-center">Bo'sh</th>
+                                        @endforelse
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($students as $index => $student)
+                                        @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
+                                        <tr>
+                                            <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
+                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            @forelse($lectureColumns as $idx => $col)
+                                                @php $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null; @endphp
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'date-separator' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'date-end' : '' }}">
+                                                    @if($lectureMark === 'NB')
+                                                        <span class="text-red-600 font-medium">NB</span>
+                                                    @elseif($lectureMark === '+')
+                                                        <span class="text-green-600 font-bold">+</span>
+                                                    @else
+                                                        <span>&nbsp;</span>
+                                                    @endif
+                                                </td>
+                                            @empty
+                                                <td class="px-1 py-1 text-center"><span>&nbsp;</span></td>
+                                            @endforelse
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
             <!-- Amaliyot Tab Content -->
-            <div id="content-amaliyot" class="tab-content">
+            <div id="content-amaliyot" class="tab-content hidden">
                 <div class="bg-white">
                     @if($students->isEmpty())
                         <div class="p-4 text-center text-gray-500">
@@ -693,15 +799,19 @@
             document.getElementById('view-' + viewType).classList.add('active');
 
             if (viewType === 'compact') {
-                document.getElementById('jb-compact-view').classList.remove('hidden');
-                document.getElementById('jb-detailed-view').classList.add('hidden');
-                document.getElementById('mt-compact-view').classList.remove('hidden');
-                document.getElementById('mt-detailed-view').classList.add('hidden');
+                document.getElementById('mz-compact-view')?.classList.remove('hidden');
+                document.getElementById('mz-detailed-view')?.classList.add('hidden');
+                document.getElementById('jb-compact-view')?.classList.remove('hidden');
+                document.getElementById('jb-detailed-view')?.classList.add('hidden');
+                document.getElementById('mt-compact-view')?.classList.remove('hidden');
+                document.getElementById('mt-detailed-view')?.classList.add('hidden');
             } else {
-                document.getElementById('jb-compact-view').classList.add('hidden');
-                document.getElementById('jb-detailed-view').classList.remove('hidden');
-                document.getElementById('mt-compact-view').classList.add('hidden');
-                document.getElementById('mt-detailed-view').classList.remove('hidden');
+                document.getElementById('mz-compact-view')?.classList.add('hidden');
+                document.getElementById('mz-detailed-view')?.classList.remove('hidden');
+                document.getElementById('jb-compact-view')?.classList.add('hidden');
+                document.getElementById('jb-detailed-view')?.classList.remove('hidden');
+                document.getElementById('mt-compact-view')?.classList.add('hidden');
+                document.getElementById('mt-detailed-view')?.classList.remove('hidden');
             }
         }
     </script>

@@ -459,31 +459,40 @@
         .select2-container--classic .select2-selection--single .select2-selection__rendered {
             line-height: 34px;
             padding-left: 10px;
-            padding-right: 45px;
+            padding-right: 52px;
             color: #1e293b;
             font-size: 0.8rem;
             font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .select2-container--classic .select2-selection--single .select2-selection__arrow {
             height: 34px;
-            width: 24px;
+            width: 22px;
             background: transparent;
             border-left: none;
+            right: 0;
         }
         .select2-container--classic .select2-selection--single .select2-selection__clear {
             position: absolute;
-            right: 25px;
+            right: 22px;
             top: 50%;
             transform: translateY(-50%);
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
-            color: #9ca3af;
+            color: #94a3b8;
             cursor: pointer;
-            padding: 0 5px;
-            z-index: 1;
+            padding: 2px 6px;
+            z-index: 2;
+            background: #ffffff;
+            border-radius: 50%;
+            line-height: 1;
+            transition: all 0.15s;
         }
         .select2-container--classic .select2-selection--single .select2-selection__clear:hover {
-            color: #ef4444;
+            color: #ffffff;
+            background: #ef4444;
         }
         .select2-dropdown {
             font-size: 0.8rem;

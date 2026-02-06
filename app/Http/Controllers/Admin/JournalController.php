@@ -881,68 +881,47 @@ class JournalController extends Controller
 
     public function getSubjects(Request $request)
     {
-        // Faqat faol guruhlar bilan bog'liq fanlarni olish
-        $activeGroupsQuery = Group::where('department_active', true)->where('active', true);
+        // Asosiy journal query bilan bir xil joinlar - faqat haqiqiy natija bor fanlar
+        $query = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
 
-        // Fakultet bo'yicha filtrlash
-        if ($request->filled('faculty_id')) {
-            $faculty = Department::find($request->faculty_id);
-            if ($faculty) {
-                $activeGroupsQuery->where('department_hemis_id', $faculty->department_hemis_id);
-            }
-        }
-
-        // Yo'nalish bo'yicha filtrlash
-        if ($request->filled('specialty_id')) {
-            $activeGroupsQuery->where('specialty_hemis_id', $request->specialty_id);
-        }
-
-        // Ta'lim turi bo'yicha filtrlash
         if ($request->filled('education_type')) {
-            $curriculaIds = Curriculum::where('education_type_code', $request->education_type)
-                ->pluck('curricula_hemis_id');
-            $activeGroupsQuery->whereIn('curriculum_hemis_id', $curriculaIds);
+            $query->where('c.education_type_code', $request->education_type);
         }
-
-        // O'quv yili bo'yicha filtrlash
         if ($request->filled('education_year')) {
-            $curriculaIds = Curriculum::where('education_year_code', $request->education_year)
-                ->pluck('curricula_hemis_id');
-            $activeGroupsQuery->whereIn('curriculum_hemis_id', $curriculaIds);
+            $query->where('c.education_year_code', $request->education_year);
         }
-
-        $activeCurriculaIds = $activeGroupsQuery->pluck('curriculum_hemis_id')->unique();
-
-        $query = CurriculumSubject::whereIn('curricula_hemis_id', $activeCurriculaIds);
-
-        // Kafedra bo'yicha filtrlash (curriculum_subjects.department_id)
+        if ($request->filled('faculty_id')) {
+            $query->where('f.id', $request->faculty_id);
+        }
         if ($request->filled('department_id')) {
-            $query->where('department_id', $request->department_id);
+            $query->where('cs.department_id', $request->department_id);
         }
-
+        if ($request->filled('specialty_id')) {
+            $query->where('sp.specialty_hemis_id', $request->specialty_id);
+        }
         if ($request->filled('semester_code')) {
-            $query->where('semester_code', $request->semester_code);
+            $query->where('cs.semester_code', $request->semester_code);
         }
-
-        // Kurs bo'yicha filtrlash (semestr orqali)
         if ($request->filled('level_code')) {
-            $semesterCodes = Semester::where('level_code', $request->level_code)
-                ->pluck('code');
-            $query->whereIn('semester_code', $semesterCodes);
+            $query->where('s.level_code', $request->level_code);
         }
-
-        // Joriy semestr bo'yicha filtrlash
         if ($request->get('current_semester') == '1') {
-            $currentSemesterCodes = Semester::where('current', true)
-                ->whereIn('curriculum_hemis_id', $activeCurriculaIds)
-                ->pluck('code')
-                ->unique();
-            $query->whereIn('semester_code', $currentSemesterCodes);
+            $query->where('s.current', true);
         }
 
-        return $query->select('subject_id', 'subject_name')
-            ->groupBy('subject_id', 'subject_name')
-            ->orderBy('subject_name')
+        return $query->select('cs.subject_id', 'cs.subject_name')
+            ->groupBy('cs.subject_id', 'cs.subject_name')
+            ->orderBy('cs.subject_name')
             ->get()
             ->pluck('subject_name', 'subject_id');
     }

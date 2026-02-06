@@ -1,7 +1,7 @@
-<aside class="w-64 flex flex-col fixed left-0 top-0 shadow-xl z-50" style="background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%); height: 100vh;">
+<aside class="w-64 flex flex-col fixed left-0 top-0 shadow-xl z-50" style="background: linear-gradient(180deg, #1a3268 0%, #2b5ea7 100%); height: 100vh;">
     <!-- Logo Section (Fixed at top) -->
-    <div class="p-4 flex flex-col items-center flex-shrink-0" style="background-color: #172554; border-bottom: 1px solid rgba(255,255,255,0.1);">
-        <img src="{{ asset('logo.png') }}" alt="Logo" class="w-16 h-16 rounded-full mb-2" style="border: 3px solid rgba(255,255,255,0.3); box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+    <div class="p-4 flex flex-col items-center flex-shrink-0" style="background-color: #142850; border-bottom: 1px solid rgba(255,255,255,0.12);">
+        <img src="{{ asset('logo.png') }}" alt="Logo" class="w-16 h-16 rounded-full mb-2" style="border: 3px solid rgba(255,255,255,0.35); box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
         <h1 style="color: #ffffff; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.05em;">LMS</h1>
     </div>
 
@@ -224,7 +224,7 @@
     </nav>
 
     <!-- User Section (Fixed at bottom) -->
-    <div class="p-3 flex-shrink-0" style="background-color: #172554; border-top: 1px solid rgba(255,255,255,0.1);">
+    <div class="p-3 flex-shrink-0" style="background-color: #142850; border-top: 1px solid rgba(255,255,255,0.12);">
         <div class="flex items-center mb-2 px-2">
             <div class="w-8 h-8 rounded-full flex items-center justify-center mr-2" style="background-color: rgba(255,255,255,0.2);">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #ffffff;">

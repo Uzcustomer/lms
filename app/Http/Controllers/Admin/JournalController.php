@@ -42,23 +42,47 @@ class JournalController extends Controller
             ->orderBy('name')
             ->get();
 
-        $kafedras = CurriculumSubject::whereNotNull('department_id')
-            ->whereNotNull('department_name')
-            ->select('department_id', 'department_name')
-            ->groupBy('department_id', 'department_name')
-            ->orderBy('department_name')
+        // Base query builder (umumiy join va filtrlar)
+        $baseQuery = function () {
+            return DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as s', function ($join) {
+                    $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('s.code', '=', 'cs.semester_code');
+                })
+                ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+                ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
+                ->where('g.department_active', true)
+                ->where('g.active', true);
+        };
+
+        // Kafedra dropdown uchun - faqat haqiqiy natija bor kafedralar
+        $kafedraQuery = $baseQuery()
+            ->whereNotNull('cs.department_id')
+            ->whereNotNull('cs.department_name');
+
+        if ($selectedEducationType) {
+            $kafedraQuery->where('c.education_type_code', $selectedEducationType);
+        }
+        if ($request->filled('education_year')) {
+            $kafedraQuery->where('c.education_year_code', $request->education_year);
+        }
+        if ($request->filled('faculty')) {
+            $kafedraQuery->where('f.id', $request->faculty);
+        }
+        if ($request->get('current_semester', '1') == '1') {
+            $kafedraQuery->where('s.current', true);
+        }
+
+        $kafedras = $kafedraQuery
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
             ->get();
 
         // Build query for journal entries
-        $query = DB::table('curriculum_subjects as cs')
-            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-            ->join('semesters as s', function ($join) {
-                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                    ->on('s.code', '=', 'cs.semester_code');
-            })
-            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
-            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
+        $query = $baseQuery()
             ->select([
                 'cs.id',
                 'cs.subject_id',
@@ -74,9 +98,7 @@ class JournalController extends Controller
                 'sp.name as specialty_name',
                 's.level_name',
             ])
-            ->distinct()
-            ->where('g.department_active', true)
-            ->where('g.active', true);
+            ->distinct();
 
         // Apply filters
         if ($selectedEducationType) {

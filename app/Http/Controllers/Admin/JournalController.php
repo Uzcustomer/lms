@@ -22,6 +22,15 @@ class JournalController extends Controller
             ->groupBy('education_type_code', 'education_type_name')
             ->get();
 
+        $selectedEducationType = $request->get('education_type');
+        if (!$request->has('education_type')) {
+            $selectedEducationType = $educationTypes
+                ->first(function ($type) {
+                    return str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr');
+                })
+                ?->education_type_code;
+        }
+
         $educationYears = Curriculum::select('education_year_code', 'education_year_name')
             ->whereNotNull('education_year_code')
             ->groupBy('education_year_code', 'education_year_name')
@@ -30,6 +39,17 @@ class JournalController extends Controller
 
         $faculties = Department::where('structure_type_code', 11)
             ->where('active', true)
+            ->orderBy('name')
+            ->get();
+
+        $kafedras = Department::where('active', true)
+            ->whereIn(
+                'department_hemis_id',
+                Group::where('department_active', true)
+                    ->where('active', true)
+                    ->pluck('department_hemis_id')
+                    ->unique()
+            )
             ->orderBy('name')
             ->get();
 
@@ -42,6 +62,7 @@ class JournalController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as d', 'd.department_hemis_id', '=', 'g.department_hemis_id')
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->select([
                 'cs.id',
@@ -54,6 +75,7 @@ class JournalController extends Controller
                 'g.id as group_id',
                 'g.name as group_name',
                 'd.name as department_name',
+                'f.name as faculty_name',
                 'sp.name as specialty_name',
                 's.level_name',
             ])
@@ -62,8 +84,8 @@ class JournalController extends Controller
             ->where('g.active', true);
 
         // Apply filters
-        if ($request->filled('education_type')) {
-            $query->where('c.education_type_code', $request->education_type);
+        if ($selectedEducationType) {
+            $query->where('c.education_type_code', $selectedEducationType);
         }
 
         if ($request->filled('education_year')) {
@@ -71,7 +93,11 @@ class JournalController extends Controller
         }
 
         if ($request->filled('faculty')) {
-            $query->where('d.id', $request->faculty);
+            $query->where('f.id', $request->faculty);
+        }
+
+        if ($request->filled('department')) {
+            $query->where('d.id', $request->department);
         }
 
         if ($request->filled('specialty')) {
@@ -107,7 +133,8 @@ class JournalController extends Controller
         $sortMap = [
             'education_type' => 'c.education_type_name',
             'education_year' => 'c.education_year_name',
-            'faculty' => 'd.name',
+            'faculty' => 'f.name',
+            'department' => 'd.name',
             'specialty' => 'sp.name',
             'level' => 's.level_name',
             'semester' => 'cs.semester_name',
@@ -124,8 +151,10 @@ class JournalController extends Controller
         return view('admin.journal.index', compact(
             'journals',
             'educationTypes',
+            'selectedEducationType',
             'educationYears',
             'faculties',
+            'kafedras',
             'sortColumn',
             'sortDirection'
         ));
@@ -846,6 +875,14 @@ class JournalController extends Controller
             }
         }
 
+        // Kafedra bo'yicha filtrlash
+        if ($request->filled('department_id')) {
+            $department = Department::find($request->department_id);
+            if ($department) {
+                $activeGroupsQuery->where('department_hemis_id', $department->department_hemis_id);
+            }
+        }
+
         // Yo'nalish bo'yicha filtrlash
         if ($request->filled('specialty_id')) {
             $activeGroupsQuery->where('specialty_hemis_id', $request->specialty_id);
@@ -904,6 +941,13 @@ class JournalController extends Controller
             $faculty = Department::find($request->faculty_id);
             if ($faculty) {
                 $query->where('department_hemis_id', $faculty->department_hemis_id);
+            }
+        }
+
+        if ($request->filled('department_id')) {
+            $department = Department::find($request->department_id);
+            if ($department) {
+                $query->where('department_hemis_id', $department->department_hemis_id);
             }
         }
 

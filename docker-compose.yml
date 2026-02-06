@@ -41,7 +41,21 @@ services:
             - "8084:80"
         networks:
             - app-network
-
+    phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: lmsttatf_phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:80"
+    environment:
+      PMA_HOST: host.docker.internal
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 128M
+      PMA_ABSOLUTE_URI: http://mark.tashmedunitf.uz/phpmyadmin/
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-network
 networks:
     app-network:
         driver: bridge

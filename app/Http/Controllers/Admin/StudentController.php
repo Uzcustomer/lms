@@ -142,14 +142,19 @@ class StudentController extends Controller
 
     public function resetLocalPassword(Student $student)
     {
-        $temporaryPassword = $student->student_id_number;
+        try {
+            $temporaryPassword = $student->student_id_number;
 
-        $student->local_password = Hash::make($temporaryPassword);
-        $student->local_password_expires_at = now()->addDays(3);
-        $student->must_change_password = true;
-        $student->save();
+            $student->local_password = Hash::make($temporaryPassword);
+            $student->local_password_expires_at = now()->addDays(3);
+            $student->must_change_password = true;
+            $student->save();
 
-        return back()->with('success', "{$student->full_name} uchun vaqtinchalik parol o'rnatildi: {$temporaryPassword}");
+            return back()->with('success', "{$student->full_name} uchun vaqtinchalik parol o'rnatildi: {$temporaryPassword}");
+        } catch (\Exception $e) {
+            Log::error('Parolni tiklashda xatolik: ' . $e->getMessage());
+            return back()->with('error', "Parolni tiklashda xatolik yuz berdi. Iltimos, migratsiyalar ishga tushirilganligini tekshiring.");
+        }
     }
 
 

@@ -253,7 +253,8 @@
                                                   onsubmit="return confirm('Ushbu talaba uchun vaqtinchalik parolni student ID raqamiga tiklaysizmi?')">
                                                 @csrf
                                                 <button type="submit"
-                                                        class="px-2 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600">
+                                                        class="px-2 py-1 text-xs rounded"
+                                                        style="background-color: #f59e0b; color: white;">
                                                     Parolni tiklash
                                                 </button>
                                             </form>

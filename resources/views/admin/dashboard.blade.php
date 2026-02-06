@@ -16,7 +16,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="font-sans antialiased">
-<div class="flex h-screen bg-gray-100">
+<div style="background: yellow;" class="flex h-screen bg-gray-100">
     <!-- Sidebar -->
     <x-admin-sidebar />
 

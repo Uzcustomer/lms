@@ -25,12 +25,14 @@
 
                 <!-- Filters -->
                 <form id="filter-form" method="GET" action="{{ route('admin.journal.index') }}">
-                    <div class="px-5 pt-4 pb-3" style="background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%); border-bottom: 1px solid #e2e8f0;">
+                    <div class="filter-container">
 
                         <!-- Row 1 -->
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end;">
-                            <div style="min-width: 160px;">
-                                <label class="filter-label">Ta'lim turi</label>
+                        <div class="filter-row">
+                            <div class="filter-item" style="min-width: 160px;">
+                                <label class="filter-label fl-blue">
+                                    <span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi
+                                </label>
                                 <select name="education_type" id="education_type" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
                                     @foreach($educationTypes as $type)
@@ -41,20 +43,10 @@
                                 </select>
                             </div>
 
-                            <div style="min-width: 160px;">
-                                <label class="filter-label">O'quv yili</label>
-                                <select name="education_year" id="education_year" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                    @foreach($educationYears as $year)
-                                        <option value="{{ $year->education_year_code }}" {{ request('education_year') == $year->education_year_code ? 'selected' : '' }}>
-                                            {{ $year->education_year_name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            <div style="flex: 1; min-width: 200px;">
-                                <label class="filter-label">Fakultet</label>
+                            <div class="filter-item" style="flex: 1; min-width: 200px;">
+                                <label class="filter-label fl-emerald">
+                                    <span class="fl-dot" style="background:#10b981;"></span> Fakultet
+                                </label>
                                 <select name="faculty" id="faculty" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
                                     @foreach($faculties as $faculty)
@@ -65,15 +57,19 @@
                                 </select>
                             </div>
 
-                            <div style="flex: 1; min-width: 240px;">
-                                <label class="filter-label">Yo'nalish</label>
+                            <div class="filter-item" style="flex: 1; min-width: 240px;">
+                                <label class="filter-label fl-cyan">
+                                    <span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish
+                                </label>
                                 <select name="specialty" id="specialty" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
                                 </select>
                             </div>
 
-                            <div style="min-width: 90px;">
-                                <label class="filter-label">Sahifada</label>
+                            <div class="filter-item" style="min-width: 90px;">
+                                <label class="filter-label fl-slate">
+                                    <span class="fl-dot" style="background:#94a3b8;"></span> Sahifada
+                                </label>
                                 <select id="per_page" name="per_page" class="select2" style="width: 100%;">
                                     @foreach([10, 25, 50, 100] as $pageSize)
                                         <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>
@@ -83,43 +79,52 @@
                                 </select>
                             </div>
 
-                            <div style="min-width: 130px;">
+                            <div class="filter-item" style="min-width: 160px;">
                                 <label class="filter-label">&nbsp;</label>
                                 <input type="hidden" name="current_semester" id="current_semester_input" value="{{ request('current_semester', '1') }}">
-                                <button type="button" id="current-semester-toggle"
-                                    class="toggle-btn {{ request('current_semester', '1') == '1' ? 'active' : '' }}"
-                                    onclick="toggleCurrentSemester()">
-                                    <span class="toggle-indicator"></span>
-                                    <span class="toggle-text">Joriy semestr</span>
-                                </button>
+                                <input type="hidden" name="education_year" id="education_year" value="{{ request('education_year') }}">
+                                <div class="toggle-switch {{ request('current_semester', '1') == '1' ? 'active' : '' }}" id="current-semester-toggle" onclick="toggleCurrentSemester()">
+                                    <div class="toggle-track">
+                                        <div class="toggle-thumb"></div>
+                                    </div>
+                                    <span class="toggle-label">Joriy semestr</span>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Row 2 -->
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
-                            <div style="min-width: 160px;">
-                                <label class="filter-label">Semestr</label>
-                                <select name="semester_code" id="semester_code" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                </select>
-                            </div>
-
-                            <div style="min-width: 170px;">
-                                <label class="filter-label">Guruh</label>
-                                <select name="group" id="group" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                </select>
-                            </div>
-
-                            <div style="min-width: 140px;">
-                                <label class="filter-label">Kurs</label>
+                        <div class="filter-row">
+                            <div class="filter-item" style="min-width: 140px;">
+                                <label class="filter-label fl-violet">
+                                    <span class="fl-dot" style="background:#8b5cf6;"></span> Kurs
+                                </label>
                                 <select name="level_code" id="level_code" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
                                 </select>
                             </div>
 
-                            <div style="flex: 1; min-width: 220px;">
-                                <label class="filter-label">Kafedra</label>
+                            <div class="filter-item" style="min-width: 150px;">
+                                <label class="filter-label fl-teal">
+                                    <span class="fl-dot" style="background:#14b8a6;"></span> Semestr
+                                </label>
+                                <select name="semester_code" id="semester_code" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-item" style="min-width: 170px;">
+                                <label class="filter-label fl-indigo">
+                                    <span class="fl-dot" style="background:#1a3268;"></span> Guruh
+                                </label>
+                                <select name="group" id="group" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-item" style="flex: 1; min-width: 220px;">
+                                <label class="filter-label fl-amber">
+                                    <span class="fl-dot" style="background:#f59e0b;"></span> Kafedra
+                                </label>
                                 <select name="department" id="department" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
                                     @foreach($kafedras as $kafedra)
@@ -130,8 +135,10 @@
                                 </select>
                             </div>
 
-                            <div style="flex: 1; min-width: 280px;">
-                                <label class="filter-label">Fan</label>
+                            <div class="filter-item" style="flex: 1; min-width: 280px;">
+                                <label class="filter-label fl-subject">
+                                    <span class="fl-dot" style="background:#0f172a;"></span> Fan
+                                </label>
                                 <select name="subject" id="subject" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
                                 </select>
@@ -143,7 +150,6 @@
                                         <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                         <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
-                                    <span style="font-size: 11px;">Yuklanmoqda...</span>
                                 </div>
                             </div>
                         </div>
@@ -171,7 +177,6 @@
                                     @php
                                         $columns = [
                                             'education_type' => "Ta'lim turi",
-                                            'education_year' => "O'quv yili",
                                             'faculty' => 'Fakultet',
                                             'department' => 'Kafedra',
                                             'specialty' => "Yo'nalish",
@@ -206,44 +211,15 @@
                                 @foreach ($journals as $index => $journal)
                                     <tr class="journal-row"
                                         onclick="window.location='{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code]) }}'">
-                                        <td class="td-num">
-                                            {{ $journals->firstItem() + $index }}
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-blue">{{ $journal->education_type_name ?? '-' }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-slate">{{ $journal->education_year_name ?? '-' }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="text-cell text-emerald" title="{{ $journal->faculty_name ?? '-' }}">
-                                                {{ Str::limit($journal->faculty_name ?? '-', 30) }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-amber" title="{{ $journal->kafedra_name ?? '-' }}">
-                                                {{ Str::limit($journal->kafedra_name ?? '-', 25) }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="text-cell text-cyan" title="{{ $journal->specialty_name ?? '-' }}">
-                                                {{ Str::limit($journal->specialty_name ?? '-', 25) }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-violet">{{ $journal->level_name ?? '-' }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-teal">{{ $journal->semester_name ?? '-' }}</span>
-                                        </td>
-                                        <td>
-                                            <span class="text-cell text-subject" title="{{ $journal->subject_name ?? '-' }}">
-                                                {{ Str::limit($journal->subject_name ?? '-', 30) }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-indigo">{{ $journal->group_name ?? '-' }}</span>
-                                        </td>
+                                        <td class="td-num">{{ $journals->firstItem() + $index }}</td>
+                                        <td><span class="badge badge-blue">{{ $journal->education_type_name ?? '-' }}</span></td>
+                                        <td><span class="text-cell text-emerald">{{ $journal->faculty_name ?? '-' }}</span></td>
+                                        <td><span class="badge badge-amber">{{ $journal->kafedra_name ?? '-' }}</span></td>
+                                        <td><span class="text-cell text-cyan">{{ $journal->specialty_name ?? '-' }}</span></td>
+                                        <td><span class="badge badge-violet">{{ $journal->level_name ?? '-' }}</span></td>
+                                        <td><span class="badge badge-teal">{{ $journal->semester_name ?? '-' }}</span></td>
+                                        <td><span class="text-cell text-subject">{{ $journal->subject_name ?? '-' }}</span></td>
+                                        <td><span class="badge badge-indigo">{{ $journal->group_name ?? '-' }}</span></td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -263,6 +239,28 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
+        // Maxsus belgilarni olib tashlab fuzzy qidiruv
+        function stripSpecialChars(str) {
+            return str.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase();
+        }
+
+        function fuzzyMatcher(params, data) {
+            if ($.trim(params.term) === '') return data;
+            if (typeof data.text === 'undefined') return null;
+
+            var searchClean = stripSpecialChars(params.term);
+            var optionClean = stripSpecialChars(data.text);
+
+            if (optionClean.indexOf(searchClean) > -1) {
+                return $.extend({}, data, true);
+            }
+            // Oddiy qidiruv ham (asl matn bo'yicha)
+            if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) {
+                return $.extend({}, data, true);
+            }
+            return null;
+        }
+
         function toggleCurrentSemester() {
             const btn = document.getElementById('current-semester-toggle');
             const input = document.getElementById('current_semester_input');
@@ -289,7 +287,6 @@
 
             function autoSubmitForm() {
                 if (isInitialLoad) return;
-
                 clearTimeout(autoSubmitTimeout);
                 autoSubmitTimeout = setTimeout(function() {
                     $('#filter-loading').removeClass('hidden').css('display', 'flex');
@@ -302,11 +299,12 @@
                     theme: 'classic',
                     width: '100%',
                     allowClear: true,
-                    placeholder: $(this).find('option:first').text()
+                    placeholder: $(this).find('option:first').text(),
+                    matcher: fuzzyMatcher
                 }).on('select2:open', function() {
                     setTimeout(function() {
-                        const searchField = document.querySelector('.select2-container--open .select2-search__field');
-                        if (searchField) searchField.focus();
+                        var sf = document.querySelector('.select2-container--open .select2-search__field');
+                        if (sf) sf.focus();
                     }, 10);
                 });
             });
@@ -321,42 +319,24 @@
             const selectedEducationYear = @json(request('education_year'));
             const currentSemester = @json(request('current_semester', '1'));
 
-            function resetDropdown(element, placeholder) {
-                $(element).empty().append(`<option value="">${placeholder}</option>`);
+            function resetDropdown(el, ph) {
+                $(el).empty().append(`<option value="">${ph}</option>`);
             }
 
             function populateDropdownUnique(url, params, element, callback) {
-                $.ajax({
-                    url: url,
-                    type: 'GET',
-                    data: params,
-                    success: function (data) {
-                        const uniqueNames = {};
-                        $.each(data, function (key, value) {
-                            if (!uniqueNames[value]) {
-                                uniqueNames[value] = key;
-                            }
-                        });
-                        $.each(uniqueNames, function (name, key) {
-                            $(element).append(`<option value="${key}">${name}</option>`);
-                        });
-                        if (callback) callback(data);
-                    }
-                });
+                $.ajax({ url: url, type: 'GET', data: params, success: function (data) {
+                    var unique = {};
+                    $.each(data, function (k, v) { if (!unique[v]) unique[v] = k; });
+                    $.each(unique, function (n, k) { $(element).append(`<option value="${k}">${n}</option>`); });
+                    if (callback) callback(data);
+                }});
             }
 
             function populateDropdown(url, params, element, callback) {
-                $.ajax({
-                    url: url,
-                    type: 'GET',
-                    data: params,
-                    success: function (data) {
-                        $.each(data, function (key, value) {
-                            $(element).append(`<option value="${key}">${value}</option>`);
-                        });
-                        if (callback) callback(data);
-                    }
-                });
+                $.ajax({ url: url, type: 'GET', data: params, success: function (data) {
+                    $.each(data, function (k, v) { $(element).append(`<option value="${k}">${v}</option>`); });
+                    if (callback) callback(data);
+                }});
             }
 
             function getFilterParams() {
@@ -377,125 +357,90 @@
                 resetDropdown('#group', 'Barchasi');
                 populateDropdown('{{ route("admin.journal.get-groups") }}', getFilterParams(), '#group');
             }
-
             function refreshSubjects() {
                 resetDropdown('#subject', 'Barchasi');
                 populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', getFilterParams(), '#subject');
             }
-
             function refreshSpecialties() {
                 resetDropdown('#specialty', 'Barchasi');
                 populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', getFilterParams(), '#specialty');
             }
 
-            $('#education_type').change(function () {
-                refreshSpecialties();
-                refreshSubjects();
-                refreshGroups();
-                autoSubmitForm();
-            });
-
-            $('#education_year').change(function () {
-                refreshSubjects();
-                refreshGroups();
-                autoSubmitForm();
-            });
-
-            $('#per_page').on('change', function() {
-                autoSubmitForm();
-            });
-
-            $('#faculty').change(function () {
-                refreshSpecialties();
-                refreshSubjects();
-                refreshGroups();
-                autoSubmitForm();
-            });
-
-            $('#department').change(function () {
-                refreshSubjects();
-                refreshGroups();
-                autoSubmitForm();
-            });
-
-            $('#specialty').change(function () {
-                refreshGroups();
-                autoSubmitForm();
-            });
-
+            $('#education_type').change(function () { refreshSpecialties(); refreshSubjects(); refreshGroups(); autoSubmitForm(); });
+            $('#per_page').on('change', function() { autoSubmitForm(); });
+            $('#faculty').change(function () { refreshSpecialties(); refreshSubjects(); refreshGroups(); autoSubmitForm(); });
+            $('#department').change(function () { refreshSubjects(); refreshGroups(); autoSubmitForm(); });
+            $('#specialty').change(function () { refreshGroups(); autoSubmitForm(); });
             $('#level_code').change(function () {
-                const levelCode = $(this).val();
+                var lc = $(this).val();
                 resetDropdown('#semester_code', 'Barchasi');
-
-                if (levelCode) {
-                    populateDropdown('{{ route("admin.journal.get-semesters") }}', { level_code: levelCode }, '#semester_code');
-                }
-                refreshSubjects();
-                refreshGroups();
-                autoSubmitForm();
+                if (lc) populateDropdown('{{ route("admin.journal.get-semesters") }}', { level_code: lc }, '#semester_code');
+                refreshSubjects(); refreshGroups(); autoSubmitForm();
             });
-
-            $('#semester_code').change(function () {
-                refreshSubjects();
-                refreshGroups();
-                autoSubmitForm();
-            });
-
-            $('#group').change(function () {
-                autoSubmitForm();
-            });
-
-            $('#subject').change(function () {
-                refreshGroups();
-                autoSubmitForm();
-            });
+            $('#semester_code').change(function () { refreshSubjects(); refreshGroups(); autoSubmitForm(); });
+            $('#group').change(function () { autoSubmitForm(); });
+            $('#subject').change(function () { refreshGroups(); autoSubmitForm(); });
 
             function initializeFilters() {
-                const initParams = getFilterParams();
-
-                populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', initParams, '#specialty', () => {
+                var p = getFilterParams();
+                populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', p, '#specialty', () => {
                     if (selectedSpecialty) $('#specialty').val(selectedSpecialty).trigger('change.select2');
                 });
-
                 populateDropdown('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code', () => {
                     if (selectedLevelCode) $('#level_code').val(selectedLevelCode).trigger('change.select2');
                 });
-
                 populateDropdown('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code', () => {
                     if (selectedSemesterCode) $('#semester_code').val(selectedSemesterCode).trigger('change.select2');
                 });
-
-                populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', initParams, '#subject', () => {
+                populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', p, '#subject', () => {
                     if (selectedSubject) $('#subject').val(selectedSubject).trigger('change.select2');
                 });
-
-                populateDropdown('{{ route("admin.journal.get-groups") }}', initParams, '#group', () => {
+                populateDropdown('{{ route("admin.journal.get-groups") }}', p, '#group', () => {
                     if (selectedGroup) $('#group').val(selectedGroup).trigger('change.select2');
                 });
-
-                if (selectedDepartment) {
-                    $('#department').val(selectedDepartment).trigger('change.select2');
-                }
+                if (selectedDepartment) $('#department').val(selectedDepartment).trigger('change.select2');
             }
 
             initializeFilters();
-
-            setTimeout(function() {
-                isInitialLoad = false;
-            }, 1500);
+            setTimeout(function() { isInitialLoad = false; }, 1500);
         });
     </script>
 
     <style>
-        /* ===== Filter Section ===== */
+        /* ===== Filter Container ===== */
+        .filter-container {
+            padding: 16px 20px 12px;
+            background: linear-gradient(135deg, #f0f4f8 0%, #e8edf5 100%);
+            border-bottom: 2px solid #dbe4ef;
+        }
+        .filter-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+            align-items: flex-end;
+        }
+        .filter-row:last-child { margin-bottom: 0; }
+        .filter-item { }
+
+        /* ===== Filter Labels ===== */
         .filter-label {
-            display: block;
+            display: flex;
+            align-items: center;
+            gap: 5px;
             margin-bottom: 4px;
             font-size: 11px;
-            font-weight: 600;
-            color: #64748b;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.03em;
+            letter-spacing: 0.04em;
+            color: #475569;
+        }
+        .fl-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
         }
 
         /* ===== Select2 ===== */
@@ -503,86 +448,107 @@
             height: 36px;
             border: 1px solid #cbd5e1;
             border-radius: 8px;
-            background: white;
-            transition: border-color 0.2s;
+            background: #ffffff;
+            transition: all 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         .select2-container--classic .select2-selection--single:hover {
-            border-color: #94a3b8;
+            border-color: #2b5ea7;
+            box-shadow: 0 0 0 2px rgba(43,94,167,0.1);
         }
         .select2-container--classic .select2-selection--single .select2-selection__rendered {
             line-height: 34px;
             padding-left: 10px;
-            padding-right: 45px;
-            color: #334155;
+            padding-right: 52px;
+            color: #1e293b;
             font-size: 0.8rem;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .select2-container--classic .select2-selection--single .select2-selection__arrow {
             height: 34px;
-            width: 24px;
+            width: 22px;
             background: transparent;
             border-left: none;
+            right: 0;
         }
         .select2-container--classic .select2-selection--single .select2-selection__clear {
             position: absolute;
-            right: 25px;
+            right: 22px;
             top: 50%;
             transform: translateY(-50%);
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
-            color: #9ca3af;
+            color: #94a3b8;
             cursor: pointer;
-            padding: 0 5px;
-            z-index: 1;
+            padding: 2px 6px;
+            z-index: 2;
+            background: #ffffff;
+            border-radius: 50%;
+            line-height: 1;
+            transition: all 0.15s;
         }
         .select2-container--classic .select2-selection--single .select2-selection__clear:hover {
-            color: #ef4444;
+            color: #ffffff;
+            background: #ef4444;
         }
         .select2-dropdown {
             font-size: 0.8rem;
             border-radius: 8px;
             border: 1px solid #cbd5e1;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
         }
         .select2-container--classic .select2-results__option--highlighted {
             background-color: #2b5ea7;
         }
 
-        /* ===== Toggle Button ===== */
-        .toggle-btn {
+        /* ===== Toggle Switch ===== */
+        .toggle-switch {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 14px;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            background: white;
+            gap: 10px;
             cursor: pointer;
-            font-size: 12px;
-            color: #64748b;
-            transition: all 0.2s;
+            padding: 6px 0;
             height: 36px;
+            user-select: none;
         }
-        .toggle-btn:hover {
-            border-color: #94a3b8;
+        .toggle-track {
+            width: 40px;
+            height: 22px;
+            background: #cbd5e1;
+            border-radius: 11px;
+            position: relative;
+            transition: background 0.25s;
+            flex-shrink: 0;
         }
-        .toggle-btn.active {
-            background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
-            border-color: #2b5ea7;
-            color: #1e3a5f;
-            font-weight: 600;
+        .toggle-switch.active .toggle-track {
+            background: linear-gradient(135deg, #2b5ea7, #3b7ddb);
         }
-        .toggle-indicator {
-            width: 12px;
-            height: 12px;
+        .toggle-thumb {
+            width: 18px;
+            height: 18px;
+            background: #ffffff;
             border-radius: 50%;
-            background: #D1D5DB;
-            transition: all 0.2s;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.25s;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
         }
-        .toggle-btn.active .toggle-indicator {
-            background: #2b5ea7;
-            box-shadow: 0 0 0 3px rgba(43,94,167,0.2);
+        .toggle-switch.active .toggle-thumb {
+            transform: translateX(18px);
         }
-        .toggle-text { white-space: nowrap; }
+        .toggle-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            white-space: nowrap;
+        }
+        .toggle-switch.active .toggle-label {
+            color: #1e3a5f;
+        }
 
         /* ===== Table ===== */
         .journal-table {
@@ -591,34 +557,29 @@
             border-spacing: 0;
             font-size: 13px;
         }
-
         .journal-table thead {
             position: sticky;
             top: 0;
             z-index: 10;
         }
-
         .journal-table thead tr {
-            background: linear-gradient(135deg, #1a3268 0%, #2b5ea7 100%);
+            background: linear-gradient(135deg, #0c1929 0%, #1a3268 50%, #2b5ea7 100%);
         }
-
         .journal-table th {
             padding: 14px 12px;
             text-align: left;
             font-weight: 600;
-            font-size: 12px;
+            font-size: 11.5px;
             color: #ffffff;
             text-transform: uppercase;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.05em;
             white-space: nowrap;
             border-bottom: 3px solid #f59e0b;
         }
-
         .journal-table th.th-num {
-            padding: 14px 12px 14px 20px;
-            width: 50px;
+            padding: 14px 12px 14px 16px;
+            width: 44px;
         }
-
         .sort-link {
             display: inline-flex;
             align-items: center;
@@ -627,19 +588,9 @@
             text-decoration: none;
             transition: opacity 0.15s;
         }
-        .sort-link:hover {
-            opacity: 0.85;
-        }
-
-        .sort-icon {
-            font-size: 8px;
-            opacity: 0.5;
-        }
-        .sort-icon.active {
-            font-size: 10px;
-            opacity: 1;
-            color: #fbbf24;
-        }
+        .sort-link:hover { opacity: 0.85; }
+        .sort-icon { font-size: 8px; opacity: 0.4; }
+        .sort-icon.active { font-size: 10px; opacity: 1; color: #fbbf24; }
 
         /* ===== Table Body ===== */
         .journal-table tbody tr {
@@ -647,90 +598,57 @@
             transition: all 0.15s ease;
             border-bottom: 1px solid #f1f5f9;
         }
-
-        .journal-table tbody tr:nth-child(even) {
-            background-color: #f8fafc;
-        }
-        .journal-table tbody tr:nth-child(odd) {
-            background-color: #ffffff;
-        }
-
+        .journal-table tbody tr:nth-child(even) { background-color: #f8fafc; }
+        .journal-table tbody tr:nth-child(odd) { background-color: #ffffff; }
         .journal-table tbody tr:hover {
             background-color: #eff6ff !important;
             box-shadow: inset 4px 0 0 #2b5ea7;
         }
-
         .journal-table td {
-            padding: 14px 12px;
+            padding: 10px 12px;
             vertical-align: middle;
+            line-height: 1.4;
         }
-
         .td-num {
-            padding-left: 20px !important;
+            padding-left: 16px !important;
             font-weight: 700;
             color: #2b5ea7;
-            font-size: 14px;
+            font-size: 13px;
         }
 
-        /* ===== Badge Styles ===== */
+        /* ===== Badges ===== */
         .badge {
             display: inline-block;
-            padding: 4px 10px;
+            padding: 3px 9px;
             border-radius: 6px;
             font-size: 11.5px;
             font-weight: 600;
-            white-space: nowrap;
             line-height: 1.4;
         }
-
-        .badge-blue {
-            background: #dbeafe;
-            color: #1e40af;
-            border: 1px solid #bfdbfe;
-        }
-        .badge-slate {
-            background: #f1f5f9;
-            color: #475569;
-            border: 1px solid #e2e8f0;
-        }
-        .badge-amber {
-            background: #fef3c7;
-            color: #92400e;
-            border: 1px solid #fde68a;
-        }
-        .badge-violet {
-            background: #ede9fe;
-            color: #5b21b6;
-            border: 1px solid #ddd6fe;
-        }
-        .badge-teal {
-            background: #ccfbf1;
-            color: #0f766e;
-            border: 1px solid #99f6e4;
-        }
+        .badge-blue { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+        .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
+        .badge-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #99f6e4; white-space: nowrap; }
         .badge-indigo {
             background: linear-gradient(135deg, #1a3268, #2b5ea7);
             color: #ffffff;
             border: none;
+            white-space: nowrap;
         }
 
-        /* ===== Text Cell Styles ===== */
+        /* ===== Text Cells ===== */
         .text-cell {
             font-size: 12.5px;
             font-weight: 500;
-            line-height: 1.4;
+            line-height: 1.35;
+            display: block;
         }
-
-        .text-emerald {
-            color: #047857;
-        }
-        .text-cyan {
-            color: #0e7490;
-        }
+        .text-emerald { color: #047857; }
+        .text-cyan { color: #0e7490; }
         .text-subject {
-            color: #1e293b;
+            color: #0f172a;
             font-weight: 700;
-            font-size: 13px;
+            font-size: 12.5px;
         }
     </style>
 </x-app-layout>

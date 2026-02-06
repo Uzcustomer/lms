@@ -141,10 +141,17 @@ class StudentController extends Controller
         return view('admin.students.index', compact('students', 'departments', 'specialties', 'groups', 'curriculums', 'semesters'));
     }
 
-    public function resetLocalPassword(Student $student)
+    public function resetLocalPassword(Request $request, Student $student)
     {
         try {
-            $temporaryPassword = $student->student_id_number;
+            $request->validate([
+                'password_type' => 'required|in:auto,manual',
+                'custom_password' => 'required_if:password_type,manual|nullable|string|min:4',
+            ]);
+
+            $temporaryPassword = $request->password_type === 'manual'
+                ? $request->custom_password
+                : $student->student_id_number;
 
             $tempDays = (int) Setting::get('temp_password_days', 3);
 
@@ -154,6 +161,8 @@ class StudentController extends Controller
             $student->save();
 
             return back()->with('success', "{$student->full_name} uchun vaqtinchalik parol o'rnatildi: {$temporaryPassword} ({$tempDays} kun amal qiladi)");
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
         } catch (\Exception $e) {
             Log::error('Parolni tiklashda xatolik: ' . $e->getMessage());
             return back()->with('error', "Parolni tiklashda xatolik yuz berdi. Iltimos, migratsiyalar ishga tushirilganligini tekshiring.");

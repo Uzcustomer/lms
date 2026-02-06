@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
 use App\Http\Controllers\Admin\TeacherController;
+use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
 
@@ -205,8 +206,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     });
 
-    // Faqat admin uchun sinxronizatsiya route'lari
+    // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari
     Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':admin'])->group(function () {
+        Route::get('/password-settings', [PasswordSettingsController::class, 'index'])->name('password-settings.index');
+        Route::post('/password-settings', [PasswordSettingsController::class, 'update'])->name('password-settings.update');
+
         Route::get('/synchronizes', [DashboardController::class, 'indexSynchronizes'])->name('synchronizes');
         Route::post('/synchronize', [DashboardController::class, 'importSchedulesPartialy'])->name('synchronize');
         Route::post('/synchronize/curricula', [DashboardController::class, 'importCurricula'])->name('synchronize.curricula');

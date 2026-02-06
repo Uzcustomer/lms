@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Student;
 
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use App\Models\Student;
 use Illuminate\Support\Facades\Auth;
@@ -92,12 +93,14 @@ class StudentAuthController extends Controller
             return back()->withErrors(['current_password' => 'Joriy vaqtinchalik parol noto‘g‘ri.']);
         }
 
+        $changedPasswordDays = (int) Setting::get('changed_password_days', 30);
+
         $student->local_password = Hash::make($request->password);
-        $student->local_password_expires_at = null;
+        $student->local_password_expires_at = now()->addDays($changedPasswordDays);
         $student->must_change_password = false;
         $student->save();
 
-        return redirect()->route('student.dashboard')->with('success', 'Parol muvaffaqiyatli yangilandi.');
+        return redirect()->route('student.dashboard')->with('success', "Parol muvaffaqiyatli yangilandi. Parol {$changedPasswordDays} kun amal qiladi. Shu muddat ichida HEMIS parolingizni tiklang.");
     }
 
 

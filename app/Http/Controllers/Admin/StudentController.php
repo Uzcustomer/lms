@@ -20,6 +20,7 @@ use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Specialty;
 use App\Models\StudentGrade;
+use App\Models\Setting;
 use App\Models\StudentPerformance;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -140,16 +141,32 @@ class StudentController extends Controller
         return view('admin.students.index', compact('students', 'departments', 'specialties', 'groups', 'curriculums', 'semesters'));
     }
 
-    public function resetLocalPassword(Student $student)
+    public function resetLocalPassword(Request $request, Student $student)
     {
-        $temporaryPassword = $student->student_id_number;
+        try {
+            $request->validate([
+                'password_type' => 'required|in:auto,manual',
+                'custom_password' => 'required_if:password_type,manual|nullable|string|min:4',
+            ]);
 
-        $student->local_password = Hash::make($temporaryPassword);
-        $student->local_password_expires_at = now()->addDays(3);
-        $student->must_change_password = true;
-        $student->save();
+            $temporaryPassword = $request->password_type === 'manual'
+                ? $request->custom_password
+                : $student->student_id_number;
 
-        return back()->with('success', "{$student->full_name} uchun vaqtinchalik parol o'rnatildi: {$temporaryPassword}");
+            $tempDays = (int) Setting::get('temp_password_days', 3);
+
+            $student->local_password = Hash::make($temporaryPassword);
+            $student->local_password_expires_at = now()->addDays($tempDays);
+            $student->must_change_password = true;
+            $student->save();
+
+            return back()->with('success', "{$student->full_name} uchun vaqtinchalik parol o'rnatildi: {$temporaryPassword} ({$tempDays} kun amal qiladi)");
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Exception $e) {
+            Log::error('Parolni tiklashda xatolik: ' . $e->getMessage());
+            return back()->with('error', "Parolni tiklashda xatolik yuz berdi. Iltimos, migratsiyalar ishga tushirilganligini tekshiring.");
+        }
     }
 
 

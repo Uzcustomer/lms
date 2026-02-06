@@ -249,14 +249,12 @@
                                         <td class="px-2 py-2 whitespace-nowrap text-gray-500">{{ $student->avg_gpa }}</td>
                                         <td class="px-2 py-2 whitespace-nowrap text-gray-500">{{ \Carbon\Carbon::parse($student->updated_at)->format('d-m-Y H:i') }}</td>
                                         <td class="px-2 py-2 whitespace-nowrap">
-                                            <form method="POST" action="{{ route('admin.students.reset-local-password', $student) }}"
-                                                  onsubmit="return confirm('Ushbu talaba uchun vaqtinchalik parolni student ID raqamiga tiklaysizmi?')">
-                                                @csrf
-                                                <button type="submit"
-                                                        class="px-2 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600">
-                                                    Parolni tiklash
-                                                </button>
-                                            </form>
+                                            <button type="button"
+                                                    class="px-2 py-1 text-xs rounded"
+                                                    style="background-color: #f59e0b; color: white;"
+                                                    onclick="openResetModal('{{ $student->id }}', '{{ addslashes($student->full_name) }}', '{{ $student->student_id_number }}')">
+                                                Parolni tiklash
+                                            </button>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -294,6 +292,91 @@
     </div>
 
 
+
+    <!-- Parolni tiklash modal -->
+    <div id="resetModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:white; border-radius:12px; padding:24px; max-width:440px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <h3 style="font-size:16px; font-weight:600; color:#1f2937; margin-bottom:4px;">Parolni tiklash</h3>
+            <p id="modalStudentName" style="font-size:13px; color:#6b7280; margin-bottom:16px;"></p>
+
+            <form id="resetForm" method="POST">
+                @csrf
+                <div style="margin-bottom:12px;">
+                    <label style="display:flex; align-items:center; padding:10px 12px; border:2px solid #2563eb; border-radius:8px; cursor:pointer; background:#eff6ff; margin-bottom:8px;">
+                        <input type="radio" name="password_type" value="auto" checked
+                               onchange="toggleManualInput()" style="margin-right:10px;">
+                        <div>
+                            <div style="font-size:13px; font-weight:600; color:#1e40af;">Avtomatik (Talaba ID)</div>
+                            <div id="autoPasswordDisplay" style="font-size:12px; color:#3b82f6; margin-top:2px;"></div>
+                        </div>
+                    </label>
+
+                    <label style="display:flex; align-items:center; padding:10px 12px; border:2px solid #d1d5db; border-radius:8px; cursor:pointer;">
+                        <input type="radio" name="password_type" value="manual"
+                               onchange="toggleManualInput()" style="margin-right:10px;">
+                        <div style="font-size:13px; font-weight:600; color:#374151;">Boshqa parol kiritish</div>
+                    </label>
+                </div>
+
+                <div id="manualPasswordField" style="display:none; margin-bottom:12px;">
+                    <label style="font-size:12px; font-weight:500; color:#374151; display:block; margin-bottom:4px;">Parolni kiriting (kamida 4 belgi)</label>
+                    <input type="text" name="custom_password" id="customPasswordInput"
+                           style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; box-sizing:border-box;"
+                           placeholder="Yangi parol..." minlength="4">
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+                    <button type="button" onclick="closeResetModal()"
+                            style="padding:8px 16px; border:1px solid #d1d5db; border-radius:6px; background:white; color:#374151; font-size:13px; cursor:pointer;">
+                        Bekor qilish
+                    </button>
+                    <button type="submit"
+                            style="padding:8px 16px; border:none; border-radius:6px; background:#f59e0b; color:white; font-size:13px; font-weight:600; cursor:pointer;">
+                        Tasdiqlash
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openResetModal(studentId, studentName, studentIdNumber) {
+            document.getElementById('modalStudentName').textContent = studentName;
+            document.getElementById('autoPasswordDisplay').textContent = 'Parol: ' + studentIdNumber;
+            document.getElementById('resetForm').action = '{{ url("admin/students") }}/' + studentId + '/reset-local-password';
+            document.getElementById('customPasswordInput').value = '';
+            document.querySelector('input[name="password_type"][value="auto"]').checked = true;
+            toggleManualInput();
+            document.getElementById('resetModal').style.display = 'flex';
+        }
+
+        function closeResetModal() {
+            document.getElementById('resetModal').style.display = 'none';
+        }
+
+        function toggleManualInput() {
+            var isManual = document.querySelector('input[name="password_type"]:checked').value === 'manual';
+            document.getElementById('manualPasswordField').style.display = isManual ? 'block' : 'none';
+            document.getElementById('customPasswordInput').required = isManual;
+
+            var labels = document.getElementById('resetForm').querySelectorAll('label');
+            if (isManual) {
+                labels[0].style.borderColor = '#d1d5db';
+                labels[0].style.background = 'white';
+                labels[1].style.borderColor = '#2563eb';
+                labels[1].style.background = '#eff6ff';
+            } else {
+                labels[0].style.borderColor = '#2563eb';
+                labels[0].style.background = '#eff6ff';
+                labels[1].style.borderColor = '#d1d5db';
+                labels[1].style.background = 'white';
+            }
+        }
+
+        document.getElementById('resetModal').addEventListener('click', function(e) {
+            if (e.target === this) closeResetModal();
+        });
+    </script>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />

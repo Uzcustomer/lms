@@ -42,15 +42,11 @@ class JournalController extends Controller
             ->orderBy('name')
             ->get();
 
-        $kafedras = Department::where('active', true)
-            ->whereIn(
-                'department_hemis_id',
-                Group::where('department_active', true)
-                    ->where('active', true)
-                    ->pluck('department_hemis_id')
-                    ->unique()
-            )
-            ->orderBy('name')
+        $kafedras = CurriculumSubject::whereNotNull('department_id')
+            ->whereNotNull('department_name')
+            ->select('department_id', 'department_name')
+            ->groupBy('department_id', 'department_name')
+            ->orderBy('department_name')
             ->get();
 
         // Build query for journal entries
@@ -61,7 +57,6 @@ class JournalController extends Controller
                 $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
                     ->on('s.code', '=', 'cs.semester_code');
             })
-            ->leftJoin('departments as d', 'd.department_hemis_id', '=', 'g.department_hemis_id')
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->select([
@@ -74,7 +69,7 @@ class JournalController extends Controller
                 'c.education_year_name',
                 'g.id as group_id',
                 'g.name as group_name',
-                'd.name as department_name',
+                'cs.department_name as kafedra_name',
                 'f.name as faculty_name',
                 'sp.name as specialty_name',
                 's.level_name',
@@ -97,7 +92,7 @@ class JournalController extends Controller
         }
 
         if ($request->filled('department')) {
-            $query->where('d.id', $request->department);
+            $query->where('cs.department_id', $request->department);
         }
 
         if ($request->filled('specialty')) {
@@ -134,7 +129,7 @@ class JournalController extends Controller
             'education_type' => 'c.education_type_name',
             'education_year' => 'c.education_year_name',
             'faculty' => 'f.name',
-            'department' => 'd.name',
+            'department' => 'cs.department_name',
             'specialty' => 'sp.name',
             'level' => 's.level_name',
             'semester' => 'cs.semester_name',
@@ -875,14 +870,6 @@ class JournalController extends Controller
             }
         }
 
-        // Kafedra bo'yicha filtrlash
-        if ($request->filled('department_id')) {
-            $department = Department::find($request->department_id);
-            if ($department) {
-                $activeGroupsQuery->where('department_hemis_id', $department->department_hemis_id);
-            }
-        }
-
         // Yo'nalish bo'yicha filtrlash
         if ($request->filled('specialty_id')) {
             $activeGroupsQuery->where('specialty_hemis_id', $request->specialty_id);
@@ -905,6 +892,11 @@ class JournalController extends Controller
         $activeCurriculaIds = $activeGroupsQuery->pluck('curriculum_hemis_id')->unique();
 
         $query = CurriculumSubject::whereIn('curricula_hemis_id', $activeCurriculaIds);
+
+        // Kafedra bo'yicha filtrlash (curriculum_subjects.department_id)
+        if ($request->filled('department_id')) {
+            $query->where('department_id', $request->department_id);
+        }
 
         if ($request->filled('semester_code')) {
             $query->where('semester_code', $request->semester_code);
@@ -944,11 +936,12 @@ class JournalController extends Controller
             }
         }
 
+        // Kafedra bo'yicha filtrlash (curriculum_subjects.department_id orqali)
         if ($request->filled('department_id')) {
-            $department = Department::find($request->department_id);
-            if ($department) {
-                $query->where('department_hemis_id', $department->department_hemis_id);
-            }
+            $curriculaWithDept = CurriculumSubject::where('department_id', $request->department_id)
+                ->pluck('curricula_hemis_id')
+                ->unique();
+            $query->whereIn('curriculum_hemis_id', $curriculaWithDept);
         }
 
         if ($request->filled('specialty_id')) {

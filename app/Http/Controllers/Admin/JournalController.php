@@ -523,12 +523,35 @@ class JournalController extends Controller
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
 
+        // Faculty (Fakultet) - department linked to curriculum
+        $faculty = Department::where('department_hemis_id', $curriculum->department_hemis_id ?? null)->first();
+        $facultyName = $faculty->name ?? '';
+
+        // Kafedra - from curriculum subject
+        $kafedraName = $subject->department_name ?? '';
+
+        // Kurs (Course level) - from semester
+        $kursName = $semester->level_name ?? '';
+
+        // O'qituvchi (Teacher) - from schedules for this group/subject/semester
+        $teacherName = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotNull('employee_name')
+            ->where('employee_name', '!=', 'Manual Entry')
+            ->value('employee_name') ?? '';
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
             'curriculum',
             'semester',
             'students',
+            'facultyName',
+            'kafedraName',
+            'kursName',
+            'teacherName',
             'lectureLessonDates',
             'lectureColumns',
             'lectureAttendance',

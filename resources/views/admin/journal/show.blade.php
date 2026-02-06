@@ -182,22 +182,32 @@
 
             <!-- Info Panel -->
             <div class="py-2 bg-gray-50 border-b border-gray-200">
-                <div class="flex flex-wrap items-center gap-x-8 gap-y-1 text-sm">
+                <div class="flex justify-between items-start text-sm">
                     <div>
-                        <span class="text-gray-500">Guruh:</span>
-                        <span class="font-medium text-blue-600 ml-1">{{ $group->name }}</span>
-                    </div>
-                    <div>
-                        <span class="text-gray-500">Fan:</span>
-                        <span class="font-medium text-gray-900 ml-1">{{ $subject->subject_name }}</span>
-                    </div>
-                    <div>
-                        <span class="text-gray-500">Semestr:</span>
-                        <span class="font-medium text-gray-900 ml-1">{{ $semester->name ?? $subject->semester_name }}</span>
-                    </div>
-                    <div class="ml-auto">
                         <span class="text-gray-500">Talabalar soni:</span>
                         <span class="font-medium text-gray-900 ml-1">{{ $students->count() }}</span>
+                    </div>
+                    <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-sm">
+                        <span class="text-gray-500 text-right">Guruh:</span>
+                        <span class="font-medium text-blue-600">{{ $group->name }}</span>
+
+                        <span class="text-gray-500 text-right">Fan:</span>
+                        <span class="font-medium text-gray-900">{{ $subject->subject_name }}</span>
+
+                        <span class="text-gray-500 text-right">Kurs:</span>
+                        <span class="font-medium text-gray-900">{{ $kursName }}</span>
+
+                        <span class="text-gray-500 text-right">Semestr:</span>
+                        <span class="font-medium text-gray-900">{{ $semester->name ?? $subject->semester_name }}</span>
+
+                        <span class="text-gray-500 text-right">Kafedra:</span>
+                        <span class="font-medium text-gray-900">{{ $kafedraName }}</span>
+
+                        <span class="text-gray-500 text-right">Fakultet:</span>
+                        <span class="font-medium text-gray-900">{{ $facultyName }}</span>
+
+                        <span class="text-gray-500 text-right">O'qituvchi:</span>
+                        <span class="font-medium text-gray-900">{{ $teacherName }}</span>
                     </div>
                 </div>
             </div>

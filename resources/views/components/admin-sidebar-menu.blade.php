@@ -186,6 +186,17 @@
             <span style="color: #ffffff;">Deadline</span>
         </a>
 
+        <a href="{{ route('admin.password-settings.index') }}"
+           class="flex items-center px-4 py-3 mb-1 rounded-lg"
+           style="color: #ffffff; {{ request()->routeIs('admin.password-settings*') ? 'background-color: rgba(255,255,255,0.2); font-weight: 600;' : '' }}"
+           onmouseover="this.style.backgroundColor='rgba(255,255,255,0.15)'"
+           onmouseout="this.style.backgroundColor='{{ request()->routeIs('admin.password-settings*') ? 'rgba(255,255,255,0.2)' : 'transparent' }}'">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <span style="color: #ffffff;">Parol sozlamalari</span>
+        </a>
+
         <a href="{{ route('admin.synchronizes') }}"
            class="flex items-center px-4 py-3 mb-1 rounded-lg"
            style="color: #ffffff; {{ request()->routeIs('admin.synchronizes*') ? 'background-color: rgba(255,255,255,0.2); font-weight: 600;' : '' }}"

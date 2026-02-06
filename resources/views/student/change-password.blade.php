@@ -1,6 +1,12 @@
 <x-guest-layout>
     <div class="mb-4 text-sm text-gray-600">
-        Xavfsizlik uchun vaqtinchalik parol bilan kirgansiz. Davom etishdan oldin yangi parol o‘rnating.
+        Xavfsizlik uchun vaqtinchalik parol bilan kirgansiz. Davom etishdan oldin yangi parol o'rnating.
+    </div>
+
+    <div class="mb-4 p-3 rounded-lg" style="background-color: #fefce8; border: 1px solid #fde68a;">
+        <p class="text-xs" style="color: #92400e;">
+            Yangi parol ham muddatli bo'ladi. Shu muddat ichida HEMIS parolingizni tiklashni unutmang.
+        </p>
     </div>
 
     <form method="POST" action="{{ route('student.password.update') }}">

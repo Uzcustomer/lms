@@ -131,8 +131,8 @@
                             <select name="department" id="department" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                                 @foreach($kafedras as $kafedra)
-                                    <option value="{{ $kafedra->id }}" {{ request('department') == $kafedra->id ? 'selected' : '' }}>
-                                        {{ $kafedra->name }}
+                                    <option value="{{ $kafedra->department_id }}" {{ request('department') == $kafedra->department_id ? 'selected' : '' }}>
+                                        {{ $kafedra->department_name }}
                                     </option>
                                 @endforeach
                             </select>
@@ -231,7 +231,7 @@
                                             {{ $journal->faculty_name ?? '-' }}
                                         </td>
                                         <td style="padding: 10px 16px; color: #334155;">
-                                            {{ $journal->department_name ?? '-' }}
+                                            {{ $journal->kafedra_name ?? '-' }}
                                         </td>
                                         <td style="padding: 10px 16px; color: #0891b2;" title="{{ $journal->specialty_name ?? '-' }}">
                                             {{ Str::limit($journal->specialty_name ?? '-', 25) }}

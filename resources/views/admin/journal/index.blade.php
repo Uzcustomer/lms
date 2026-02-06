@@ -626,7 +626,7 @@
             line-height: 1.4;
         }
         .badge-blue { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
-        .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; white-space: normal; word-break: break-word; max-width: 260px; display: inline-block; }
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
         .badge-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #99f6e4; white-space: nowrap; }
         .badge-indigo {
@@ -644,11 +644,14 @@
             display: block;
         }
         .text-emerald { color: #047857; }
-        .text-cyan { color: #0e7490; }
+        .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
         .text-subject {
             color: #0f172a;
             font-weight: 700;
             font-size: 12.5px;
+            max-width: 260px;
+            white-space: normal;
+            word-break: break-word;
         }
     </style>
 </x-app-layout>

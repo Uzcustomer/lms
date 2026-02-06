@@ -48,7 +48,7 @@ services:
       PMA_HOST: host.docker.internal
       PMA_PORT: 3306
       UPLOAD_LIMIT: 128M
-      PMA_ABSOLUTE_URI: http://mark.tashmedunitf.uz/phpmyadmin/
+      PMA_ABSOLUTE_URI: https://mark.tashmedunitf.uz/phpmyadmin/
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

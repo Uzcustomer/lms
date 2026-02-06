@@ -21,9 +21,22 @@ class StudentController extends Controller
     {
         $this->studentGradeService = new StudentGradeService;
     }
+
+    private function redirectIfPasswordChangeRequired()
+    {
+        if (Auth::guard('student')->user()?->must_change_password) {
+            return redirect()->route('student.password.edit');
+        }
+
+        return null;
+    }
     public function dashboard()
     {
         $student = Auth::guard('student')->user();
+
+        if ($redirect = $this->redirectIfPasswordChangeRequired()) {
+            return $redirect;
+        }
 
         $avgGpa = $student->avg_gpa ?? 0;
 
@@ -44,6 +57,10 @@ class StudentController extends Controller
 
     public function getSchedule(Request $request)
     {
+        if ($redirect = $this->redirectIfPasswordChangeRequired()) {
+            return $redirect;
+        }
+
         $token = Auth::guard('student')->user()->token;
 
         $semestersResponse = Http::withoutVerifying()->withToken($token)->get('https://student.ttatf.uz/rest/v1/education/semesters');
@@ -102,6 +119,10 @@ class StudentController extends Controller
 
     public function getAttendance(Request $request)
     {
+        if ($redirect = $this->redirectIfPasswordChangeRequired()) {
+            return $redirect;
+        }
+
         $token = Auth::user()->token;
         $semester = Auth::user()->semester_code;
         $level_code = Auth::user()->level_code;
@@ -159,6 +180,10 @@ class StudentController extends Controller
 
     public function getSubjects(Request $request)
     {
+        if ($redirect = $this->redirectIfPasswordChangeRequired()) {
+            return $redirect;
+        }
+
         $token = Auth::user()->token;
         $semester = Auth::user()->semester_code;
         $semester_name = Auth::user()->semester_name;
@@ -249,6 +274,10 @@ class StudentController extends Controller
 
     public function getSubjectGrades($subjectId)
     {
+        if ($redirect = $this->redirectIfPasswordChangeRequired()) {
+            return $redirect;
+        }
+
         $student = Auth::user();
         $semester = $student->semester_code;
 
@@ -264,6 +293,10 @@ class StudentController extends Controller
 
     public function getPendingLessons()
     {
+        if ($redirect = $this->redirectIfPasswordChangeRequired()) {
+            return $redirect;
+        }
+
         $pendingLessons = StudentGrade::where('student_id', auth()->id())
             ->whereIn('status', ['pending', 'retake'])
 //            ->where('training_type_code', '<>', 11)
@@ -275,6 +308,10 @@ class StudentController extends Controller
 
     public function profile()
     {
+        if ($redirect = $this->redirectIfPasswordChangeRequired()) {
+            return $redirect;
+        }
+
         $token = Auth::guard('student')->user()->token;
 
         $response = Http::withoutVerifying()->withToken($token)->get('https://student.ttatf.uz/rest/v1/account/me');

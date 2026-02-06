@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Student;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cookie;
 
@@ -14,6 +15,11 @@ class StudentAuthController extends Controller
 {
     public function login(Request $request)
     {
+        $request->validate([
+            'login' => ['required', 'string'],
+            'password' => ['required', 'string'],
+        ]);
+
         $response = Http::withoutVerifying()->post('https://student.ttatf.uz/rest/v1/auth/login', [
             'login' => $request->login,
             'password' => $request->password,
@@ -36,18 +42,62 @@ class StudentAuthController extends Controller
                     [
                         'token' => $token,
                         'token_expires_at' => now()->addDays(7),
+                        'must_change_password' => false,
                     ]
                 );
 
                 Auth::guard('student')->login($student);
 
-                return redirect()->route('student.dashboard')->with('studentData', $studentData);
+                return redirect()->intended(route('student.dashboard'))->with('studentData', $studentData);
             } else {
                 return back()->withErrors(['login' => 'Talabaning ma\'lumotlarini olishda xatolik.']);
             }
         } else {
+            $student = Student::where('student_id_number', $request->login)->first();
+
+            if (
+                $student &&
+                $student->local_password &&
+                (!$student->local_password_expires_at || $student->local_password_expires_at->isFuture()) &&
+                Hash::check($request->password, $student->local_password)
+            ) {
+                Auth::guard('student')->login($student);
+
+                if ($student->must_change_password) {
+                    return redirect()->route('student.password.edit');
+                }
+
+                return redirect()->intended(route('student.dashboard'));
+            }
+
             return back()->withErrors(['login' => "Login yoki parol noto'g'ri."]);
         }
+    }
+
+    public function editPassword()
+    {
+        return view('student.change-password');
+    }
+
+    public function updatePassword(Request $request)
+    {
+        $student = Auth::guard('student')->user();
+
+        $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        if (!$student || !$student->local_password || !Hash::check($request->current_password, $student->local_password)) {
+            return back()->withErrors(['current_password' => 'Joriy vaqtinchalik parol noto‘g‘ri.']);
+        }
+
+        $student->local_password = Hash::make($request->password);
+        $student->local_password_expires_at = null;
+        $student->must_change_password = false;
+        $student->save();
+
+        return redirect()->route('student.dashboard')->with('success', 'Parol muvaffaqiyatli yangilandi.');
     }
 
 

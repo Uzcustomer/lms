@@ -29,6 +29,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
@@ -137,6 +138,18 @@ class StudentController extends Controller
 
 
         return view('admin.students.index', compact('students', 'departments', 'specialties', 'groups', 'curriculums', 'semesters'));
+    }
+
+    public function resetLocalPassword(Student $student)
+    {
+        $temporaryPassword = $student->student_id_number;
+
+        $student->local_password = Hash::make($temporaryPassword);
+        $student->local_password_expires_at = now()->addDays(3);
+        $student->must_change_password = true;
+        $student->save();
+
+        return back()->with('success', "{$student->full_name} uchun vaqtinchalik parol o'rnatildi: {$temporaryPassword}");
     }
 
 

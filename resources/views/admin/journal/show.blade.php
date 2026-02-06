@@ -25,7 +25,7 @@
             background-color: #f3f4f6;
         }
         .tab-container {
-            background: #4f46e5;
+            background: #374151;
             border-radius: 12px 12px 0 0;
             display: flex;
             align-items: flex-end;
@@ -38,19 +38,19 @@
             font-weight: 600;
             border: none;
             border-radius: 8px 8px 0 0;
-            background: rgba(255, 255, 255, 0.25);
-            color: rgba(255, 255, 255, 0.85);
+            background: #6b7280;
+            color: #d1d5db;
             transition: all 0.2s;
             cursor: pointer;
             outline: none;
         }
         .tab-btn:hover:not(.active) {
-            background: rgba(255, 255, 255, 0.4);
+            background: #9ca3af;
             color: #fff;
         }
         .tab-btn.active {
-            background: #fff;
-            color: #1e293b;
+            background: #f3f4f6;
+            color: #1f2937;
             font-weight: 700;
         }
         .view-btn {

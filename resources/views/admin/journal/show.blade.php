@@ -24,19 +24,33 @@
         .journal-table thead th {
             background-color: #f3f4f6;
         }
+        .tab-container {
+            background: #4f46e5;
+            border-radius: 12px 12px 0 0;
+            display: flex;
+            align-items: flex-end;
+            padding: 10px 10px 0 10px;
+            gap: 4px;
+        }
         .tab-btn {
-            padding: 8px 16px;
+            padding: 10px 24px;
             font-size: 14px;
-            font-weight: 500;
-            border: 1px solid #000;
-            border-radius: 6px;
-            background: #fff;
-            color: #6b7280;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            background: rgba(255, 255, 255, 0.25);
+            color: rgba(255, 255, 255, 0.85);
             transition: all 0.2s;
+            cursor: pointer;
+            outline: none;
+        }
+        .tab-btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.4);
+            color: #fff;
         }
         .tab-btn.active {
-            border: 2px solid #000;
-            color: #2563eb;
+            background: #fff;
+            color: #1e293b;
             font-weight: 700;
         }
         .view-btn {
@@ -142,25 +156,27 @@
     <div class="py-2">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Tabs and View Toggle -->
-            <div class="mb-0 flex justify-between items-center">
-                <nav class="flex space-x-4">
-                    <button id="tab-maruza" onclick="switchTab('maruza')"
-                        class="tab-btn">
-                        Ma'ruza
-                    </button>
-                    <button id="tab-amaliyot" onclick="switchTab('amaliyot')"
-                        class="tab-btn active">
-                        Amaliyot
-                    </button>
-                    <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
-                        class="tab-btn">
-                        Mustaqil ta'lim
-                    </button>
-                </nav>
-                <div class="flex items-center">
-                    <span class="text-xs text-gray-500 mr-2">Ko'rinish:</span>
-                    <button id="view-compact" onclick="switchView('compact')" class="view-btn active">Ixcham</button>
-                    <button id="view-detailed" onclick="switchView('detailed')" class="view-btn">Batafsil</button>
+            <div class="mb-0">
+                <div class="flex justify-between items-end">
+                    <nav class="tab-container">
+                        <button id="tab-maruza" onclick="switchTab('maruza')"
+                            class="tab-btn">
+                            Ma'ruza
+                        </button>
+                        <button id="tab-amaliyot" onclick="switchTab('amaliyot')"
+                            class="tab-btn active">
+                            Amaliyot
+                        </button>
+                        <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
+                            class="tab-btn">
+                            Mustaqil ta'lim
+                        </button>
+                    </nav>
+                    <div class="flex items-center pb-2">
+                        <span class="text-xs text-gray-500 mr-2">Ko'rinish:</span>
+                        <button id="view-compact" onclick="switchView('compact')" class="view-btn active">Ixcham</button>
+                        <button id="view-detailed" onclick="switchView('detailed')" class="view-btn">Batafsil</button>
+                    </div>
                 </div>
             </div>
 

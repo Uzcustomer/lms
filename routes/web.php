@@ -46,6 +46,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
+        Route::post('/students/{student}/reset-local-password', [AdminStudentController::class, 'resetLocalPassword'])->name('students.reset-local-password');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
             Route::get('', [QaytnomaController::class, 'index'])->name('index');
@@ -229,6 +230,11 @@ Route::prefix('student')->name('student.')->group(function () {
     Route::middleware('guest:student')->group(function () {
         Route::post('/login', [StudentAuthController::class, 'login'])->name('login.post');
         //        Route::post('/refresh-token', [StudentAuthController::class, 'refreshToken'])->name('refresh-token');
+    });
+
+    Route::middleware(['auth:student'])->group(function () {
+        Route::get('/change-password', [StudentAuthController::class, 'editPassword'])->name('password.edit');
+        Route::put('/change-password', [StudentAuthController::class, 'updatePassword'])->name('password.update');
     });
 
     Route::get('/login', function () {

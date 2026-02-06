@@ -28,7 +28,7 @@ class Student extends Authenticatable
         'student_type_code', 'student_type_name', 'social_category_code', 'social_category_name',
         'accommodation_code', 'accommodation_name', 'student_status_code', 'student_status_name',
         'curriculum_id', 'hemis_created_at', 'hemis_updated_at', 'hash',
-        'token', 'token_expires_at', 'language_code',
+        'token', 'token_expires_at', 'local_password', 'local_password_expires_at', 'must_change_password', 'language_code',
         'language_name',
         'year_of_enter',
         'roommate_count',
@@ -44,6 +44,13 @@ class Student extends Authenticatable
         'total_credit' => 'decimal:2',
         'hemis_created_at' => 'datetime',
         'hemis_updated_at' => 'datetime',
+        'local_password_expires_at' => 'datetime',
+        'must_change_password' => 'boolean',
+    ];
+
+    protected $hidden = [
+        'local_password',
+        'token',
     ];
 
     public function studentGrades()

@@ -24,7 +24,7 @@
             <div class="overflow-hidden bg-white shadow-sm sm:rounded-lg">
                 <!-- Filters -->
                 <form id="filter-form" method="GET" action="{{ route('admin.journal.index') }}" class="p-3 bg-gray-50 border-b">
-                    <!-- Row 1: Ta'lim turi, O'quv yili, Fakultet, Yo'nalish, Kurs -->
+                    <!-- Row 1: Ta'lim turi, O'quv yili, Fakultet, Yo'nalish, Sahifada, Joriy semestr toggle -->
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end;">
                         <!-- Ta'lim turi -->
                         <div style="min-width: 160px;">
@@ -32,7 +32,7 @@
                             <select name="education_type" id="education_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                                 @foreach($educationTypes as $type)
-                                    <option value="{{ $type->education_type_code }}" {{ request('education_type') == $type->education_type_code ? 'selected' : '' }}>
+                                    <option value="{{ $type->education_type_code }}" {{ ($selectedEducationType ?? request('education_type')) == $type->education_type_code ? 'selected' : '' }}>
                                         {{ $type->education_type_name }}
                                     </option>
                                 @endforeach
@@ -73,41 +73,6 @@
                             </select>
                         </div>
 
-                        <!-- Kurs -->
-                        <div style="min-width: 140px;">
-                            <label class="filter-label">Kurs</label>
-                            <select name="level_code" id="level_code" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Row 2: Semestr, Guruh, Fan, Sahifada, Joriy semestr toggle -->
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
-                        <!-- Semestr -->
-                        <div style="min-width: 160px;">
-                            <label class="filter-label">Semestr</label>
-                            <select name="semester_code" id="semester_code" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                            </select>
-                        </div>
-
-                        <!-- Guruh -->
-                        <div style="min-width: 170px;">
-                            <label class="filter-label">Guruh</label>
-                            <select name="group" id="group" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                            </select>
-                        </div>
-
-                        <!-- Fan -->
-                        <div style="flex: 1; min-width: 280px;">
-                            <label class="filter-label">Fan</label>
-                            <select name="subject" id="subject" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                            </select>
-                        </div>
-
                         <!-- Sahifada -->
                         <div style="min-width: 90px;">
                             <label class="filter-label">Sahifada</label>
@@ -130,6 +95,55 @@
                                 <span class="toggle-indicator"></span>
                                 <span class="toggle-text">Joriy semestr</span>
                             </button>
+                        </div>
+
+                    </div>
+
+                    <!-- Row 2: Semestr, Guruh, Kurs, Kafedra, Fan -->
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
+                        <!-- Semestr -->
+                        <div style="min-width: 160px;">
+                            <label class="filter-label">Semestr</label>
+                            <select name="semester_code" id="semester_code" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                            </select>
+                        </div>
+
+                        <!-- Guruh -->
+                        <div style="min-width: 170px;">
+                            <label class="filter-label">Guruh</label>
+                            <select name="group" id="group" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                            </select>
+                        </div>
+
+                        <!-- Kurs -->
+                        <div style="min-width: 140px;">
+                            <label class="filter-label">Kurs</label>
+                            <select name="level_code" id="level_code" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                            </select>
+                        </div>
+
+                        <!-- Kafedra -->
+                        <div style="flex: 1; min-width: 220px;">
+                            <label class="filter-label">Kafedra</label>
+                            <select name="department" id="department" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($kafedras as $kafedra)
+                                    <option value="{{ $kafedra->id }}" {{ request('department') == $kafedra->id ? 'selected' : '' }}>
+                                        {{ $kafedra->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <!-- Fan -->
+                        <div style="flex: 1; min-width: 280px;">
+                            <label class="filter-label">Fan</label>
+                            <select name="subject" id="subject" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                            </select>
                         </div>
 
                         <!-- Loading indicator -->
@@ -165,6 +179,7 @@
                                             'education_type' => "Ta'lim turi",
                                             'education_year' => "O'quv yili",
                                             'faculty' => 'Fakultet',
+                                            'department' => 'Kafedra',
                                             'specialty' => "Yo'nalish",
                                             'level' => 'Kurs',
                                             'semester' => 'Semestr',
@@ -211,6 +226,9 @@
                                         </td>
                                         <td style="padding: 10px 16px; color: #334155;">
                                             {{ $journal->education_year_name ?? '-' }}
+                                        </td>
+                                        <td style="padding: 10px 16px; color: #334155;">
+                                            {{ $journal->faculty_name ?? '-' }}
                                         </td>
                                         <td style="padding: 10px 16px; color: #334155;">
                                             {{ $journal->department_name ?? '-' }}
@@ -306,6 +324,7 @@
             const selectedSubject = @json(request('subject'));
             const selectedGroup = @json(request('group'));
             const selectedFaculty = @json(request('faculty'));
+            const selectedDepartment = @json(request('department'));
             const selectedEducationYear = @json(request('education_year'));
             const currentSemester = @json(request('current_semester', '1'));
 
@@ -355,6 +374,7 @@
                     education_year: $('#education_year').val() || '',
                     faculty_id: $('#faculty').val() || '',
                     specialty_id: $('#specialty').val() || '',
+                    department_id: $('#department').val() || '',
                     level_code: $('#level_code').val() || '',
                     semester_code: $('#semester_code').val() || '',
                     subject_id: $('#subject').val() || '',
@@ -401,6 +421,13 @@
             // Fakultet tanlash
             $('#faculty').change(function () {
                 refreshSpecialties();
+                refreshSubjects();
+                refreshGroups();
+                autoSubmitForm();
+            });
+
+            // Kafedra tanlash
+            $('#department').change(function () {
                 refreshSubjects();
                 refreshGroups();
                 autoSubmitForm();
@@ -471,6 +498,10 @@
                 populateDropdown('{{ route("admin.journal.get-groups") }}', initParams, '#group', () => {
                     if (selectedGroup) $('#group').val(selectedGroup).trigger('change.select2');
                 });
+
+                if (selectedDepartment) {
+                    $('#department').val(selectedDepartment).trigger('change.select2');
+                }
             }
 
             initializeFilters();

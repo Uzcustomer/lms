@@ -444,10 +444,10 @@
             border-right: 2px solid #94a3b8 !important;
         }
         .detailed-date-start {
-            border-left: 3px solid #dc2626 !important;
+            border-left: 4px double #64748b !important;
         }
         .detailed-date-end {
-            border-right: 3px solid #dc2626 !important;
+            border-right: 4px double #64748b !important;
         }
         .inconsistent-grade {
             background-color: #fef3c7 !important;

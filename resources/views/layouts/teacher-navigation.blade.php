@@ -64,10 +64,6 @@
                                         :active="request()->routeIs('teacher.qaytnoma.index')">
                                         YN oldi qaydnoma
                                     </x-dropdown-link>
-                                    <x-dropdown-link :href="route('teacher.absence_report.index')"
-                                        :active="request()->routeIs('teacher.absence_report.*')">
-                                        74 soat dars qoldirish
-                                    </x-dropdown-link>
                                     <x-dropdown-link :href="route('teacher.vedomost.index')"
                                         :active="request()->routeIs('teacher.vedomost.index')">
                                         Vedomost
@@ -212,12 +208,6 @@
                     <x-nav-link :href="route('teacher.qaytnoma.index')"
                         :active="request()->routeIs('teacher.qaytnoma.index')">
                         YN oldi qaydnoma
-                    </x-nav-link>
-                </div>
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('teacher.absence_report.index')"
-                        :active="request()->routeIs('teacher.absence_report.*')">
-                        74 soat dars qoldirish
                     </x-nav-link>
                 </div>
                 @endif

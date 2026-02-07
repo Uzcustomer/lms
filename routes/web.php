@@ -60,12 +60,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::put('/edit/{id}', [QaytnomaController::class, 'edit_save'])->name('edit.save');
         });
 
-        Route::prefix('absence-report')->name('absence_report.')->group(function () {
-            Route::get('', [AbsenceReportController::class, 'index'])->name('index');
-            Route::get('/create', [AbsenceReportController::class, 'create'])->name('create');
-            Route::post('/store', [AbsenceReportController::class, 'store'])->name('store');
-            Route::delete('/delete/{id}', [AbsenceReportController::class, 'delete'])->name('delete');
-        });
+        Route::get('/absence-report', [AbsenceReportController::class, 'index'])->name('absence_report.index');
 
         Route::prefix('independent')->name('independent.')->group(function () {
             Route::get('', [IndependentController::class, 'index'])->name('index');
@@ -353,12 +348,6 @@ Route::prefix('teacher')->name('teacher.')->middleware(['web'])->group(function 
         Route::get('/qaytnoma', [QaytnomaController::class, 'index_teacher'])->name('qaytnoma.index');
         Route::get('/qaytnoma/create', [QaytnomaController::class, 'create_teacher'])->name('qaytnoma.create');
         Route::post('/qaytnoma/store', [QaytnomaController::class, 'store'])->name('qaytnoma.store');
-
-        Route::prefix('absence-report')->name('absence_report.')->group(function () {
-            Route::get('', [AbsenceReportController::class, 'index_teacher'])->name('index');
-            Route::get('/create', [AbsenceReportController::class, 'create_teacher'])->name('create');
-            Route::post('/store', [AbsenceReportController::class, 'store'])->name('store');
-        });
 
         Route::prefix('oraliqnazorat')->name('oraliqnazorat.')->group(function () {
             Route::get('', [OraliqNazoratController::class, 'index_teacher'])->name('index');

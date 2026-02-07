@@ -348,28 +348,27 @@
                         instance.altInput.classList.add('date-input');
                         instance.altInput.setAttribute('placeholder', 'kk.oo.yyyy');
                     }
-                    // Scroll bilan oylar o'rtasida yumshoq o'tish (throttle)
-                    var lastScroll = 0;
+                    // Scroll: delta yig'iladi, chegaraga yetganda oy o'zgaradi
+                    var accDelta = 0;
+                    var threshold = 400;
+                    var resetTimer = null;
                     instance.calendarContainer.addEventListener('wheel', function(e) {
                         e.preventDefault();
-                        var now = Date.now();
-                        if (now - lastScroll < 250) return;
-                        lastScroll = now;
-                        var daysWrap = instance.calendarContainer.querySelector('.flatpickr-days');
-                        if (daysWrap) {
-                            daysWrap.style.transition = 'opacity 0.15s ease';
-                            daysWrap.style.opacity = '0.3';
-                        }
-                        if (e.deltaY > 0) {
-                            instance.changeMonth(1);
-                        } else {
-                            instance.changeMonth(-1);
-                        }
-                        setTimeout(function() {
+                        accDelta += e.deltaY;
+                        clearTimeout(resetTimer);
+                        resetTimer = setTimeout(function() { accDelta = 0; }, 300);
+
+                        if (Math.abs(accDelta) >= threshold) {
+                            var dir = accDelta > 0 ? 1 : -1;
+                            accDelta = 0;
+                            var daysWrap = instance.calendarContainer.querySelector('.flatpickr-days');
                             if (daysWrap) {
-                                daysWrap.style.opacity = '1';
+                                daysWrap.style.transition = 'opacity 0.12s ease';
+                                daysWrap.style.opacity = '0.3';
+                                setTimeout(function() { daysWrap.style.opacity = '1'; }, 40);
                             }
-                        }, 30);
+                            instance.changeMonth(dir);
+                        }
                     }, { passive: false });
                 }
             };

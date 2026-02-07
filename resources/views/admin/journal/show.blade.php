@@ -1,13 +1,13 @@
 <x-app-layout>
     <style>
         .journal-table {
-            border: 1px solid #000;
+            border: 1px solid #cbd5e1;
             width: auto;
             table-layout: auto;
         }
         .journal-table th,
         .journal-table td {
-            border: 1px solid #000;
+            border: 1px solid #cbd5e1 !important;
             white-space: nowrap;
             text-align: center;
             vertical-align: middle;
@@ -24,8 +24,18 @@
         .journal-table thead th {
             background-color: #f3f4f6;
         }
+        .journal-table .date-header-cell {
+            overflow: hidden;
+            text-overflow: clip;
+            max-height: 90px;
+        }
+        .journal-table .joriy-header {
+            height: 38px;
+            font-size: 13px;
+            letter-spacing: 0.02em;
+        }
         .tab-container {
-            background: #374151;
+            background: #e5e7eb;
             border-radius: 12px 12px 0 0;
             display: flex;
             align-items: flex-end;
@@ -144,15 +154,15 @@
             font-weight: 600;
             border: none;
             border-radius: 8px 8px 0 0;
-            background: #6b7280;
-            color: #d1d5db;
+            background: #d1d5db;
+            color: #4b5563;
             transition: all 0.2s;
             cursor: pointer;
             outline: none;
         }
         .tab-btn:hover:not(.active) {
-            background: #9ca3af;
-            color: #fff;
+            background: #c7cbd1;
+            color: #1f2937;
         }
         .tab-btn.active {
             background: #f3f4f6;
@@ -211,16 +221,16 @@
             border-top-color: #1f2937;
         }
         .date-separator {
-            border-left: 1px solid #000 !important;
+            border-left: 2px solid #94a3b8 !important;
         }
         .date-end {
-            border-right: 1px solid #000 !important;
+            border-right: 2px solid #94a3b8 !important;
         }
         .detailed-date-start {
-            border-left: 3px double #000 !important;
+            border-left: 3px double #64748b !important;
         }
         .detailed-date-end {
-            border-right: 3px double #000 !important;
+            border-right: 3px double #64748b !important;
         }
         .inconsistent-grade {
             background-color: #fef3c7 !important;
@@ -259,10 +269,10 @@
         }
     </style>
 
-    <div class="py-2">
+    <div class="py-2" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Full-width Tabs with View Toggle -->
-            <div class="mb-0">
+            <div class="mb-4">
                 <nav class="tab-container">
                     <div style="display: flex; align-items: flex-end; gap: 4px;">
                         <button id="tab-maruza" onclick="switchTab('maruza')"
@@ -279,7 +289,7 @@
                         </button>
                     </div>
                     <div class="flex items-center" style="padding-bottom: 8px;">
-                        <span class="text-xs mr-2" style="color: #9ca3af;">Ko'rinish:</span>
+                        <span class="text-xs mr-2" style="color: #6b7280;">Ko'rinish:</span>
                         <button id="view-compact" onclick="switchView('compact')" class="view-btn active">Ixcham</button>
                         <button id="view-detailed" onclick="switchView('detailed')" class="view-btn">Batafsil</button>
                     </div>
@@ -314,7 +324,7 @@
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="min-width: 180px;">F.I.SH.</th>
                                         @forelse($lectureLessonDates as $idx => $date)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 58px;">
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 90px;">
                                                 {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                             </th>
                                         @empty
@@ -369,7 +379,7 @@
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="min-width: 180px;">F.I.SH.</th>
                                         @forelse($lectureColumns as $idx => $col)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 68px;">
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 95px;">
                                                 {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty
@@ -435,9 +445,9 @@
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         @if($totalJbDays > 0)
-                                            <th colspan="{{ $totalJbDays }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Joriy nazorat (kunlik o'rtacha)</th>
+                                            <th colspan="{{ $totalJbDays }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Joriy nazorat (kunlik o'rtacha)</th>
                                         @else
-                                            <th colspan="1" class="px-1 py-1 font-bold text-gray-700 text-center">JN</th>
+                                            <th colspan="1" class="px-1 py-2 font-bold text-gray-700 text-center joriy-header">JN</th>
                                         @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">JN %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">MT %</th>
@@ -448,7 +458,7 @@
                                     </tr>
                                     <tr>
                                         @forelse($jbLessonDates as $idx => $date)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 58px;">
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 90px;">
                                                 {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                             </th>
                                         @empty
@@ -557,9 +567,9 @@
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
                                         <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         @if(count($jbColumns) > 0)
-                                            <th colspan="{{ count($jbColumns) }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Joriy nazorat (har bir dars)</th>
+                                            <th colspan="{{ count($jbColumns) }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Joriy nazorat (har bir dars)</th>
                                         @else
-                                            <th colspan="1" class="px-1 py-1 font-bold text-gray-700 text-center">JN</th>
+                                            <th colspan="1" class="px-1 py-2 font-bold text-gray-700 text-center joriy-header">JN</th>
                                         @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">JN %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">MT %</th>
@@ -576,7 +586,7 @@
                                                 $isLastOfDate = !isset($jbColumns[$colIndex + 1]) || $jbColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
                                             @endphp
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 68px;">
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 95px;">
                                                 {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty
@@ -783,12 +793,12 @@
                                         <tr>
                                             <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
                                             <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
-                                            <th colspan="{{ $totalMtDays }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Mustaqil ta'lim (kunlik o'rtacha)</th>
+                                            <th colspan="{{ $totalMtDays }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Mustaqil ta'lim (kunlik o'rtacha)</th>
                                             <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
                                         </tr>
                                         <tr>
                                             @foreach($mtLessonDates as $idx => $date)
-                                                <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 58px;">
+                                                <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 90px;">
                                                     {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
                                                 </th>
                                             @endforeach
@@ -858,9 +868,9 @@
                                             <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
                                             <th rowspan="2" class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                             @if(count($mtColumns) > 0)
-                                                <th colspan="{{ count($mtColumns) }}" class="px-1 py-1 font-bold text-gray-700 text-center date-separator date-end">Mustaqil ta'lim (har bir dars)</th>
+                                                <th colspan="{{ count($mtColumns) }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Mustaqil ta'lim (har bir dars)</th>
                                             @else
-                                                <th colspan="1" class="px-1 py-1 font-bold text-gray-700 text-center">MT</th>
+                                                <th colspan="1" class="px-1 py-2 font-bold text-gray-700 text-center joriy-header">MT</th>
                                             @endif
                                             <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
                                     </tr>
@@ -872,7 +882,7 @@
                                                 $isLastOfDate = !isset($mtColumns[$colIndex + 1]) || $mtColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
                                             @endphp
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 68px;">
+                                            <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 95px;">
                                                 {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
                                             </th>
                                         @empty

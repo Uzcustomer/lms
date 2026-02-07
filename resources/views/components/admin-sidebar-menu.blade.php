@@ -137,33 +137,6 @@
             JN o'zlashtirish
         </a>
 
-        @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
-        <div class="sidebar-section">Sozlamalar</div>
-
-        <a href="{{ route('admin.deadlines') }}"
-           class="sidebar-link {{ request()->routeIs('admin.deadlines*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-            </svg>
-            Deadline
-        </a>
-
-        <a href="{{ route('admin.password-settings.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.password-settings*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-            </svg>
-            Parol sozlamalari
-        </a>
-
-        <a href="{{ route('admin.synchronizes') }}"
-           class="sidebar-link {{ request()->routeIs('admin.synchronizes*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-            </svg>
-            Sinxronizatsiya
-        </a>
-        @endif
 
         @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya']))
         <a href="{{ route('admin.examtest.index') }}"
@@ -176,25 +149,78 @@
         @endif
     </nav>
 
-    <!-- User Section -->
-    <div class="p-3 flex-shrink-0" style="background-color: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.08);">
-        <div class="flex items-center mb-2 px-2">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center mr-2" style="background: linear-gradient(135deg, #2b5ea7, #3b7ddb);">
+    <!-- User Section with Profile Dropdown -->
+    <div class="p-3 flex-shrink-0 relative" x-data="{ profileOpen: false }" @click.outside="profileOpen = false" style="background-color: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.08);">
+        <!-- Dropdown Menu (opens upward) -->
+        <div x-show="profileOpen"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 translate-y-2"
+             class="absolute bottom-full left-3 right-3 mb-2 rounded-xl overflow-hidden"
+             style="background: #1e293b; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 -8px 32px rgba(0,0,0,0.4);">
+
+            <!-- User email/info -->
+            <div class="px-4 py-3" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                <p style="color: rgba(255,255,255,0.5); font-size: 0.75rem;">{{ Auth::user()->email ?? Auth::user()->name }}</p>
+            </div>
+
+            @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
+            <!-- Settings links -->
+            <div class="py-1">
+                <a href="{{ route('admin.deadlines') }}" class="profile-dropdown-link">
+                    <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    Deadline
+                </a>
+                <a href="{{ route('admin.password-settings.index') }}" class="profile-dropdown-link">
+                    <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                    Parol sozlamalari
+                </a>
+                <a href="{{ route('admin.synchronizes') }}" class="profile-dropdown-link">
+                    <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Sinxronizatsiya
+                </a>
+            </div>
+
+            <div style="border-top: 1px solid rgba(255,255,255,0.08);"></div>
+            @endif
+
+            <!-- Logout -->
+            <div class="py-1">
+                <form method="POST" action="{{ route('admin.logout') }}">
+                    @csrf
+                    <button type="submit" class="profile-dropdown-link w-full text-left" style="color: #fca5a5;">
+                        <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                        </svg>
+                        Chiqish
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Profile Button (clickable) -->
+        <button @click="profileOpen = !profileOpen" class="w-full flex items-center px-2 py-2 rounded-lg transition-all duration-200 hover:bg-white/10 cursor-pointer">
+            <div class="w-9 h-9 rounded-full flex items-center justify-center mr-3 flex-shrink-0" style="background: linear-gradient(135deg, #2b5ea7, #3b7ddb);">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #ffffff;">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                 </svg>
             </div>
-            <span style="color: #ffffff; font-weight: 500; font-size: 0.875rem;">{{ Auth::user()->name }}</span>
-        </div>
-        <form method="POST" action="{{ route('admin.logout') }}">
-            @csrf
-            <button type="submit" class="sidebar-logout">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #ffffff;">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
-                </svg>
-                Chiqish
-            </button>
-        </form>
+            <div class="flex-1 text-left min-w-0">
+                <span class="block truncate" style="color: #ffffff; font-weight: 500; font-size: 0.875rem;">{{ Auth::user()->name }}</span>
+            </div>
+            <svg class="w-4 h-4 flex-shrink-0 transition-transform duration-200" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: rgba(255,255,255,0.5);">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+            </svg>
+        </button>
     </div>
 
     <style>
@@ -244,25 +270,22 @@
             letter-spacing: 0.12em;
             border-top: 1px solid rgba(255,255,255,0.05);
         }
-        .sidebar-logout {
-            width: 100%;
-            padding: 8px 12px;
-            border-radius: 8px;
+        .profile-dropdown-link {
             display: flex;
             align-items: center;
-            justify-content: center;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.1);
+            padding: 10px 16px;
             color: rgba(255,255,255,0.8);
             font-size: 0.8rem;
-            font-weight: 500;
+            font-weight: 400;
+            text-decoration: none;
+            transition: all 0.15s ease;
             cursor: pointer;
-            transition: all 0.2s;
+            background: none;
+            border: none;
         }
-        .sidebar-logout:hover {
-            background: rgba(239,68,68,0.2);
-            border-color: rgba(239,68,68,0.4);
-            color: #fca5a5;
+        .profile-dropdown-link:hover {
+            background-color: rgba(255,255,255,0.08);
+            color: #ffffff;
         }
     </style>
 </aside>

@@ -64,6 +64,11 @@
                                 <span class="inline-flex items-center mt-1 px-1.5 py-0.5 rounded text-xs font-semibold {{ $teacher->status ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
                                     {{ $teacher->status ? 'Faol' : 'Nofaol' }}
                                 </span>
+                                @if(!$teacher->is_active)
+                                    <span class="inline-flex items-center mt-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-yellow-100 text-yellow-700">
+                                        HEMIS'da yo'q
+                                    </span>
+                                @endif
                             </div>
                         </div>
 

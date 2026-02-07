@@ -25,6 +25,7 @@ class ImportTeachers extends Command
         $page = 1;
         $pageSize = 40;
         $totalImported = 0;
+        $importedEmployeeIds = [];
 
         do {
             $response = Http::withoutVerifying()
@@ -69,8 +70,11 @@ class ImportTeachers extends Command
                         'decree_number' => $employeeData['decree_number'] ?? 0,
                         'contract_date' => date('Y-m-d', $employeeData['contract_date']),
                         'decree_date' => date('Y-m-d', $employeeData['decree_date']),
+                        'is_active' => true,
                     ]
                 );
+
+                $importedEmployeeIds[] = $employeeData['employee_id_number'];
 
                 if (!$teacher->login) {
                     $teacher->login = $employeeData['employee_id_number'];
@@ -109,6 +113,19 @@ class ImportTeachers extends Command
             $page++;
 
         } while ($page <= $totalPages);
+
+        // HEMIS'da bo'lmagan xodimlarni is_active=0 qilish (o'chirmasdan)
+        // Telefon, telegram va boshqa lokal ma'lumotlari saqlanib qoladi
+        if (!empty($importedEmployeeIds)) {
+            $deactivatedCount = Teacher::whereNotIn('employee_id_number', $importedEmployeeIds)
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+
+            if ($deactivatedCount > 0) {
+                $this->info("Deactivated: {$deactivatedCount} employees not found in HEMIS");
+                $telegram->notify("HEMIS'da topilmagan {$deactivatedCount} ta xodim deaktivatsiya qilindi (ma'lumotlari saqlanib qoldi)");
+            }
+        }
 
         $telegram->notify("Xodimlar importi tugadi. Jami: {$totalImported} ta");
         $this->info('Employee import completed successfully.');

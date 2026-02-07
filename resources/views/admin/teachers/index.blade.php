@@ -71,11 +71,19 @@
                                     <option value="0" {{ request('status') === '0' ? 'selected' : '' }}>Nofaol</option>
                                 </select>
                             </div>
+                            <div style="min-width: 100px;">
+                                <label class="block text-xs text-gray-500 mb-1">Holati</label>
+                                <select name="is_active" class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                                    <option value="1" {{ request('is_active', '1') === '1' ? 'selected' : '' }}>Aktiv</option>
+                                    <option value="0" {{ request('is_active') === '0' ? 'selected' : '' }}>Noaktiv</option>
+                                    <option value="" {{ request()->has('is_active') && request('is_active') === '' ? 'selected' : '' }}>Barchasi</option>
+                                </select>
+                            </div>
                             <div class="flex gap-1">
                                 <button type="submit" class="px-3 py-2 text-sm bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition">
                                     <i class="fas fa-search mr-1"></i>Filtr
                                 </button>
-                                @if(request()->hasAny(['search', 'department', 'staff_position', 'role', 'status']))
+                                @if(request()->hasAny(['search', 'department', 'staff_position', 'role', 'status', 'is_active']))
                                     <a href="{{ route('admin.teachers.index') }}" class="px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition">
                                         Tozalash
                                     </a>

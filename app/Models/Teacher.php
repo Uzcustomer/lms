@@ -39,6 +39,7 @@ class Teacher extends Authenticatable
         'hemis_id',
         'meta_id',
         'status',
+        'is_active',
         'department_hemis_id',
         'role',
         'must_change_password',
@@ -57,6 +58,11 @@ class Teacher extends Authenticatable
     protected $casts = [
         'telegram_verified_at' => 'datetime',
     ];
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
 
     public function isProfileComplete(): bool
     {

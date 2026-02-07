@@ -590,7 +590,7 @@
         }
         .sort-link:hover { opacity: 0.75; }
         .sort-icon { font-size: 8px; opacity: 0.4; }
-        .sort-icon.active { font-size: 10px; opacity: 1; color: #2b5ea7; }
+        .sort-icon.active { font-size: 11px; opacity: 1; color: #ef4444; }
 
         /* ===== Table Body ===== */
         .journal-table tbody tr {

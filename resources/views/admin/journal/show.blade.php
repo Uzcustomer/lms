@@ -948,61 +948,10 @@
                         Filtrlar
                     </div>
 
-                    <!-- Guruh -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Guruh</div>
-                        <select id="filter-group" class="sidebar-select" onchange="onGroupChange(this.value)">
-                            <option value="{{ $groupId }}" selected>{{ $group->name }}</option>
-                        </select>
-                        <div id="loading-group" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
-                    </div>
-
-                    <!-- Fan -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Fan</div>
-                        <select id="filter-subject" class="sidebar-select" onchange="onSubjectChange(this.value)">
-                            <option value="{{ $subjectId }}" selected>{{ $subject->subject_name }}</option>
-                        </select>
-                        <div id="loading-subject" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
-                    </div>
-
-                    <!-- Semestr -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Semestr</div>
-                        <select id="filter-semester" class="sidebar-select" onchange="onSemesterChange(this.value)">
-                            <option value="{{ $semesterCode }}" selected>{{ $semester->name ?? $subject->semester_name }}</option>
-                        </select>
-                        <div id="loading-semester" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
-                    </div>
-
-                    <!-- Kurs -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Kurs</div>
-                        <select id="filter-level" class="sidebar-select" onchange="onNarrowFilterChange()">
-                            <option value="">Barchasi</option>
-                            @if($levelCode)
-                                <option value="{{ $levelCode }}" selected>{{ $kursName }}</option>
-                            @endif
-                        </select>
-                        <div id="loading-level" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
-                    </div>
-
-                    <!-- Kafedra -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Kafedra</div>
-                        <select id="filter-kafedra" class="sidebar-select" style="font-size: 12px;" onchange="onNarrowFilterChange()">
-                            <option value="">Barchasi</option>
-                            @if($kafedraId)
-                                <option value="{{ $kafedraId }}" selected>{{ $kafedraName }}</option>
-                            @endif
-                        </select>
-                        <div id="loading-kafedra" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
-                    </div>
-
-                    <!-- Fakultet -->
+                    <!-- Fakultet (erkin) -->
                     <div class="sidebar-field">
                         <div class="sidebar-label">Fakultet</div>
-                        <select id="filter-faculty" class="sidebar-select" style="font-size: 12px;" onchange="onNarrowFilterChange()">
+                        <select id="filter-faculty" class="sidebar-select" style="font-size: 12px;" onchange="onFacultyChange()">
                             <option value="">Barchasi</option>
                             @if($facultyId)
                                 <option value="{{ $facultyId }}" selected>{{ $facultyName }}</option>
@@ -1011,11 +960,77 @@
                         <div id="loading-faculty" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- O'qituvchi -->
+                    <!-- Yo'nalish (fakultetga bog'liq) -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Yo'nalish</div>
+                        <select id="filter-specialty" class="sidebar-select" style="font-size: 12px;" onchange="onSpecialtyChange()">
+                            <option value="">Barchasi</option>
+                            @if($specialtyId)
+                                <option value="{{ $specialtyId }}" selected>{{ $specialtyName }}</option>
+                            @endif
+                        </select>
+                        <div id="loading-specialty" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <!-- Kafedra (erkin) -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Kafedra</div>
+                        <select id="filter-kafedra" class="sidebar-select" style="font-size: 12px;" onchange="onKafedraChange()">
+                            <option value="">Barchasi</option>
+                            @if($kafedraId)
+                                <option value="{{ $kafedraId }}" selected>{{ $kafedraName }}</option>
+                            @endif
+                        </select>
+                        <div id="loading-kafedra" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <!-- Kurs (yo'nalishga bog'liq) -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Kurs</div>
+                        <select id="filter-level" class="sidebar-select" onchange="onLevelChange()">
+                            <option value="">Barchasi</option>
+                            @if($levelCode)
+                                <option value="{{ $levelCode }}" selected>{{ $kursName }}</option>
+                            @endif
+                        </select>
+                        <div id="loading-level" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <!-- Semestr (kursga bog'liq) -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Semestr</div>
+                        <select id="filter-semester" class="sidebar-select" onchange="onSemesterChange()">
+                            <option value="">Barchasi</option>
+                            @if($semesterCode)
+                                <option value="{{ $semesterCode }}" selected>{{ $semester->name ?? $subject->semester_name }}</option>
+                            @endif
+                        </select>
+                        <div id="loading-semester" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <!-- Guruh (semestrga bog'liq, fan bilan ikki tomonlama) -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Guruh</div>
+                        <select id="filter-group" class="sidebar-select" onchange="onGroupChange(this.value)">
+                            <option value="{{ $groupId }}" selected>{{ $group->name }}</option>
+                        </select>
+                        <div id="loading-group" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <!-- Fan (semestrga bog'liq, guruh bilan ikki tomonlama) -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Fan</div>
+                        <select id="filter-subject" class="sidebar-select" onchange="onSubjectChange(this.value)">
+                            <option value="{{ $subjectId }}" selected>{{ $subject->subject_name }}</option>
+                        </select>
+                        <div id="loading-subject" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <!-- O'qituvchi (kontekstga qarab) -->
                     <div class="sidebar-field">
                         <div class="sidebar-label">O'qituvchi</div>
-                        <select id="filter-teacher" class="sidebar-select" style="font-size: 12px;" onchange="onNarrowFilterChange()">
-                            <option value="">Barchasi</option>
+                        <select id="filter-teacher" class="sidebar-select" style="font-size: 12px;">
+                            <option value="">-</option>
                             @if($teacherName)
                                 <option value="{{ $teacherName }}" selected>{{ $teacherName }}</option>
                             @endif
@@ -1035,38 +1050,57 @@
     </div>
 
     <script>
-        // ====== Sidebar Filter Logic (Dynamic Cross-Filtering) ======
+        // ====== Cascading Sidebar Filters ======
+        // Zanjir: Fakultet(erkin) → Yo'nalish → Kurs → Semestr → [Guruh ↔ Fan]
+        // Kafedra erkin, fanga ta'sir qiladi.
         const currentGroupId = '{{ $groupId }}';
         const currentSubjectId = '{{ $subjectId }}';
         const currentSemesterCode = '{{ $semesterCode }}';
         const currentFacultyId = '{{ $facultyId }}';
+        const currentSpecialtyId = '{{ $specialtyId }}';
         const currentKafedraId = '{{ $kafedraId }}';
         const currentLevelCode = '{{ $levelCode }}';
         const currentTeacher = @json($teacherName);
         const journalShowBaseUrl = '{{ url("/admin/journal/show") }}';
         const sidebarOptionsUrl = '{{ route("admin.journal.get-sidebar-options") }}';
 
-        // Read URL query params to preserve narrow filters across navigations
+        // URL params - navigatsiyada filtr qiymatlarini saqlash uchun
         const urlParams = new URLSearchParams(window.location.search);
-        const initialFacultyId = urlParams.get('faculty_id') || currentFacultyId;
-        const initialKafedraId = urlParams.get('kafedra_id') || currentKafedraId;
-        const initialLevelCode = urlParams.get('level_code') || currentLevelCode;
-        const initialTeacher = urlParams.get('teacher') || currentTeacher;
 
-        function navigateToJournal(groupId, subjectId, semesterCode) {
-            // Preserve narrow filter values in URL query params
-            const narrowFilters = {
-                faculty_id: document.getElementById('filter-faculty')?.value || '',
-                kafedra_id: document.getElementById('filter-kafedra')?.value || '',
-                level_code: document.getElementById('filter-level')?.value || '',
-                teacher: document.getElementById('filter-teacher')?.value || '',
+        function getVal(id) { return document.getElementById(id)?.value || ''; }
+
+        function getFilterValues() {
+            return {
+                faculty_id: getVal('filter-faculty'),
+                specialty_id: getVal('filter-specialty'),
+                kafedra_id: getVal('filter-kafedra'),
+                level_code: getVal('filter-level'),
+                semester_code: getVal('filter-semester'),
+                group_id: getVal('filter-group'),
+                subject_id: getVal('filter-subject'),
             };
-            let url = `${journalShowBaseUrl}/${groupId}/${subjectId}/${semesterCode}`;
-            const qs = Object.entries(narrowFilters)
+        }
+
+        function buildQS(params) {
+            return Object.entries(params)
                 .filter(([k, v]) => v !== '')
                 .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
                 .join('&');
-            if (qs) url += `?${qs}`;
+        }
+
+        function navigateToJournal(groupId, subjectId, semesterCode) {
+            const narrowParams = {
+                faculty_id: getVal('filter-faculty'),
+                specialty_id: getVal('filter-specialty'),
+                kafedra_id: getVal('filter-kafedra'),
+                level_code: getVal('filter-level'),
+            };
+            let url = `${journalShowBaseUrl}/${groupId}/${subjectId}/${semesterCode}`;
+            const qs = Object.entries(narrowParams)
+                .filter(([k, v]) => v !== '')
+                .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+                .join('&');
+            if (qs) url += '?' + qs;
             window.location.href = url;
         }
 
@@ -1075,158 +1109,187 @@
             if (el) el.classList.toggle('active', show);
         }
 
-        function populateSelect(selectId, data, currentValue, addAllOption) {
+        function populateSelect(selectId, data, currentValue, addAll) {
             const select = document.getElementById(selectId);
             if (!select) return;
             select.innerHTML = '';
-
-            if (addAllOption) {
-                const allOpt = document.createElement('option');
-                allOpt.value = '';
-                allOpt.textContent = 'Barchasi';
-                select.appendChild(allOpt);
+            if (addAll) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'Barchasi';
+                select.appendChild(opt);
             }
-
-            let hasCurrentValue = false;
+            let found = false;
             for (const [key, value] of Object.entries(data)) {
-                const option = document.createElement('option');
-                option.value = key;
-                option.textContent = value;
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = value;
                 if (String(key) === String(currentValue)) {
-                    option.selected = true;
-                    hasCurrentValue = true;
+                    opt.selected = true;
+                    found = true;
                 }
-                select.appendChild(option);
+                select.appendChild(opt);
             }
-            if (!hasCurrentValue && !addAllOption && select.options.length > 0) {
+            if (!found && !addAll && select.options.length > 0) {
                 select.options[0].selected = true;
             }
         }
 
-        // Get current values of all filters
-        function getFilterValues() {
-            return {
-                group_id: document.getElementById('filter-group')?.value || '',
-                subject_id: document.getElementById('filter-subject')?.value || '',
-                semester_code: document.getElementById('filter-semester')?.value || '',
-                faculty_id: document.getElementById('filter-faculty')?.value || '',
-                kafedra_id: document.getElementById('filter-kafedra')?.value || '',
-                level_code: document.getElementById('filter-level')?.value || '',
-                teacher: document.getElementById('filter-teacher')?.value || '',
+        // Kaskad reset - ota filtr o'zgarganda bolalar tozalanadi
+        function cascadeReset(from) {
+            const chains = {
+                'faculty':   ['specialty', 'level', 'semester', 'group', 'subject'],
+                'specialty': ['level', 'semester', 'group', 'subject'],
+                'level':     ['semester', 'group', 'subject'],
+                'semester':  ['group', 'subject'],
             };
+            (chains[from] || []).forEach(f => {
+                const el = document.getElementById('filter-' + f);
+                if (el) el.value = '';
+            });
         }
 
-        function buildQueryString(params) {
-            return Object.entries(params)
-                .filter(([k, v]) => v !== '')
-                .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-                .join('&');
-        }
-
-        // Refresh all filter dropdowns based on current selections
-        let refreshAbortController = null;
-        function refreshAllFilters(overrideValues) {
-            // Cancel previous in-flight request
-            if (refreshAbortController) refreshAbortController.abort();
-            refreshAbortController = new AbortController();
+        // Barcha dropdownlarni yangilash
+        let abortCtrl = null;
+        function refreshFilters(overrideValues) {
+            if (abortCtrl) abortCtrl.abort();
+            abortCtrl = new AbortController();
 
             const values = overrideValues || getFilterValues();
-            const qs = buildQueryString(values);
+            const qs = buildQS(values);
 
-            const allFields = ['group', 'subject', 'semester', 'faculty', 'kafedra', 'level', 'teacher'];
-            allFields.forEach(f => setLoading(f, true));
+            const fields = ['faculty', 'specialty', 'kafedra', 'level', 'semester', 'group', 'subject', 'teacher'];
+            fields.forEach(f => setLoading(f, true));
 
-            fetch(`${sidebarOptionsUrl}?${qs}`, { signal: refreshAbortController.signal })
+            fetch(`${sidebarOptionsUrl}?${qs}`, { signal: abortCtrl.signal })
                 .then(r => r.json())
                 .then(data => {
-                    populateSelect('filter-group', data.groups, values.group_id, false);
-                    populateSelect('filter-subject', data.subjects, values.subject_id, false);
-                    populateSelect('filter-semester', data.semesters, values.semester_code, false);
                     populateSelect('filter-faculty', data.faculties, values.faculty_id, true);
+                    populateSelect('filter-specialty', data.specialties, values.specialty_id, true);
                     populateSelect('filter-kafedra', data.kafedras, values.kafedra_id, true);
                     populateSelect('filter-level', data.levels, values.level_code, true);
-                    populateSelect('filter-teacher', data.teachers, values.teacher, true);
-                    allFields.forEach(f => setLoading(f, false));
+                    populateSelect('filter-semester', data.semesters, values.semester_code, true);
+                    populateSelect('filter-group', data.groups, values.group_id, false);
+                    populateSelect('filter-subject', data.subjects, values.subject_id, false);
+                    populateSelect('filter-teacher', data.teachers, values.teacher || currentTeacher, true);
+                    fields.forEach(f => setLoading(f, false));
                 })
                 .catch(err => {
                     if (err.name !== 'AbortError') {
-                        allFields.forEach(f => setLoading(f, false));
+                        fields.forEach(f => setLoading(f, false));
                     }
                 });
         }
 
-        // Called when a narrow filter (faculty, kafedra, kurs, teacher) changes
-        function onNarrowFilterChange() {
-            refreshAllFilters();
+        // ===== Kaskad filtr handlerlari =====
+
+        // Fakultet o'zgardi → yo'nalish, kurs, semestr, guruh, fan tozalanadi
+        function onFacultyChange() {
+            cascadeReset('faculty');
+            refreshFilters();
         }
 
+        // Yo'nalish o'zgardi → kurs, semestr, guruh, fan tozalanadi
+        function onSpecialtyChange() {
+            cascadeReset('specialty');
+            refreshFilters();
+        }
+
+        // Kurs o'zgardi → semestr, guruh, fan tozalanadi
+        function onLevelChange() {
+            cascadeReset('level');
+            refreshFilters();
+        }
+
+        // Kafedra o'zgardi → faqat fan yangilanadi
+        function onKafedraChange() {
+            refreshFilters();
+        }
+
+        // Semestr o'zgardi → guruh, fan tozalanadi va yangilanadi
+        function onSemesterChange() {
+            cascadeReset('semester');
+            refreshFilters();
+        }
+
+        // ===== Navigatsiya filtrlari =====
+
+        // Guruh o'zgardi → mos fan topiladi → navigatsiya
         function onGroupChange(newGroupId) {
-            if (newGroupId === currentGroupId) return;
-            // Fetch options with the new group to find valid subject+semester, then navigate
+            if (!newGroupId) return;
             const values = getFilterValues();
             values.group_id = newGroupId;
-            const qs = buildQueryString(values);
 
             setLoading('subject', true);
-            setLoading('semester', true);
-
-            fetch(`${sidebarOptionsUrl}?${qs}`)
+            fetch(`${sidebarOptionsUrl}?${buildQS(values)}`)
                 .then(r => r.json())
                 .then(data => {
                     setLoading('subject', false);
-                    setLoading('semester', false);
-
                     if (!data.subjects || Object.keys(data.subjects).length === 0) {
                         alert('Bu guruh uchun fanlar topilmadi');
-                        document.getElementById('filter-group').value = currentGroupId;
                         return;
                     }
-
-                    let targetSubjectId = currentSubjectId;
-                    if (!data.subjects[currentSubjectId]) {
-                        targetSubjectId = Object.keys(data.subjects)[0];
+                    let targetSubject = values.subject_id;
+                    if (!data.subjects[targetSubject]) {
+                        targetSubject = Object.keys(data.subjects)[0];
                     }
-
-                    let targetSemester = currentSemesterCode;
-                    if (!data.semesters || !data.semesters[currentSemesterCode]) {
-                        targetSemester = data.semesters ? Object.keys(data.semesters)[0] : currentSemesterCode;
+                    let targetSemester = values.semester_code;
+                    if (!targetSemester || (data.semesters && !data.semesters[targetSemester])) {
+                        targetSemester = data.semesters ? Object.keys(data.semesters)[0] : '';
                     }
-
-                    navigateToJournal(newGroupId, targetSubjectId, targetSemester);
+                    if (targetSubject && targetSemester) {
+                        navigateToJournal(newGroupId, targetSubject, targetSemester);
+                    }
                 })
                 .catch(() => {
                     setLoading('subject', false);
-                    setLoading('semester', false);
                     alert('Xatolik yuz berdi');
-                    document.getElementById('filter-group').value = currentGroupId;
                 });
         }
 
+        // Fan o'zgardi → mos guruh topiladi → navigatsiya
         function onSubjectChange(newSubjectId) {
-            if (newSubjectId === currentSubjectId) return;
-            const groupId = document.getElementById('filter-group').value;
-            const semesterCode = document.getElementById('filter-semester').value;
-            navigateToJournal(groupId, newSubjectId, semesterCode);
+            if (!newSubjectId) return;
+            const values = getFilterValues();
+            values.subject_id = newSubjectId;
+
+            setLoading('group', true);
+            fetch(`${sidebarOptionsUrl}?${buildQS(values)}`)
+                .then(r => r.json())
+                .then(data => {
+                    setLoading('group', false);
+                    if (!data.groups || Object.keys(data.groups).length === 0) {
+                        alert('Bu fan uchun guruhlar topilmadi');
+                        return;
+                    }
+                    let targetGroup = values.group_id;
+                    if (!data.groups[targetGroup]) {
+                        targetGroup = Object.keys(data.groups)[0];
+                    }
+                    let targetSemester = values.semester_code;
+                    if (!targetSemester || (data.semesters && !data.semesters[targetSemester])) {
+                        targetSemester = data.semesters ? Object.keys(data.semesters)[0] : '';
+                    }
+                    if (targetGroup && targetSemester) {
+                        navigateToJournal(targetGroup, newSubjectId, targetSemester);
+                    }
+                })
+                .catch(() => {
+                    setLoading('group', false);
+                    alert('Xatolik yuz berdi');
+                });
         }
 
-        function onSemesterChange(newSemesterCode) {
-            if (newSemesterCode === currentSemesterCode) return;
-            const groupId = document.getElementById('filter-group').value;
-            const subjectId = document.getElementById('filter-subject').value;
-            navigateToJournal(groupId, subjectId, newSemesterCode);
-        }
-
-        // Load filters when page is ready
+        // Sahifa yuklanganda filtrlarni to'ldirish
         document.addEventListener('DOMContentLoaded', function() {
-            // Use initial values (from URL params or page defaults)
-            refreshAllFilters({
+            refreshFilters({
+                faculty_id: urlParams.get('faculty_id') || currentFacultyId,
+                specialty_id: urlParams.get('specialty_id') || currentSpecialtyId,
+                kafedra_id: urlParams.get('kafedra_id') || currentKafedraId,
+                level_code: urlParams.get('level_code') || currentLevelCode,
+                semester_code: currentSemesterCode,
                 group_id: currentGroupId,
                 subject_id: currentSubjectId,
-                semester_code: currentSemesterCode,
-                faculty_id: initialFacultyId,
-                kafedra_id: initialKafedraId,
-                level_code: initialLevelCode,
-                teacher: initialTeacher,
             });
         });
 

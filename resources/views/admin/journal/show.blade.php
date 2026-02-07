@@ -59,16 +59,46 @@
         .sidebar-header {
             background: #374151;
             color: #fff;
-            padding: 10px 16px;
+            padding: 8px 12px;
             font-size: 13px;
             font-weight: 600;
             border-radius: 0 8px 0 0;
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 8px;
         }
+        .sidebar-header-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .sidebar-view-toggle {
+            display: flex;
+        }
+        .sidebar-view-btn {
+            padding: 3px 10px;
+            font-size: 11px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: transparent;
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .sidebar-view-btn:first-child {
+            border-radius: 4px 0 0 4px;
+        }
+        .sidebar-view-btn:last-child {
+            border-radius: 0 4px 4px 0;
+            margin-left: -1px;
+        }
+        .sidebar-view-btn.active {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+            border-color: rgba(255,255,255,0.5);
+        }
         .sidebar-field {
-            padding: 8px 16px;
+            padding: 4px 12px;
             border-bottom: 1px solid #e2e8f0;
         }
         .sidebar-field:last-child {
@@ -81,6 +111,28 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
             margin-bottom: 4px;
+        }
+        .sidebar-section-label {
+            font-size: 11px;
+            color: #374151;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 6px 12px 2px;
+            background: #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .sidebar-teacher-row {
+            font-size: 12px;
+            color: #1f2937;
+            padding: 3px 0;
+        }
+        .sidebar-teacher-type {
+            font-size: 10px;
+            color: #6b7280;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
         }
         .sidebar-select {
             width: 100%;
@@ -277,11 +329,6 @@
                             class="tab-btn">
                             Mustaqil ta'lim
                         </button>
-                    </div>
-                    <div class="flex items-center" style="padding-bottom: 8px;">
-                        <span class="text-xs mr-2" style="color: #9ca3af;">Ko'rinish:</span>
-                        <button id="view-compact" onclick="switchView('compact')" class="view-btn active">Ixcham</button>
-                        <button id="view-detailed" onclick="switchView('detailed')" class="view-btn">Batafsil</button>
                     </div>
                 </nav>
             </div>
@@ -944,13 +991,17 @@
                 <!-- Right Sidebar: Filters -->
                 <div class="journal-sidebar">
                     <div class="sidebar-header">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-                        Filtrlar
+                        <div class="sidebar-header-left">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                            Filtrlar
+                        </div>
+                        <div class="sidebar-view-toggle">
+                            <button id="view-compact" onclick="switchView('compact')" class="sidebar-view-btn active">Ixcham</button>
+                            <button id="view-detailed" onclick="switchView('detailed')" class="sidebar-view-btn">Batafsil</button>
+                        </div>
                     </div>
 
-                    <!-- Fakultet (erkin) -->
                     <div class="sidebar-field">
-                        <div class="sidebar-label">Fakultet</div>
                         <select id="filter-faculty" class="sidebar-select" style="font-size: 12px;" onchange="onFacultyChange()">
                             <option value="">Barchasi</option>
                             @if($facultyId)
@@ -960,9 +1011,7 @@
                         <div id="loading-faculty" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- Yo'nalish (fakultetga bog'liq) -->
                     <div class="sidebar-field">
-                        <div class="sidebar-label">Yo'nalish</div>
                         <select id="filter-specialty" class="sidebar-select" style="font-size: 12px;" onchange="onSpecialtyChange()">
                             <option value="">Barchasi</option>
                             @if($specialtyId)
@@ -972,15 +1021,11 @@
                         <div id="loading-specialty" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- Kafedra (ma'lumot - fan almashsa o'zgaradi) -->
                     <div class="sidebar-field">
-                        <div class="sidebar-label">Kafedra</div>
-                        <div id="kafedra-display" class="sidebar-value" style="font-size: 12px;">{{ $kafedraName }}</div>
+                        <div id="kafedra-display" class="sidebar-value" style="font-size: 11px; padding: 5px 8px; background: transparent; border: none; color: #6b7280;">{{ $kafedraName }}</div>
                     </div>
 
-                    <!-- Kurs (yo'nalishga bog'liq) -->
                     <div class="sidebar-field">
-                        <div class="sidebar-label">Kurs</div>
                         <select id="filter-level" class="sidebar-select" onchange="onLevelChange()">
                             <option value="">Barchasi</option>
                             @if($levelCode)
@@ -990,9 +1035,7 @@
                         <div id="loading-level" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- Semestr (kursga bog'liq) -->
                     <div class="sidebar-field">
-                        <div class="sidebar-label">Semestr</div>
                         <select id="filter-semester" class="sidebar-select" onchange="onSemesterChange()">
                             <option value="">Barchasi</option>
                             @if($semesterCode)
@@ -1002,52 +1045,49 @@
                         <div id="loading-semester" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- Guruh (semestrga bog'liq, fan bilan ikki tomonlama) -->
                     <div class="sidebar-field">
-                        <div class="sidebar-label">Guruh</div>
                         <select id="filter-group" class="sidebar-select" onchange="onGroupChange(this.value)">
                             <option value="{{ $groupId }}" selected>{{ $group->name }}</option>
                         </select>
                         <div id="loading-group" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- Fan (semestrga bog'liq, guruh bilan ikki tomonlama) -->
                     <div class="sidebar-field">
-                        <div class="sidebar-label">Fan</div>
-                        <select id="filter-subject" class="sidebar-select" onchange="onSubjectChange(this.value)">
+                        <select id="filter-subject" class="sidebar-select" style="font-size: 12px;" onchange="onSubjectChange(this.value)">
                             <option value="{{ $subjectId }}" selected>{{ $subject->subject_name }}</option>
                         </select>
                         <div id="loading-subject" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- Ma'ruza o'qituvchisi -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Ma'ruza o'qituvchisi</div>
-                        <div id="lecture-teacher-display" class="sidebar-value" style="font-size: 12px;">
-                            @if($lectureTeacher)
-                                {{ $lectureTeacher['name'] }} ({{ $lectureTeacher['hours'] }} soat)
-                            @else
-                                -
-                            @endif
+                    <!-- O'qituvchilar -->
+                    <div class="sidebar-section-label">O'qituvchilar</div>
+                    <div class="sidebar-field" id="teachers-section" style="padding: 6px 12px;">
+                        <div style="margin-bottom: 4px;">
+                            <div class="sidebar-teacher-type">Ma'ruza</div>
+                            <div id="lecture-teacher-display" class="sidebar-teacher-row">
+                                @if($lectureTeacher)
+                                    {{ $lectureTeacher['name'] }} ({{ $lectureTeacher['hours'] }} soat)
+                                @else
+                                    -
+                                @endif
+                            </div>
                         </div>
-                    </div>
-
-                    <!-- Amaliyot o'qituvchisi -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Amaliyot o'qituvchisi</div>
-                        <div id="practice-teacher-display" class="sidebar-value" style="font-size: 12px;">
-                            @if(count($practiceTeachers) > 0)
-                                @foreach($practiceTeachers as $pt)
-                                    <div>{{ $pt['name'] }} ({{ $pt['hours'] }} soat)</div>
-                                @endforeach
-                            @else
-                                -
-                            @endif
+                        <div>
+                            <div class="sidebar-teacher-type">Amaliyot</div>
+                            <div id="practice-teacher-display" class="sidebar-teacher-row">
+                                @if(count($practiceTeachers) > 0)
+                                    @foreach($practiceTeachers as $pt)
+                                        <div>{{ $pt['name'] }} ({{ $pt['hours'] }} soat)</div>
+                                    @endforeach
+                                @else
+                                    -
+                                @endif
+                            </div>
                         </div>
                     </div>
 
                     <!-- Talabalar soni -->
-                    <div class="sidebar-field" style="background: #eff6ff;">
+                    <div class="sidebar-field" style="background: #eff6ff; padding: 6px 12px;">
                         <div class="sidebar-label">Talabalar soni</div>
                         <div class="sidebar-value" style="font-weight: 700; color: #2563eb; border-color: #bfdbfe;">{{ $students->count() }}</div>
                     </div>
@@ -1384,7 +1424,7 @@
         }
 
         function switchView(viewType) {
-            document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.sidebar-view-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('view-' + viewType).classList.add('active');
 
             if (viewType === 'compact') {

@@ -62,29 +62,18 @@ class ReportController extends Controller
             ->orderBy('cs.department_name')
             ->get();
 
-        // Asosiy so'rov
-        $query = DB::table('student_grades as sg')
-            ->join('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
+        // ===== OPTIMALLASHTIRILGAN SO'ROV =====
+        // 1-qadam: student_grades da faqat 3 ustun bo'yicha aggregatsiya (tez)
+        $gradesSubquery = DB::table('student_grades')
             ->select([
-                'sg.student_hemis_id',
-                'sg.subject_id',
-                'sg.subject_name',
-                's.full_name',
-                's.department_name',
-                's.specialty_name',
-                's.level_name',
-                's.semester_name',
-                's.group_name',
-                's.department_id',
-                's.specialty_id',
-                's.group_id',
-                's.level_code',
-                's.semester_code',
-                DB::raw('ROUND(AVG(sg.grade), 2) as avg_grade'),
+                'student_hemis_id',
+                'subject_id',
+                'subject_name',
+                DB::raw('ROUND(AVG(grade), 2) as avg_grade'),
                 DB::raw('COUNT(*) as grades_count'),
             ])
-            ->whereNotNull('sg.grade')
-            ->where('sg.grade', '>', 0);
+            ->whereNotNull('grade')
+            ->where('grade', '>', 0);
 
         // Joriy semestr filtri (default ON)
         if ($request->get('current_semester', '1') == '1') {
@@ -94,19 +83,49 @@ class ReportController extends Controller
                 ->unique()
                 ->toArray();
             if (!empty($currentSemesterCodes)) {
-                $query->whereIn('sg.semester_code', $currentSemesterCodes);
+                $gradesSubquery->whereIn('semester_code', $currentSemesterCodes);
             }
         }
 
         // Semestr filtri
         if ($request->filled('semester_code')) {
-            $query->where('sg.semester_code', $request->semester_code);
+            $gradesSubquery->where('semester_code', $request->semester_code);
         }
 
         // Fan filtri
         if ($request->filled('subject')) {
-            $query->where('sg.subject_id', $request->subject);
+            $gradesSubquery->where('subject_id', $request->subject);
         }
+
+        // Kafedra filtri
+        if ($request->filled('department')) {
+            $subjectIds = DB::table('curriculum_subjects')
+                ->where('department_id', $request->department)
+                ->pluck('subject_id')
+                ->unique()
+                ->toArray();
+            $gradesSubquery->whereIn('subject_id', $subjectIds);
+        }
+
+        $gradesSubquery->groupBy('student_hemis_id', 'subject_id', 'subject_name');
+
+        // 2-qadam: Aggregatsiya natijasini students bilan JOIN (tez, chunki kamroq qatorlar)
+        $query = DB::table(DB::raw("({$gradesSubquery->toSql()}) as g"))
+            ->mergeBindings($gradesSubquery)
+            ->join('students as s', 's.hemis_id', '=', 'g.student_hemis_id')
+            ->select([
+                'g.student_hemis_id',
+                'g.subject_id',
+                'g.subject_name',
+                'g.avg_grade',
+                'g.grades_count',
+                's.full_name',
+                's.department_name',
+                's.specialty_name',
+                's.level_name',
+                's.semester_name',
+                's.group_name',
+            ]);
 
         // Fakultet filtri
         if ($request->filled('faculty')) {
@@ -131,45 +150,21 @@ class ReportController extends Controller
             $query->where('s.group_id', $request->group);
         }
 
-        // Kafedra filtri
-        if ($request->filled('department')) {
-            $subjectIds = DB::table('curriculum_subjects')
-                ->where('department_id', $request->department)
-                ->pluck('subject_id')
-                ->unique();
-            $query->whereIn('sg.subject_id', $subjectIds);
-        }
-
         // Ta'lim turi filtri
         if ($selectedEducationType) {
-            $curriculaHemisIds = Curriculum::where('education_type_code', $selectedEducationType)
-                ->pluck('curricula_hemis_id');
             $groupIds = DB::table('groups')
-                ->whereIn('curriculum_hemis_id', $curriculaHemisIds)
-                ->pluck('group_hemis_id');
+                ->whereIn('curriculum_hemis_id',
+                    Curriculum::where('education_type_code', $selectedEducationType)
+                        ->pluck('curricula_hemis_id')
+                )
+                ->pluck('group_hemis_id')
+                ->toArray();
             $query->whereIn('s.group_id', $groupIds);
         }
 
-        $query->groupBy(
-            'sg.student_hemis_id',
-            'sg.subject_id',
-            'sg.subject_name',
-            's.full_name',
-            's.department_name',
-            's.specialty_name',
-            's.level_name',
-            's.semester_name',
-            's.group_name',
-            's.department_id',
-            's.specialty_id',
-            's.group_id',
-            's.level_code',
-            's.semester_code'
-        );
-
-        // Saralash
+        // Saralash (default: o'rtacha baho kamayish tartibida)
         $sortColumn = $request->get('sort', 'avg_grade');
-        $sortDirection = $request->get('direction', 'asc');
+        $sortDirection = $request->get('direction', 'desc');
 
         $sortMap = [
             'full_name' => 's.full_name',
@@ -178,12 +173,12 @@ class ReportController extends Controller
             'level_name' => 's.level_name',
             'semester_name' => 's.semester_name',
             'group_name' => 's.group_name',
-            'subject_name' => 'sg.subject_name',
-            'avg_grade' => 'avg_grade',
-            'grades_count' => 'grades_count',
+            'subject_name' => 'g.subject_name',
+            'avg_grade' => 'g.avg_grade',
+            'grades_count' => 'g.grades_count',
         ];
 
-        $orderByColumn = $sortMap[$sortColumn] ?? 'avg_grade';
+        $orderByColumn = $sortMap[$sortColumn] ?? 'g.avg_grade';
         $query->orderBy($orderByColumn, $sortDirection);
 
         $perPage = $request->get('per_page', 50);

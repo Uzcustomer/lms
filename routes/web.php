@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\IndependentController;
 use App\Http\Controllers\Admin\JournalController;
 use App\Http\Controllers\Admin\OraliqNazoratController;
 use App\Http\Controllers\Admin\OskiController;
+use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\ExamTestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QaytnomaController;
@@ -187,6 +188,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/student-grades-week/export-box', [AdminStudentController::class, 'exportStudentGradesBox'])->name('student-grades-week.export-box');
         Route::post('/student-grades-update-via-excel/import', [AdminStudentController::class, 'import'])->name('student-import-grades');
 
+
+        Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 

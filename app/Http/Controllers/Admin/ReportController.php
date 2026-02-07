@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Curriculum;
+use App\Models\Setting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1267,6 +1268,7 @@ class ReportController extends Controller
         // 4-QADAM: Har bir talaba/fan uchun davomat ma'lumotlarini hisoblash
         $studentSubjectData = [];
         $now = Carbon::now('Asia/Tashkent');
+        $spravkaDays = (int) Setting::get('spravka_deadline_days', 10);
 
         foreach ($gradesRaw as $g) {
             $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
@@ -1287,8 +1289,6 @@ class ReportController extends Controller
                     'total_absent_hours' => 0,
                     'unexcused_absent_hours' => 0,
                     'unexcused_absent_dates' => [],
-                    'has_pending_deadline' => false,
-                    'is_overdue' => false,
                     'attendance_dates' => [],
                 ];
             }
@@ -1299,13 +1299,6 @@ class ReportController extends Controller
                 if ($g->status !== 'retake') {
                     $studentSubjectData[$ssKey]['unexcused_absent_hours'] += 2;
                     $studentSubjectData[$ssKey]['unexcused_absent_dates'][] = $dateKey;
-                }
-
-                if ($g->status === 'pending' && $g->deadline) {
-                    $studentSubjectData[$ssKey]['has_pending_deadline'] = true;
-                    if (Carbon::parse($g->deadline)->lt($now)) {
-                        $studentSubjectData[$ssKey]['is_overdue'] = true;
-                    }
                 }
             } else {
                 if ($g->grade !== null && $g->grade > 0) {
@@ -1322,18 +1315,21 @@ class ReportController extends Controller
 
             if ($totalAuditoryHours === 0) continue;
 
-            $unexcusedPercent = ($data['unexcused_absent_hours'] / $totalAuditoryHours) * 100;
+            $unexcusedPercent = round(($data['unexcused_absent_hours'] / $totalAuditoryHours) * 100);
 
             if ($unexcusedPercent < 25) continue;
 
-            $spravkaStatus = '-';
-            if ($data['has_pending_deadline']) {
-                $spravkaStatus = $data['is_overdue'] ? 'Kechikkan' : 'Muddat bor';
-            }
-
+            // Spravka muddati: oxirgi sababsiz dars kunidan boshlab hisoblash
             $absentDates = $data['unexcused_absent_dates'];
             sort($absentDates);
+            $spravkaStatus = '-';
+            if (!empty($absentDates)) {
+                $latestAbsentDate = Carbon::parse(end($absentDates));
+                $daysSinceAbsent = $latestAbsentDate->diffInDays($now);
+                $spravkaStatus = $daysSinceAbsent <= $spravkaDays ? 'Muddat bor' : 'Kechikkan';
+            }
 
+            // 25% chegarasiga yetgan sanani aniqlash
             $firstAttendanceAfter25 = null;
             $cumulativeHours = 0;
             $thresholdDate = null;
@@ -1351,7 +1347,7 @@ class ReportController extends Controller
                 sort($gradeDates);
                 foreach ($gradeDates as $gDate) {
                     if ($gDate > $thresholdDate) {
-                        $firstAttendanceAfter25 = $gDate;
+                        $firstAttendanceAfter25 = Carbon::parse($gDate)->format('d.m.Y');
                         break;
                     }
                 }
@@ -1367,9 +1363,10 @@ class ReportController extends Controller
                 'total_absent_hours' => $data['total_absent_hours'],
                 'unexcused_absent_hours' => $data['unexcused_absent_hours'],
                 'auditory_hours' => $totalAuditoryHours,
+                'unexcused_percent' => $unexcusedPercent,
                 'spravka_status' => $spravkaStatus,
                 'first_attendance_after_25' => $firstAttendanceAfter25,
-                'report_date' => $now->format('d.m.Y H:i'),
+                'report_date' => $now->format('d.m.Y'),
             ];
         }
 
@@ -1396,9 +1393,10 @@ class ReportController extends Controller
                 'semester_name' => $st->semester_name ?? '-',
                 'group_name' => $st->group_name ?? '-',
                 'subject_name' => $r['subject_name'],
-                'total_absent_hours' => $r['total_absent_hours'],
                 'unexcused_absent_hours' => $r['unexcused_absent_hours'],
+                'total_absent_hours' => $r['total_absent_hours'],
                 'auditory_hours' => $r['auditory_hours'],
+                'unexcused_percent' => $r['unexcused_percent'],
                 'spravka_status' => $r['spravka_status'],
                 'first_attendance_after_25' => $r['first_attendance_after_25'],
                 'report_date' => $r['report_date'],
@@ -1453,7 +1451,7 @@ class ReportController extends Controller
         $sheet->setTitle('25% sababsiz hisobot');
 
         $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh', 'Fan',
-            'Jami qoldirilgan (soat)', 'Sababsiz (soat)', 'Auditoriya soati',
+            'Sababsiz qoldirilgan soat', 'Jami qoldirilgan soat', 'Auditoriya soati', 'Sababsiz %',
             'Spravka muddati', '25% dan keyin darsga chiqqan sana', 'Hisobot sanasi'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
@@ -1465,7 +1463,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:N1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:O1')->applyFromArray($headerStyle);
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -1477,22 +1475,23 @@ class ReportController extends Controller
             $sheet->setCellValue([6, $row], $r['semester_name']);
             $sheet->setCellValue([7, $row], $r['group_name']);
             $sheet->setCellValue([8, $row], $r['subject_name']);
-            $sheet->setCellValue([9, $row], $r['total_absent_hours']);
-            $sheet->setCellValue([10, $row], $r['unexcused_absent_hours']);
+            $sheet->setCellValue([9, $row], $r['unexcused_absent_hours']);
+            $sheet->setCellValue([10, $row], $r['total_absent_hours']);
             $sheet->setCellValue([11, $row], $r['auditory_hours']);
-            $sheet->setCellValue([12, $row], $r['spravka_status']);
-            $sheet->setCellValue([13, $row], $r['first_attendance_after_25'] ?? '-');
-            $sheet->setCellValue([14, $row], $r['report_date']);
+            $sheet->setCellValue([12, $row], $r['unexcused_percent'] . '%');
+            $sheet->setCellValue([13, $row], $r['spravka_status']);
+            $sheet->setCellValue([14, $row], $r['first_attendance_after_25'] ?? '-');
+            $sheet->setCellValue([15, $row], $r['report_date']);
         }
 
-        $widths = [5, 30, 25, 30, 8, 10, 15, 35, 18, 16, 16, 16, 24, 18];
+        $widths = [5, 30, 25, 30, 8, 10, 15, 35, 20, 20, 16, 12, 16, 24, 16];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:O{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

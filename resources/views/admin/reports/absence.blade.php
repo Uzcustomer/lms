@@ -136,9 +136,10 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="total_absent_hours">Jami qoldirilgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="unexcused_absent_hours">Sababsiz <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="unexcused_absent_hours">Sababsiz qoldirilgan soat <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="total_absent_hours">Jami qoldirilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="auditory_hours">Auditoriya soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="unexcused_percent">Sababsiz % <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th>Spravka muddati</th>
                                         <th>25% dan keyin darsga chiqqan</th>
                                         <th>Hisobot sanasi</th>
@@ -251,7 +252,6 @@
             var html = '';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
-                var percent = r.auditory_hours > 0 ? Math.round((r.unexcused_absent_hours / r.auditory_hours) * 100) : 0;
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
@@ -261,9 +261,10 @@
                 html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
+                html += '<td style="text-align:center;"><span class="badge badge-grade-red">' + r.unexcused_absent_hours + '</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.total_absent_hours + '</td>';
-                html += '<td style="text-align:center;"><span class="badge badge-grade-red">' + r.unexcused_absent_hours + ' (' + percent + '%)</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.auditory_hours + '</td>';
+                html += '<td style="text-align:center;"><span class="badge badge-grade-red">' + r.unexcused_percent + '%</span></td>';
                 html += '<td style="text-align:center;"><span class="badge ' + spravkaClass(r.spravka_status) + '">' + esc(r.spravka_status) + '</span></td>';
                 html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.first_attendance_after_25) + '</td>';
                 html += '<td style="text-align:center;font-size:12px;color:#94a3b8;">' + esc(r.report_date) + '</td>';

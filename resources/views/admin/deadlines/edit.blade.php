@@ -20,6 +20,19 @@
 
                     <form method="POST" action="{{ route('admin.deadlines.update') }}">
                         @csrf
+
+                        <div class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                            <label for="spravka_deadline_days" class="block text-sm font-medium text-gray-700 mb-1">
+                                Spravka topshirish muddati (kunlarda)
+                            </label>
+                            <div class="flex items-center gap-3">
+                                <input type="number" name="spravka_deadline_days" id="spravka_deadline_days"
+                                    class="block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    value="{{ old('spravka_deadline_days', $spravkaDays ?? 10) }}" min="1">
+                                <span class="text-sm text-gray-500">kun</span>
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-1 gap-6 mt-4 sm:grid-cols-3">
                             @foreach ($deadlines as $deadline)
                                 <div>

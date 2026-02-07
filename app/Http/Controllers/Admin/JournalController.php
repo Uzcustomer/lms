@@ -579,29 +579,21 @@ class JournalController extends Controller
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
 
-        // Calculate auditorium hours (classroom hours only: Ma'ruza + Amaliyot)
-        // Exclude: 99=MT, 100=ON, 101=OSKI, 102=Test
-        // Note: subject_details contains FULL YEAR data (all semesters), so we divide by semester count
-        $excludedAcloadCodes = [99, 100, 101, 102];
-        $auditoriumHours = 0;
-        if (is_array($subject->subject_details)) {
-            foreach ($subject->subject_details as $detail) {
-                $trainingCode = $detail['trainingType']['code'] ?? ($detail['id'] ?? null);
-                if ($trainingCode !== null && !in_array((int) $trainingCode, $excludedAcloadCodes)) {
-                    $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
-                }
-            }
-        }
-        // Fallback to total_acload if subject_details is empty or auditorium hours is 0
+        // Calculate auditorium hours from schedules (semester-specific, matches teacher hours)
+        // Excludes: 99=MT, 100=ON, 101=OSKI, 102=Test
+        $audScheduleRows = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->whereNotIn('training_type_code', [99, 100, 101, 102])
+            ->whereNotNull('lesson_date')
+            ->select('lesson_pair_start_time', 'lesson_pair_end_time')
+            ->get();
+        $auditoriumHours = $this->calculateAcademicHours($audScheduleRows);
+        // Fallback to total_acload if no schedules found
         if ($auditoriumHours <= 0) {
             $auditoriumHours = $totalAcload;
-        }
-        // subject_details stores full-year totals; divide by number of semesters for per-semester value
-        $subjectSemesterCount = CurriculumSubject::where('subject_id', $subjectId)
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->count();
-        if ($subjectSemesterCount > 1) {
-            $auditoriumHours = round($auditoriumHours / $subjectSemesterCount);
         }
 
         // Faculty (Fakultet) - department linked to curriculum

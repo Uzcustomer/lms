@@ -972,16 +972,10 @@
                         <div id="loading-specialty" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- Kafedra (erkin) -->
+                    <!-- Kafedra (ma'lumot - fan almashsa o'zgaradi) -->
                     <div class="sidebar-field">
                         <div class="sidebar-label">Kafedra</div>
-                        <select id="filter-kafedra" class="sidebar-select" style="font-size: 12px;" onchange="onKafedraChange()">
-                            <option value="">Barchasi</option>
-                            @if($kafedraId)
-                                <option value="{{ $kafedraId }}" selected>{{ $kafedraName }}</option>
-                            @endif
-                        </select>
-                        <div id="loading-kafedra" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                        <div id="kafedra-display" class="sidebar-value" style="font-size: 12px;">{{ $kafedraName }}</div>
                     </div>
 
                     <!-- Kurs (yo'nalishga bog'liq) -->
@@ -1058,7 +1052,6 @@
         const currentSemesterCode = '{{ $semesterCode }}';
         const currentFacultyId = '{{ $facultyId }}';
         const currentSpecialtyId = '{{ $specialtyId }}';
-        const currentKafedraId = '{{ $kafedraId }}';
         const currentLevelCode = '{{ $levelCode }}';
         const currentTeacher = @json($teacherName);
         const journalShowBaseUrl = '{{ url("/admin/journal/show") }}';
@@ -1073,7 +1066,6 @@
             return {
                 faculty_id: getVal('filter-faculty'),
                 specialty_id: getVal('filter-specialty'),
-                kafedra_id: getVal('filter-kafedra'),
                 level_code: getVal('filter-level'),
                 semester_code: getVal('filter-semester'),
                 group_id: getVal('filter-group'),
@@ -1092,7 +1084,6 @@
             const narrowParams = {
                 faculty_id: getVal('filter-faculty'),
                 specialty_id: getVal('filter-specialty'),
-                kafedra_id: getVal('filter-kafedra'),
                 level_code: getVal('filter-level'),
             };
             let url = `${journalShowBaseUrl}/${groupId}/${subjectId}/${semesterCode}`;
@@ -1158,7 +1149,7 @@
             const values = overrideValues || getFilterValues();
             const qs = buildQS(values);
 
-            const fields = ['faculty', 'specialty', 'kafedra', 'level', 'semester', 'group', 'subject', 'teacher'];
+            const fields = ['faculty', 'specialty', 'level', 'semester', 'group', 'subject', 'teacher'];
             fields.forEach(f => setLoading(f, true));
 
             fetch(`${sidebarOptionsUrl}?${qs}`, { signal: abortCtrl.signal })
@@ -1166,12 +1157,14 @@
                 .then(data => {
                     populateSelect('filter-faculty', data.faculties, values.faculty_id, true);
                     populateSelect('filter-specialty', data.specialties, values.specialty_id, true);
-                    populateSelect('filter-kafedra', data.kafedras, values.kafedra_id, true);
                     populateSelect('filter-level', data.levels, values.level_code, true);
                     populateSelect('filter-semester', data.semesters, values.semester_code, true);
                     populateSelect('filter-group', data.groups, values.group_id, false);
                     populateSelect('filter-subject', data.subjects, values.subject_id, false);
                     populateSelect('filter-teacher', data.teachers, values.teacher || currentTeacher, true);
+                    // Kafedra ma'lumot sifatida yangilanadi
+                    const kafedraEl = document.getElementById('kafedra-display');
+                    if (kafedraEl) kafedraEl.textContent = data.kafedra_name || '';
                     fields.forEach(f => setLoading(f, false));
                 })
                 .catch(err => {
@@ -1198,11 +1191,6 @@
         // Kurs o'zgardi → semestr, guruh, fan tozalanadi
         function onLevelChange() {
             cascadeReset('level');
-            refreshFilters();
-        }
-
-        // Kafedra o'zgardi → faqat fan yangilanadi
-        function onKafedraChange() {
             refreshFilters();
         }
 
@@ -1285,7 +1273,6 @@
             refreshFilters({
                 faculty_id: urlParams.get('faculty_id') || currentFacultyId,
                 specialty_id: urlParams.get('specialty_id') || currentSpecialtyId,
-                kafedra_id: urlParams.get('kafedra_id') || currentKafedraId,
                 level_code: urlParams.get('level_code') || currentLevelCode,
                 semester_code: currentSemesterCode,
                 group_id: currentGroupId,

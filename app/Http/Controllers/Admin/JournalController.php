@@ -1311,18 +1311,7 @@ class JournalController extends Controller
             ->orderBy('sp.name')
             ->pluck('sp.name', 'sp.specialty_hemis_id');
 
-        // 3. Kafedra - erkin, hamma kafedralar
-        $kafedras = DB::table('curriculum_subjects as cs')
-            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
-            ->where('g.department_active', true)
-            ->where('g.active', true)
-            ->whereNotNull('cs.department_id')
-            ->select('cs.department_id', 'cs.department_name')
-            ->groupBy('cs.department_id', 'cs.department_name')
-            ->orderBy('cs.department_name')
-            ->pluck('cs.department_name', 'cs.department_id');
-
-        // 4. Kurs - yo'nalishga bog'liq
+        // 3. Kurs - yo'nalishga bog'liq
         $levelsQuery = DB::table('semesters as s')
             ->join('groups as g', 'g.curriculum_hemis_id', '=', 's.curriculum_hemis_id')
             ->where('g.department_active', true)
@@ -1406,11 +1395,6 @@ class JournalController extends Controller
         if ($request->filled('group_id')) {
             $subjectsQuery->where('g.id', $request->group_id);
         }
-        // Kafedra faqat guruh tanlanmagan holatda fanga ta'sir qiladi
-        // Guruh tanlangan bo'lsa - guruhning BARCHA fanlari ko'rinadi
-        if ($request->filled('kafedra_id') && !$request->filled('group_id')) {
-            $subjectsQuery->where('cs.department_id', $request->kafedra_id);
-        }
         if ($request->filled('specialty_id')) {
             $subjectsQuery->where('g.specialty_hemis_id', $request->specialty_id);
         }
@@ -1449,15 +1433,29 @@ class JournalController extends Controller
             ->orderBy('sch.employee_name')
             ->pluck('sch.employee_name', 'sch.employee_name');
 
+        // Kafedra nomi - tanlangan fan bo'yicha (ma'lumot sifatida)
+        $kafedraName = '';
+        if ($request->filled('subject_id') && $request->filled('group_id')) {
+            $grp = $group ?? Group::find($request->group_id);
+            if ($grp) {
+                $kafedraName = CurriculumSubject::where('subject_id', $request->subject_id)
+                    ->where('curricula_hemis_id', $grp->curriculum_hemis_id)
+                    ->value('department_name') ?? '';
+            }
+        } elseif ($request->filled('subject_id')) {
+            $kafedraName = CurriculumSubject::where('subject_id', $request->subject_id)
+                ->value('department_name') ?? '';
+        }
+
         return response()->json([
             'faculties' => $faculties,
             'specialties' => $specialties,
-            'kafedras' => $kafedras,
             'levels' => $levels,
             'semesters' => $semesters,
             'groups' => $groups,
             'subjects' => $subjects,
             'teachers' => $teachers,
+            'kafedra_name' => $kafedraName,
         ]);
     }
 }

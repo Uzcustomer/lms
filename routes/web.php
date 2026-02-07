@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\ExamTestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QaytnomaController;
+use App\Http\Controllers\AbsenceReportController;
 use App\Http\Controllers\VedomostController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Student\StudentAuthController;
@@ -57,6 +58,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/delete/{id}', [QaytnomaController::class, 'delete'])->name('delete');
             Route::get('/edit/{id}', [QaytnomaController::class, 'edit'])->name('edit');
             Route::put('/edit/{id}', [QaytnomaController::class, 'edit_save'])->name('edit.save');
+        });
+
+        Route::prefix('absence-report')->name('absence_report.')->group(function () {
+            Route::get('', [AbsenceReportController::class, 'index'])->name('index');
+            Route::get('/create', [AbsenceReportController::class, 'create'])->name('create');
+            Route::post('/store', [AbsenceReportController::class, 'store'])->name('store');
+            Route::delete('/delete/{id}', [AbsenceReportController::class, 'delete'])->name('delete');
         });
 
         Route::prefix('independent')->name('independent.')->group(function () {
@@ -345,6 +353,12 @@ Route::prefix('teacher')->name('teacher.')->middleware(['web'])->group(function 
         Route::get('/qaytnoma', [QaytnomaController::class, 'index_teacher'])->name('qaytnoma.index');
         Route::get('/qaytnoma/create', [QaytnomaController::class, 'create_teacher'])->name('qaytnoma.create');
         Route::post('/qaytnoma/store', [QaytnomaController::class, 'store'])->name('qaytnoma.store');
+
+        Route::prefix('absence-report')->name('absence_report.')->group(function () {
+            Route::get('', [AbsenceReportController::class, 'index_teacher'])->name('index');
+            Route::get('/create', [AbsenceReportController::class, 'create_teacher'])->name('create');
+            Route::post('/store', [AbsenceReportController::class, 'store'])->name('store');
+        });
 
         Route::prefix('oraliqnazorat')->name('oraliqnazorat.')->group(function () {
             Route::get('', [OraliqNazoratController::class, 'index_teacher'])->name('index');

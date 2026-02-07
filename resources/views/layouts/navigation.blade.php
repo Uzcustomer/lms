@@ -123,6 +123,12 @@
                         YN oldi qaydnoma
                     </x-nav-link>
                 </div>
+                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                    <x-nav-link :href="route('admin.absence_report.index')"
+                        :active="request()->routeIs('admin.absence_report.*')">
+                        74 soat dars qoldirish
+                    </x-nav-link>
+                </div>
                 @if( auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya']))
 
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
@@ -271,6 +277,10 @@
                 :active="request()->routeIs('admin.qaytnoma.index')">
                 YN oldi qaytnoma
 
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('admin.absence_report.index')"
+                :active="request()->routeIs('admin.absence_report.*')">
+                74 soat dars qoldirish
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('admin.examtest.index')"
                 :active="request()->routeIs('admin.examtest.index')">

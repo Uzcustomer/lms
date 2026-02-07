@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\ExamTestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QaytnomaController;
+use App\Http\Controllers\AbsenceReportController;
 use App\Http\Controllers\VedomostController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Student\StudentAuthController;
@@ -58,6 +59,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/edit/{id}', [QaytnomaController::class, 'edit'])->name('edit');
             Route::put('/edit/{id}', [QaytnomaController::class, 'edit_save'])->name('edit.save');
         });
+
+        Route::get('/absence-report', [AbsenceReportController::class, 'index'])->name('absence_report.index');
 
         Route::prefix('independent')->name('independent.')->group(function () {
             Route::get('', [IndependentController::class, 'index'])->name('index');

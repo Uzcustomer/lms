@@ -25,12 +25,18 @@
                             <input type="password" name="password" id="password" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                         </div>
                         <div class="mb-4">
-                            <label for="role" class="block text-gray-700 text-sm font-bold mb-2">Rol:</label>
-                            <select name="role" id="role" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+                            <label for="roles" class="block text-gray-700 text-sm font-bold mb-2">Rollar (bir nechta tanlash mumkin):</label>
+                            <select name="roles[]" id="roles" multiple
+                                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                    style="min-height: 150px;"
+                                    required>
                                 @foreach($roles as $role)
-                                    <option value="{{ $role->name }}" {{ $user->hasRole($role->name) ? 'selected' : '' }}>{{ $role->name }}</option>
+                                    <option value="{{ $role->value }}" {{ $user->hasRole($role->value) ? 'selected' : '' }}>
+                                        {{ $role->label() }}
+                                    </option>
                                 @endforeach
                             </select>
+                            <p class="text-gray-500 text-xs mt-1">Ctrl (Cmd) tugmasini bosib bir nechta rol tanlang</p>
                         </div>
                         <div class="flex items-center justify-between">
                             <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">

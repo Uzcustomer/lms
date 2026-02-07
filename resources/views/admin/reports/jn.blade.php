@@ -333,6 +333,8 @@
 
             var fpConfig = {
                 dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'd.m.Y',
                 allowInput: true,
                 locale: uzLocale,
                 onDayCreate: function(dObj, dStr, fp, dayElem) {
@@ -341,13 +343,31 @@
                     }
                 },
                 onReady: function(selectedDates, dateStr, instance) {
-                    // Scroll bilan oylar o'rtasida o'tish
+                    // Alt input ga class va placeholder berish
+                    if (instance.altInput) {
+                        instance.altInput.classList.add('date-input');
+                        instance.altInput.setAttribute('placeholder', 'kk.oo.yyyy');
+                    }
+                    // Scroll: delta yig'iladi, chegaraga yetganda oy o'zgaradi
+                    var accDelta = 0;
+                    var threshold = 400;
+                    var resetTimer = null;
                     instance.calendarContainer.addEventListener('wheel', function(e) {
                         e.preventDefault();
-                        if (e.deltaY > 0) {
-                            instance.changeMonth(1);
-                        } else {
-                            instance.changeMonth(-1);
+                        accDelta += e.deltaY;
+                        clearTimeout(resetTimer);
+                        resetTimer = setTimeout(function() { accDelta = 0; }, 300);
+
+                        if (Math.abs(accDelta) >= threshold) {
+                            var dir = accDelta > 0 ? 1 : -1;
+                            accDelta = 0;
+                            var daysWrap = instance.calendarContainer.querySelector('.flatpickr-days');
+                            if (daysWrap) {
+                                daysWrap.style.transition = 'opacity 0.12s ease';
+                                daysWrap.style.opacity = '0.3';
+                                setTimeout(function() { daysWrap.style.opacity = '1'; }, 40);
+                            }
+                            instance.changeMonth(dir);
                         }
                     }, { passive: false });
                 }

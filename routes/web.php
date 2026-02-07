@@ -165,6 +165,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
         Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
         Route::put('/teachers/{teacher}/roles', [TeacherController::class, 'updateRoles'])->name('teachers.update-roles');
+        Route::post('/teachers/{teacher}/reset-password', [TeacherController::class, 'resetPassword'])->name('teachers.reset-password');
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
 
@@ -274,7 +275,17 @@ Route::prefix('teacher')->name('teacher.')->middleware(['web'])->group(function 
     });
     Route::get('/login', [TeacherAuthController::class, 'showLoginForm'])->name('login');
 
-    Route::middleware(['auth:teacher', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi'])->group(function () {
+    Route::middleware(['auth:teacher'])->group(function () {
+        Route::get('/force-change-password', [TeacherAuthController::class, 'showForceChangePassword'])->name('force-change-password');
+        Route::post('/force-change-password', [TeacherAuthController::class, 'forceChangePassword'])->name('force-change-password.post');
+
+        Route::get('/complete-profile', [TeacherAuthController::class, 'showCompleteProfile'])->name('complete-profile');
+        Route::post('/complete-profile/phone', [TeacherAuthController::class, 'savePhone'])->name('complete-profile.phone');
+        Route::post('/complete-profile/telegram', [TeacherAuthController::class, 'saveTelegram'])->name('complete-profile.telegram');
+        Route::get('/verify-telegram/check', [TeacherAuthController::class, 'checkTelegramVerification'])->name('verify-telegram.check');
+    });
+
+    Route::middleware(['auth:teacher', 'force.password.change', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('teacher.dashboard');
         });
@@ -362,5 +373,9 @@ Route::prefix('teacher')->name('teacher.')->middleware(['web'])->group(function 
 Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 });
+
+// Telegram bot webhook (CSRF excluded in bootstrap/app.php)
+Route::post('/telegram/webhook/{token}', [\App\Http\Controllers\TelegramWebhookController::class, 'handle'])
+    ->name('telegram.webhook');
 
 require __DIR__ . '/auth.php';

@@ -6,6 +6,7 @@ use App\Enums\ProjectRole;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Teacher;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
@@ -26,9 +27,30 @@ class TeacherController extends Controller
             });
         }
 
-        $teachers = $query->paginate(15);
+        if ($request->filled('department')) {
+            $query->where('department', $request->department);
+        }
 
-        return view('admin.teachers.index', compact('teachers'));
+        if ($request->filled('staff_position')) {
+            $query->where('staff_position', $request->staff_position);
+        }
+
+        if ($request->filled('role')) {
+            $roleName = $request->role;
+            $query->whereHas('roles', fn ($q) => $q->where('name', $roleName));
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $teachers = $query->paginate(15)->withQueryString();
+
+        $departments = Teacher::whereNotNull('department')->distinct()->pluck('department')->sort()->values();
+        $positions = Teacher::whereNotNull('staff_position')->distinct()->pluck('staff_position')->sort()->values();
+        $activeRoles = Role::where('guard_name', 'web')->pluck('name');
+
+        return view('admin.teachers.index', compact('teachers', 'departments', 'positions', 'activeRoles'));
     }
 
     public function show(Teacher $teacher)
@@ -63,6 +85,24 @@ class TeacherController extends Controller
         return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Xodim ma\'lumotlari yangilandi');
     }
 
+    public function resetPassword(Teacher $teacher)
+    {
+        if (!$teacher->birth_date) {
+            return redirect()->route('admin.teachers.show', $teacher)
+                ->with('error', 'Xodimning tug\'ilgan sanasi mavjud emas, parolni tiklab bo\'lmaydi.');
+        }
+
+        $birthDate = Carbon::parse($teacher->birth_date);
+        $newPassword = $birthDate->format('dmY'); // ddmmyyyy
+
+        $teacher->password = Hash::make($newPassword);
+        $teacher->must_change_password = true;
+        $teacher->save();
+
+        return redirect()->route('admin.teachers.show', $teacher)
+            ->with('success', 'Parol tiklandi (' . $newPassword . '). Xodim keyingi kirishda parolni o\'zgartirishi kerak.');
+    }
+
     public function updateRoles(Request $request, Teacher $teacher)
     {
         $validRoleValues = array_values(array_map(fn ($r) => $r->value, ProjectRole::staffRoles()));
@@ -75,7 +115,6 @@ class TeacherController extends Controller
 
         $roles = $request->input('roles', []);
 
-        // Bazada yo'q rollarni avtomatik yaratish
         foreach ($roles as $roleName) {
             Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
         }

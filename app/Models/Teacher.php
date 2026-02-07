@@ -39,14 +39,56 @@ class Teacher extends Authenticatable
         'hemis_id',
         'meta_id',
         'status',
-        'department_hemis_id'
-        ,
-        'role'
+        'department_hemis_id',
+        'role',
+        'must_change_password',
+        'phone',
+        'telegram_username',
+        'telegram_chat_id',
+        'telegram_verification_code',
+        'telegram_verified_at',
     ];
 
     protected $hidden = [
         'password',
+        'telegram_verification_code',
     ];
+
+    protected $casts = [
+        'telegram_verified_at' => 'datetime',
+    ];
+
+    public function isProfileComplete(): bool
+    {
+        return !empty($this->phone);
+    }
+
+    public function isTelegramVerified(): bool
+    {
+        return $this->telegram_verified_at !== null;
+    }
+
+    public function telegramDaysLeft(): int
+    {
+        if ($this->isTelegramVerified()) {
+            return 0;
+        }
+
+        // Telefon kiritilgan vaqtdan 7 kun
+        if (!$this->phone) {
+            return 7;
+        }
+
+        $deadline = $this->updated_at->copy()->addDays(7);
+        $daysLeft = (int) now()->diffInDays($deadline, false);
+
+        return max($daysLeft, 0);
+    }
+
+    public function isTelegramDeadlinePassed(): bool
+    {
+        return !$this->isTelegramVerified() && $this->phone && $this->telegramDaysLeft() <= 0;
+    }
 
     public function studentGrades()
     {

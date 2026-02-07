@@ -153,7 +153,7 @@
                     @else
                         @php
                             $sortColumn = $sortColumn ?? 'avg_grade';
-                            $sortDirection = $sortDirection ?? 'asc';
+                            $sortDirection = $sortDirection ?? 'desc';
                         @endphp
                         <table class="journal-table">
                             <thead>

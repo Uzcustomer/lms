@@ -92,7 +92,7 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Holat</label>
                             <select id="status_filter" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                <option value="any_missing">Kamida biri yo'q</option>
+                                <option value="any_missing" selected>Kamida biri yo'q</option>
                                 <option value="attendance_missing">Davomat yo'q</option>
                                 <option value="grade_missing">Baho yo'q</option>
                                 <option value="both_missing">Ikkalasi yo'q</option>

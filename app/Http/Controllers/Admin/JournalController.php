@@ -581,6 +581,7 @@ class JournalController extends Controller
 
         // Calculate auditorium hours (classroom hours only: Ma'ruza + Amaliyot)
         // Exclude: 99=MT, 100=ON, 101=OSKI, 102=Test
+        // Note: subject_details contains FULL YEAR data (all semesters), so we divide by semester count
         $excludedAcloadCodes = [99, 100, 101, 102];
         $auditoriumHours = 0;
         if (is_array($subject->subject_details)) {
@@ -594,6 +595,13 @@ class JournalController extends Controller
         // Fallback to total_acload if subject_details is empty or auditorium hours is 0
         if ($auditoriumHours <= 0) {
             $auditoriumHours = $totalAcload;
+        }
+        // subject_details stores full-year totals; divide by number of semesters for per-semester value
+        $subjectSemesterCount = CurriculumSubject::where('subject_id', $subjectId)
+            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+            ->count();
+        if ($subjectSemesterCount > 1) {
+            $auditoriumHours = round($auditoriumHours / $subjectSemesterCount);
         }
 
         // Faculty (Fakultet) - department linked to curriculum

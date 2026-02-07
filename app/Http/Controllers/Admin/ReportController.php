@@ -521,6 +521,14 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.group_id', $request->group);
         }
 
+        if ($request->filled('date_from')) {
+            $scheduleQuery->where('sch.lesson_date', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
+        }
+
         // Dars jadvalini olish (guruh bo'yicha aggregatsiya)
         $schedules = $scheduleQuery->select(
             'sch.schedule_hemis_id',

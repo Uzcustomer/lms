@@ -1352,19 +1352,22 @@ class JournalController extends Controller
         $groupsQuery = DB::table('groups as g')
             ->where('g.department_active', true)
             ->where('g.active', true);
-        // Faqat joriy semestri bor guruhlar (eski yillarni chiqarmaslik uchun)
-        $groupsQuery->whereExists(function ($sub) {
-            $sub->select(DB::raw(1))
-                ->from('semesters as s_cur')
-                ->whereColumn('s_cur.curriculum_hemis_id', 'g.curriculum_hemis_id')
-                ->where('s_cur.current', true);
-        });
         if ($request->filled('semester_code')) {
+            // Tanlangan semestr guruhning curriculumida current bo'lishi shart
             $groupsQuery->whereExists(function ($sub) use ($request) {
                 $sub->select(DB::raw(1))
                     ->from('semesters as s2')
                     ->whereColumn('s2.curriculum_hemis_id', 'g.curriculum_hemis_id')
-                    ->where('s2.code', $request->semester_code);
+                    ->where('s2.code', $request->semester_code)
+                    ->where('s2.current', true);
+            });
+        } else {
+            // Semestr tanlanmagan - ixtiyoriy joriy semestri bor guruhlar
+            $groupsQuery->whereExists(function ($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('semesters as s_cur')
+                    ->whereColumn('s_cur.curriculum_hemis_id', 'g.curriculum_hemis_id')
+                    ->where('s_cur.current', true);
             });
         }
         if ($request->filled('specialty_id')) {

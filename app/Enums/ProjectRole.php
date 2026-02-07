@@ -7,6 +7,8 @@ enum ProjectRole: string
     case SUPERADMIN = 'superadmin';
     case ADMIN = 'admin';
     case JUNIOR_ADMIN = 'kichik_admin';
+    case INSPECTOR = 'inspeksiya';
+    case VICE_RECTOR = 'oquv_prorektori';
     case REGISTRAR_OFFICE = 'registrator_ofisi';
     case ACADEMIC_DEPARTMENT = 'oquv_bolimi';
     case ACCOUNTANT = 'buxgalteriya';
@@ -24,6 +26,8 @@ enum ProjectRole: string
             self::SUPERADMIN => 'Superadmin',
             self::ADMIN => 'Admin',
             self::JUNIOR_ADMIN => 'Kichik admin',
+            self::INSPECTOR => 'Inspeksiya',
+            self::VICE_RECTOR => "O'quv prorektori",
             self::REGISTRAR_OFFICE => 'Registrator ofisi',
             self::ACADEMIC_DEPARTMENT => "O'quv bo'limi",
             self::ACCOUNTANT => 'Buxgalteriya',
@@ -43,6 +47,8 @@ enum ProjectRole: string
             self::SUPERADMIN,
             self::ADMIN,
             self::JUNIOR_ADMIN,
+            self::INSPECTOR,
+            self::VICE_RECTOR,
             self::REGISTRAR_OFFICE,
             self::ACADEMIC_DEPARTMENT,
             self::ACCOUNTANT,
@@ -56,6 +62,26 @@ enum ProjectRole: string
 
             self::STUDENT => 'student',
         };
+    }
+
+    /**
+     * Rol berish huquqiga ega rollar.
+     */
+    public static function roleManagers(): array
+    {
+        return [
+            self::SUPERADMIN,
+            self::ADMIN,
+            self::JUNIOR_ADMIN,
+        ];
+    }
+
+    /**
+     * Berilgan rol boshqa foydalanuvchilarga rol bera oladimi?
+     */
+    public function canAssignRoles(): bool
+    {
+        return in_array($this, self::roleManagers());
     }
 
     /**

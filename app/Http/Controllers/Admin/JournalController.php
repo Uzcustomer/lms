@@ -553,12 +553,14 @@ class JournalController extends Controller
             $otherGrades[$studentId] = $result;
         }
 
-        // Get attendance data for each student
+        // Get attendance data for each student (auditorium types only: exclude MT, ON, OSKI, Test)
+        $excludedAttendanceCodes = [99, 100, 101, 102];
         $attendanceData = DB::table('attendances')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->whereNotIn('training_type_code', $excludedAttendanceCodes)
             ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
             ->groupBy('student_hemis_id')
             ->pluck('total_absent_off', 'student_hemis_id')

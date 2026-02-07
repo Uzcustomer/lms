@@ -84,22 +84,69 @@
         </div>
 
         @if(!$teacher->phone)
-            <form method="POST" action="{{ route('teacher.complete-profile.phone') }}">
+            <form method="POST" action="{{ route('teacher.complete-profile.phone') }}"
+                  x-data="phoneInput()" x-init="init()">
                 @csrf
                 <div class="mb-3">
-                    <label for="phone" class="block text-xs font-medium text-gray-600 mb-1">O'zbekiston telefon raqami</label>
-                    <div class="relative">
-                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500 text-sm font-medium pointer-events-none">
-                            <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDMwIDIwIj48cmVjdCB3aWR0aD0iMzAiIGhlaWdodD0iNi42NyIgZmlsbD0iIzFhYjNlOCIvPjxyZWN0IHk9IjYuNjciIHdpZHRoPSIzMCIgaGVpZ2h0PSI2LjY3IiBmaWxsPSIjZmZmIi8+PHJlY3QgeT0iMTMuMzMiIHdpZHRoPSIzMCIgaGVpZ2h0PSI2LjY3IiBmaWxsPSIjMGE5YjQ2Ii8+PHJlY3QgeT0iNi4xNyIgd2lkdGg9IjMwIiBoZWlnaHQ9IjEiIGZpbGw9IiNjZTExMjYiLz48cmVjdCB5PSIxMi44MyIgd2lkdGg9IjMwIiBoZWlnaHQ9IjEiIGZpbGw9IiNjZTExMjYiLz48L3N2Zz4=" alt="UZ" class="w-5 h-3.5 mr-1.5 rounded-sm">
-                        </span>
-                        <input type="tel" name="phone" id="phone"
-                               value="{{ old('phone', '+998') }}"
-                               placeholder="+998901234567"
-                               maxlength="13"
-                               class="w-full pl-14 text-sm rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                               oninput="formatPhone(this)">
+                    {{-- Country selector --}}
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Mamlakat</label>
+                    <div class="relative mb-2" @click.away="open = false">
+                        <button type="button" @click="open = !open"
+                                class="w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg border border-gray-300 bg-white shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-left">
+                            <span class="flex items-center">
+                                <span class="text-lg mr-2" x-text="selectedFlag"></span>
+                                <span x-text="selectedName" class="text-gray-900"></span>
+                            </span>
+                            <span class="flex items-center text-gray-400">
+                                <span x-text="'+' + selectedCode" class="text-xs font-medium text-gray-500 mr-2"></span>
+                                <svg class="w-4 h-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </span>
+                        </button>
+
+                        {{-- Dropdown --}}
+                        <div x-show="open" x-transition
+                             class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-hidden">
+                            {{-- Search --}}
+                            <div class="p-2 border-b border-gray-100">
+                                <input type="text" x-model="search" x-ref="searchInput"
+                                       placeholder="Qidirish..."
+                                       class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 py-1.5">
+                            </div>
+                            {{-- List --}}
+                            <div class="overflow-y-auto max-h-48">
+                                <template x-for="c in filteredCountries" :key="c.code">
+                                    <button type="button"
+                                            @click="selectCountry(c)"
+                                            class="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-blue-50 transition"
+                                            :class="selectedCode === c.code ? 'bg-blue-50' : ''">
+                                        <span class="flex items-center">
+                                            <span class="text-lg mr-2" x-text="c.flag"></span>
+                                            <span x-text="c.name" class="text-gray-800"></span>
+                                        </span>
+                                        <span x-text="'+' + c.code" class="text-xs text-gray-400 font-medium"></span>
+                                    </button>
+                                </template>
+                                <div x-show="filteredCountries.length === 0" class="px-3 py-2 text-xs text-gray-400 text-center">
+                                    Topilmadi
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <p class="mt-1 text-xs text-gray-400">Format: +998XXXXXXXXX</p>
+
+                    {{-- Phone input --}}
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Telefon raqami</label>
+                    <div class="flex items-center">
+                        <span class="inline-flex items-center px-3 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 border border-r-0 border-gray-300 rounded-l-lg"
+                              x-text="'+' + selectedCode"></span>
+                        <input type="tel" x-model="phoneNumber" x-ref="phoneInput"
+                               placeholder="901234567"
+                               maxlength="15"
+                               class="flex-1 text-sm rounded-r-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2.5"
+                               oninput="this.value = this.value.replace(/[^\d]/g, '')">
+                    </div>
+                    <input type="hidden" name="phone" :value="'+' + selectedCode + phoneNumber">
                 </div>
                 <button type="submit"
                         class="w-full inline-flex justify-center items-center px-3 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
@@ -211,15 +258,119 @@
     @endif
 
     <script>
-        function formatPhone(input) {
-            let val = input.value.replace(/[^\d+]/g, '');
-            if (!val.startsWith('+998')) {
-                val = '+998';
-            }
-            if (val.length > 13) {
-                val = val.substring(0, 13);
-            }
-            input.value = val;
+        function phoneInput() {
+            return {
+                open: false,
+                search: '',
+                phoneNumber: '',
+                selectedCode: '998',
+                selectedName: 'Uzbekistan',
+                selectedFlag: '\uD83C\uDDFA\uD83C\uDDFF',
+                countries: [
+                    {name:'Afghanistan',code:'93',flag:'\uD83C\uDDE6\uD83C\uDDEB'},
+                    {name:'Albania',code:'355',flag:'\uD83C\uDDE6\uD83C\uDDF1'},
+                    {name:'Algeria',code:'213',flag:'\uD83C\uDDE9\uD83C\uDDFF'},
+                    {name:'Argentina',code:'54',flag:'\uD83C\uDDE6\uD83C\uDDF7'},
+                    {name:'Armenia',code:'374',flag:'\uD83C\uDDE6\uD83C\uDDF2'},
+                    {name:'Australia',code:'61',flag:'\uD83C\uDDE6\uD83C\uDDFA'},
+                    {name:'Austria',code:'43',flag:'\uD83C\uDDE6\uD83C\uDDF9'},
+                    {name:'Azerbaijan',code:'994',flag:'\uD83C\uDDE6\uD83C\uDDFF'},
+                    {name:'Bahrain',code:'973',flag:'\uD83C\uDDE7\uD83C\uDDED'},
+                    {name:'Bangladesh',code:'880',flag:'\uD83C\uDDE7\uD83C\uDDE9'},
+                    {name:'Belarus',code:'375',flag:'\uD83C\uDDE7\uD83C\uDDFE'},
+                    {name:'Belgium',code:'32',flag:'\uD83C\uDDE7\uD83C\uDDEA'},
+                    {name:'Brazil',code:'55',flag:'\uD83C\uDDE7\uD83C\uDDF7'},
+                    {name:'Bulgaria',code:'359',flag:'\uD83C\uDDE7\uD83C\uDDEC'},
+                    {name:'Canada',code:'1',flag:'\uD83C\uDDE8\uD83C\uDDE6'},
+                    {name:'Chile',code:'56',flag:'\uD83C\uDDE8\uD83C\uDDF1'},
+                    {name:'China',code:'86',flag:'\uD83C\uDDE8\uD83C\uDDF3'},
+                    {name:'Colombia',code:'57',flag:'\uD83C\uDDE8\uD83C\uDDF4'},
+                    {name:'Croatia',code:'385',flag:'\uD83C\uDDED\uD83C\uDDF7'},
+                    {name:'Cuba',code:'53',flag:'\uD83C\uDDE8\uD83C\uDDFA'},
+                    {name:'Czech Republic',code:'420',flag:'\uD83C\uDDE8\uD83C\uDDFF'},
+                    {name:'Denmark',code:'45',flag:'\uD83C\uDDE9\uD83C\uDDF0'},
+                    {name:'Egypt',code:'20',flag:'\uD83C\uDDEA\uD83C\uDDEC'},
+                    {name:'Estonia',code:'372',flag:'\uD83C\uDDEA\uD83C\uDDEA'},
+                    {name:'Finland',code:'358',flag:'\uD83C\uDDEB\uD83C\uDDEE'},
+                    {name:'France',code:'33',flag:'\uD83C\uDDEB\uD83C\uDDF7'},
+                    {name:'Georgia',code:'995',flag:'\uD83C\uDDEC\uD83C\uDDEA'},
+                    {name:'Germany',code:'49',flag:'\uD83C\uDDE9\uD83C\uDDEA'},
+                    {name:'Greece',code:'30',flag:'\uD83C\uDDEC\uD83C\uDDF7'},
+                    {name:'Hungary',code:'36',flag:'\uD83C\uDDED\uD83C\uDDFA'},
+                    {name:'India',code:'91',flag:'\uD83C\uDDEE\uD83C\uDDF3'},
+                    {name:'Indonesia',code:'62',flag:'\uD83C\uDDEE\uD83C\uDDE9'},
+                    {name:'Iran',code:'98',flag:'\uD83C\uDDEE\uD83C\uDDF7'},
+                    {name:'Iraq',code:'964',flag:'\uD83C\uDDEE\uD83C\uDDF6'},
+                    {name:'Ireland',code:'353',flag:'\uD83C\uDDEE\uD83C\uDDEA'},
+                    {name:'Israel',code:'972',flag:'\uD83C\uDDEE\uD83C\uDDF1'},
+                    {name:'Italy',code:'39',flag:'\uD83C\uDDEE\uD83C\uDDF9'},
+                    {name:'Japan',code:'81',flag:'\uD83C\uDDEF\uD83C\uDDF5'},
+                    {name:'Jordan',code:'962',flag:'\uD83C\uDDEF\uD83C\uDDF4'},
+                    {name:'Kazakhstan',code:'7',flag:'\uD83C\uDDF0\uD83C\uDDFF'},
+                    {name:'Kuwait',code:'965',flag:'\uD83C\uDDF0\uD83C\uDDFC'},
+                    {name:'Kyrgyzstan',code:'996',flag:'\uD83C\uDDF0\uD83C\uDDEC'},
+                    {name:'Latvia',code:'371',flag:'\uD83C\uDDF1\uD83C\uDDFB'},
+                    {name:'Lebanon',code:'961',flag:'\uD83C\uDDF1\uD83C\uDDE7'},
+                    {name:'Lithuania',code:'370',flag:'\uD83C\uDDF1\uD83C\uDDF9'},
+                    {name:'Malaysia',code:'60',flag:'\uD83C\uDDF2\uD83C\uDDFE'},
+                    {name:'Mexico',code:'52',flag:'\uD83C\uDDF2\uD83C\uDDFD'},
+                    {name:'Moldova',code:'373',flag:'\uD83C\uDDF2\uD83C\uDDE9'},
+                    {name:'Mongolia',code:'976',flag:'\uD83C\uDDF2\uD83C\uDDF3'},
+                    {name:'Morocco',code:'212',flag:'\uD83C\uDDF2\uD83C\uDDE6'},
+                    {name:'Netherlands',code:'31',flag:'\uD83C\uDDF3\uD83C\uDDF1'},
+                    {name:'New Zealand',code:'64',flag:'\uD83C\uDDF3\uD83C\uDDFF'},
+                    {name:'Nigeria',code:'234',flag:'\uD83C\uDDF3\uD83C\uDDEC'},
+                    {name:'Norway',code:'47',flag:'\uD83C\uDDF3\uD83C\uDDF4'},
+                    {name:'Oman',code:'968',flag:'\uD83C\uDDF4\uD83C\uDDF2'},
+                    {name:'Pakistan',code:'92',flag:'\uD83C\uDDF5\uD83C\uDDF0'},
+                    {name:'Philippines',code:'63',flag:'\uD83C\uDDF5\uD83C\uDDED'},
+                    {name:'Poland',code:'48',flag:'\uD83C\uDDF5\uD83C\uDDF1'},
+                    {name:'Portugal',code:'351',flag:'\uD83C\uDDF5\uD83C\uDDF9'},
+                    {name:'Qatar',code:'974',flag:'\uD83C\uDDF6\uD83C\uDDE6'},
+                    {name:'Romania',code:'40',flag:'\uD83C\uDDF7\uD83C\uDDF4'},
+                    {name:'Russia',code:'7',flag:'\uD83C\uDDF7\uD83C\uDDFA'},
+                    {name:'Saudi Arabia',code:'966',flag:'\uD83C\uDDF8\uD83C\uDDE6'},
+                    {name:'Serbia',code:'381',flag:'\uD83C\uDDF7\uD83C\uDDF8'},
+                    {name:'Singapore',code:'65',flag:'\uD83C\uDDF8\uD83C\uDDEC'},
+                    {name:'Slovakia',code:'421',flag:'\uD83C\uDDF8\uD83C\uDDF0'},
+                    {name:'South Korea',code:'82',flag:'\uD83C\uDDF0\uD83C\uDDF7'},
+                    {name:'Spain',code:'34',flag:'\uD83C\uDDEA\uD83C\uDDF8'},
+                    {name:'Sweden',code:'46',flag:'\uD83C\uDDF8\uD83C\uDDEA'},
+                    {name:'Switzerland',code:'41',flag:'\uD83C\uDDE8\uD83C\uDDED'},
+                    {name:'Syria',code:'963',flag:'\uD83C\uDDF8\uD83C\uDDFE'},
+                    {name:'Tajikistan',code:'992',flag:'\uD83C\uDDF9\uD83C\uDDEF'},
+                    {name:'Thailand',code:'66',flag:'\uD83C\uDDF9\uD83C\uDDED'},
+                    {name:'Tunisia',code:'216',flag:'\uD83C\uDDF9\uD83C\uDDF3'},
+                    {name:'Turkey',code:'90',flag:'\uD83C\uDDF9\uD83C\uDDF7'},
+                    {name:'Turkmenistan',code:'993',flag:'\uD83C\uDDF9\uD83C\uDDF2'},
+                    {name:'UAE',code:'971',flag:'\uD83C\uDDE6\uD83C\uDDEA'},
+                    {name:'Ukraine',code:'380',flag:'\uD83C\uDDFA\uD83C\uDDE6'},
+                    {name:'United Kingdom',code:'44',flag:'\uD83C\uDDEC\uD83C\uDDE7'},
+                    {name:'United States',code:'1',flag:'\uD83C\uDDFA\uD83C\uDDF8'},
+                    {name:'Uzbekistan',code:'998',flag:'\uD83C\uDDFA\uD83C\uDDFF'},
+                    {name:'Vietnam',code:'84',flag:'\uD83C\uDDFB\uD83C\uDDF3'},
+                ],
+                get filteredCountries() {
+                    if (!this.search) return this.countries;
+                    let s = this.search.toLowerCase();
+                    return this.countries.filter(c =>
+                        c.name.toLowerCase().includes(s) || c.code.includes(s)
+                    );
+                },
+                init() {
+                    this.$watch('open', v => {
+                        if (v) this.$nextTick(() => this.$refs.searchInput && this.$refs.searchInput.focus());
+                        else this.search = '';
+                    });
+                },
+                selectCountry(c) {
+                    this.selectedCode = c.code;
+                    this.selectedName = c.name;
+                    this.selectedFlag = c.flag;
+                    this.open = false;
+                    this.$nextTick(() => this.$refs.phoneInput && this.$refs.phoneInput.focus());
+                }
+            };
         }
 
         @if($teacher->phone && $teacher->telegram_verification_code && !$teacher->telegram_verified_at)

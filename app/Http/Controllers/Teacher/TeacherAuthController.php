@@ -107,9 +107,9 @@ class TeacherAuthController extends Controller
     public function savePhone(Request $request)
     {
         $request->validate([
-            'phone' => ['required', 'string', 'regex:/^\+998\d{9}$/'],
+            'phone' => ['required', 'string', 'regex:/^\+\d{7,15}$/'],
         ], [
-            'phone.regex' => 'Telefon raqami +998XXXXXXXXX formatida bo\'lishi kerak.',
+            'phone.regex' => 'Telefon raqami noto\'g\'ri formatda. Masalan: +998901234567',
         ]);
 
         $teacher = Auth::guard('teacher')->user();

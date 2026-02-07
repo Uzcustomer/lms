@@ -588,5 +588,22 @@
                 }
             }
         }
+
+        // Sidebar scroll position saqlab qolish
+        document.addEventListener('DOMContentLoaded', function () {
+            const nav = document.querySelector('.sidebar-nav');
+            if (!nav) return;
+
+            // Sahifa yuklanganda oldingi scroll pozitsiyasini tiklash
+            const saved = sessionStorage.getItem('sidebar-scroll');
+            if (saved !== null) {
+                nav.scrollTop = parseInt(saved, 10);
+            }
+
+            // Sahifa tark etilishidan oldin scroll pozitsiyasini saqlash
+            window.addEventListener('beforeunload', function () {
+                sessionStorage.setItem('sidebar-scroll', nav.scrollTop);
+            });
+        });
     </script>
 </aside>

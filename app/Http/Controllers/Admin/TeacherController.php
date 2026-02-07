@@ -33,14 +33,14 @@ class TeacherController extends Controller
     public function show(Teacher $teacher)
     {
         $departments = Department::where('structure_type_code', 11)->get();
-        $roles = ProjectRole::teacherRoles();
+        $roles = ProjectRole::staffRoles();
         return view('admin.teachers.show', compact('teacher', 'departments', 'roles'));
     }
 
     public function edit(Teacher $teacher)
     {
         $departments = Department::where('structure_type_code', 11)->get();
-        $roles = ProjectRole::teacherRoles();
+        $roles = ProjectRole::staffRoles();
         return view('admin.teachers.edit', compact('teacher', 'departments', 'roles'));
     }
 
@@ -64,7 +64,7 @@ class TeacherController extends Controller
 
     public function updateRoles(Request $request, Teacher $teacher)
     {
-        $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::teacherRoles());
+        $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
 
         $request->validate([
             'roles' => 'nullable|array',

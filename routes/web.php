@@ -41,7 +41,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
 
 
-    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat'])->group(function () {
+    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('admin.dashboard');
         });
@@ -273,7 +273,7 @@ Route::prefix('teacher')->name('teacher.')->middleware(['web'])->group(function 
     });
     Route::get('/login', [TeacherAuthController::class, 'showLoginForm'])->name('login');
 
-    Route::middleware(['auth:teacher', \Spatie\Permission\Middleware\RoleMiddleware::class . ':oqituvchi|dekan|kafedra_mudiri|fan_masuli|tyutor'])->group(function () {
+    Route::middleware(['auth:teacher', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('teacher.dashboard');
         });

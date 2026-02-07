@@ -18,19 +18,19 @@ class UserController extends Controller
 
     public function create()
     {
-        $roles = ProjectRole::webRoles();
+        $roles = ProjectRole::staffRoles();
         return view('admin.users.create', compact('roles'));
     }
 
     public function edit(User $user)
     {
-        $roles = ProjectRole::webRoles();
+        $roles = ProjectRole::staffRoles();
         return view('admin.users.edit', compact('user', 'roles'));
     }
 
     public function store(Request $request)
     {
-        $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::webRoles());
+        $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
 
         $request->validate([
             'name' => 'required',
@@ -53,7 +53,7 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
-        $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::webRoles());
+        $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
 
         $request->validate([
             'name' => 'required',

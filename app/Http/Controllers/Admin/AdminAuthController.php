@@ -19,8 +19,8 @@ class AdminAuthController extends Controller
 
         if (Auth::attempt($credentials)) {
             $user = Auth::user();
-            $webRoleValues = array_map(fn ($r) => $r->value, ProjectRole::webRoles());
-            if ($user->hasRole($webRoleValues)) {
+            $staffRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
+            if ($user->hasRole($staffRoleValues)) {
                 $request->session()->regenerate();
                 return redirect()->intended(route('admin.dashboard'));
             } else {

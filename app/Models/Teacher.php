@@ -42,11 +42,26 @@ class Teacher extends Authenticatable
         'department_hemis_id',
         'role',
         'must_change_password',
+        'phone',
+        'telegram_username',
+        'telegram_chat_id',
+        'telegram_verification_code',
+        'telegram_verified_at',
     ];
 
     protected $hidden = [
         'password',
+        'telegram_verification_code',
     ];
+
+    protected $casts = [
+        'telegram_verified_at' => 'datetime',
+    ];
+
+    public function isProfileComplete(): bool
+    {
+        return !empty($this->phone) && !empty($this->telegram_username) && $this->telegram_verified_at !== null;
+    }
 
     public function studentGrades()
     {

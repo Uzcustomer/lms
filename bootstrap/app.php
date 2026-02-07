@@ -22,6 +22,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class,
         ]);
 
+        $middleware->validateCsrfTokens(except: [
+            'telegram/webhook/*',
+        ]);
+
     })
     ->withSchedule(function (Schedule $schedule) {
         $schedule->call(function () {

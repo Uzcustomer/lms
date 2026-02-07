@@ -13,9 +13,32 @@ class ForcePasswordChange
     {
         $teacher = Auth::guard('teacher')->user();
 
-        if ($teacher && $teacher->must_change_password) {
-            if (!$request->routeIs('teacher.force-change-password*') && !$request->routeIs('teacher.logout')) {
+        if (!$teacher) {
+            return $next($request);
+        }
+
+        $allowedRoutes = [
+            'teacher.force-change-password*',
+            'teacher.complete-profile*',
+            'teacher.verify-telegram*',
+            'teacher.logout',
+        ];
+
+        $isAllowed = false;
+        foreach ($allowedRoutes as $route) {
+            if ($request->routeIs($route)) {
+                $isAllowed = true;
+                break;
+            }
+        }
+
+        if (!$isAllowed) {
+            if ($teacher->must_change_password) {
                 return redirect()->route('teacher.force-change-password');
+            }
+
+            if (!$teacher->isProfileComplete()) {
+                return redirect()->route('teacher.complete-profile');
             }
         }
 

@@ -97,6 +97,29 @@
                                 <span class="font-medium text-gray-900">{{ $teacher->employee_type }}</span>
                             </div>
                             @endif
+
+                            {{-- Aloqa ma'lumotlari --}}
+                            <div class="pt-2 mt-2 border-t border-gray-100">
+                                <div class="flex items-start">
+                                    <span class="text-gray-400 w-24 flex-shrink-0">Telefon</span>
+                                    <span class="font-medium {{ $teacher->phone ? 'text-gray-900' : 'text-red-400' }}">
+                                        {{ $teacher->phone ?? 'Kiritilmagan' }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex items-start">
+                                <span class="text-gray-400 w-24 flex-shrink-0">Telegram</span>
+                                <span class="font-medium {{ $teacher->telegram_username ? 'text-gray-900' : 'text-red-400' }}">
+                                    {{ $teacher->telegram_username ?? 'Kiritilmagan' }}
+                                    @if($teacher->telegram_verified_at)
+                                        <svg class="w-3.5 h-3.5 inline text-green-500 ml-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                        </svg>
+                                    @elseif($teacher->telegram_username)
+                                        <span class="text-xs text-yellow-500 ml-1">tasdiqlanmagan</span>
+                                    @endif
+                                </span>
+                            </div>
                         </div>
                     </div>
 

@@ -763,7 +763,7 @@
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}</span></td>
+                                            <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}</span></td>
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -938,7 +938,7 @@
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}</span></td>
+                                            <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}</span></td>
                                         </tr>
                                     @endforeach
                                 </tbody>

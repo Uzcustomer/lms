@@ -9,6 +9,7 @@ use App\Models\Teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 
 class TeacherController extends Controller
 {
@@ -64,7 +65,7 @@ class TeacherController extends Controller
 
     public function updateRoles(Request $request, Teacher $teacher)
     {
-        $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
+        $validRoleValues = array_values(array_map(fn ($r) => $r->value, ProjectRole::staffRoles()));
 
         $request->validate([
             'roles' => 'nullable|array',
@@ -73,6 +74,11 @@ class TeacherController extends Controller
         ]);
 
         $roles = $request->input('roles', []);
+
+        // Bazada yo'q rollarni avtomatik yaratish
+        foreach ($roles as $roleName) {
+            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+        }
 
         $teacher->syncRoles($roles);
 

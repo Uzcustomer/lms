@@ -68,7 +68,7 @@ enum ProjectRole: string
      */
     public static function staffRoles(): array
     {
-        return array_filter(self::cases(), fn (self $role) => $role !== self::STUDENT);
+        return array_values(array_filter(self::cases(), fn (self $role) => $role !== self::STUDENT));
     }
 
     /**

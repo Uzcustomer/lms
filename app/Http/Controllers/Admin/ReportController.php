@@ -286,12 +286,15 @@ class ReportController extends Controller
                 ? round($dailySum / $daysForAverage, 0, PHP_ROUND_HALF_UP)
                 : 0;
 
+            $comboParts = explode('|', $comboKey);
             $results[$ssKey] = [
                 'student_hemis_id' => $info['student_hemis_id'],
                 'subject_id' => $info['subject_id'],
                 'subject_name' => $info['subject_name'],
                 'avg_grade' => $jnAverage,
                 'grades_count' => $daysForAverage,
+                'group_id' => $comboParts[0] ?? '',
+                'semester_code' => $comboParts[2] ?? '',
             ];
         }
 
@@ -319,6 +322,9 @@ class ReportController extends Controller
                 'subject_name' => $r['subject_name'],
                 'avg_grade' => $r['avg_grade'],
                 'grades_count' => $r['grades_count'],
+                'group_id' => $r['group_id'],
+                'subject_id' => $r['subject_id'],
+                'semester_code' => $r['semester_code'],
             ];
         }
 
@@ -332,6 +338,11 @@ class ReportController extends Controller
             $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
             return $sortDirection === 'desc' ? -$cmp : $cmp;
         });
+
+        // Excel export
+        if ($request->get('export') === 'excel') {
+            return $this->exportExcel($finalResults);
+        }
 
         // Pagination
         $page = $request->get('page', 1);
@@ -353,5 +364,70 @@ class ReportController extends Controller
             'current_page' => (int) $page,
             'last_page' => ceil($total / $perPage),
         ]);
+    }
+
+    /**
+     * Excel fayl yaratish va yuklash
+     */
+    private function exportExcel(array $data)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('JN hisobot');
+
+        // Sarlavhalar
+        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh', 'Fan', "O'rtacha baho", 'Darslar soni'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+
+        // Sarlavha stili
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
+
+        // Ma'lumotlar
+        foreach ($data as $i => $r) {
+            $row = $i + 2;
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $r['full_name']);
+            $sheet->setCellValue([3, $row], $r['department_name']);
+            $sheet->setCellValue([4, $row], $r['specialty_name']);
+            $sheet->setCellValue([5, $row], $r['level_name']);
+            $sheet->setCellValue([6, $row], $r['semester_name']);
+            $sheet->setCellValue([7, $row], $r['group_name']);
+            $sheet->setCellValue([8, $row], $r['subject_name']);
+            $sheet->setCellValue([9, $row], $r['avg_grade']);
+            $sheet->setCellValue([10, $row], $r['grades_count']);
+        }
+
+        // Ustun kengliklarini sozlash
+        $widths = [5, 30, 25, 30, 8, 10, 15, 35, 14, 12];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
+
+        // Ma'lumotlar uchun border
+        $lastRow = count($data) + 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:J{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            ]);
+        }
+
+        $fileName = 'JN_hisobot_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'jn_');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 }

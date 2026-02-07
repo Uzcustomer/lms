@@ -39,9 +39,9 @@ class Teacher extends Authenticatable
         'hemis_id',
         'meta_id',
         'status',
-        'department_hemis_id'
-        ,
-        'role'
+        'department_hemis_id',
+        'role',
+        'must_change_password',
     ];
 
     protected $hidden = [

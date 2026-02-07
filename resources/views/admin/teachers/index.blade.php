@@ -8,7 +8,6 @@
     @if (session('error'))
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-4">
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-                <strong class="font-bold">Xatolik:</strong>
                 <span class="block sm:inline">{{ session('error') }}</span>
             </div>
         </div>
@@ -17,7 +16,6 @@
     @if (session('success'))
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-4">
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
-                <strong class="font-bold">Muvaffaqiyatli:</strong>
                 <span class="block sm:inline">{{ session('success') }}</span>
             </div>
         </div>
@@ -27,17 +25,65 @@
         <div class="w-full px-4 sm:px-6">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-4 bg-white border-b border-gray-200">
-                    <div class="flex justify-between mb-3">
-                        <form action="{{ route('admin.teachers.index') }}" method="GET" class="flex items-center">
-                            <input type="text" name="search" value="{{ request('search') }}" placeholder="Ism, ID yoki kafedra bo'yicha qidirish..."
-                                   class="text-sm rounded-md shadow-sm border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                                   style="min-width: 280px;">
-                            <button type="submit"
-                                    class="ml-2 px-3 py-2 text-sm bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition">
-                                <i class="fas fa-search mr-1"></i>Qidirish
-                            </button>
-                        </form>
-                    </div>
+
+                    {{-- Qidirish va filtrlar --}}
+                    <form action="{{ route('admin.teachers.index') }}" method="GET" class="mb-3">
+                        <div class="flex flex-wrap items-end gap-2">
+                            <div class="flex-1" style="min-width: 200px;">
+                                <label class="block text-xs text-gray-500 mb-1">Qidirish</label>
+                                <input type="text" name="search" value="{{ request('search') }}" placeholder="Ism, ID..."
+                                       class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                            </div>
+                            <div style="min-width: 180px;">
+                                <label class="block text-xs text-gray-500 mb-1">Kafedra</label>
+                                <select name="department" class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                                    <option value="">Barchasi</option>
+                                    @foreach($departments as $dept)
+                                        <option value="{{ $dept }}" {{ request('department') == $dept ? 'selected' : '' }}>{{ $dept }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div style="min-width: 140px;">
+                                <label class="block text-xs text-gray-500 mb-1">Lavozim</label>
+                                <select name="staff_position" class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                                    <option value="">Barchasi</option>
+                                    @foreach($positions as $pos)
+                                        <option value="{{ $pos }}" {{ request('staff_position') == $pos ? 'selected' : '' }}>{{ $pos }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div style="min-width: 140px;">
+                                <label class="block text-xs text-gray-500 mb-1">Rol</label>
+                                <select name="role" class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                                    <option value="">Barchasi</option>
+                                    @foreach($activeRoles as $roleName)
+                                        <option value="{{ $roleName }}" {{ request('role') == $roleName ? 'selected' : '' }}>
+                                            {{ \App\Enums\ProjectRole::tryFrom($roleName)?->label() ?? $roleName }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div style="min-width: 100px;">
+                                <label class="block text-xs text-gray-500 mb-1">Status</label>
+                                <select name="status" class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                                    <option value="">Barchasi</option>
+                                    <option value="1" {{ request('status') === '1' ? 'selected' : '' }}>Faol</option>
+                                    <option value="0" {{ request('status') === '0' ? 'selected' : '' }}>Nofaol</option>
+                                </select>
+                            </div>
+                            <div class="flex gap-1">
+                                <button type="submit" class="px-3 py-2 text-sm bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition">
+                                    <i class="fas fa-search mr-1"></i>Filtr
+                                </button>
+                                @if(request()->hasAny(['search', 'department', 'staff_position', 'role', 'status']))
+                                    <a href="{{ route('admin.teachers.index') }}" class="px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition">
+                                        Tozalash
+                                    </a>
+                                @endif
+                            </div>
+                        </div>
+                    </form>
+
                     <div class="overflow-x-auto">
                         <table class="w-full divide-y divide-gray-200 table-fixed">
                             <thead class="bg-gray-50">

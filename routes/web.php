@@ -164,6 +164,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
         Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
         Route::put('/teachers/{teacher}/roles', [TeacherController::class, 'updateRoles'])->name('teachers.update-roles');
+        Route::post('/teachers/{teacher}/reset-password', [TeacherController::class, 'resetPassword'])->name('teachers.reset-password');
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
 
@@ -273,7 +274,12 @@ Route::prefix('teacher')->name('teacher.')->middleware(['web'])->group(function 
     });
     Route::get('/login', [TeacherAuthController::class, 'showLoginForm'])->name('login');
 
-    Route::middleware(['auth:teacher', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi'])->group(function () {
+    Route::middleware(['auth:teacher'])->group(function () {
+        Route::get('/force-change-password', [TeacherAuthController::class, 'showForceChangePassword'])->name('force-change-password');
+        Route::post('/force-change-password', [TeacherAuthController::class, 'forceChangePassword'])->name('force-change-password.post');
+    });
+
+    Route::middleware(['auth:teacher', 'force.password.change', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('teacher.dashboard');
         });

@@ -13,6 +13,14 @@
         </div>
     @endif
 
+    @if (session('error'))
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-4">
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <span class="block sm:inline">{{ session('error') }}</span>
+            </div>
+        </div>
+    @endif
+
     @if ($errors->any())
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-4">
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
@@ -89,6 +97,42 @@
                                 <span class="font-medium text-gray-900">{{ $teacher->employee_type }}</span>
                             </div>
                             @endif
+                        </div>
+                    </div>
+
+                    {{-- Parolni tiklash --}}
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mt-4">
+                        <div class="px-4 py-3 border-b border-gray-100">
+                            <h4 class="text-sm font-semibold text-gray-900">Parolni tiklash</h4>
+                        </div>
+                        <div class="px-4 py-3">
+                            @if($teacher->must_change_password)
+                                <div class="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                                    <svg class="w-3.5 h-3.5 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                    </svg>
+                                    Parol tiklangan. Xodim keyingi kirishda parolni o'zgartirishi kerak.
+                                </div>
+                            @endif
+                            <p class="text-xs text-gray-500 mb-2">
+                                Parol tug'ilgan sana formatida tiklanadi: <strong>ddmmyyyy</strong>
+                                @if($teacher->birth_date)
+                                    ({{ \Carbon\Carbon::parse($teacher->birth_date)->format('d.m.Y') }})
+                                @endif
+                            </p>
+                            <form action="{{ route('admin.teachers.reset-password', $teacher) }}" method="POST"
+                                  onsubmit="return confirm('Parolni tiklashni tasdiqlaysizmi? Yangi parol: tug\'ilgan sana (ddmmyyyy)')">
+                                @csrf
+                                <button type="submit"
+                                        class="w-full inline-flex justify-center items-center px-3 py-2 text-xs font-medium rounded-md transition
+                                        {{ $teacher->birth_date ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-gray-200 text-gray-400 cursor-not-allowed' }}"
+                                        {{ !$teacher->birth_date ? 'disabled' : '' }}>
+                                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                    </svg>
+                                    {{ $teacher->birth_date ? 'Parolni tiklash' : 'Tug\'ilgan sana mavjud emas' }}
+                                </button>
+                            </form>
                         </div>
                     </div>
 

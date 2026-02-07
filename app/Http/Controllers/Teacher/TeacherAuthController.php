@@ -33,6 +33,12 @@ class TeacherAuthController extends Controller
 
         if (Auth::guard('teacher')->attempt($credentials)) {
             $request->session()->regenerate();
+
+            $teacher = Auth::guard('teacher')->user();
+            if ($teacher->must_change_password) {
+                return redirect()->route('teacher.force-change-password');
+            }
+
             return redirect()->intended(route('teacher.dashboard'));
         }
 
@@ -49,6 +55,29 @@ class TeacherAuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    public function showForceChangePassword()
+    {
+        $teacher = Auth::guard('teacher')->user();
+        if (!$teacher || !$teacher->must_change_password) {
+            return redirect()->route('teacher.dashboard');
+        }
+        return view('teacher.force-change-password');
+    }
+
+    public function forceChangePassword(Request $request)
+    {
+        $request->validate([
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ]);
+
+        $teacher = Auth::guard('teacher')->user();
+        $teacher->password = Hash::make($request->password);
+        $teacher->must_change_password = false;
+        $teacher->save();
+
+        return redirect()->route('teacher.dashboard')->with('success', 'Parol muvaffaqiyatli o\'zgartirildi.');
     }
 
     public function editCredentials()

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Curriculum;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -69,26 +70,18 @@ class ReportController extends Controller
 
     /**
      * AJAX: JN hisobot ma'lumotlarini hisoblash
+     * Jurnal bilan bir xil formula: kunlik o'rtachalar (half-round-up) → yakuniy o'rtacha (half-round-up)
      */
     public function jnReportData(Request $request)
     {
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
-        // 1-QADAM: schedules dan to'g'ri kombinatsiyalarni olish
-        //   Joriy semestr filtri: schedules.semester_code shu GURUHNING
-        //   curriculum'i uchun joriy bo'lishi kerak (har qanday curriculum emas)
+        // 1-QADAM: Barcha schedule yozuvlarini olish (pairs_per_day hisoblash uchun)
         $scheduleQuery = DB::table('schedules as sch')
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereNotNull('sch.lesson_date')
-            ->select(
-                'sch.group_id',
-                'sch.subject_id',
-                'sch.semester_code',
-                DB::raw('MIN(sch.lesson_date) as min_date')
-            )
-            ->groupBy('sch.group_id', 'sch.subject_id', 'sch.semester_code');
+            ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code');
 
-        // Joriy semestr filtri — guruhning curriculum'iga mos joriy semestr
         if ($request->get('current_semester', '1') == '1') {
             $scheduleQuery
                 ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
@@ -100,17 +93,33 @@ class ReportController extends Controller
         }
 
         if ($request->filled('semester_code')) {
-            $scheduleQuery->where('semester_code', $request->semester_code);
+            $scheduleQuery->where('sch.semester_code', $request->semester_code);
         }
 
         if ($request->filled('subject')) {
-            $scheduleQuery->where('subject_id', $request->subject);
+            $scheduleQuery->where('sch.subject_id', $request->subject);
         }
 
-        $validSchedules = $scheduleQuery->get();
+        $scheduleRows = $scheduleQuery->get();
 
-        if ($validSchedules->isEmpty()) {
+        if ($scheduleRows->isEmpty()) {
             return response()->json(['data' => [], 'total' => 0]);
+        }
+
+        // Schedule ma'lumotlarini tayyorlash: columns, minDates
+        $columns = [];    // [combo_key][date_pair] = true
+        $minDates = [];   // [combo_key] = eng kichik sana
+
+        foreach ($scheduleRows as $row) {
+            $dateKey = substr($row->lesson_date, 0, 10);
+            $comboKey = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
+            $datePairKey = $dateKey . '_' . $row->lesson_pair_code;
+
+            $columns[$comboKey][$datePairKey] = true;
+
+            if (!isset($minDates[$comboKey]) || $dateKey < $minDates[$comboKey]) {
+                $minDates[$comboKey] = $dateKey;
+            }
         }
 
         // 2-QADAM: Talabalar ro'yxatini tayyorlash (filtrlar bilan)
@@ -144,7 +153,7 @@ class ReportController extends Controller
             $studentQuery->whereIn('s.group_id', $groupIds);
         }
 
-        // Kafedra filtri — faqat shu kafedraga tegishli fanlarni olish
+        // Kafedra filtri
         $allowedSubjectIds = null;
         if ($request->filled('department')) {
             $allowedSubjectIds = DB::table('curriculum_subjects')
@@ -154,18 +163,7 @@ class ReportController extends Controller
                 ->toArray();
         }
 
-        // 3-QADAM: schedules + students birlashtirish va student_grades dan baholar olish
-        // schedules bo'yicha iteratsiya — har bir valid schedule uchun baholarni to'plash
-        $scheduleMap = [];
-        foreach ($validSchedules as $sch) {
-            $key = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
-            $scheduleMap[$key] = $sch->min_date;
-        }
-
-        // group_id lar ro'yxati
-        $scheduleGroupIds = $validSchedules->pluck('group_id')->unique()->toArray();
-
-        // Faqat valid schedule gruppalardagi talabalarni olish
+        $scheduleGroupIds = $scheduleRows->pluck('group_id')->unique()->toArray();
         $studentQuery->whereIn('s.group_id', $scheduleGroupIds);
         $students = $studentQuery->get();
 
@@ -173,17 +171,14 @@ class ReportController extends Controller
             return response()->json(['data' => [], 'total' => 0]);
         }
 
-        // student_hemis_id -> group_id map
         $studentGroupMap = [];
         foreach ($students as $st) {
             $studentGroupMap[$st->hemis_id] = $st->group_id;
         }
         $studentHemisIds = array_keys($studentGroupMap);
 
-        // Valid (subject_id, semester_code) juftliklari
-        $validSubjectSemesters = $validSchedules->map(fn($s) => $s->subject_id . '|' . $s->semester_code)->unique()->toArray();
-        $validSubjectIds = $validSchedules->pluck('subject_id')->unique()->toArray();
-        $validSemesterCodes = $validSchedules->pluck('semester_code')->unique()->toArray();
+        $validSubjectIds = $scheduleRows->pluck('subject_id')->unique()->toArray();
+        $validSemesterCodes = $scheduleRows->pluck('semester_code')->unique()->toArray();
 
         if ($allowedSubjectIds !== null) {
             $validSubjectIds = array_intersect($validSubjectIds, $allowedSubjectIds);
@@ -192,7 +187,7 @@ class ReportController extends Controller
             }
         }
 
-        // 4-QADAM: student_grades dan baholarni olish (oddiy WHERE IN - TEZ)
+        // 3-QADAM: student_grades dan baholarni olish (lesson_pair_code bilan)
         $gradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->whereIn('subject_id', $validSubjectIds)
@@ -201,42 +196,104 @@ class ReportController extends Controller
             ->whereNotNull('grade')
             ->where('grade', '>', 0)
             ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'grade', 'lesson_date')
+            ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'grade', 'lesson_date', 'lesson_pair_code')
             ->get();
 
-        // 5-QADAM: PHP da hisoblash (scheduleMap bilan filtrlash + aggregatsiya)
-        $results = [];
+        // 4-QADAM: Jurnal formulasi bo'yicha hisoblash
+        // a) Baho date_pair larini columns ga birlashtirish (jurnal kabi fallback)
+        // b) Baholarni kun bo'yicha guruhlash
+        $cutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay()->format('Y-m-d');
+
+        $gradesByDay = [];      // [student|subject|date] => [grade1, ...]
+        $studentSubjects = [];  // [student|subject] => info
+
         foreach ($gradesRaw as $g) {
             $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
             if (!$groupId) continue;
 
-            $key = $groupId . '|' . $g->subject_id . '|' . $g->semester_code;
-            $minDate = $scheduleMap[$key] ?? null;
+            $comboKey = $groupId . '|' . $g->subject_id . '|' . $g->semester_code;
+            $minDate = $minDates[$comboKey] ?? null;
             if (!$minDate) continue;
 
-            // lesson_date >= minScheduleDate tekshiruvi
-            if ($g->lesson_date < $minDate) continue;
+            $dateKey = substr($g->lesson_date, 0, 10);
+            if ($dateKey < $minDate) continue;
 
-            $resultKey = $g->student_hemis_id . '|' . $g->subject_id;
-            if (!isset($results[$resultKey])) {
-                $results[$resultKey] = [
+            // Baho date_pair ni columns ga birlashtirish (jurnal fallback logikasi)
+            $datePairKey = $dateKey . '_' . $g->lesson_pair_code;
+            $columns[$comboKey][$datePairKey] = true;
+
+            // Baholarni kun bo'yicha guruhlash
+            $gradeKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $dateKey;
+            $gradesByDay[$gradeKey][] = $g->grade;
+
+            // Student-subject ma'lumotlarini saqlash
+            $ssKey = $g->student_hemis_id . '|' . $g->subject_id;
+            if (!isset($studentSubjects[$ssKey])) {
+                $studentSubjects[$ssKey] = [
                     'student_hemis_id' => $g->student_hemis_id,
                     'subject_id' => $g->subject_id,
                     'subject_name' => $g->subject_name,
-                    'grade_sum' => 0,
-                    'grades_count' => 0,
+                    'combo_key' => $comboKey,
                 ];
             }
-            $results[$resultKey]['grade_sum'] += $g->grade;
-            $results[$resultKey]['grades_count']++;
         }
 
-        // O'rtachalarni hisoblash
-        foreach ($results as &$r) {
-            $r['avg_grade'] = round($r['grade_sum'] / $r['grades_count'], 2);
-            unset($r['grade_sum']);
+        // pairs_per_day va lesson_dates ni yakuniy columns dan hisoblash
+        $pairsPerDay = [];   // [combo_key|date] => juftliklar soni
+        $lessonDates = [];   // [combo_key] => [date1, date2, ...]
+
+        foreach ($columns as $comboKey => $datePairs) {
+            $datesSet = [];
+            foreach ($datePairs as $datePair => $v) {
+                $dateKey = substr($datePair, 0, 10);
+                $ppdKey = $comboKey . '|' . $dateKey;
+                $pairsPerDay[$ppdKey] = ($pairsPerDay[$ppdKey] ?? 0) + 1;
+                $datesSet[$dateKey] = true;
+            }
+            $dates = array_keys($datesSet);
+            sort($dates);
+            $lessonDates[$comboKey] = $dates;
         }
-        unset($r);
+
+        // 5-QADAM: Kunlik o'rtachalar → yakuniy o'rtacha (jurnal formulasi)
+        // Har bir kun: round(gradeSum / pairsInDay, 0, PHP_ROUND_HALF_UP)
+        // Yakuniy: round(dailySum / totalDays, 0, PHP_ROUND_HALF_UP)
+        $results = [];
+        foreach ($studentSubjects as $ssKey => $info) {
+            $comboKey = $info['combo_key'];
+            $comboLessonDates = $lessonDates[$comboKey] ?? [];
+
+            $dailySum = 0;
+            $daysForAverage = 0;
+
+            foreach ($comboLessonDates as $dateKey) {
+                if ($dateKey > $cutoffDate) continue;
+
+                $gradeKey = $info['student_hemis_id'] . '|' . $info['subject_id'] . '|' . $dateKey;
+                $dayGrades = $gradesByDay[$gradeKey] ?? [];
+
+                $ppdKey = $comboKey . '|' . $dateKey;
+                $pairsInDay = $pairsPerDay[$ppdKey] ?? 1;
+
+                $gradeSum = array_sum($dayGrades);
+                $dailyAvg = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+
+                $dailySum += $dailyAvg;
+                $daysForAverage++;
+            }
+
+            $jnAverage = $daysForAverage > 0
+                ? round($dailySum / $daysForAverage, 0, PHP_ROUND_HALF_UP)
+                : 0;
+
+            $results[$ssKey] = [
+                'student_hemis_id' => $info['student_hemis_id'],
+                'subject_id' => $info['subject_id'],
+                'subject_name' => $info['subject_name'],
+                'avg_grade' => $jnAverage,
+                'grades_count' => $daysForAverage,
+            ];
+        }
 
         // Talaba ma'lumotlarini biriktirish
         $hemisIds = array_unique(array_column($results, 'student_hemis_id'));

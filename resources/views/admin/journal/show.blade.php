@@ -1020,16 +1020,30 @@
                         <div id="loading-subject" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- O'qituvchi (kontekstga qarab) -->
+                    <!-- Ma'ruza o'qituvchisi -->
                     <div class="sidebar-field">
-                        <div class="sidebar-label">O'qituvchi</div>
-                        <select id="filter-teacher" class="sidebar-select" style="font-size: 12px;">
-                            <option value="">-</option>
-                            @if($teacherName)
-                                <option value="{{ $teacherName }}" selected>{{ $teacherName }}</option>
+                        <div class="sidebar-label">Ma'ruza o'qituvchisi</div>
+                        <div id="lecture-teacher-display" class="sidebar-value" style="font-size: 12px;">
+                            @if($lectureTeacher)
+                                {{ $lectureTeacher['name'] }} ({{ $lectureTeacher['hours'] }} soat)
+                            @else
+                                -
                             @endif
-                        </select>
-                        <div id="loading-teacher" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                        </div>
+                    </div>
+
+                    <!-- Amaliyot o'qituvchisi -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Amaliyot o'qituvchisi</div>
+                        <div id="practice-teacher-display" class="sidebar-value" style="font-size: 12px;">
+                            @if(count($practiceTeachers) > 0)
+                                @foreach($practiceTeachers as $pt)
+                                    <div>{{ $pt['name'] }} ({{ $pt['hours'] }} soat)</div>
+                                @endforeach
+                            @else
+                                -
+                            @endif
+                        </div>
                     </div>
 
                     <!-- Talabalar soni -->
@@ -1053,7 +1067,6 @@
         const currentFacultyId = '{{ $facultyId }}';
         const currentSpecialtyId = '{{ $specialtyId }}';
         const currentLevelCode = '{{ $levelCode }}';
-        const currentTeacher = @json($teacherName);
         const journalShowBaseUrl = '{{ url("/admin/journal/show") }}';
         const sidebarOptionsUrl = '{{ route("admin.journal.get-sidebar-options") }}';
 
@@ -1150,7 +1163,7 @@
             const values = overrideValues || getFilterValues();
             const qs = buildQS(values);
 
-            const fields = ['faculty', 'specialty', 'level', 'semester', 'group', 'subject', 'teacher'];
+            const fields = ['faculty', 'specialty', 'level', 'semester', 'group', 'subject'];
             fields.forEach(f => setLoading(f, true));
 
             fetch(`${sidebarOptionsUrl}?${qs}`, { signal: abortCtrl.signal })
@@ -1162,7 +1175,26 @@
                     populateSelect('filter-semester', data.semesters, values.semester_code, true);
                     populateSelect('filter-group', data.groups, values.group_id, false);
                     populateSelect('filter-subject', data.subjects, values.subject_id, false);
-                    populateSelect('filter-teacher', data.teachers, values.teacher || currentTeacher, true);
+                    // O'qituvchi ma'lumotlarini yangilash (tur bo'yicha)
+                    const lectureEl = document.getElementById('lecture-teacher-display');
+                    const practiceEl = document.getElementById('practice-teacher-display');
+                    if (lectureEl) {
+                        if (data.teacher_data && data.teacher_data.lecture_teacher) {
+                            const t = data.teacher_data.lecture_teacher;
+                            lectureEl.textContent = t.name + ' (' + t.hours + ' soat)';
+                        } else {
+                            lectureEl.textContent = '-';
+                        }
+                    }
+                    if (practiceEl) {
+                        if (data.teacher_data && data.teacher_data.practice_teachers && data.teacher_data.practice_teachers.length > 0) {
+                            practiceEl.innerHTML = data.teacher_data.practice_teachers
+                                .map(t => '<div>' + t.name + ' (' + t.hours + ' soat)</div>')
+                                .join('');
+                        } else {
+                            practiceEl.textContent = '-';
+                        }
+                    }
                     // Kafedra ma'lumot sifatida yangilanadi
                     const kafedraEl = document.getElementById('kafedra-display');
                     if (kafedraEl) kafedraEl.textContent = data.kafedra_name || '';

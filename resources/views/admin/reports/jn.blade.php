@@ -151,6 +151,8 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <link href="/css/scroll-calendar.css" rel="stylesheet" />
+    <script src="/js/scroll-calendar.js"></script>
 
     <script>
         let currentSort = 'avg_grade';
@@ -306,187 +308,6 @@
                 loadReport(1);
             });
 
-            // ScrollCalendar — Windows 10 uslubidagi uzluksiz scroll kalendar
-            var SC_MONTHS = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentabr","Oktabr","Noyabr","Dekabr"];
-            var SC_DAYS = ["Du","Se","Cho","Pa","Ju","Sha","Ya"];
-            var SC_ROW = 34, SC_STEP = 17, SC_VISIBLE = 6;
-
-            function scPad(n) { return n < 10 ? '0'+n : ''+n; }
-            function scYmd(d) { return d.getFullYear()+'-'+scPad(d.getMonth()+1)+'-'+scPad(d.getDate()); }
-            function scDmy(d) { return scPad(d.getDate())+'.'+scPad(d.getMonth()+1)+'.'+d.getFullYear(); }
-            function scSame(a,b) { return a&&b&&a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); }
-            function scMonday(d) {
-                var dt = new Date(d); dt.setHours(0,0,0,0);
-                var day = dt.getDay(), diff = day===0 ? -6 : 1-day;
-                dt.setDate(dt.getDate()+diff); return dt;
-            }
-
-            function ScrollCalendar(inputId) {
-                this.input = document.getElementById(inputId);
-                this.selected = null;
-                this.today = new Date(); this.today.setHours(0,0,0,0);
-                this.weeks = [];
-                this.isOpen = false;
-                this._build();
-                this._gen();
-                this._render();
-                this._bind();
-            }
-            var SCP = ScrollCalendar.prototype;
-
-            SCP._build = function() {
-                var wrap = document.createElement('div');
-                wrap.className = 'sc-wrap';
-                this.input.parentNode.insertBefore(wrap, this.input);
-
-                this.display = document.createElement('input');
-                this.display.type = 'text'; this.display.className = 'date-input';
-                this.display.placeholder = 'kk.oo.yyyy'; this.display.readOnly = true;
-                this.display.style.cursor = 'pointer';
-                wrap.appendChild(this.display);
-
-                this.clearBtn = document.createElement('span');
-                this.clearBtn.className = 'sc-clear';
-                this.clearBtn.innerHTML = '&times;';
-                this.clearBtn.style.display = 'none';
-                wrap.appendChild(this.clearBtn);
-
-                this.input.type = 'hidden';
-                wrap.appendChild(this.input);
-
-                this.dd = document.createElement('div');
-                this.dd.className = 'sc-dropdown';
-
-                var hdr = document.createElement('div'); hdr.className = 'sc-header';
-                this.prevBtn = document.createElement('span');
-                this.prevBtn.className = 'sc-nav'; this.prevBtn.innerHTML = '&#9650;';
-                this.monthLabel = document.createElement('span'); this.monthLabel.className = 'sc-month';
-                this.nextBtn = document.createElement('span');
-                this.nextBtn.className = 'sc-nav'; this.nextBtn.innerHTML = '&#9660;';
-                var navBox = document.createElement('span'); navBox.className = 'sc-nav-box';
-                navBox.appendChild(this.prevBtn); navBox.appendChild(this.nextBtn);
-                hdr.appendChild(this.monthLabel); hdr.appendChild(navBox);
-
-                var wbar = document.createElement('div'); wbar.className = 'sc-wdays';
-                for (var i = 0; i < 7; i++) {
-                    var s = document.createElement('span');
-                    s.textContent = SC_DAYS[i];
-                    if (i === 6) s.classList.add('sc-sun');
-                    wbar.appendChild(s);
-                }
-
-                this.body = document.createElement('div'); this.body.className = 'sc-body';
-                this.dd.appendChild(hdr); this.dd.appendChild(wbar); this.dd.appendChild(this.body);
-                wrap.appendChild(this.dd);
-                this.wrap = wrap;
-            };
-
-            SCP._gen = function() {
-                var start = new Date(this.today.getFullYear(), this.today.getMonth() - 6, 1);
-                var end = new Date(this.today.getFullYear(), this.today.getMonth() + 18, 0);
-                var mon = scMonday(start);
-                this.weeks = [];
-                while (mon <= end) {
-                    var wk = [];
-                    for (var i = 0; i < 7; i++) { var d = new Date(mon); d.setDate(d.getDate()+i); wk.push(d); }
-                    this.weeks.push(wk);
-                    mon = new Date(mon); mon.setDate(mon.getDate()+7);
-                }
-            };
-
-            SCP._render = function() {
-                this.body.innerHTML = '';
-                for (var w = 0; w < this.weeks.length; w++) {
-                    var row = document.createElement('div'); row.className = 'sc-week';
-                    for (var d = 0; d < 7; d++) {
-                        var date = this.weeks[w][d];
-                        var cell = document.createElement('span');
-                        cell.className = 'sc-day'; cell.textContent = date.getDate();
-                        cell._date = date;
-                        if (d === 6) cell.classList.add('sc-sun');
-                        if (scSame(date, this.today)) cell.classList.add('sc-today');
-                        if (scSame(date, this.selected)) cell.classList.add('sc-selected');
-                        // Oy boshida label qo'shish
-                        if (date.getDate() === 1) {
-                            cell.setAttribute('data-month', SC_MONTHS[date.getMonth()].substring(0,3));
-                            cell.classList.add('sc-month-start');
-                        }
-                        row.appendChild(cell);
-                    }
-                    this.body.appendChild(row);
-                }
-            };
-
-            SCP._bind = function() {
-                var self = this;
-                this.display.addEventListener('click', function(e) { e.stopPropagation(); self.isOpen ? self.close() : self.open(); });
-                this.clearBtn.addEventListener('click', function(e) { e.stopPropagation(); self.clear(); });
-                this.prevBtn.addEventListener('click', function(e) { e.stopPropagation(); self.body.scrollTop -= SC_ROW * 4; });
-                this.nextBtn.addEventListener('click', function(e) { e.stopPropagation(); self.body.scrollTop += SC_ROW * 4; });
-
-                this.body.addEventListener('wheel', function(e) {
-                    e.preventDefault();
-                    self.body.scrollTop += (e.deltaY > 0 ? 1 : -1) * SC_STEP;
-                }, { passive: false });
-
-                this.body.addEventListener('scroll', function() { self._updateHeader(); });
-
-                this.body.addEventListener('click', function(e) {
-                    var t = e.target;
-                    if (t.classList.contains('sc-day') && t._date) self._select(t._date);
-                });
-
-                document.addEventListener('click', function(e) {
-                    if (self.isOpen && !self.wrap.contains(e.target)) self.close();
-                });
-
-                document.addEventListener('keydown', function(e) {
-                    if (e.key === 'Escape' && self.isOpen) self.close();
-                });
-            };
-
-            SCP.open = function() {
-                // Barcha boshqa ochiq kalendarlarni yopish
-                document.querySelectorAll('.sc-dropdown').forEach(function(el) { el.style.display = 'none'; });
-                this.dd.style.display = 'block'; this.isOpen = true;
-                this._scrollToDate(this.selected || this.today);
-                this._updateHeader();
-            };
-            SCP.close = function() { this.dd.style.display = 'none'; this.isOpen = false; };
-
-            SCP.clear = function() {
-                this.selected = null; this.input.value = ''; this.display.value = '';
-                this.clearBtn.style.display = 'none'; this._refreshCells();
-            };
-
-            SCP._select = function(d) {
-                this.selected = d; this.input.value = scYmd(d); this.display.value = scDmy(d);
-                this.clearBtn.style.display = 'block'; this._refreshCells(); this.close();
-            };
-
-            SCP._refreshCells = function() {
-                var cells = this.body.querySelectorAll('.sc-day'), sel = this.selected;
-                for (var i = 0; i < cells.length; i++) {
-                    cells[i].classList.toggle('sc-selected', scSame(cells[i]._date, sel));
-                }
-            };
-
-            SCP._scrollToDate = function(d) {
-                for (var w = 0; w < this.weeks.length; w++) {
-                    if (this.weeks[w][0] <= d && this.weeks[w][6] >= d) {
-                        this.body.scrollTop = w * SC_ROW - SC_ROW * 2;
-                        return;
-                    }
-                }
-            };
-
-            SCP._updateHeader = function() {
-                var midY = this.body.scrollTop + (SC_VISIBLE * SC_ROW) / 2;
-                var idx = Math.max(0, Math.min(Math.floor(midY / SC_ROW), this.weeks.length - 1));
-                var thu = this.weeks[idx][3];
-                this.monthLabel.textContent = SC_MONTHS[thu.getMonth()] + ' ' + thu.getFullYear();
-            };
-
             // Kalendarlarni yaratish
             new ScrollCalendar('date_from');
             new ScrollCalendar('date_to');
@@ -535,30 +356,6 @@
         .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
         .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
         .date-input::placeholder { color: #94a3b8; font-weight: 400; }
-
-        /* ScrollCalendar */
-        .sc-wrap { position: relative; }
-        .sc-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 18px; font-weight: bold; color: #94a3b8; cursor: pointer; line-height: 1; padding: 0 4px; border-radius: 50%; z-index: 2; transition: all 0.15s; }
-        .sc-clear:hover { color: #fff; background: #ef4444; }
-        .sc-dropdown { display: none; position: absolute; top: 100%; left: 0; z-index: 9999; background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.15); width: 270px; margin-top: 4px; overflow: hidden; }
-        .sc-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 8px; }
-        .sc-month { font-weight: 700; font-size: 14px; color: #1e293b; }
-        .sc-nav-box { display: flex; flex-direction: column; gap: 1px; }
-        .sc-nav { cursor: pointer; color: #64748b; font-size: 10px; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; user-select: none; line-height: 1; }
-        .sc-nav:hover { background: #f1f5f9; color: #1e293b; }
-        .sc-wdays { display: grid; grid-template-columns: repeat(7, 1fr); padding: 2px 6px 4px; border-bottom: 1px solid #f1f5f9; }
-        .sc-wdays span { text-align: center; font-size: 11px; font-weight: 700; color: #64748b; padding: 2px 0; }
-        .sc-wdays .sc-sun { color: #dc2626; }
-        .sc-body { height: 204px; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
-        .sc-body::-webkit-scrollbar { display: none; }
-        .sc-week { display: grid; grid-template-columns: repeat(7, 1fr); height: 34px; }
-        .sc-day { display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; color: #334155; cursor: pointer; border-radius: 50%; width: 30px; height: 30px; margin: 2px auto; transition: background 0.1s; position: relative; }
-        .sc-day:hover { background: #eff6ff; }
-        .sc-day.sc-sun { color: #dc2626; font-weight: 600; }
-        .sc-day.sc-today { background: #e0e7ff; font-weight: 700; color: #2b5ea7; }
-        .sc-day.sc-selected { background: #2b5ea7 !important; color: #fff !important; font-weight: 700; }
-        .sc-day.sc-selected.sc-sun { background: #dc2626 !important; }
-        .sc-day.sc-month-start::after { content: attr(data-month); position: absolute; top: -1px; right: -4px; font-size: 7px; font-weight: 700; color: #2b5ea7; background: #eff6ff; padding: 0 3px; border-radius: 3px; line-height: 1.4; pointer-events: none; }
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }

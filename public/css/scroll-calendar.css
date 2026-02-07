@@ -1,0 +1,83 @@
+/**
+ * ScrollCalendar — CSS stillari
+ * Ishlatish: <link rel="stylesheet" href="/css/scroll-calendar.css">
+ */
+
+/* Input */
+.sc-wrap { position: relative; }
+
+.sc-clear {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    font-size: 18px; font-weight: bold; color: #94a3b8; cursor: pointer;
+    line-height: 1; padding: 0 4px; border-radius: 50%; z-index: 2; transition: all 0.15s;
+}
+.sc-clear:hover { color: #fff; background: #ef4444; }
+
+/* Dropdown */
+.sc-dropdown {
+    display: none; position: absolute; top: 100%; left: 0; z-index: 9999;
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.15); width: 270px; margin-top: 4px; overflow: hidden;
+}
+
+/* Header */
+.sc-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px 8px;
+}
+.sc-month { font-weight: 700; font-size: 14px; color: #1e293b; }
+.sc-nav-box { display: flex; flex-direction: column; gap: 1px; }
+.sc-nav {
+    cursor: pointer; color: #64748b; font-size: 10px; padding: 2px 6px;
+    border-radius: 4px; transition: all 0.15s; user-select: none; line-height: 1;
+}
+.sc-nav:hover { background: #f1f5f9; color: #1e293b; }
+
+/* Weekday bar */
+.sc-wdays {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    padding: 2px 6px 4px; border-bottom: 1px solid #f1f5f9;
+}
+.sc-wdays span {
+    text-align: center; font-size: 11px; font-weight: 700;
+    color: #64748b; padding: 2px 0;
+}
+.sc-wdays .sc-sun { color: #dc2626; }
+
+/* Scrollable body */
+.sc-body {
+    height: 204px; overflow-y: auto;
+    scrollbar-width: none; -ms-overflow-style: none;
+}
+.sc-body::-webkit-scrollbar { display: none; }
+
+/* Week row */
+.sc-week {
+    display: grid; grid-template-columns: repeat(7, 1fr); height: 34px;
+}
+
+/* Day cell */
+.sc-day {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 500; color: #334155; cursor: pointer;
+    border-radius: 50%; width: 30px; height: 30px; margin: 2px auto;
+    transition: background 0.1s; position: relative;
+}
+.sc-day:hover { background: #eff6ff; }
+
+/* Yakshanba — qizil */
+.sc-day.sc-sun { color: #dc2626; font-weight: 600; }
+
+/* Bugungi kun */
+.sc-day.sc-today { background: #e0e7ff; font-weight: 700; color: #2b5ea7; }
+
+/* Tanlangan sana */
+.sc-day.sc-selected { background: #2b5ea7 !important; color: #fff !important; font-weight: 700; }
+.sc-day.sc-selected.sc-sun { background: #dc2626 !important; }
+
+/* Oy boshi labeli */
+.sc-day.sc-month-start::after {
+    content: attr(data-month); position: absolute; top: -1px; right: -4px;
+    font-size: 7px; font-weight: 700; color: #2b5ea7; background: #eff6ff;
+    padding: 0 3px; border-radius: 3px; line-height: 1.4; pointer-events: none;
+}

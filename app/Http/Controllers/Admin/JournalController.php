@@ -528,6 +528,11 @@ class JournalController extends Controller
         $facultyName = $faculty->name ?? '';
         $facultyId = $faculty->id ?? '';
 
+        // Yo'nalish (Specialty) - from group
+        $specialty = Specialty::where('specialty_hemis_id', $group->specialty_hemis_id)->first();
+        $specialtyId = $specialty->specialty_hemis_id ?? '';
+        $specialtyName = $specialty->name ?? '';
+
         // Kafedra - from curriculum subject
         $kafedraName = $subject->department_name ?? '';
         $kafedraId = $subject->department_id ?? '';
@@ -553,6 +558,8 @@ class JournalController extends Controller
             'students',
             'facultyName',
             'facultyId',
+            'specialtyId',
+            'specialtyName',
             'kafedraName',
             'kafedraId',
             'kursName',
@@ -1272,111 +1279,149 @@ class JournalController extends Controller
     }
 
     /**
-     * Dynamic sidebar filter options - returns available options for all filters
-     * based on the currently selected filter values (faceted search pattern).
+     * Cascading sidebar filter options.
+     * Chain: Fakultet(free) → Yo'nalish → Kurs → Semestr → [Guruh ↔ Fan]
+     * Kafedra is free and filters Fan.
      */
     public function getSidebarOptions(Request $request)
     {
-        // Helper: build base query joining all relevant tables
-        $buildBase = function () use ($request) {
-            $query = DB::table('curriculum_subjects as cs')
-                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-                ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                ->join('semesters as s', function ($join) {
-                    $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                        ->on('s.code', '=', 'cs.semester_code');
-                })
-                ->leftJoin('departments as fac', function ($join) {
-                    $join->on('fac.department_hemis_id', '=', 'g.department_hemis_id')
-                        ->where('fac.structure_type_code', '=', 11)
-                        ->where('fac.active', '=', true);
-                })
-                ->where('g.department_active', true)
-                ->where('g.active', true);
+        // Fakultet department_hemis_id (reused in multiple queries)
+        $facultyDeptHemisId = null;
+        if ($request->filled('faculty_id')) {
+            $facultyDeptHemisId = Department::where('id', $request->faculty_id)->value('department_hemis_id');
+        }
 
-            // Teacher filter: restrict to group/subject/semester combinations that the teacher teaches
-            if ($request->filled('teacher')) {
-                $query->whereExists(function ($sub) use ($request) {
-                    $sub->select(DB::raw(1))
-                        ->from('schedules as sch_filter')
-                        ->whereColumn('sch_filter.group_id', 'g.group_hemis_id')
-                        ->whereColumn('sch_filter.subject_id', 'cs.subject_id')
-                        ->whereColumn('sch_filter.semester_code', 'cs.semester_code')
-                        ->where('sch_filter.employee_name', $request->teacher);
-                });
-            }
+        // 1. Fakultet - erkin, hamma faol fakultetlar
+        $faculties = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name')
+            ->pluck('name', 'id');
 
-            return $query;
-        };
+        // 2. Yo'nalish - fakultetga bog'liq
+        $specialtiesQuery = DB::table('specialties as sp')
+            ->join('groups as g', 'g.specialty_hemis_id', '=', 'sp.specialty_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+        if ($facultyDeptHemisId) {
+            $specialtiesQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        $specialties = $specialtiesQuery
+            ->select('sp.specialty_hemis_id', 'sp.name')
+            ->groupBy('sp.specialty_hemis_id', 'sp.name')
+            ->orderBy('sp.name')
+            ->pluck('sp.name', 'sp.specialty_hemis_id');
 
-        // Apply all filters except the specified one
-        $applyFilters = function ($query, $except = '') use ($request) {
-            if ($except !== 'group' && $request->filled('group_id')) {
-                $query->where('g.id', $request->group_id);
-            }
-            if ($except !== 'subject' && $request->filled('subject_id')) {
-                $query->where('cs.subject_id', $request->subject_id);
-            }
-            if ($except !== 'semester' && $request->filled('semester_code')) {
-                $query->where('cs.semester_code', $request->semester_code);
-            }
-            if ($except !== 'faculty' && $request->filled('faculty_id')) {
-                $query->where('fac.id', $request->faculty_id);
-            }
-            if ($except !== 'kafedra' && $request->filled('kafedra_id')) {
-                $query->where('cs.department_id', $request->kafedra_id);
-            }
-            if ($except !== 'level' && $request->filled('level_code')) {
-                $query->where('s.level_code', $request->level_code);
-            }
-            return $query;
-        };
-
-        // Groups
-        $groups = $applyFilters($buildBase(), 'group')
-            ->select('g.id', 'g.name')
-            ->groupBy('g.id', 'g.name')
-            ->orderBy('g.name')
-            ->pluck('g.name', 'g.id');
-
-        // Subjects
-        $subjects = $applyFilters($buildBase(), 'subject')
-            ->select('cs.subject_id', 'cs.subject_name')
-            ->groupBy('cs.subject_id', 'cs.subject_name')
-            ->orderBy('cs.subject_name')
-            ->pluck('cs.subject_name', 'cs.subject_id');
-
-        // Semesters
-        $semesters = $applyFilters($buildBase(), 'semester')
-            ->select('s.code', 's.name')
-            ->groupBy('s.code', 's.name')
-            ->orderBy('s.code')
-            ->pluck('s.name', 's.code');
-
-        // Faculties
-        $faculties = $applyFilters($buildBase(), 'faculty')
-            ->whereNotNull('fac.id')
-            ->select('fac.id', 'fac.name')
-            ->groupBy('fac.id', 'fac.name')
-            ->orderBy('fac.name')
-            ->pluck('fac.name', 'fac.id');
-
-        // Kafedras (departments from curriculum_subjects)
-        $kafedras = $applyFilters($buildBase(), 'kafedra')
+        // 3. Kafedra - erkin, hamma kafedralar
+        $kafedras = DB::table('curriculum_subjects as cs')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
             ->whereNotNull('cs.department_id')
             ->select('cs.department_id', 'cs.department_name')
             ->groupBy('cs.department_id', 'cs.department_name')
             ->orderBy('cs.department_name')
             ->pluck('cs.department_name', 'cs.department_id');
 
-        // Levels (Kurs)
-        $levels = $applyFilters($buildBase(), 'level')
+        // 4. Kurs - yo'nalishga bog'liq
+        $levelsQuery = DB::table('semesters as s')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 's.curriculum_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+        if ($request->filled('specialty_id')) {
+            $levelsQuery->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($facultyDeptHemisId) {
+            $levelsQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        $levels = $levelsQuery
             ->select('s.level_code', 's.level_name')
             ->groupBy('s.level_code', 's.level_name')
             ->orderBy('s.level_code')
             ->pluck('s.level_name', 's.level_code');
 
-        // Teachers (from schedules table)
+        // 5. Semestr - kursga bog'liq (+ yo'nalish kontekst)
+        $semestersQuery = DB::table('semesters as s')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 's.curriculum_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+        if ($request->filled('level_code')) {
+            $semestersQuery->where('s.level_code', $request->level_code);
+        }
+        if ($request->filled('specialty_id')) {
+            $semestersQuery->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($facultyDeptHemisId) {
+            $semestersQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        $semesters = $semestersQuery
+            ->select('s.code', 's.name')
+            ->groupBy('s.code', 's.name')
+            ->orderBy('s.code')
+            ->pluck('s.name', 's.code');
+
+        // 6. Guruh - semestr + yo'nalish + fakultet + fan (ikki tomonlama)
+        $groupsQuery = DB::table('groups as g')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+        if ($request->filled('semester_code')) {
+            $groupsQuery->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('semesters as s2')
+                    ->whereColumn('s2.curriculum_hemis_id', 'g.curriculum_hemis_id')
+                    ->where('s2.code', $request->semester_code);
+            });
+        }
+        if ($request->filled('specialty_id')) {
+            $groupsQuery->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($facultyDeptHemisId) {
+            $groupsQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        // Ikki tomonlama: fan tanlansa, faqat o'sha fan bor guruhlar
+        if ($request->filled('subject_id')) {
+            $groupsQuery->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('curriculum_subjects as cs2')
+                    ->whereColumn('cs2.curricula_hemis_id', 'g.curriculum_hemis_id')
+                    ->where('cs2.subject_id', $request->subject_id);
+                if ($request->filled('semester_code')) {
+                    $sub->where('cs2.semester_code', $request->semester_code);
+                }
+            });
+        }
+        $groups = $groupsQuery
+            ->select('g.id', 'g.name')
+            ->orderBy('g.name')
+            ->pluck('g.name', 'g.id');
+
+        // 7. Fan - semestr + guruh (ikki tomonlama) + kafedra + yo'nalish kontekst
+        $subjectsQuery = DB::table('curriculum_subjects as cs')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+        if ($request->filled('semester_code')) {
+            $subjectsQuery->where('cs.semester_code', $request->semester_code);
+        }
+        // Ikki tomonlama: guruh tanlansa, faqat o'sha guruh fanlari
+        if ($request->filled('group_id')) {
+            $subjectsQuery->where('g.id', $request->group_id);
+        }
+        if ($request->filled('kafedra_id')) {
+            $subjectsQuery->where('cs.department_id', $request->kafedra_id);
+        }
+        if ($request->filled('specialty_id')) {
+            $subjectsQuery->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($facultyDeptHemisId) {
+            $subjectsQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        $subjects = $subjectsQuery
+            ->select('cs.subject_id', 'cs.subject_name')
+            ->groupBy('cs.subject_id', 'cs.subject_name')
+            ->orderBy('cs.subject_name')
+            ->pluck('cs.subject_name', 'cs.subject_id');
+
+        // 8. O'qituvchi - guruh + fan + semestr kontekstiga qarab
         $teacherQuery = DB::table('schedules as sch')
             ->join('groups as g2', 'g2.group_hemis_id', '=', 'sch.group_id')
             ->where('g2.department_active', true)
@@ -1384,7 +1429,6 @@ class JournalController extends Controller
             ->whereNotNull('sch.employee_name')
             ->where('sch.employee_name', '!=', 'Manual Entry')
             ->where('sch.employee_name', '!=', '');
-
         if ($request->filled('group_id')) {
             $group = Group::find($request->group_id);
             if ($group) {
@@ -1397,25 +1441,20 @@ class JournalController extends Controller
         if ($request->filled('semester_code')) {
             $teacherQuery->where('sch.semester_code', $request->semester_code);
         }
-        if ($request->filled('faculty_id')) {
-            $facultyDeptHemisId = Department::where('id', $request->faculty_id)->value('department_hemis_id');
-            if ($facultyDeptHemisId) {
-                $teacherQuery->where('g2.department_hemis_id', $facultyDeptHemisId);
-            }
-        }
-
-        $teachers = $teacherQuery->select('sch.employee_name')
+        $teachers = $teacherQuery
+            ->select('sch.employee_name')
             ->distinct()
             ->orderBy('sch.employee_name')
             ->pluck('sch.employee_name', 'sch.employee_name');
 
         return response()->json([
-            'groups' => $groups,
-            'subjects' => $subjects,
-            'semesters' => $semesters,
             'faculties' => $faculties,
+            'specialties' => $specialties,
             'kafedras' => $kafedras,
             'levels' => $levels,
+            'semesters' => $semesters,
+            'groups' => $groups,
+            'subjects' => $subjects,
             'teachers' => $teachers,
         ]);
     }

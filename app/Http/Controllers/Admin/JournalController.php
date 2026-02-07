@@ -553,48 +553,18 @@ class JournalController extends Controller
             $otherGrades[$studentId] = $result;
         }
 
-        // Get attendance data from HEMIS API (real-time, authoritative source)
+        // Get attendance data for each student (auditorium types only: exclude MT, ON, OSKI, Test)
         $excludedAttendanceCodes = [99, 100, 101, 102];
-        $attendanceData = [];
-        try {
-            $hemisToken = config('services.hemis.token');
-            $page = 1;
-            do {
-                $apiResponse = Http::timeout(10)->withoutVerifying()->withToken($hemisToken)
-                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-list", [
-                        'limit' => 200,
-                        'page' => $page,
-                        '_group' => $group->group_hemis_id,
-                        '_subject' => $subjectId,
-                    ]);
-                if ($apiResponse->successful()) {
-                    $apiData = $apiResponse->json()['data'];
-                    foreach ($apiData['items'] as $item) {
-                        $sHemisId = $item['student']['id'];
-                        $tCode = (int) ($item['trainingType']['code'] ?? 0);
-                        if (!in_array($tCode, $excludedAttendanceCodes)) {
-                            $attendanceData[$sHemisId] = ($attendanceData[$sHemisId] ?? 0) + $item['absent_off'];
-                        }
-                    }
-                    $apiTotalPages = $apiData['pagination']['pageCount'] ?? 1;
-                    $page++;
-                } else {
-                    break;
-                }
-            } while ($page <= $apiTotalPages);
-        } catch (\Exception $e) {
-            // Fallback: use local attendance data if HEMIS API is unavailable
-            $attendanceData = DB::table('attendances')
-                ->whereIn('student_hemis_id', $studentHemisIds)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
-                ->whereNotIn('training_type_code', $excludedAttendanceCodes)
-                ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
-                ->groupBy('student_hemis_id')
-                ->pluck('total_absent_off', 'student_hemis_id')
-                ->toArray();
-        }
+        $attendanceData = DB::table('attendances')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+            ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
+            ->groupBy('student_hemis_id')
+            ->pluck('total_absent_off', 'student_hemis_id')
+            ->toArray();
 
         // Get manual MT grades (entries without lesson_date)
         $manualMtGrades = DB::table('student_grades')

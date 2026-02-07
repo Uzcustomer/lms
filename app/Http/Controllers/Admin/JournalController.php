@@ -579,19 +579,18 @@ class JournalController extends Controller
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
 
-        // Calculate auditorium hours from schedules (semester-specific, matches teacher hours)
-        // Excludes: 99=MT, 100=ON, 101=OSKI, 102=Test
-        $audScheduleRows = DB::table('schedules')
-            ->where('group_id', $group->group_hemis_id)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
-            ->whereNotIn('training_type_code', [99, 100, 101, 102])
-            ->whereNotNull('lesson_date')
-            ->select('lesson_pair_start_time', 'lesson_pair_end_time')
-            ->get();
-        $auditoriumHours = $this->calculateAcademicHours($audScheduleRows);
-        // Fallback to total_acload if no schedules found
+        // Calculate auditorium hours from subject_details
+        // Exclude: 17=Mustaqil ta'lim (auditoriya soatiga kirmaydi)
+        $nonAuditoriumCodes = ['17'];
+        $auditoriumHours = 0;
+        if (is_array($subject->subject_details)) {
+            foreach ($subject->subject_details as $detail) {
+                $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                    $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                }
+            }
+        }
         if ($auditoriumHours <= 0) {
             $auditoriumHours = $totalAcload;
         }

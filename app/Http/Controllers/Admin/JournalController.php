@@ -191,8 +191,20 @@ class JournalController extends Controller
             ->where('code', $semesterCode)
             ->first();
 
-        // Current education year from curriculum (for filtering out old year data)
+        // Current education year: determine from schedules (most reliable source)
+        // Pick the education_year_code that has the latest lesson_date for this group/subject/semester
         $educationYearCode = $curriculum->education_year_code ?? null;
+        $scheduleEducationYear = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('education_year_code')
+            ->orderBy('lesson_date', 'desc')
+            ->value('education_year_code');
+        if ($scheduleEducationYear) {
+            $educationYearCode = $scheduleEducationYear;
+        }
 
         // Get student hemis IDs for this group
         $studentHemisIds = DB::table('students')
@@ -210,7 +222,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->whereNotIn('training_type_name', $excludedTrainingTypes)
             ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->whereNotNull('lesson_date')
@@ -223,7 +235,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
             ->select('lesson_date', 'lesson_pair_code')
@@ -235,7 +247,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->where('training_type_code', 11)
             ->whereNotNull('lesson_date')
             ->select('lesson_date', 'lesson_pair_code')
@@ -259,7 +271,7 @@ class JournalController extends Controller
             ->whereNotIn('training_type_name', $excludedTrainingTypes)
             ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->whereNotNull('lesson_date')
-            ->when($minScheduleDate, fn($q, $v) => $q->where('lesson_date', '>=', $v))
+            ->when($minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
@@ -272,7 +284,7 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
-            ->when($minScheduleDate, fn($q, $v) => $q->where('lesson_date', '>=', $v))
+            ->when($minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
@@ -434,7 +446,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->where('training_type_code', 11)
             ->whereNotNull('lesson_date')
             ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
@@ -459,7 +471,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
             ->whereNotNull('lesson_date')
             ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
@@ -478,7 +490,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
             ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
@@ -506,8 +518,8 @@ class JournalController extends Controller
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->whereIn('training_type_code', [100, 101, 102])
-            ->when($minScheduleDate, fn($q, $v) => $q->where(function ($q2) use ($v) {
-                $q2->where('lesson_date', '>=', $v)->orWhereNull('lesson_date');
+            ->when($minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
+                $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
             }))
             ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason')
             ->get();
@@ -539,7 +551,7 @@ class JournalController extends Controller
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
             ->groupBy('student_hemis_id')
             ->pluck('total_absent_off', 'student_hemis_id')

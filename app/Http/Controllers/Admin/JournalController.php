@@ -191,6 +191,9 @@ class JournalController extends Controller
             ->where('code', $semesterCode)
             ->first();
 
+        // Current education year from curriculum (for filtering out old year data)
+        $educationYearCode = $curriculum->education_year_code ?? null;
+
         // Get student hemis IDs for this group
         $studentHemisIds = DB::table('students')
             ->where('group_id', $group->group_hemis_id)
@@ -207,6 +210,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
             ->whereNotIn('training_type_name', $excludedTrainingTypes)
             ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->whereNotNull('lesson_date')
@@ -219,6 +223,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
             ->select('lesson_date', 'lesson_pair_code')
@@ -230,6 +235,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
             ->where('training_type_code', 11)
             ->whereNotNull('lesson_date')
             ->select('lesson_date', 'lesson_pair_code')
@@ -237,7 +243,15 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
+        // Determine earliest schedule date for filtering old year grades
+        $minScheduleDate = collect()
+            ->merge($jbScheduleRows->pluck('lesson_date'))
+            ->merge($mtScheduleRows->pluck('lesson_date'))
+            ->merge($lectureScheduleRows->pluck('lesson_date'))
+            ->min();
+
         // Data source: get all JB grades with lesson_pair info and status fields
+        // Filter by minScheduleDate to exclude grades from previous education years
         $jbGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
@@ -245,6 +259,7 @@ class JournalController extends Controller
             ->whereNotIn('training_type_name', $excludedTrainingTypes)
             ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->whereNotNull('lesson_date')
+            ->when($minScheduleDate, fn($q, $v) => $q->where('lesson_date', '>=', $v))
             ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
@@ -257,6 +272,7 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
+            ->when($minScheduleDate, fn($q, $v) => $q->where('lesson_date', '>=', $v))
             ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
@@ -418,6 +434,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
             ->where('training_type_code', 11)
             ->whereNotNull('lesson_date')
             ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
@@ -442,6 +459,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
             ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
             ->whereNotNull('lesson_date')
             ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
@@ -460,6 +478,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
             ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
@@ -481,11 +500,15 @@ class JournalController extends Controller
             ->get();
 
         // Get other averages (ON, OSKI, Test) with status-based grade calculation
+        // Filter by minScheduleDate to exclude old education year data
         $otherGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->whereIn('training_type_code', [100, 101, 102])
+            ->when($minScheduleDate, fn($q, $v) => $q->where(function ($q2) use ($v) {
+                $q2->where('lesson_date', '>=', $v)->orWhereNull('lesson_date');
+            }))
             ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason')
             ->get();
 
@@ -516,6 +539,7 @@ class JournalController extends Controller
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->when($educationYearCode, fn($q, $v) => $q->where('education_year_code', $v))
             ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
             ->groupBy('student_hemis_id')
             ->pluck('total_absent_off', 'student_hemis_id')

@@ -1111,7 +1111,8 @@
                 select.appendChild(opt);
             }
             let found = false;
-            for (const [key, value] of Object.entries(data)) {
+            const entries = Object.entries(data).sort((a, b) => a[1].localeCompare(b[1]));
+            for (const [key, value] of entries) {
                 const opt = document.createElement('option');
                 opt.value = key;
                 opt.textContent = value;

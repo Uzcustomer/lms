@@ -1393,13 +1393,21 @@ class JournalController extends Controller
             ->orderBy('g.name')
             ->pluck('g.name', 'g.id');
 
-        // 7. Fan - semestr + guruh (ikki tomonlama) + kafedra + yo'nalish kontekst
+        // 7. Fan - semestr + guruh (ikki tomonlama) + yo'nalish kontekst
         $subjectsQuery = DB::table('curriculum_subjects as cs')
             ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
             ->where('g.department_active', true)
             ->where('g.active', true);
         if ($request->filled('semester_code')) {
             $subjectsQuery->where('cs.semester_code', $request->semester_code);
+            // Faqat joriy semestr fanlari (eski curriculumlarni chiqarmaslik uchun)
+            $subjectsQuery->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('semesters as s3')
+                    ->whereColumn('s3.curriculum_hemis_id', 'cs.curricula_hemis_id')
+                    ->where('s3.code', $request->semester_code)
+                    ->where('s3.current', true);
+            });
         }
         // Ikki tomonlama: guruh tanlansa, faqat o'sha guruh fanlari
         if ($request->filled('group_id')) {

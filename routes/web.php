@@ -190,6 +190,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
 
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');
+        Route::get('/reports/jn/data', [ReportController::class, 'jnReportData'])->name('reports.jn.data');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 

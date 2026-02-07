@@ -17,6 +17,13 @@
                         </div>
                     @endif
 
+                    <div class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-4">
+                        <div>
+                            <span class="text-sm font-medium text-gray-700">Spravka topshirish muddati:</span>
+                            <span class="ml-2 text-lg font-bold text-amber-700">{{ $spravkaDays ?? 10 }} kun</span>
+                        </div>
+                    </div>
+
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">

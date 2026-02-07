@@ -36,8 +36,9 @@ class DashboardController extends Controller
     public function showDeadlines(): View
     {
         $deadlines = Deadline::with('level')->get();
+        $spravkaDays = Setting::get('spravka_deadline_days', 10);
 
-        return view('admin.deadlines.show', compact('deadlines'));
+        return view('admin.deadlines.show', compact('deadlines', 'spravkaDays'));
     }
 
     public function editDeadlines(): View

@@ -247,7 +247,7 @@
                                                 class="text-xs text-gray-500">{{ $student->group->education_lang_name }}</div>
                                         </td>
                                         <td class="px-2 py-2 whitespace-nowrap text-gray-500">{{ $student->avg_gpa }}</td>
-                                        <td class="px-2 py-2 whitespace-nowrap text-gray-500">{{ \Carbon\Carbon::parse($student->updated_at)->format('d-m-Y H:i') }}</td>
+                                        <td class="px-2 py-2 whitespace-nowrap text-gray-500">{{ format_datetime($student->updated_at) }}</td>
                                         <td class="px-2 py-2 whitespace-nowrap">
                                             <button type="button"
                                                     class="px-2 py-1 text-xs rounded"

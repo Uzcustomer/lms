@@ -218,7 +218,7 @@
                                             {{ $independent->grade_teacher ?? "???" }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {{ $independent->created_at->format('d-m-Y H:i:s') }}
+                                            {{ format_datetime($independent->created_at, true) }}
                                         </td>
 
 

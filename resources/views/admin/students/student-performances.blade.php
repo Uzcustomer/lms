@@ -122,7 +122,7 @@
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $grade->student->full_name }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $grade->training_type_name }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">   {{$grade->curriculum()->marking_system_name }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ \Carbon\Carbon::parse($grade->lesson_date)->format('d-m-Y') }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ format_date($grade->lesson_date) }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">       @if($grade->reason == 'teacher_victim')
                                       Ustoz xatosi
                                     @elseif($grade->status == 'low_grade')
@@ -130,7 +130,7 @@
                                     @else
                                       NB
                                     @endif</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ \Carbon\Carbon::parse($grade->deadline)->format('d-m-Y H:i:s') }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ format_datetime($grade->deadline, true) }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     @if($grade->status == 'pending')
                                         {{ $grade->reason == "absent" ? "NB" : $grade->grade }}

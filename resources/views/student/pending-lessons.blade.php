@@ -64,7 +64,7 @@
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $lesson->subject_name }}</td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $lesson->employee_name }}</td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $lesson->training_type_name }}</td>
-                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ \Carbon\Carbon::parse($lesson->lesson_date)->format('d-m-Y')}}</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ format_date($lesson->lesson_date) }}</td>
 {{--                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $lesson->reason == 'absent' ? 'NB' : 'Past baho' }}</td>--}}
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">  @if($lesson->reason == 'teacher_victim')
                                                         Kechiktirilgan baho

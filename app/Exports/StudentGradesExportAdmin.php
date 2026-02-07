@@ -93,14 +93,14 @@ class StudentGradesExportAdmin implements FromQuery, WithHeadings, ShouldAutoSiz
             $row->education_year_name,
             $row->semester_name,
             $row->specialty_name,
-            Carbon::parse($row->lesson_date)->format('d-m-Y'),
+            format_date($row->lesson_date),
             $row->subject_name,
             $row->training_type_name,
             $row->lesson_pair_name,
             $row->teacher_name,
             $grade,
             $this->translateStatus($row->status),
-            $row->retake_graded_at ? Carbon::parse($row->retake_graded_at)->format('d-m-Y') : null,
+            format_date($row->retake_graded_at),
             $this->translateReason($row->reason),
         ];
     }

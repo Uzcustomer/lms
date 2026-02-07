@@ -87,14 +87,14 @@
                                     @if($viewType == 'week')
                                         @foreach($weeks as $index => $week)
                                             <th class="px-4 py-2 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">
-                                                {{ $index + 1 }}-Hafta <br>{{ $week->start_date->format('d-m-Y') }}
-                                                - {{ $week->end_date->format('d-m-Y') }}
+                                                {{ $index + 1 }}-Hafta <br>{{ format_date($week->start_date) }}
+                                                - {{ format_date($week->end_date) }}
                                             </th>
                                         @endforeach
                                     @else
                                         @foreach($dates as $date)
                                             <th class="px-4 py-2 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">
-                                                {{ $date->format('d.m.Y') }}
+                                                {{ format_date($date) }}
                                             </th>
                                         @endforeach
                                     @endif

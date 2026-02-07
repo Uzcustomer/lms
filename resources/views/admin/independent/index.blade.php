@@ -205,7 +205,7 @@
                                             {{ $independent->grade_teacher ?? "???" }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {{ $independent->created_at->format('d-m-Y H:i:s') }}
+                                            {{ format_datetime($independent->created_at, true) }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             <form action="{{ route('admin.independent.delete', $independent->id) }}"

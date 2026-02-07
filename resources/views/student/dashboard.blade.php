@@ -85,7 +85,7 @@
                                               d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     </svg>
                                     <span>{{ $grade->subject_name }} fanidan {{ $grade->grade }} ball oldingiz - ({{ $grade->lesson_pair_name }}-para)  <time
-                                            datetime="{{ $grade->created_at }}">{{ $grade->created_at->format('d-m-Y') }}</time> </span>
+                                            datetime="{{ $grade->created_at }}">{{ format_date($grade->created_at) }}</time> </span>
                                 </li>
                             @endforeach
                         </ul>

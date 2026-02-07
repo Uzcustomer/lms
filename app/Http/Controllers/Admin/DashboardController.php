@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Jobs\ImportSchedulesPartiallyJob;
 use App\Models\Deadline;
+use App\Models\Setting;
 use App\Models\Student;
 use App\Services\TelegramService;
 use Illuminate\Contracts\View\View;
@@ -43,8 +44,9 @@ class DashboardController extends Controller
     {
         // $levels = Student::distinct()->get(['level_code', 'level_name']);
         $deadlines = Deadline::get();
+        $spravkaDays = Setting::get('spravka_deadline_days', 10);
 
-        return view('admin.deadlines.edit', compact('deadlines'));
+        return view('admin.deadlines.edit', compact('deadlines', 'spravkaDays'));
     }
 
     // Update deadlines
@@ -56,6 +58,10 @@ class DashboardController extends Controller
             'deadlines.*.joriy' => 'required|integer|min:1',
             'deadlines.*.mustaqil_talim' => 'required|integer|min:1',
         ]);
+
+        if ($request->filled('spravka_deadline_days')) {
+            Setting::set('spravka_deadline_days', (int) $request->spravka_deadline_days);
+        }
 
         foreach ($validated['deadlines'] as $levelCode => $deadlineData) {
             Deadline::updateOrCreate(

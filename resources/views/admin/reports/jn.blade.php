@@ -127,6 +127,7 @@
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="avg_grade">O'rtacha baho <span class="sort-icon active">&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="grades_count">Darslar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;">Jurnal</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -237,7 +238,7 @@
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
                 var journalUrl = journalBase + '/' + encodeURIComponent(r.group_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code);
-                html += '<tr class="journal-row clickable-row" onclick="window.open(\'' + journalUrl + '\', \'_blank\')" title="Jurnalni ochish">';
+                html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
@@ -248,6 +249,7 @@
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td><span class="badge ' + gradeClass(r.avg_grade) + '">' + r.avg_grade + '</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.grades_count + '</td>';
+                html += '<td style="text-align:center;"><a href="' + journalUrl + '" target="_blank" class="journal-link">Ko\'rish</a></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -375,7 +377,6 @@
         .journal-table tbody tr:nth-child(even) { background: #f8fafc; }
         .journal-table tbody tr:nth-child(odd) { background: #fff; }
         .journal-table tbody tr:hover { background: #eff6ff !important; box-shadow: inset 4px 0 0 #2b5ea7; }
-        .journal-table tbody tr.clickable-row { cursor: pointer; }
         .journal-table td { padding: 10px 12px; vertical-align: middle; line-height: 1.4; }
         .td-num { padding-left: 16px !important; font-weight: 700; color: #2b5ea7; font-size: 13px; }
 
@@ -391,6 +392,8 @@
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
         .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; max-width: 260px; white-space: normal; word-break: break-word; }
+        .journal-link { display: inline-block; padding: 3px 10px; background: #eff6ff; color: #2b5ea7; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11.5px; font-weight: 600; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
+        .journal-link:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }

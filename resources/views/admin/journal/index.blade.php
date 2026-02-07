@@ -563,18 +563,18 @@
             z-index: 10;
         }
         .journal-table thead tr {
-            background: linear-gradient(135deg, #0c1929 0%, #1a3268 50%, #2b5ea7 100%);
+            background: linear-gradient(135deg, #e8edf5 0%, #dbe4ef 50%, #d1d9e6 100%);
         }
         .journal-table th {
             padding: 14px 12px;
             text-align: left;
             font-weight: 600;
             font-size: 11.5px;
-            color: #ffffff;
+            color: #334155;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             white-space: nowrap;
-            border-bottom: 3px solid #f59e0b;
+            border-bottom: 2px solid #cbd5e1;
         }
         .journal-table th.th-num {
             padding: 14px 12px 14px 16px;
@@ -584,13 +584,13 @@
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            color: #ffffff;
+            color: #334155;
             text-decoration: none;
             transition: opacity 0.15s;
         }
-        .sort-link:hover { opacity: 0.85; }
+        .sort-link:hover { opacity: 0.75; }
         .sort-icon { font-size: 8px; opacity: 0.4; }
-        .sort-icon.active { font-size: 10px; opacity: 1; color: #fbbf24; }
+        .sort-icon.active { font-size: 10px; opacity: 1; color: #2b5ea7; }
 
         /* ===== Table Body ===== */
         .journal-table tbody tr {

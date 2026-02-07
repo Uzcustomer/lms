@@ -29,8 +29,114 @@
             border-radius: 12px 12px 0 0;
             display: flex;
             align-items: flex-end;
+            justify-content: space-between;
             padding: 10px 10px 0 10px;
             gap: 4px;
+            width: 100%;
+        }
+        .journal-layout {
+            display: flex;
+            gap: 0;
+            align-items: flex-start;
+        }
+        .journal-main-content {
+            flex: 1;
+            min-width: 0;
+            overflow-x: auto;
+        }
+        .journal-sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            background: #f8fafc;
+            border-left: 2px solid #e2e8f0;
+            border-radius: 0 8px 8px 0;
+            padding: 0;
+            position: sticky;
+            top: 0;
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+        }
+        .sidebar-header {
+            background: #374151;
+            color: #fff;
+            padding: 10px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 0 8px 0 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sidebar-field {
+            padding: 8px 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .sidebar-field:last-child {
+            border-bottom: none;
+        }
+        .sidebar-label {
+            font-size: 11px;
+            color: #6b7280;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+        .sidebar-select {
+            width: 100%;
+            padding: 6px 28px 6px 10px;
+            font-size: 13px;
+            font-weight: 500;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #fff;
+            color: #1f2937;
+            cursor: pointer;
+            transition: all 0.15s;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+        }
+        .sidebar-select:hover {
+            border-color: #3b82f6;
+        }
+        .sidebar-select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        .sidebar-value {
+            font-size: 13px;
+            font-weight: 500;
+            color: #1f2937;
+            padding: 6px 10px;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+        }
+        .sidebar-loading {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #6b7280;
+            padding: 4px 0;
+        }
+        .sidebar-loading.active {
+            display: flex;
+        }
+        .sidebar-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #e5e7eb;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
         .tab-btn {
             padding: 10px 24px;
@@ -155,10 +261,10 @@
 
     <div class="py-2">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-            <!-- Tabs and View Toggle -->
+            <!-- Full-width Tabs with View Toggle -->
             <div class="mb-0">
-                <div class="flex justify-between items-end">
-                    <nav class="tab-container">
+                <nav class="tab-container">
+                    <div style="display: flex; align-items: flex-end; gap: 4px;">
                         <button id="tab-maruza" onclick="switchTab('maruza')"
                             class="tab-btn">
                             Ma'ruza
@@ -171,47 +277,19 @@
                             class="tab-btn">
                             Mustaqil ta'lim
                         </button>
-                    </nav>
-                    <div class="flex items-center pb-2">
-                        <span class="text-xs text-gray-500 mr-2">Ko'rinish:</span>
+                    </div>
+                    <div class="flex items-center" style="padding-bottom: 8px;">
+                        <span class="text-xs mr-2" style="color: #9ca3af;">Ko'rinish:</span>
                         <button id="view-compact" onclick="switchView('compact')" class="view-btn active">Ixcham</button>
                         <button id="view-detailed" onclick="switchView('detailed')" class="view-btn">Batafsil</button>
                     </div>
-                </div>
+                </nav>
             </div>
 
-            <!-- Info Panel -->
-            <div class="py-2 bg-gray-50 border-b border-gray-200">
-                <div class="flex justify-between items-start text-sm">
-                    <div>
-                        <span class="text-gray-500">Talabalar soni:</span>
-                        <span class="font-medium text-gray-900 ml-1">{{ $students->count() }}</span>
-                    </div>
-                    <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-sm">
-                        <span class="text-gray-500 text-right">Guruh:</span>
-                        <span class="font-medium text-blue-600">{{ $group->name }}</span>
-
-                        <span class="text-gray-500 text-right">Fan:</span>
-                        <span class="font-medium text-gray-900">{{ $subject->subject_name }}</span>
-
-                        <span class="text-gray-500 text-right">Kurs:</span>
-                        <span class="font-medium text-gray-900">{{ $kursName }}</span>
-
-                        <span class="text-gray-500 text-right">Semestr:</span>
-                        <span class="font-medium text-gray-900">{{ $semester->name ?? $subject->semester_name }}</span>
-
-                        <span class="text-gray-500 text-right">Kafedra:</span>
-                        <span class="font-medium text-gray-900">{{ $kafedraName }}</span>
-
-                        <span class="text-gray-500 text-right">Fakultet:</span>
-                        <span class="font-medium text-gray-900">{{ $facultyName }}</span>
-
-                        <span class="text-gray-500 text-right">O'qituvchi:</span>
-                        <span class="font-medium text-gray-900">{{ $teacherName }}</span>
-                    </div>
-                </div>
-            </div>
-
+            <!-- Main Layout: Content + Sidebar -->
+            <div class="journal-layout">
+                <!-- Main content area -->
+                <div class="journal-main-content">
 
             <!-- Ma'ruza Tab Content -->
             <div id="content-maruza" class="tab-content hidden">
@@ -860,10 +938,212 @@
                     @endif
                 </div>
             </div>
+
+                </div><!-- /.journal-main-content -->
+
+                <!-- Right Sidebar: Filters -->
+                <div class="journal-sidebar">
+                    <div class="sidebar-header">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                        Filtrlar
+                    </div>
+
+                    <!-- Guruh -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Guruh</div>
+                        <select id="filter-group" class="sidebar-select" onchange="onGroupChange(this.value)">
+                            <option value="{{ $groupId }}" selected>{{ $group->name }}</option>
+                        </select>
+                        <div id="loading-group" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <!-- Fan -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Fan</div>
+                        <select id="filter-subject" class="sidebar-select" onchange="onSubjectChange(this.value)">
+                            <option value="{{ $subjectId }}" selected>{{ $subject->subject_name }}</option>
+                        </select>
+                        <div id="loading-subject" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <!-- Semestr -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Semestr</div>
+                        <select id="filter-semester" class="sidebar-select" onchange="onSemesterChange(this.value)">
+                            <option value="{{ $semesterCode }}" selected>{{ $semester->name ?? $subject->semester_name }}</option>
+                        </select>
+                        <div id="loading-semester" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <!-- Kurs -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Kurs</div>
+                        <div class="sidebar-value">{{ $kursName }}</div>
+                    </div>
+
+                    <!-- Kafedra -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Kafedra</div>
+                        <div class="sidebar-value" style="font-size: 12px;">{{ $kafedraName }}</div>
+                    </div>
+
+                    <!-- Fakultet -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">Fakultet</div>
+                        <div class="sidebar-value" style="font-size: 12px;">{{ $facultyName }}</div>
+                    </div>
+
+                    <!-- O'qituvchi -->
+                    <div class="sidebar-field">
+                        <div class="sidebar-label">O'qituvchi</div>
+                        <div class="sidebar-value" style="font-size: 12px;">{{ $teacherName }}</div>
+                    </div>
+
+                    <!-- Talabalar soni -->
+                    <div class="sidebar-field" style="background: #eff6ff;">
+                        <div class="sidebar-label">Talabalar soni</div>
+                        <div class="sidebar-value" style="font-weight: 700; color: #2563eb; border-color: #bfdbfe;">{{ $students->count() }}</div>
+                    </div>
+                </div>
+
+            </div><!-- /.journal-layout -->
         </div>
     </div>
 
     <script>
+        // ====== Sidebar Filter Logic ======
+        const currentGroupId = '{{ $groupId }}';
+        const currentSubjectId = '{{ $subjectId }}';
+        const currentSemesterCode = '{{ $semesterCode }}';
+        const journalShowBaseUrl = '{{ url("/admin/journal/show") }}';
+
+        function navigateToJournal(groupId, subjectId, semesterCode) {
+            window.location.href = `${journalShowBaseUrl}/${groupId}/${subjectId}/${semesterCode}`;
+        }
+
+        function setLoading(field, show) {
+            const el = document.getElementById('loading-' + field);
+            if (el) el.classList.toggle('active', show);
+        }
+
+        function populateSelect(selectId, data, currentValue) {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            const oldValue = select.value;
+            select.innerHTML = '';
+            let hasCurrentValue = false;
+            for (const [key, value] of Object.entries(data)) {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = value;
+                if (String(key) === String(currentValue)) {
+                    option.selected = true;
+                    hasCurrentValue = true;
+                }
+                select.appendChild(option);
+            }
+            if (!hasCurrentValue && select.options.length > 0) {
+                select.options[0].selected = true;
+            }
+        }
+
+        // Load initial filter options on page load
+        function loadInitialFilters() {
+            // Load subjects and semesters for current group
+            setLoading('subject', true);
+            setLoading('semester', true);
+            setLoading('group', true);
+
+            fetch(`{{ route('admin.journal.get-filters-by-group') }}?group_id=${currentGroupId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.subjects) {
+                        populateSelect('filter-subject', data.subjects, currentSubjectId);
+                    }
+                    if (data.semesters) {
+                        populateSelect('filter-semester', data.semesters, currentSemesterCode);
+                    }
+                    setLoading('subject', false);
+                    setLoading('semester', false);
+                })
+                .catch(() => {
+                    setLoading('subject', false);
+                    setLoading('semester', false);
+                });
+
+            // Load all groups (initially unfiltered to show all options)
+            fetch(`{{ route('admin.journal.get-groups') }}`)
+                .then(r => r.json())
+                .then(data => {
+                    populateSelect('filter-group', data, currentGroupId);
+                    setLoading('group', false);
+                })
+                .catch(() => {
+                    setLoading('group', false);
+                });
+        }
+
+        function onGroupChange(newGroupId) {
+            if (newGroupId === currentGroupId) return;
+
+            setLoading('subject', true);
+            setLoading('semester', true);
+
+            fetch(`{{ route('admin.journal.get-filters-by-group') }}?group_id=${newGroupId}`)
+                .then(r => r.json())
+                .then(data => {
+                    setLoading('subject', false);
+                    setLoading('semester', false);
+
+                    if (!data.subjects || Object.keys(data.subjects).length === 0) {
+                        alert('Bu guruh uchun fanlar topilmadi');
+                        document.getElementById('filter-group').value = currentGroupId;
+                        return;
+                    }
+
+                    // Check if current subject exists in new group
+                    let targetSubjectId = currentSubjectId;
+                    if (!data.subjects[currentSubjectId]) {
+                        targetSubjectId = Object.keys(data.subjects)[0];
+                    }
+                    populateSelect('filter-subject', data.subjects, targetSubjectId);
+
+                    // Check if current semester exists
+                    let targetSemester = currentSemesterCode;
+                    if (data.semesters && !data.semesters[currentSemesterCode]) {
+                        targetSemester = Object.keys(data.semesters)[0];
+                    }
+                    if (data.semesters) {
+                        populateSelect('filter-semester', data.semesters, targetSemester);
+                    }
+
+                    navigateToJournal(newGroupId, targetSubjectId, targetSemester);
+                })
+                .catch(() => {
+                    setLoading('subject', false);
+                    setLoading('semester', false);
+                    alert('Xatolik yuz berdi');
+                    document.getElementById('filter-group').value = currentGroupId;
+                });
+        }
+
+        function onSubjectChange(newSubjectId) {
+            if (newSubjectId === currentSubjectId) return;
+            const groupId = document.getElementById('filter-group').value;
+            const semesterCode = document.getElementById('filter-semester').value;
+            navigateToJournal(groupId, newSubjectId, semesterCode);
+        }
+
+        function onSemesterChange(newSemesterCode) {
+            if (newSemesterCode === currentSemesterCode) return;
+            const groupId = document.getElementById('filter-group').value;
+            const subjectId = document.getElementById('filter-subject').value;
+            navigateToJournal(groupId, subjectId, newSemesterCode);
+        }
+
+        // Load filters when page is ready
+        document.addEventListener('DOMContentLoaded', loadInitialFilters);
+
         // MT Grade save configuration
         const mtGradeConfig = {
             url: '{{ route("admin.journal.save-mt-grade") }}',

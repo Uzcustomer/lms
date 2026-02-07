@@ -553,18 +553,48 @@ class JournalController extends Controller
             $otherGrades[$studentId] = $result;
         }
 
-        // Get attendance data for each student (auditorium types only: exclude MT, ON, OSKI, Test)
+        // Get attendance data from HEMIS API (real-time, authoritative source)
         $excludedAttendanceCodes = [99, 100, 101, 102];
-        $attendanceData = DB::table('attendances')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
-            ->whereNotIn('training_type_code', $excludedAttendanceCodes)
-            ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
-            ->groupBy('student_hemis_id')
-            ->pluck('total_absent_off', 'student_hemis_id')
-            ->toArray();
+        $attendanceData = [];
+        try {
+            $hemisToken = config('services.hemis.token');
+            $page = 1;
+            do {
+                $apiResponse = Http::timeout(10)->withoutVerifying()->withToken($hemisToken)
+                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-list", [
+                        'limit' => 200,
+                        'page' => $page,
+                        '_group' => $group->group_hemis_id,
+                        '_subject' => $subjectId,
+                    ]);
+                if ($apiResponse->successful()) {
+                    $apiData = $apiResponse->json()['data'];
+                    foreach ($apiData['items'] as $item) {
+                        $sHemisId = $item['student']['id'];
+                        $tCode = (int) ($item['trainingType']['code'] ?? 0);
+                        if (!in_array($tCode, $excludedAttendanceCodes)) {
+                            $attendanceData[$sHemisId] = ($attendanceData[$sHemisId] ?? 0) + $item['absent_off'];
+                        }
+                    }
+                    $apiTotalPages = $apiData['pagination']['pageCount'] ?? 1;
+                    $page++;
+                } else {
+                    break;
+                }
+            } while ($page <= $apiTotalPages);
+        } catch (\Exception $e) {
+            // Fallback: use local attendance data if HEMIS API is unavailable
+            $attendanceData = DB::table('attendances')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+                ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+                ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
+                ->groupBy('student_hemis_id')
+                ->pluck('total_absent_off', 'student_hemis_id')
+                ->toArray();
+        }
 
         // Get manual MT grades (entries without lesson_date)
         $manualMtGrades = DB::table('student_grades')
@@ -581,6 +611,7 @@ class JournalController extends Controller
 
         // Calculate auditorium hours (classroom hours only: Ma'ruza + Amaliyot)
         // Exclude: 99=MT, 100=ON, 101=OSKI, 102=Test
+        // Note: subject_details contains FULL YEAR data (all semesters), so we divide by semester count
         $excludedAcloadCodes = [99, 100, 101, 102];
         $auditoriumHours = 0;
         if (is_array($subject->subject_details)) {
@@ -594,6 +625,13 @@ class JournalController extends Controller
         // Fallback to total_acload if subject_details is empty or auditorium hours is 0
         if ($auditoriumHours <= 0) {
             $auditoriumHours = $totalAcload;
+        }
+        // subject_details stores full-year totals; divide by number of semesters for per-semester value
+        $subjectSemesterCount = CurriculumSubject::where('subject_id', $subjectId)
+            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+            ->count();
+        if ($subjectSemesterCount > 1) {
+            $auditoriumHours = round($auditoriumHours / $subjectSemesterCount);
         }
 
         // Faculty (Fakultet) - department linked to curriculum

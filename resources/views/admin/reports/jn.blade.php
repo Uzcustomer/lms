@@ -333,6 +333,8 @@
 
             var fpConfig = {
                 dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'd.m.Y',
                 allowInput: true,
                 locale: uzLocale,
                 onDayCreate: function(dObj, dStr, fp, dayElem) {
@@ -341,14 +343,33 @@
                     }
                 },
                 onReady: function(selectedDates, dateStr, instance) {
-                    // Scroll bilan oylar o'rtasida o'tish
+                    // Alt input ga class va placeholder berish
+                    if (instance.altInput) {
+                        instance.altInput.classList.add('date-input');
+                        instance.altInput.setAttribute('placeholder', 'kk.oo.yyyy');
+                    }
+                    // Scroll bilan oylar o'rtasida yumshoq o'tish (throttle)
+                    var lastScroll = 0;
                     instance.calendarContainer.addEventListener('wheel', function(e) {
                         e.preventDefault();
+                        var now = Date.now();
+                        if (now - lastScroll < 250) return;
+                        lastScroll = now;
+                        var daysWrap = instance.calendarContainer.querySelector('.flatpickr-days');
+                        if (daysWrap) {
+                            daysWrap.style.transition = 'opacity 0.15s ease';
+                            daysWrap.style.opacity = '0.3';
+                        }
                         if (e.deltaY > 0) {
                             instance.changeMonth(1);
                         } else {
                             instance.changeMonth(-1);
                         }
+                        setTimeout(function() {
+                            if (daysWrap) {
+                                daysWrap.style.opacity = '1';
+                            }
+                        }, 30);
                     }, { passive: false });
                 }
             };

@@ -1,12 +1,14 @@
-<aside class="w-64 flex flex-col fixed left-0 top-0 z-50" style="background: linear-gradient(180deg, #0c1929 0%, #142850 50%, #1a3268 100%); height: 100vh; box-shadow: 4px 0 24px rgba(0,0,0,0.3);">
+<aside x-data="sidebarTheme()" :data-theme="theme"
+       class="sidebar-themed w-64 flex flex-col fixed left-0 top-0 z-50"
+       style="height: 100vh;">
     <!-- Logo Section -->
-    <div class="p-4 flex flex-col items-center flex-shrink-0" style="background-color: rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.08);">
-        <img src="{{ asset('logo.png') }}" alt="Logo" class="w-16 h-16 rounded-full mb-2" style="border: 3px solid rgba(255,255,255,0.25); box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-        <h1 style="color: #ffffff; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.05em;">LMS</h1>
+    <div class="p-4 flex flex-col items-center flex-shrink-0 sidebar-logo-section">
+        <img src="{{ asset('logo.png') }}" alt="Logo" class="w-16 h-16 rounded-full mb-2 sidebar-logo-img">
+        <h1 class="sidebar-logo-text">LMS</h1>
     </div>
 
     <!-- Navigation Menu -->
-    <nav class="flex-1 py-3 px-3 overflow-y-auto" style="scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent;">
+    <nav class="flex-1 py-3 px-3 overflow-y-auto sidebar-nav">
         <a href="{{ route('admin.dashboard') }}"
            class="sidebar-link {{ request()->routeIs('admin.dashboard') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -137,7 +139,6 @@
             JN o'zlashtirish
         </a>
 
-
         @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya']))
         <a href="{{ route('admin.examtest.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.examtest.*') ? 'sidebar-active' : '' }}">
@@ -150,8 +151,8 @@
     </nav>
 
     <!-- User Section with Profile Dropdown -->
-    <div class="p-3 flex-shrink-0" x-data="{ profileOpen: false }" @click.outside="profileOpen = false" style="background-color: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.08);">
-        <!-- Dropdown Menu (fixed, opens upward from bottom-left) -->
+    <div class="p-3 flex-shrink-0 sidebar-user-section" x-data="{ profileOpen: false }" @click.outside="profileOpen = false">
+        <!-- Dropdown Menu (fixed, opens upward) -->
         <div x-show="profileOpen"
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 transform translate-y-2"
@@ -159,12 +160,31 @@
              x-transition:leave="transition ease-in duration-150"
              x-transition:leave-start="opacity-100 transform translate-y-0"
              x-transition:leave-end="opacity-0 transform translate-y-2"
-             class="fixed rounded-xl overflow-hidden"
-             style="bottom: 70px; left: 12px; width: 232px; z-index: 9999; background: #1e293b; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 -8px 32px rgba(0,0,0,0.5);">
+             class="fixed rounded-xl overflow-hidden sidebar-dropdown"
+             style="bottom: 70px; left: 12px; width: 232px; z-index: 9999;">
 
             <!-- User email/info -->
-            <div class="px-4 py-3" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
-                <p style="color: rgba(255,255,255,0.5); font-size: 0.75rem;">{{ Auth::user()->email ?? Auth::user()->name }}</p>
+            <div class="px-4 py-3 sidebar-dropdown-header">
+                <p class="sidebar-dropdown-email">{{ Auth::user()->email ?? Auth::user()->name }}</p>
+            </div>
+
+            <!-- Theme switcher -->
+            <div class="py-1 sidebar-dropdown-divider-bottom">
+                <button @click="toggleTheme()" class="profile-dropdown-link w-full text-left">
+                    <!-- Sun icon (shown in dark mode) -->
+                    <template x-if="theme === 'kosmik'">
+                        <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                    </template>
+                    <!-- Moon icon (shown in light mode) -->
+                    <template x-if="theme === 'yorug'">
+                        <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                        </svg>
+                    </template>
+                    <span>Mavzu: <strong x-text="theme === 'kosmik' ? 'Kosmik' : 'Yorug\''"></strong></span>
+                </button>
             </div>
 
             @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
@@ -190,14 +210,14 @@
                 </a>
             </div>
 
-            <div style="border-top: 1px solid rgba(255,255,255,0.08);"></div>
+            <div class="sidebar-dropdown-divider"></div>
             @endif
 
             <!-- Logout -->
             <div class="py-1">
                 <form method="POST" action="{{ route('admin.logout') }}">
                     @csrf
-                    <button type="submit" class="profile-dropdown-link w-full text-left" style="color: #fca5a5;">
+                    <button type="submit" class="profile-dropdown-link w-full text-left sidebar-logout-btn">
                         <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                         </svg>
@@ -208,73 +228,251 @@
         </div>
 
         <!-- Profile Button (clickable) -->
-        <button @click="profileOpen = !profileOpen" class="w-full flex items-center px-2 py-2 rounded-lg transition-all duration-200 hover:bg-white/10 cursor-pointer">
-            <div class="w-9 h-9 rounded-full flex items-center justify-center mr-3 flex-shrink-0" style="background: linear-gradient(135deg, #2b5ea7, #3b7ddb);">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #ffffff;">
+        <button @click="profileOpen = !profileOpen" class="w-full flex items-center px-2 py-2 rounded-lg transition-all duration-200 sidebar-profile-btn cursor-pointer">
+            <div class="w-9 h-9 rounded-full flex items-center justify-center mr-3 flex-shrink-0 sidebar-avatar">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                 </svg>
             </div>
             <div class="flex-1 text-left min-w-0">
-                <span class="block truncate" style="color: #ffffff; font-weight: 500; font-size: 0.875rem;">{{ Auth::user()->name }}</span>
+                <span class="block truncate sidebar-username">{{ Auth::user()->name }}</span>
             </div>
-            <svg class="w-4 h-4 flex-shrink-0 transition-transform duration-200" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: rgba(255,255,255,0.5);">
+            <svg class="w-4 h-4 flex-shrink-0 transition-transform duration-200 sidebar-chevron" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
             </svg>
         </button>
     </div>
 
     <style>
+        /* ===== KOSMIK THEME (Dark - Default) ===== */
+        .sidebar-themed[data-theme="kosmik"] {
+            background: linear-gradient(180deg, #0c1929 0%, #142850 50%, #1a3268 100%);
+            box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-logo-section {
+            background-color: rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-logo-img {
+            border: 3px solid rgba(255,255,255,0.25);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-logo-text {
+            color: #ffffff;
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-nav {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.15) transparent;
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-link {
+            color: rgba(255,255,255,0.75);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-link:hover {
+            background-color: rgba(255,255,255,0.08);
+            color: #ffffff;
+            border-left-color: rgba(255,255,255,0.3);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-link.sidebar-active {
+            background: linear-gradient(135deg, rgba(43,94,167,0.5), rgba(43,94,167,0.3));
+            color: #ffffff;
+            border-left-color: #60a5fa;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-link.sidebar-active .sidebar-icon {
+            color: #60a5fa;
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-icon {
+            color: rgba(255,255,255,0.5);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-link:hover .sidebar-icon {
+            color: rgba(255,255,255,0.85);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-section {
+            color: rgba(96,165,250,0.6);
+            border-top-color: rgba(255,255,255,0.05);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-user-section {
+            background-color: rgba(0,0,0,0.25);
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-profile-btn:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-avatar {
+            background: linear-gradient(135deg, #2b5ea7, #3b7ddb);
+            color: #ffffff;
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-username {
+            color: #ffffff;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-chevron {
+            color: rgba(255,255,255,0.5);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-dropdown {
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.12);
+            box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-dropdown-header {
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-dropdown-email {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.75rem;
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-dropdown-divider {
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-dropdown-divider-bottom {
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .sidebar-themed[data-theme="kosmik"] .profile-dropdown-link {
+            color: rgba(255,255,255,0.8);
+        }
+        .sidebar-themed[data-theme="kosmik"] .profile-dropdown-link:hover {
+            background-color: rgba(255,255,255,0.08);
+            color: #ffffff;
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-logout-btn {
+            color: #fca5a5 !important;
+        }
+
+        /* ===== YORUG' THEME (Light) ===== */
+        .sidebar-themed[data-theme="yorug"] {
+            background: #ffffff;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.08);
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-logo-section {
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-logo-img {
+            border: 3px solid #e5e7eb;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-logo-text {
+            color: #1f2937;
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-nav {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(0,0,0,0.12) transparent;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-link {
+            color: #4b5563;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-link:hover {
+            background-color: #f3f4f6;
+            color: #111827;
+            border-left-color: #d1d5db;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-link.sidebar-active {
+            background: #eff6ff;
+            color: #1d4ed8;
+            border-left-color: #3b82f6;
+            box-shadow: none;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-link.sidebar-active .sidebar-icon {
+            color: #3b82f6;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-icon {
+            color: #9ca3af;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-link:hover .sidebar-icon {
+            color: #6b7280;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-section {
+            color: #3b82f6;
+            border-top-color: #e5e7eb;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-user-section {
+            background-color: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-profile-btn:hover {
+            background-color: #f3f4f6;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-avatar {
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+            color: #ffffff;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-username {
+            color: #1f2937;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-chevron {
+            color: #9ca3af;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-dropdown {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 -8px 32px rgba(0,0,0,0.12);
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-dropdown-header {
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-dropdown-email {
+            color: #6b7280;
+            font-size: 0.75rem;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-dropdown-divider {
+            border-top: 1px solid #e5e7eb;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-dropdown-divider-bottom {
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .sidebar-themed[data-theme="yorug"] .profile-dropdown-link {
+            color: #4b5563;
+        }
+        .sidebar-themed[data-theme="yorug"] .profile-dropdown-link:hover {
+            background-color: #f3f4f6;
+            color: #111827;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-logout-btn {
+            color: #ef4444 !important;
+        }
+
+        /* ===== BASE STYLES (shared) ===== */
         .sidebar-link {
             display: flex;
             align-items: center;
             padding: 10px 16px;
             margin-bottom: 2px;
             border-radius: 8px;
-            color: rgba(255,255,255,0.75);
             font-size: 0.875rem;
             font-weight: 400;
             text-decoration: none;
             transition: all 0.2s ease;
             border-left: 3px solid transparent;
         }
-        .sidebar-link:hover {
-            background-color: rgba(255,255,255,0.08);
-            color: #ffffff;
-            border-left-color: rgba(255,255,255,0.3);
-        }
         .sidebar-link.sidebar-active {
-            background: linear-gradient(135deg, rgba(43,94,167,0.5), rgba(43,94,167,0.3));
-            color: #ffffff;
             font-weight: 600;
-            border-left-color: #60a5fa;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-        .sidebar-link.sidebar-active .sidebar-icon {
-            color: #60a5fa;
         }
         .sidebar-icon {
-            color: rgba(255,255,255,0.5);
             transition: color 0.2s;
             flex-shrink: 0;
-        }
-        .sidebar-link:hover .sidebar-icon {
-            color: rgba(255,255,255,0.85);
         }
         .sidebar-section {
             padding: 12px 16px 8px;
             margin-top: 12px;
-            color: rgba(96,165,250,0.6);
             font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.12em;
-            border-top: 1px solid rgba(255,255,255,0.05);
+            border-top: 1px solid transparent;
         }
         .profile-dropdown-link {
             display: flex;
             align-items: center;
             padding: 10px 16px;
-            color: rgba(255,255,255,0.8);
             font-size: 0.8rem;
             font-weight: 400;
             text-decoration: none;
@@ -283,9 +481,17 @@
             background: none;
             border: none;
         }
-        .profile-dropdown-link:hover {
-            background-color: rgba(255,255,255,0.08);
-            color: #ffffff;
-        }
     </style>
+
+    <script>
+        function sidebarTheme() {
+            return {
+                theme: localStorage.getItem('sidebar-theme') || 'kosmik',
+                toggleTheme() {
+                    this.theme = this.theme === 'kosmik' ? 'yorug' : 'kosmik';
+                    localStorage.setItem('sidebar-theme', this.theme);
+                }
+            }
+        }
+    </script>
 </aside>

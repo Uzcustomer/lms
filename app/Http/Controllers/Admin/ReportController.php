@@ -74,29 +74,29 @@ class ReportController extends Controller
     {
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
-        // 1-QADAM: schedules dan to'g'ri (group_hemis_id, subject_id, semester_code, min_date)
-        //          kombinatsiyalarini olish — BU TEZ (schedules kichik jadval)
-        $scheduleQuery = DB::table('schedules')
-            ->whereNotIn('training_type_code', $excludedCodes)
-            ->whereNotNull('lesson_date')
+        // 1-QADAM: schedules dan to'g'ri kombinatsiyalarni olish
+        //   Joriy semestr filtri: schedules.semester_code shu GURUHNING
+        //   curriculum'i uchun joriy bo'lishi kerak (har qanday curriculum emas)
+        $scheduleQuery = DB::table('schedules as sch')
+            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotNull('sch.lesson_date')
             ->select(
-                'group_id',
-                'subject_id',
-                'semester_code',
-                DB::raw('MIN(lesson_date) as min_date')
+                'sch.group_id',
+                'sch.subject_id',
+                'sch.semester_code',
+                DB::raw('MIN(sch.lesson_date) as min_date')
             )
-            ->groupBy('group_id', 'subject_id', 'semester_code');
+            ->groupBy('sch.group_id', 'sch.subject_id', 'sch.semester_code');
 
-        // Joriy semestr filtri
+        // Joriy semestr filtri — guruhning curriculum'iga mos joriy semestr
         if ($request->get('current_semester', '1') == '1') {
-            $currentSemesterCodes = DB::table('semesters')
-                ->where('current', true)
-                ->pluck('code')
-                ->unique()
-                ->toArray();
-            if (!empty($currentSemesterCodes)) {
-                $scheduleQuery->whereIn('semester_code', $currentSemesterCodes);
-            }
+            $scheduleQuery
+                ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.code', '=', 'sch.semester_code')
+                        ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
+                })
+                ->where('sem.current', true);
         }
 
         if ($request->filled('semester_code')) {

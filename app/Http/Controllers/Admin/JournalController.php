@@ -297,6 +297,13 @@ class JournalController extends Controller
             if ($row->status === 'pending') {
                 return null;
             }
+            // Absent entries with no actual grade: use retake_grade if available, otherwise null (show as NB)
+            if ($row->reason === 'absent' && $row->grade === null) {
+                if ($row->retake_grade !== null) {
+                    return ['grade' => $row->retake_grade, 'is_retake' => true];
+                }
+                return null;
+            }
             // status = closed AND reason = teacher_victim AND grade == 0 AND retake_grade === null → null
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
@@ -419,11 +426,11 @@ class JournalController extends Controller
         }
 
         // Track absence markers (NB) separately from grades:
-        // - absent row with pending status => NB
-        // - real numeric grade (including 0) still has priority in cell rendering
+        // - absent row (any status) => NB if no effective grade exists
+        // - real numeric grade (including retake) still has priority in cell rendering
         $jbAbsences = [];
         foreach ($jbGradesRaw as $g) {
-            if ($g->reason === 'absent' && $g->status === 'pending') {
+            if ($g->reason === 'absent') {
                 $jbAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = [
                     'id' => $g->id,
                     'retake_grade' => $g->retake_grade
@@ -433,7 +440,7 @@ class JournalController extends Controller
 
         $mtAbsences = [];
         foreach ($mtGradesRaw as $g) {
-            if ($g->reason === 'absent' && $g->status === 'pending') {
+            if ($g->reason === 'absent') {
                 $mtAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = [
                     'id' => $g->id,
                     'retake_grade' => $g->retake_grade
@@ -570,6 +577,23 @@ class JournalController extends Controller
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
 
+        // Calculate auditorium hours (classroom hours only: Ma'ruza + Amaliyot)
+        // Exclude: 99=MT, 100=ON, 101=OSKI, 102=Test
+        $excludedAcloadCodes = [99, 100, 101, 102];
+        $auditoriumHours = 0;
+        if (is_array($subject->subject_details)) {
+            foreach ($subject->subject_details as $detail) {
+                $trainingCode = $detail['trainingType']['code'] ?? ($detail['id'] ?? null);
+                if ($trainingCode !== null && !in_array((int) $trainingCode, $excludedAcloadCodes)) {
+                    $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                }
+            }
+        }
+        // Fallback to total_acload if subject_details is empty or auditorium hours is 0
+        if ($auditoriumHours <= 0) {
+            $auditoriumHours = $totalAcload;
+        }
+
         // Faculty (Fakultet) - department linked to curriculum
         $faculty = Department::where('department_hemis_id', $curriculum->department_hemis_id ?? null)->first();
         $facultyName = $faculty->name ?? '';
@@ -631,6 +655,7 @@ class JournalController extends Controller
             'attendanceData',
             'manualMtGrades',
             'totalAcload',
+            'auditoriumHours',
             'groupId',
             'subjectId',
             'semesterCode'

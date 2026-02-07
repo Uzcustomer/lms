@@ -169,7 +169,7 @@
                                                 </td>
 
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                    {{ $qaytnoma->created_at->format('d-m-Y H:i:s') }}
+                                                    {{ format_datetime($qaytnoma->created_at, true) }}
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
 

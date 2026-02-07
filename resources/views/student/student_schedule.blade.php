@@ -33,8 +33,8 @@
                                 id="week-select"
                                 name="week_id"
                                 :options="$weeks->map(function($week) use ($selectedWeekId) {
-                                    $startDate = \Carbon\Carbon::createFromTimestamp($week['start_date'])->format('d.m.Y');
-                                    $endDate = \Carbon\Carbon::createFromTimestamp($week['end_date'])->format('d.m.Y');
+                                    $startDate = format_date(\Carbon\Carbon::createFromTimestamp($week['start_date']));
+                                    $endDate = format_date(\Carbon\Carbon::createFromTimestamp($week['end_date']));
                                     return [
                                         'value' => $week['id'],
                                         'label' => $startDate . ' - ' . $endDate,

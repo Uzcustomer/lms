@@ -6,7 +6,16 @@
             </svg>
             <h2 class="text-lg font-bold text-gray-900">Profilni to'ldiring</h2>
         </div>
-        <p class="text-sm text-gray-500">Davom etish uchun telefon raqamingiz va Telegram hisobingizni tasdiqlang.</p>
+        <p class="text-sm text-gray-500">
+            @if(!$teacher->phone)
+                Davom etish uchun telefon raqamingizni kiriting.
+            @else
+                Telegram hisobingizni tasdiqlang.
+                @if(!$teacher->isTelegramVerified())
+                    <span class="font-medium text-orange-600">({{ $teacher->telegramDaysLeft() }} kun muhlat)</span>
+                @endif
+            @endif
+        </p>
     </div>
 
     @if (session('success'))
@@ -190,6 +199,16 @@
             @endif
         @endif
     </div>
+
+    {{-- Keyinroq tugmasi — telegram muhlat o'tmagan bo'lsa --}}
+    @if($teacher->phone && !$teacher->isTelegramVerified() && !$teacher->isTelegramDeadlinePassed())
+        <div class="mt-4 text-center">
+            <a href="{{ route('teacher.dashboard') }}"
+               class="text-sm text-gray-500 hover:text-gray-700 underline">
+                Keyinroq tasdiqlash ({{ $teacher->telegramDaysLeft() }} kun qoldi)
+            </a>
+        </div>
+    @endif
 
     <script>
         function formatPhone(input) {

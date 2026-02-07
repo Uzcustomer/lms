@@ -41,7 +41,7 @@ class TeacherAuthController extends Controller
                 return redirect()->route('teacher.force-change-password');
             }
 
-            if (!$teacher->isProfileComplete()) {
+            if (!$teacher->isProfileComplete() || $teacher->isTelegramDeadlinePassed()) {
                 return redirect()->route('teacher.complete-profile');
             }
 
@@ -89,7 +89,12 @@ class TeacherAuthController extends Controller
     public function showCompleteProfile()
     {
         $teacher = Auth::guard('teacher')->user();
-        if (!$teacher || $teacher->isProfileComplete()) {
+        if (!$teacher) {
+            return redirect()->route('teacher.login');
+        }
+
+        // Telefon bor va telegram muhlat o'tmagan — sahifani ko'rsatish shart emas
+        if ($teacher->isProfileComplete() && !$teacher->isTelegramDeadlinePassed() && $teacher->isTelegramVerified()) {
             return redirect()->route('teacher.dashboard');
         }
 
@@ -111,7 +116,9 @@ class TeacherAuthController extends Controller
         $teacher->phone = $request->phone;
         $teacher->save();
 
-        return redirect()->route('teacher.complete-profile')->with('success', 'Telefon raqami saqlandi.');
+        // Telefon saqlandi — dashboardga yo'naltiramiz (telegram hali majburiy emas)
+        return redirect()->route('teacher.dashboard')
+            ->with('success', 'Telefon raqami saqlandi. Telegram hisobingizni 7 kun ichida tasdiqlang.');
     }
 
     public function saveTelegram(Request $request)

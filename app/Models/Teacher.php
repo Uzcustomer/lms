@@ -60,7 +60,34 @@ class Teacher extends Authenticatable
 
     public function isProfileComplete(): bool
     {
-        return !empty($this->phone) && !empty($this->telegram_username) && $this->telegram_verified_at !== null;
+        return !empty($this->phone);
+    }
+
+    public function isTelegramVerified(): bool
+    {
+        return $this->telegram_verified_at !== null;
+    }
+
+    public function telegramDaysLeft(): int
+    {
+        if ($this->isTelegramVerified()) {
+            return 0;
+        }
+
+        // Telefon kiritilgan vaqtdan 7 kun
+        if (!$this->phone) {
+            return 7;
+        }
+
+        $deadline = $this->updated_at->copy()->addDays(7);
+        $daysLeft = (int) now()->diffInDays($deadline, false);
+
+        return max($daysLeft, 0);
+    }
+
+    public function isTelegramDeadlinePassed(): bool
+    {
+        return !$this->isTelegramVerified() && $this->phone && $this->telegramDaysLeft() <= 0;
     }
 
     public function studentGrades()

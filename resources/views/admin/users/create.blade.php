@@ -30,14 +30,16 @@
                                    required>
                         </div>
                         <div class="mb-4">
-                            <label for="role" class="block text-gray-700 text-sm font-bold mb-2">Role:</label>
-                            <select name="role" id="role"
+                            <label for="roles" class="block text-gray-700 text-sm font-bold mb-2">Rollar (bir nechta tanlash mumkin):</label>
+                            <select name="roles[]" id="roles" multiple
                                     class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                    style="min-height: 150px;"
                                     required>
                                 @foreach($roles as $role)
-                                    <option value="{{ $role->name }}">{{ $role->name }}</option>
+                                    <option value="{{ $role->value }}">{{ $role->label() }}</option>
                                 @endforeach
                             </select>
+                            <p class="text-gray-500 text-xs mt-1">Ctrl (Cmd) tugmasini bosib bir nechta rol tanlang</p>
                         </div>
                         <div class="flex items-center justify-between">
                             <button type="submit"

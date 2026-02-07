@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\ProjectRole;
 use App\Http\Controllers\Controller;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumWeek;
@@ -41,16 +42,20 @@ class TeacherController extends Controller
     public function edit(Teacher $teacher)
     {
         $departments = Department::where('structure_type_code', 11)->get();
-        return view('admin.teachers.edit', compact('teacher', 'departments'));
+        $roles = ProjectRole::teacherRoles();
+        return view('admin.teachers.edit', compact('teacher', 'departments', 'roles'));
     }
 
     public function update(Request $request, Teacher $teacher)
     {
+        $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::teacherRoles());
+
         $request->validate([
             'login' => 'required|string|max:255|unique:teachers,login,' . $teacher->id,
             'password' => 'nullable|string|min:6',
-            'role' => 'required|in:teacher,dekan',
-            'department_hemis_id' => 'required_if:role,dekan|exists:departments,department_hemis_id',
+            'roles' => 'required|array|min:1',
+            'roles.*' => 'in:' . implode(',', $validRoleValues),
+            'department_hemis_id' => 'nullable|exists:departments,department_hemis_id',
             'status' => 'required|boolean',
         ]);
 
@@ -58,12 +63,13 @@ class TeacherController extends Controller
         if ($request->filled('password')) {
             $teacher->password = Hash::make($request->password);
         }
-        $teacher->role = $request->role;
-        $teacher->department_hemis_id = $request->role === 'dekan' ? $request->department_hemis_id : null;
+        $teacher->department_hemis_id = in_array(ProjectRole::DEAN->value, $request->roles)
+            ? $request->department_hemis_id
+            : null;
         $teacher->status = $request->status;
 
         $teacher->save();
-        $teacher->syncRoles([$request->role]);
+        $teacher->syncRoles($request->roles);
 
         return redirect()->route('admin.teachers.index')->with('success', 'O\'qituvchi ma\'lumotlari yangilandi');
     }

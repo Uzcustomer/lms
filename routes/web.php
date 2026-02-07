@@ -201,6 +201,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
         Route::get('/reports/schedule-report/data', [ReportController::class, 'scheduleReportData'])->name('reports.schedule-report.data');
 
+        Route::get('/reports/absence', [ReportController::class, 'absenceReport'])->name('reports.absence');
+        Route::get('/reports/absence/data', [ReportController::class, 'absenceReportData'])->name('reports.absence.data');
+
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
         Route::get('/lessons/create', [LessonController::class, 'index'])->name('lessons.create');

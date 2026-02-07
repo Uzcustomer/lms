@@ -44,6 +44,12 @@ class TeacherController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('is_active')) {
+            $query->where('is_active', $request->is_active);
+        } else {
+            $query->where('is_active', true);
+        }
+
         $teachers = $query->paginate(15)->withQueryString();
 
         $departments = Teacher::whereNotNull('department')->distinct()->pluck('department')->sort()->values();

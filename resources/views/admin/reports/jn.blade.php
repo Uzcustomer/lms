@@ -308,10 +308,42 @@
                 loadReport(1);
             });
 
-            // Flatpickr init
-            var fpFrom = flatpickr('#date_from', {
+            // O'zbek tili lokalizatsiyasi
+            var uzLocale = {
+                firstDayOfWeek: 1,
+                weekdays: {
+                    shorthand: ["Yak", "Dush", "Sesh", "Chor", "Pay", "Jum", "Shan"],
+                    longhand: ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"]
+                },
+                months: {
+                    shorthand: ["Yan", "Fev", "Mar", "Apr", "May", "Iyun", "Iyul", "Avg", "Sen", "Okt", "Noy", "Dek"],
+                    longhand: ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"]
+                },
+                rangeSeparator: " — ",
+                weekAbbreviation: "Haf",
+                scrollTitle: "Kattalashtirish uchun aylantiring",
+                toggleTitle: "O'zgartirish",
+                amPM: ["AM", "PM"],
+                yearAriaLabel: "Yil",
+                monthAriaLabel: "Oy",
+                hourAriaLabel: "Soat",
+                minuteAriaLabel: "Daqiqa",
+                time_24hr: true
+            };
+
+            var fpConfig = {
                 dateFormat: 'Y-m-d',
                 allowInput: true,
+                locale: uzLocale,
+                onDayCreate: function(dObj, dStr, fp, dayElem) {
+                    if (dayElem.dateObj.getDay() === 0) {
+                        dayElem.classList.add('flatpickr-sunday');
+                    }
+                }
+            };
+
+            // Flatpickr init
+            var fpFrom = flatpickr('#date_from', Object.assign({}, fpConfig, {
                 onChange: function(selectedDates) {
                     if (selectedDates.length) {
                         fpTo.set('minDate', selectedDates[0]);
@@ -319,10 +351,8 @@
                         fpTo.set('minDate', null);
                     }
                 }
-            });
-            var fpTo = flatpickr('#date_to', {
-                dateFormat: 'Y-m-d',
-                allowInput: true,
+            }));
+            var fpTo = flatpickr('#date_to', Object.assign({}, fpConfig, {
                 onChange: function(selectedDates) {
                     if (selectedDates.length) {
                         fpFrom.set('maxDate', selectedDates[0]);
@@ -330,7 +360,7 @@
                         fpFrom.set('maxDate', null);
                     }
                 }
-            });
+            }));
 
             // Select2 init
             $('.select2').each(function() {
@@ -376,6 +406,12 @@
         .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
         .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
         .date-input::placeholder { color: #94a3b8; font-weight: 400; }
+
+        /* Flatpickr: Yakshanba kunlarini qizil rangda ko'rsatish */
+        .flatpickr-sunday { color: #dc2626 !important; font-weight: 600 !important; }
+        .flatpickr-sunday:hover { background: #fef2f2 !important; }
+        .flatpickr-sunday.selected { background: #dc2626 !important; color: #fff !important; }
+        .flatpickr-calendar .flatpickr-weekday:nth-child(7) { color: #dc2626 !important; font-weight: 700 !important; }
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }

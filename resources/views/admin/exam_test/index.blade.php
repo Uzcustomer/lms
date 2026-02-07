@@ -383,7 +383,7 @@
                                             {{ $examtest->grade_teacher ?? "???" }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {{ $examtest->created_at->format('d-m-Y H:i:s') }}
+                                            {{ format_datetime($examtest->created_at, true) }}
                                         </td>
 
 

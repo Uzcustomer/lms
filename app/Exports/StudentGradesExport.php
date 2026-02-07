@@ -45,7 +45,7 @@ class StudentGradesExport implements FromCollection
             }
         } else {
             foreach ($this->dates as $date) {
-                $header[] = $date->format('d.m.Y');
+                $header[] = format_date($date);
             }
         }
         $data->push($header);

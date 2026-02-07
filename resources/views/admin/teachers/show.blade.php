@@ -105,7 +105,7 @@
                         @if($teacher->birth_date)
                         <div class="info-row">
                             <span class="info-label">Tug'ilgan sana</span>
-                            <span class="info-value">{{ \Carbon\Carbon::parse($teacher->birth_date)->format('d.m.Y') }}</span>
+                            <span class="info-value">{{ format_date($teacher->birth_date) }}</span>
                         </div>
                         @endif
                         <div class="info-row">

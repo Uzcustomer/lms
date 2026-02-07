@@ -208,7 +208,7 @@
                                                                     </td>
 
                                                                     <td class="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">
-                                                                        {{ $vedomost->created_at->format('d-m-Y H:i:s') }}
+                                                                        {{ format_datetime($vedomost->created_at, true) }}
                                                                     </td>
                                                                     <td class="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
                                                                         @if(auth()->user()->hasRole(['admin']))

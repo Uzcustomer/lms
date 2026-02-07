@@ -54,9 +54,7 @@ class LessonHistory extends Model
     {
         return collect($this->schedule_info)->pluck('lesson_date')
             ->map(function($date) {
-                return Carbon::parse($date)
-                    ->timezone('Asia/Tashkent')
-                    ->format('d.m.Y');
+                return format_date($date);
             })
             ->join(', ');
     }

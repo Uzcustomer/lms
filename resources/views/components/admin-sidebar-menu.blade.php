@@ -160,31 +160,82 @@
              x-transition:leave="transition ease-in duration-150"
              x-transition:leave-start="opacity-100 transform translate-y-0"
              x-transition:leave-end="opacity-0 transform translate-y-2"
-             class="fixed rounded-xl overflow-hidden sidebar-dropdown"
-             style="bottom: 70px; left: 12px; width: 232px; z-index: 9999;">
+             class="fixed rounded-xl sidebar-dropdown"
+             style="bottom: 70px; left: 12px; width: 232px; z-index: 9999; overflow: visible;">
 
             <!-- User email/info -->
-            <div class="px-4 py-3 sidebar-dropdown-header">
+            <div class="px-4 py-3 sidebar-dropdown-header" style="border-radius: 12px 12px 0 0;">
                 <p class="sidebar-dropdown-email">{{ Auth::user()->email ?? Auth::user()->name }}</p>
             </div>
 
-            <!-- Theme switcher -->
-            <div class="py-1 sidebar-dropdown-divider-bottom">
-                <button @click="toggleTheme()" class="profile-dropdown-link w-full text-left">
-                    <!-- Sun icon (shown in dark mode) -->
-                    <template x-if="theme === 'kosmik'">
+            <!-- Theme switcher with cascade submenu -->
+            <div class="py-1 sidebar-dropdown-divider-bottom" x-data="{ themeOpen: false }" style="position: relative;">
+                <button @mouseenter="themeOpen = true" @mouseleave="themeOpen = false"
+                        @click="themeOpen = !themeOpen"
+                        class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
+                    <span class="flex items-center">
                         <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
                         </svg>
-                    </template>
-                    <!-- Moon icon (shown in light mode) -->
-                    <template x-if="theme === 'yorug'">
-                        <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
-                        </svg>
-                    </template>
-                    <span>Mavzu: <strong x-text="theme === 'kosmik' ? 'Kosmik' : 'Yorug\''"></strong></span>
+                        Mavzu
+                    </span>
+                    <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
                 </button>
+
+                <!-- Cascade submenu (opens to the right) -->
+                <div x-show="themeOpen"
+                     @mouseenter="themeOpen = true"
+                     @mouseleave="themeOpen = false"
+                     x-transition:enter="transition ease-out duration-150"
+                     x-transition:enter-start="opacity-0 transform -translate-x-1"
+                     x-transition:enter-end="opacity-100 transform translate-x-0"
+                     x-transition:leave="transition ease-in duration-100"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="sidebar-submenu"
+                     style="position: fixed; left: 248px; width: 170px; z-index: 10000;"
+                     x-init="$nextTick(() => {
+                         const el = $el;
+                         const parent = $el.previousElementSibling;
+                         if (parent) {
+                             const rect = parent.getBoundingClientRect();
+                             el.style.top = (rect.top - 4) + 'px';
+                         }
+                     })"
+                     x-effect="if (themeOpen) {
+                         const parent = $el.previousElementSibling;
+                         if (parent) {
+                             const rect = parent.getBoundingClientRect();
+                             $el.style.top = (rect.top - 4) + 'px';
+                         }
+                     }">
+                    <button @click="setTheme('kosmik'); themeOpen = false;"
+                            class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                            </svg>
+                            Kosmik
+                        </span>
+                        <svg x-show="theme === 'kosmik'" class="w-4 h-4 flex-shrink-0 sidebar-check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </button>
+                    <button @click="setTheme('yorug'); themeOpen = false;"
+                            class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                            </svg>
+                            Yorug'
+                        </span>
+                        <svg x-show="theme === 'yorug'" class="w-4 h-4 flex-shrink-0 sidebar-check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
@@ -214,7 +265,7 @@
             @endif
 
             <!-- Logout -->
-            <div class="py-1">
+            <div class="py-1" style="border-radius: 0 0 12px 12px;">
                 <form method="POST" action="{{ route('admin.logout') }}">
                     @csrf
                     <button type="submit" class="profile-dropdown-link w-full text-left sidebar-logout-btn">
@@ -341,6 +392,16 @@
         .sidebar-themed[data-theme="kosmik"] .sidebar-logout-btn {
             color: #fca5a5 !important;
         }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-submenu {
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.12);
+            box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+            border-radius: 10px;
+            padding: 4px 0;
+        }
+        .sidebar-themed[data-theme="kosmik"] .sidebar-check-icon {
+            color: #60a5fa;
+        }
 
         /* ===== YORUG' THEME (Light) ===== */
         .sidebar-themed[data-theme="yorug"] {
@@ -439,6 +500,16 @@
         .sidebar-themed[data-theme="yorug"] .sidebar-logout-btn {
             color: #ef4444 !important;
         }
+        .sidebar-themed[data-theme="yorug"] .sidebar-submenu {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            box-shadow: 4px 0 16px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            padding: 4px 0;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-check-icon {
+            color: #3b82f6;
+        }
 
         /* ===== BASE STYLES (shared) ===== */
         .sidebar-link {
@@ -487,9 +558,9 @@
         function sidebarTheme() {
             return {
                 theme: localStorage.getItem('sidebar-theme') || 'kosmik',
-                toggleTheme() {
-                    this.theme = this.theme === 'kosmik' ? 'yorug' : 'kosmik';
-                    localStorage.setItem('sidebar-theme', this.theme);
+                setTheme(name) {
+                    this.theme = name;
+                    localStorage.setItem('sidebar-theme', name);
                 }
             }
         }

@@ -167,6 +167,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
         Route::put('/teachers/{teacher}/roles', [TeacherController::class, 'updateRoles'])->name('teachers.update-roles');
         Route::post('/teachers/{teacher}/reset-password', [TeacherController::class, 'resetPassword'])->name('teachers.reset-password');
+        Route::put('/teachers/{teacher}/contact', [TeacherController::class, 'updateContact'])->name('teachers.update-contact');
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
 

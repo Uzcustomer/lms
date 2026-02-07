@@ -134,43 +134,92 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
                         </svg>
                         Aloqa ma'lumotlari
+                        @if(auth()->user()->hasAnyRole(['superadmin', 'admin', 'kichik_admin']))
+                            <button type="button" onclick="toggleContactEdit()" class="contact-edit-toggle" id="contact-edit-btn" title="Tahrirlash">
+                                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                                </svg>
+                            </button>
+                        @endif
                     </div>
                     <div class="card-body">
-                        <div class="contact-item">
-                            <div class="contact-icon contact-icon-phone">
-                                <svg style="width: 18px; height: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
-                                </svg>
+                        {{-- Ko'rish rejimi --}}
+                        <div id="contact-view">
+                            <div class="contact-item">
+                                <div class="contact-icon contact-icon-phone">
+                                    <svg style="width: 18px; height: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="contact-label">Telefon</div>
+                                    <div class="contact-value {{ $teacher->phone ? '' : 'contact-missing' }}">
+                                        {{ $teacher->phone ?? 'Kiritilmagan' }}
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <div class="contact-label">Telefon</div>
-                                <div class="contact-value {{ $teacher->phone ? '' : 'contact-missing' }}">
-                                    {{ $teacher->phone ?? 'Kiritilmagan' }}
+                            <div class="contact-item">
+                                <div class="contact-icon contact-icon-telegram">
+                                    <svg style="width: 18px; height: 18px;" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="contact-label">
+                                        Telegram
+                                        @if($teacher->telegram_verified_at)
+                                            <svg style="width: 14px; height: 14px; display: inline; color: #10b981; margin-left: 4px;" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                            </svg>
+                                        @elseif($teacher->telegram_username)
+                                            <span style="font-size: 10px; color: #f59e0b; margin-left: 4px;">tasdiqlanmagan</span>
+                                        @endif
+                                    </div>
+                                    <div class="contact-value {{ $teacher->telegram_username ? '' : 'contact-missing' }}">
+                                        {{ $teacher->telegram_username ?? 'Kiritilmagan' }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="contact-item">
-                            <div class="contact-icon contact-icon-telegram">
-                                <svg style="width: 18px; height: 18px;" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <div class="contact-label">
-                                    Telegram
-                                    @if($teacher->telegram_verified_at)
-                                        <svg style="width: 14px; height: 14px; display: inline; color: #10b981; margin-left: 4px;" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                        </svg>
-                                    @elseif($teacher->telegram_username)
-                                        <span style="font-size: 10px; color: #f59e0b; margin-left: 4px;">tasdiqlanmagan</span>
-                                    @endif
+
+                        {{-- Tahrirlash rejimi (faqat admin rollar uchun) --}}
+                        @if(auth()->user()->hasAnyRole(['superadmin', 'admin', 'kichik_admin']))
+                        <form action="{{ route('admin.teachers.update-contact', $teacher) }}" method="POST" id="contact-edit" style="display: none;">
+                            @csrf
+                            @method('PUT')
+                            <div class="contact-edit-field">
+                                <div class="contact-icon contact-icon-phone" style="width: 34px; height: 34px;">
+                                    <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                                    </svg>
                                 </div>
-                                <div class="contact-value {{ $teacher->telegram_username ? '' : 'contact-missing' }}">
-                                    {{ $teacher->telegram_username ?? 'Kiritilmagan' }}
+                                <div style="flex: 1;">
+                                    <label class="form-label" style="margin-bottom: 2px;">Telefon</label>
+                                    <input type="text" name="phone" value="{{ $teacher->phone }}" placeholder="+998901234567" class="form-input">
                                 </div>
                             </div>
-                        </div>
+                            <div class="contact-edit-field">
+                                <div class="contact-icon contact-icon-telegram" style="width: 34px; height: 34px;">
+                                    <svg style="width: 16px; height: 16px;" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                                    </svg>
+                                </div>
+                                <div style="flex: 1;">
+                                    <label class="form-label" style="margin-bottom: 2px;">Telegram username</label>
+                                    <input type="text" name="telegram_username" value="{{ $teacher->telegram_username }}" placeholder="@username" class="form-input">
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px; margin-top: 10px;">
+                                <button type="submit" class="btn btn-teal" style="flex: 1;">
+                                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                    Saqlash
+                                </button>
+                                <button type="button" onclick="toggleContactEdit()" class="btn btn-gray">Bekor</button>
+                            </div>
+                        </form>
+                        @endif
                     </div>
                 </div>
 
@@ -292,6 +341,21 @@
     </div>
 
     <script>
+        function toggleContactEdit() {
+            var view = document.getElementById('contact-view');
+            var edit = document.getElementById('contact-edit');
+            var btn = document.getElementById('contact-edit-btn');
+            if (edit.style.display === 'none') {
+                view.style.display = 'none';
+                edit.style.display = 'block';
+                btn.classList.add('contact-edit-active');
+            } else {
+                view.style.display = 'block';
+                edit.style.display = 'none';
+                btn.classList.remove('contact-edit-active');
+            }
+        }
+
         function toggleRole(checkbox) {
             var card = checkbox.closest('.role-card');
             var icon = card.querySelector('[data-icon]');
@@ -520,6 +584,28 @@
         }
         .contact-icon-phone { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
         .contact-icon-telegram { background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; }
+        .contact-edit-toggle {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: 1px solid #99f6e4;
+            background: #f0fdfa;
+            color: #0f766e;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .contact-edit-toggle:hover { background: #ccfbf1; border-color: #5eead4; }
+        .contact-edit-active { background: #0f766e !important; color: #fff !important; border-color: #0f766e !important; }
+        .contact-edit-field {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+        }
         .contact-label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.03em; }
         .contact-value { font-size: 14px; font-weight: 700; color: #1e293b; margin-top: 2px; }
         .contact-missing { color: #ef4444; font-weight: 500; }
@@ -565,6 +651,10 @@
             transition: all 0.2s;
             text-decoration: none;
         }
+        .btn-teal { background: linear-gradient(135deg, #14b8a6, #0d9488); color: #fff; }
+        .btn-teal:hover { box-shadow: 0 2px 8px rgba(20,184,166,0.4); }
+        .btn-gray { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+        .btn-gray:hover { background: #e2e8f0; color: #334155; }
         .btn-dark { background: #1e293b; color: #fff; }
         .btn-dark:hover { background: #0f172a; }
         .btn-orange { background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; white-space: nowrap; }

@@ -135,6 +135,27 @@ class TeacherController extends Controller
         return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Rollar muvaffaqiyatli yangilandi');
     }
 
+    public function updateContact(Request $request, Teacher $teacher)
+    {
+        $user = auth()->user();
+        if (!$user->hasAnyRole(['superadmin', 'admin', 'kichik_admin'])) {
+            abort(403, 'Sizda bu amalni bajarish huquqi yo\'q.');
+        }
+
+        $request->validate([
+            'phone' => ['nullable', 'string', 'regex:/^\+\d{7,15}$/'],
+            'telegram_username' => ['nullable', 'string', 'max:255'],
+        ], [
+            'phone.regex' => 'Telefon raqami noto\'g\'ri formatda. Masalan: +998901234567',
+        ]);
+
+        $teacher->phone = $request->phone;
+        $teacher->telegram_username = $request->telegram_username;
+        $teacher->save();
+
+        return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Aloqa ma\'lumotlari yangilandi');
+    }
+
     public function importTeachers()
     {
         Artisan::call('import:teachers');

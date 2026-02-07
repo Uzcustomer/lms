@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            JN o'zlashtirish hisoboti
+            25% sababsiz davomat hisoboti
         </h2>
     </x-slot>
 
@@ -37,13 +37,16 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 150px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanadan</label>
-                            <input type="text" id="date_from" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
-                        </div>
-                        <div class="filter-item" style="min-width: 150px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanagacha</label>
-                            <input type="text" id="date_to" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
+                        <div class="filter-item" style="min-width: 170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Chetlashganlik holati</label>
+                            <select id="student_status" class="select2" style="width: 100%;">
+                                @foreach($studentStatuses as $status)
+                                    <option value="{{ $status->student_status_code }}"
+                                        {{ str_contains(mb_strtolower($status->student_status_name ?? ''), 'qimoqda') ? 'selected' : '' }}>
+                                        {{ $status->student_status_name }}
+                                    </option>
+                                @endforeach
+                            </select>
                         </div>
                         <div class="filter-item" style="min-width: 90px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
@@ -52,13 +55,6 @@
                                     <option value="{{ $ps }}" {{ $ps == 50 ? 'selected' : '' }}>{{ $ps }}</option>
                                 @endforeach
                             </select>
-                        </div>
-                        <div class="filter-item" style="min-width: 160px;">
-                            <label class="filter-label">&nbsp;</label>
-                            <div class="toggle-switch active" id="current-semester-toggle" onclick="toggleSemester()">
-                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
-                                <span class="toggle-label">Joriy semestr</span>
-                            </div>
                         </div>
                     </div>
                     <!-- Row 2 -->
@@ -88,6 +84,13 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <div class="toggle-switch active" id="current-semester-toggle" onclick="toggleSemester()">
+                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                                <span class="toggle-label">Joriy semestr</span>
+                            </div>
+                        </div>
                         <div class="filter-item" style="min-width: 290px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
@@ -109,7 +112,7 @@
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Natijalar shu yerda ko'rsatiladi</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Auditoriya soatining 25% va undan ko'p sababsiz dars qoldirgan talabalar ro'yxati</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
@@ -117,8 +120,8 @@
                         <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
                     </div>
                     <div id="table-area" style="display:none;">
-                        <div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:12px;">
-                            <span id="total-badge" class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                        <div style="padding:10px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;align-items:center;gap:12px;">
+                            <span id="total-badge" class="badge" style="background:#dc2626;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
                         </div>
                         <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
@@ -133,9 +136,12 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="avg_grade">O'rtacha baho <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="grades_count">Darslar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;">Jurnal</th>
+                                        <th><a href="#" class="sort-link" data-sort="total_absent_hours">Jami qoldirilgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="unexcused_absent_hours">Sababsiz <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="auditory_hours">Auditoriya soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th>Spravka muddati</th>
+                                        <th>25% dan keyin darsga chiqqan</th>
+                                        <th>Hisobot sanasi</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -151,11 +157,9 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <link href="/css/scroll-calendar.css" rel="stylesheet" />
-    <script src="/js/scroll-calendar.js"></script>
 
     <script>
-        let currentSort = 'avg_grade';
+        let currentSort = 'unexcused_absent_hours';
         let currentDirection = 'desc';
         let currentPage = 1;
 
@@ -178,13 +182,12 @@
                 education_type: $('#education_type').val() || '',
                 faculty: $('#faculty').val() || '',
                 specialty: $('#specialty').val() || '',
-                date_from: $('#date_from').val() || '',
-                date_to: $('#date_to').val() || '',
                 level_code: $('#level_code').val() || '',
                 semester_code: $('#semester_code').val() || '',
                 group: $('#group').val() || '',
                 department: $('#department').val() || '',
                 subject: $('#subject').val() || '',
+                student_status: $('#student_status').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
@@ -205,7 +208,7 @@
             var startTime = performance.now();
 
             $.ajax({
-                url: '{{ route("admin.reports.jn.data") }}',
+                url: '{{ route("admin.reports.absence.data") }}',
                 type: 'GET',
                 data: params,
                 timeout: 120000,
@@ -221,7 +224,7 @@
                         return;
                     }
 
-                    $('#total-badge').text('Jami: ' + res.total);
+                    $('#total-badge').text('Jami: ' + res.total + ' ta talaba');
                     $('#time-badge').text(elapsed + ' soniyada hisoblandi');
                     renderTable(res.data);
                     renderPagination(res);
@@ -236,20 +239,19 @@
             });
         }
 
-        function gradeClass(val) {
-            if (val < 60) return 'badge-grade-red';
-            if (val < 75) return 'badge-grade-yellow';
-            return 'badge-grade-green';
+        function spravkaClass(val) {
+            if (val === 'Kechikkan') return 'badge-spravka-red';
+            if (val === 'Muddat bor') return 'badge-spravka-green';
+            return 'badge-spravka-gray';
         }
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
         function renderTable(data) {
             var html = '';
-            var journalBase = '{{ url("/admin/journal/show") }}';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
-                var journalUrl = journalBase + '/' + encodeURIComponent(r.group_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code);
+                var percent = r.auditory_hours > 0 ? Math.round((r.unexcused_absent_hours / r.auditory_hours) * 100) : 0;
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
@@ -259,9 +261,12 @@
                 html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
-                html += '<td><span class="badge ' + gradeClass(r.avg_grade) + '">' + r.avg_grade + '</span></td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.grades_count + '</td>';
-                html += '<td style="text-align:center;"><a href="' + journalUrl + '" target="_blank" class="journal-link">Ko\'rish</a></td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.total_absent_hours + '</td>';
+                html += '<td style="text-align:center;"><span class="badge badge-grade-red">' + r.unexcused_absent_hours + ' (' + percent + '%)</span></td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.auditory_hours + '</td>';
+                html += '<td style="text-align:center;"><span class="badge ' + spravkaClass(r.spravka_status) + '">' + esc(r.spravka_status) + '</span></td>';
+                html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.first_attendance_after_25) + '</td>';
+                html += '<td style="text-align:center;font-size:12px;color:#94a3b8;">' + esc(r.report_date) + '</td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -271,7 +276,7 @@
             var params = getFilters();
             params.export = 'excel';
             var query = $.param(params);
-            window.location.href = '{{ route("admin.reports.jn.data") }}?' + query;
+            window.location.href = '{{ route("admin.reports.absence.data") }}?' + query;
         }
 
         function renderPagination(res) {
@@ -302,15 +307,10 @@
                     currentSort = col;
                     currentDirection = 'asc';
                 }
-                // Update icons
                 $('.sort-link .sort-icon').removeClass('active').html('&#9650;&#9660;');
                 $(this).find('.sort-icon').addClass('active').html(currentDirection === 'asc' ? '&#9650;' : '&#9660;');
                 loadReport(1);
             });
-
-            // Kalendarlarni yaratish
-            new ScrollCalendar('date_from');
-            new ScrollCalendar('date_to');
 
             // Select2 init
             $('.select2').each(function() {
@@ -352,11 +352,6 @@
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
-        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 30px 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; outline: none; }
-        .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
-        .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
-        .date-input::placeholder { color: #94a3b8; font-weight: 400; }
-
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
 
@@ -387,8 +382,8 @@
         .journal-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .journal-table thead { position: sticky; top: 0; z-index: 10; }
         .journal-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
-        .journal-table th { padding: 14px 12px; text-align: left; font-weight: 600; font-size: 11.5px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
-        .journal-table th.th-num { padding: 14px 12px 14px 16px; width: 44px; }
+        .journal-table th { padding: 14px 10px; text-align: left; font-weight: 600; font-size: 11px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
+        .journal-table th.th-num { padding: 14px 10px 14px 16px; width: 44px; }
         .sort-link { display: inline-flex; align-items: center; gap: 4px; color: #334155; text-decoration: none; cursor: pointer; }
         .sort-link:hover { opacity: 0.75; }
         .sort-icon { font-size: 8px; opacity: 0.4; }
@@ -397,27 +392,26 @@
         .journal-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
         .journal-table tbody tr:nth-child(even) { background: #f8fafc; }
         .journal-table tbody tr:nth-child(odd) { background: #fff; }
-        .journal-table tbody tr:hover { background: #eff6ff !important; box-shadow: inset 4px 0 0 #2b5ea7; }
-        .journal-table td { padding: 10px 12px; vertical-align: middle; line-height: 1.4; }
-        .td-num { padding-left: 16px !important; font-weight: 700; color: #2b5ea7; font-size: 13px; }
+        .journal-table tbody tr:hover { background: #fef2f2 !important; box-shadow: inset 4px 0 0 #dc2626; }
+        .journal-table td { padding: 10px 10px; vertical-align: middle; line-height: 1.4; }
+        .td-num { padding-left: 16px !important; font-weight: 700; color: #dc2626; font-size: 13px; }
 
         .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
         .badge-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #99f6e4; white-space: nowrap; }
         .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
         .badge-grade-red { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
-        .badge-grade-yellow { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
-        .badge-grade-green { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
+        .badge-spravka-red { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .badge-spravka-green { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+        .badge-spravka-gray { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
 
         .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
         .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; max-width: 260px; white-space: normal; word-break: break-word; }
-        .journal-link { display: inline-block; padding: 3px 10px; background: #eff6ff; color: #2b5ea7; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11.5px; font-weight: 600; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
-        .journal-link:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
-        .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }
-        .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
+        .pg-btn:hover { background: #fef2f2; border-color: #dc2626; color: #dc2626; }
+        .pg-active { background: linear-gradient(135deg, #dc2626, #ef4444) !important; color: #fff !important; border-color: #dc2626 !important; }
     </style>
 </x-app-layout>

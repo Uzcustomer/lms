@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\ExamTestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QaytnomaController;
+use App\Http\Controllers\AbsenceReportController;
 use App\Http\Controllers\VedomostController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Student\StudentAuthController;
@@ -58,6 +59,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/edit/{id}', [QaytnomaController::class, 'edit'])->name('edit');
             Route::put('/edit/{id}', [QaytnomaController::class, 'edit_save'])->name('edit.save');
         });
+
+        Route::get('/absence-report', [AbsenceReportController::class, 'index'])->name('absence_report.index');
 
         Route::prefix('independent')->name('independent.')->group(function () {
             Route::get('', [IndependentController::class, 'index'])->name('index');
@@ -194,6 +197,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/lesson-assignment', [ReportController::class, 'lessonAssignment'])->name('reports.lesson-assignment');
         Route::get('/reports/lesson-assignment/data', [ReportController::class, 'lessonAssignmentData'])->name('reports.lesson-assignment.data');
+
+        Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
+        Route::get('/reports/schedule-report/data', [ReportController::class, 'scheduleReportData'])->name('reports.schedule-report.data');
+
+        Route::get('/reports/absence', [ReportController::class, 'absenceReport'])->name('reports.absence');
+        Route::get('/reports/absence/data', [ReportController::class, 'absenceReportData'])->name('reports.absence.data');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 

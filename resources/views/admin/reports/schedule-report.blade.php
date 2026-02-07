@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            JN o'zlashtirish hisoboti
+            Dars jadval mosligi hisoboti
         </h2>
     </x-slot>
 
@@ -36,14 +36,6 @@
                         <div class="filter-item" style="flex: 1; min-width: 240px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item" style="min-width: 150px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanadan</label>
-                            <input type="text" id="date_from" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
-                        </div>
-                        <div class="filter-item" style="min-width: 150px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanagacha</label>
-                            <input type="text" id="date_to" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
                         </div>
                         <div class="filter-item" style="min-width: 90px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
@@ -88,6 +80,26 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                    </div>
+                    <!-- Row 3 -->
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Sana (dan)</label>
+                            <input type="date" id="date_from" class="date-input" />
+                        </div>
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Sana (gacha)</label>
+                            <input type="date" id="date_to" class="date-input" />
+                        </div>
+                        <div class="filter-item" style="min-width: 170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Moslik holati</label>
+                            <select id="match_status" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="none">Jadval yo'q</option>
+                                <option value="partial">Qisman</option>
+                                <option value="full">To'liq</option>
+                            </select>
+                        </div>
                         <div class="filter-item" style="min-width: 290px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
@@ -121,21 +133,23 @@
                             <span id="total-badge" class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
                         </div>
-                        <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
+                        <div style="max-height:calc(100vh - 380px);overflow-y:auto;overflow-x:auto;">
                             <table class="journal-table">
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
-                                        <th><a href="#" class="sort-link" data-sort="full_name">Talaba FISH <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="department_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="faculty_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="department_name">Kafedra <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="avg_grade">O'rtacha baho <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="grades_count">Darslar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;">Jurnal</th>
+                                        <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="employee_name">O'qituvchi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="planned_hours">Reja (soat) <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="schedule_count">Jadval (juft) <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="lesson_days">Dars kunlari <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="status">Holat <span class="sort-icon active">&#9650;</span></a></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -151,12 +165,10 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <link href="/css/scroll-calendar.css" rel="stylesheet" />
-    <script src="/js/scroll-calendar.js"></script>
 
     <script>
-        let currentSort = 'avg_grade';
-        let currentDirection = 'desc';
+        let currentSort = 'status';
+        let currentDirection = 'asc';
         let currentPage = 1;
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
@@ -178,13 +190,14 @@
                 education_type: $('#education_type').val() || '',
                 faculty: $('#faculty').val() || '',
                 specialty: $('#specialty').val() || '',
-                date_from: $('#date_from').val() || '',
-                date_to: $('#date_to').val() || '',
                 level_code: $('#level_code').val() || '',
                 semester_code: $('#semester_code').val() || '',
                 group: $('#group').val() || '',
                 department: $('#department').val() || '',
                 subject: $('#subject').val() || '',
+                date_from: $('#date_from').val() || '',
+                date_to: $('#date_to').val() || '',
+                match_status: $('#match_status').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
@@ -205,7 +218,7 @@
             var startTime = performance.now();
 
             $.ajax({
-                url: '{{ route("admin.reports.jn.data") }}',
+                url: '{{ route("admin.reports.schedule-report.data") }}',
                 type: 'GET',
                 data: params,
                 timeout: 120000,
@@ -236,32 +249,35 @@
             });
         }
 
-        function gradeClass(val) {
-            if (val < 60) return 'badge-grade-red';
-            if (val < 75) return 'badge-grade-yellow';
-            return 'badge-grade-green';
-        }
-
         function esc(s) { return $('<span>').text(s || '-').html(); }
+
+        function statusBadge(status) {
+            if (status === 'full') {
+                return '<span class="badge badge-status-full">To\'liq</span>';
+            } else if (status === 'partial') {
+                return '<span class="badge badge-status-partial">Qisman</span>';
+            }
+            return '<span class="badge badge-status-none">Jadval yo\'q</span>';
+        }
 
         function renderTable(data) {
             var html = '';
-            var journalBase = '{{ url("/admin/journal/show") }}';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
-                var journalUrl = journalBase + '/' + encodeURIComponent(r.group_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code);
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
-                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
-                html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
+                html += '<td><span class="text-cell text-emerald">' + esc(r.faculty_name) + '</span></td>';
                 html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
-                html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td><span class="text-cell" style="color:#92400e;">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
-                html += '<td><span class="badge ' + gradeClass(r.avg_grade) + '">' + r.avg_grade + '</span></td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.grades_count + '</td>';
-                html += '<td style="text-align:center;"><a href="' + journalUrl + '" target="_blank" class="journal-link">Ko\'rish</a></td>';
+                html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td><span class="text-cell" style="font-weight:600;color:#0f172a;">' + esc(r.employee_name) + '</span></td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.planned_hours + '</td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.schedule_count + '</td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.lesson_days + '</td>';
+                html += '<td style="text-align:center;">' + statusBadge(r.status) + '</td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -271,7 +287,7 @@
             var params = getFilters();
             params.export = 'excel';
             var query = $.param(params);
-            window.location.href = '{{ route("admin.reports.jn.data") }}?' + query;
+            window.location.href = '{{ route("admin.reports.schedule-report.data") }}?' + query;
         }
 
         function renderPagination(res) {
@@ -302,15 +318,10 @@
                     currentSort = col;
                     currentDirection = 'asc';
                 }
-                // Update icons
                 $('.sort-link .sort-icon').removeClass('active').html('&#9650;&#9660;');
                 $(this).find('.sort-icon').addClass('active').html(currentDirection === 'asc' ? '&#9650;' : '&#9660;');
                 loadReport(1);
             });
-
-            // Kalendarlarni yaratish
-            new ScrollCalendar('date_from');
-            new ScrollCalendar('date_to');
 
             // Select2 init
             $('.select2').each(function() {
@@ -352,10 +363,9 @@
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
-        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 30px 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; outline: none; }
+        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; }
         .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
-        .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
-        .date-input::placeholder { color: #94a3b8; font-weight: 400; }
+        .date-input:focus { outline: none; border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.2); }
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
@@ -405,16 +415,15 @@
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
         .badge-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #99f6e4; white-space: nowrap; }
         .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
-        .badge-grade-red { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
-        .badge-grade-yellow { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
-        .badge-grade-green { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
+
+        .badge-status-full { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 4px 12px; font-size: 12px; font-weight: 700; }
+        .badge-status-partial { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; padding: 4px 12px; font-size: 12px; font-weight: 700; }
+        .badge-status-none { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 12px; font-size: 12px; font-weight: 700; }
 
         .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
         .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; max-width: 260px; white-space: normal; word-break: break-word; }
-        .journal-link { display: inline-block; padding: 3px 10px; background: #eff6ff; color: #2b5ea7; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11.5px; font-weight: 600; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
-        .journal-link:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }

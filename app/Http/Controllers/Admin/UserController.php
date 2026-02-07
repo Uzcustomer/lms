@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\ProjectRole;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
@@ -17,23 +18,26 @@ class UserController extends Controller
 
     public function create()
     {
-        $roles = Role::where('guard_name','web')->get();
+        $roles = ProjectRole::staffRoles();
         return view('admin.users.create', compact('roles'));
     }
 
     public function edit(User $user)
     {
-        $roles = Role::where('guard_name','web')->get();
+        $roles = ProjectRole::staffRoles();
         return view('admin.users.edit', compact('user', 'roles'));
     }
 
     public function store(Request $request)
     {
+        $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
+
         $request->validate([
             'name' => 'required',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:8',
-            'role' => 'required|exists:roles,name',
+            'roles' => 'required|array|min:1',
+            'roles.*' => 'in:' . implode(',', $validRoleValues),
         ]);
 
         $user = User::create([
@@ -42,19 +46,20 @@ class UserController extends Controller
             'password' => bcrypt($request->password),
         ]);
 
-        $user->assignRole($request->role);
+        $user->syncRoles($request->roles);
 
-        return redirect()->route('admin.users.index')->with('success', 'User created successfully');
+        return redirect()->route('admin.users.index')->with('success', "Foydalanuvchi yaratildi");
     }
-
-
 
     public function update(Request $request, User $user)
     {
+        $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
+
         $request->validate([
             'name' => 'required',
             'email' => 'required|email|unique:users,email,' . $user->id,
-            'role' => 'required|exists:roles,name',
+            'roles' => 'required|array|min:1',
+            'roles.*' => 'in:' . implode(',', $validRoleValues),
         ]);
 
         $user->update([
@@ -66,9 +71,9 @@ class UserController extends Controller
             $user->update(['password' => bcrypt($request->password)]);
         }
 
-        $user->syncRoles([$request->role]);
+        $user->syncRoles($request->roles);
 
-        return redirect()->route('admin.users.index')->with('success', 'User updated successfully');
+        return redirect()->route('admin.users.index')->with('success', "Foydalanuvchi yangilandi");
     }
 
     public function destroy(User $user)

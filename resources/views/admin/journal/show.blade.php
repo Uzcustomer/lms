@@ -82,16 +82,46 @@
         .sidebar-header {
             background: #374151;
             color: #fff;
-            padding: 10px 16px;
+            padding: 8px 12px;
             font-size: 13px;
             font-weight: 600;
             border-radius: 0 8px 0 0;
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 8px;
         }
+        .sidebar-header-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .sidebar-view-toggle {
+            display: flex;
+        }
+        .sidebar-view-btn {
+            padding: 3px 10px;
+            font-size: 11px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: transparent;
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .sidebar-view-btn:first-child {
+            border-radius: 4px 0 0 4px;
+        }
+        .sidebar-view-btn:last-child {
+            border-radius: 0 4px 4px 0;
+            margin-left: -1px;
+        }
+        .sidebar-view-btn.active {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+            border-color: rgba(255,255,255,0.5);
+        }
         .sidebar-field {
-            padding: 8px 16px;
+            padding: 4px 12px;
             border-bottom: 1px solid #e2e8f0;
         }
         .sidebar-field:last-child {
@@ -104,6 +134,78 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
             margin-bottom: 4px;
+        }
+        .sidebar-section-label {
+            font-size: 11px;
+            color: #374151;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 6px 12px 2px;
+            background: #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .sidebar-info-text {
+            width: 100%;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #fff;
+            color: #1f2937;
+        }
+        .sidebar-teacher-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 5px 0;
+        }
+        .sidebar-teacher-card + .sidebar-teacher-card {
+            border-top: 1px solid #f1f5f9;
+        }
+        .sidebar-teacher-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #1e293b;
+            flex: 1;
+            line-height: 1.3;
+        }
+        .sidebar-teacher-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .badge-lecture {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+        .badge-practice {
+            background: #d1fae5;
+            color: #047857;
+        }
+        .sidebar-teacher-type-label {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 1px 6px;
+            border-radius: 3px;
+            margin-bottom: 2px;
+        }
+        .type-label-lecture {
+            background: #f3e8ff;
+            color: #7c3aed;
+        }
+        .type-label-practice {
+            background: #ecfdf5;
+            color: #059669;
         }
         .sidebar-select {
             width: 100%;
@@ -300,11 +402,6 @@
                             class="tab-btn">
                             Mustaqil ta'lim
                         </button>
-                    </div>
-                    <div class="flex items-center" style="padding-bottom: 8px;">
-                        <span class="text-xs mr-2" style="color: #6b7280;">Ko'rinish:</span>
-                        <button id="view-compact" onclick="switchView('compact')" class="view-btn active">Ixcham</button>
-                        <button id="view-detailed" onclick="switchView('detailed')" class="view-btn">Batafsil</button>
                     </div>
                 </nav>
             </div>
@@ -967,63 +1064,109 @@
                 <!-- Right Sidebar: Filters -->
                 <div class="journal-sidebar">
                     <div class="sidebar-header">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-                        Filtrlar
+                        <div class="sidebar-header-left">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                            Filtrlar
+                        </div>
+                        <div class="sidebar-view-toggle">
+                            <button id="view-compact" onclick="switchView('compact')" class="sidebar-view-btn active">Ixcham</button>
+                            <button id="view-detailed" onclick="switchView('detailed')" class="sidebar-view-btn">Batafsil</button>
+                        </div>
                     </div>
 
-                    <!-- Guruh -->
                     <div class="sidebar-field">
-                        <div class="sidebar-label">Guruh</div>
+                        <select id="filter-faculty" class="sidebar-select" style="font-size: 12px;" onchange="onFacultyChange()">
+                            <option value="">Barchasi</option>
+                            @if($facultyId)
+                                <option value="{{ $facultyId }}" selected>{{ $facultyName }}</option>
+                            @endif
+                        </select>
+                        <div id="loading-faculty" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <div class="sidebar-field">
+                        <select id="filter-specialty" class="sidebar-select" style="font-size: 12px;" onchange="onSpecialtyChange()">
+                            <option value="">Barchasi</option>
+                            @if($specialtyId)
+                                <option value="{{ $specialtyId }}" selected>{{ $specialtyName }}</option>
+                            @endif
+                        </select>
+                        <div id="loading-specialty" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <div class="sidebar-field">
+                        <div id="kafedra-display" class="sidebar-info-text">{{ $kafedraName }}</div>
+                    </div>
+
+                    <div class="sidebar-field">
+                        <select id="filter-level" class="sidebar-select" onchange="onLevelChange()">
+                            <option value="">Barchasi</option>
+                            @if($levelCode)
+                                <option value="{{ $levelCode }}" selected>{{ $kursName }}</option>
+                            @endif
+                        </select>
+                        <div id="loading-level" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <div class="sidebar-field">
+                        <select id="filter-semester" class="sidebar-select" onchange="onSemesterChange()">
+                            <option value="">Barchasi</option>
+                            @if($semesterCode)
+                                <option value="{{ $semesterCode }}" selected>{{ $semester->name ?? $subject->semester_name }}</option>
+                            @endif
+                        </select>
+                        <div id="loading-semester" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
+                    </div>
+
+                    <div class="sidebar-field">
                         <select id="filter-group" class="sidebar-select" onchange="onGroupChange(this.value)">
                             <option value="{{ $groupId }}" selected>{{ $group->name }}</option>
                         </select>
                         <div id="loading-group" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- Fan -->
                     <div class="sidebar-field">
-                        <div class="sidebar-label">Fan</div>
-                        <select id="filter-subject" class="sidebar-select" onchange="onSubjectChange(this.value)">
+                        <select id="filter-subject" class="sidebar-select" style="font-size: 12px;" onchange="onSubjectChange(this.value)">
                             <option value="{{ $subjectId }}" selected>{{ $subject->subject_name }}</option>
                         </select>
                         <div id="loading-subject" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
                     </div>
 
-                    <!-- Semestr -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Semestr</div>
-                        <select id="filter-semester" class="sidebar-select" onchange="onSemesterChange(this.value)">
-                            <option value="{{ $semesterCode }}" selected>{{ $semester->name ?? $subject->semester_name }}</option>
-                        </select>
-                        <div id="loading-semester" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
-                    </div>
-
-                    <!-- Kurs -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Kurs</div>
-                        <div class="sidebar-value">{{ $kursName }}</div>
-                    </div>
-
-                    <!-- Kafedra -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Kafedra</div>
-                        <div class="sidebar-value" style="font-size: 12px;">{{ $kafedraName }}</div>
-                    </div>
-
-                    <!-- Fakultet -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">Fakultet</div>
-                        <div class="sidebar-value" style="font-size: 12px;">{{ $facultyName }}</div>
-                    </div>
-
-                    <!-- O'qituvchi -->
-                    <div class="sidebar-field">
-                        <div class="sidebar-label">O'qituvchi</div>
-                        <div class="sidebar-value" style="font-size: 12px;">{{ $teacherName }}</div>
+                    <!-- O'qituvchilar -->
+                    <div class="sidebar-section-label">O'qituvchilar</div>
+                    <div class="sidebar-field" id="teachers-section" style="padding: 6px 12px;">
+                        <div>
+                            <div class="sidebar-teacher-type-label type-label-lecture">Ma'ruza</div>
+                            <div id="lecture-teacher-display">
+                                @if($lectureTeacher)
+                                    <div class="sidebar-teacher-card">
+                                        <div class="sidebar-teacher-name">{{ $lectureTeacher['name'] }}</div>
+                                        <div class="sidebar-teacher-badge badge-lecture">{{ $lectureTeacher['hours'] }} soat</div>
+                                    </div>
+                                @else
+                                    <div class="sidebar-teacher-card"><div class="sidebar-teacher-name" style="color:#9ca3af;">-</div></div>
+                                @endif
+                            </div>
+                        </div>
+                        <div style="margin-top: 4px;">
+                            <div class="sidebar-teacher-type-label type-label-practice">Amaliyot</div>
+                            <div id="practice-teacher-display">
+                                @if(count($practiceTeachers) > 0)
+                                    @foreach($practiceTeachers as $pt)
+                                        <div class="sidebar-teacher-card">
+                                            <div class="sidebar-teacher-name">{{ $pt['name'] }}</div>
+                                            <div class="sidebar-teacher-badge badge-practice">{{ $pt['hours'] }} soat</div>
+                                        </div>
+                                    @endforeach
+                                @else
+                                    <div class="sidebar-teacher-card"><div class="sidebar-teacher-name" style="color:#9ca3af;">-</div></div>
+                                @endif
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Talabalar soni -->
-                    <div class="sidebar-field" style="background: #eff6ff;">
+                    <div class="sidebar-field" style="background: #eff6ff; padding: 6px 12px;">
                         <div class="sidebar-label">Talabalar soni</div>
                         <div class="sidebar-value" style="font-weight: 700; color: #2563eb; border-color: #bfdbfe;">{{ $students->count() }}</div>
                     </div>
@@ -1034,14 +1177,54 @@
     </div>
 
     <script>
-        // ====== Sidebar Filter Logic ======
+        // ====== Cascading Sidebar Filters ======
+        // Zanjir: Fakultet(erkin) → Yo'nalish → Kurs → Semestr → [Guruh ↔ Fan]
+        // Kafedra erkin, fanga ta'sir qiladi.
         const currentGroupId = '{{ $groupId }}';
         const currentSubjectId = '{{ $subjectId }}';
         const currentSemesterCode = '{{ $semesterCode }}';
+        const currentFacultyId = '{{ $facultyId }}';
+        const currentSpecialtyId = '{{ $specialtyId }}';
+        const currentLevelCode = '{{ $levelCode }}';
         const journalShowBaseUrl = '{{ url("/admin/journal/show") }}';
+        const sidebarOptionsUrl = '{{ route("admin.journal.get-sidebar-options") }}';
+
+        // URL params - navigatsiyada filtr qiymatlarini saqlash uchun
+        const urlParams = new URLSearchParams(window.location.search);
+
+        function getVal(id) { return document.getElementById(id)?.value || ''; }
+
+        function getFilterValues() {
+            return {
+                faculty_id: getVal('filter-faculty'),
+                specialty_id: getVal('filter-specialty'),
+                level_code: getVal('filter-level'),
+                semester_code: getVal('filter-semester'),
+                group_id: getVal('filter-group'),
+                subject_id: getVal('filter-subject'),
+            };
+        }
+
+        function buildQS(params) {
+            return Object.entries(params)
+                .filter(([k, v]) => v !== '')
+                .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+                .join('&');
+        }
 
         function navigateToJournal(groupId, subjectId, semesterCode) {
-            window.location.href = `${journalShowBaseUrl}/${groupId}/${subjectId}/${semesterCode}`;
+            const narrowParams = {
+                faculty_id: getVal('filter-faculty'),
+                specialty_id: getVal('filter-specialty'),
+                level_code: getVal('filter-level'),
+            };
+            let url = `${journalShowBaseUrl}/${groupId}/${subjectId}/${semesterCode}`;
+            const qs = Object.entries(narrowParams)
+                .filter(([k, v]) => v !== '')
+                .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+                .join('&');
+            if (qs) url += '?' + qs;
+            window.location.href = url;
         }
 
         function setLoading(field, show) {
@@ -1049,123 +1232,205 @@
             if (el) el.classList.toggle('active', show);
         }
 
-        function populateSelect(selectId, data, currentValue) {
+        function populateSelect(selectId, data, currentValue, addAll) {
             const select = document.getElementById(selectId);
             if (!select) return;
-            const oldValue = select.value;
             select.innerHTML = '';
-            let hasCurrentValue = false;
-            for (const [key, value] of Object.entries(data)) {
-                const option = document.createElement('option');
-                option.value = key;
-                option.textContent = value;
-                if (String(key) === String(currentValue)) {
-                    option.selected = true;
-                    hasCurrentValue = true;
-                }
-                select.appendChild(option);
+            if (addAll) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'Barchasi';
+                select.appendChild(opt);
             }
-            if (!hasCurrentValue && select.options.length > 0) {
+            let found = false;
+            const entries = Object.entries(data).sort((a, b) => a[1].localeCompare(b[1]));
+            for (const [key, value] of entries) {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = value;
+                if (String(key) === String(currentValue)) {
+                    opt.selected = true;
+                    found = true;
+                }
+                select.appendChild(opt);
+            }
+            if (!found && !addAll && select.options.length > 0) {
                 select.options[0].selected = true;
             }
         }
 
-        // Load initial filter options on page load
-        function loadInitialFilters() {
-            // Load subjects and semesters for current group
-            setLoading('subject', true);
-            setLoading('semester', true);
-            setLoading('group', true);
+        // Kaskad reset - ota filtr o'zgarganda bolalar tozalanadi
+        function cascadeReset(from) {
+            const chains = {
+                'faculty':   ['specialty', 'level', 'semester', 'group', 'subject'],
+                'specialty': ['level', 'semester', 'group', 'subject'],
+                'level':     ['semester', 'group', 'subject'],
+                'semester':  ['group', 'subject'],
+            };
+            (chains[from] || []).forEach(f => {
+                const el = document.getElementById('filter-' + f);
+                if (el) el.value = '';
+            });
+        }
 
-            fetch(`{{ route('admin.journal.get-filters-by-group') }}?group_id=${currentGroupId}`)
+        // Barcha dropdownlarni yangilash
+        let abortCtrl = null;
+        function refreshFilters(overrideValues) {
+            if (abortCtrl) abortCtrl.abort();
+            abortCtrl = new AbortController();
+
+            const values = overrideValues || getFilterValues();
+            const qs = buildQS(values);
+
+            const fields = ['faculty', 'specialty', 'level', 'semester', 'group', 'subject'];
+            fields.forEach(f => setLoading(f, true));
+
+            fetch(`${sidebarOptionsUrl}?${qs}`, { signal: abortCtrl.signal })
                 .then(r => r.json())
                 .then(data => {
-                    if (data.subjects) {
-                        populateSelect('filter-subject', data.subjects, currentSubjectId);
+                    populateSelect('filter-faculty', data.faculties, values.faculty_id, true);
+                    populateSelect('filter-specialty', data.specialties, values.specialty_id, true);
+                    populateSelect('filter-level', data.levels, values.level_code, true);
+                    populateSelect('filter-semester', data.semesters, values.semester_code, true);
+                    populateSelect('filter-group', data.groups, values.group_id, false);
+                    populateSelect('filter-subject', data.subjects, values.subject_id, false);
+                    // O'qituvchi ma'lumotlarini yangilash (tur bo'yicha)
+                    const lectureEl = document.getElementById('lecture-teacher-display');
+                    const practiceEl = document.getElementById('practice-teacher-display');
+                    if (lectureEl) {
+                        if (data.teacher_data && data.teacher_data.lecture_teacher) {
+                            const t = data.teacher_data.lecture_teacher;
+                            lectureEl.innerHTML = '<div class="sidebar-teacher-card"><div class="sidebar-teacher-name">' + t.name + '</div><div class="sidebar-teacher-badge badge-lecture">' + t.hours + ' soat</div></div>';
+                        } else {
+                            lectureEl.innerHTML = '<div class="sidebar-teacher-card"><div class="sidebar-teacher-name" style="color:#9ca3af;">-</div></div>';
+                        }
                     }
-                    if (data.semesters) {
-                        populateSelect('filter-semester', data.semesters, currentSemesterCode);
+                    if (practiceEl) {
+                        if (data.teacher_data && data.teacher_data.practice_teachers && data.teacher_data.practice_teachers.length > 0) {
+                            practiceEl.innerHTML = data.teacher_data.practice_teachers
+                                .map(t => '<div class="sidebar-teacher-card"><div class="sidebar-teacher-name">' + t.name + '</div><div class="sidebar-teacher-badge badge-practice">' + t.hours + ' soat</div></div>')
+                                .join('');
+                        } else {
+                            practiceEl.innerHTML = '<div class="sidebar-teacher-card"><div class="sidebar-teacher-name" style="color:#9ca3af;">-</div></div>';
+                        }
                     }
-                    setLoading('subject', false);
-                    setLoading('semester', false);
+                    // Kafedra ma'lumot sifatida yangilanadi
+                    const kafedraEl = document.getElementById('kafedra-display');
+                    if (kafedraEl) kafedraEl.textContent = data.kafedra_name || '';
+                    fields.forEach(f => setLoading(f, false));
                 })
-                .catch(() => {
-                    setLoading('subject', false);
-                    setLoading('semester', false);
-                });
-
-            // Load all groups (initially unfiltered to show all options)
-            fetch(`{{ route('admin.journal.get-groups') }}`)
-                .then(r => r.json())
-                .then(data => {
-                    populateSelect('filter-group', data, currentGroupId);
-                    setLoading('group', false);
-                })
-                .catch(() => {
-                    setLoading('group', false);
+                .catch(err => {
+                    if (err.name !== 'AbortError') {
+                        fields.forEach(f => setLoading(f, false));
+                    }
                 });
         }
 
+        // ===== Kaskad filtr handlerlari =====
+
+        // Fakultet o'zgardi → yo'nalish, kurs, semestr, guruh, fan tozalanadi
+        function onFacultyChange() {
+            cascadeReset('faculty');
+            refreshFilters();
+        }
+
+        // Yo'nalish o'zgardi → kurs, semestr, guruh, fan tozalanadi
+        function onSpecialtyChange() {
+            cascadeReset('specialty');
+            refreshFilters();
+        }
+
+        // Kurs o'zgardi → semestr, guruh, fan tozalanadi
+        function onLevelChange() {
+            cascadeReset('level');
+            refreshFilters();
+        }
+
+        // Semestr o'zgardi → guruh, fan tozalanadi va yangilanadi
+        function onSemesterChange() {
+            cascadeReset('semester');
+            refreshFilters();
+        }
+
+        // ===== Navigatsiya filtrlari =====
+
+        // Guruh o'zgardi → mos fan topiladi → navigatsiya
         function onGroupChange(newGroupId) {
-            if (newGroupId === currentGroupId) return;
+            if (!newGroupId) return;
+            const values = getFilterValues();
+            values.group_id = newGroupId;
 
             setLoading('subject', true);
-            setLoading('semester', true);
-
-            fetch(`{{ route('admin.journal.get-filters-by-group') }}?group_id=${newGroupId}`)
+            fetch(`${sidebarOptionsUrl}?${buildQS(values)}`)
                 .then(r => r.json())
                 .then(data => {
                     setLoading('subject', false);
-                    setLoading('semester', false);
-
                     if (!data.subjects || Object.keys(data.subjects).length === 0) {
                         alert('Bu guruh uchun fanlar topilmadi');
-                        document.getElementById('filter-group').value = currentGroupId;
                         return;
                     }
-
-                    // Check if current subject exists in new group
-                    let targetSubjectId = currentSubjectId;
-                    if (!data.subjects[currentSubjectId]) {
-                        targetSubjectId = Object.keys(data.subjects)[0];
+                    let targetSubject = values.subject_id;
+                    if (!data.subjects[targetSubject]) {
+                        targetSubject = Object.keys(data.subjects)[0];
                     }
-                    populateSelect('filter-subject', data.subjects, targetSubjectId);
-
-                    // Check if current semester exists
-                    let targetSemester = currentSemesterCode;
-                    if (data.semesters && !data.semesters[currentSemesterCode]) {
-                        targetSemester = Object.keys(data.semesters)[0];
+                    let targetSemester = values.semester_code;
+                    if (!targetSemester || (data.semesters && !data.semesters[targetSemester])) {
+                        targetSemester = data.semesters ? Object.keys(data.semesters)[0] : '';
                     }
-                    if (data.semesters) {
-                        populateSelect('filter-semester', data.semesters, targetSemester);
+                    if (targetSubject && targetSemester) {
+                        navigateToJournal(newGroupId, targetSubject, targetSemester);
                     }
-
-                    navigateToJournal(newGroupId, targetSubjectId, targetSemester);
                 })
                 .catch(() => {
                     setLoading('subject', false);
-                    setLoading('semester', false);
                     alert('Xatolik yuz berdi');
-                    document.getElementById('filter-group').value = currentGroupId;
                 });
         }
 
+        // Fan o'zgardi → mos guruh topiladi → navigatsiya
         function onSubjectChange(newSubjectId) {
-            if (newSubjectId === currentSubjectId) return;
-            const groupId = document.getElementById('filter-group').value;
-            const semesterCode = document.getElementById('filter-semester').value;
-            navigateToJournal(groupId, newSubjectId, semesterCode);
+            if (!newSubjectId) return;
+            const values = getFilterValues();
+            values.subject_id = newSubjectId;
+
+            setLoading('group', true);
+            fetch(`${sidebarOptionsUrl}?${buildQS(values)}`)
+                .then(r => r.json())
+                .then(data => {
+                    setLoading('group', false);
+                    if (!data.groups || Object.keys(data.groups).length === 0) {
+                        alert('Bu fan uchun guruhlar topilmadi');
+                        return;
+                    }
+                    let targetGroup = values.group_id;
+                    if (!data.groups[targetGroup]) {
+                        targetGroup = Object.keys(data.groups)[0];
+                    }
+                    let targetSemester = values.semester_code;
+                    if (!targetSemester || (data.semesters && !data.semesters[targetSemester])) {
+                        targetSemester = data.semesters ? Object.keys(data.semesters)[0] : '';
+                    }
+                    if (targetGroup && targetSemester) {
+                        navigateToJournal(targetGroup, newSubjectId, targetSemester);
+                    }
+                })
+                .catch(() => {
+                    setLoading('group', false);
+                    alert('Xatolik yuz berdi');
+                });
         }
 
-        function onSemesterChange(newSemesterCode) {
-            if (newSemesterCode === currentSemesterCode) return;
-            const groupId = document.getElementById('filter-group').value;
-            const subjectId = document.getElementById('filter-subject').value;
-            navigateToJournal(groupId, subjectId, newSemesterCode);
-        }
-
-        // Load filters when page is ready
-        document.addEventListener('DOMContentLoaded', loadInitialFilters);
+        // Sahifa yuklanganda filtrlarni to'ldirish
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshFilters({
+                faculty_id: urlParams.get('faculty_id') || currentFacultyId,
+                specialty_id: urlParams.get('specialty_id') || currentSpecialtyId,
+                level_code: urlParams.get('level_code') || currentLevelCode,
+                semester_code: currentSemesterCode,
+                group_id: currentGroupId,
+                subject_id: currentSubjectId,
+            });
+        });
 
         // MT Grade save configuration
         const mtGradeConfig = {
@@ -1238,7 +1503,7 @@
         }
 
         function switchView(viewType) {
-            document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.sidebar-view-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('view-' + viewType).classList.add('active');
 
             if (viewType === 'compact') {

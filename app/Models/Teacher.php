@@ -10,6 +10,8 @@ class Teacher extends Authenticatable
 {
     use HasFactory, HasRoles;
 
+    protected $guard_name = 'web';
+
     protected $fillable = [
         'full_name',
         'short_name',

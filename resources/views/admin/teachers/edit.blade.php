@@ -26,14 +26,21 @@
                                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                         </div>
                         <div class="mb-4">
-                            <label for="role" class="block text-gray-700 text-sm font-bold mb-2">Rol:</label>
-                            <select name="role" id="role" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" onchange="toggleDepartmentSelect()">
-                                <option value="teacher" {{ $teacher->role == 'teacher' ? 'selected' : '' }}>O'qituvchi</option>
-                                <option value="dekan" {{ $teacher->role == 'dekan' ? 'selected' : '' }}>Dekan</option>
+                            <label for="roles" class="block text-gray-700 text-sm font-bold mb-2">Rollar (bir nechta tanlash mumkin):</label>
+                            <select name="roles[]" id="roles" multiple
+                                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                    style="min-height: 150px;"
+                                    onchange="toggleDepartmentSelect()">
+                                @foreach($roles as $role)
+                                    <option value="{{ $role->value }}" {{ $teacher->hasRole($role->value) ? 'selected' : '' }}>
+                                        {{ $role->label() }}
+                                    </option>
+                                @endforeach
                             </select>
+                            <p class="text-gray-500 text-xs mt-1">Ctrl (Cmd) tugmasini bosib bir nechta rol tanlang</p>
                         </div>
 
-                        <div id="department-select" class="mb-4" style="display: {{ $teacher->role_id == 'dekan' ? 'block' : 'none' }};">
+                        <div id="department-select" class="mb-4" style="display: none;">
                             <label for="department" class="block text-gray-700 text-sm font-bold mb-2">Fakultet:</label>
                             <select name="department_hemis_id" id="department" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
                                 @foreach($departments as $department)
@@ -67,13 +74,10 @@
     </div>
     <script>
         function toggleDepartmentSelect() {
-            var roleSelect = document.getElementById('role');
+            var roleSelect = document.getElementById('roles');
             var departmentSelect = document.getElementById('department-select');
-            if (roleSelect.value === 'dekan') {
-                departmentSelect.style.display = 'block';
-            } else {
-                departmentSelect.style.display = 'none';
-            }
+            var selectedValues = Array.from(roleSelect.selectedOptions).map(o => o.value);
+            departmentSelect.style.display = selectedValues.includes('dekan') ? 'block' : 'none';
         }
 
         document.addEventListener('DOMContentLoaded', toggleDepartmentSelect);

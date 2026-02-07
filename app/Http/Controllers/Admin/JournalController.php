@@ -526,21 +526,26 @@ class JournalController extends Controller
         // Faculty (Fakultet) - department linked to curriculum
         $faculty = Department::where('department_hemis_id', $curriculum->department_hemis_id ?? null)->first();
         $facultyName = $faculty->name ?? '';
+        $facultyId = $faculty->id ?? '';
+
+        // Yo'nalish (Specialty) - from group
+        $specialty = Specialty::where('specialty_hemis_id', $group->specialty_hemis_id)->first();
+        $specialtyId = $specialty->specialty_hemis_id ?? '';
+        $specialtyName = $specialty->name ?? '';
 
         // Kafedra - from curriculum subject
         $kafedraName = $subject->department_name ?? '';
+        $kafedraId = $subject->department_id ?? '';
 
         // Kurs (Course level) - from semester
         $kursName = $semester->level_name ?? '';
+        $levelCode = $semester->level_code ?? '';
 
-        // O'qituvchi (Teacher) - from schedules for this group/subject/semester
-        $teacherName = DB::table('schedules')
-            ->where('group_id', $group->group_hemis_id)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->whereNotNull('employee_name')
-            ->where('employee_name', '!=', 'Manual Entry')
-            ->value('employee_name') ?? '';
+        // O'qituvchi (Teacher) - jadvaldan tur bo'yicha ajratilgan, soatlari bilan
+        $teacherData = $this->getTeachersByType($group->group_hemis_id, $subjectId, $semesterCode);
+        $lectureTeacher = $teacherData['lecture_teacher'];
+        $practiceTeachers = $teacherData['practice_teachers'];
+        $teacherName = $lectureTeacher['name'] ?? ($practiceTeachers[0]['name'] ?? '');
 
         return view('admin.journal.show', compact(
             'group',
@@ -549,9 +554,16 @@ class JournalController extends Controller
             'semester',
             'students',
             'facultyName',
+            'facultyId',
+            'specialtyId',
+            'specialtyName',
             'kafedraName',
+            'kafedraId',
             'kursName',
+            'levelCode',
             'teacherName',
+            'lectureTeacher',
+            'practiceTeachers',
             'lectureLessonDates',
             'lectureColumns',
             'lectureAttendance',
@@ -1263,5 +1275,254 @@ class JournalController extends Controller
             'subjects' => $subjects,
             'level_codes' => $levelCodes,
         ];
+    }
+
+    /**
+     * Dars jadvalidagi vaqtdan akademik soatlarni hisoblash.
+     * 80 min = 2 soat, 40-45 min = 1 soat.
+     */
+    private function calculateAcademicHours($rows)
+    {
+        return $rows->sum(function ($row) {
+            if (!$row->lesson_pair_start_time || !$row->lesson_pair_end_time) return 0;
+            $start = \Carbon\Carbon::parse($row->lesson_pair_start_time);
+            $end = \Carbon\Carbon::parse($row->lesson_pair_end_time);
+            $minutes = $start->diffInMinutes($end);
+            return $minutes >= 60 ? 2 : 1;
+        });
+    }
+
+    /**
+     * O'qituvchilarni tur bo'yicha ajratish: Ma'ruza va Amaliyot.
+     * Har bir o'qituvchi uchun akademik soatlar hisoblanadi.
+     */
+    private function getTeachersByType($groupHemisId, $subjectId, $semesterCode)
+    {
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+
+        $schedules = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotNull('employee_name')
+            ->where('employee_name', '!=', 'Manual Entry')
+            ->where('employee_name', '!=', '')
+            ->select('employee_name', 'training_type_code', 'lesson_pair_start_time', 'lesson_pair_end_time')
+            ->get();
+
+        $lectureTeacher = null;
+        $practiceTeachers = [];
+
+        // Ma'ruza o'qituvchisi (training_type_code = 11)
+        $lectureRows = $schedules->where('training_type_code', 11);
+        if ($lectureRows->isNotEmpty()) {
+            $grouped = $lectureRows->groupBy('employee_name');
+            foreach ($grouped as $name => $rows) {
+                $hours = $this->calculateAcademicHours($rows);
+                $lectureTeacher = ['name' => $name, 'hours' => $hours];
+                break; // Odatda bitta ma'ruza o'qituvchisi
+            }
+        }
+
+        // Amaliyot o'qituvchilari (11, 99, 100, 101, 102 tashqaridagi turlar)
+        $practiceRows = $schedules->filter(function ($row) use ($excludedTrainingCodes) {
+            return !in_array($row->training_type_code, $excludedTrainingCodes);
+        });
+        if ($practiceRows->isNotEmpty()) {
+            $grouped = $practiceRows->groupBy('employee_name');
+            foreach ($grouped as $name => $rows) {
+                $hours = $this->calculateAcademicHours($rows);
+                $practiceTeachers[] = ['name' => $name, 'hours' => $hours];
+            }
+        }
+
+        return [
+            'lecture_teacher' => $lectureTeacher,
+            'practice_teachers' => $practiceTeachers,
+        ];
+    }
+
+    /**
+     * Cascading sidebar filter options.
+     * Chain: Fakultet(free) → Yo'nalish → Kurs → Semestr → [Guruh ↔ Fan]
+     * Kafedra is free and filters Fan.
+     */
+    public function getSidebarOptions(Request $request)
+    {
+        // Fakultet department_hemis_id (reused in multiple queries)
+        $facultyDeptHemisId = null;
+        if ($request->filled('faculty_id')) {
+            $facultyDeptHemisId = Department::where('id', $request->faculty_id)->value('department_hemis_id');
+        }
+
+        // 1. Fakultet - erkin, hamma faol fakultetlar
+        $faculties = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name')
+            ->pluck('name', 'id');
+
+        // 2. Yo'nalish - fakultetga bog'liq
+        $specialtiesQuery = DB::table('specialties as sp')
+            ->join('groups as g', 'g.specialty_hemis_id', '=', 'sp.specialty_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+        if ($facultyDeptHemisId) {
+            $specialtiesQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        $specialties = $specialtiesQuery
+            ->select('sp.specialty_hemis_id', 'sp.name')
+            ->groupBy('sp.specialty_hemis_id', 'sp.name')
+            ->orderBy('sp.name')
+            ->pluck('sp.name', 'sp.specialty_hemis_id');
+
+        // 3. Kurs - yo'nalishga bog'liq
+        $levelsQuery = DB::table('semesters as s')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 's.curriculum_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+        if ($request->filled('specialty_id')) {
+            $levelsQuery->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($facultyDeptHemisId) {
+            $levelsQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        $levels = $levelsQuery
+            ->select('s.level_code', 's.level_name')
+            ->groupBy('s.level_code', 's.level_name')
+            ->orderBy('s.level_code')
+            ->pluck('s.level_name', 's.level_code');
+
+        // 5. Semestr - kursga bog'liq (+ yo'nalish kontekst)
+        $semestersQuery = DB::table('semesters as s')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 's.curriculum_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+        if ($request->filled('level_code')) {
+            $semestersQuery->where('s.level_code', $request->level_code);
+        }
+        if ($request->filled('specialty_id')) {
+            $semestersQuery->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($facultyDeptHemisId) {
+            $semestersQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        $semesters = $semestersQuery
+            ->select('s.code', 's.name')
+            ->groupBy('s.code', 's.name')
+            ->orderBy('s.code')
+            ->pluck('s.name', 's.code');
+
+        // 6. Guruh - semestr + yo'nalish + fakultet + fan (ikki tomonlama)
+        $groupsQuery = DB::table('groups as g')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+        if ($request->filled('semester_code')) {
+            // Tanlangan semestr guruhning curriculumida current bo'lishi shart
+            $groupsQuery->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('semesters as s2')
+                    ->whereColumn('s2.curriculum_hemis_id', 'g.curriculum_hemis_id')
+                    ->where('s2.code', $request->semester_code)
+                    ->where('s2.current', true);
+            });
+        } else {
+            // Semestr tanlanmagan - ixtiyoriy joriy semestri bor guruhlar
+            $groupsQuery->whereExists(function ($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('semesters as s_cur')
+                    ->whereColumn('s_cur.curriculum_hemis_id', 'g.curriculum_hemis_id')
+                    ->where('s_cur.current', true);
+            });
+        }
+        if ($request->filled('specialty_id')) {
+            $groupsQuery->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($facultyDeptHemisId) {
+            $groupsQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        // Ikki tomonlama: fan tanlansa, faqat o'sha fan bor guruhlar
+        if ($request->filled('subject_id')) {
+            $groupsQuery->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('curriculum_subjects as cs2')
+                    ->whereColumn('cs2.curricula_hemis_id', 'g.curriculum_hemis_id')
+                    ->where('cs2.subject_id', $request->subject_id);
+                if ($request->filled('semester_code')) {
+                    $sub->where('cs2.semester_code', $request->semester_code);
+                }
+            });
+        }
+        $groups = $groupsQuery
+            ->select('g.id', 'g.name')
+            ->orderBy('g.name')
+            ->pluck('g.name', 'g.id');
+
+        // 7. Fan - semestr + guruh (ikki tomonlama) + yo'nalish kontekst
+        $subjectsQuery = DB::table('curriculum_subjects as cs')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+        if ($request->filled('semester_code')) {
+            $subjectsQuery->where('cs.semester_code', $request->semester_code);
+            // Faqat joriy semestr fanlari (eski curriculumlarni chiqarmaslik uchun)
+            $subjectsQuery->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('semesters as s3')
+                    ->whereColumn('s3.curriculum_hemis_id', 'cs.curricula_hemis_id')
+                    ->where('s3.code', $request->semester_code)
+                    ->where('s3.current', true);
+            });
+        }
+        // Ikki tomonlama: guruh tanlansa, faqat o'sha guruh fanlari
+        if ($request->filled('group_id')) {
+            $subjectsQuery->where('g.id', $request->group_id);
+        }
+        if ($request->filled('specialty_id')) {
+            $subjectsQuery->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($facultyDeptHemisId) {
+            $subjectsQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        $subjects = $subjectsQuery
+            ->select('cs.subject_id', 'cs.subject_name')
+            ->groupBy('cs.subject_id', 'cs.subject_name')
+            ->orderBy('cs.subject_name')
+            ->pluck('cs.subject_name', 'cs.subject_id');
+
+        // 8. O'qituvchi - tur bo'yicha ajratilgan (Ma'ruza / Amaliyot), soatlari bilan
+        $teacherData = ['lecture_teacher' => null, 'practice_teachers' => []];
+        $selectedGroup = $request->filled('group_id') ? Group::find($request->group_id) : null;
+        if ($selectedGroup && $request->filled('subject_id') && $request->filled('semester_code')) {
+            $teacherData = $this->getTeachersByType(
+                $selectedGroup->group_hemis_id,
+                $request->subject_id,
+                $request->semester_code
+            );
+        }
+
+        // Kafedra nomi - tanlangan fan bo'yicha (ma'lumot sifatida)
+        $kafedraName = '';
+        if ($request->filled('subject_id') && $selectedGroup) {
+            $grp = $selectedGroup;
+            if ($grp) {
+                $kafedraName = CurriculumSubject::where('subject_id', $request->subject_id)
+                    ->where('curricula_hemis_id', $grp->curriculum_hemis_id)
+                    ->value('department_name') ?? '';
+            }
+        } elseif ($request->filled('subject_id')) {
+            $kafedraName = CurriculumSubject::where('subject_id', $request->subject_id)
+                ->value('department_name') ?? '';
+        }
+
+        return response()->json([
+            'faculties' => $faculties,
+            'specialties' => $specialties,
+            'levels' => $levels,
+            'semesters' => $semesters,
+            'groups' => $groups,
+            'subjects' => $subjects,
+            'teacher_data' => $teacherData,
+            'kafedra_name' => $kafedraName,
+        ]);
     }
 }

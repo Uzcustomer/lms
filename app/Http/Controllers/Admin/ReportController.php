@@ -76,6 +76,10 @@ class ReportController extends Controller
     {
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
+        // Sana oralig'i filtri
+        $dateFrom = $request->filled('date_from') ? $request->date_from : null;
+        $dateTo = $request->filled('date_to') ? $request->date_to : null;
+
         // 1-QADAM: Barcha schedule yozuvlarini olish (pairs_per_day hisoblash uchun)
         $scheduleQuery = DB::table('schedules as sch')
             ->whereNotIn('sch.training_type_code', $excludedCodes)
@@ -98,6 +102,14 @@ class ReportController extends Controller
 
         if ($request->filled('subject')) {
             $scheduleQuery->where('sch.subject_id', $request->subject);
+        }
+
+        // Sana oralig'i bo'yicha dars jadvalini filtrlash
+        if ($dateFrom) {
+            $scheduleQuery->where('sch.lesson_date', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $scheduleQuery->where('sch.lesson_date', '<=', $dateTo);
         }
 
         $scheduleRows = $scheduleQuery->get();
@@ -188,7 +200,7 @@ class ReportController extends Controller
         }
 
         // 3-QADAM: student_grades dan baholarni olish (lesson_pair_code bilan)
-        $gradesRaw = DB::table('student_grades')
+        $gradesQuery = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->whereIn('subject_id', $validSubjectIds)
             ->whereIn('semester_code', $validSemesterCodes)
@@ -196,13 +208,22 @@ class ReportController extends Controller
             ->whereNotNull('grade')
             ->where('grade', '>', 0)
             ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'grade', 'lesson_date', 'lesson_pair_code')
-            ->get();
+            ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'grade', 'lesson_date', 'lesson_pair_code');
+
+        // Sana oralig'i bo'yicha baholarni filtrlash
+        if ($dateFrom) {
+            $gradesQuery->where('lesson_date', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $gradesQuery->where('lesson_date', '<=', $dateTo);
+        }
+
+        $gradesRaw = $gradesQuery->get();
 
         // 4-QADAM: Jurnal formulasi bo'yicha hisoblash
         // a) Baho date_pair larini columns ga birlashtirish (jurnal kabi fallback)
         // b) Baholarni kun bo'yicha guruhlash
-        $cutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay()->format('Y-m-d');
+        $cutoffDate = $dateTo ?? Carbon::now('Asia/Tashkent')->subDay()->startOfDay()->format('Y-m-d');
 
         $gradesByDay = [];      // [student|subject|date] => [grade1, ...]
         $studentSubjects = [];  // [student|subject] => info

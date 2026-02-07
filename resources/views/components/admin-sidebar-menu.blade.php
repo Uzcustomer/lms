@@ -150,17 +150,17 @@
     </nav>
 
     <!-- User Section with Profile Dropdown -->
-    <div class="p-3 flex-shrink-0 relative" x-data="{ profileOpen: false }" @click.outside="profileOpen = false" style="background-color: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.08);">
-        <!-- Dropdown Menu (opens upward) -->
+    <div class="p-3 flex-shrink-0" x-data="{ profileOpen: false }" @click.outside="profileOpen = false" style="background-color: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.08);">
+        <!-- Dropdown Menu (fixed, opens upward from bottom-left) -->
         <div x-show="profileOpen"
              x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0 translate-y-2"
-             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:enter-start="opacity-0 transform translate-y-2"
+             x-transition:enter-end="opacity-100 transform translate-y-0"
              x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100 translate-y-0"
-             x-transition:leave-end="opacity-0 translate-y-2"
-             class="absolute bottom-full left-3 right-3 mb-2 rounded-xl overflow-hidden"
-             style="background: #1e293b; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 -8px 32px rgba(0,0,0,0.4);">
+             x-transition:leave-start="opacity-100 transform translate-y-0"
+             x-transition:leave-end="opacity-0 transform translate-y-2"
+             class="fixed rounded-xl overflow-hidden"
+             style="bottom: 70px; left: 12px; width: 232px; z-index: 9999; background: #1e293b; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 -8px 32px rgba(0,0,0,0.5);">
 
             <!-- User email/info -->
             <div class="px-4 py-3" style="border-bottom: 1px solid rgba(255,255,255,0.08);">

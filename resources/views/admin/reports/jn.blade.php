@@ -339,28 +339,23 @@
                     if (dayElem.dateObj.getDay() === 0) {
                         dayElem.classList.add('flatpickr-sunday');
                     }
+                },
+                onReady: function(selectedDates, dateStr, instance) {
+                    // Scroll bilan oylar o'rtasida o'tish
+                    instance.calendarContainer.addEventListener('wheel', function(e) {
+                        e.preventDefault();
+                        if (e.deltaY > 0) {
+                            instance.changeMonth(1);
+                        } else {
+                            instance.changeMonth(-1);
+                        }
+                    }, { passive: false });
                 }
             };
 
-            // Flatpickr init
-            var fpFrom = flatpickr('#date_from', Object.assign({}, fpConfig, {
-                onChange: function(selectedDates) {
-                    if (selectedDates.length) {
-                        fpTo.set('minDate', selectedDates[0]);
-                    } else {
-                        fpTo.set('minDate', null);
-                    }
-                }
-            }));
-            var fpTo = flatpickr('#date_to', Object.assign({}, fpConfig, {
-                onChange: function(selectedDates) {
-                    if (selectedDates.length) {
-                        fpFrom.set('maxDate', selectedDates[0]);
-                    } else {
-                        fpFrom.set('maxDate', null);
-                    }
-                }
-            }));
+            // Flatpickr init (bir-biriga bog'lanmagan)
+            var fpFrom = flatpickr('#date_from', fpConfig);
+            var fpTo = flatpickr('#date_to', fpConfig);
 
             // Select2 init
             $('.select2').each(function() {

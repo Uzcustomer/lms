@@ -139,6 +139,14 @@
             JN o'zlashtirish
         </a>
 
+        <a href="{{ route('admin.reports.lesson-assignment') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.lesson-assignment*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+            </svg>
+            Dars belgilash
+        </a>
+
         @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya']))
         <a href="{{ route('admin.examtest.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.examtest.*') ? 'sidebar-active' : '' }}">

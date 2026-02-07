@@ -192,6 +192,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');
         Route::get('/reports/jn/data', [ReportController::class, 'jnReportData'])->name('reports.jn.data');
 
+        Route::get('/reports/lesson-assignment', [ReportController::class, 'lessonAssignment'])->name('reports.lesson-assignment');
+        Route::get('/reports/lesson-assignment/data', [ReportController::class, 'lessonAssignmentData'])->name('reports.lesson-assignment.data');
+
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
         Route::get('/lessons/create', [LessonController::class, 'index'])->name('lessons.create');

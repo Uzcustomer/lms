@@ -541,14 +541,11 @@ class JournalController extends Controller
         $kursName = $semester->level_name ?? '';
         $levelCode = $semester->level_code ?? '';
 
-        // O'qituvchi (Teacher) - from schedules for this group/subject/semester
-        $teacherName = DB::table('schedules')
-            ->where('group_id', $group->group_hemis_id)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->whereNotNull('employee_name')
-            ->where('employee_name', '!=', 'Manual Entry')
-            ->value('employee_name') ?? '';
+        // O'qituvchi (Teacher) - jadvaldan tur bo'yicha ajratilgan, soatlari bilan
+        $teacherData = $this->getTeachersByType($group->group_hemis_id, $subjectId, $semesterCode);
+        $lectureTeacher = $teacherData['lecture_teacher'];
+        $practiceTeachers = $teacherData['practice_teachers'];
+        $teacherName = $lectureTeacher['name'] ?? ($practiceTeachers[0]['name'] ?? '');
 
         return view('admin.journal.show', compact(
             'group',
@@ -565,6 +562,8 @@ class JournalController extends Controller
             'kursName',
             'levelCode',
             'teacherName',
+            'lectureTeacher',
+            'practiceTeachers',
             'lectureLessonDates',
             'lectureColumns',
             'lectureAttendance',
@@ -1279,6 +1278,71 @@ class JournalController extends Controller
     }
 
     /**
+     * Dars jadvalidagi vaqtdan akademik soatlarni hisoblash.
+     * 80 min = 2 soat, 40-45 min = 1 soat.
+     */
+    private function calculateAcademicHours($rows)
+    {
+        return $rows->sum(function ($row) {
+            if (!$row->lesson_pair_start_time || !$row->lesson_pair_end_time) return 0;
+            $start = \Carbon\Carbon::parse($row->lesson_pair_start_time);
+            $end = \Carbon\Carbon::parse($row->lesson_pair_end_time);
+            $minutes = $start->diffInMinutes($end);
+            return $minutes >= 60 ? 2 : 1;
+        });
+    }
+
+    /**
+     * O'qituvchilarni tur bo'yicha ajratish: Ma'ruza va Amaliyot.
+     * Har bir o'qituvchi uchun akademik soatlar hisoblanadi.
+     */
+    private function getTeachersByType($groupHemisId, $subjectId, $semesterCode)
+    {
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+
+        $schedules = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotNull('employee_name')
+            ->where('employee_name', '!=', 'Manual Entry')
+            ->where('employee_name', '!=', '')
+            ->select('employee_name', 'training_type_code', 'lesson_pair_start_time', 'lesson_pair_end_time')
+            ->get();
+
+        $lectureTeacher = null;
+        $practiceTeachers = [];
+
+        // Ma'ruza o'qituvchisi (training_type_code = 11)
+        $lectureRows = $schedules->where('training_type_code', 11);
+        if ($lectureRows->isNotEmpty()) {
+            $grouped = $lectureRows->groupBy('employee_name');
+            foreach ($grouped as $name => $rows) {
+                $hours = $this->calculateAcademicHours($rows);
+                $lectureTeacher = ['name' => $name, 'hours' => $hours];
+                break; // Odatda bitta ma'ruza o'qituvchisi
+            }
+        }
+
+        // Amaliyot o'qituvchilari (11, 99, 100, 101, 102 tashqaridagi turlar)
+        $practiceRows = $schedules->filter(function ($row) use ($excludedTrainingCodes) {
+            return !in_array($row->training_type_code, $excludedTrainingCodes);
+        });
+        if ($practiceRows->isNotEmpty()) {
+            $grouped = $practiceRows->groupBy('employee_name');
+            foreach ($grouped as $name => $rows) {
+                $hours = $this->calculateAcademicHours($rows);
+                $practiceTeachers[] = ['name' => $name, 'hours' => $hours];
+            }
+        }
+
+        return [
+            'lecture_teacher' => $lectureTeacher,
+            'practice_teachers' => $practiceTeachers,
+        ];
+    }
+
+    /**
      * Cascading sidebar filter options.
      * Chain: Fakultet(free) → Yo'nalish → Kurs → Semestr → [Guruh ↔ Fan]
      * Kafedra is free and filters Fan.
@@ -1425,36 +1489,21 @@ class JournalController extends Controller
             ->orderBy('cs.subject_name')
             ->pluck('cs.subject_name', 'cs.subject_id');
 
-        // 8. O'qituvchi - guruh + fan + semestr kontekstiga qarab
-        $teacherQuery = DB::table('schedules as sch')
-            ->join('groups as g2', 'g2.group_hemis_id', '=', 'sch.group_id')
-            ->where('g2.department_active', true)
-            ->where('g2.active', true)
-            ->whereNotNull('sch.employee_name')
-            ->where('sch.employee_name', '!=', 'Manual Entry')
-            ->where('sch.employee_name', '!=', '');
-        if ($request->filled('group_id')) {
-            $group = Group::find($request->group_id);
-            if ($group) {
-                $teacherQuery->where('sch.group_id', $group->group_hemis_id);
-            }
+        // 8. O'qituvchi - tur bo'yicha ajratilgan (Ma'ruza / Amaliyot), soatlari bilan
+        $teacherData = ['lecture_teacher' => null, 'practice_teachers' => []];
+        $selectedGroup = $request->filled('group_id') ? Group::find($request->group_id) : null;
+        if ($selectedGroup && $request->filled('subject_id') && $request->filled('semester_code')) {
+            $teacherData = $this->getTeachersByType(
+                $selectedGroup->group_hemis_id,
+                $request->subject_id,
+                $request->semester_code
+            );
         }
-        if ($request->filled('subject_id')) {
-            $teacherQuery->where('sch.subject_id', $request->subject_id);
-        }
-        if ($request->filled('semester_code')) {
-            $teacherQuery->where('sch.semester_code', $request->semester_code);
-        }
-        $teachers = $teacherQuery
-            ->select('sch.employee_name')
-            ->distinct()
-            ->orderBy('sch.employee_name')
-            ->pluck('sch.employee_name', 'sch.employee_name');
 
         // Kafedra nomi - tanlangan fan bo'yicha (ma'lumot sifatida)
         $kafedraName = '';
-        if ($request->filled('subject_id') && $request->filled('group_id')) {
-            $grp = $group ?? Group::find($request->group_id);
+        if ($request->filled('subject_id') && $selectedGroup) {
+            $grp = $selectedGroup;
             if ($grp) {
                 $kafedraName = CurriculumSubject::where('subject_id', $request->subject_id)
                     ->where('curricula_hemis_id', $grp->curriculum_hemis_id)
@@ -1472,7 +1521,7 @@ class JournalController extends Controller
             'semesters' => $semesters,
             'groups' => $groups,
             'subjects' => $subjects,
-            'teachers' => $teachers,
+            'teacher_data' => $teacherData,
             'kafedra_name' => $kafedraName,
         ]);
     }

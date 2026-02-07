@@ -207,6 +207,108 @@
             background: #ecfdf5;
             color: #059669;
         }
+        /* Mavzular bo'limi */
+        .mavzular-section {
+            margin-top: 16px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .mavzular-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .mavzular-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .mavzular-body {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .mavzular-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .mavzular-table thead th {
+            background: #f1f5f9;
+            color: #64748b;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 0.05em;
+            padding: 8px 10px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .mavzular-table tbody tr {
+            border-bottom: 1px solid #f1f5f9;
+            transition: background 0.15s;
+        }
+        .mavzular-table tbody tr:hover {
+            background: #f8fafc;
+        }
+        .mavzular-table tbody td {
+            padding: 8px 10px;
+            color: #334155;
+            vertical-align: top;
+        }
+        .mavzular-table .topic-num {
+            color: #94a3b8;
+            font-weight: 600;
+            text-align: center;
+            width: 36px;
+        }
+        .mavzular-table .topic-hours {
+            text-align: center;
+            width: 60px;
+        }
+        .topic-hours-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+        .mavzular-table .topic-name {
+            font-weight: 500;
+            line-height: 1.4;
+        }
+        .mavzular-table .topic-date {
+            color: #94a3b8;
+            font-size: 11px;
+            white-space: nowrap;
+            width: 90px;
+        }
+        .mavzular-loading {
+            padding: 24px;
+            text-align: center;
+            color: #94a3b8;
+        }
+        .mavzular-empty {
+            padding: 24px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 13px;
+        }
+        .mavzular-error {
+            padding: 16px;
+            text-align: center;
+            color: #ef4444;
+            font-size: 13px;
+        }
         .sidebar-select {
             width: 100%;
             padding: 6px 28px 6px 10px;
@@ -1173,6 +1275,20 @@
                 </div>
 
             </div><!-- /.journal-layout -->
+
+            <!-- Mavzular bo'limi -->
+            <div class="mavzular-section" id="mavzular-section">
+                <div class="mavzular-header">
+                    <div class="mavzular-title">Mavzular</div>
+                </div>
+                <div class="mavzular-body" id="mavzular-body">
+                    <div class="mavzular-loading" id="mavzular-loading">
+                        <div class="sidebar-spinner" style="margin: 0 auto 8px;"></div>
+                        Mavzular yuklanmoqda...
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -1188,6 +1304,9 @@
         const currentLevelCode = '{{ $levelCode }}';
         const journalShowBaseUrl = '{{ url("/admin/journal/show") }}';
         const sidebarOptionsUrl = '{{ route("admin.journal.get-sidebar-options") }}';
+        const topicsUrl = '{{ route("admin.journal.get-topics") }}';
+        const currentSemesterHemisId = '{{ $semester->semester_hemis_id ?? '' }}';
+        const currentCurriculumHemisId = '{{ $group->curriculum_hemis_id ?? '' }}';
 
         // URL params - navigatsiyada filtr qiymatlarini saqlash uchun
         const urlParams = new URLSearchParams(window.location.search);
@@ -1420,6 +1539,55 @@
                 });
         }
 
+        // ===== Mavzular =====
+        function loadTopics() {
+            const body = document.getElementById('mavzular-body');
+            if (!body) return;
+
+            const params = new URLSearchParams({
+                semester_id: currentSemesterHemisId,
+                curriculum_id: currentCurriculumHemisId,
+                subject_id: currentSubjectId,
+                limit: 200,
+            });
+
+            body.innerHTML = '<div class="mavzular-loading"><div class="sidebar-spinner" style="margin:0 auto 8px;"></div>Mavzular yuklanmoqda...</div>';
+
+            fetch(`${topicsUrl}?${params}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success || !data.data || !data.data.items || data.data.items.length === 0) {
+                        body.innerHTML = '<div class="mavzular-empty">Mavzular topilmadi</div>';
+                        return;
+                    }
+
+                    const items = data.data.items.sort((a, b) => (a.position || 0) - (b.position || 0));
+
+                    let html = '<table class="mavzular-table"><thead><tr>' +
+                        '<th style="text-align:center;width:36px;">#</th>' +
+                        '<th style="text-align:center;width:60px;">Soat</th>' +
+                        '<th>Mavzu nomi</th>' +
+                        '<th style="width:90px;">Sana</th>' +
+                        '</tr></thead><tbody>';
+
+                    items.forEach((item, i) => {
+                        const date = item.created_at ? new Date(item.created_at * 1000).toLocaleDateString('uz-UZ', {year:'numeric', month:'2-digit', day:'2-digit'}) : '-';
+                        html += '<tr>' +
+                            '<td class="topic-num">' + (i + 1) + '</td>' +
+                            '<td class="topic-hours"><span class="topic-hours-badge">' + (item.topic_load || 0) + '</span></td>' +
+                            '<td class="topic-name">' + (item.name || '-') + '</td>' +
+                            '<td class="topic-date">' + date + '</td>' +
+                            '</tr>';
+                    });
+
+                    html += '</tbody></table>';
+                    body.innerHTML = html;
+                })
+                .catch(err => {
+                    body.innerHTML = '<div class="mavzular-error">Xatolik: ' + err.message + '</div>';
+                });
+        }
+
         // Sahifa yuklanganda filtrlarni to'ldirish
         document.addEventListener('DOMContentLoaded', function() {
             refreshFilters({
@@ -1430,6 +1598,7 @@
                 group_id: currentGroupId,
                 subject_id: currentSubjectId,
             });
+            loadTopics();
         });
 
         // MT Grade save configuration

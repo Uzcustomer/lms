@@ -1406,7 +1406,9 @@ class JournalController extends Controller
         if ($request->filled('group_id')) {
             $subjectsQuery->where('g.id', $request->group_id);
         }
-        if ($request->filled('kafedra_id')) {
+        // Kafedra faqat guruh tanlanmagan holatda fanga ta'sir qiladi
+        // Guruh tanlangan bo'lsa - guruhning BARCHA fanlari ko'rinadi
+        if ($request->filled('kafedra_id') && !$request->filled('group_id')) {
             $subjectsQuery->where('cs.department_id', $request->kafedra_id);
         }
         if ($request->filled('specialty_id')) {

@@ -23,7 +23,7 @@
                     </x-nav-link>
                 </div>
 
-                @if( auth()->user()->hasRole(['admin']))
+                @if( auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.index')">
                         {{ __('Foydalanuvchilar') }}
@@ -32,7 +32,7 @@
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('admin.teachers.index')"
                         :active="request()->routeIs('admin.teachers.index')">
-                        {{ __("O'qituvchilar") }}
+                        {{ __("Xodimlar") }}
                     </x-nav-link>
                 </div>
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
@@ -123,7 +123,7 @@
                         YN oldi qaydnoma
                     </x-nav-link>
                 </div>
-                @if( auth()->user()->hasRole(['examiner']))
+                @if( auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya']))
 
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('admin.examtest.index')"
@@ -154,13 +154,13 @@
                     </x-slot>
 
                     <x-slot name="content">
-                        @if( auth()->user()->hasRole(['admin']))
+                        @if( auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
                         <x-dropdown-link :href="route('admin.deadlines')">
                             {{ __('Deadline') }}
                         </x-dropdown-link>
                         @endif
 
-                        @if( auth()->user()->hasRole(['admin']))
+                        @if( auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
                         <x-dropdown-link :href="route('admin.synchronizes')">
                             {{ __('Sinxronizatsiya') }}
                         </x-dropdown-link>
@@ -204,13 +204,13 @@
                 :active="request()->routeIs('admin.students.index')">
                 {{ __('Talabalar') }}
             </x-responsive-nav-link>
-            @if( auth()->user()->hasRole(['admin']))
+            @if( auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
             <x-responsive-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.index')">
                 {{ __('Foydalanuvchilar') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('admin.teachers.index')"
                 :active="request()->routeIs('admin.teachers.index')">
-                {{ __('O\'qituvchilar') }}
+                {{ __('Xodimlar') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('admin.student-grades-week')"
                 :active="request()->routeIs('admin.student-grades-week')">

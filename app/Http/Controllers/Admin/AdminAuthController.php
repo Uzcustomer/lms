@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\ProjectRole;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,8 @@ class AdminAuthController extends Controller
 
         if (Auth::attempt($credentials)) {
             $user = Auth::user();
-            if ($user->hasRole(['admin', 'teacher', 'examiner'])) {
+            $webRoleValues = array_map(fn ($r) => $r->value, ProjectRole::webRoles());
+            if ($user->hasRole($webRoleValues)) {
                 $request->session()->regenerate();
                 return redirect()->intended(route('admin.dashboard'));
             } else {

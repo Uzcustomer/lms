@@ -520,14 +520,6 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.group_id', $request->group);
         }
 
-        if ($request->filled('date_from')) {
-            $scheduleQuery->where('sch.lesson_date', '>=', $request->date_from);
-        }
-
-        if ($request->filled('date_to')) {
-            $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
-        }
-
         // Dars jadvalini olish (guruh bo'yicha aggregatsiya)
         $schedules = $scheduleQuery->select(
             'sch.schedule_hemis_id',
@@ -625,14 +617,18 @@ class ReportController extends Controller
 
         $results = array_values($grouped);
 
-        // Davomat/Baho holati filtrlari
-        if ($request->filled('attendance_status')) {
-            $attFilter = $request->attendance_status === 'yes';
-            $results = array_values(array_filter($results, fn($r) => $r['has_attendance'] === $attFilter));
-        }
-        if ($request->filled('grade_status')) {
-            $gradeFilter = $request->grade_status === 'yes';
-            $results = array_values(array_filter($results, fn($r) => $r['has_grades'] === $gradeFilter));
+        // Holat filtri (birlashtirilgan)
+        if ($request->filled('status_filter')) {
+            $results = array_values(array_filter($results, function ($r) use ($request) {
+                return match ($request->status_filter) {
+                    'any_missing' => !$r['has_attendance'] || !$r['has_grades'],
+                    'attendance_missing' => !$r['has_attendance'],
+                    'grade_missing' => !$r['has_grades'],
+                    'both_missing' => !$r['has_attendance'] && !$r['has_grades'],
+                    'all_done' => $r['has_attendance'] && $r['has_grades'],
+                    default => true,
+                };
+            }));
         }
 
         // Saralash

@@ -80,12 +80,18 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 140px;">
+                        <div class="filter-item" style="min-width: 290px;">
                             <label class="filter-label">&nbsp;</label>
-                            <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
-                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                                Hisoblash
-                            </button>
+                            <div style="display:flex;gap:8px;">
+                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    Excel
+                                </button>
+                                <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                    Hisoblash
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -198,6 +204,7 @@
                     if (!res.data || res.data.length === 0) {
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
+                        $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
                         return;
                     }
 
@@ -206,6 +213,7 @@
                     renderTable(res.data);
                     renderPagination(res);
                     $('#table-area').show();
+                    $('#btn-excel').prop('disabled', false).css('opacity', '1');
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
@@ -225,9 +233,11 @@
 
         function renderTable(data) {
             var html = '';
+            var journalBase = '{{ url("/admin/journal/show") }}';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
-                html += '<tr class="journal-row">';
+                var journalUrl = journalBase + '/' + encodeURIComponent(r.group_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code);
+                html += '<tr class="journal-row clickable-row" onclick="window.open(\'' + journalUrl + '\', \'_blank\')" title="Jurnalni ochish">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
@@ -241,6 +251,13 @@
                 html += '</tr>';
             }
             $('#table-body').html(html);
+        }
+
+        function downloadExcel() {
+            var params = getFilters();
+            params.export = 'excel';
+            var query = $.param(params);
+            window.location.href = '{{ route("admin.reports.jn.data") }}?' + query;
         }
 
         function renderPagination(res) {
@@ -320,6 +337,10 @@
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
 
+        .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
+        .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
+        .btn-excel:disabled { cursor: not-allowed; opacity: 0.5; }
+
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -354,6 +375,7 @@
         .journal-table tbody tr:nth-child(even) { background: #f8fafc; }
         .journal-table tbody tr:nth-child(odd) { background: #fff; }
         .journal-table tbody tr:hover { background: #eff6ff !important; box-shadow: inset 4px 0 0 #2b5ea7; }
+        .journal-table tbody tr.clickable-row { cursor: pointer; }
         .journal-table td { padding: 10px 12px; vertical-align: middle; line-height: 1.4; }
         .td-num { padding-left: 16px !important; font-weight: 700; color: #2b5ea7; font-size: 13px; }
 

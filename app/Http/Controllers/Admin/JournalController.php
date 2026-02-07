@@ -11,6 +11,7 @@ use App\Models\Semester;
 use App\Models\Specialty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 class JournalController extends Controller
 {
@@ -1275,6 +1276,55 @@ class JournalController extends Controller
             'subjects' => $subjects,
             'level_codes' => $levelCodes,
         ];
+    }
+
+    /**
+     * HEMIS API dan fan mavzularini olish.
+     */
+    public function getTopics(Request $request)
+    {
+        $baseUrl = rtrim(config('services.hemis.base_url', 'https://student.ttatf.uz/rest/v1/'), '/');
+        $token = config('services.hemis.token');
+
+        $params = [
+            'page' => $request->get('page', 1),
+            'limit' => $request->get('limit', 200),
+        ];
+
+        if ($request->filled('semester_id')) {
+            $params['_semester'] = $request->semester_id;
+        }
+        if ($request->filled('curriculum_id')) {
+            $params['_curriculum'] = $request->curriculum_id;
+        }
+        if ($request->filled('training_type')) {
+            $params['_training_type'] = $request->training_type;
+        }
+
+        try {
+            $response = Http::withoutVerifying()
+                ->withToken($token)
+                ->timeout(30)
+                ->get($baseUrl . '/data/curriculum-subject-topic-list', $params);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                // Fan bo'yicha filtrlash (API da subject filter bo'lmasligi mumkin)
+                if ($request->filled('subject_id') && isset($data['data']['items'])) {
+                    $subjectId = (int) $request->subject_id;
+                    $data['data']['items'] = array_values(
+                        array_filter($data['data']['items'], function ($item) use ($subjectId) {
+                            return isset($item['subject']['id']) && (int) $item['subject']['id'] === $subjectId;
+                        })
+                    );
+                }
+                return response()->json($data);
+            }
+
+            return response()->json(['success' => false, 'error' => 'HEMIS API xatolik: ' . $response->status(), 'data' => []]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage(), 'data' => []]);
+        }
     }
 
     /**

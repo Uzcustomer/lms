@@ -10,219 +10,124 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
 
                 <!-- Filters -->
-                <form id="filter-form" method="GET" action="{{ route('admin.reports.jn') }}">
-                    <div class="filter-container">
-
-                        <!-- Row 1 -->
-                        <div class="filter-row">
-                            <div class="filter-item" style="min-width: 160px;">
-                                <label class="filter-label fl-blue">
-                                    <span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi
-                                </label>
-                                <select name="education_type" id="education_type" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                    @foreach($educationTypes as $type)
-                                        <option value="{{ $type->education_type_code }}" {{ ($selectedEducationType ?? request('education_type')) == $type->education_type_code ? 'selected' : '' }}>
-                                            {{ $type->education_type_name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            <div class="filter-item" style="flex: 1; min-width: 200px;">
-                                <label class="filter-label fl-emerald">
-                                    <span class="fl-dot" style="background:#10b981;"></span> Fakultet
-                                </label>
-                                <select name="faculty" id="faculty" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                    @foreach($faculties as $faculty)
-                                        <option value="{{ $faculty->id }}" {{ request('faculty') == $faculty->id ? 'selected' : '' }}>
-                                            {{ $faculty->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            <div class="filter-item" style="flex: 1; min-width: 240px;">
-                                <label class="filter-label fl-cyan">
-                                    <span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish
-                                </label>
-                                <select name="specialty" id="specialty" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                </select>
-                            </div>
-
-                            <div class="filter-item" style="min-width: 90px;">
-                                <label class="filter-label fl-slate">
-                                    <span class="fl-dot" style="background:#94a3b8;"></span> Sahifada
-                                </label>
-                                <select id="per_page" name="per_page" class="select2" style="width: 100%;">
-                                    @foreach([10, 25, 50, 100] as $pageSize)
-                                        <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>
-                                            {{ $pageSize }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            <div class="filter-item" style="min-width: 160px;">
-                                <label class="filter-label">&nbsp;</label>
-                                <input type="hidden" name="current_semester" id="current_semester_input" value="{{ request('current_semester', '1') }}">
-                                <div class="toggle-switch {{ request('current_semester', '1') == '1' ? 'active' : '' }}" id="current-semester-toggle" onclick="toggleCurrentSemester()">
-                                    <div class="toggle-track">
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                    <span class="toggle-label">Joriy semestr</span>
-                                </div>
-                            </div>
+                <div class="filter-container">
+                    <!-- Row 1 -->
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
+                            <select id="education_type" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($educationTypes as $type)
+                                    <option value="{{ $type->education_type_code }}" {{ ($selectedEducationType ?? '') == $type->education_type_code ? 'selected' : '' }}>
+                                        {{ $type->education_type_name }}
+                                    </option>
+                                @endforeach
+                            </select>
                         </div>
-
-                        <!-- Row 2 -->
-                        <div class="filter-row">
-                            <div class="filter-item" style="min-width: 140px;">
-                                <label class="filter-label fl-violet">
-                                    <span class="fl-dot" style="background:#8b5cf6;"></span> Kurs
-                                </label>
-                                <select name="level_code" id="level_code" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                </select>
-                            </div>
-
-                            <div class="filter-item" style="min-width: 150px;">
-                                <label class="filter-label fl-teal">
-                                    <span class="fl-dot" style="background:#14b8a6;"></span> Semestr
-                                </label>
-                                <select name="semester_code" id="semester_code" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                </select>
-                            </div>
-
-                            <div class="filter-item" style="min-width: 170px;">
-                                <label class="filter-label fl-indigo">
-                                    <span class="fl-dot" style="background:#1a3268;"></span> Guruh
-                                </label>
-                                <select name="group" id="group" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                </select>
-                            </div>
-
-                            <div class="filter-item" style="flex: 1; min-width: 220px;">
-                                <label class="filter-label fl-amber">
-                                    <span class="fl-dot" style="background:#f59e0b;"></span> Kafedra
-                                </label>
-                                <select name="department" id="department" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                    @foreach($kafedras as $kafedra)
-                                        <option value="{{ $kafedra->department_id }}" {{ request('department') == $kafedra->department_id ? 'selected' : '' }}>
-                                            {{ $kafedra->department_name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            <div class="filter-item" style="flex: 1; min-width: 280px;">
-                                <label class="filter-label fl-subject">
-                                    <span class="fl-dot" style="background:#0f172a;"></span> Fan
-                                </label>
-                                <select name="subject" id="subject" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                </select>
-                            </div>
-
-                            <div style="display: flex; align-items: flex-end; padding-bottom: 6px;">
-                                <div id="filter-loading" class="hidden" style="display: none; align-items: center; color: #2b5ea7;">
-                                    <svg class="animate-spin" style="height: 16px; width: 16px; margin-right: 4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                        <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                </div>
+                        <div class="filter-item" style="flex: 1; min-width: 200px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
+                            <select id="faculty" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($faculties as $faculty)
+                                    <option value="{{ $faculty->id }}">{{ $faculty->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item" style="flex: 1; min-width: 240px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
+                            <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 90px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
+                            <select id="per_page" class="select2" style="width: 100%;">
+                                @foreach([10, 25, 50, 100] as $ps)
+                                    <option value="{{ $ps }}" {{ $ps == 50 ? 'selected' : '' }}>{{ $ps }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <div class="toggle-switch active" id="current-semester-toggle" onclick="toggleSemester()">
+                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                                <span class="toggle-label">Joriy semestr</span>
                             </div>
                         </div>
                     </div>
-                </form>
-
-                <!-- Table -->
-                <div style="max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: auto;">
-                    @if($results->isEmpty())
-                        <div style="padding: 60px 20px; text-align: center;">
-                            <svg style="width: 48px; height: 48px; margin: 0 auto 12px; color: #cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            <p style="color: #94a3b8; font-size: 14px;">Ma'lumot topilmadi.</p>
+                    <!-- Row 2 -->
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 140px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                    @else
-                        @php
-                            $sortColumn = $sortColumn ?? 'avg_grade';
-                            $sortDirection = $sortDirection ?? 'desc';
-                        @endphp
-                        <table class="journal-table">
-                            <thead>
-                                <tr>
-                                    <th class="th-num">#</th>
-                                    @php
-                                        $columns = [
-                                            'full_name' => 'Talaba FISH',
-                                            'department_name' => 'Fakultet',
-                                            'specialty_name' => "Yo'nalish",
-                                            'level_name' => 'Kurs',
-                                            'semester_name' => 'Semestr',
-                                            'group_name' => 'Guruh',
-                                            'subject_name' => 'Fan',
-                                            'avg_grade' => "O'rtacha baho",
-                                            'grades_count' => 'Baholar soni',
-                                        ];
-                                    @endphp
-                                    @foreach($columns as $column => $label)
-                                        @php
-                                            $isActive = $sortColumn === $column;
-                                            $newDirection = ($isActive && $sortDirection === 'asc') ? 'desc' : 'asc';
-                                            $sortUrl = request()->fullUrlWithQuery(['sort' => $column, 'direction' => $newDirection]);
-                                        @endphp
-                                        <th>
-                                            <a href="{{ $sortUrl }}" class="sort-link">
-                                                {{ $label }}
-                                                @if($isActive)
-                                                    <span class="sort-icon active">
-                                                        @if($sortDirection === 'asc') &#9650; @else &#9660; @endif
-                                                    </span>
-                                                @else
-                                                    <span class="sort-icon">&#9650;&#9660;</span>
-                                                @endif
-                                            </a>
-                                        </th>
-                                    @endforeach
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($results as $index => $row)
-                                    <tr class="journal-row">
-                                        <td class="td-num">{{ $results->firstItem() + $index }}</td>
-                                        <td><span class="text-cell" style="font-weight: 700; color: #0f172a;">{{ $row->full_name }}</span></td>
-                                        <td><span class="text-cell text-emerald">{{ $row->department_name ?? '-' }}</span></td>
-                                        <td><span class="text-cell text-cyan">{{ $row->specialty_name ?? '-' }}</span></td>
-                                        <td><span class="badge badge-violet">{{ $row->level_name ?? '-' }}</span></td>
-                                        <td><span class="badge badge-teal">{{ $row->semester_name ?? '-' }}</span></td>
-                                        <td><span class="badge badge-indigo">{{ $row->group_name ?? '-' }}</span></td>
-                                        <td><span class="text-cell text-subject">{{ $row->subject_name ?? '-' }}</span></td>
-                                        <td>
-                                            @if($row->avg_grade < 60)
-                                                <span class="badge badge-grade-red">{{ $row->avg_grade }}</span>
-                                            @elseif($row->avg_grade < 75)
-                                                <span class="badge badge-grade-yellow">{{ $row->avg_grade }}</span>
-                                            @else
-                                                <span class="badge badge-grade-green">{{ $row->avg_grade }}</span>
-                                            @endif
-                                        </td>
-                                        <td style="text-align: center; font-weight: 600; color: #475569;">{{ $row->grades_count }}</td>
-                                    </tr>
+                        <div class="filter-item" style="min-width: 150px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
+                            <select id="semester_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
+                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="flex: 1; min-width: 220px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Kafedra</label>
+                            <select id="department" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($kafedras as $kafedra)
+                                    <option value="{{ $kafedra->department_id }}">{{ $kafedra->department_name }}</option>
                                 @endforeach
-                            </tbody>
-                        </table>
-
-                        <div style="padding: 12px 20px; border-top: 1px solid #e2e8f0; background: #f8fafc;">
-                            {{ $results->links() }}
+                            </select>
                         </div>
-                    @endif
+                        <div class="filter-item" style="flex: 1; min-width: 280px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
+                            <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 140px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
+                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                Hisoblash
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Result Area -->
+                <div id="result-area">
+                    <div id="empty-state" style="padding: 60px 20px; text-align: center;">
+                        <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                        <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Natijalar shu yerda ko'rsatiladi</p>
+                    </div>
+                    <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
+                        <div class="spinner"></div>
+                        <p style="color:#2b5ea7;font-size:14px;margin-top:16px;font-weight:600;">Hisoblanmoqda...</p>
+                        <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
+                    </div>
+                    <div id="table-area" style="display:none;">
+                        <div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:12px;">
+                            <span id="total-badge" class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                            <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                        </div>
+                        <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
+                            <table class="journal-table">
+                                <thead>
+                                    <tr>
+                                        <th class="th-num">#</th>
+                                        <th><a href="#" class="sort-link" data-sort="full_name">Talaba FISH <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="department_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="avg_grade">O'rtacha baho <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="grades_count">Baholar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body"></tbody>
+                            </table>
+                        </div>
+                        <div id="pagination-area" style="padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -233,412 +138,240 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        function stripSpecialChars(str) {
-            return str.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase();
-        }
+        let currentSort = 'avg_grade';
+        let currentDirection = 'desc';
+        let currentPage = 1;
 
+        function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
             if ($.trim(params.term) === '') return data;
             if (typeof data.text === 'undefined') return null;
-
-            var searchClean = stripSpecialChars(params.term);
-            var optionClean = stripSpecialChars(data.text);
-
-            if (optionClean.indexOf(searchClean) > -1) {
-                return $.extend({}, data, true);
-            }
-            if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) {
-                return $.extend({}, data, true);
-            }
+            if (stripSpecialChars(data.text).indexOf(stripSpecialChars(params.term)) > -1) return $.extend({}, data, true);
+            if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) return $.extend({}, data, true);
             return null;
         }
 
-        function toggleCurrentSemester() {
-            const btn = document.getElementById('current-semester-toggle');
-            const input = document.getElementById('current_semester_input');
-            const isActive = btn.classList.contains('active');
-
-            if (isActive) {
-                btn.classList.remove('active');
-                input.value = '0';
-            } else {
-                btn.classList.add('active');
-                input.value = '1';
-            }
-
-            setTimeout(function() {
-                document.getElementById('filter-loading').classList.remove('hidden');
-                document.getElementById('filter-loading').style.display = 'flex';
-                document.getElementById('filter-form').submit();
-            }, 100);
+        function toggleSemester() {
+            var btn = document.getElementById('current-semester-toggle');
+            btn.classList.toggle('active');
         }
 
-        $(document).ready(function () {
-            let isInitialLoad = true;
-            let autoSubmitTimeout = null;
+        function getFilters() {
+            return {
+                education_type: $('#education_type').val() || '',
+                faculty: $('#faculty').val() || '',
+                specialty: $('#specialty').val() || '',
+                level_code: $('#level_code').val() || '',
+                semester_code: $('#semester_code').val() || '',
+                group: $('#group').val() || '',
+                department: $('#department').val() || '',
+                subject: $('#subject').val() || '',
+                current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
+                per_page: $('#per_page').val() || 50,
+                sort: currentSort,
+                direction: currentDirection,
+            };
+        }
 
-            function autoSubmitForm() {
-                if (isInitialLoad) return;
-                clearTimeout(autoSubmitTimeout);
-                autoSubmitTimeout = setTimeout(function() {
-                    $('#filter-loading').removeClass('hidden').css('display', 'flex');
-                    $('#filter-form').submit();
-                }, 400);
+        function loadReport(page) {
+            currentPage = page || 1;
+            var params = getFilters();
+            params.page = currentPage;
+
+            $('#empty-state').hide();
+            $('#table-area').hide();
+            $('#loading-state').show();
+            $('#btn-calculate').prop('disabled', true).css('opacity', '0.6');
+
+            var startTime = performance.now();
+
+            $.ajax({
+                url: '{{ route("admin.reports.jn.data") }}',
+                type: 'GET',
+                data: params,
+                timeout: 120000,
+                success: function(res) {
+                    var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+                    $('#loading-state').hide();
+                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+
+                    if (!res.data || res.data.length === 0) {
+                        $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
+                        $('#table-area').hide();
+                        return;
+                    }
+
+                    $('#total-badge').text('Jami: ' + res.total);
+                    $('#time-badge').text(elapsed + ' soniyada hisoblandi');
+                    renderTable(res.data);
+                    renderPagination(res);
+                    $('#table-area').show();
+                },
+                error: function(xhr) {
+                    $('#loading-state').hide();
+                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+                    $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                }
+            });
+        }
+
+        function gradeClass(val) {
+            if (val < 60) return 'badge-grade-red';
+            if (val < 75) return 'badge-grade-yellow';
+            return 'badge-grade-green';
+        }
+
+        function esc(s) { return $('<span>').text(s || '-').html(); }
+
+        function renderTable(data) {
+            var html = '';
+            for (var i = 0; i < data.length; i++) {
+                var r = data[i];
+                html += '<tr class="journal-row">';
+                html += '<td class="td-num">' + r.row_num + '</td>';
+                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
+                html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
+                html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
+                html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
+                html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
+                html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
+                html += '<td><span class="badge ' + gradeClass(r.avg_grade) + '">' + r.avg_grade + '</span></td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.grades_count + '</td>';
+                html += '</tr>';
             }
+            $('#table-body').html(html);
+        }
 
-            $('.select2').each(function () {
-                $(this).select2({
-                    theme: 'classic',
-                    width: '100%',
-                    allowClear: true,
-                    placeholder: $(this).find('option:first').text(),
-                    matcher: fuzzyMatcher
-                }).on('select2:open', function() {
-                    setTimeout(function() {
-                        var sf = document.querySelector('.select2-container--open .select2-search__field');
-                        if (sf) sf.focus();
-                    }, 10);
-                });
+        function renderPagination(res) {
+            if (res.last_page <= 1) { $('#pagination-area').html(''); return; }
+            var html = '';
+            if (res.current_page > 1)
+                html += '<button class="pg-btn" onclick="loadReport(' + (res.current_page - 1) + ')">&laquo; Oldingi</button>';
+            for (var p = 1; p <= res.last_page; p++) {
+                if (p === 1 || p === res.last_page || (p >= res.current_page - 2 && p <= res.current_page + 2)) {
+                    html += '<button class="pg-btn' + (p === res.current_page ? ' pg-active' : '') + '" onclick="loadReport(' + p + ')">' + p + '</button>';
+                } else if (p === res.current_page - 3 || p === res.current_page + 3) {
+                    html += '<span style="color:#94a3b8;padding:0 4px;">...</span>';
+                }
+            }
+            if (res.current_page < res.last_page)
+                html += '<button class="pg-btn" onclick="loadReport(' + (res.current_page + 1) + ')">Keyingi &raquo;</button>';
+            $('#pagination-area').html(html);
+        }
+
+        $(document).ready(function() {
+            // Sort links
+            $(document).on('click', '.sort-link', function(e) {
+                e.preventDefault();
+                var col = $(this).data('sort');
+                if (currentSort === col) {
+                    currentDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort = col;
+                    currentDirection = 'asc';
+                }
+                // Update icons
+                $('.sort-link .sort-icon').removeClass('active').html('&#9650;&#9660;');
+                $(this).find('.sort-icon').addClass('active').html(currentDirection === 'asc' ? '&#9650;' : '&#9660;');
+                loadReport(1);
             });
 
-            const selectedSpecialty = @json(request('specialty'));
-            const selectedLevelCode = @json(request('level_code'));
-            const selectedSemesterCode = @json(request('semester_code'));
-            const selectedSubject = @json(request('subject'));
-            const selectedGroup = @json(request('group'));
-            const selectedDepartment = @json(request('department'));
-
-            function resetDropdown(el, ph) {
-                $(el).empty().append(`<option value="">${ph}</option>`);
-            }
-
-            function populateDropdownUnique(url, params, element, callback) {
-                $.ajax({ url: url, type: 'GET', data: params, success: function (data) {
-                    var unique = {};
-                    $.each(data, function (k, v) { if (!unique[v]) unique[v] = k; });
-                    $.each(unique, function (n, k) { $(element).append(`<option value="${k}">${n}</option>`); });
-                    if (callback) callback(data);
-                }});
-            }
-
-            function populateDropdown(url, params, element, callback) {
-                $.ajax({ url: url, type: 'GET', data: params, success: function (data) {
-                    $.each(data, function (k, v) { $(element).append(`<option value="${k}">${v}</option>`); });
-                    if (callback) callback(data);
-                }});
-            }
-
-            function getFilterParams() {
-                return {
-                    education_type: $('#education_type').val() || '',
-                    faculty_id: $('#faculty').val() || '',
-                    specialty_id: $('#specialty').val() || '',
-                    department_id: $('#department').val() || '',
-                    level_code: $('#level_code').val() || '',
-                    semester_code: $('#semester_code').val() || '',
-                    subject_id: $('#subject').val() || '',
-                    current_semester: $('#current_semester_input').val() || '1',
-                };
-            }
-
-            function refreshGroups() {
-                resetDropdown('#group', 'Barchasi');
-                populateDropdown('{{ route("admin.journal.get-groups") }}', getFilterParams(), '#group');
-            }
-            function refreshSubjects() {
-                resetDropdown('#subject', 'Barchasi');
-                populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', getFilterParams(), '#subject');
-            }
-            function refreshSpecialties() {
-                resetDropdown('#specialty', 'Barchasi');
-                populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', getFilterParams(), '#specialty');
-            }
-
-            $('#education_type').change(function () { refreshSpecialties(); refreshSubjects(); refreshGroups(); autoSubmitForm(); });
-            $('#per_page').on('change', function() { autoSubmitForm(); });
-            $('#faculty').change(function () { refreshSpecialties(); refreshSubjects(); refreshGroups(); autoSubmitForm(); });
-            $('#department').change(function () { refreshSubjects(); refreshGroups(); autoSubmitForm(); });
-            $('#specialty').change(function () { refreshGroups(); autoSubmitForm(); });
-            $('#level_code').change(function () {
-                var lc = $(this).val();
-                resetDropdown('#semester_code', 'Barchasi');
-                if (lc) populateDropdown('{{ route("admin.journal.get-semesters") }}', { level_code: lc }, '#semester_code');
-                refreshSubjects(); refreshGroups(); autoSubmitForm();
+            // Select2 init
+            $('.select2').each(function() {
+                $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher })
+                .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
-            $('#semester_code').change(function () { refreshSubjects(); refreshGroups(); autoSubmitForm(); });
-            $('#group').change(function () { autoSubmitForm(); });
-            $('#subject').change(function () { refreshGroups(); autoSubmitForm(); });
 
-            function initializeFilters() {
-                var p = getFilterParams();
-                populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', p, '#specialty', () => {
-                    if (selectedSpecialty) $('#specialty').val(selectedSpecialty).trigger('change.select2');
-                });
-                populateDropdown('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code', () => {
-                    if (selectedLevelCode) $('#level_code').val(selectedLevelCode).trigger('change.select2');
-                });
-                populateDropdown('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code', () => {
-                    if (selectedSemesterCode) $('#semester_code').val(selectedSemesterCode).trigger('change.select2');
-                });
-                populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', p, '#subject', () => {
-                    if (selectedSubject) $('#subject').val(selectedSubject).trigger('change.select2');
-                });
-                populateDropdown('{{ route("admin.journal.get-groups") }}', p, '#group', () => {
-                    if (selectedGroup) $('#group').val(selectedGroup).trigger('change.select2');
-                });
-                if (selectedDepartment) $('#department').val(selectedDepartment).trigger('change.select2');
-            }
+            // Cascading dropdowns
+            function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
+            function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }
+            function pd(url, p, el, cb) { $.get(url, p, function(d) { $.each(d, function(k,v){ $(el).append('<option value="'+k+'">'+v+'</option>'); }); if(cb) cb(); }); }
+            function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
 
-            initializeFilters();
-            setTimeout(function() { isInitialLoad = false; }, 1500);
+            function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
+            function rSubj() { rd('#subject'); pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject'); }
+            function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
+
+            $('#education_type').change(function() { rSpec(); rSubj(); rGrp(); });
+            $('#faculty').change(function() { rSpec(); rSubj(); rGrp(); });
+            $('#department').change(function() { rSubj(); rGrp(); });
+            $('#specialty').change(function() { rGrp(); });
+            $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("admin.journal.get-semesters") }}', {level_code:lc}, '#semester_code'); rSubj(); rGrp(); });
+            $('#semester_code').change(function() { rSubj(); rGrp(); });
+            $('#subject').change(function() { rGrp(); });
+
+            // Init dropdowns
+            pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
+            pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
+            pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code');
+            pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject');
+            pd('{{ route("admin.journal.get-groups") }}', fp(), '#group');
         });
     </script>
 
     <style>
-        /* ===== Filter Container ===== */
-        .filter-container {
-            padding: 16px 20px 12px;
-            background: linear-gradient(135deg, #f0f4f8 0%, #e8edf5 100%);
-            border-bottom: 2px solid #dbe4ef;
-        }
-        .filter-row {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 10px;
-            align-items: flex-end;
-        }
+        .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; }
+        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; }
         .filter-row:last-child { margin-bottom: 0; }
+        .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
+        .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
-        /* ===== Filter Labels ===== */
-        .filter-label {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            margin-bottom: 4px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: #475569;
-        }
-        .fl-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            display: inline-block;
-            flex-shrink: 0;
-        }
+        .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
+        .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
 
-        /* ===== Select2 ===== */
-        .select2-container--classic .select2-selection--single {
-            height: 36px;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            background: #ffffff;
-            transition: all 0.2s;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-        }
-        .select2-container--classic .select2-selection--single:hover {
-            border-color: #2b5ea7;
-            box-shadow: 0 0 0 2px rgba(43,94,167,0.1);
-        }
-        .select2-container--classic .select2-selection--single .select2-selection__rendered {
-            line-height: 34px;
-            padding-left: 10px;
-            padding-right: 52px;
-            color: #1e293b;
-            font-size: 0.8rem;
-            font-weight: 500;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .select2-container--classic .select2-selection--single .select2-selection__arrow {
-            height: 34px;
-            width: 22px;
-            background: transparent;
-            border-left: none;
-            right: 0;
-        }
-        .select2-container--classic .select2-selection--single .select2-selection__clear {
-            position: absolute;
-            right: 22px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 16px;
-            font-weight: bold;
-            color: #94a3b8;
-            cursor: pointer;
-            padding: 2px 6px;
-            z-index: 2;
-            background: #ffffff;
-            border-radius: 50%;
-            line-height: 1;
-            transition: all 0.15s;
-        }
-        .select2-container--classic .select2-selection--single .select2-selection__clear:hover {
-            color: #ffffff;
-            background: #ef4444;
-        }
-        .select2-dropdown {
-            font-size: 0.8rem;
-            border-radius: 8px;
-            border: 1px solid #cbd5e1;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-        }
-        .select2-container--classic .select2-results__option--highlighted {
-            background-color: #2b5ea7;
-        }
+        .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ===== Toggle Switch ===== */
-        .toggle-switch {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            cursor: pointer;
-            padding: 6px 0;
-            height: 36px;
-            user-select: none;
-        }
-        .toggle-track {
-            width: 40px;
-            height: 22px;
-            background: #cbd5e1;
-            border-radius: 11px;
-            position: relative;
-            transition: background 0.25s;
-            flex-shrink: 0;
-        }
-        .toggle-switch.active .toggle-track {
-            background: linear-gradient(135deg, #2b5ea7, #3b7ddb);
-        }
-        .toggle-thumb {
-            width: 18px;
-            height: 18px;
-            background: #ffffff;
-            border-radius: 50%;
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            transition: transform 0.25s;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-        }
-        .toggle-switch.active .toggle-thumb {
-            transform: translateX(18px);
-        }
-        .toggle-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: #64748b;
-            white-space: nowrap;
-        }
-        .toggle-switch.active .toggle-label {
-            color: #1e3a5f;
-        }
+        .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; padding-right: 52px; color: #1e293b; font-size: 0.8rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 22px; background: transparent; border-left: none; right: 0; }
+        .select2-container--classic .select2-selection--single .select2-selection__clear { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-size: 16px; font-weight: bold; color: #94a3b8; cursor: pointer; padding: 2px 6px; z-index: 2; background: #fff; border-radius: 50%; line-height: 1; transition: all 0.15s; }
+        .select2-container--classic .select2-selection--single .select2-selection__clear:hover { color: #fff; background: #ef4444; }
+        .select2-dropdown { font-size: 0.8rem; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+        .select2-container--classic .select2-results__option--highlighted { background-color: #2b5ea7; }
 
-        /* ===== Table ===== */
-        .journal-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            font-size: 13px;
-        }
-        .journal-table thead {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-        .journal-table thead tr {
-            background: linear-gradient(135deg, #e8edf5 0%, #dbe4ef 50%, #d1d9e6 100%);
-        }
-        .journal-table th {
-            padding: 14px 12px;
-            text-align: left;
-            font-weight: 600;
-            font-size: 11.5px;
-            color: #334155;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            white-space: nowrap;
-            border-bottom: 2px solid #cbd5e1;
-        }
-        .journal-table th.th-num {
-            padding: 14px 12px 14px 16px;
-            width: 44px;
-        }
-        .sort-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            color: #334155;
-            text-decoration: none;
-            transition: opacity 0.15s;
-        }
+        .toggle-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 0; height: 36px; user-select: none; }
+        .toggle-track { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; transition: background 0.25s; flex-shrink: 0; }
+        .toggle-switch.active .toggle-track { background: linear-gradient(135deg, #2b5ea7, #3b7ddb); }
+        .toggle-thumb { width: 18px; height: 18px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: transform 0.25s; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+        .toggle-switch.active .toggle-thumb { transform: translateX(18px); }
+        .toggle-label { font-size: 12px; font-weight: 600; color: #64748b; white-space: nowrap; }
+        .toggle-switch.active .toggle-label { color: #1e3a5f; }
+
+        .journal-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+        .journal-table thead { position: sticky; top: 0; z-index: 10; }
+        .journal-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
+        .journal-table th { padding: 14px 12px; text-align: left; font-weight: 600; font-size: 11.5px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
+        .journal-table th.th-num { padding: 14px 12px 14px 16px; width: 44px; }
+        .sort-link { display: inline-flex; align-items: center; gap: 4px; color: #334155; text-decoration: none; cursor: pointer; }
         .sort-link:hover { opacity: 0.75; }
         .sort-icon { font-size: 8px; opacity: 0.4; }
         .sort-icon.active { font-size: 11px; opacity: 1; color: #ef4444; }
 
-        /* ===== Table Body ===== */
-        .journal-table tbody tr {
-            transition: all 0.15s ease;
-            border-bottom: 1px solid #f1f5f9;
-        }
-        .journal-table tbody tr:nth-child(even) { background-color: #f8fafc; }
-        .journal-table tbody tr:nth-child(odd) { background-color: #ffffff; }
-        .journal-table tbody tr:hover {
-            background-color: #eff6ff !important;
-            box-shadow: inset 4px 0 0 #2b5ea7;
-        }
-        .journal-table td {
-            padding: 10px 12px;
-            vertical-align: middle;
-            line-height: 1.4;
-        }
-        .td-num {
-            padding-left: 16px !important;
-            font-weight: 700;
-            color: #2b5ea7;
-            font-size: 13px;
-        }
+        .journal-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
+        .journal-table tbody tr:nth-child(even) { background: #f8fafc; }
+        .journal-table tbody tr:nth-child(odd) { background: #fff; }
+        .journal-table tbody tr:hover { background: #eff6ff !important; box-shadow: inset 4px 0 0 #2b5ea7; }
+        .journal-table td { padding: 10px 12px; vertical-align: middle; line-height: 1.4; }
+        .td-num { padding-left: 16px !important; font-weight: 700; color: #2b5ea7; font-size: 13px; }
 
-        /* ===== Badges ===== */
-        .badge {
-            display: inline-block;
-            padding: 3px 9px;
-            border-radius: 6px;
-            font-size: 11.5px;
-            font-weight: 600;
-            line-height: 1.4;
-        }
+        .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
         .badge-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #99f6e4; white-space: nowrap; }
-        .badge-indigo {
-            background: linear-gradient(135deg, #1a3268, #2b5ea7);
-            color: #ffffff;
-            border: none;
-            white-space: nowrap;
-        }
+        .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
         .badge-grade-red { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
         .badge-grade-yellow { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
         .badge-grade-green { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
 
-        /* ===== Text Cells ===== */
-        .text-cell {
-            font-size: 12.5px;
-            font-weight: 500;
-            line-height: 1.35;
-            display: block;
-        }
+        .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
-        .text-subject {
-            color: #0f172a;
-            font-weight: 700;
-            font-size: 12.5px;
-            max-width: 260px;
-            white-space: normal;
-            word-break: break-word;
-        }
+        .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; max-width: 260px; white-space: normal; word-break: break-word; }
+
+        .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
+        .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }
+        .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
     </style>
 </x-app-layout>

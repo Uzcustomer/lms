@@ -73,7 +73,9 @@ class ReportController extends Controller
                 DB::raw('COUNT(*) as grades_count'),
             ])
             ->whereNotNull('grade')
-            ->where('grade', '>', 0);
+            ->where('grade', '>', 0)
+            // Faqat JN baholarini olish (11=Ma'ruza, 99=MT, 100=ON, 101=Oski, 102=Test chiqariladi)
+            ->whereNotIn('training_type_code', config('app.training_type_code', [11, 99, 100, 101, 102]));
 
         // Joriy semestr filtri (default ON)
         if ($request->get('current_semester', '1') == '1') {

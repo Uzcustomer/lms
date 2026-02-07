@@ -12,6 +12,8 @@ class ReportController extends Controller
 {
     public function jnReport(Request $request)
     {
+        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+
         // Filtr uchun dropdown ma'lumotlari
         $faculties = Department::where('structure_type_code', 11)
             ->where('active', true)
@@ -62,20 +64,39 @@ class ReportController extends Controller
             ->orderBy('cs.department_name')
             ->get();
 
-        // ===== OPTIMALLASHTIRILGAN SO'ROV =====
-        // 1-qadam: student_grades da faqat 3 ustun bo'yicha aggregatsiya (tez)
-        $gradesSubquery = DB::table('student_grades')
+        // ===== ASOSIY SO'ROV (Jurnal mantiqi bilan mos) =====
+        // Subquery: student_grades + students JOIN (group_id uchun) + schedules EXISTS tekshiruvi
+        $gradesSubquery = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->select([
-                'student_hemis_id',
-                'subject_id',
-                'subject_name',
-                DB::raw('ROUND(AVG(grade), 2) as avg_grade'),
+                'sg.student_hemis_id',
+                'sg.subject_id',
+                'sg.subject_name',
+                DB::raw('ROUND(AVG(sg.grade), 2) as avg_grade'),
                 DB::raw('COUNT(*) as grades_count'),
             ])
-            ->whereNotNull('grade')
-            ->where('grade', '>', 0)
-            // Faqat JN baholarini olish (11=Ma'ruza, 99=MT, 100=ON, 101=Oski, 102=Test chiqariladi)
-            ->whereNotIn('training_type_code', config('app.training_type_code', [11, 99, 100, 101, 102]));
+            ->whereNotNull('sg.grade')
+            ->where('sg.grade', '>', 0)
+            ->whereNotIn('sg.training_type_code', $excludedCodes)
+            ->whereNotNull('sg.lesson_date')
+            // Faqat dars jadvali mavjud bo'lgan kombinatsiyalar
+            ->whereExists(function ($q) use ($excludedCodes) {
+                $q->select(DB::raw(1))
+                    ->from('schedules as sch')
+                    ->whereColumn('sch.group_id', 'st.group_id')
+                    ->whereColumn('sch.subject_id', 'sg.subject_id')
+                    ->whereColumn('sch.semester_code', 'sg.semester_code')
+                    ->whereNotIn('sch.training_type_code', $excludedCodes)
+                    ->whereNotNull('sch.lesson_date');
+            })
+            // Faqat joriy o'quv yili baholarini olish (eski yil baholarini chiqarish)
+            ->where('sg.lesson_date', '>=', DB::raw("(
+                SELECT MIN(sch2.lesson_date) FROM schedules as sch2
+                WHERE sch2.group_id = st.group_id
+                AND sch2.subject_id = sg.subject_id
+                AND sch2.semester_code = sg.semester_code
+                AND sch2.lesson_date IS NOT NULL
+            )"));
 
         // Joriy semestr filtri (default ON)
         if ($request->get('current_semester', '1') == '1') {
@@ -85,18 +106,18 @@ class ReportController extends Controller
                 ->unique()
                 ->toArray();
             if (!empty($currentSemesterCodes)) {
-                $gradesSubquery->whereIn('semester_code', $currentSemesterCodes);
+                $gradesSubquery->whereIn('sg.semester_code', $currentSemesterCodes);
             }
         }
 
         // Semestr filtri
         if ($request->filled('semester_code')) {
-            $gradesSubquery->where('semester_code', $request->semester_code);
+            $gradesSubquery->where('sg.semester_code', $request->semester_code);
         }
 
         // Fan filtri
         if ($request->filled('subject')) {
-            $gradesSubquery->where('subject_id', $request->subject);
+            $gradesSubquery->where('sg.subject_id', $request->subject);
         }
 
         // Kafedra filtri
@@ -106,12 +127,47 @@ class ReportController extends Controller
                 ->pluck('subject_id')
                 ->unique()
                 ->toArray();
-            $gradesSubquery->whereIn('subject_id', $subjectIds);
+            $gradesSubquery->whereIn('sg.subject_id', $subjectIds);
         }
 
-        $gradesSubquery->groupBy('student_hemis_id', 'subject_id', 'subject_name');
+        // Fakultet filtri (subquery ichida, chunki st mavjud)
+        if ($request->filled('faculty')) {
+            $faculty = Department::find($request->faculty);
+            if ($faculty) {
+                $gradesSubquery->where('st.department_id', $faculty->department_hemis_id);
+            }
+        }
 
-        // 2-qadam: Aggregatsiya natijasini students bilan JOIN (tez, chunki kamroq qatorlar)
+        // Yo'nalish filtri
+        if ($request->filled('specialty')) {
+            $gradesSubquery->where('st.specialty_id', $request->specialty);
+        }
+
+        // Kurs filtri
+        if ($request->filled('level_code')) {
+            $gradesSubquery->where('st.level_code', $request->level_code);
+        }
+
+        // Guruh filtri
+        if ($request->filled('group')) {
+            $gradesSubquery->where('st.group_id', $request->group);
+        }
+
+        // Ta'lim turi filtri
+        if ($selectedEducationType) {
+            $groupIds = DB::table('groups')
+                ->whereIn('curriculum_hemis_id',
+                    Curriculum::where('education_type_code', $selectedEducationType)
+                        ->pluck('curricula_hemis_id')
+                )
+                ->pluck('group_hemis_id')
+                ->toArray();
+            $gradesSubquery->whereIn('st.group_id', $groupIds);
+        }
+
+        $gradesSubquery->groupBy('sg.student_hemis_id', 'sg.subject_id', 'sg.subject_name');
+
+        // Outer query: aggregatsiya natijasini students bilan JOIN (ko'rsatish uchun)
         $query = DB::table(DB::raw("({$gradesSubquery->toSql()}) as g"))
             ->mergeBindings($gradesSubquery)
             ->join('students as s', 's.hemis_id', '=', 'g.student_hemis_id')
@@ -129,42 +185,7 @@ class ReportController extends Controller
                 's.group_name',
             ]);
 
-        // Fakultet filtri
-        if ($request->filled('faculty')) {
-            $faculty = Department::find($request->faculty);
-            if ($faculty) {
-                $query->where('s.department_id', $faculty->department_hemis_id);
-            }
-        }
-
-        // Yo'nalish filtri
-        if ($request->filled('specialty')) {
-            $query->where('s.specialty_id', $request->specialty);
-        }
-
-        // Kurs filtri
-        if ($request->filled('level_code')) {
-            $query->where('s.level_code', $request->level_code);
-        }
-
-        // Guruh filtri
-        if ($request->filled('group')) {
-            $query->where('s.group_id', $request->group);
-        }
-
-        // Ta'lim turi filtri
-        if ($selectedEducationType) {
-            $groupIds = DB::table('groups')
-                ->whereIn('curriculum_hemis_id',
-                    Curriculum::where('education_type_code', $selectedEducationType)
-                        ->pluck('curricula_hemis_id')
-                )
-                ->pluck('group_hemis_id')
-                ->toArray();
-            $query->whereIn('s.group_id', $groupIds);
-        }
-
-        // Saralash (default: o'rtacha baho kamayish tartibida)
+        // Saralash
         $sortColumn = $request->get('sort', 'avg_grade');
         $sortDirection = $request->get('direction', 'desc');
 

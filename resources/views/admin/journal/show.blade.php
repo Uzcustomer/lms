@@ -725,7 +725,7 @@
 
                                             // Calculate attendance percentage with 2 decimal places
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
-                                            $davomatPercent = $totalAcload > 0 ? round(($absentOff / $totalAcload) * 100, 2) : 0;
+                                            $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
@@ -848,7 +848,7 @@
                                             $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null];
 
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
-                                            $davomatPercent = $totalAcload > 0 ? round(($absentOff / $totalAcload) * 100, 2) : 0;
+                                            $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>

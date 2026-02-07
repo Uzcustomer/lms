@@ -443,10 +443,10 @@
         .date-end {
             border-right: 2px solid #94a3b8 !important;
         }
-        .detailed-date-start {
+        .journal-table .detailed-date-start {
             border-left: 4px double #64748b !important;
         }
-        .detailed-date-end {
+        .journal-table .detailed-date-end {
             border-right: 4px double #64748b !important;
         }
         .inconsistent-grade {

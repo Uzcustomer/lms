@@ -18,7 +18,7 @@
         .journal-table tbody tr:nth-child(even) {
             background-color: #f8fafc;
         }
-        .journal-table tbody tr:hover td {
+        .journal-table tbody td:hover {
             background-color: #e0f2fe !important;
         }
         .journal-table thead th {

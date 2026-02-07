@@ -136,12 +136,11 @@
                                 <th>Lavozim</th>
                                 <th>Rollar</th>
                                 <th style="width: 80px;">Status</th>
-                                <th style="width: 80px;">Amallar</th>
                             </tr>
                             </thead>
                             <tbody>
                             @foreach($teachers as $index => $teacher)
-                                <tr>
+                                <tr onclick="window.location='{{ route('admin.teachers.show', $teacher) }}'" style="cursor: pointer;">
                                     <td style="padding-left: 16px; font-weight: 700; color: #2b5ea7; font-size: 13px;">
                                         {{ $teachers->firstItem() + $index }}
                                     </td>
@@ -185,15 +184,6 @@
                                         @else
                                             <span class="badge badge-red">Nofaol</span>
                                         @endif
-                                    </td>
-                                    <td>
-                                        <a href="{{ route('admin.teachers.show', $teacher) }}" class="action-btn">
-                                            <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                            </svg>
-                                            Profil
-                                        </a>
                                     </td>
                                 </tr>
                             @endforeach

@@ -63,9 +63,21 @@
                             </div>
                         </div>
                     </div>
-                    <div class="profile-id-section">
-                        <span class="profile-id-label">ID RAQAMI</span>
-                        <span class="profile-id-value">{{ $teacher->employee_id_number }}</span>
+                    <div style="display: flex; align-items: center; gap: 16px; flex-shrink: 0;">
+                        <div class="profile-id-section">
+                            <span class="profile-id-label">ID RAQAMI</span>
+                            <span class="profile-id-value">{{ $teacher->employee_id_number }}</span>
+                        </div>
+                        <form action="{{ route('admin.teachers.reset-password', $teacher) }}" method="POST"
+                              onsubmit="return confirm('Parolni tiklashni tasdiqlaysizmi? Yangi parol: tug\'ilgan sana (ddmmyyyy)')">
+                            @csrf
+                            <button type="submit" class="btn-reset-password" {{ !$teacher->birth_date ? 'disabled' : '' }}>
+                                <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                                </svg>
+                                Parolni tiklash
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -204,33 +216,14 @@
                             </div>
                         </form>
 
-                        {{-- Parolni tiklash --}}
-                        <div class="password-reset-section">
-                            @if($teacher->must_change_password)
-                                <div class="pw-warning">
-                                    <svg style="width: 14px; height: 14px; flex-shrink: 0;" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                                    </svg>
-                                    Parol tiklangan. Keyingi kirishda o'zgartirishi kerak.
-                                </div>
-                            @endif
-                            <form action="{{ route('admin.teachers.reset-password', $teacher) }}" method="POST"
-                                  onsubmit="return confirm('Parolni tiklashni tasdiqlaysizmi?')" style="display: flex; align-items: center; gap: 8px;">
-                                @csrf
-                                <span style="font-size: 11px; color: #64748b; flex: 1;">
-                                    Parol: <strong>ddmmyyyy</strong>
-                                    @if($teacher->birth_date)
-                                        ({{ \Carbon\Carbon::parse($teacher->birth_date)->format('d.m.Y') }})
-                                    @endif
-                                </span>
-                                <button type="submit" class="btn btn-orange" {{ !$teacher->birth_date ? 'disabled' : '' }}>
-                                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                    </svg>
-                                    Tiklash
-                                </button>
-                            </form>
-                        </div>
+                        @if($teacher->must_change_password)
+                            <div class="pw-warning" style="margin-top: 10px;">
+                                <svg style="width: 14px; height: 14px; flex-shrink: 0;" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                                Parol tiklangan. Keyingi kirishda o'zgartirishi kerak.
+                            </div>
+                        @endif
                     </div>
                 </div>
 
@@ -580,12 +573,35 @@
         .btn-amber { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; }
         .btn-amber:hover { box-shadow: 0 2px 8px rgba(245,158,11,0.4); }
 
-        /* ===== Password Reset ===== */
-        .password-reset-section {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px dashed #e2e8f0;
+        /* ===== Reset Password Button (header) ===== */
+        .btn-reset-password {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 18px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(249,115,22,0.3);
         }
+        .btn-reset-password:hover {
+            box-shadow: 0 4px 16px rgba(249,115,22,0.5);
+            transform: translateY(-1px);
+        }
+        .btn-reset-password:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* ===== Password Warning ===== */
         .pw-warning {
             display: flex;
             align-items: center;

@@ -23,71 +23,59 @@
         </div>
     @endif
 
-    <div class="py-12">
-        <div class="max-w-full mx-auto sm:px-6 lg:px-8">
+    <div class="py-4">
+        <div class="w-full px-4 sm:px-6">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 bg-white border-b border-gray-200">
-                    <div class="flex justify-between mb-4">
+                <div class="p-4 bg-white border-b border-gray-200">
+                    <div class="flex justify-between mb-3">
                         <form action="{{ route('admin.teachers.index') }}" method="GET" class="flex items-center">
                             <input type="text" name="search" value="{{ request('search') }}" placeholder="Ism, ID yoki kafedra bo'yicha qidirish..."
-                                   class="rounded-md shadow-sm border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                                   style="min-width: 300px;">
+                                   class="text-sm rounded-md shadow-sm border-gray-300 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                                   style="min-width: 280px;">
                             <button type="submit"
-                                    class="ml-2 px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition duration-300">
-                                <i class="fas fa-search mr-2"></i>{{ __('Qidirish') }}
+                                    class="ml-2 px-3 py-2 text-sm bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition">
+                                <i class="fas fa-search mr-1"></i>Qidirish
                             </button>
                         </form>
                     </div>
                     <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
+                        <table class="w-full divide-y divide-gray-200 table-fixed">
                             <thead class="bg-gray-50">
                             <tr>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Xodim
-                                </th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Kafedra
-                                </th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Lavozim
-                                </th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Rollar
-                                </th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Status
-                                </th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Amallar
-                                </th>
+                                <th class="w-1/4 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Xodim</th>
+                                <th class="w-1/4 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kafedra</th>
+                                <th class="w-1/8 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Lavozim</th>
+                                <th class="w-1/6 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rollar</th>
+                                <th class="w-16 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="w-20 px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amallar</th>
                             </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
                             @foreach($teachers as $teacher)
                                 <tr class="hover:bg-gray-50 transition">
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="flex items-center">
-                                            <div class="flex-shrink-0 h-10 w-10">
+                                    <td class="px-3 py-2">
+                                        <div class="flex items-center min-w-0">
+                                            <div class="flex-shrink-0 h-8 w-8">
                                                 @if($teacher->image)
-                                                    <img class="h-10 w-10 rounded-full object-cover" src="{{ $teacher->image }}" alt="">
+                                                    <img class="h-8 w-8 rounded-full object-cover" src="{{ $teacher->image }}" alt="">
                                                 @else
-                                                    <div class="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                                                        <span class="text-indigo-700 font-semibold text-sm">{{ mb_substr($teacher->first_name ?? '', 0, 1) }}{{ mb_substr($teacher->second_name ?? '', 0, 1) }}</span>
+                                                    <div class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                                        <span class="text-indigo-700 font-semibold text-xs">{{ mb_substr($teacher->first_name ?? '', 0, 1) }}{{ mb_substr($teacher->second_name ?? '', 0, 1) }}</span>
                                                     </div>
                                                 @endif
                                             </div>
-                                            <div class="ml-4">
-                                                <div class="text-sm font-medium text-gray-900">{{ $teacher->full_name }}</div>
-                                                <div class="text-sm text-gray-500">ID: {{ $teacher->employee_id_number }}</div>
+                                            <div class="ml-2 min-w-0">
+                                                <div class="text-xs font-medium text-gray-900 truncate">{{ $teacher->full_name }}</div>
+                                                <div class="text-xs text-gray-400">{{ $teacher->employee_id_number }}</div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $teacher->department }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ $teacher->staff_position }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="flex flex-wrap gap-1">
+                                    <td class="px-3 py-2 text-xs text-gray-600 truncate">{{ $teacher->department }}</td>
+                                    <td class="px-3 py-2 text-xs text-gray-600 truncate">{{ $teacher->staff_position }}</td>
+                                    <td class="px-3 py-2">
+                                        <div class="flex flex-wrap gap-0.5">
                                             @forelse($teacher->roles as $role)
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
                                                     {{ \App\Enums\ProjectRole::tryFrom($role->name)?->label() ?? $role->name }}
                                                 </span>
                                             @empty
@@ -95,15 +83,15 @@
                                             @endforelse
                                         </div>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {{ $teacher->status ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                    <td class="px-3 py-2">
+                                        <span class="px-1.5 py-0.5 inline-flex text-xs font-semibold rounded {{ $teacher->status ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
                                             {{ $teacher->status ? 'Faol' : 'Nofaol' }}
                                         </span>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <td class="px-3 py-2">
                                         <a href="{{ route('admin.teachers.show', $teacher) }}"
-                                           class="inline-flex items-center px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100 transition">
-                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                           class="inline-flex items-center px-2 py-1 text-xs bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100 transition">
+                                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                             </svg>
@@ -115,7 +103,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="mt-4">
+                    <div class="mt-3">
                         {{ $teachers->links() }}
                     </div>
                 </div>

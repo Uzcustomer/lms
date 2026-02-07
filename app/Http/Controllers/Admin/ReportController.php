@@ -309,6 +309,16 @@ class ReportController extends Controller
                 ->keyBy('hemis_id');
         }
 
+        // group_hemis_id → groups.id map (jurnal URL uchun)
+        $groupHemisIds = array_unique(array_column($results, 'group_id'));
+        $groupIdMap = [];
+        if (!empty($groupHemisIds)) {
+            $groupIdMap = DB::table('groups')
+                ->whereIn('group_hemis_id', $groupHemisIds)
+                ->pluck('id', 'group_hemis_id')
+                ->toArray();
+        }
+
         $finalResults = [];
         foreach ($results as $r) {
             $st = $studentInfo[$r['student_hemis_id']] ?? null;
@@ -322,7 +332,7 @@ class ReportController extends Controller
                 'subject_name' => $r['subject_name'],
                 'avg_grade' => $r['avg_grade'],
                 'grades_count' => $r['grades_count'],
-                'group_id' => $r['group_id'],
+                'group_id' => $groupIdMap[$r['group_id']] ?? $r['group_id'],
                 'subject_id' => $r['subject_id'],
                 'semester_code' => $r['semester_code'],
             ];

@@ -526,12 +526,15 @@ class JournalController extends Controller
         // Faculty (Fakultet) - department linked to curriculum
         $faculty = Department::where('department_hemis_id', $curriculum->department_hemis_id ?? null)->first();
         $facultyName = $faculty->name ?? '';
+        $facultyId = $faculty->id ?? '';
 
         // Kafedra - from curriculum subject
         $kafedraName = $subject->department_name ?? '';
+        $kafedraId = $subject->department_id ?? '';
 
         // Kurs (Course level) - from semester
         $kursName = $semester->level_name ?? '';
+        $levelCode = $semester->level_code ?? '';
 
         // O'qituvchi (Teacher) - from schedules for this group/subject/semester
         $teacherName = DB::table('schedules')
@@ -549,8 +552,11 @@ class JournalController extends Controller
             'semester',
             'students',
             'facultyName',
+            'facultyId',
             'kafedraName',
+            'kafedraId',
             'kursName',
+            'levelCode',
             'teacherName',
             'lectureLessonDates',
             'lectureColumns',
@@ -1263,5 +1269,154 @@ class JournalController extends Controller
             'subjects' => $subjects,
             'level_codes' => $levelCodes,
         ];
+    }
+
+    /**
+     * Dynamic sidebar filter options - returns available options for all filters
+     * based on the currently selected filter values (faceted search pattern).
+     */
+    public function getSidebarOptions(Request $request)
+    {
+        // Helper: build base query joining all relevant tables
+        $buildBase = function () use ($request) {
+            $query = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as s', function ($join) {
+                    $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('s.code', '=', 'cs.semester_code');
+                })
+                ->leftJoin('departments as fac', function ($join) {
+                    $join->on('fac.department_hemis_id', '=', 'g.department_hemis_id')
+                        ->where('fac.structure_type_code', '=', 11)
+                        ->where('fac.active', '=', true);
+                })
+                ->where('g.department_active', true)
+                ->where('g.active', true);
+
+            // Teacher filter: restrict to group/subject/semester combinations that the teacher teaches
+            if ($request->filled('teacher')) {
+                $query->whereExists(function ($sub) use ($request) {
+                    $sub->select(DB::raw(1))
+                        ->from('schedules as sch_filter')
+                        ->whereColumn('sch_filter.group_id', 'g.group_hemis_id')
+                        ->whereColumn('sch_filter.subject_id', 'cs.subject_id')
+                        ->whereColumn('sch_filter.semester_code', 'cs.semester_code')
+                        ->where('sch_filter.employee_name', $request->teacher);
+                });
+            }
+
+            return $query;
+        };
+
+        // Apply all filters except the specified one
+        $applyFilters = function ($query, $except = '') use ($request) {
+            if ($except !== 'group' && $request->filled('group_id')) {
+                $query->where('g.id', $request->group_id);
+            }
+            if ($except !== 'subject' && $request->filled('subject_id')) {
+                $query->where('cs.subject_id', $request->subject_id);
+            }
+            if ($except !== 'semester' && $request->filled('semester_code')) {
+                $query->where('cs.semester_code', $request->semester_code);
+            }
+            if ($except !== 'faculty' && $request->filled('faculty_id')) {
+                $query->where('fac.id', $request->faculty_id);
+            }
+            if ($except !== 'kafedra' && $request->filled('kafedra_id')) {
+                $query->where('cs.department_id', $request->kafedra_id);
+            }
+            if ($except !== 'level' && $request->filled('level_code')) {
+                $query->where('s.level_code', $request->level_code);
+            }
+            return $query;
+        };
+
+        // Groups
+        $groups = $applyFilters($buildBase(), 'group')
+            ->select('g.id', 'g.name')
+            ->groupBy('g.id', 'g.name')
+            ->orderBy('g.name')
+            ->pluck('g.name', 'g.id');
+
+        // Subjects
+        $subjects = $applyFilters($buildBase(), 'subject')
+            ->select('cs.subject_id', 'cs.subject_name')
+            ->groupBy('cs.subject_id', 'cs.subject_name')
+            ->orderBy('cs.subject_name')
+            ->pluck('cs.subject_name', 'cs.subject_id');
+
+        // Semesters
+        $semesters = $applyFilters($buildBase(), 'semester')
+            ->select('s.code', 's.name')
+            ->groupBy('s.code', 's.name')
+            ->orderBy('s.code')
+            ->pluck('s.name', 's.code');
+
+        // Faculties
+        $faculties = $applyFilters($buildBase(), 'faculty')
+            ->whereNotNull('fac.id')
+            ->select('fac.id', 'fac.name')
+            ->groupBy('fac.id', 'fac.name')
+            ->orderBy('fac.name')
+            ->pluck('fac.name', 'fac.id');
+
+        // Kafedras (departments from curriculum_subjects)
+        $kafedras = $applyFilters($buildBase(), 'kafedra')
+            ->whereNotNull('cs.department_id')
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
+            ->pluck('cs.department_name', 'cs.department_id');
+
+        // Levels (Kurs)
+        $levels = $applyFilters($buildBase(), 'level')
+            ->select('s.level_code', 's.level_name')
+            ->groupBy('s.level_code', 's.level_name')
+            ->orderBy('s.level_code')
+            ->pluck('s.level_name', 's.level_code');
+
+        // Teachers (from schedules table)
+        $teacherQuery = DB::table('schedules as sch')
+            ->join('groups as g2', 'g2.group_hemis_id', '=', 'sch.group_id')
+            ->where('g2.department_active', true)
+            ->where('g2.active', true)
+            ->whereNotNull('sch.employee_name')
+            ->where('sch.employee_name', '!=', 'Manual Entry')
+            ->where('sch.employee_name', '!=', '');
+
+        if ($request->filled('group_id')) {
+            $group = Group::find($request->group_id);
+            if ($group) {
+                $teacherQuery->where('sch.group_id', $group->group_hemis_id);
+            }
+        }
+        if ($request->filled('subject_id')) {
+            $teacherQuery->where('sch.subject_id', $request->subject_id);
+        }
+        if ($request->filled('semester_code')) {
+            $teacherQuery->where('sch.semester_code', $request->semester_code);
+        }
+        if ($request->filled('faculty_id')) {
+            $facultyDeptHemisId = Department::where('id', $request->faculty_id)->value('department_hemis_id');
+            if ($facultyDeptHemisId) {
+                $teacherQuery->where('g2.department_hemis_id', $facultyDeptHemisId);
+            }
+        }
+
+        $teachers = $teacherQuery->select('sch.employee_name')
+            ->distinct()
+            ->orderBy('sch.employee_name')
+            ->pluck('sch.employee_name', 'sch.employee_name');
+
+        return response()->json([
+            'groups' => $groups,
+            'subjects' => $subjects,
+            'semesters' => $semesters,
+            'faculties' => $faculties,
+            'kafedras' => $kafedras,
+            'levels' => $levels,
+            'teachers' => $teachers,
+        ]);
     }
 }

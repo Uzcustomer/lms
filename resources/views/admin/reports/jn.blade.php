@@ -120,7 +120,7 @@
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="avg_grade">O'rtacha baho <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="grades_count">Baholar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="grades_count">Darslar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>

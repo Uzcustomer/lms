@@ -13,7 +13,7 @@ class RoleSeeder extends Seeder
         foreach (ProjectRole::cases() as $role) {
             Role::firstOrCreate([
                 'name' => $role->value,
-                'guard_name' => $role->guard(),
+                'guard_name' => 'web',
             ]);
         }
     }

@@ -41,29 +41,6 @@ enum ProjectRole: string
         };
     }
 
-    public function guard(): string
-    {
-        return match ($this) {
-            self::SUPERADMIN,
-            self::ADMIN,
-            self::JUNIOR_ADMIN,
-            self::INSPECTOR,
-            self::VICE_RECTOR,
-            self::REGISTRAR_OFFICE,
-            self::ACADEMIC_DEPARTMENT,
-            self::ACCOUNTANT,
-            self::SPIRITUAL_AFFAIRS => 'web',
-
-            self::TUTOR,
-            self::DEAN,
-            self::DEPARTMENT_HEAD,
-            self::SUBJECT_RESPONSIBLE,
-            self::TEACHER => 'teacher',
-
-            self::STUDENT => 'student',
-        };
-    }
-
     /**
      * Rol berish huquqiga ega rollar.
      */
@@ -85,26 +62,22 @@ enum ProjectRole: string
     }
 
     /**
+     * Talaba rolidan tashqari barcha rollar (xodimlar uchun).
+     *
      * @return array<ProjectRole>
      */
-    public static function webRoles(): array
+    public static function staffRoles(): array
     {
-        return array_filter(self::cases(), fn (self $role) => $role->guard() === 'web');
+        return array_filter(self::cases(), fn (self $role) => $role !== self::STUDENT);
     }
 
     /**
+     * Barcha rollar ro'yxati.
+     *
      * @return array<ProjectRole>
      */
-    public static function teacherRoles(): array
+    public static function allRoles(): array
     {
-        return array_filter(self::cases(), fn (self $role) => $role->guard() === 'teacher');
-    }
-
-    /**
-     * @return array<ProjectRole>
-     */
-    public static function studentRoles(): array
-    {
-        return array_filter(self::cases(), fn (self $role) => $role->guard() === 'student');
+        return self::cases();
     }
 }

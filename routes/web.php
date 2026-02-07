@@ -41,7 +41,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
 
 
-    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':admin|teacher|examiner|dekan'])->group(function () {
+    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('admin.dashboard');
         });
@@ -161,8 +161,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/student-grades/{gradeId}/status', [AdminStudentController::class, 'updateStatus'])->name('student-grades.update-status');
 
         Route::get('/teachers', [TeacherController::class, 'index'])->name('teachers.index');
+        Route::get('/teachers/{teacher}', [TeacherController::class, 'show'])->name('teachers.show');
         Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
         Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
+        Route::put('/teachers/{teacher}/roles', [TeacherController::class, 'updateRoles'])->name('teachers.update-roles');
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
 
@@ -208,7 +210,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari
-    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':admin'])->group(function () {
+    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
         Route::get('/password-settings', [PasswordSettingsController::class, 'index'])->name('password-settings.index');
         Route::post('/password-settings', [PasswordSettingsController::class, 'update'])->name('password-settings.update');
 
@@ -272,7 +274,7 @@ Route::prefix('teacher')->name('teacher.')->middleware(['web'])->group(function 
     });
     Route::get('/login', [TeacherAuthController::class, 'showLoginForm'])->name('login');
 
-    Route::middleware(['auth:teacher', \Spatie\Permission\Middleware\RoleMiddleware::class . ':teacher|dekan'])->group(function () {
+    Route::middleware(['auth:teacher', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('teacher.dashboard');
         });

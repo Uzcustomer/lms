@@ -122,17 +122,67 @@
             background: #f1f5f9;
             border-bottom: 1px solid #e2e8f0;
         }
-        .sidebar-teacher-row {
+        .sidebar-info-text {
+            width: 100%;
+            padding: 6px 10px;
             font-size: 12px;
-            color: #1f2937;
-            padding: 3px 0;
-        }
-        .sidebar-teacher-type {
-            font-size: 10px;
-            color: #6b7280;
             font-weight: 500;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #fff;
+            color: #1f2937;
+        }
+        .sidebar-teacher-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 5px 0;
+        }
+        .sidebar-teacher-card + .sidebar-teacher-card {
+            border-top: 1px solid #f1f5f9;
+        }
+        .sidebar-teacher-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #1e293b;
+            flex: 1;
+            line-height: 1.3;
+        }
+        .sidebar-teacher-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .badge-lecture {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+        .badge-practice {
+            background: #d1fae5;
+            color: #047857;
+        }
+        .sidebar-teacher-type-label {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.03em;
+            letter-spacing: 0.04em;
+            padding: 1px 6px;
+            border-radius: 3px;
+            margin-bottom: 2px;
+        }
+        .type-label-lecture {
+            background: #f3e8ff;
+            color: #7c3aed;
+        }
+        .type-label-practice {
+            background: #ecfdf5;
+            color: #059669;
         }
         .sidebar-select {
             width: 100%;
@@ -1022,7 +1072,7 @@
                     </div>
 
                     <div class="sidebar-field">
-                        <div id="kafedra-display" class="sidebar-value" style="font-size: 11px; padding: 5px 8px; background: transparent; border: none; color: #6b7280;">{{ $kafedraName }}</div>
+                        <div id="kafedra-display" class="sidebar-info-text">{{ $kafedraName }}</div>
                     </div>
 
                     <div class="sidebar-field">
@@ -1062,25 +1112,31 @@
                     <!-- O'qituvchilar -->
                     <div class="sidebar-section-label">O'qituvchilar</div>
                     <div class="sidebar-field" id="teachers-section" style="padding: 6px 12px;">
-                        <div style="margin-bottom: 4px;">
-                            <div class="sidebar-teacher-type">Ma'ruza</div>
-                            <div id="lecture-teacher-display" class="sidebar-teacher-row">
+                        <div>
+                            <div class="sidebar-teacher-type-label type-label-lecture">Ma'ruza</div>
+                            <div id="lecture-teacher-display">
                                 @if($lectureTeacher)
-                                    {{ $lectureTeacher['name'] }} ({{ $lectureTeacher['hours'] }} soat)
+                                    <div class="sidebar-teacher-card">
+                                        <div class="sidebar-teacher-name">{{ $lectureTeacher['name'] }}</div>
+                                        <div class="sidebar-teacher-badge badge-lecture">{{ $lectureTeacher['hours'] }} soat</div>
+                                    </div>
                                 @else
-                                    -
+                                    <div class="sidebar-teacher-card"><div class="sidebar-teacher-name" style="color:#9ca3af;">-</div></div>
                                 @endif
                             </div>
                         </div>
-                        <div>
-                            <div class="sidebar-teacher-type">Amaliyot</div>
-                            <div id="practice-teacher-display" class="sidebar-teacher-row">
+                        <div style="margin-top: 4px;">
+                            <div class="sidebar-teacher-type-label type-label-practice">Amaliyot</div>
+                            <div id="practice-teacher-display">
                                 @if(count($practiceTeachers) > 0)
                                     @foreach($practiceTeachers as $pt)
-                                        <div>{{ $pt['name'] }} ({{ $pt['hours'] }} soat)</div>
+                                        <div class="sidebar-teacher-card">
+                                            <div class="sidebar-teacher-name">{{ $pt['name'] }}</div>
+                                            <div class="sidebar-teacher-badge badge-practice">{{ $pt['hours'] }} soat</div>
+                                        </div>
                                     @endforeach
                                 @else
-                                    -
+                                    <div class="sidebar-teacher-card"><div class="sidebar-teacher-name" style="color:#9ca3af;">-</div></div>
                                 @endif
                             </div>
                         </div>
@@ -1221,18 +1277,18 @@
                     if (lectureEl) {
                         if (data.teacher_data && data.teacher_data.lecture_teacher) {
                             const t = data.teacher_data.lecture_teacher;
-                            lectureEl.textContent = t.name + ' (' + t.hours + ' soat)';
+                            lectureEl.innerHTML = '<div class="sidebar-teacher-card"><div class="sidebar-teacher-name">' + t.name + '</div><div class="sidebar-teacher-badge badge-lecture">' + t.hours + ' soat</div></div>';
                         } else {
-                            lectureEl.textContent = '-';
+                            lectureEl.innerHTML = '<div class="sidebar-teacher-card"><div class="sidebar-teacher-name" style="color:#9ca3af;">-</div></div>';
                         }
                     }
                     if (practiceEl) {
                         if (data.teacher_data && data.teacher_data.practice_teachers && data.teacher_data.practice_teachers.length > 0) {
                             practiceEl.innerHTML = data.teacher_data.practice_teachers
-                                .map(t => '<div>' + t.name + ' (' + t.hours + ' soat)</div>')
+                                .map(t => '<div class="sidebar-teacher-card"><div class="sidebar-teacher-name">' + t.name + '</div><div class="sidebar-teacher-badge badge-practice">' + t.hours + ' soat</div></div>')
                                 .join('');
                         } else {
-                            practiceEl.textContent = '-';
+                            practiceEl.innerHTML = '<div class="sidebar-teacher-card"><div class="sidebar-teacher-name" style="color:#9ca3af;">-</div></div>';
                         }
                     }
                     // Kafedra ma'lumot sifatida yangilanadi

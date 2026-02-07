@@ -678,7 +678,7 @@
                                     <tr>
                                         @forelse($jbLessonDates as $idx => $date)
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px;">
-                                                <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}</div>
+                                                <div class="date-text-wrapper">{{ format_date($date) }}</div>
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -806,7 +806,7 @@
                                                 $prevDate = $col['date'];
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px;">
-                                                <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})</div>
+                                                <div class="date-text-wrapper">{{ format_date($col['date']) }}({{ $col['pair'] }})</div>
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -1018,7 +1018,7 @@
                                         <tr>
                                             @foreach($mtLessonDates as $idx => $date)
                                                 <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px;">
-                                                    <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}</div>
+                                                    <div class="date-text-wrapper">{{ format_date($date) }}</div>
                                                 </th>
                                             @endforeach
                                         </tr>
@@ -1102,7 +1102,7 @@
                                                 $prevDate = $col['date'];
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px;">
-                                                <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})</div>
+                                                <div class="date-text-wrapper">{{ format_date($col['date']) }}({{ $col['pair'] }})</div>
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>

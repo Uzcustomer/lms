@@ -288,18 +288,28 @@ class JournalController extends Controller
             return null;
         };
 
-        // Build unique date+pair columns for detailed view from schedules (calendar source)
+        // Build unique date+pair columns for detailed view from schedules (calendar source).
+        // Merge grade date+pair as fallback for old data where schedule rows might be missing.
         $jbColumns = $jbScheduleRows->map(function ($schedule) {
             return ['date' => $schedule->lesson_date, 'pair' => $schedule->lesson_pair_code];
-        })->unique(function ($item) {
+        })->merge($jbGradesRaw->map(function ($grade) {
+            return ['date' => $grade->lesson_date, 'pair' => $grade->lesson_pair_code];
+        }))->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
+        })->sort(function ($a, $b) {
+            return strcmp($a['date'], $b['date']) ?: strcmp($a['pair'], $b['pair']);
         })->values()->toArray();
 
-        // Build unique date+pair columns for detailed view from schedules (calendar source)
+        // Build unique date+pair columns for detailed view from schedules (calendar source).
+        // Merge grade date+pair as fallback for old data where schedule rows might be missing.
         $mtColumns = $mtScheduleRows->map(function ($schedule) {
             return ['date' => $schedule->lesson_date, 'pair' => $schedule->lesson_pair_code];
-        })->unique(function ($item) {
+        })->merge($mtGradesRaw->map(function ($grade) {
+            return ['date' => $grade->lesson_date, 'pair' => $grade->lesson_pair_code];
+        }))->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
+        })->sort(function ($a, $b) {
+            return strcmp($a['date'], $b['date']) ?: strcmp($a['pair'], $b['pair']);
         })->values()->toArray();
 
         // Get distinct dates for compact view from schedules (calendar source).

@@ -37,6 +37,14 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                        <div class="filter-item" style="min-width: 150px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanadan</label>
+                            <input type="text" id="date_from" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
+                        </div>
+                        <div class="filter-item" style="min-width: 150px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanagacha</label>
+                            <input type="text" id="date_to" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
+                        </div>
                         <div class="filter-item" style="min-width: 90px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
                             <select id="per_page" class="select2" style="width: 100%;">
@@ -143,6 +151,8 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
     <script>
         let currentSort = 'avg_grade';
@@ -168,6 +178,8 @@
                 education_type: $('#education_type').val() || '',
                 faculty: $('#faculty').val() || '',
                 specialty: $('#specialty').val() || '',
+                date_from: $('#date_from').val() || '',
+                date_to: $('#date_to').val() || '',
                 level_code: $('#level_code').val() || '',
                 semester_code: $('#semester_code').val() || '',
                 group: $('#group').val() || '',
@@ -296,6 +308,30 @@
                 loadReport(1);
             });
 
+            // Flatpickr init
+            var fpFrom = flatpickr('#date_from', {
+                dateFormat: 'Y-m-d',
+                allowInput: true,
+                onChange: function(selectedDates) {
+                    if (selectedDates.length) {
+                        fpTo.set('minDate', selectedDates[0]);
+                    } else {
+                        fpTo.set('minDate', null);
+                    }
+                }
+            });
+            var fpTo = flatpickr('#date_to', {
+                dateFormat: 'Y-m-d',
+                allowInput: true,
+                onChange: function(selectedDates) {
+                    if (selectedDates.length) {
+                        fpFrom.set('maxDate', selectedDates[0]);
+                    } else {
+                        fpFrom.set('maxDate', null);
+                    }
+                }
+            });
+
             // Select2 init
             $('.select2').each(function() {
                 $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher })
@@ -335,6 +371,11 @@
         .filter-row:last-child { margin-bottom: 0; }
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; outline: none; }
+        .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
+        .date-input::placeholder { color: #94a3b8; font-weight: 400; }
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }

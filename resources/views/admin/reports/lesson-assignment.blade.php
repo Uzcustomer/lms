@@ -37,13 +37,25 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 150px;">
+                        <div class="filter-item" style="min-width: 155px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Sana (dan)</label>
-                            <input type="date" id="date_from" class="date-input" />
+                            <div class="date-picker-wrap">
+                                <input type="text" id="date_from" class="date-input" placeholder="kk.oo.yyyy" readonly />
+                                <span class="date-picker-icon">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                </span>
+                                <span class="date-clear-btn" id="date_from_clear" title="Tozalash">&times;</span>
+                            </div>
                         </div>
-                        <div class="filter-item" style="min-width: 150px;">
+                        <div class="filter-item" style="min-width: 155px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Sana (gacha)</label>
-                            <input type="date" id="date_to" class="date-input" />
+                            <div class="date-picker-wrap">
+                                <input type="text" id="date_to" class="date-input" placeholder="kk.oo.yyyy" readonly />
+                                <span class="date-picker-icon">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                </span>
+                                <span class="date-clear-btn" id="date_to_clear" title="Tozalash">&times;</span>
+                            </div>
                         </div>
                         <div class="filter-item" style="min-width: 90px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
@@ -164,6 +176,8 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
     <script>
         let currentSort = 'lesson_date';
@@ -333,6 +347,54 @@
                 .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
 
+            // Flatpickr calendar init
+            var fpConfig = {
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'd.m.Y',
+                allowInput: false,
+                disableMobile: true,
+                locale: {
+                    firstDayOfWeek: 1,
+                    weekdays: {
+                        shorthand: ['Ya', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh'],
+                        longhand: ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba']
+                    },
+                    months: {
+                        shorthand: ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'],
+                        longhand: ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr']
+                    },
+                    rangeSeparator: ' — ',
+                },
+                prevArrow: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>',
+                nextArrow: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>',
+            };
+
+            var fpFrom = flatpickr('#date_from', Object.assign({}, fpConfig, {
+                onChange: function(dates, dateStr) {
+                    if (fpTo && dates.length) fpTo.set('minDate', dates[0]);
+                    $('#date_from_clear').toggle(!!dateStr);
+                }
+            }));
+            var fpTo = flatpickr('#date_to', Object.assign({}, fpConfig, {
+                onChange: function(dates, dateStr) {
+                    if (fpFrom && dates.length) fpFrom.set('maxDate', dates[0]);
+                    $('#date_to_clear').toggle(!!dateStr);
+                }
+            }));
+
+            // Clear buttons for date pickers
+            $('#date_from_clear').hide().on('click', function() {
+                fpFrom.clear();
+                fpTo.set('minDate', null);
+                $(this).hide();
+            });
+            $('#date_to_clear').hide().on('click', function() {
+                fpTo.clear();
+                fpFrom.set('maxDate', null);
+                $(this).hide();
+            });
+
             // Cascading dropdowns
             function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
             function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }
@@ -367,9 +429,37 @@
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
-        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; box-sizing: border-box; }
-        .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
-        .date-input:focus { outline: none; border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.2); }
+        .date-picker-wrap { position: relative; }
+        .date-picker-wrap .date-input,
+        .date-picker-wrap input.flatpickr-input,
+        .date-picker-wrap input.form-control.input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 32px 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; box-sizing: border-box; cursor: pointer; }
+        .date-picker-wrap input:hover, .date-picker-wrap input.active { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .date-picker-wrap input:focus { outline: none; border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.2); }
+        .date-picker-icon { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none; display: flex; align-items: center; }
+        .date-clear-btn { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); color: #94a3b8; cursor: pointer; font-size: 16px; font-weight: bold; padding: 2px 4px; line-height: 1; border-radius: 50%; transition: all 0.15s; z-index: 2; }
+        .date-clear-btn:hover { color: #fff; background: #ef4444; }
+
+        /* Flatpickr custom theme */
+        .flatpickr-calendar { border-radius: 12px; box-shadow: 0 12px 36px rgba(0,0,0,0.15); border: 1px solid #cbd5e1; font-family: inherit; }
+        .flatpickr-calendar.arrowTop:before, .flatpickr-calendar.arrowTop:after { border-bottom-color: #e8edf5; }
+        .flatpickr-months { background: linear-gradient(135deg, #2b5ea7, #3b7ddb); border-radius: 12px 12px 0 0; padding: 6px 0; }
+        .flatpickr-months .flatpickr-month { color: #fff; fill: #fff; height: 36px; }
+        .flatpickr-current-month { color: #fff; font-weight: 700; font-size: 14px; }
+        .flatpickr-current-month .flatpickr-monthDropdown-months { background: transparent; color: #fff; font-weight: 700; border: none; appearance: none; -webkit-appearance: none; }
+        .flatpickr-current-month .flatpickr-monthDropdown-months option { background: #2b5ea7; color: #fff; }
+        .flatpickr-current-month input.cur-year { color: #fff; font-weight: 700; }
+        .flatpickr-months .flatpickr-prev-month, .flatpickr-months .flatpickr-next-month { color: #fff; fill: #fff; padding: 8px 12px; }
+        .flatpickr-months .flatpickr-prev-month:hover svg, .flatpickr-months .flatpickr-next-month:hover svg { fill: #e2e8f0; }
+        .flatpickr-months .flatpickr-prev-month svg, .flatpickr-months .flatpickr-next-month svg { fill: #fff; }
+        span.flatpickr-weekday { color: #475569; font-weight: 700; font-size: 11px; }
+        .flatpickr-weekdays { background: #f0f4f8; border-bottom: 1px solid #e2e8f0; }
+        .flatpickr-day { border-radius: 8px; font-weight: 500; font-size: 13px; color: #334155; transition: all 0.15s; }
+        .flatpickr-day:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }
+        .flatpickr-day.selected, .flatpickr-day.selected:hover { background: linear-gradient(135deg, #2b5ea7, #3b7ddb); border-color: #2b5ea7; color: #fff; box-shadow: 0 2px 8px rgba(43,94,167,0.35); }
+        .flatpickr-day.today { border-color: #2b5ea7; color: #2b5ea7; font-weight: 700; }
+        .flatpickr-day.today:hover { background: #2b5ea7; color: #fff; }
+        .flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay { color: #cbd5e1; }
+        .flatpickr-day.prevMonthDay:hover, .flatpickr-day.nextMonthDay:hover { background: #f8fafc; color: #94a3b8; }
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }

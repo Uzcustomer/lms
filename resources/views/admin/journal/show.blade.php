@@ -7,7 +7,7 @@
         }
         .journal-table th,
         .journal-table td {
-            border: 1px solid #cbd5e1 !important;
+            border: 1px solid #94a3b8 !important;
             white-space: nowrap;
             text-align: center;
             vertical-align: middle;
@@ -25,17 +25,30 @@
             background-color: #f3f4f6;
         }
         .journal-table .date-header-cell {
+            padding: 0 !important;
+            vertical-align: middle;
+        }
+        .journal-table .date-header-cell .date-text-wrapper {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            height: 90px;
             overflow: hidden;
-            text-overflow: clip;
-            max-height: 90px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            line-height: 1.2;
+            margin: 0 auto;
+            padding: 2px 0;
         }
         .journal-table .joriy-header {
-            height: 38px;
+            height: 44px;
             font-size: 13px;
+            font-weight: 700 !important;
             letter-spacing: 0.02em;
         }
         .tab-container {
-            background: #e5e7eb;
+            background: #e5e7eb !important;
             border-radius: 12px 12px 0 0;
             display: flex;
             align-items: flex-end;
@@ -154,19 +167,19 @@
             font-weight: 600;
             border: none;
             border-radius: 8px 8px 0 0;
-            background: #d1d5db;
-            color: #4b5563;
+            background: #d1d5db !important;
+            color: #4b5563 !important;
             transition: all 0.2s;
             cursor: pointer;
             outline: none;
         }
         .tab-btn:hover:not(.active) {
-            background: #c7cbd1;
-            color: #1f2937;
+            background: #c7cbd1 !important;
+            color: #1f2937 !important;
         }
         .tab-btn.active {
-            background: #f3f4f6;
-            color: #1f2937;
+            background: #f3f4f6 !important;
+            color: #1f2937 !important;
             font-weight: 700;
         }
         .view-btn {
@@ -324,8 +337,8 @@
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="min-width: 180px;">F.I.SH.</th>
                                         @forelse($lectureLessonDates as $idx => $date)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 90px;">
-                                                {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
+                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px;">
+                                                <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}</div>
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">Bo'sh</th>
@@ -379,8 +392,8 @@
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="width: 35px;">T/R</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center" style="min-width: 180px;">F.I.SH.</th>
                                         @forelse($lectureColumns as $idx => $col)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 95px;">
-                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
+                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px;">
+                                                <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})</div>
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">Bo'sh</th>
@@ -458,8 +471,8 @@
                                     </tr>
                                     <tr>
                                         @forelse($jbLessonDates as $idx => $date)
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 90px;">
-                                                {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
+                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px;">
+                                                <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}</div>
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -586,8 +599,8 @@
                                                 $isLastOfDate = !isset($jbColumns[$colIndex + 1]) || $jbColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
                                             @endphp
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 95px;">
-                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
+                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px;">
+                                                <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})</div>
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -798,8 +811,8 @@
                                         </tr>
                                         <tr>
                                             @foreach($mtLessonDates as $idx => $date)
-                                                <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 62px; width: 62px; writing-mode: vertical-rl; transform: rotate(180deg); height: 90px;">
-                                                    {{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}
+                                                <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px;">
+                                                    <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($date)->format('d.m.Y') }}</div>
                                                 </th>
                                             @endforeach
                                         </tr>
@@ -882,8 +895,8 @@
                                                 $isLastOfDate = !isset($mtColumns[$colIndex + 1]) || $mtColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
                                             @endphp
-                                            <th class="px-1 py-1 font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 68px; width: 68px; writing-mode: vertical-rl; transform: rotate(180deg); height: 95px;">
-                                                {{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})
+                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px;">
+                                                <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($col['date'])->format('d.m.Y') }}({{ $col['pair'] }})</div>
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>

@@ -864,11 +864,11 @@ class ReportController extends Controller
             'cs.semester_code',
             'cs.subject_details',
             'g.group_hemis_id',
-            'g.group_name',
+            'g.name as group_name',
             'f.name as faculty_name',
             'g.specialty_name',
             's.level_name',
-            's.semester_name'
+            's.name as semester_name'
         )->get();
 
         if ($curriculumSubjects->isEmpty()) {

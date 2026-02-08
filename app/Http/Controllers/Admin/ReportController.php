@@ -344,6 +344,10 @@ class ReportController extends Controller
 
         $finalResults = [];
         foreach ($results as $r) {
+            $mappedGroupId = $groupIdMap[$r['group_id']] ?? null;
+            if ($mappedGroupId === null) {
+                continue;
+            }
             $st = $studentInfo[$r['student_hemis_id']] ?? null;
             $finalResults[] = [
                 'full_name' => $st->full_name ?? 'Noma\'lum',
@@ -355,7 +359,7 @@ class ReportController extends Controller
                 'subject_name' => $r['subject_name'],
                 'avg_grade' => $r['avg_grade'],
                 'grades_count' => $r['grades_count'],
-                'group_id' => $groupIdMap[$r['group_id']] ?? $r['group_id'],
+                'group_id' => $mappedGroupId,
                 'subject_id' => $r['subject_id'],
                 'semester_code' => $r['semester_code'],
             ];

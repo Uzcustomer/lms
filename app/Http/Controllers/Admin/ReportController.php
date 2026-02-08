@@ -1664,10 +1664,10 @@ class ReportController extends Controller
             if ($request->get('current_semester', '1') == '1') {
                 $currentSemester = DB::table('semesters')
                     ->where('current', true)
-                    ->select('education_year_code')
+                    ->select('education_year')
                     ->first();
-                if ($currentSemester && $currentSemester->education_year_code) {
-                    $apiParams['_education_year'] = $currentSemester->education_year_code;
+                if ($currentSemester && $currentSemester->education_year) {
+                    $apiParams['_education_year'] = $currentSemester->education_year;
                 }
             }
 

@@ -1173,14 +1173,16 @@ class ReportController extends Controller
             ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code')
             ->distinct();
 
-        if ($request->get('current_semester', '1') == '1') {
+        $isCurrentSemester = $request->get('current_semester', '1') == '1';
+        if ($isCurrentSemester) {
             $scheduleQuery
                 ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
                 ->join('semesters as sem', function ($join) {
                     $join->on('sem.code', '=', 'sch.semester_code')
                         ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
                 })
-                ->where('sem.current', true);
+                ->where('sem.current', true)
+                ->where('sch.education_year_current', true);
         }
 
         if ($request->filled('semester_code')) {
@@ -1317,12 +1319,23 @@ class ReportController extends Controller
         }
 
         // 3-QADAM: student_grades dan ma'lumotlarni olish
+        // Joriy o'quv yili bo'lsa, o'tgan yilgi ma'lumotlar tushmasligi uchun
+        // joriy o'quv yilining eng kichik dars sanasidan filtrlash
+        $minScheduleDate = null;
+        if ($isCurrentSemester) {
+            $minScheduleDate = DB::table('schedules')
+                ->where('education_year_current', true)
+                ->whereNotNull('lesson_date')
+                ->min('lesson_date');
+        }
+
         $gradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->whereIn('subject_id', $filteredSubjectIds)
             ->whereIn('semester_code', $validSemesterCodes)
             ->whereNotIn('training_type_code', $excludedCodes)
             ->whereNotNull('lesson_date')
+            ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
                 'grade', 'lesson_date', 'lesson_pair_code', 'reason', 'status', 'deadline')
             ->get();

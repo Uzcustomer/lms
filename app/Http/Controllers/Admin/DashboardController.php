@@ -151,4 +151,11 @@ class DashboardController extends Controller
         Artisan::queue('import:teachers');
         return back()->with('success', 'O\'qituvchilarni import qilish boshlandi (fon rejimida).');
     }
+
+    public function importAttendanceControls(): RedirectResponse
+    {
+        $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Davomat nazorati sinxronizatsiyasi boshlandi");
+        Artisan::queue('import:attendance-controls');
+        return back()->with('success', 'Davomat nazorati import qilish boshlandi (fon rejimida).');
+    }
 }

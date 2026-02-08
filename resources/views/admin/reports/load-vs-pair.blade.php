@@ -217,7 +217,14 @@
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
 
                     if (!res.data || res.data.length === 0) {
-                        $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
+                        var msg = "Ma'lumot topilmadi";
+                        if (res.debug) {
+                            msg = res.debug.message || JSON.stringify(res.debug);
+                        }
+                        $('#empty-state').show().find('p:first').text(msg);
+                        if (res.debug) {
+                            $('#empty-state').find('p:last').text(JSON.stringify(res.debug));
+                        }
                         $('#table-area').hide();
                         $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
                         return;

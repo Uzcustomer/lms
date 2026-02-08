@@ -1193,17 +1193,35 @@ class ReportController extends Controller
             return response()->json(['data' => [], 'total' => 0]);
         }
 
-        // Auditoriya soatlarini hisoblash: har bir (sana + pair) = 2 soat
+        // attendance_controls dan load (dars soati) qiymatlarini olish
+        $acRows = DB::table('attendance_controls')
+            ->whereIn('group_id', $scheduleRows->pluck('group_id')->unique())
+            ->whereIn('subject_id', $scheduleRows->pluck('subject_id')->unique())
+            ->whereIn('semester_code', $scheduleRows->pluck('semester_code')->unique())
+            ->select('group_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code', 'load')
+            ->get();
+
+        $loadLookup = [];
+        foreach ($acRows as $ac) {
+            $key = $ac->group_id . '|' . $ac->subject_id . '|' . $ac->semester_code
+                . '|' . substr($ac->lesson_date, 0, 10) . '_' . $ac->lesson_pair_code;
+            $loadLookup[$key] = (int) $ac->load;
+        }
+
+        // Auditoriya soatlarini hisoblash: attendance_controls dan load qiymatini olish
         $auditoryPairs = [];
         foreach ($scheduleRows as $row) {
             $comboKey = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
             $datePairKey = substr($row->lesson_date, 0, 10) . '_' . $row->lesson_pair_code;
-            $auditoryPairs[$comboKey][$datePairKey] = true;
+            if (!isset($auditoryPairs[$comboKey][$datePairKey])) {
+                $loadKey = $comboKey . '|' . $datePairKey;
+                $auditoryPairs[$comboKey][$datePairKey] = $loadLookup[$loadKey] ?? 2;
+            }
         }
 
         $auditoryHours = [];
         foreach ($auditoryPairs as $comboKey => $pairs) {
-            $auditoryHours[$comboKey] = count($pairs) * 2;
+            $auditoryHours[$comboKey] = array_sum($pairs);
         }
 
         // 2-QADAM: Talabalar ro'yxatini tayyorlash
@@ -1315,11 +1333,18 @@ class ReportController extends Controller
             }
 
             if ($g->reason === 'absent') {
-                $studentSubjectData[$ssKey]['total_absent_hours'] += 2;
+                $loadKey = $groupId . '|' . $g->subject_id . '|' . $g->semester_code
+                    . '|' . $dateKey . '_' . $g->lesson_pair_code;
+                $loadValue = $loadLookup[$loadKey] ?? 2;
+
+                $studentSubjectData[$ssKey]['total_absent_hours'] += $loadValue;
 
                 if ($g->status !== 'retake') {
-                    $studentSubjectData[$ssKey]['unexcused_absent_hours'] += 2;
-                    $studentSubjectData[$ssKey]['unexcused_absent_dates'][] = $dateKey;
+                    $studentSubjectData[$ssKey]['unexcused_absent_hours'] += $loadValue;
+                    $studentSubjectData[$ssKey]['unexcused_absent_dates'][] = [
+                        'date' => $dateKey,
+                        'load' => $loadValue,
+                    ];
                 }
             } else {
                 if ($g->grade !== null && $g->grade > 0) {
@@ -1341,11 +1366,11 @@ class ReportController extends Controller
             if ($unexcusedPercent < 25) continue;
 
             // Spravka muddati: oxirgi sababsiz dars kunidan boshlab hisoblash
-            $absentDates = $data['unexcused_absent_dates'];
-            sort($absentDates);
+            $absentEntries = $data['unexcused_absent_dates'];
+            usort($absentEntries, fn($a, $b) => strcmp($a['date'], $b['date']));
             $spravkaStatus = '-';
-            if (!empty($absentDates)) {
-                $latestAbsentDate = Carbon::parse(end($absentDates));
+            if (!empty($absentEntries)) {
+                $latestAbsentDate = Carbon::parse(end($absentEntries)['date']);
                 $daysSinceAbsent = $latestAbsentDate->diffInDays($now);
                 $spravkaStatus = $daysSinceAbsent <= $spravkaDays ? 'Muddat bor' : 'Kechikkan';
             }
@@ -1355,10 +1380,10 @@ class ReportController extends Controller
             $cumulativeHours = 0;
             $thresholdDate = null;
 
-            foreach ($absentDates as $aDate) {
-                $cumulativeHours += 2;
+            foreach ($absentEntries as $aEntry) {
+                $cumulativeHours += $aEntry['load'];
                 if (($cumulativeHours / $totalAuditoryHours) * 100 >= 25 && !$thresholdDate) {
-                    $thresholdDate = $aDate;
+                    $thresholdDate = $aEntry['date'];
                     break;
                 }
             }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Curriculum;
 use App\Models\Department;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -150,7 +151,7 @@ class AbsenceReportController extends Controller
         }
 
         // 3.5. 74+ soat talabalar uchun spravka status va qatnashish sanasi
-        $spravkaDeadlineDays = 3;
+        $spravkaDeadlineDays = (int) Setting::get('spravka_deadline_days', 10);
         $today = date('Y-m-d');
         $reportDate = date('d.m.Y');
 

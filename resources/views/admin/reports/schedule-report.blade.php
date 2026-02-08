@@ -88,15 +88,6 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 170px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Moslik holati</label>
-                            <select id="match_status" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                                <option value="none">Jadval yo'q</option>
-                                <option value="partial">Qisman</option>
-                                <option value="full">To'liq</option>
-                            </select>
-                        </div>
                         <div class="filter-item" style="min-width: 290px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
@@ -139,14 +130,12 @@
                                         <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="department_name">Kafedra <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="employee_name">O'qituvchi <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="planned_hours">Reja (soat) <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="schedule_count">Jadval (juft) <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="lesson_days">Dars kunlari <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="status">Holat <span class="sort-icon active">&#9650;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="training_type">Dars turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda qo'yilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="farq">Farq <span class="sort-icon active">&#9660;</span></a></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -162,12 +151,12 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <link href="/css/scroll-calendar.css" rel="stylesheet" />
+    <script src="/js/scroll-calendar.js"></script>
 
     <script>
-        let currentSort = 'status';
-        let currentDirection = 'asc';
+        let currentSort = 'farq';
+        let currentDirection = 'desc';
         let currentPage = 1;
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
@@ -196,7 +185,6 @@
                 subject: $('#subject').val() || '',
                 date_from: $('#date_from').val() || '',
                 date_to: $('#date_to').val() || '',
-                match_status: $('#match_status').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
@@ -250,13 +238,13 @@
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
-        function statusBadge(status) {
-            if (status === 'full') {
-                return '<span class="badge badge-status-full">To\'liq</span>';
-            } else if (status === 'partial') {
-                return '<span class="badge badge-status-partial">Qisman</span>';
+        function farqBadge(farq) {
+            if (farq === 0) {
+                return '<span class="badge badge-status-full" style="font-size:13px;">' + farq + '</span>';
+            } else if (farq > 0) {
+                return '<span class="badge badge-status-partial" style="font-size:13px;">' + farq + '</span>';
             }
-            return '<span class="badge badge-status-none">Jadval yo\'q</span>';
+            return '<span class="badge badge-status-none" style="font-size:13px;">' + farq + '</span>';
         }
 
         function renderTable(data) {
@@ -269,14 +257,12 @@
                 html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
-                html += '<td><span class="text-cell" style="color:#92400e;">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
-                html += '<td><span class="text-cell" style="font-weight:600;color:#0f172a;">' + esc(r.employee_name) + '</span></td>';
+                html += '<td><span class="text-cell" style="font-weight:600;color:#6d28d9;">' + esc(r.training_type) + '</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.planned_hours + '</td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.schedule_count + '</td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.lesson_days + '</td>';
-                html += '<td style="text-align:center;">' + statusBadge(r.status) + '</td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
+                html += '<td style="text-align:center;">' + farqBadge(r.farq) + '</td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -307,71 +293,9 @@
         }
 
         $(document).ready(function() {
-            // O'zbek tili lokalizatsiyasi
-            var uzLocale = {
-                firstDayOfWeek: 1,
-                weekdays: {
-                    shorthand: ["Yak", "Dush", "Sesh", "Chor", "Pay", "Jum", "Shan"],
-                    longhand: ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"]
-                },
-                months: {
-                    shorthand: ["Yan", "Fev", "Mar", "Apr", "May", "Iyun", "Iyul", "Avg", "Sen", "Okt", "Noy", "Dek"],
-                    longhand: ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"]
-                },
-                rangeSeparator: " — ",
-                weekAbbreviation: "Haf",
-                scrollTitle: "Kattalashtirish uchun aylantiring",
-                toggleTitle: "O'zgartirish",
-                amPM: ["AM", "PM"],
-                yearAriaLabel: "Yil",
-                monthAriaLabel: "Oy",
-                hourAriaLabel: "Soat",
-                minuteAriaLabel: "Daqiqa",
-                time_24hr: true
-            };
-
-            var fpConfig = {
-                dateFormat: 'Y-m-d',
-                altInput: true,
-                altFormat: 'd.m.Y',
-                allowInput: true,
-                locale: uzLocale,
-                onDayCreate: function(dObj, dStr, fp, dayElem) {
-                    if (dayElem.dateObj.getDay() === 0) {
-                        dayElem.classList.add('flatpickr-sunday');
-                    }
-                },
-                onReady: function(selectedDates, dateStr, instance) {
-                    if (instance.altInput) {
-                        instance.altInput.classList.add('date-input');
-                        instance.altInput.setAttribute('placeholder', 'kk.oo.yyyy');
-                    }
-                    var accDelta = 0;
-                    var threshold = 400;
-                    var resetTimer = null;
-                    instance.calendarContainer.addEventListener('wheel', function(e) {
-                        e.preventDefault();
-                        accDelta += e.deltaY;
-                        clearTimeout(resetTimer);
-                        resetTimer = setTimeout(function() { accDelta = 0; }, 300);
-
-                        if (Math.abs(accDelta) >= threshold) {
-                            var dir = accDelta > 0 ? 1 : -1;
-                            accDelta = 0;
-                            var daysWrap = instance.calendarContainer.querySelector('.flatpickr-days');
-                            if (daysWrap) {
-                                daysWrap.style.transition = 'opacity 0.12s ease';
-                                daysWrap.style.opacity = '0.3';
-                                setTimeout(function() { daysWrap.style.opacity = '1'; }, 40);
-                            }
-                            instance.changeMonth(dir);
-                        }
-                    }, { passive: false });
-                }
-            };
-
-            flatpickr('#date_from', fpConfig);
-            flatpickr('#date_to', fpConfig);
+            // Kalendarlarni yaratish
+            new ScrollCalendar('date_from');
+            new ScrollCalendar('date_to');
 
             // Sort links
             $(document).on('click', '.sort-link', function(e) {
@@ -428,16 +352,10 @@
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
-        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; outline: none; }
+        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 30px 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; outline: none; }
         .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
         .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
         .date-input::placeholder { color: #94a3b8; font-weight: 400; }
-
-        /* Flatpickr: Yakshanba kunlarini qizil rangda ko'rsatish */
-        .flatpickr-sunday { color: #dc2626 !important; font-weight: 600 !important; }
-        .flatpickr-sunday:hover { background: #fef2f2 !important; }
-        .flatpickr-sunday.selected { background: #dc2626 !important; color: #fff !important; }
-        .flatpickr-calendar .flatpickr-weekday:nth-child(7) { color: #dc2626 !important; font-weight: 700 !important; }
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }

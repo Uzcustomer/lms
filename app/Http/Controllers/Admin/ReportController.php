@@ -800,12 +800,11 @@ class ReportController extends Controller
 
     /**
      * AJAX: Dars jadval mosligi hisobot ma'lumotlarini hisoblash
+     * Har bir fan+guruh+dars_turi uchun ajratilgan soat vs jadvalda qo'yilgan soatni solishtiradi
      */
     public function scheduleReportData(Request $request)
     {
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
-
-        // 1-QADAM: O'quv rejadagi fanlarni olish (curriculum_subjects)
+        // 1-QADAM: O'quv rejadagi fanlarni olish (curriculum_subjects) - subject_details bilan
         $csQuery = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
@@ -862,9 +861,7 @@ class ReportController extends Controller
             'cs.subject_id',
             'cs.subject_name',
             'cs.semester_code',
-            'cs.department_id',
-            'cs.department_name',
-            'cs.total_acload as planned_hours',
+            'cs.subject_details',
             'g.group_hemis_id',
             'g.group_name',
             'f.name as faculty_name',
@@ -877,7 +874,8 @@ class ReportController extends Controller
             return response()->json(['data' => [], 'total' => 0]);
         }
 
-        // 2-QADAM: Har bir guruh+fan+semestr uchun jadvaldan darslar sonini hisoblash
+        // 2-QADAM: Jadvaldan darslar sonini dars turi bo'yicha hisoblash
+        // Akademik soat = (lesson_pair_end_time - lesson_pair_start_time) / 40 daqiqa
         $groupIds = $curriculumSubjects->pluck('group_hemis_id')->unique()->toArray();
         $subjectIds = $curriculumSubjects->pluck('subject_id')->unique()->toArray();
         $semesterCodes = $curriculumSubjects->pluck('semester_code')->unique()->toArray();
@@ -886,7 +884,6 @@ class ReportController extends Controller
             ->whereIn('sch.group_id', $groupIds)
             ->whereIn('sch.subject_id', $subjectIds)
             ->whereIn('sch.semester_code', $semesterCodes)
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');
 
@@ -897,92 +894,80 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
         }
 
-        $scheduleCounts = $scheduleQuery
+        $scheduleRows = $scheduleQuery
             ->select(
                 'sch.group_id',
                 'sch.subject_id',
                 'sch.semester_code',
-                'sch.employee_name',
-                DB::raw('COUNT(*) as schedule_count'),
-                DB::raw('COUNT(DISTINCT DATE(sch.lesson_date)) as lesson_days')
+                'sch.training_type_code',
+                'sch.lesson_pair_start_time',
+                'sch.lesson_pair_end_time'
             )
-            ->groupBy('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.employee_name')
             ->get();
 
-        // Schedule ma'lumotlarini map ga aylantirish
+        // Har bir jadval qatori uchun akademik soatni hisoblash va yig'ish
         $scheduleMap = [];
-        foreach ($scheduleCounts as $sc) {
-            $key = $sc->group_id . '|' . $sc->subject_id . '|' . $sc->semester_code;
-            if (!isset($scheduleMap[$key])) {
-                $scheduleMap[$key] = [
-                    'schedule_count' => 0,
-                    'lesson_days' => 0,
-                    'employee_name' => $sc->employee_name,
-                ];
-            }
-            $scheduleMap[$key]['schedule_count'] += $sc->schedule_count;
-            $scheduleMap[$key]['lesson_days'] = max($scheduleMap[$key]['lesson_days'], $sc->lesson_days);
-            if (!$scheduleMap[$key]['employee_name'] && $sc->employee_name) {
-                $scheduleMap[$key]['employee_name'] = $sc->employee_name;
-            }
+        foreach ($scheduleRows as $row) {
+            $key = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code . '|' . $row->training_type_code;
+            $start = strtotime($row->lesson_pair_start_time);
+            $end = strtotime($row->lesson_pair_end_time);
+            $durationMinutes = ($end - $start) / 60;
+            // 1 akademik soat = 40 daqiqa (80 min = 2 soat, 40-45 min = 1 soat)
+            $academicHours = max(1, round($durationMinutes / 40));
+            $scheduleMap[$key] = ($scheduleMap[$key] ?? 0) + $academicHours;
         }
 
-        // 3-QADAM: Natijalarni birlashtirish
+        // 3-QADAM: subject_details JSON dan dars turlari bo'yicha ajratilgan soatlarni olish
+        // Har bir fan+guruh+dars_turi uchun alohida qator hosil qilish
         $results = [];
         foreach ($curriculumSubjects as $cs) {
-            $key = $cs->group_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code;
-            $schedule = $scheduleMap[$key] ?? null;
-
-            $scheduleCount = $schedule ? $schedule['schedule_count'] : 0;
-            $lessonDays = $schedule ? $schedule['lesson_days'] : 0;
-            $plannedHours = (int) ($cs->planned_hours ?? 0);
-
-            // Moslik holati
-            if ($scheduleCount == 0) {
-                $status = 'none'; // Jadval yo'q
-            } elseif ($plannedHours > 0 && $scheduleCount >= $plannedHours) {
-                $status = 'full'; // To'liq mos
-            } else {
-                $status = 'partial'; // Qisman mos
+            $details = $cs->subject_details;
+            if (is_string($details)) {
+                $details = json_decode($details, true);
+            }
+            if (!is_array($details) || empty($details)) {
+                continue;
             }
 
-            $results[] = [
-                'faculty_name' => $cs->faculty_name ?? '-',
-                'specialty_name' => $cs->specialty_name ?? '-',
-                'level_name' => $cs->level_name ?? '-',
-                'semester_name' => $cs->semester_name ?? '-',
-                'department_name' => $cs->department_name ?? '-',
-                'subject_name' => $cs->subject_name ?? '-',
-                'group_name' => $cs->group_name ?? '-',
-                'employee_name' => $schedule['employee_name'] ?? '-',
-                'planned_hours' => $plannedHours,
-                'schedule_count' => $scheduleCount,
-                'lesson_days' => $lessonDays,
-                'status' => $status,
-            ];
+            foreach ($details as $detail) {
+                $trainingTypeCode = (string) ($detail['trainingType']['code'] ?? '');
+                $trainingTypeName = $detail['trainingType']['name'] ?? '-';
+                $plannedHours = (int) ($detail['academic_load'] ?? 0);
+
+                if ($trainingTypeCode === '') {
+                    continue;
+                }
+
+                $schedKey = $cs->group_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code . '|' . $trainingTypeCode;
+                $scheduledHours = $scheduleMap[$schedKey] ?? 0;
+                $farq = $plannedHours - $scheduledHours;
+
+                $results[] = [
+                    'faculty_name' => $cs->faculty_name ?? '-',
+                    'specialty_name' => $cs->specialty_name ?? '-',
+                    'level_name' => $cs->level_name ?? '-',
+                    'semester_name' => $cs->semester_name ?? '-',
+                    'subject_name' => $cs->subject_name ?? '-',
+                    'group_name' => $cs->group_name ?? '-',
+                    'training_type' => $trainingTypeName,
+                    'planned_hours' => $plannedHours,
+                    'scheduled_hours' => $scheduledHours,
+                    'farq' => $farq,
+                ];
+            }
         }
 
-        // Moslik filtri
-        if ($request->filled('match_status')) {
-            $statusFilter = $request->match_status;
-            $results = array_values(array_filter($results, fn($r) => $r['status'] === $statusFilter));
+        if (empty($results)) {
+            return response()->json(['data' => [], 'total' => 0]);
         }
 
-        // Saralash
-        $sortColumn = $request->get('sort', 'status');
-        $sortDirection = $request->get('direction', 'asc');
+        // Saralash (standart: farq bo'yicha kamayish tartibida)
+        $sortColumn = $request->get('sort', 'farq');
+        $sortDirection = $request->get('direction', 'desc');
 
         usort($results, function ($a, $b) use ($sortColumn, $sortDirection) {
             $valA = $a[$sortColumn] ?? '';
             $valB = $b[$sortColumn] ?? '';
-
-            // Status uchun maxsus tartiblash: none -> partial -> full
-            if ($sortColumn === 'status') {
-                $order = ['none' => 0, 'partial' => 1, 'full' => 2];
-                $valA = $order[$valA] ?? 99;
-                $valB = $order[$valB] ?? 99;
-            }
-
             $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
             return $sortDirection === 'desc' ? -$cmp : $cmp;
         });
@@ -1022,7 +1007,7 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Jadval mosligi');
 
-        $headers = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Kafedra', 'Fan', 'Guruh', 'O\'qituvchi', 'Reja (soat)', 'Jadval (juft)', 'Dars kunlari', 'Holat'];
+        $headers = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Guruh', 'Dars turi', 'Ajratilgan soat', 'Jadvalda qo\'yilgan soat', 'Farq'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -1033,9 +1018,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
-
-        $statusLabels = ['none' => "Jadval yo'q", 'partial' => 'Qisman', 'full' => "To'liq"];
+        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -1044,24 +1027,22 @@ class ReportController extends Controller
             $sheet->setCellValue([3, $row], $r['specialty_name']);
             $sheet->setCellValue([4, $row], $r['level_name']);
             $sheet->setCellValue([5, $row], $r['semester_name']);
-            $sheet->setCellValue([6, $row], $r['department_name']);
-            $sheet->setCellValue([7, $row], $r['subject_name']);
-            $sheet->setCellValue([8, $row], $r['group_name']);
-            $sheet->setCellValue([9, $row], $r['employee_name']);
-            $sheet->setCellValue([10, $row], $r['planned_hours']);
-            $sheet->setCellValue([11, $row], $r['schedule_count']);
-            $sheet->setCellValue([12, $row], $r['lesson_days']);
-            $sheet->setCellValue([13, $row], $statusLabels[$r['status']] ?? '-');
+            $sheet->setCellValue([6, $row], $r['subject_name']);
+            $sheet->setCellValue([7, $row], $r['group_name']);
+            $sheet->setCellValue([8, $row], $r['training_type']);
+            $sheet->setCellValue([9, $row], $r['planned_hours']);
+            $sheet->setCellValue([10, $row], $r['scheduled_hours']);
+            $sheet->setCellValue([11, $row], $r['farq']);
         }
 
-        $widths = [5, 25, 30, 8, 10, 25, 35, 15, 30, 12, 12, 12, 14];
+        $widths = [5, 25, 30, 8, 10, 35, 15, 20, 16, 22, 10];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

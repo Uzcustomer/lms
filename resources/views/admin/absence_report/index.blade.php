@@ -36,6 +36,18 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                        <div class="filter-item" style="max-width:110px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="max-width:130px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Semestr</label>
+                            <select id="semester" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
+                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
                         <div class="filter-item">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Talaba holati</label>
                             <select id="student_status" class="select2" style="width: 100%;">
@@ -44,22 +56,6 @@
                                         {{ str_contains(mb_strtolower($status->student_status_name ?? ''), 'qimoqda') ? 'selected' : '' }}>
                                         {{ $status->student_status_name }}
                                     </option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="filter-item" style="max-width:110px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
-                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item">
-                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item" style="max-width:80px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifa</label>
-                            <select id="per_page" class="select2" style="width: 100%;">
-                                @foreach([10, 25, 50, 100] as $ps)
-                                    <option value="{{ $ps }}" {{ $ps == 50 ? 'selected' : '' }}>{{ $ps }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -124,7 +120,9 @@
                                         <th><a href="#" class="sort-link" data-sort="excused_hours">Sababli <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="total_hours">Jami soat <span class="sort-icon active">&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="total_days">Jami kun <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th>Status</th>
+                                        <th style="white-space:normal;min-width:100px;"><a href="#" class="sort-link" data-sort="attendance_after_74">74 soat keyin qatnashgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="min-width:90px;">Hisobot sanasi</th>
+                                        <th style="white-space:normal;min-width:120px;">Status</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -194,10 +192,10 @@
                 faculty: $('#faculty').val() || '',
                 specialty: $('#specialty').val() || '',
                 level_code: $('#level_code').val() || '',
+                semester: $('#semester').val() || '',
                 group: $('#group').val() || '',
                 student_status: $('#student_status').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
-                per_page: $('#per_page').val() || 50,
                 sort: currentSort,
                 direction: currentDirection,
             };
@@ -244,7 +242,9 @@
             'yellow':   {label: 'Ogohlantirish', cls: 'status-yellow'},
             'orange':   {label: 'Xavfli',        cls: 'status-orange'},
             'red':      {label: 'Jiddiy',         cls: 'status-red'},
-            'critical': {label: 'Chegara',        cls: 'status-critical'}
+            'critical': {label: 'Chegara',        cls: 'status-critical'},
+            'late':     {label: 'Kechikkan',      cls: 'status-late'},
+            'has_time': {label: 'Muddati bor',    cls: 'status-hastime'}
         };
 
         function renderTable(data) {
@@ -263,6 +263,8 @@
                 html += '<td style="text-align:center;"><span class="badge badge-excused">' + r.excused_hours + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-total">' + r.total_hours + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-days">' + r.total_days + '</span></td>';
+                html += '<td style="text-align:center;font-size:12px;white-space:nowrap;">' + esc(r.attendance_after_74) + '</td>';
+                html += '<td style="text-align:center;font-size:12px;white-space:nowrap;">' + esc(r.report_date) + '</td>';
                 html += '<td style="text-align:center;"><span class="badge ' + st.cls + '">' + st.label + '</span></td>';
                 html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(\'' + r.student_hemis_id + '\',\'' + esc(r.full_name).replace(/'/g, "\\'") + '\')">Batafsil</button></td>';
                 html += '</tr>';
@@ -383,15 +385,18 @@
             function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
 
             function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
+            function rSem() { rd('#semester'); pd('{{ route("admin.journal.get-semesters") }}', { level_code: $('#level_code').val() || '' }, '#semester'); }
             function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
 
             $('#education_type').change(function() { rSpec(); rGrp(); });
             $('#faculty').change(function() { rSpec(); rGrp(); });
             $('#specialty').change(function() { rGrp(); });
-            $('#level_code').change(function() { rGrp(); });
+            $('#level_code').change(function() { rSem(); rGrp(); });
+            $('#semester').change(function() { rGrp(); });
 
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
+            pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester');
             pd('{{ route("admin.journal.get-groups") }}', fp(), '#group');
         });
     </script>
@@ -472,6 +477,8 @@
         .status-orange { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; font-weight: 700; }
         .status-red { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; font-weight: 700; }
         .status-critical { background: #7f1d1d; color: #fff; border: none; font-weight: 700; }
+        .status-late { background: #dc2626; color: #fff; border: none; font-weight: 700; }
+        .status-hastime { background: #16a34a; color: #fff; border: none; font-weight: 700; }
 
         .text-cell { font-size: 12px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }

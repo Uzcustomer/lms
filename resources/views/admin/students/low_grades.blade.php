@@ -22,47 +22,24 @@
                         </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                        @foreach($grades as $grade)
+                        @forelse($grades as $grade)
                             <tr>
-                                <td class="px-6 py-4 whitespace-nowrap">{{ $grade['subject']['name'] }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">{{ $grade['trainingType']['name'] }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">{{ $grade['employee']['name'] }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">{{ $grade['grade'] }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">{{ date('d-m-Y', $grade['lesson_date']) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">{{ $grade->subject_name }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">{{ $grade->training_type_name }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">{{ $grade->employee_name }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">{{ $grade->grade }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">{{ \Carbon\Carbon::parse($grade->lesson_date)->format('d-m-Y') }}</td>
                             </tr>
-                        @endforeach
+                        @empty
+                            <tr>
+                                <td colspan="5" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">No low grades found.</td>
+                            </tr>
+                        @endforelse
                         </tbody>
                     </table>
 
-                    <!-- Pagination -->
                     <div class="mt-4">
-                        @if ($pagination['pageCount'] > 1)
-                            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                                <a href="{{ request()->fullUrlWithQuery(['page' => 1]) }}"
-                                   class="px-4 py-2 bg-white border border-gray-300 text-sm font-medium text-gray-500 hover:bg-gray-50">
-                                    First
-                                </a>
-                                @if($pagination['page'] > 1)
-                                    <a href="{{ request()->fullUrlWithQuery(['page' => $pagination['page'] - 1]) }}"
-                                       class="px-4 py-2 bg-white border border-gray-300 text-sm font-medium text-gray-500 hover:bg-gray-50">
-                                        Previous
-                                    </a>
-                                @endif
-                                <span class="px-4 py-2 bg-white border border-gray-300 text-sm font-medium text-gray-500">
-                                    Page {{ $pagination['page'] }} of {{ $pagination['pageCount'] }}
-                                </span>
-                                @if($pagination['page'] < $pagination['pageCount'])
-                                    <a href="{{ request()->fullUrlWithQuery(['page' => $pagination['page'] + 1]) }}"
-                                       class="px-4 py-2 bg-white border border-gray-300 text-sm font-medium text-gray-500 hover:bg-gray-50">
-                                        Next
-                                    </a>
-                                @endif
-                                <a href="{{ request()->fullUrlWithQuery(['page' => $pagination['pageCount']]) }}"
-                                   class="px-4 py-2 bg-white border border-gray-300 text-sm font-medium text-gray-500 hover:bg-gray-50">
-                                    Last
-                                </a>
-                            </nav>
-                        @endif
+                        {{ $grades->links() }}
                     </div>
                 </div>
             </div>

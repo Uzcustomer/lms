@@ -90,8 +90,9 @@ class AbsenceReportController extends Controller
             $query->where('a.semester_code', $request->semester);
         }
 
-        // Joriy semestr filtri: har bir guruhning curriculum bo'yicha joriy semestri
+        // Joriy semestr + joriy o'quv yili filtri
         if ($request->get('current_semester', '1') == '1') {
+            $query->where('a.education_year_current', true);
             $query->whereExists(function ($q) {
                 $q->select(DB::raw(1))
                     ->from('semesters as sem')
@@ -166,6 +167,7 @@ class AbsenceReportController extends Controller
                 $attQuery->where('a2.semester_code', $request->semester);
             }
             if ($request->get('current_semester', '1') == '1') {
+                $attQuery->where('a2.education_year_current', true);
                 $attQuery->whereExists(function ($q) {
                     $q->select(DB::raw(1))
                         ->from('semesters as sem2')
@@ -285,6 +287,8 @@ class AbsenceReportController extends Controller
             ->orderBy('lesson_pair_start_time');
 
         if ($request->get('current_semester', '1') == '1') {
+            $query->where('education_year_current', true);
+
             $curriculumId = DB::table('students as s')
                 ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
                 ->where('s.hemis_id', $hemisId)

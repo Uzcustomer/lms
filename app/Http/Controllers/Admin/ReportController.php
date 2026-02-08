@@ -804,6 +804,7 @@ class ReportController extends Controller
      */
     public function scheduleReportData(Request $request)
     {
+        try {
         // 1-QADAM: O'quv rejadagi fanlarni olish (curriculum_subjects) - subject_details bilan
         $csQuery = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
@@ -996,6 +997,17 @@ class ReportController extends Controller
             'current_page' => (int) $page,
             'last_page' => ceil($total / $perPage),
         ]);
+        } catch (\Throwable $e) {
+            \Log::error('Schedule report error: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'error' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ], 500);
+        }
     }
 
     /**

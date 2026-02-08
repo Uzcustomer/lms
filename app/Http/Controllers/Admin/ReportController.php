@@ -875,7 +875,7 @@ class ReportController extends Controller
         }
 
         // 2-QADAM: Jadvaldan darslar sonini dars turi bo'yicha hisoblash
-        // Har bir schedule qatori = 1 juft = 2 akademik soat
+        // Akademik soat = (lesson_pair_end_time - lesson_pair_start_time) / 40 daqiqa
         $groupIds = $curriculumSubjects->pluck('group_hemis_id')->unique()->toArray();
         $subjectIds = $curriculumSubjects->pluck('subject_id')->unique()->toArray();
         $semesterCodes = $curriculumSubjects->pluck('semester_code')->unique()->toArray();
@@ -894,22 +894,27 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
         }
 
-        $scheduleCounts = $scheduleQuery
+        $scheduleRows = $scheduleQuery
             ->select(
                 'sch.group_id',
                 'sch.subject_id',
                 'sch.semester_code',
                 'sch.training_type_code',
-                DB::raw('COUNT(*) * 2 as scheduled_hours')
+                'sch.lesson_pair_start_time',
+                'sch.lesson_pair_end_time'
             )
-            ->groupBy('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.training_type_code')
             ->get();
 
-        // Schedule ma'lumotlarini map: group_id|subject_id|semester_code|training_type_code => scheduled_hours
+        // Har bir jadval qatori uchun akademik soatni hisoblash va yig'ish
         $scheduleMap = [];
-        foreach ($scheduleCounts as $sc) {
-            $key = $sc->group_id . '|' . $sc->subject_id . '|' . $sc->semester_code . '|' . $sc->training_type_code;
-            $scheduleMap[$key] = (int) $sc->scheduled_hours;
+        foreach ($scheduleRows as $row) {
+            $key = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code . '|' . $row->training_type_code;
+            $start = strtotime($row->lesson_pair_start_time);
+            $end = strtotime($row->lesson_pair_end_time);
+            $durationMinutes = ($end - $start) / 60;
+            // 1 akademik soat = 40 daqiqa (80 min = 2 soat, 40-45 min = 1 soat)
+            $academicHours = max(1, round($durationMinutes / 40));
+            $scheduleMap[$key] = ($scheduleMap[$key] ?? 0) + $academicHours;
         }
 
         // 3-QADAM: subject_details JSON dan dars turlari bo'yicha ajratilgan soatlarni olish

@@ -1725,7 +1725,7 @@ class ReportController extends Controller
                 'ac.load',
                 'ac.lesson_date',
                 'ac.training_type_name',
-                'ac.group_id',
+                'g.id as group_local_id',
                 'ac.subject_id',
                 'ac.semester_code',
                 'f.name as faculty_name',
@@ -1769,7 +1769,7 @@ class ReportController extends Controller
                     'load_hours' => $loadHours,
                     'farq' => $farq,
                     'lesson_date' => $lessonDateStr,
-                    'group_id' => $row->group_id ?? '',
+                    'group_id' => $row->group_local_id ?? '',
                     'subject_id' => $row->subject_id ?? '',
                     'semester_code' => $row->semester_code ?? '',
                 ];

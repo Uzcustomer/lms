@@ -1580,4 +1580,9 @@ class ReportController extends Controller
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
     }
+
+    public function debtorsReport()
+    {
+        return view('admin.reports.debtors');
+    }
 }

@@ -75,6 +75,14 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                             <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                        <div class="filter-item" style="min-width: 220px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#6d28d9;"></span> Dars turi</label>
+                            <select id="training_types" class="select2-multi" multiple style="width: 100%;">
+                                @foreach($trainingTypes as $tt)
+                                    <option value="{{ $tt->training_type_code }}">{{ $tt->training_type_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="filter-item" style="flex: 1; min-width: 220px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Kafedra</label>
                             <select id="department" class="select2" style="width: 100%;">
@@ -174,7 +182,7 @@
         }
 
         function getFilters() {
-            return {
+            var params = {
                 education_type: $('#education_type').val() || '',
                 faculty: $('#faculty').val() || '',
                 specialty: $('#specialty').val() || '',
@@ -190,6 +198,9 @@
                 sort: currentSort,
                 direction: currentDirection,
             };
+            var tt = $('#training_types').val();
+            if (tt && tt.length > 0) params.training_types = tt;
+            return params;
         }
 
         function loadReport(page) {
@@ -323,6 +334,8 @@
                 $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher })
                 .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
+            // Multi-select for training types
+            $('.select2-multi').select2({ theme: 'classic', width: '100%', placeholder: 'Barchasi', allowClear: true, matcher: fuzzyMatcher });
 
             // Cascading dropdowns
             function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
@@ -381,6 +394,13 @@
         .select2-container--classic .select2-selection--single .select2-selection__clear:hover { color: #fff; background: #ef4444; }
         .select2-dropdown { font-size: 0.8rem; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
         .select2-container--classic .select2-results__option--highlighted { background-color: #2b5ea7; }
+
+        .select2-container--classic .select2-selection--multiple { min-height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04); padding: 2px 4px; }
+        .select2-container--classic .select2-selection--multiple:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .select2-container--classic .select2-selection--multiple .select2-selection__choice { background: linear-gradient(135deg, #6d28d9, #7c3aed); color: #fff; border: none; border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 600; margin: 2px; }
+        .select2-container--classic .select2-selection--multiple .select2-selection__choice__remove { color: #e0d0ff; margin-right: 4px; }
+        .select2-container--classic .select2-selection--multiple .select2-selection__choice__remove:hover { color: #fff; }
+        .select2-container--classic .select2-selection--multiple .select2-search__field { font-size: 0.8rem; }
 
         .toggle-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 0; height: 36px; user-select: none; }
         .toggle-track { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; transition: background 0.25s; flex-shrink: 0; }

@@ -135,9 +135,9 @@
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="lesson_date">Dars sanasi <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="pair_name">Juftlik <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="pair_hours">Juftlik soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="load_hours">Yuklama soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="width:70px;"><a href="#" class="sort-link" data-sort="pair_name">Juftlik <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="width:50px;"><a href="#" class="sort-link" data-sort="pair_hours">Juftlik soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="width:50px;"><a href="#" class="sort-link" data-sort="load_hours">Yuklama soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="farq">Farq <span class="sort-icon active">&#9660;</span></a></th>
                                         <th>Jurnal</th>
                                     </tr>
@@ -281,9 +281,9 @@
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td><span class="text-cell" style="font-weight:600;color:#334155;white-space:nowrap;">' + esc(r.lesson_date) + '</span></td>';
-                html += '<td><span class="text-cell" style="font-weight:600;color:#6d28d9;white-space:nowrap;">' + esc(r.pair_name) + '</span></td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.pair_hours + '</td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.load_hours + '</td>';
+                html += '<td style="width:70px;padding:10px 6px;"><span class="text-cell" style="font-weight:600;color:#6d28d9;white-space:nowrap;font-size:12px;">' + esc(r.pair_name) + '</span></td>';
+                html += '<td style="width:50px;text-align:center;font-weight:600;color:#475569;padding:10px 4px;">' + r.pair_hours + '</td>';
+                html += '<td style="width:50px;text-align:center;font-weight:600;color:#475569;padding:10px 4px;">' + r.load_hours + '</td>';
                 html += '<td style="text-align:center;">' + farqBadge(r.farq) + '</td>';
                 var jUrl = journalBase + '/' + encodeURIComponent(r.group_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code);
                 html += '<td style="text-align:center;"><a href="' + jUrl + '" target="_blank" class="journal-link">Ko\'rish</a></td>';
@@ -437,7 +437,7 @@
         .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
-        .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; max-width: 260px; white-space: normal; word-break: break-word; }
+        .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; min-width: 300px; white-space: normal; word-break: break-word; }
 
         .journal-link { display: inline-block; padding: 3px 10px; background: #eff6ff; color: #2b5ea7; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11.5px; font-weight: 600; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
         .journal-link:hover { background: #2b5ea7; color: #fff; }

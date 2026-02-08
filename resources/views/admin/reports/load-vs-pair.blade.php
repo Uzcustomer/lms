@@ -134,6 +134,7 @@
                                         <th><a href="#" class="sort-link" data-sort="department_name">Kafedra <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="lesson_date">Dars sanasi <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="pair_name">Juftlik <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="pair_hours">Juftlik soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="load_hours">Yuklama soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
@@ -276,6 +277,7 @@
                 html += '<td><span class="text-cell" style="color:#92400e;">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td><span class="text-cell" style="font-weight:600;color:#334155;white-space:nowrap;">' + esc(r.lesson_date) + '</span></td>';
                 html += '<td><span class="text-cell" style="font-weight:600;color:#6d28d9;white-space:nowrap;">' + esc(r.pair_name) + '</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.pair_hours + '</td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.load_hours + '</td>';

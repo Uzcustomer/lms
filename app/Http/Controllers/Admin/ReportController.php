@@ -790,11 +790,20 @@ class ReportController extends Controller
             ->orderBy('cs.department_name')
             ->get();
 
+        $trainingTypes = DB::table('schedules')
+            ->select('training_type_code', 'training_type_name')
+            ->whereNotNull('training_type_code')
+            ->whereNull('deleted_at')
+            ->groupBy('training_type_code', 'training_type_name')
+            ->orderBy('training_type_name')
+            ->get();
+
         return view('admin.reports.schedule-report', compact(
             'faculties',
             'educationTypes',
             'selectedEducationType',
-            'kafedras'
+            'kafedras',
+            'trainingTypes'
         ));
     }
 
@@ -920,6 +929,7 @@ class ReportController extends Controller
 
         // 3-QADAM: subject_details JSON dan dars turlari bo'yicha ajratilgan soatlarni olish
         // Har bir fan+guruh+dars_turi uchun alohida qator hosil qilish
+        $trainingTypeFilter = $request->has('training_types') ? (array) $request->training_types : [];
         $results = [];
         foreach ($curriculumSubjects as $cs) {
             $details = $cs->subject_details;
@@ -936,6 +946,11 @@ class ReportController extends Controller
                 $plannedHours = (int) ($detail['academic_load'] ?? 0);
 
                 if ($trainingTypeCode === '') {
+                    continue;
+                }
+
+                // Dars turi filtri
+                if (!empty($trainingTypeFilter) && !in_array($trainingTypeCode, $trainingTypeFilter)) {
                     continue;
                 }
 

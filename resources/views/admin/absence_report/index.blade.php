@@ -12,6 +12,16 @@
                 <!-- Filters - bir qatorda -->
                 <div class="filter-container">
                     <div class="filter-row">
+                        <div class="filter-item" style="max-width:150px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#6366f1;"></span> O'quv yili</label>
+                            <select id="education_year" class="select2" style="width: 100%;">
+                                @foreach($educationYears as $ey)
+                                    <option value="{{ $ey->education_year_code }}" {{ ($currentEducationYear ?? '') == $ey->education_year_code ? 'selected' : '' }}>
+                                        {{ $ey->education_year_name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="filter-item">
                             <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
                             <select id="education_type" class="select2" style="width: 100%;">
@@ -188,6 +198,7 @@
 
         function getFilters() {
             return {
+                education_year: $('#education_year').val() || '',
                 education_type: $('#education_type').val() || '',
                 faculty: $('#faculty').val() || '',
                 specialty: $('#specialty').val() || '',
@@ -285,7 +296,7 @@
 
             $.ajax({
                 url: '{{ route("admin.absence_report.detail") }}',
-                data: { hemis_id: hemisId, current_semester: cs },
+                data: { hemis_id: hemisId, current_semester: cs, education_year: $('#education_year').val() || '' },
                 success: function(res) {
                     $('#modal-loading').hide();
                     if (res.student) {

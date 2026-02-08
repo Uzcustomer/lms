@@ -1649,289 +1649,120 @@ class ReportController extends Controller
 
     /**
      * AJAX: Yuklama vs Juftlik hisobot ma'lumotlarini hisoblash
-     * /v1/data/attendance-control-list dan load va lessonPair ni solishtiradi
+     * attendance_controls jadvalidan foydalanadi (HEMIS API dan sinxronlangan)
+     * Juftlik soat = lesson_pair vaqtidan hisoblangan akademik soat: round((end-start)/40)
+     * Yuklama soat = load maydoni (API dan kelgan)
+     * Farq = juftlik_soat - yuklama_soat
      */
     public function loadVsPairReportData(Request $request)
     {
         try {
-            $token = config('services.hemis.token');
-            $baseUrl = rtrim(config('services.hemis.base_url'), '/');
+            $query = DB::table('attendance_controls as ac')
+                ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'ac.group_id')
+                ->leftJoin('curricula as c', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                ->leftJoin('semesters as s', function ($join) {
+                    $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('s.code', '=', 'ac.semester_code');
+                })
+                ->leftJoin('departments as f', function ($join) {
+                    $join->on('f.department_hemis_id', '=', 'c.department_hemis_id')
+                        ->where('f.structure_type_code', 11);
+                })
+                ->leftJoin('schedules as sch', 'sch.schedule_hemis_id', '=', 'ac.subject_schedule_id');
 
-            // API parametrlarini tayyorlash
-            $apiParams = ['limit' => 200, 'page' => 1];
-
-            // Joriy semestr uchun education_year ni olish
-            if ($request->get('current_semester', '1') == '1') {
-                $currentSemester = DB::table('semesters')
-                    ->where('current', true)
-                    ->select('education_year')
-                    ->first();
-                if ($currentSemester && $currentSemester->education_year) {
-                    $apiParams['_education_year'] = $currentSemester->education_year;
+            // Filtrlar
+            if ($request->filled('education_type')) {
+                $query->where('c.education_type_code', $request->education_type);
+            }
+            if ($request->filled('faculty')) {
+                $faculty = Department::find($request->faculty);
+                if ($faculty) {
+                    $query->where('c.department_hemis_id', $faculty->department_hemis_id);
                 }
             }
-
-            // API filtrlari
-            if ($request->filled('group')) {
-                $apiParams['_group'] = $request->group;
+            if ($request->filled('specialty')) {
+                $query->where('g.specialty_hemis_id', $request->specialty);
+            }
+            if ($request->filled('level_code')) {
+                $query->where('s.level_code', $request->level_code);
+            }
+            if ($request->filled('semester_code')) {
+                $query->where('ac.semester_code', $request->semester_code);
+            }
+            if ($request->filled('department')) {
+                $query->where('sch.department_id', $request->department);
             }
             if ($request->filled('subject')) {
-                $apiParams['_subject'] = $request->subject;
+                $query->where('ac.subject_id', $request->subject);
+            }
+            if ($request->filled('group')) {
+                $query->where('ac.group_id', $request->group);
+            }
+            if ($request->filled('date_from')) {
+                $query->where('ac.lesson_date', '>=', $request->date_from);
+            }
+            if ($request->filled('date_to')) {
+                $query->where('ac.lesson_date', '<=', $request->date_to . ' 23:59:59');
             }
 
-            // Barcha sahifalarni API dan olish
-            $allItems = [];
-            $maxPages = 100;
-            $currentPage = 1;
+            $rows = $query->select(
+                'ac.employee_id',
+                'ac.employee_name',
+                'ac.subject_name',
+                'ac.group_name',
+                'ac.semester_name',
+                'ac.lesson_pair_name',
+                'ac.lesson_pair_start_time',
+                'ac.lesson_pair_end_time',
+                'ac.load',
+                'ac.lesson_date',
+                'ac.training_type_name',
+                'f.name as faculty_name',
+                'g.specialty_name',
+                's.level_name',
+                'sch.department_name'
+            )->get();
 
-            do {
-                $apiParams['page'] = $currentPage;
-                $response = Http::withoutVerifying()
-                    ->timeout(60)
-                    ->withToken($token)
-                    ->get($baseUrl . '/data/attendance-control-list', $apiParams);
-
-                if (!$response->successful()) {
-                    \Log::warning('Load vs Pair API failed', [
-                        'status' => $response->status(),
-                        'url' => $baseUrl . '/data/attendance-control-list',
-                        'params' => $apiParams,
-                        'body' => substr($response->body(), 0, 500),
-                    ]);
-                    break;
-                }
-
-                $json = $response->json();
-                $items = $json['data']['items'] ?? ($json['data'][0]['items'] ?? []);
-                $allItems = array_merge($allItems, $items);
-
-                $pagination = $json['data']['pagination'] ?? ($json['data'][0]['pagination'][0] ?? []);
-                $pageCount = $pagination['pageCount'] ?? 1;
-                $currentPage++;
-            } while ($currentPage <= $pageCount && $currentPage <= $maxPages);
-
-            if (empty($allItems)) {
-                return response()->json([
-                    'data' => [],
-                    'total' => 0,
-                    'debug' => [
-                        'api_url' => $baseUrl . '/data/attendance-control-list',
-                        'api_params' => $apiParams,
-                        'api_response_keys' => array_keys($json ?? []),
-                        'api_data_type' => isset($json['data']) ? gettype($json['data']) : 'missing',
-                        'api_success' => $json['success'] ?? null,
-                        'api_error' => $json['error'] ?? null,
-                    ],
-                ]);
+            if ($rows->isEmpty()) {
+                return response()->json(['data' => [], 'total' => 0]);
             }
 
-            // Lokal ma'lumotlar bilan boyitish uchun ID larni yig'ish
-            $scheduleHemisIds = array_filter(array_unique(array_map(
-                fn($item) => $item['_subject_schedule'] ?? null,
-                $allItems
-            )));
-
-            $groupHemisIds = array_filter(array_unique(array_map(
-                fn($item) => $item['group']['id'] ?? null,
-                $allItems
-            )));
-
-            // Jadval ma'lumotlaridan boyitish (fakultet, kafedra)
-            $scheduleInfo = [];
-            if (!empty($scheduleHemisIds)) {
-                foreach (array_chunk($scheduleHemisIds, 5000) as $chunk) {
-                    $rows = DB::table('schedules')
-                        ->whereIn('schedule_hemis_id', $chunk)
-                        ->select('schedule_hemis_id', 'department_name', 'faculty_name')
-                        ->get();
-                    foreach ($rows as $row) {
-                        $scheduleInfo[$row->schedule_hemis_id] = $row;
-                    }
-                }
-            }
-
-            // Guruh ma'lumotlaridan boyitish (yo'nalish)
-            $groupInfo = [];
-            if (!empty($groupHemisIds)) {
-                $rows = DB::table('groups as g')
-                    ->leftJoin('curricula as c', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                    ->leftJoin('departments as d', function ($join) {
-                        $join->on('d.department_hemis_id', '=', 'c.department_hemis_id')
-                            ->where('d.structure_type_code', 11);
-                    })
-                    ->whereIn('g.group_hemis_id', $groupHemisIds)
-                    ->select(
-                        'g.group_hemis_id',
-                        'g.specialty_name',
-                        'd.name as faculty_name',
-                        'c.education_type_code'
-                    )
-                    ->get();
-                foreach ($rows as $row) {
-                    $groupInfo[$row->group_hemis_id] = $row;
-                }
-            }
-
-            // Semestr ma'lumotlaridan boyitish (kurs/level)
-            $semesterLevels = [];
-            $semesterCodes = array_filter(array_unique(array_map(
-                fn($item) => $item['semester']['code'] ?? null,
-                $allItems
-            )));
-            if (!empty($semesterCodes) && !empty($groupHemisIds)) {
-                $rows = DB::table('semesters as s')
-                    ->join('groups as g', 'g.curriculum_hemis_id', '=', 's.curriculum_hemis_id')
-                    ->whereIn('g.group_hemis_id', $groupHemisIds)
-                    ->whereIn('s.code', $semesterCodes)
-                    ->select('g.group_hemis_id', 's.code as semester_code', 's.level_name')
-                    ->get();
-                foreach ($rows as $row) {
-                    $semesterLevels[$row->group_hemis_id . '|' . $row->semester_code] = $row->level_name;
-                }
-            }
-
-            // Filtrlarni tekshirish uchun ma'lumot tayyorlash
-            $filterEducationType = $request->get('education_type');
-            $filterFacultyId = $request->get('faculty');
-            $filterSpecialty = $request->get('specialty');
-            $filterLevelCode = $request->get('level_code');
-            $filterSemesterCode = $request->get('semester_code');
-            $filterDepartment = $request->get('department');
-            $filterDateFrom = $request->get('date_from');
-            $filterDateTo = $request->get('date_to');
-
-            // Fakultet nomi
-            $filterFacultyHemisId = null;
-            if ($filterFacultyId) {
-                $faculty = Department::find($filterFacultyId);
-                $filterFacultyHemisId = $faculty->department_hemis_id ?? null;
-            }
-
-            // Kafedra nomi
-            $filterDepartmentName = null;
-            if ($filterDepartment) {
-                $filterDepartmentName = DB::table('curriculum_subjects')
-                    ->where('department_id', $filterDepartment)
-                    ->value('department_name');
-            }
-
-            // Specialty name uchun
-            $filterSpecialtyName = null;
-            if ($filterSpecialty) {
-                $filterSpecialtyName = DB::table('groups')
-                    ->where('specialty_hemis_id', $filterSpecialty)
-                    ->value('specialty_name');
-            }
-
-            // Ma'lumotlarni qayta ishlash
+            // Juftlik soat va yuklama soatni solishtirish
             $results = [];
-            foreach ($allItems as $item) {
-                $startTime = $item['lessonPair']['start_time'] ?? '';
-                $endTime = $item['lessonPair']['end_time'] ?? '';
+            foreach ($rows as $row) {
+                $start = strtotime($row->lesson_pair_start_time);
+                $end = strtotime($row->lesson_pair_end_time);
+                $minutes = ($end && $start && $end > $start) ? ($end - $start) / 60 : 0;
+                $pairHours = ($minutes > 0) ? max(1, round($minutes / 40)) : 0;
+                $loadHours = (int) $row->load;
+                $farq = $pairHours - $loadHours;
 
-                // Juftlik akademik soatini hisoblash
-                $start = strtotime($startTime);
-                $end = strtotime($endTime);
-                $durationMinutes = ($end && $start && $end > $start) ? ($end - $start) / 60 : 0;
-                $pairHours = ($durationMinutes > 0) ? max(1, round($durationMinutes / 40)) : 0;
-
-                $load = (int) ($item['load'] ?? 0);
-                $farq = $pairHours - $load;
-
-                // Boyitish ma'lumotlari
-                $groupId = $item['group']['id'] ?? null;
-                $scheduleId = $item['_subject_schedule'] ?? null;
-                $semCode = $item['semester']['code'] ?? '';
-                $gInfo = $groupInfo[$groupId] ?? null;
-                $sInfo = $scheduleInfo[$scheduleId] ?? null;
-                $levelName = $semesterLevels[($groupId . '|' . $semCode)] ?? '-';
-
-                $facultyName = $sInfo->faculty_name ?? ($gInfo->faculty_name ?? '-');
-                $specialtyName = $gInfo->specialty_name ?? '-';
-                $departmentName = $sInfo->department_name ?? '-';
-
-                // Lokal filtrlar
-                if ($filterEducationType && $gInfo && $gInfo->education_type_code != $filterEducationType) {
-                    continue;
-                }
-                if ($filterFacultyHemisId && $gInfo && ($gInfo->faculty_name ?? '') !== '') {
-                    // Fakultet bo'yicha filtrlash
-                    $faculty = Department::find($filterFacultyId);
-                    if ($faculty && $facultyName !== $faculty->name) {
-                        continue;
-                    }
-                }
-                if ($filterSpecialtyName && $specialtyName !== $filterSpecialtyName) {
-                    continue;
-                }
-                if ($filterLevelCode && $levelName === '-') {
-                    continue;
-                }
-                if ($filterSemesterCode && $semCode !== $filterSemesterCode) {
-                    continue;
-                }
-                if ($filterDepartmentName && $departmentName !== $filterDepartmentName) {
+                if ($farq == 0) {
                     continue;
                 }
 
-                // Sana filtri
-                $lessonDate = $item['lesson_date'] ?? null;
-                $lessonDateStr = $lessonDate ? date('Y-m-d', $lessonDate) : null;
-                if ($filterDateFrom && $lessonDateStr && $lessonDateStr < $filterDateFrom) {
-                    continue;
-                }
-                if ($filterDateTo && $lessonDateStr && $lessonDateStr > $filterDateTo) {
-                    continue;
-                }
-
-                $pairName = ($item['lessonPair']['name'] ?? '') . ' (' . $startTime . '-' . $endTime . ')';
+                $pairName = $row->lesson_pair_name . ' (' . $row->lesson_pair_start_time . '-' . $row->lesson_pair_end_time . ')';
+                $lessonDateStr = $row->lesson_date ? date('Y-m-d', strtotime($row->lesson_date)) : '-';
 
                 $results[] = [
-                    'employee_name' => $item['employee']['name'] ?? '-',
-                    'faculty_name' => $facultyName,
-                    'specialty_name' => $specialtyName,
-                    'level_name' => $levelName,
-                    'semester_name' => $item['semester']['name'] ?? '-',
-                    'department_name' => $departmentName,
-                    'subject_name' => $item['subject']['name'] ?? '-',
-                    'group_name' => $item['group']['name'] ?? '-',
+                    'employee_name' => $row->employee_name ?? '-',
+                    'faculty_name' => $row->faculty_name ?? '-',
+                    'specialty_name' => $row->specialty_name ?? '-',
+                    'level_name' => $row->level_name ?? '-',
+                    'semester_name' => $row->semester_name ?? '-',
+                    'department_name' => $row->department_name ?? '-',
+                    'subject_name' => $row->subject_name ?? '-',
+                    'group_name' => $row->group_name ?? '-',
                     'pair_name' => $pairName,
                     'pair_hours' => $pairHours,
-                    'load_hours' => $load,
+                    'load_hours' => $loadHours,
                     'farq' => $farq,
                     'lesson_date' => $lessonDateStr,
                 ];
             }
 
-            $totalBeforeLocalFilter = count($results);
-
             if (empty($results)) {
-                return response()->json([
-                    'data' => [],
-                    'total' => 0,
-                    'debug' => [
-                        'api_items_count' => count($allItems),
-                        'after_local_filter' => 0,
-                        'sample_item' => !empty($allItems) ? array_slice($allItems, 0, 1) : null,
-                    ],
-                ]);
-            }
-
-            // Faqat farq bor qatorlarni ko'rsatish
-            $totalBeforeFarqFilter = count($results);
-            $results = array_values(array_filter($results, fn($r) => $r['farq'] != 0));
-
-            if (empty($results)) {
-                return response()->json([
-                    'data' => [],
-                    'total' => 0,
-                    'debug' => [
-                        'api_items_count' => count($allItems),
-                        'after_local_filter' => $totalBeforeFarqFilter,
-                        'after_farq_filter' => 0,
-                        'message' => "API dan {$totalBeforeFarqFilter} ta qator keldi, lekin barchasida farq=0 (yuklama va juftlik soati teng)",
-                    ],
-                ]);
+                return response()->json(['data' => [], 'total' => 0]);
             }
 
             // Saralash (standart: farq bo'yicha kamayish tartibida)
@@ -1973,7 +1804,6 @@ class ReportController extends Controller
             \Log::error('Load vs Pair report error: ' . $e->getMessage(), [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
             ]);
             return response()->json([
                 'error' => $e->getMessage(),

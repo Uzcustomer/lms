@@ -90,24 +90,15 @@ class AbsenceReportController extends Controller
             $query->where('a.semester_code', $request->semester);
         }
 
-        // Joriy semestr filtri
-        $currentSemesterCodes = [];
+        // Joriy semestr filtri: har bir guruhning curriculum bo'yicha joriy semestri
         if ($request->get('current_semester', '1') == '1') {
             $query->whereExists(function ($q) {
                 $q->select(DB::raw(1))
                     ->from('semesters as sem')
                     ->whereColumn('sem.curriculum_hemis_id', 'g.curriculum_hemis_id')
+                    ->whereColumn('sem.code', 'a.semester_code')
                     ->where('sem.current', true);
             });
-
-            $currentSemesterCodes = DB::table('semesters')
-                ->where('current', true)
-                ->pluck('code')
-                ->unique()
-                ->toArray();
-            if (!empty($currentSemesterCodes)) {
-                $query->whereIn('a.semester_code', $currentSemesterCodes);
-            }
         }
 
         // 2. Talaba bo'yicha guruhlash: sababsiz, sababli, jami soat, jami kun
@@ -164,19 +155,27 @@ class AbsenceReportController extends Controller
 
         $thresholdData = [];
         if (!empty($criticalStudentIds)) {
-            $attQuery = DB::table('attendances')
-                ->whereIn('student_hemis_id', $criticalStudentIds)
-                ->where('absent_off', '>', 0)
-                ->select('student_hemis_id', 'lesson_date', 'absent_off');
+            $attQuery = DB::table('attendances as a2')
+                ->join('students as s2', 's2.hemis_id', '=', 'a2.student_hemis_id')
+                ->join('groups as g2', 'g2.hemis_id', '=', 's2.group_hemis_id')
+                ->whereIn('a2.student_hemis_id', $criticalStudentIds)
+                ->where('a2.absent_off', '>', 0)
+                ->select('a2.student_hemis_id', 'a2.lesson_date', 'a2.absent_off');
 
             if ($request->filled('semester')) {
-                $attQuery->where('semester_code', $request->semester);
+                $attQuery->where('a2.semester_code', $request->semester);
             }
-            if ($request->get('current_semester', '1') == '1' && !empty($currentSemesterCodes)) {
-                $attQuery->whereIn('semester_code', $currentSemesterCodes);
+            if ($request->get('current_semester', '1') == '1') {
+                $attQuery->whereExists(function ($q) {
+                    $q->select(DB::raw(1))
+                        ->from('semesters as sem2')
+                        ->whereColumn('sem2.curriculum_hemis_id', 'g2.curriculum_hemis_id')
+                        ->whereColumn('sem2.code', 'a2.semester_code')
+                        ->where('sem2.current', true);
+                });
             }
 
-            $attQuery->orderBy('lesson_date')->orderBy('lesson_pair_start_time');
+            $attQuery->orderBy('a2.lesson_date')->orderBy('a2.lesson_pair_start_time');
             $allRecords = $attQuery->get()->groupBy('student_hemis_id');
 
             foreach ($criticalStudentIds as $studentId) {
@@ -286,13 +285,19 @@ class AbsenceReportController extends Controller
             ->orderBy('lesson_pair_start_time');
 
         if ($request->get('current_semester', '1') == '1') {
-            $currentSemesterCodes = DB::table('semesters')
-                ->where('current', true)
-                ->pluck('code')
-                ->unique()
-                ->toArray();
-            if (!empty($currentSemesterCodes)) {
-                $query->whereIn('semester_code', $currentSemesterCodes);
+            $curriculumId = DB::table('students as s')
+                ->join('groups as g', 'g.hemis_id', '=', 's.group_hemis_id')
+                ->where('s.hemis_id', $hemisId)
+                ->value('g.curriculum_hemis_id');
+
+            if ($curriculumId) {
+                $currentCode = DB::table('semesters')
+                    ->where('curriculum_hemis_id', $curriculumId)
+                    ->where('current', true)
+                    ->value('code');
+                if ($currentCode) {
+                    $query->where('semester_code', $currentCode);
+                }
             }
         }
 

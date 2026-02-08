@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Curriculum;
 use App\Models\Setting;
+use App\Models\CurriculumSubject;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1168,7 +1169,7 @@ class ReportController extends Controller
         $scheduleQuery = DB::table('schedules as sch')
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereNotNull('sch.lesson_date')
-            ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code', 'sch.training_type_code');
+            ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code');
 
         if ($request->get('current_semester', '1') == '1') {
             $scheduleQuery
@@ -1193,17 +1194,62 @@ class ReportController extends Controller
             return response()->json(['data' => [], 'total' => 0]);
         }
 
-        // Auditoriya soatlarini hisoblash: har bir (sana + pair + training_type) = 2 soat
-        $auditoryPairs = [];
+        // Auditoriya soatlarini hisoblash: curriculum_subjects.subject_details dan
+        // (Jurnal details bilan bir xil logika)
+        $groupCurriculumMap = DB::table('groups')
+            ->whereIn('group_hemis_id', $scheduleRows->pluck('group_id')->unique())
+            ->pluck('curriculum_hemis_id', 'group_hemis_id')
+            ->toArray();
+
+        $comboKeys = [];
         foreach ($scheduleRows as $row) {
-            $comboKey = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
-            $datePairKey = substr($row->lesson_date, 0, 10) . '_' . $row->lesson_pair_code . '_' . $row->training_type_code;
-            $auditoryPairs[$comboKey][$datePairKey] = true;
+            $comboKeys[$row->group_id . '|' . $row->subject_id . '|' . $row->semester_code] = [
+                'group_id' => $row->group_id,
+                'subject_id' => $row->subject_id,
+                'semester_code' => $row->semester_code,
+            ];
         }
 
+        $currSubjectKeys = [];
+        foreach ($comboKeys as $combo) {
+            $currHemisId = $groupCurriculumMap[$combo['group_id']] ?? null;
+            if ($currHemisId) {
+                $currSubjectKeys[$currHemisId . '|' . $combo['subject_id'] . '|' . $combo['semester_code']] = true;
+            }
+        }
+
+        $curriculumSubjects = CurriculumSubject::whereIn('curricula_hemis_id', array_unique(array_values($groupCurriculumMap)))
+            ->whereIn('subject_id', $scheduleRows->pluck('subject_id')->unique())
+            ->whereIn('semester_code', $scheduleRows->pluck('semester_code')->unique())
+            ->get()
+            ->keyBy(function ($item) {
+                return $item->curricula_hemis_id . '|' . $item->subject_id . '|' . $item->semester_code;
+            });
+
+        $nonAuditoriumCodes = ['17'];
         $auditoryHours = [];
-        foreach ($auditoryPairs as $comboKey => $pairs) {
-            $auditoryHours[$comboKey] = count($pairs) * 2;
+        foreach ($comboKeys as $comboKey => $combo) {
+            $currHemisId = $groupCurriculumMap[$combo['group_id']] ?? null;
+            if (!$currHemisId) continue;
+
+            $csKey = $currHemisId . '|' . $combo['subject_id'] . '|' . $combo['semester_code'];
+            $cs = $curriculumSubjects[$csKey] ?? null;
+            if (!$cs) continue;
+
+            $hours = 0;
+            if (is_array($cs->subject_details)) {
+                foreach ($cs->subject_details as $detail) {
+                    $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                    if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                        $hours += (float) ($detail['academic_load'] ?? 0);
+                    }
+                }
+            }
+            if ($hours <= 0) {
+                $hours = (float) ($cs->total_acload ?? 0);
+            }
+
+            $auditoryHours[$comboKey] = $hours;
         }
 
         // 2-QADAM: Talabalar ro'yxatini tayyorlash

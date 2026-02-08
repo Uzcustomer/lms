@@ -335,7 +335,8 @@
                 .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
             // Multi-select for training types with checkboxes
-            $('.select2-multi').select2({
+            var $ttSelect = $('.select2-multi');
+            $ttSelect.select2({
                 theme: 'classic', width: '100%', placeholder: 'Barchasi', allowClear: true, matcher: fuzzyMatcher,
                 closeOnSelect: false,
                 templateResult: function(data) {
@@ -349,9 +350,31 @@
                     return $el;
                 }
             }).on('select2:select select2:unselect', function() {
-                // Force re-render of dropdown options to update checkboxes
                 var $sel = $(this);
                 setTimeout(function() { $sel.select2('close').select2('open'); }, 1);
+            }).on('select2:open', function() {
+                setTimeout(function() {
+                    var $dropdown = $('.select2-container--open .select2-results');
+                    if ($dropdown.length && !$dropdown.find('.tt-select-actions').length) {
+                        var allVals = [];
+                        $('#training_types option').each(function() { if (this.value) allVals.push(this.value); });
+                        var $bar = $('<div class="tt-select-actions" style="display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid #e2e8f0;background:#f8fafc;">' +
+                            '<button type="button" class="tt-act-btn tt-check-all" style="flex:1;">Barchasini belgilash</button>' +
+                            '<button type="button" class="tt-act-btn tt-uncheck-all" style="flex:1;">Barchasini olib tashlash</button>' +
+                            '</div>');
+                        $bar.find('.tt-check-all').on('mousedown', function(e) {
+                            e.preventDefault();
+                            $('#training_types').val(allVals).trigger('change');
+                            setTimeout(function() { $ttSelect.select2('close').select2('open'); }, 1);
+                        });
+                        $bar.find('.tt-uncheck-all').on('mousedown', function(e) {
+                            e.preventDefault();
+                            $('#training_types').val([]).trigger('change');
+                            setTimeout(function() { $ttSelect.select2('close').select2('open'); }, 1);
+                        });
+                        $dropdown.prepend($bar);
+                    }
+                }, 1);
             });
 
             // Cascading dropdowns
@@ -418,6 +441,9 @@
         .select2-container--classic .select2-selection--multiple .select2-selection__choice__remove { color: #e0d0ff; margin-right: 4px; }
         .select2-container--classic .select2-selection--multiple .select2-selection__choice__remove:hover { color: #fff; }
         .select2-container--classic .select2-selection--multiple .select2-search__field { font-size: 0.8rem; }
+
+        .tt-act-btn { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; font-size: 11px; font-weight: 600; color: #475569; cursor: pointer; transition: all 0.15s; }
+        .tt-act-btn:hover { background: #6d28d9; color: #fff; border-color: #6d28d9; }
 
         .toggle-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 0; height: 36px; user-select: none; }
         .toggle-track { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; transition: background 0.25s; flex-shrink: 0; }

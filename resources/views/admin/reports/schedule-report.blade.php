@@ -334,8 +334,25 @@
                 $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher })
                 .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
-            // Multi-select for training types
-            $('.select2-multi').select2({ theme: 'classic', width: '100%', placeholder: 'Barchasi', allowClear: true, matcher: fuzzyMatcher });
+            // Multi-select for training types with checkboxes
+            $('.select2-multi').select2({
+                theme: 'classic', width: '100%', placeholder: 'Barchasi', allowClear: true, matcher: fuzzyMatcher,
+                closeOnSelect: false,
+                templateResult: function(data) {
+                    if (!data.id) return data.text;
+                    var isSelected = (($('#training_types').val() || []).indexOf(data.id) !== -1);
+                    var $el = $('<span style="display:flex;align-items:center;gap:8px;padding:2px 0;cursor:pointer;">' +
+                        '<span class="cb-box" style="width:16px;height:16px;border:2px solid ' + (isSelected ? '#6d28d9' : '#cbd5e1') + ';border-radius:4px;display:flex;align-items:center;justify-content:center;background:' + (isSelected ? '#6d28d9' : '#fff') + ';flex-shrink:0;transition:all .15s;">' +
+                        (isSelected ? '<svg width="10" height="10" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" fill="none"/></svg>' : '') +
+                        '</span>' +
+                        '<span>' + data.text + '</span></span>');
+                    return $el;
+                }
+            }).on('select2:select select2:unselect', function() {
+                // Force re-render of dropdown options to update checkboxes
+                var $sel = $(this);
+                setTimeout(function() { $sel.select2('close').select2('open'); }, 1);
+            });
 
             // Cascading dropdowns
             function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }

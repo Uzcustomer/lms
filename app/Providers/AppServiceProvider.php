@@ -18,7 +18,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Ensure helpers are loaded even if composer autoload_files is stale
+        $helpersPath = app_path('Helpers/helpers.php');
+        if (file_exists($helpersPath) && !function_exists('format_date')) {
+            require_once $helpersPath;
+        }
     }
 
     /**

@@ -1946,4 +1946,291 @@ class ReportController extends Controller
     {
         return view('admin.reports.debtors');
     }
+
+    /**
+     * Sababli check hisoboti sahifasi
+     * Onlayn sababli qilishga ariza yozganlar bilan HEMISda davomat sababli qilinganini tekshirish
+     */
+    public function sababliCheckReport(Request $request)
+    {
+        $faculties = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
+
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $selectedEducationType = $request->get('education_type');
+        if (!$request->has('education_type')) {
+            $selectedEducationType = $educationTypes
+                ->first(fn($type) => str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr'))
+                ?->education_type_code;
+        }
+
+        return view('admin.reports.sababli-check', compact(
+            'faculties',
+            'educationTypes',
+            'selectedEducationType'
+        ));
+    }
+
+    /**
+     * AJAX: Sababli check hisobot ma'lumotlarini hisoblash
+     * student_grades da reason='absent' + status='retake' bo'lganlarni
+     * attendances da absent_on > 0 ekanligini tekshiradi
+     */
+    public function sababliCheckData(Request $request)
+    {
+        // 1-QADAM: student_grades dan sababli qilingan (reason='absent', status='retake') yozuvlarni olish
+        $gradesQuery = DB::table('student_grades as sg')
+            ->join('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
+            ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
+            ->where('sg.reason', 'absent')
+            ->where('sg.status', 'retake');
+
+        // Filtrlar
+        if ($request->filled('education_type')) {
+            $groupIds = DB::table('groups')
+                ->whereIn('curriculum_hemis_id',
+                    Curriculum::where('education_type_code', $request->education_type)
+                        ->pluck('curricula_hemis_id')
+                )
+                ->pluck('group_hemis_id')
+                ->toArray();
+            $gradesQuery->whereIn('s.group_id', $groupIds);
+        }
+        if ($request->filled('faculty')) {
+            $faculty = Department::find($request->faculty);
+            if ($faculty) {
+                $gradesQuery->where('s.department_id', $faculty->department_hemis_id);
+            }
+        }
+        if ($request->filled('specialty')) {
+            $gradesQuery->where('s.specialty_id', $request->specialty);
+        }
+        if ($request->filled('level_code')) {
+            $gradesQuery->where('s.level_code', $request->level_code);
+        }
+        if ($request->filled('group')) {
+            $gradesQuery->where('s.group_id', $request->group);
+        }
+
+        // Joriy semestr
+        if ($request->get('current_semester', '1') == '1') {
+            $currentSemesterCodes = DB::table('semesters')
+                ->where('current', true)
+                ->pluck('code')
+                ->unique()
+                ->toArray();
+            if (!empty($currentSemesterCodes)) {
+                $gradesQuery->whereIn('sg.semester_code', $currentSemesterCodes);
+            }
+        }
+
+        $gradesRows = $gradesQuery->select(
+            'sg.student_hemis_id',
+            's.full_name',
+            's.department_name',
+            's.specialty_name',
+            's.level_name',
+            's.group_name',
+            's.semester_name',
+            'sg.subject_id',
+            'sg.subject_name',
+            'sg.lesson_date',
+            'sg.lesson_pair_code',
+            'sg.semester_code'
+        )->get();
+
+        if ($gradesRows->isEmpty()) {
+            return response()->json(['data' => [], 'total' => 0]);
+        }
+
+        // 2-QADAM: attendances dan tegishli yozuvlarni olish
+        $studentHemisIds = $gradesRows->pluck('student_hemis_id')->unique()->toArray();
+
+        $attendanceRows = DB::table('attendances')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->select('student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code', 'absent_on', 'absent_off')
+            ->get();
+
+        // attendances ni kalit bo'yicha indekslash: student_hemis_id|subject_id|lesson_date|lesson_pair_code
+        $attendanceMap = [];
+        foreach ($attendanceRows as $att) {
+            $dateStr = substr($att->lesson_date, 0, 10);
+            $key = $att->student_hemis_id . '|' . $att->subject_id . '|' . $dateStr . '|' . $att->lesson_pair_code;
+            $attendanceMap[$key] = $att;
+        }
+
+        // 3-QADAM: Solishtirish
+        $results = [];
+        foreach ($gradesRows as $gr) {
+            $dateStr = substr($gr->lesson_date, 0, 10);
+            $key = $gr->student_hemis_id . '|' . $gr->subject_id . '|' . $dateStr . '|' . $gr->lesson_pair_code;
+
+            $att = $attendanceMap[$key] ?? null;
+
+            $hemisSababli = false;
+            $hemisStatus = 'Davomat topilmadi';
+
+            if ($att) {
+                if ((int) $att->absent_on > 0 && (int) $att->absent_off == 0) {
+                    $hemisSababli = true;
+                    $hemisStatus = 'Sababli';
+                } elseif ((int) $att->absent_off > 0 && (int) $att->absent_on == 0) {
+                    $hemisStatus = 'Sababsiz';
+                } elseif ((int) $att->absent_on > 0 && (int) $att->absent_off > 0) {
+                    $hemisSababli = true;
+                    $hemisStatus = 'Aralash';
+                } else {
+                    $hemisStatus = 'Noaniq';
+                }
+            }
+
+            $match = $hemisSababli ? 'match' : 'mismatch';
+
+            $results[] = [
+                'student_hemis_id' => $gr->student_hemis_id,
+                'full_name' => $gr->full_name,
+                'department_name' => $gr->department_name ?? '-',
+                'specialty_name' => $gr->specialty_name ?? '-',
+                'level_name' => $gr->level_name ?? '-',
+                'group_name' => $gr->group_name ?? '-',
+                'subject_name' => $gr->subject_name ?? '-',
+                'lesson_date' => $dateStr ? date('d.m.Y', strtotime($dateStr)) : '-',
+                'lms_status' => 'Sababli (retake)',
+                'hemis_status' => $hemisStatus,
+                'match' => $match,
+            ];
+        }
+
+        // Filtrlash: faqat nomuvofiqlarni ko'rsatish
+        if ($request->get('filter_status') === 'mismatch') {
+            $results = array_values(array_filter($results, fn($r) => $r['match'] === 'mismatch'));
+        } elseif ($request->get('filter_status') === 'match') {
+            $results = array_values(array_filter($results, fn($r) => $r['match'] === 'match'));
+        }
+
+        // Saralash
+        $sortColumn = $request->get('sort', 'full_name');
+        $sortDirection = $request->get('direction', 'asc');
+
+        usort($results, function ($a, $b) use ($sortColumn, $sortDirection) {
+            $valA = $a[$sortColumn] ?? '';
+            $valB = $b[$sortColumn] ?? '';
+            $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
+            return $sortDirection === 'desc' ? -$cmp : $cmp;
+        });
+
+        // Excel export
+        if ($request->get('export') === 'excel') {
+            return $this->exportSababliCheckExcel($results);
+        }
+
+        // Statistika
+        $totalCount = count($results);
+        $matchCount = count(array_filter($results, fn($r) => $r['match'] === 'match'));
+        $mismatchCount = $totalCount - $matchCount;
+
+        // Sahifalash
+        $page = (int) $request->get('page', 1);
+        $perPage = (int) $request->get('per_page', 50);
+        $total = count($results);
+        $offset = ($page - 1) * $perPage;
+        $pageData = array_slice($results, $offset, $perPage);
+
+        foreach ($pageData as $i => &$item) {
+            $item['row_num'] = $offset + $i + 1;
+        }
+        unset($item);
+
+        return response()->json([
+            'data' => $pageData,
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => $page,
+            'last_page' => (int) ceil($total / max($perPage, 1)),
+            'match_count' => $matchCount,
+            'mismatch_count' => $mismatchCount,
+        ]);
+    }
+
+    /**
+     * Sababli check Excel export
+     */
+    private function exportSababliCheckExcel(array $data)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Sababli check');
+
+        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Fan', 'Sana', 'LMS holati', 'HEMIS holati', 'Natija'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+
+        foreach ($data as $i => $r) {
+            $row = $i + 2;
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $r['full_name']);
+            $sheet->setCellValue([3, $row], $r['department_name']);
+            $sheet->setCellValue([4, $row], $r['specialty_name']);
+            $sheet->setCellValue([5, $row], $r['level_name']);
+            $sheet->setCellValue([6, $row], $r['group_name']);
+            $sheet->setCellValue([7, $row], $r['subject_name']);
+            $sheet->setCellValue([8, $row], $r['lesson_date']);
+            $sheet->setCellValue([9, $row], $r['lms_status']);
+            $sheet->setCellValue([10, $row], $r['hemis_status']);
+            $sheet->setCellValue([11, $row], $r['match'] === 'match' ? 'Mos' : 'Mos emas');
+
+            // Natija rangini qo'yish
+            if ($r['match'] === 'match') {
+                $sheet->getStyle("K{$row}")->applyFromArray([
+                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D1FAE5']],
+                    'font' => ['bold' => true, 'color' => ['rgb' => '065F46']],
+                ]);
+            } else {
+                $sheet->getStyle("K{$row}")->applyFromArray([
+                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEE2E2']],
+                    'font' => ['bold' => true, 'color' => ['rgb' => 'DC2626']],
+                ]);
+            }
+        }
+
+        $widths = [5, 30, 25, 30, 8, 15, 35, 12, 18, 18, 12];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
+
+        $lastRow = count($data) + 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            ]);
+        }
+
+        $fileName = 'Sababli_check_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'sc_');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
 }

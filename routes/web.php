@@ -204,6 +204,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/absence', [ReportController::class, 'absenceReport'])->name('reports.absence');
         Route::get('/reports/absence/data', [ReportController::class, 'absenceReportData'])->name('reports.absence.data');
 
+        Route::get('/reports/load-vs-pair', [ReportController::class, 'loadVsPairReport'])->name('reports.load-vs-pair');
+        Route::get('/reports/load-vs-pair/data', [ReportController::class, 'loadVsPairReportData'])->name('reports.load-vs-pair.data');
+
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');

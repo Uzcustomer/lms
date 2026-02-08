@@ -129,6 +129,7 @@ class AbsenceReportController extends Controller
             if (!$status) continue;
 
             $results[] = [
+                'student_hemis_id' => $r->student_hemis_id,
                 'full_name' => $r->full_name,
                 'department_name' => $r->department_name ?? '-',
                 'specialty_name' => $r->specialty_name ?? '-',
@@ -176,6 +177,63 @@ class AbsenceReportController extends Controller
             'per_page' => $perPage,
             'current_page' => $page,
             'last_page' => (int) ceil($total / $perPage),
+        ]);
+    }
+
+    /**
+     * Talabaning batafsil davomat ma'lumotlari
+     */
+    public function detail(Request $request)
+    {
+        $hemisId = $request->get('hemis_id');
+        if (!$hemisId) {
+            return response()->json(['data' => []]);
+        }
+
+        $student = DB::table('students')
+            ->where('hemis_id', $hemisId)
+            ->select('full_name', 'department_name', 'specialty_name',
+                'level_name', 'semester_name', 'group_name')
+            ->first();
+
+        $query = DB::table('attendances')
+            ->where('student_hemis_id', $hemisId)
+            ->select('subject_name', 'lesson_date', 'lesson_pair_name',
+                'lesson_pair_start_time', 'lesson_pair_end_time',
+                'absent_on', 'absent_off', 'semester_name')
+            ->orderBy('lesson_date', 'desc')
+            ->orderBy('lesson_pair_start_time');
+
+        if ($request->get('current_semester', '1') == '1') {
+            $currentSemesterCodes = DB::table('semesters')
+                ->where('current', true)
+                ->pluck('code')
+                ->unique()
+                ->toArray();
+            if (!empty($currentSemesterCodes)) {
+                $query->whereIn('semester_code', $currentSemesterCodes);
+            }
+        }
+
+        $rows = $query->get()->map(function ($r) {
+            $lessonDate = $r->lesson_date ? date('d.m.Y', strtotime($r->lesson_date)) : '-';
+            $pairTime = $r->lesson_pair_start_time . ' - ' . $r->lesson_pair_end_time;
+            $type = ((int) $r->absent_on > 0 && (int) $r->absent_off == 0) ? 'Sababli' : 'Sababsiz';
+            $hours = max((int) $r->absent_on, (int) $r->absent_off);
+
+            return [
+                'subject_name' => $r->subject_name,
+                'lesson_date' => $lessonDate,
+                'pair_name' => $r->lesson_pair_name,
+                'pair_time' => $pairTime,
+                'type' => $type,
+                'hours' => $hours,
+            ];
+        });
+
+        return response()->json([
+            'student' => $student,
+            'data' => $rows,
         ]);
     }
 

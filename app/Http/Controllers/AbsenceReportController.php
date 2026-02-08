@@ -92,12 +92,12 @@ class AbsenceReportController extends Controller
 
         // Joriy semestr + joriy o'quv yili filtri
         if ($request->get('current_semester', '1') == '1') {
-            $query->where('a.education_year_current', true);
             $query->whereExists(function ($q) {
                 $q->select(DB::raw(1))
                     ->from('semesters as sem')
                     ->whereColumn('sem.curriculum_hemis_id', 'g.curriculum_hemis_id')
                     ->whereColumn('sem.code', 'a.semester_code')
+                    ->whereColumn('sem.education_year', 'a.education_year_code')
                     ->where('sem.current', true);
             });
         }
@@ -167,12 +167,12 @@ class AbsenceReportController extends Controller
                 $attQuery->where('a2.semester_code', $request->semester);
             }
             if ($request->get('current_semester', '1') == '1') {
-                $attQuery->where('a2.education_year_current', true);
                 $attQuery->whereExists(function ($q) {
                     $q->select(DB::raw(1))
                         ->from('semesters as sem2')
                         ->whereColumn('sem2.curriculum_hemis_id', 'g2.curriculum_hemis_id')
                         ->whereColumn('sem2.code', 'a2.semester_code')
+                        ->whereColumn('sem2.education_year', 'a2.education_year_code')
                         ->where('sem2.current', true);
                 });
             }
@@ -287,20 +287,19 @@ class AbsenceReportController extends Controller
             ->orderBy('lesson_pair_start_time');
 
         if ($request->get('current_semester', '1') == '1') {
-            $query->where('education_year_current', true);
-
             $curriculumId = DB::table('students as s')
                 ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
                 ->where('s.hemis_id', $hemisId)
                 ->value('g.curriculum_hemis_id');
 
             if ($curriculumId) {
-                $currentCode = DB::table('semesters')
+                $currentSem = DB::table('semesters')
                     ->where('curriculum_hemis_id', $curriculumId)
                     ->where('current', true)
-                    ->value('code');
-                if ($currentCode) {
-                    $query->where('semester_code', $currentCode);
+                    ->first(['code', 'education_year']);
+                if ($currentSem) {
+                    $query->where('semester_code', $currentSem->code);
+                    $query->where('education_year_code', $currentSem->education_year);
                 }
             }
         }

@@ -275,18 +275,6 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $jbControlRows = DB::table('attendance_controls')
-            ->where('group_id', $group->group_hemis_id)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
-            ->whereNotIn('training_type_code', $excludedTrainingCodes)
-            ->whereNotNull('lesson_date')
-            ->select(DB::raw('DATE(lesson_date) as lesson_date'), 'lesson_pair_code')
-            ->orderBy('lesson_date')
-            ->orderBy('lesson_pair_code')
-            ->get();
-
         // Determine earliest schedule date for filtering old year grades
         $minScheduleDate = collect()
             ->merge($jbScheduleRows->pluck('lesson_date'))
@@ -361,8 +349,6 @@ class JournalController extends Controller
             return ['date' => $schedule->lesson_date, 'pair' => $schedule->lesson_pair_code];
         })->merge($jbGradesRaw->map(function ($grade) {
             return ['date' => $grade->lesson_date, 'pair' => $grade->lesson_pair_code];
-        }))->merge($jbControlRows->map(function ($row) {
-            return ['date' => $row->lesson_date, 'pair' => $row->lesson_pair_code];
         }))->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
         })->sort(function ($a, $b) {
@@ -386,7 +372,6 @@ class JournalController extends Controller
         $jbLessonDates = $jbScheduleRows
             ->pluck('lesson_date')
             ->merge($jbGradesRaw->pluck('lesson_date'))
-            ->merge($jbControlRows->pluck('lesson_date'))
             ->unique()
             ->sort()
             ->values()
@@ -487,20 +472,6 @@ class JournalController extends Controller
             }
         }
 
-        // Students without grades for attendance_control practical sessions → NB
-        foreach ($studentHemisIds as $studentHemisId) {
-            foreach ($jbControlRows as $row) {
-                $hasGrade = isset($jbGrades[$studentHemisId][$row->lesson_date][$row->lesson_pair_code]);
-                $hasAbsence = isset($jbAbsences[$studentHemisId][$row->lesson_date][$row->lesson_pair_code]);
-                if (!$hasGrade && !$hasAbsence) {
-                    $jbAbsences[$studentHemisId][$row->lesson_date][$row->lesson_pair_code] = [
-                        'id' => null,
-                        'retake_grade' => null
-                    ];
-                }
-            }
-        }
-
         $lectureAttendanceRaw = DB::table('attendances')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('group_id', $group->group_hemis_id)
@@ -530,11 +501,12 @@ class JournalController extends Controller
             $lectureMarkedPairs[$row->lesson_date][$row->lesson_pair_code] = true;
         }
 
-        // Students without attendance records for attendance_control sessions → NB
+        // Students without attendance records for attendance_control sessions → + (present)
+        // Dars o'tilgan (load bor), NB yozilmagan → darsda qatnashgan
         foreach ($studentHemisIds as $studentHemisId) {
             foreach ($lectureControlRows as $row) {
                 if (!isset($lectureAttendance[$studentHemisId][$row->lesson_date][$row->lesson_pair_code])) {
-                    $lectureAttendance[$studentHemisId][$row->lesson_date][$row->lesson_pair_code] = 'NB';
+                    $lectureAttendance[$studentHemisId][$row->lesson_date][$row->lesson_pair_code] = '+';
                 }
             }
         }

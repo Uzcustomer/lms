@@ -750,7 +750,18 @@
                                                             <span class="tooltip-content">{{ $gradesText }}</span>
                                                         @endif
                                                     @elseif($hasAbsenceNoGrade)
-                                                        <span class="text-red-600 font-medium">NB</span>
+                                                        @php
+                                                            $dayAttData = $jbAttendance[$student->hemis_id][$date] ?? [];
+                                                            $daySababli = false;
+                                                            foreach ($dayAbsences as $pairCode => $absData) {
+                                                                $attForPair = $dayAttData[$pairCode] ?? null;
+                                                                if ($attForPair && ((int) ($attForPair['absent_on'] ?? 0)) > 0) {
+                                                                    $daySababli = true;
+                                                                    break;
+                                                                }
+                                                            }
+                                                        @endphp
+                                                        <span class="{{ $daySababli ? 'text-green-600' : 'text-red-600' }} font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -906,23 +917,22 @@
                                                             <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif
                                                     @elseif($isAbsent)
-                                                        @if($gradeRecordId !== null && $showRatingInput)
+                                                        @php
+                                                            $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
+                                                            $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
+                                                            $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                        @endphp
+                                                        @if($showRatingInput)
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
-                                                                <span class="text-red-600 font-medium">NB</span>
-                                                            </div>
-                                                        @elseif($gradeRecordId === null && $canRate)
-                                                            <div class="editable-cell cursor-pointer hover:bg-blue-50"
-                                                                 onclick="makeEditableEmpty(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}')"
-                                                                 title="Bosib baho kiriting">
-                                                                <span class="text-red-600 font-medium">NB</span>
+                                                                <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                             </div>
                                                         @elseif($hasRetake)
                                                             <div class="flex items-center justify-center gap-1">
-                                                                <span class="text-red-600 font-medium">NB</span>
+                                                                <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                                 <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan">✓</span>
                                                             </div>
                                                         @else
-                                                            <span class="text-red-600 font-medium">NB</span>
+                                                            <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                         @endif
                                                     @else
                                                         @if($canRate && $isEmpty)

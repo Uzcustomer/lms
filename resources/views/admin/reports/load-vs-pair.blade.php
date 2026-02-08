@@ -88,13 +88,6 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 160px;">
-                            <label class="filter-label">&nbsp;</label>
-                            <div class="toggle-switch" id="only-diff-toggle" onclick="toggleOnlyDiff()">
-                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
-                                <span class="toggle-label">Faqat farqli</span>
-                            </div>
-                        </div>
                         <div class="filter-item" style="min-width: 290px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
@@ -182,11 +175,6 @@
             btn.classList.toggle('active');
         }
 
-        function toggleOnlyDiff() {
-            var btn = document.getElementById('only-diff-toggle');
-            btn.classList.toggle('active');
-        }
-
         function getFilters() {
             return {
                 education_type: $('#education_type').val() || '',
@@ -200,7 +188,6 @@
                 date_from: $('#date_from').val() || '',
                 date_to: $('#date_to').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
-                only_diff: document.getElementById('only-diff-toggle').classList.contains('active') ? '1' : '0',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
                 direction: currentDirection,

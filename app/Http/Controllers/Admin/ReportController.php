@@ -1888,10 +1888,8 @@ class ReportController extends Controller
                 return response()->json(['data' => [], 'total' => 0]);
             }
 
-            // Faqat farq bo'yicha filter (ixtiyoriy)
-            if ($request->get('only_diff') === '1') {
-                $results = array_values(array_filter($results, fn($r) => $r['farq'] != 0));
-            }
+            // Faqat farq bor qatorlarni ko'rsatish
+            $results = array_values(array_filter($results, fn($r) => $r['farq'] != 0));
 
             // Saralash (standart: farq bo'yicha kamayish tartibida)
             $sortColumn = $request->get('sort', 'farq');

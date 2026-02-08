@@ -1168,7 +1168,7 @@ class ReportController extends Controller
         $scheduleQuery = DB::table('schedules as sch')
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereNotNull('sch.lesson_date')
-            ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code');
+            ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code', 'sch.training_type_code');
 
         if ($request->get('current_semester', '1') == '1') {
             $scheduleQuery
@@ -1193,11 +1193,11 @@ class ReportController extends Controller
             return response()->json(['data' => [], 'total' => 0]);
         }
 
-        // Auditoriya soatlarini hisoblash: har bir (sana + pair) = 2 soat
+        // Auditoriya soatlarini hisoblash: har bir (sana + pair + training_type) = 2 soat
         $auditoryPairs = [];
         foreach ($scheduleRows as $row) {
             $comboKey = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
-            $datePairKey = substr($row->lesson_date, 0, 10) . '_' . $row->lesson_pair_code;
+            $datePairKey = substr($row->lesson_date, 0, 10) . '_' . $row->lesson_pair_code . '_' . $row->training_type_code;
             $auditoryPairs[$comboKey][$datePairKey] = true;
         }
 

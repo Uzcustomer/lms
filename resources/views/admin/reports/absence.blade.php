@@ -135,10 +135,10 @@
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="unexcused_absent_hours">Sababsiz qoldirilgan soat <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="total_absent_hours">Jami qoldirilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="auditory_hours">Auditoriya soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th class="th-fan"><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th class="th-hour"><a href="#" class="sort-link" data-sort="unexcused_absent_hours">Sababsiz qoldirilgan soat <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th class="th-hour"><a href="#" class="sort-link" data-sort="total_absent_hours">Jami qoldirilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th class="th-hour"><a href="#" class="sort-link" data-sort="auditory_hours">Auditoriya soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="unexcused_percent">Sababsiz % <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th>Spravka muddati</th>
                                         <th>25% dan keyin darsga chiqqan</th>
@@ -385,6 +385,8 @@
         .journal-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
         .journal-table th { padding: 14px 10px; text-align: left; font-weight: 600; font-size: 11px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
         .journal-table th.th-num { padding: 14px 10px 14px 16px; width: 44px; }
+        .journal-table th.th-fan { min-width: 200px; }
+        .journal-table th.th-hour { white-space: normal !important; max-width: 90px; min-width: 70px; text-align: center !important; line-height: 1.3; }
         .sort-link { display: inline-flex; align-items: center; gap: 4px; color: #334155; text-decoration: none; cursor: pointer; }
         .sort-link:hover { opacity: 0.75; }
         .sort-icon { font-size: 8px; opacity: 0.4; }
@@ -409,7 +411,7 @@
         .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
-        .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; max-width: 260px; white-space: normal; word-break: break-word; }
+        .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; min-width: 200px; white-space: normal; word-break: break-word; }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #fef2f2; border-color: #dc2626; color: #dc2626; }

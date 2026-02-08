@@ -19,7 +19,6 @@ class ImportAttendanceControls extends Command
         $this->info('Fetching attendance controls from HEMIS API...');
 
         $token = config('services.hemis.token');
-        $baseUrl = config('services.hemis.base_url');
         $page = 1;
         $pageSize = 200;
         $totalImported = 0;
@@ -30,10 +29,7 @@ class ImportAttendanceControls extends Command
                 $response = Http::withoutVerifying()
                     ->withToken($token)
                     ->timeout(60)
-                    ->get($baseUrl . 'data/attendance-control-list', [
-                        'limit' => $pageSize,
-                        'page' => $page,
-                    ]);
+                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-control-list?limit=$pageSize&page=$page");
 
                 if ($response->successful()) {
                     $json = $response->json();

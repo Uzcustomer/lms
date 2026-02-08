@@ -90,6 +90,7 @@ class AbsenceReportController extends Controller
         }
 
         // Joriy semestr filtri
+        $currentSemesterCodes = [];
         if ($request->get('current_semester', '1') == '1') {
             $query->whereExists(function ($q) {
                 $q->select(DB::raw(1))
@@ -147,6 +148,80 @@ class AbsenceReportController extends Controller
                 'status' => $status,
             ];
         }
+
+        // 3.5. 74+ soat talabalar uchun spravka status va qatnashish sanasi
+        $spravkaDeadlineDays = 3;
+        $today = date('Y-m-d');
+        $reportDate = date('d.m.Y');
+
+        $criticalStudentIds = [];
+        foreach ($results as $item) {
+            if ($item['unexcused_hours'] >= 74) {
+                $criticalStudentIds[] = $item['student_hemis_id'];
+            }
+        }
+
+        $thresholdData = [];
+        if (!empty($criticalStudentIds)) {
+            $attQuery = DB::table('attendances')
+                ->whereIn('student_hemis_id', $criticalStudentIds)
+                ->where('absent_off', '>', 0)
+                ->select('student_hemis_id', 'lesson_date', 'absent_off');
+
+            if ($request->filled('semester')) {
+                $attQuery->where('semester_code', $request->semester);
+            }
+            if ($request->get('current_semester', '1') == '1' && !empty($currentSemesterCodes)) {
+                $attQuery->whereIn('semester_code', $currentSemesterCodes);
+            }
+
+            $attQuery->orderBy('lesson_date')->orderBy('lesson_pair_start_time');
+            $allRecords = $attQuery->get()->groupBy('student_hemis_id');
+
+            foreach ($criticalStudentIds as $studentId) {
+                $records = $allRecords->get($studentId, collect());
+                $cumulative = 0;
+                $thresholdDate = null;
+                $firstAfterDate = null;
+
+                foreach ($records as $rec) {
+                    $recDate = date('Y-m-d', strtotime($rec->lesson_date));
+                    if (!$thresholdDate) {
+                        $cumulative += (int) $rec->absent_off;
+                        if ($cumulative >= 74) {
+                            $thresholdDate = $recDate;
+                        }
+                    } elseif ($recDate > $thresholdDate && !$firstAfterDate) {
+                        $firstAfterDate = $recDate;
+                        break;
+                    }
+                }
+
+                $thresholdData[$studentId] = [
+                    'threshold_date' => $thresholdDate,
+                    'first_after' => $firstAfterDate,
+                ];
+            }
+        }
+
+        foreach ($results as &$item) {
+            $item['report_date'] = $reportDate;
+
+            if ($item['unexcused_hours'] >= 74 && isset($thresholdData[$item['student_hemis_id']])) {
+                $td = $thresholdData[$item['student_hemis_id']];
+                $item['attendance_after_74'] = $td['first_after']
+                    ? date('d.m.Y', strtotime($td['first_after']))
+                    : '-';
+
+                if ($td['threshold_date']) {
+                    $deadlineDate = date('Y-m-d', strtotime($td['threshold_date'] . " +{$spravkaDeadlineDays} days"));
+                    $item['status'] = ($today > $deadlineDate) ? 'late' : 'has_time';
+                }
+            } else {
+                $item['attendance_after_74'] = '-';
+            }
+        }
+        unset($item);
 
         // 4. Saralash
         $sortColumn = $request->get('sort', 'total_hours');
@@ -266,7 +341,7 @@ class AbsenceReportController extends Controller
 
         $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh',
             'Sababsiz (soat)', 'Sababli (soat)', 'Jami qoldirilgan soat',
-            'Jami qoldirilgan kun', 'Status'];
+            'Jami qoldirilgan kun', '74 soat keyin qatnashgan', 'Hisobot sanasi', 'Status'];
 
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
@@ -278,13 +353,15 @@ class AbsenceReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
 
         $statusLabels = [
             'yellow' => 'Ogohlantirish (30-45 soat / 15-20 kun)',
             'orange' => 'Xavfli (45-60 soat / 20-25 kun)',
             'red' => 'Jiddiy (60-74 soat / 25-30 kun)',
             'critical' => 'Chegara (74+ soat / 30+ kun)',
+            'late' => 'Kechikkan',
+            'has_time' => 'Spravka topshirishga muddati bor',
         ];
 
         foreach ($data as $i => $r) {
@@ -299,27 +376,29 @@ class AbsenceReportController extends Controller
             $sheet->setCellValue([8, $row], $r['excused_hours']);
             $sheet->setCellValue([9, $row], $r['total_hours']);
             $sheet->setCellValue([10, $row], $r['total_days']);
-            $sheet->setCellValue([11, $row], $statusLabels[$r['status']] ?? '-');
+            $sheet->setCellValue([11, $row], $r['attendance_after_74'] ?? '-');
+            $sheet->setCellValue([12, $row], $r['report_date'] ?? '-');
+            $sheet->setCellValue([13, $row], $statusLabels[$r['status']] ?? '-');
 
             // Status rangini qo'yish
-            $colors = ['yellow' => 'FFF3CD', 'orange' => 'FFE0B2', 'red' => 'FFCDD2', 'critical' => 'D32F2F'];
-            $fontColors = ['yellow' => '856404', 'orange' => 'E65100', 'red' => 'C62828', 'critical' => 'FFFFFF'];
+            $colors = ['yellow' => 'FFF3CD', 'orange' => 'FFE0B2', 'red' => 'FFCDD2', 'critical' => 'D32F2F', 'late' => 'D32F2F', 'has_time' => '16A34A'];
+            $fontColors = ['yellow' => '856404', 'orange' => 'E65100', 'red' => 'C62828', 'critical' => 'FFFFFF', 'late' => 'FFFFFF', 'has_time' => 'FFFFFF'];
             if (isset($colors[$r['status']])) {
-                $sheet->getStyle("K{$row}")->applyFromArray([
+                $sheet->getStyle("M{$row}")->applyFromArray([
                     'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $colors[$r['status']]]],
                     'font' => ['bold' => true, 'color' => ['rgb' => $fontColors[$r['status']]]],
                 ]);
             }
         }
 
-        $widths = [5, 30, 25, 30, 8, 15, 16, 16, 20, 20, 35];
+        $widths = [5, 30, 25, 30, 8, 15, 16, 16, 20, 20, 22, 18, 35];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

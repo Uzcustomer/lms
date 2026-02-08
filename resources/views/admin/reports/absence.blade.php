@@ -140,7 +140,7 @@
                                         <th class="th-hour"><a href="#" class="sort-link" data-sort="total_absent_hours">Jami qoldirilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th class="th-hour"><a href="#" class="sort-link" data-sort="auditory_hours">Auditoriya soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="unexcused_percent">Sababsiz % <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th>Spravka muddati</th>
+                                        <th>Spravka topshirish muddati</th>
                                         <th>25% dan keyin darsga chiqqan</th>
                                         <th>Hisobot sanasi</th>
                                     </tr>
@@ -235,7 +235,11 @@
                 error: function(xhr) {
                     $('#loading-state').hide();
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
-                    $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                    var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        msg += ' (' + xhr.responseJSON.error + ')';
+                    }
+                    $('#empty-state').show().find('p:first').text(msg);
                 }
             });
         }

@@ -1221,7 +1221,7 @@
                         <select id="filter-semester" class="sidebar-select" onchange="onSemesterChange()">
                             <option value="">Barchasi</option>
                             @if($semesterCode)
-                                <option value="{{ $semesterCode }}" selected>{{ $semester->name ?? $subject->semester_name }}</option>
+                                <option value="{{ $semesterCode }}" selected>{{ $semester?->name ?? $subject->semester_name }}</option>
                             @endif
                         </select>
                         <div id="loading-semester" class="sidebar-loading"><div class="sidebar-spinner"></div> Yuklanmoqda...</div>
@@ -1312,7 +1312,7 @@
         const journalShowBaseUrl = '{{ url("/admin/journal/show") }}';
         const sidebarOptionsUrl = '{{ route("admin.journal.get-sidebar-options") }}';
         const topicsUrl = '{{ route("admin.journal.get-topics") }}';
-        const currentSemesterHemisId = '{{ $semester->semester_hemis_id ?? '' }}';
+        const currentSemesterHemisId = '{{ $semester?->semester_hemis_id ?? '' }}';
         const currentCurriculumHemisId = '{{ $group->curriculum_hemis_id ?? '' }}';
 
         // URL params - navigatsiyada filtr qiymatlarini saqlash uchun

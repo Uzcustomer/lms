@@ -180,11 +180,18 @@ class JournalController extends Controller
 
     public function show(Request $request, $groupId, $subjectId, $semesterCode)
     {
-        $group = Group::where('id', $groupId)->firstOrFail();
+        $group = Group::find($groupId);
+        if (!$group) {
+            abort(404, "Guruh topilmadi (ID: {$groupId})");
+        }
+
         $subject = CurriculumSubject::where('subject_id', $subjectId)
             ->where('curricula_hemis_id', $group->curriculum_hemis_id)
             ->where('semester_code', $semesterCode)
-            ->firstOrFail();
+            ->first();
+        if (!$subject) {
+            abort(404, "Fan topilmadi (subject_id: {$subjectId}, semester: {$semesterCode})");
+        }
 
         $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
         $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
@@ -193,7 +200,7 @@ class JournalController extends Controller
 
         // Current education year: determine from schedules (most reliable source)
         // Pick the education_year_code that has the latest lesson_date for this group/subject/semester
-        $educationYearCode = $curriculum->education_year_code ?? null;
+        $educationYearCode = $curriculum?->education_year_code;
         $scheduleEducationYear = DB::table('schedules')
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
@@ -596,7 +603,7 @@ class JournalController extends Controller
         }
 
         // Faculty (Fakultet) - department linked to curriculum
-        $faculty = Department::where('department_hemis_id', $curriculum->department_hemis_id ?? null)->first();
+        $faculty = Department::where('department_hemis_id', $curriculum?->department_hemis_id)->first();
         $facultyName = $faculty->name ?? '';
         $facultyId = $faculty->id ?? '';
 
@@ -610,8 +617,8 @@ class JournalController extends Controller
         $kafedraId = $subject->department_id ?? '';
 
         // Kurs (Course level) - from semester
-        $kursName = $semester->level_name ?? '';
-        $levelCode = $semester->level_code ?? '';
+        $kursName = $semester?->level_name ?? '';
+        $levelCode = $semester?->level_code ?? '';
 
         // O'qituvchi (Teacher) - jadvaldan tur bo'yicha ajratilgan, soatlari bilan
         $teacherData = $this->getTeachersByType($group->group_hemis_id, $subjectId, $semesterCode);

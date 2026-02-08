@@ -1166,11 +1166,12 @@ class ReportController extends Controller
         try {
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
-        // 1-QADAM: Barcha schedule yozuvlarini olish
+        // 1-QADAM: Schedule dan unique (group, subject, semester) kombinatsiyalarini olish
         $scheduleQuery = DB::table('schedules as sch')
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereNotNull('sch.lesson_date')
-            ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code');
+            ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code')
+            ->distinct();
 
         if ($request->get('current_semester', '1') == '1') {
             $scheduleQuery
@@ -1189,21 +1190,25 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.subject_id', $request->subject);
         }
 
-        $scheduleRows = $scheduleQuery->get();
+        $scheduleCombos = $scheduleQuery->get();
 
-        if ($scheduleRows->isEmpty()) {
+        if ($scheduleCombos->isEmpty()) {
             return response()->json(['data' => [], 'total' => 0]);
         }
+
+        $scheduleGroupIds = $scheduleCombos->pluck('group_id')->unique()->toArray();
+        $validSubjectIds = $scheduleCombos->pluck('subject_id')->unique()->toArray();
+        $validSemesterCodes = $scheduleCombos->pluck('semester_code')->unique()->toArray();
 
         // Auditoriya soatlarini hisoblash: curriculum_subjects.subject_details dan
         // (Jurnal details bilan bir xil logika)
         $groupCurriculumMap = DB::table('groups')
-            ->whereIn('group_hemis_id', $scheduleRows->pluck('group_id')->unique())
+            ->whereIn('group_hemis_id', $scheduleGroupIds)
             ->pluck('curriculum_hemis_id', 'group_hemis_id')
             ->toArray();
 
         $comboKeys = [];
-        foreach ($scheduleRows as $row) {
+        foreach ($scheduleCombos as $row) {
             $comboKeys[$row->group_id . '|' . $row->subject_id . '|' . $row->semester_code] = [
                 'group_id' => $row->group_id,
                 'subject_id' => $row->subject_id,
@@ -1211,17 +1216,9 @@ class ReportController extends Controller
             ];
         }
 
-        $currSubjectKeys = [];
-        foreach ($comboKeys as $combo) {
-            $currHemisId = $groupCurriculumMap[$combo['group_id']] ?? null;
-            if ($currHemisId) {
-                $currSubjectKeys[$currHemisId . '|' . $combo['subject_id'] . '|' . $combo['semester_code']] = true;
-            }
-        }
-
         $curriculumSubjects = CurriculumSubject::whereIn('curricula_hemis_id', array_unique(array_values($groupCurriculumMap)))
-            ->whereIn('subject_id', $scheduleRows->pluck('subject_id')->unique())
-            ->whereIn('semester_code', $scheduleRows->pluck('semester_code')->unique())
+            ->whereIn('subject_id', $validSubjectIds)
+            ->whereIn('semester_code', $validSemesterCodes)
             ->get()
             ->keyBy(function ($item) {
                 return $item->curricula_hemis_id . '|' . $item->subject_id . '|' . $item->semester_code;
@@ -1298,7 +1295,6 @@ class ReportController extends Controller
                 ->toArray();
         }
 
-        $scheduleGroupIds = $scheduleRows->pluck('group_id')->unique()->toArray();
         $studentQuery->whereIn('s.group_id', $scheduleGroupIds);
         $students = $studentQuery->get();
 
@@ -1312,12 +1308,10 @@ class ReportController extends Controller
         }
         $studentHemisIds = array_keys($studentGroupMap);
 
-        $validSubjectIds = $scheduleRows->pluck('subject_id')->unique()->toArray();
-        $validSemesterCodes = $scheduleRows->pluck('semester_code')->unique()->toArray();
-
+        $filteredSubjectIds = $validSubjectIds;
         if ($allowedSubjectIds !== null) {
-            $validSubjectIds = array_intersect($validSubjectIds, $allowedSubjectIds);
-            if (empty($validSubjectIds)) {
+            $filteredSubjectIds = array_intersect($validSubjectIds, $allowedSubjectIds);
+            if (empty($filteredSubjectIds)) {
                 return response()->json(['data' => [], 'total' => 0]);
             }
         }
@@ -1325,7 +1319,7 @@ class ReportController extends Controller
         // 3-QADAM: student_grades dan ma'lumotlarni olish
         $gradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
-            ->whereIn('subject_id', $validSubjectIds)
+            ->whereIn('subject_id', $filteredSubjectIds)
             ->whereIn('semester_code', $validSemesterCodes)
             ->whereNotIn('training_type_code', $excludedCodes)
             ->whereNotNull('lesson_date')

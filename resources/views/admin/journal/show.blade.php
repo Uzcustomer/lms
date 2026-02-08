@@ -906,8 +906,14 @@
                                                             <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif
                                                     @elseif($isAbsent)
-                                                        @if($showRatingInput)
+                                                        @if($gradeRecordId !== null && $showRatingInput)
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
+                                                                <span class="text-red-600 font-medium">NB</span>
+                                                            </div>
+                                                        @elseif($gradeRecordId === null && $canRate)
+                                                            <div class="editable-cell cursor-pointer hover:bg-blue-50"
+                                                                 onclick="makeEditableEmpty(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}')"
+                                                                 title="Bosib baho kiriting">
                                                                 <span class="text-red-600 font-medium">NB</span>
                                                             </div>
                                                         @elseif($hasRetake)

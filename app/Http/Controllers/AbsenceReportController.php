@@ -157,7 +157,7 @@ class AbsenceReportController extends Controller
         if (!empty($criticalStudentIds)) {
             $attQuery = DB::table('attendances as a2')
                 ->join('students as s2', 's2.hemis_id', '=', 'a2.student_hemis_id')
-                ->join('groups as g2', 'g2.hemis_id', '=', 's2.group_hemis_id')
+                ->join('groups as g2', 'g2.group_hemis_id', '=', 's2.group_id')
                 ->whereIn('a2.student_hemis_id', $criticalStudentIds)
                 ->where('a2.absent_off', '>', 0)
                 ->select('a2.student_hemis_id', 'a2.lesson_date', 'a2.absent_off');
@@ -286,7 +286,7 @@ class AbsenceReportController extends Controller
 
         if ($request->get('current_semester', '1') == '1') {
             $curriculumId = DB::table('students as s')
-                ->join('groups as g', 'g.hemis_id', '=', 's.group_hemis_id')
+                ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
                 ->where('s.hemis_id', $hemisId)
                 ->value('g.curriculum_hemis_id');
 

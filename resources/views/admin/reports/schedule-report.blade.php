@@ -162,8 +162,8 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <link href="/css/scroll-calendar.css" rel="stylesheet" />
+    <script src="/js/scroll-calendar.js"></script>
 
     <script>
         let currentSort = 'status';
@@ -307,71 +307,9 @@
         }
 
         $(document).ready(function() {
-            // O'zbek tili lokalizatsiyasi
-            var uzLocale = {
-                firstDayOfWeek: 1,
-                weekdays: {
-                    shorthand: ["Yak", "Dush", "Sesh", "Chor", "Pay", "Jum", "Shan"],
-                    longhand: ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"]
-                },
-                months: {
-                    shorthand: ["Yan", "Fev", "Mar", "Apr", "May", "Iyun", "Iyul", "Avg", "Sen", "Okt", "Noy", "Dek"],
-                    longhand: ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"]
-                },
-                rangeSeparator: " — ",
-                weekAbbreviation: "Haf",
-                scrollTitle: "Kattalashtirish uchun aylantiring",
-                toggleTitle: "O'zgartirish",
-                amPM: ["AM", "PM"],
-                yearAriaLabel: "Yil",
-                monthAriaLabel: "Oy",
-                hourAriaLabel: "Soat",
-                minuteAriaLabel: "Daqiqa",
-                time_24hr: true
-            };
-
-            var fpConfig = {
-                dateFormat: 'Y-m-d',
-                altInput: true,
-                altFormat: 'd.m.Y',
-                allowInput: true,
-                locale: uzLocale,
-                onDayCreate: function(dObj, dStr, fp, dayElem) {
-                    if (dayElem.dateObj.getDay() === 0) {
-                        dayElem.classList.add('flatpickr-sunday');
-                    }
-                },
-                onReady: function(selectedDates, dateStr, instance) {
-                    if (instance.altInput) {
-                        instance.altInput.classList.add('date-input');
-                        instance.altInput.setAttribute('placeholder', 'kk.oo.yyyy');
-                    }
-                    var accDelta = 0;
-                    var threshold = 400;
-                    var resetTimer = null;
-                    instance.calendarContainer.addEventListener('wheel', function(e) {
-                        e.preventDefault();
-                        accDelta += e.deltaY;
-                        clearTimeout(resetTimer);
-                        resetTimer = setTimeout(function() { accDelta = 0; }, 300);
-
-                        if (Math.abs(accDelta) >= threshold) {
-                            var dir = accDelta > 0 ? 1 : -1;
-                            accDelta = 0;
-                            var daysWrap = instance.calendarContainer.querySelector('.flatpickr-days');
-                            if (daysWrap) {
-                                daysWrap.style.transition = 'opacity 0.12s ease';
-                                daysWrap.style.opacity = '0.3';
-                                setTimeout(function() { daysWrap.style.opacity = '1'; }, 40);
-                            }
-                            instance.changeMonth(dir);
-                        }
-                    }, { passive: false });
-                }
-            };
-
-            flatpickr('#date_from', fpConfig);
-            flatpickr('#date_to', fpConfig);
+            // Kalendarlarni yaratish
+            new ScrollCalendar('date_from');
+            new ScrollCalendar('date_to');
 
             // Sort links
             $(document).on('click', '.sort-link', function(e) {
@@ -428,16 +366,10 @@
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
-        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; outline: none; }
+        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 30px 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; outline: none; }
         .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
         .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
         .date-input::placeholder { color: #94a3b8; font-weight: 400; }
-
-        /* Flatpickr: Yakshanba kunlarini qizil rangda ko'rsatish */
-        .flatpickr-sunday { color: #dc2626 !important; font-weight: 600 !important; }
-        .flatpickr-sunday:hover { background: #fef2f2 !important; }
-        .flatpickr-sunday.selected { background: #dc2626 !important; color: #fff !important; }
-        .flatpickr-calendar .flatpickr-weekday:nth-child(7) { color: #dc2626 !important; font-weight: 700 !important; }
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }

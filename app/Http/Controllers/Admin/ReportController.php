@@ -1691,7 +1691,15 @@ class ReportController extends Controller
                     ->withToken($token)
                     ->get($baseUrl . '/data/attendance-control-list', $apiParams);
 
-                if (!$response->successful()) break;
+                if (!$response->successful()) {
+                    \Log::warning('Load vs Pair API failed', [
+                        'status' => $response->status(),
+                        'url' => $baseUrl . '/data/attendance-control-list',
+                        'params' => $apiParams,
+                        'body' => substr($response->body(), 0, 500),
+                    ]);
+                    break;
+                }
 
                 $json = $response->json();
                 $items = $json['data']['items'] ?? ($json['data'][0]['items'] ?? []);
@@ -1703,7 +1711,18 @@ class ReportController extends Controller
             } while ($currentPage <= $pageCount && $currentPage <= $maxPages);
 
             if (empty($allItems)) {
-                return response()->json(['data' => [], 'total' => 0]);
+                return response()->json([
+                    'data' => [],
+                    'total' => 0,
+                    'debug' => [
+                        'api_url' => $baseUrl . '/data/attendance-control-list',
+                        'api_params' => $apiParams,
+                        'api_response_keys' => array_keys($json ?? []),
+                        'api_data_type' => isset($json['data']) ? gettype($json['data']) : 'missing',
+                        'api_success' => $json['success'] ?? null,
+                        'api_error' => $json['error'] ?? null,
+                    ],
+                ]);
             }
 
             // Lokal ma'lumotlar bilan boyitish uchun ID larni yig'ish
@@ -1884,12 +1903,36 @@ class ReportController extends Controller
                 ];
             }
 
+            $totalBeforeLocalFilter = count($results);
+
             if (empty($results)) {
-                return response()->json(['data' => [], 'total' => 0]);
+                return response()->json([
+                    'data' => [],
+                    'total' => 0,
+                    'debug' => [
+                        'api_items_count' => count($allItems),
+                        'after_local_filter' => 0,
+                        'sample_item' => !empty($allItems) ? array_slice($allItems, 0, 1) : null,
+                    ],
+                ]);
             }
 
             // Faqat farq bor qatorlarni ko'rsatish
+            $totalBeforeFarqFilter = count($results);
             $results = array_values(array_filter($results, fn($r) => $r['farq'] != 0));
+
+            if (empty($results)) {
+                return response()->json([
+                    'data' => [],
+                    'total' => 0,
+                    'debug' => [
+                        'api_items_count' => count($allItems),
+                        'after_local_filter' => $totalBeforeFarqFilter,
+                        'after_farq_filter' => 0,
+                        'message' => "API dan {$totalBeforeFarqFilter} ta qator keldi, lekin barchasida farq=0 (yuklama va juftlik soati teng)",
+                    ],
+                ]);
+            }
 
             // Saralash (standart: farq bo'yicha kamayish tartibida)
             $sortColumn = $request->get('sort', 'farq');

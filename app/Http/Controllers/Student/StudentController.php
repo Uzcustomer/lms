@@ -4,14 +4,16 @@ namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\CurriculumSubject;
+use App\Models\CurriculumWeek;
 use App\Models\Group;
 use App\Models\Schedule;
+use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use App\Services\StudentGradeService;
 
 class StudentController extends Controller
@@ -61,59 +63,97 @@ class StudentController extends Controller
             return $redirect;
         }
 
-        $token = Auth::guard('student')->user()->token;
+        $student = Auth::guard('student')->user();
 
-        $semestersResponse = Http::withoutVerifying()->withToken($token)->get('https://student.ttatf.uz/rest/v1/education/semesters');
-        $scheduleResponse = Http::withoutVerifying()->withToken($token)->get('https://student.ttatf.uz/rest/v1/education/schedule');
-
-        if ($semestersResponse->successful() && $scheduleResponse->successful()) {
-            $semesters = collect($semestersResponse->json('data'));
-            $schedule = collect($scheduleResponse->json('data'));
-
-            $currentSemester = $semesters->firstWhere('current', true);
-            $selectedSemesterId = $request->input('semester_id', $currentSemester['id']);
-            $selectedSemester = $semesters->firstWhere('id', $selectedSemesterId);
-
-            $semesterSchedule = $schedule->where('semester.code', $selectedSemester['code']);
-
-            $currentDate = Carbon::now();
-            $currentWeek = collect($selectedSemester['weeks'])->first(function ($week) use ($currentDate) {
-                $startDate = Carbon::createFromTimestamp($week['start_date']);
-                $endDate = Carbon::createFromTimestamp($week['end_date']);
-                return $currentDate->between($startDate, $endDate);
+        $semesters = Semester::where('curriculum_hemis_id', $student->curriculum_id)
+            ->get()
+            ->map(function ($sem) {
+                return [
+                    'id' => $sem->semester_hemis_id,
+                    'name' => $sem->name,
+                    'code' => $sem->code,
+                    'current' => $sem->current,
+                    'education_year' => ['name' => $sem->education_year ?? ''],
+                ];
             });
 
-            if (!$currentWeek) {
-                $currentWeek = collect($selectedSemester['weeks'])
-                    ->sortBy('start_date')
-                    ->first(function ($week) use ($currentDate) {
-                        return Carbon::createFromTimestamp($week['start_date'])->isAfter($currentDate);
-                    });
-            }
+        $currentSemester = $semesters->firstWhere('current', true);
+        $selectedSemesterId = $request->input('semester_id', $currentSemester['id'] ?? $semesters->first()['id'] ?? null);
+        $selectedSemesterData = $semesters->firstWhere('id', $selectedSemesterId);
 
-            $selectedWeekId = $request->input('week_id', $currentWeek['id'] ?? $selectedSemester['weeks'][0]['id']);
-
-            $groupedSchedule = $semesterSchedule
-                ->where('_week', $selectedWeekId)
-                ->groupBy(function ($lesson) {
-                    return Carbon::createFromTimestamp($lesson['lesson_date'])->format('l');
-                })
-                ->map(function ($dayLessons) {
-                    return $dayLessons
-                        ->unique(function ($lesson) {
-                            return $lesson['subject']['id'] . $lesson['lessonPair']['start_time'] . $lesson['lessonPair']['end_time'] . (isset($lesson['auditorium']['code'])?$lesson['auditorium']['code']:null) . $lesson['employee']['id'];
-                        })
-                        ->sortBy('lessonPair.start_time')
-                        ->values();
-                })
-                ->sortKeys();
-
-            $weeks = collect($selectedSemester['weeks'])->sortBy('start_date')->values();
-
-            return view('student.student_schedule', compact('groupedSchedule', 'selectedSemester', 'semesters', 'weeks', 'selectedWeekId'));
-        } else {
-            return back()->withErrors('Unable to retrieve schedule or semesters.');
+        if (!$selectedSemesterData) {
+            return back()->withErrors('Semestr topilmadi.');
         }
+
+        $weeks = CurriculumWeek::where('semester_hemis_id', $selectedSemesterId)
+            ->orderBy('start_date')
+            ->get()
+            ->map(function ($week) {
+                return [
+                    'id' => $week->curriculum_week_hemis_id,
+                    'start_date' => $week->start_date->timestamp,
+                    'end_date' => $week->end_date->timestamp,
+                ];
+            })->values();
+
+        $selectedSemester = array_merge($selectedSemesterData, ['weeks' => $weeks->toArray()]);
+
+        $currentDate = Carbon::now();
+        $currentWeek = $weeks->first(function ($week) use ($currentDate) {
+            return $currentDate->between(
+                Carbon::createFromTimestamp($week['start_date']),
+                Carbon::createFromTimestamp($week['end_date'])
+            );
+        });
+
+        if (!$currentWeek) {
+            $currentWeek = $weeks->first(function ($week) use ($currentDate) {
+                return Carbon::createFromTimestamp($week['start_date'])->isAfter($currentDate);
+            });
+        }
+
+        $selectedWeekId = $request->input('week_id', $currentWeek['id'] ?? ($weeks->first()['id'] ?? null));
+
+        $selectedWeek = $weeks->firstWhere('id', $selectedWeekId);
+        $weekStart = $selectedWeek ? Carbon::createFromTimestamp($selectedWeek['start_date']) : null;
+        $weekEnd = $selectedWeek ? Carbon::createFromTimestamp($selectedWeek['end_date']) : null;
+
+        $scheduleQuery = Schedule::where('group_id', $student->group_id)
+            ->where('semester_code', $selectedSemesterData['code']);
+
+        if ($weekStart && $weekEnd) {
+            $scheduleQuery->whereBetween('lesson_date', [$weekStart, $weekEnd]);
+        }
+
+        $scheduleRecords = $scheduleQuery->get();
+
+        $groupedSchedule = $scheduleRecords
+            ->groupBy(function ($lesson) {
+                return Carbon::parse($lesson->lesson_date)->format('l');
+            })
+            ->map(function ($dayLessons) {
+                return $dayLessons
+                    ->unique(function ($lesson) {
+                        return $lesson->subject_id . $lesson->lesson_pair_start_time . $lesson->lesson_pair_end_time . $lesson->auditorium_code . $lesson->employee_id;
+                    })
+                    ->map(function ($lesson) {
+                        return [
+                            'subject' => ['name' => $lesson->subject_name, 'id' => $lesson->subject_id],
+                            'employee' => ['name' => $lesson->employee_name, 'id' => $lesson->employee_id],
+                            'auditorium' => ['name' => $lesson->auditorium_name ?? '', 'code' => $lesson->auditorium_code],
+                            'lessonPair' => [
+                                'start_time' => $lesson->lesson_pair_start_time,
+                                'end_time' => $lesson->lesson_pair_end_time,
+                            ],
+                            'lesson_date' => Carbon::parse($lesson->lesson_date)->timestamp,
+                        ];
+                    })
+                    ->sortBy('lessonPair.start_time')
+                    ->values();
+            })
+            ->sortKeys();
+
+        return view('student.student_schedule', compact('groupedSchedule', 'selectedSemester', 'semesters', 'weeks', 'selectedWeekId'));
     }
 
 
@@ -123,53 +163,48 @@ class StudentController extends Controller
             return $redirect;
         }
 
-        $token = Auth::user()->token;
-        $semester = Auth::user()->semester_code;
-        $level_code = Auth::user()->level_code;
+        $student = Auth::user();
+        $semester = $student->semester_code;
+        $level_code = $student->level_code;
 
-        $attendanceResponse = Http::withoutVerifying()->withToken($token)->get('https://student.ttatf.uz/rest/v1/education/attendance', [
-            'semester' => $semester
-        ]);
-
-        if (!$attendanceResponse->successful()) {
-            return back()->withErrors('Failed to fetch attendance data.');
-        }
-
-        $attendanceData = collect($attendanceResponse->json('data'));
+        $attendanceData = Attendance::where('student_hemis_id', $student->hemis_id)
+            ->where('semester_code', $semester)
+            ->orderBy('lesson_date', 'desc')
+            ->get();
 
         if ($level_code == 15 || $level_code == 16) {
             $formattedData = $attendanceData->map(function ($item) {
                 return [
-                    'semester' => $item['semester']['name'],
-                    'date' => Carbon::createFromTimestamp($item['lesson_date'])->format('d-m-Y'),
-                    'subject' => $item['subject']['name'],
-                    'training_type' => $item['trainingType']['name'],
-                    'lesson_pair' => $item['lessonPair']['name'],
-                    'start_time' => $item['lessonPair']['start_time'],
-                    'end_time' => $item['lessonPair']['end_time'],
-                    'auditorium' => isset($item['auditorium']['name'])?$item['auditorium']['name']:null,
-                    'building' => isset($item['auditorium']['building']['name'])?$item['auditorium']['building']['name']:null,
-                    'employee' => $item['employee']['name'],
-                    'faculty' => $item['faculty']['name'],
-                    'department' => $item['department']['name'],
-                    'group' => $item['group']['name'],
-                    'education_lang' => $item['group']['educationLang']['name'],
-                    'absent_on' => $item['absent_on'] > 0 ? 'Yo‘q' : 'Ha',
-                    'hours' => $item['absent_on'] == 0 ? 2 : 0
+                    'semester' => $item->semester_name,
+                    'date' => Carbon::parse($item->lesson_date)->format('d-m-Y'),
+                    'subject' => $item->subject_name,
+                    'training_type' => $item->training_type_name,
+                    'lesson_pair' => $item->lesson_pair_name,
+                    'start_time' => $item->lesson_pair_start_time,
+                    'end_time' => $item->lesson_pair_end_time,
+                    'auditorium' => null,
+                    'building' => null,
+                    'employee' => $item->employee_name,
+                    'faculty' => '',
+                    'department' => '',
+                    'group' => $item->group_name,
+                    'education_lang' => $item->education_lang_name,
+                    'absent_on' => $item->absent_on > 0 ? 'Yo\'q' : 'Ha',
+                    'hours' => $item->absent_on == 0 ? 2 : 0
                 ];
-            })->sortByDesc('date')->values();
+            })->values();
         } else {
             $formattedData = $attendanceData->map(function ($item) {
                 return [
-                    'semester' => $item['semester']['name'],
-                    'date' => Carbon::createFromTimestamp($item['lesson_date'])->format('d-m-Y') . " " . $item['lessonPair']['start_time'],
-                    'subject' => $item['subject']['name'],
-                    'training_type' => $item['trainingType']['name'],
-                    'employee' => $item['employee']['name'],
-                    'absent_on' => $item['absent_on'] > 0 ? 'Yo‘q' : 'Ha',
-                    'hours' => $item['absent_on'] == 0 ? 2 : 0
+                    'semester' => $item->semester_name,
+                    'date' => Carbon::parse($item->lesson_date)->format('d-m-Y') . " " . $item->lesson_pair_start_time,
+                    'subject' => $item->subject_name,
+                    'training_type' => $item->training_type_name,
+                    'employee' => $item->employee_name,
+                    'absent_on' => $item->absent_on > 0 ? 'Yo\'q' : 'Ha',
+                    'hours' => $item->absent_on == 0 ? 2 : 0
                 ];
-            })->sortByDesc('date')->values();
+            })->values();
         }
 
         return view('student.attendance', [
@@ -184,66 +219,71 @@ class StudentController extends Controller
             return $redirect;
         }
 
-        $token = Auth::user()->token;
-        $semester = Auth::user()->semester_code;
-        $semester_name = Auth::user()->semester_name;
-        $student_id = Auth::id();
-
-        $subjectResponse = Http::withoutVerifying()->withToken($token)->get('https://student.ttatf.uz/rest/v1/education/subject-list', [
-            'semester' => $semester
-        ]);
-
-        if (!$subjectResponse->successful()) {
-            return back()->withErrors('Failed to fetch subjects data.');
-        }
-
+        $student = Auth::user();
+        $semester = $student->semester_code;
+        $semester_name = $student->semester_name;
         $currentDate = Carbon::now();
-        $student = Student::where('id', $student_id)->first();
-        $subjects = collect($subjectResponse->json('data'))->map(function ($subject) use ($semester, $student_id, $currentDate, $student) {
-            $overallScore = $subject['overallScore'] ?? null;
-            $gradesByExam = collect($subject['gradesByExam'] ?? []);
 
-            $subject_id = $subject['curriculumSubject']['subject']['id'];
-            // whereHas('studentGrades')->
+        $curriculumSubjects = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
+            ->where('semester_code', $semester)
+            ->get();
+
+        $subjects = $curriculumSubjects->map(function ($cs) use ($semester, $currentDate, $student) {
+            $subject_id = $cs->subject_id;
+
             $lessonDates = Schedule::where('subject_id', $subject_id)
-                    ->where('group_id', $student->group_id)
-                    ->where('semester_code', $semester)
-                    ->whereNotIn('training_type_code', config('app.training_type_code'))
-                    ->where('lesson_date', '<=', $currentDate)
-                    ->distinct('lesson_date')
-                    ->pluck('lesson_date')
-                    ->map(function ($date) {
-                        return Carbon::parse($date);
-                    })->unique()->sort();
-                $dates = $lessonDates;
-                $startDate = $dates->first();
-                $endDate = $dates->last();
-            $grades = StudentGrade::where('student_hemis_id', $student->hemis_id)
-                ->where('subject_id', $subject_id)
+                ->where('group_id', $student->group_id)
+                ->where('semester_code', $semester)
                 ->whereNotIn('training_type_code', config('app.training_type_code'))
-                ->whereBetween('lesson_date', [$startDate, $endDate])
-                ->get();
+                ->where('lesson_date', '<=', $currentDate)
+                ->distinct('lesson_date')
+                ->pluck('lesson_date')
+                ->map(function ($date) {
+                    return Carbon::parse($date);
+                })->unique()->sort();
+
+            $startDate = $lessonDates->first();
+            $endDate = $lessonDates->last();
+
             $overallAverageGrade = 0;
-            $gradeInfo = $this->studentGradeService->computeAverageGrade($grades, $semester) ?? [
-                'average' => null,
-                'days' => 0,
-            ];
-            if ($gradeInfo['average'] !== null){
-                $overallAverageGrade = $gradeInfo['average'];
+            if ($startDate && $endDate) {
+                $grades = StudentGrade::where('student_hemis_id', $student->hemis_id)
+                    ->where('subject_id', $subject_id)
+                    ->whereNotIn('training_type_code', config('app.training_type_code'))
+                    ->whereBetween('lesson_date', [$startDate, $endDate])
+                    ->get();
+
+                $gradeInfo = $this->studentGradeService->computeAverageGrade($grades, $semester) ?? [
+                    'average' => null,
+                    'days' => 0,
+                ];
+                if ($gradeInfo['average'] !== null) {
+                    $overallAverageGrade = $gradeInfo['average'];
+                }
             }
-            $finalExam = $gradesByExam->firstWhere('examType.code', '13');
-            $currentExam = $gradesByExam->firstWhere('examType.code', '11');
+
+            $finalExamGrade = StudentGrade::where('student_hemis_id', $student->hemis_id)
+                ->where('subject_id', $subject_id)
+                ->where('semester_code', $semester)
+                ->where('training_type_code', 102)
+                ->avg('grade');
+
+            $currentExamGrade = StudentGrade::where('student_hemis_id', $student->hemis_id)
+                ->where('subject_id', $subject_id)
+                ->where('semester_code', $semester)
+                ->where('training_type_code', 100)
+                ->avg('grade');
 
             return [
-                'name' => $subject['curriculumSubject']['subject']['name'],
-                'code' => $subject['curriculumSubject']['subject']['code'],
-                'total_acload' => $subject['curriculumSubject']['total_acload'],
-                'credit' => $subject['curriculumSubject']['credit'],
-                'subject_type' => $subject['curriculumSubject']['subjectType']['name'],
-                'subject_id' => $subject['curriculumSubject']['subject']['id'],
-                'overall_score' => $overallScore ? "{$overallScore['grade']} / {$overallScore['max_ball']}" : 'Aniqlanmagan',
-                'final_exam' => $finalExam ? "{$finalExam['grade']} / {$finalExam['max_ball']}" : 'Aniqlanmagan',
-                'current_exam' => $currentExam ? "{$currentExam['grade']} / {$currentExam['max_ball']}" : 'Aniqlanmagan',
+                'name' => $cs->subject_name,
+                'code' => $cs->subject_code,
+                'total_acload' => $cs->total_acload,
+                'credit' => $cs->credit,
+                'subject_type' => $cs->subject_type_name,
+                'subject_id' => $cs->subject_id,
+                'overall_score' => 'Aniqlanmagan',
+                'final_exam' => $finalExamGrade ? round($finalExamGrade) : 'Aniqlanmagan',
+                'current_exam' => $currentExamGrade ? round($currentExamGrade) : 'Aniqlanmagan',
                 'average_grade' => round($overallAverageGrade),
             ];
         });
@@ -312,15 +352,26 @@ class StudentController extends Controller
             return $redirect;
         }
 
-        $token = Auth::guard('student')->user()->token;
+        $student = Auth::guard('student')->user();
 
-        $response = Http::withoutVerifying()->withToken($token)->get('https://student.ttatf.uz/rest/v1/account/me');
+        $profileData = [
+            'full_name' => $student->full_name,
+            'student_id_number' => $student->student_id_number,
+            'image' => $student->image ?? asset('images/default-avatar.png'),
+            'birth_date' => $student->birth_date ? $student->birth_date->timestamp : null,
+            'phone' => $student->other['phone'] ?? '',
+            'email' => $student->other['email'] ?? '',
+            'gender' => ['name' => $student->gender_name ?? ''],
+            'faculty' => ['name' => $student->department_name ?? ''],
+            'specialty' => ['name' => $student->specialty_name ?? ''],
+            'group' => ['name' => $student->group_name ?? ''],
+            'level' => ['name' => $student->level_name ?? ''],
+            'educationType' => ['name' => $student->education_type_name ?? ''],
+            'address' => $student->other['address'] ?? '',
+            'province' => ['name' => $student->province_name ?? ''],
+            'district' => ['name' => $student->district_name ?? ''],
+        ];
 
-        if ($response->successful()) {
-            $profileData = $response->json()['data'];
-            return view('student.profile', compact('profileData'));
-        }
-
-        return back()->withErrors('Failed to fetch profile data.');
+        return view('student.profile', compact('profileData'));
     }
 }

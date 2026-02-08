@@ -257,7 +257,7 @@ class JournalController extends Controller
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->where('training_type_code', 11)
             ->whereNotNull('lesson_date')
-            ->select('lesson_date', 'lesson_pair_code')
+            ->select(DB::raw('DATE(lesson_date) as lesson_date'), 'lesson_pair_code')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -480,7 +480,7 @@ class JournalController extends Controller
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->where('training_type_code', 11)
             ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
+            ->select('student_hemis_id', DB::raw('DATE(lesson_date) as lesson_date'), 'lesson_pair_code', 'absent_on', 'absent_off')
             ->get();
 
         $lectureAttendance = [];
@@ -488,7 +488,8 @@ class JournalController extends Controller
         foreach ($lectureAttendanceRaw as $row) {
             $lectureMarkedPairs[$row->lesson_date][$row->lesson_pair_code] = true;
 
-            $status = ((int) $row->absent_on) > 0 ? 'NB' : '+';
+            $isAbsent = ((int) $row->absent_on) > 0 || ((int) $row->absent_off) > 0;
+            $status = $isAbsent ? 'NB' : '+';
             $existing = $lectureAttendance[$row->student_hemis_id][$row->lesson_date][$row->lesson_pair_code] ?? null;
             if ($existing === 'NB') {
                 continue;

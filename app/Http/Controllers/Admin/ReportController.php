@@ -1750,7 +1750,7 @@ class ReportController extends Controller
                 }
 
                 $pairName = $row->lesson_pair_name . ' (' . $row->lesson_pair_start_time . '-' . $row->lesson_pair_end_time . ')';
-                $lessonDateStr = $row->lesson_date ? date('Y-m-d', strtotime($row->lesson_date)) : '-';
+                $lessonDateStr = $row->lesson_date ? date('d.m.Y', strtotime($row->lesson_date)) : '-';
 
                 $results[] = [
                     'employee_name' => $row->employee_name ?? '-',

@@ -10,6 +10,7 @@ use App\Models\StudentGrade;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -48,6 +49,10 @@ class ImportGrades extends Command
     {
         $this->info('Starting import of student data from Hemis API...');
         Log::info('Starting import of student data from Hemis API...' . Carbon::now());
+
+        // O'tgan o'quv yili attendance yozuvlarini nofaol qilish
+        $this->deactivateOldEducationYears();
+
         $endpoints = ['attendance-list', 'student-grade-list'];
 
         foreach ($endpoints as $endpoint) {
@@ -216,6 +221,30 @@ class ImportGrades extends Command
 //            Log::info("Imported data for: " . $date->toDateString());
 //        }
 //    }
+
+    /**
+     * Semesters jadvalidan joriy o'quv yillarini aniqlash va
+     * attendances jadvalida eski yil yozuvlarini nofaol qilish
+     */
+    private function deactivateOldEducationYears()
+    {
+        $currentEducationYears = DB::table('semesters')
+            ->where('current', true)
+            ->pluck('education_year')
+            ->unique()
+            ->toArray();
+
+        if (!empty($currentEducationYears)) {
+            $updated = Attendance::where('education_year_current', true)
+                ->whereNotIn('education_year_code', $currentEducationYears)
+                ->update(['education_year_current' => false]);
+
+            if ($updated > 0) {
+                $this->info("O'tgan o'quv yili: {$updated} ta attendance yozuvi nofaol qilindi.");
+                Log::info("Deactivated {$updated} old education year attendance records.");
+            }
+        }
+    }
 
     private function processAttendance($item)
     {

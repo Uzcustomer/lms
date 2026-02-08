@@ -1389,7 +1389,8 @@ class ReportController extends Controller
             unset($gradesChunk);
         }
 
-        // 5-QADAM: Barcha talabalarni filtrlash
+        // 5-QADAM: Foiz chegarasi bo'yicha filtrlash
+        $minPercent = (int) $request->get('min_percent', 15);
         $results = [];
         foreach ($studentSubjectData as $ssKey => $data) {
             $comboKey = $data['combo_key'];
@@ -1398,6 +1399,8 @@ class ReportController extends Controller
             if ($totalAuditoryHours <= 0) continue;
 
             $unexcusedPercent = round(($data['unexcused_absent_hours'] / $totalAuditoryHours) * 100);
+
+            if ($unexcusedPercent < $minPercent) continue;
 
             // Spravka muddati: oxirgi sababsiz dars kunidan boshlab hisoblash
             $absentDates = $data['unexcused_absent_dates'];
@@ -1487,7 +1490,7 @@ class ReportController extends Controller
         }
 
         // Saralash
-        $sortColumn = $request->get('sort', 'unexcused_absent_hours');
+        $sortColumn = $request->get('sort', 'unexcused_percent');
         $sortDirection = $request->get('direction', 'desc');
 
         usort($finalResults, function ($a, $b) use ($sortColumn, $sortDirection) {

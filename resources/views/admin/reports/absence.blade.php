@@ -56,6 +56,14 @@
                                 @endforeach
                             </select>
                         </div>
+                        <div class="filter-item" style="min-width: 110px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Sababsiz % ≥</label>
+                            <select id="min_percent" class="select2" style="width: 100%;">
+                                @foreach([0, 5, 10, 15, 20, 25, 30, 50] as $pct)
+                                    <option value="{{ $pct }}" {{ $pct == 15 ? 'selected' : '' }}>{{ $pct }}%</option>
+                                @endforeach
+                            </select>
+                        </div>
                     </div>
                     <!-- Row 2 -->
                     <div class="filter-row">
@@ -136,10 +144,10 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th class="th-fan"><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th class="th-hour"><a href="#" class="sort-link" data-sort="unexcused_absent_hours">Sababsiz qoldirilgan soat <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th class="th-hour"><a href="#" class="sort-link" data-sort="unexcused_absent_hours">Sababsiz qoldirilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th class="th-hour"><a href="#" class="sort-link" data-sort="total_absent_hours">Jami qoldirilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th class="th-hour"><a href="#" class="sort-link" data-sort="auditory_hours">Auditoriya soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="unexcused_percent">Sababsiz % <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="unexcused_percent">Sababsiz % <span class="sort-icon active">&#9660;</span></a></th>
                                         <th>Spravka topshirish muddati</th>
                                         <th>25% dan keyin darsga chiqqan</th>
                                         <th>Hisobot sanasi</th>
@@ -160,7 +168,7 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        let currentSort = 'unexcused_absent_hours';
+        let currentSort = 'unexcused_percent';
         let currentDirection = 'desc';
         let currentPage = 1;
 
@@ -190,6 +198,7 @@
                 subject: $('#subject').val() || '',
                 student_status: $('#student_status').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
+                min_percent: $('#min_percent').val() || 0,
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
                 direction: currentDirection,

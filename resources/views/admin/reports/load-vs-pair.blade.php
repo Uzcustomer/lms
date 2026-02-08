@@ -139,6 +139,7 @@
                                         <th><a href="#" class="sort-link" data-sort="pair_hours">Juftlik soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="load_hours">Yuklama soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="farq">Farq <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th>Jurnal</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -263,6 +264,8 @@
             return '<span class="badge badge-status-none" style="font-size:13px;">' + farq + '</span>';
         }
 
+        var journalBase = '{{ url("/admin/journal/show") }}';
+
         function renderTable(data) {
             var html = '';
             for (var i = 0; i < data.length; i++) {
@@ -282,6 +285,8 @@
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.pair_hours + '</td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.load_hours + '</td>';
                 html += '<td style="text-align:center;">' + farqBadge(r.farq) + '</td>';
+                var jUrl = journalBase + '/' + encodeURIComponent(r.group_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code);
+                html += '<td style="text-align:center;"><a href="' + jUrl + '" target="_blank" class="journal-link">Ko\'rish</a></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -433,6 +438,9 @@
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
         .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; max-width: 260px; white-space: normal; word-break: break-word; }
+
+        .journal-link { display: inline-block; padding: 3px 10px; background: #eff6ff; color: #2b5ea7; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11.5px; font-weight: 600; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
+        .journal-link:hover { background: #2b5ea7; color: #fff; }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }

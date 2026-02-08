@@ -9,6 +9,7 @@ use App\Models\Setting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 class ReportController extends Controller
 {
@@ -1579,6 +1580,420 @@ class ReportController extends Controller
 
         $fileName = 'JN_hisobot_' . date('Y-m-d_H-i') . '.xlsx';
         $temp = tempnam(sys_get_temp_dir(), 'jn_');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Yuklama vs Juftlik hisoboti sahifasi
+     */
+    public function loadVsPairReport(Request $request)
+    {
+        $faculties = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
+
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $selectedEducationType = $request->get('education_type');
+        if (!$request->has('education_type')) {
+            $selectedEducationType = $educationTypes
+                ->first(fn($type) => str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr'))
+                ?->education_type_code;
+        }
+
+        $kafedraQuery = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
+            ->whereNotNull('cs.department_id')
+            ->whereNotNull('cs.department_name');
+
+        if ($selectedEducationType) {
+            $kafedraQuery->where('c.education_type_code', $selectedEducationType);
+        }
+        if ($request->filled('faculty')) {
+            $kafedraQuery->where('f.id', $request->faculty);
+        }
+        $kafedraQuery->where('s.current', true);
+
+        $kafedras = $kafedraQuery
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
+            ->get();
+
+        return view('admin.reports.load-vs-pair', compact(
+            'faculties',
+            'educationTypes',
+            'selectedEducationType',
+            'kafedras'
+        ));
+    }
+
+    /**
+     * AJAX: Yuklama vs Juftlik hisobot ma'lumotlarini hisoblash
+     * /v1/data/attendance-control-list dan load va lessonPair ni solishtiradi
+     */
+    public function loadVsPairReportData(Request $request)
+    {
+        try {
+            $token = config('services.hemis.token');
+            $baseUrl = rtrim(config('services.hemis.base_url'), '/');
+
+            // API parametrlarini tayyorlash
+            $apiParams = ['limit' => 200, 'page' => 1];
+
+            // Joriy semestr uchun education_year ni olish
+            if ($request->get('current_semester', '1') == '1') {
+                $currentSemester = DB::table('semesters')
+                    ->where('current', true)
+                    ->select('education_year_code')
+                    ->first();
+                if ($currentSemester && $currentSemester->education_year_code) {
+                    $apiParams['_education_year'] = $currentSemester->education_year_code;
+                }
+            }
+
+            // API filtrlari
+            if ($request->filled('group')) {
+                $apiParams['_group'] = $request->group;
+            }
+            if ($request->filled('subject')) {
+                $apiParams['_subject'] = $request->subject;
+            }
+
+            // Barcha sahifalarni API dan olish
+            $allItems = [];
+            $maxPages = 100;
+            $currentPage = 1;
+
+            do {
+                $apiParams['page'] = $currentPage;
+                $response = Http::withoutVerifying()
+                    ->timeout(60)
+                    ->withToken($token)
+                    ->get($baseUrl . '/data/attendance-control-list', $apiParams);
+
+                if (!$response->successful()) break;
+
+                $json = $response->json();
+                $items = $json['data']['items'] ?? ($json['data'][0]['items'] ?? []);
+                $allItems = array_merge($allItems, $items);
+
+                $pagination = $json['data']['pagination'] ?? ($json['data'][0]['pagination'][0] ?? []);
+                $pageCount = $pagination['pageCount'] ?? 1;
+                $currentPage++;
+            } while ($currentPage <= $pageCount && $currentPage <= $maxPages);
+
+            if (empty($allItems)) {
+                return response()->json(['data' => [], 'total' => 0]);
+            }
+
+            // Lokal ma'lumotlar bilan boyitish uchun ID larni yig'ish
+            $scheduleHemisIds = array_filter(array_unique(array_map(
+                fn($item) => $item['_subject_schedule'] ?? null,
+                $allItems
+            )));
+
+            $groupHemisIds = array_filter(array_unique(array_map(
+                fn($item) => $item['group']['id'] ?? null,
+                $allItems
+            )));
+
+            // Jadval ma'lumotlaridan boyitish (fakultet, kafedra)
+            $scheduleInfo = [];
+            if (!empty($scheduleHemisIds)) {
+                foreach (array_chunk($scheduleHemisIds, 5000) as $chunk) {
+                    $rows = DB::table('schedules')
+                        ->whereIn('schedule_hemis_id', $chunk)
+                        ->select('schedule_hemis_id', 'department_name', 'faculty_name')
+                        ->get();
+                    foreach ($rows as $row) {
+                        $scheduleInfo[$row->schedule_hemis_id] = $row;
+                    }
+                }
+            }
+
+            // Guruh ma'lumotlaridan boyitish (yo'nalish)
+            $groupInfo = [];
+            if (!empty($groupHemisIds)) {
+                $rows = DB::table('groups as g')
+                    ->leftJoin('curricula as c', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->leftJoin('departments as d', function ($join) {
+                        $join->on('d.department_hemis_id', '=', 'c.department_hemis_id')
+                            ->where('d.structure_type_code', 11);
+                    })
+                    ->whereIn('g.group_hemis_id', $groupHemisIds)
+                    ->select(
+                        'g.group_hemis_id',
+                        'g.specialty_name',
+                        'd.name as faculty_name',
+                        'c.education_type_code'
+                    )
+                    ->get();
+                foreach ($rows as $row) {
+                    $groupInfo[$row->group_hemis_id] = $row;
+                }
+            }
+
+            // Semestr ma'lumotlaridan boyitish (kurs/level)
+            $semesterLevels = [];
+            $semesterCodes = array_filter(array_unique(array_map(
+                fn($item) => $item['semester']['code'] ?? null,
+                $allItems
+            )));
+            if (!empty($semesterCodes) && !empty($groupHemisIds)) {
+                $rows = DB::table('semesters as s')
+                    ->join('groups as g', 'g.curriculum_hemis_id', '=', 's.curriculum_hemis_id')
+                    ->whereIn('g.group_hemis_id', $groupHemisIds)
+                    ->whereIn('s.code', $semesterCodes)
+                    ->select('g.group_hemis_id', 's.code as semester_code', 's.level_name')
+                    ->get();
+                foreach ($rows as $row) {
+                    $semesterLevels[$row->group_hemis_id . '|' . $row->semester_code] = $row->level_name;
+                }
+            }
+
+            // Filtrlarni tekshirish uchun ma'lumot tayyorlash
+            $filterEducationType = $request->get('education_type');
+            $filterFacultyId = $request->get('faculty');
+            $filterSpecialty = $request->get('specialty');
+            $filterLevelCode = $request->get('level_code');
+            $filterSemesterCode = $request->get('semester_code');
+            $filterDepartment = $request->get('department');
+            $filterDateFrom = $request->get('date_from');
+            $filterDateTo = $request->get('date_to');
+
+            // Fakultet nomi
+            $filterFacultyHemisId = null;
+            if ($filterFacultyId) {
+                $faculty = Department::find($filterFacultyId);
+                $filterFacultyHemisId = $faculty->department_hemis_id ?? null;
+            }
+
+            // Kafedra nomi
+            $filterDepartmentName = null;
+            if ($filterDepartment) {
+                $filterDepartmentName = DB::table('curriculum_subjects')
+                    ->where('department_id', $filterDepartment)
+                    ->value('department_name');
+            }
+
+            // Specialty name uchun
+            $filterSpecialtyName = null;
+            if ($filterSpecialty) {
+                $filterSpecialtyName = DB::table('groups')
+                    ->where('specialty_hemis_id', $filterSpecialty)
+                    ->value('specialty_name');
+            }
+
+            // Ma'lumotlarni qayta ishlash
+            $results = [];
+            foreach ($allItems as $item) {
+                $startTime = $item['lessonPair']['start_time'] ?? '';
+                $endTime = $item['lessonPair']['end_time'] ?? '';
+
+                // Juftlik akademik soatini hisoblash
+                $start = strtotime($startTime);
+                $end = strtotime($endTime);
+                $durationMinutes = ($end && $start && $end > $start) ? ($end - $start) / 60 : 0;
+                $pairHours = ($durationMinutes > 0) ? max(1, round($durationMinutes / 40)) : 0;
+
+                $load = (int) ($item['load'] ?? 0);
+                $farq = $pairHours - $load;
+
+                // Boyitish ma'lumotlari
+                $groupId = $item['group']['id'] ?? null;
+                $scheduleId = $item['_subject_schedule'] ?? null;
+                $semCode = $item['semester']['code'] ?? '';
+                $gInfo = $groupInfo[$groupId] ?? null;
+                $sInfo = $scheduleInfo[$scheduleId] ?? null;
+                $levelName = $semesterLevels[($groupId . '|' . $semCode)] ?? '-';
+
+                $facultyName = $sInfo->faculty_name ?? ($gInfo->faculty_name ?? '-');
+                $specialtyName = $gInfo->specialty_name ?? '-';
+                $departmentName = $sInfo->department_name ?? '-';
+
+                // Lokal filtrlar
+                if ($filterEducationType && $gInfo && $gInfo->education_type_code != $filterEducationType) {
+                    continue;
+                }
+                if ($filterFacultyHemisId && $gInfo && ($gInfo->faculty_name ?? '') !== '') {
+                    // Fakultet bo'yicha filtrlash
+                    $faculty = Department::find($filterFacultyId);
+                    if ($faculty && $facultyName !== $faculty->name) {
+                        continue;
+                    }
+                }
+                if ($filterSpecialtyName && $specialtyName !== $filterSpecialtyName) {
+                    continue;
+                }
+                if ($filterLevelCode && $levelName === '-') {
+                    continue;
+                }
+                if ($filterSemesterCode && $semCode !== $filterSemesterCode) {
+                    continue;
+                }
+                if ($filterDepartmentName && $departmentName !== $filterDepartmentName) {
+                    continue;
+                }
+
+                // Sana filtri
+                $lessonDate = $item['lesson_date'] ?? null;
+                $lessonDateStr = $lessonDate ? date('Y-m-d', $lessonDate) : null;
+                if ($filterDateFrom && $lessonDateStr && $lessonDateStr < $filterDateFrom) {
+                    continue;
+                }
+                if ($filterDateTo && $lessonDateStr && $lessonDateStr > $filterDateTo) {
+                    continue;
+                }
+
+                $pairName = ($item['lessonPair']['name'] ?? '') . ' (' . $startTime . '-' . $endTime . ')';
+
+                $results[] = [
+                    'employee_name' => $item['employee']['name'] ?? '-',
+                    'faculty_name' => $facultyName,
+                    'specialty_name' => $specialtyName,
+                    'level_name' => $levelName,
+                    'semester_name' => $item['semester']['name'] ?? '-',
+                    'department_name' => $departmentName,
+                    'subject_name' => $item['subject']['name'] ?? '-',
+                    'group_name' => $item['group']['name'] ?? '-',
+                    'pair_name' => $pairName,
+                    'pair_hours' => $pairHours,
+                    'load_hours' => $load,
+                    'farq' => $farq,
+                    'lesson_date' => $lessonDateStr,
+                ];
+            }
+
+            if (empty($results)) {
+                return response()->json(['data' => [], 'total' => 0]);
+            }
+
+            // Faqat farq bo'yicha filter (ixtiyoriy)
+            if ($request->get('only_diff') === '1') {
+                $results = array_values(array_filter($results, fn($r) => $r['farq'] != 0));
+            }
+
+            // Saralash (standart: farq bo'yicha kamayish tartibida)
+            $sortColumn = $request->get('sort', 'farq');
+            $sortDirection = $request->get('direction', 'desc');
+
+            usort($results, function ($a, $b) use ($sortColumn, $sortDirection) {
+                $valA = $a[$sortColumn] ?? '';
+                $valB = $b[$sortColumn] ?? '';
+                $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
+                return $sortDirection === 'desc' ? -$cmp : $cmp;
+            });
+
+            // Excel export
+            if ($request->get('export') === 'excel') {
+                return $this->exportLoadVsPairExcel($results);
+            }
+
+            // Pagination
+            $page = $request->get('page', 1);
+            $perPage = $request->get('per_page', 50);
+            $total = count($results);
+            $offset = ($page - 1) * $perPage;
+            $pageData = array_slice($results, $offset, $perPage);
+
+            foreach ($pageData as $i => &$item) {
+                $item['row_num'] = $offset + $i + 1;
+            }
+            unset($item);
+
+            return response()->json([
+                'data' => $pageData,
+                'total' => $total,
+                'per_page' => $perPage,
+                'current_page' => (int) $page,
+                'last_page' => ceil($total / $perPage),
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Load vs Pair report error: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'error' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Yuklama vs Juftlik Excel export
+     */
+    private function exportLoadVsPairExcel(array $data)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Yuklama vs Juftlik');
+
+        $headers = ['#', 'Xodim FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Kafedra', 'Fan', 'Guruh', 'Juftlik', 'Juftlik soat', 'Yuklama soat', 'Farq'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
+
+        foreach ($data as $i => $r) {
+            $row = $i + 2;
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $r['employee_name']);
+            $sheet->setCellValue([3, $row], $r['faculty_name']);
+            $sheet->setCellValue([4, $row], $r['specialty_name']);
+            $sheet->setCellValue([5, $row], $r['level_name']);
+            $sheet->setCellValue([6, $row], $r['semester_name']);
+            $sheet->setCellValue([7, $row], $r['department_name']);
+            $sheet->setCellValue([8, $row], $r['subject_name']);
+            $sheet->setCellValue([9, $row], $r['group_name']);
+            $sheet->setCellValue([10, $row], $r['pair_name']);
+            $sheet->setCellValue([11, $row], $r['pair_hours']);
+            $sheet->setCellValue([12, $row], $r['load_hours']);
+            $sheet->setCellValue([13, $row], $r['farq']);
+        }
+
+        $widths = [5, 30, 25, 30, 8, 10, 25, 35, 15, 25, 14, 14, 10];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
+
+        $lastRow = count($data) + 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            ]);
+        }
+
+        $fileName = 'Yuklama_vs_Juftlik_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'lvp_');
 
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $writer->save($temp);

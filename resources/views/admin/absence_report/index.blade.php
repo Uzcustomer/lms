@@ -36,6 +36,18 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                        <div class="filter-item" style="max-width:110px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="max-width:130px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Semestr</label>
+                            <select id="semester" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
+                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
                         <div class="filter-item">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Talaba holati</label>
                             <select id="student_status" class="select2" style="width: 100%;">
@@ -44,22 +56,6 @@
                                         {{ str_contains(mb_strtolower($status->student_status_name ?? ''), 'qimoqda') ? 'selected' : '' }}>
                                         {{ $status->student_status_name }}
                                     </option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="filter-item" style="max-width:110px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
-                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item">
-                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item" style="max-width:80px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifa</label>
-                            <select id="per_page" class="select2" style="width: 100%;">
-                                @foreach([10, 25, 50, 100] as $ps)
-                                    <option value="{{ $ps }}" {{ $ps == 50 ? 'selected' : '' }}>{{ $ps }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -194,10 +190,10 @@
                 faculty: $('#faculty').val() || '',
                 specialty: $('#specialty').val() || '',
                 level_code: $('#level_code').val() || '',
+                semester: $('#semester').val() || '',
                 group: $('#group').val() || '',
                 student_status: $('#student_status').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
-                per_page: $('#per_page').val() || 50,
                 sort: currentSort,
                 direction: currentDirection,
             };
@@ -383,15 +379,18 @@
             function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
 
             function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
+            function rSem() { rd('#semester'); pd('{{ route("admin.journal.get-semesters") }}', { level_code: $('#level_code').val() || '' }, '#semester'); }
             function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
 
             $('#education_type').change(function() { rSpec(); rGrp(); });
             $('#faculty').change(function() { rSpec(); rGrp(); });
             $('#specialty').change(function() { rGrp(); });
-            $('#level_code').change(function() { rGrp(); });
+            $('#level_code').change(function() { rSem(); rGrp(); });
+            $('#semester').change(function() { rGrp(); });
 
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
+            pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester');
             pd('{{ route("admin.journal.get-groups") }}', fp(), '#group');
         });
     </script>

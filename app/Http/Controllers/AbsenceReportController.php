@@ -84,6 +84,11 @@ class AbsenceReportController extends Controller
             $query->whereIn('s.group_id', $groupIds);
         }
 
+        // Semestr filtri
+        if ($request->filled('semester')) {
+            $query->where('a.semester_code', $request->semester);
+        }
+
         // Joriy semestr filtri
         if ($request->get('current_semester', '1') == '1') {
             $query->whereExists(function ($q) {

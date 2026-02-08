@@ -238,8 +238,11 @@
                     var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
                     if (xhr.responseJSON && xhr.responseJSON.error) {
                         msg += ' (' + xhr.responseJSON.error + ')';
+                    } else if (xhr.status) {
+                        msg += ' (HTTP ' + xhr.status + ')';
                     }
                     $('#empty-state').show().find('p:first').text(msg);
+                    console.error('Absence report error:', xhr.status, xhr.responseText ? xhr.responseText.substring(0, 500) : '');
                 }
             });
         }

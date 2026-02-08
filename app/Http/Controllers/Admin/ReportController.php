@@ -1164,6 +1164,9 @@ class ReportController extends Controller
     public function absenceReportData(Request $request)
     {
         try {
+        ini_set('memory_limit', '512M');
+        set_time_limit(120);
+
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         // 1-QADAM: Schedule dan unique (group, subject, semester) kombinatsiyalarini olish
@@ -1329,57 +1332,61 @@ class ReportController extends Controller
                 ->min('lesson_date');
         }
 
-        $gradesRaw = DB::table('student_grades')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->whereIn('subject_id', $filteredSubjectIds)
-            ->whereIn('semester_code', $validSemesterCodes)
-            ->whereNotIn('training_type_code', $excludedCodes)
-            ->whereNotNull('lesson_date')
-            ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
-                'grade', 'lesson_date', 'lesson_pair_code', 'reason', 'status', 'deadline')
-            ->get();
-
         // 4-QADAM: Har bir talaba/fan uchun davomat ma'lumotlarini hisoblash
         $studentSubjectData = [];
         $now = Carbon::now('Asia/Tashkent');
         $spravkaDays = (int) Setting::get('spravka_deadline_days', 10);
 
-        foreach ($gradesRaw as $g) {
-            $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
-            if (!$groupId) continue;
+        // student_grades ni chunk qilib olish (katta ma'lumot uchun)
+        foreach (array_chunk($studentHemisIds, 1000) as $hemisChunk) {
+            $gradesChunk = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $hemisChunk)
+                ->whereIn('subject_id', $filteredSubjectIds)
+                ->whereIn('semester_code', $validSemesterCodes)
+                ->whereNotIn('training_type_code', $excludedCodes)
+                ->whereNotNull('lesson_date')
+                ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
+                ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
+                    'grade', 'lesson_date', 'lesson_pair_code', 'reason', 'status', 'deadline')
+                ->get();
 
-            $ssKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code;
-            $comboKey = $groupId . '|' . $g->subject_id . '|' . $g->semester_code;
-            $dateKey = substr($g->lesson_date, 0, 10);
+            foreach ($gradesChunk as $g) {
+                $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
+                if (!$groupId) continue;
 
-            if (!isset($studentSubjectData[$ssKey])) {
-                $studentSubjectData[$ssKey] = [
-                    'student_hemis_id' => $g->student_hemis_id,
-                    'subject_id' => $g->subject_id,
-                    'subject_name' => $g->subject_name,
-                    'semester_code' => $g->semester_code,
-                    'combo_key' => $comboKey,
-                    'group_id' => $groupId,
-                    'total_absent_hours' => 0,
-                    'unexcused_absent_hours' => 0,
-                    'unexcused_absent_dates' => [],
-                    'attendance_dates' => [],
-                ];
-            }
+                $ssKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code;
+                $comboKey = $groupId . '|' . $g->subject_id . '|' . $g->semester_code;
+                $dateKey = substr($g->lesson_date, 0, 10);
 
-            if ($g->reason === 'absent') {
-                $studentSubjectData[$ssKey]['total_absent_hours'] += 2;
-
-                if ($g->status !== 'retake') {
-                    $studentSubjectData[$ssKey]['unexcused_absent_hours'] += 2;
-                    $studentSubjectData[$ssKey]['unexcused_absent_dates'][] = $dateKey;
+                if (!isset($studentSubjectData[$ssKey])) {
+                    $studentSubjectData[$ssKey] = [
+                        'student_hemis_id' => $g->student_hemis_id,
+                        'subject_id' => $g->subject_id,
+                        'subject_name' => $g->subject_name,
+                        'semester_code' => $g->semester_code,
+                        'combo_key' => $comboKey,
+                        'group_id' => $groupId,
+                        'total_absent_hours' => 0,
+                        'unexcused_absent_hours' => 0,
+                        'unexcused_absent_dates' => [],
+                        'attendance_dates' => [],
+                    ];
                 }
-            } else {
-                if ($g->grade !== null && $g->grade > 0) {
-                    $studentSubjectData[$ssKey]['attendance_dates'][$dateKey] = true;
+
+                if ($g->reason === 'absent') {
+                    $studentSubjectData[$ssKey]['total_absent_hours'] += 2;
+
+                    if ($g->status !== 'retake') {
+                        $studentSubjectData[$ssKey]['unexcused_absent_hours'] += 2;
+                        $studentSubjectData[$ssKey]['unexcused_absent_dates'][] = $dateKey;
+                    }
+                } else {
+                    if ($g->grade !== null && $g->grade > 0) {
+                        $studentSubjectData[$ssKey]['attendance_dates'][$dateKey] = true;
+                    }
                 }
             }
+            unset($gradesChunk);
         }
 
         // 5-QADAM: Barcha talabalarni filtrlash

@@ -88,40 +88,45 @@
                     </div>
                 </div>
 
+                <!-- Status Legend -->
+                <div class="legend-bar">
+                    <span class="legend-item"><span class="legend-dot" style="background:#eab308;"></span> 30-45 soat / 15-20 kun</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#f97316;"></span> 45-60 soat / 20-25 kun</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#ef4444;"></span> 60-74 soat / 25-30 kun</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#7f1d1d;"></span> 74+ soat / 30+ kun</span>
+                </div>
+
                 <!-- Result Area -->
                 <div id="result-area">
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Barcha fanlar bo'yicha jami 74 soat va undan ko'p dars qoldirgan talabalar ro'yxati</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Sababsiz 30 soat va undan ko'p yoki 15 kun va undan ko'p dars qoldirgan talabalar</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
                         <p style="color:#2b5ea7;font-size:14px;margin-top:16px;font-weight:600;">Hisoblanmoqda...</p>
-                        <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
                     </div>
                     <div id="table-area" style="display:none;">
-                        <div style="padding:10px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;align-items:center;gap:12px;">
+                        <div style="padding:10px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                             <span id="total-badge" class="badge" style="background:#dc2626;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
                         </div>
-                        <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
+                        <div style="max-height:calc(100vh - 380px);overflow-y:auto;overflow-x:auto;">
                             <table class="journal-table">
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
-                                        <th><a href="#" class="sort-link" data-sort="full_name">Talaba FISH <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="full_name">FISH <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="department_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="student_status_name">Holat <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="total_absent">Jami qoldirilgan <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="unexcused_absent">Sababsiz <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="excused_absent">Sababli <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="threshold_percent">74 soatdan % <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="subjects_count">Fanlar <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th>Fanlar tafsiloti</th>
+                                        <th><a href="#" class="sort-link" data-sort="unexcused_hours">Sababsiz <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="excused_hours">Sababli <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="total_hours">Jami soat <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="total_days">Jami kun <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -139,7 +144,7 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        let currentSort = 'total_absent';
+        let currentSort = 'total_hours';
         let currentDirection = 'desc';
         let currentPage = 1;
 
@@ -217,30 +222,30 @@
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
-        function percentClass(val) {
-            if (val >= 150) return 'badge-pct-critical';
-            if (val >= 100) return 'badge-pct-danger';
-            return 'badge-pct-warning';
-        }
+        var statusMap = {
+            'yellow':   {label: 'Ogohlantirish', cls: 'status-yellow'},
+            'orange':   {label: 'Xavfli',        cls: 'status-orange'},
+            'red':      {label: 'Jiddiy',         cls: 'status-red'},
+            'critical': {label: 'Chegara',        cls: 'status-critical'}
+        };
 
         function renderTable(data) {
             var html = '';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
-                html += '<tr class="journal-row">';
+                var st = statusMap[r.status] || {label: '-', cls: ''};
+                html += '<tr class="journal-row row-' + r.status + '">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
-                html += '<td><span class="badge badge-status">' + esc(r.student_status_name) + '</span></td>';
-                html += '<td style="text-align:center;"><span class="badge badge-grade-red">' + r.total_absent + ' soat</span></td>';
-                html += '<td style="text-align:center;"><span class="badge badge-unexcused">' + r.unexcused_absent + '</span></td>';
-                html += '<td style="text-align:center;"><span class="badge badge-excused">' + r.excused_absent + '</span></td>';
-                html += '<td style="text-align:center;"><span class="badge ' + percentClass(r.threshold_percent) + '">' + r.threshold_percent + '%</span></td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.subjects_count + '</td>';
-                html += '<td><span class="text-cell text-subject-detail">' + esc(r.subjects_detail) + '</span></td>';
+                html += '<td style="text-align:center;"><span class="badge badge-unexcused">' + r.unexcused_hours + ' soat</span></td>';
+                html += '<td style="text-align:center;"><span class="badge badge-excused">' + r.excused_hours + ' soat</span></td>';
+                html += '<td style="text-align:center;"><span class="badge badge-total">' + r.total_hours + ' soat</span></td>';
+                html += '<td style="text-align:center;"><span class="badge badge-days">' + r.total_days + ' kun</span></td>';
+                html += '<td style="text-align:center;"><span class="badge ' + st.cls + '">' + st.label + '</span></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -324,6 +329,10 @@
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
+        .legend-bar { display: flex; gap: 20px; padding: 8px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; }
+        .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: #475569; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
 
@@ -364,25 +373,34 @@
         .journal-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
         .journal-table tbody tr:nth-child(even) { background: #f8fafc; }
         .journal-table tbody tr:nth-child(odd) { background: #fff; }
-        .journal-table tbody tr:hover { background: #fef2f2 !important; box-shadow: inset 4px 0 0 #dc2626; }
         .journal-table td { padding: 10px 10px; vertical-align: middle; line-height: 1.4; }
-        .td-num { padding-left: 16px !important; font-weight: 700; color: #dc2626; font-size: 13px; }
+        .td-num { padding-left: 16px !important; font-weight: 700; color: #64748b; font-size: 13px; }
 
-        .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
-        .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
-        .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
-        .badge-status { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; white-space: nowrap; }
-        .badge-grade-red { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
-        .badge-unexcused { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        /* Status row highlights */
+        .row-yellow td:first-child { border-left: 4px solid #eab308; }
+        .row-orange td:first-child { border-left: 4px solid #f97316; }
+        .row-red td:first-child { border-left: 4px solid #ef4444; }
+        .row-critical td:first-child { border-left: 4px solid #7f1d1d; }
+        .row-critical { background: #fef2f2 !important; }
+        .journal-table tbody tr:hover { background: #f1f5f9 !important; }
+
+        .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
+        .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+        .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; }
+        .badge-unexcused { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; font-weight: 700; }
         .badge-excused { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
-        .badge-pct-warning { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; font-weight: 700; }
-        .badge-pct-danger { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; font-weight: 700; }
-        .badge-pct-critical { background: #dc2626; color: #fff; border: none; font-weight: 700; }
+        .badge-total { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-weight: 700; }
+        .badge-days { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; font-weight: 700; }
+
+        /* Status badges */
+        .status-yellow { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; font-weight: 700; }
+        .status-orange { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; font-weight: 700; }
+        .status-red { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; font-weight: 700; }
+        .status-critical { background: #7f1d1d; color: #fff; border: none; font-weight: 700; }
 
         .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
-        .text-subject-detail { color: #475569; font-size: 11.5px; max-width: 350px; white-space: normal; word-break: break-word; line-height: 1.5; }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #fef2f2; border-color: #dc2626; color: #dc2626; }

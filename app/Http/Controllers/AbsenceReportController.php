@@ -4,14 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Curriculum;
 use App\Models\Department;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AbsenceReportController extends Controller
 {
-    private const THRESHOLD_HOURS = 74;
-
     public function index(Request $request)
     {
         $faculties = Department::where('structure_type_code', 11)
@@ -48,34 +45,31 @@ class AbsenceReportController extends Controller
 
     public function data(Request $request)
     {
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
-
-        // 1. Talabalar ro'yxatini olish (filtrlar bilan)
-        $studentQuery = DB::table('students as s')
+        // 1. attendances jadvalidan talabalar bo'yicha jami soatlarni hisoblash
+        $query = DB::table('attendances as a')
+            ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
             ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
             ->where('g.department_active', true)
-            ->where('g.active', true)
-            ->select('s.hemis_id', 's.full_name', 's.group_id', 's.group_name',
-                's.department_name', 's.specialty_name', 's.level_name',
-                's.semester_name', 's.student_status_name');
+            ->where('g.active', true);
 
+        // Filtrlar
         if ($request->filled('student_status')) {
-            $studentQuery->where('s.student_status_code', $request->student_status);
+            $query->where('s.student_status_code', $request->student_status);
         }
         if ($request->filled('faculty')) {
             $faculty = Department::find($request->faculty);
             if ($faculty) {
-                $studentQuery->where('s.department_id', $faculty->department_hemis_id);
+                $query->where('s.department_id', $faculty->department_hemis_id);
             }
         }
         if ($request->filled('specialty')) {
-            $studentQuery->where('s.specialty_id', $request->specialty);
+            $query->where('s.specialty_id', $request->specialty);
         }
         if ($request->filled('level_code')) {
-            $studentQuery->where('s.level_code', $request->level_code);
+            $query->where('s.level_code', $request->level_code);
         }
         if ($request->filled('group')) {
-            $studentQuery->where('s.group_id', $request->group);
+            $query->where('s.group_id', $request->group);
         }
 
         $selectedEducationType = $request->get('education_type');
@@ -87,127 +81,69 @@ class AbsenceReportController extends Controller
                 )
                 ->pluck('group_hemis_id')
                 ->toArray();
-            $studentQuery->whereIn('s.group_id', $groupIds);
+            $query->whereIn('s.group_id', $groupIds);
         }
 
-        // Joriy semestr filtri: faqat joriy semestrdagi guruhlar
+        // Joriy semestr filtri
         if ($request->get('current_semester', '1') == '1') {
-            $studentQuery->whereExists(function ($q) {
+            $query->whereExists(function ($q) {
                 $q->select(DB::raw(1))
                     ->from('semesters as sem')
                     ->whereColumn('sem.curriculum_hemis_id', 'g.curriculum_hemis_id')
                     ->where('sem.current', true);
             });
-        }
 
-        $students = $studentQuery->get();
-
-        if ($students->isEmpty()) {
-            return response()->json(['data' => [], 'total' => 0]);
-        }
-
-        $studentMap = $students->keyBy('hemis_id');
-        $hemisIds = $students->pluck('hemis_id')->toArray();
-
-        // 2. student_grades dan barcha absent yozuvlarni olish
-        $gradesQuery = DB::table('student_grades')
-            ->whereIn('student_hemis_id', $hemisIds)
-            ->whereNotIn('training_type_code', $excludedCodes)
-            ->where('reason', 'absent')
-            ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'subject_id', 'subject_name',
-                'semester_code', 'status', 'lesson_date');
-
-        if ($request->get('current_semester', '1') == '1') {
             $currentSemesterCodes = DB::table('semesters')
                 ->where('current', true)
                 ->pluck('code')
                 ->unique()
                 ->toArray();
             if (!empty($currentSemesterCodes)) {
-                $gradesQuery->whereIn('semester_code', $currentSemesterCodes);
+                $query->whereIn('a.semester_code', $currentSemesterCodes);
             }
         }
 
-        $grades = $gradesQuery->get();
+        // 2. Talaba bo'yicha guruhlash: sababsiz, sababli, jami soat, jami kun
+        $rows = $query
+            ->select(
+                'a.student_hemis_id',
+                's.full_name',
+                's.department_name',
+                's.specialty_name',
+                's.level_name',
+                's.group_name',
+                DB::raw('SUM(a.absent_off) as unexcused_hours'),
+                DB::raw('SUM(a.absent_on) as excused_hours'),
+                DB::raw('SUM(a.absent_on + a.absent_off) as total_hours'),
+                DB::raw('COUNT(DISTINCT DATE(a.lesson_date)) as total_days')
+            )
+            ->groupBy('a.student_hemis_id', 's.full_name', 's.department_name',
+                's.specialty_name', 's.level_name', 's.group_name')
+            ->get();
 
-        if ($grades->isEmpty()) {
-            return response()->json(['data' => [], 'total' => 0]);
-        }
-
-        // 3. Har bir talaba uchun soatlarni hisoblash
-        $studentData = [];
-
-        foreach ($grades as $g) {
-            $sid = $g->student_hemis_id;
-
-            if (!isset($studentData[$sid])) {
-                $studentData[$sid] = [
-                    'total_absent' => 0,
-                    'unexcused_absent' => 0,
-                    'excused_absent' => 0,
-                    'subjects' => [],
-                ];
-            }
-
-            $studentData[$sid]['total_absent'] += 2;
-
-            if ($g->status === 'retake') {
-                $studentData[$sid]['excused_absent'] += 2;
-            } else {
-                $studentData[$sid]['unexcused_absent'] += 2;
-            }
-
-            // Fan bo'yicha guruhlash
-            $subKey = $g->subject_id;
-            if (!isset($studentData[$sid]['subjects'][$subKey])) {
-                $studentData[$sid]['subjects'][$subKey] = [
-                    'name' => $g->subject_name,
-                    'hours' => 0,
-                ];
-            }
-            $studentData[$sid]['subjects'][$subKey]['hours'] += 2;
-        }
-
-        // 4. 74 soat chegarasidan o'tganlarni filtrlash
-        $threshold = (int) ($request->get('threshold', self::THRESHOLD_HOURS));
+        // 3. Statusga qarab filtrlash (minimal chegara: 30 soat sababsiz yoki 15 kun)
         $results = [];
 
-        foreach ($studentData as $sid => $data) {
-            if ($data['total_absent'] < $threshold) {
-                continue;
-            }
-
-            $st = $studentMap[$sid] ?? null;
-            if (!$st) continue;
-
-            // Fanlar ro'yxati (ko'p soatdan kamga tartiblash)
-            $subjects = $data['subjects'];
-            uasort($subjects, fn($a, $b) => $b['hours'] <=> $a['hours']);
-            $subjectList = array_map(
-                fn($s) => $s['name'] . ' (' . $s['hours'] . ' soat)',
-                $subjects
-            );
+        foreach ($rows as $r) {
+            $status = $this->getStatus((int) $r->unexcused_hours, (int) $r->total_days);
+            if (!$status) continue;
 
             $results[] = [
-                'full_name' => $st->full_name,
-                'department_name' => $st->department_name ?? '-',
-                'specialty_name' => $st->specialty_name ?? '-',
-                'level_name' => $st->level_name ?? '-',
-                'semester_name' => $st->semester_name ?? '-',
-                'group_name' => $st->group_name ?? '-',
-                'student_status_name' => $st->student_status_name ?? '-',
-                'total_absent' => $data['total_absent'],
-                'unexcused_absent' => $data['unexcused_absent'],
-                'excused_absent' => $data['excused_absent'],
-                'threshold_percent' => round(($data['total_absent'] / self::THRESHOLD_HOURS) * 100),
-                'subjects_detail' => implode('; ', $subjectList),
-                'subjects_count' => count($subjects),
+                'full_name' => $r->full_name,
+                'department_name' => $r->department_name ?? '-',
+                'specialty_name' => $r->specialty_name ?? '-',
+                'level_name' => $r->level_name ?? '-',
+                'group_name' => $r->group_name ?? '-',
+                'unexcused_hours' => (int) $r->unexcused_hours,
+                'excused_hours' => (int) $r->excused_hours,
+                'total_hours' => (int) $r->total_hours,
+                'total_days' => (int) $r->total_days,
+                'status' => $status,
             ];
         }
 
-        // Saralash
-        $sortColumn = $request->get('sort', 'total_absent');
+        // 4. Saralash
+        $sortColumn = $request->get('sort', 'total_hours');
         $sortDirection = $request->get('direction', 'desc');
 
         usort($results, function ($a, $b) use ($sortColumn, $sortDirection) {
@@ -222,7 +158,7 @@ class AbsenceReportController extends Controller
             return $this->exportExcel($results);
         }
 
-        // Sahifalash
+        // 5. Sahifalash
         $page = (int) $request->get('page', 1);
         $perPage = (int) $request->get('per_page', 50);
         $total = count($results);
@@ -243,15 +179,31 @@ class AbsenceReportController extends Controller
         ]);
     }
 
+    /**
+     * Status aniqlash:
+     * yellow  - 30-45 soat sababsiz YOKI 15-20 kun
+     * orange  - 45-60 soat sababsiz YOKI 20-25 kun
+     * red     - 60-74 soat sababsiz YOKI 25-30 kun
+     * critical - 74+ soat sababsiz YOKI 30+ kun
+     */
+    private function getStatus(int $unexcusedHours, int $totalDays): ?string
+    {
+        if ($unexcusedHours >= 74 || $totalDays >= 30) return 'critical';
+        if ($unexcusedHours >= 60 || $totalDays >= 25) return 'red';
+        if ($unexcusedHours >= 45 || $totalDays >= 20) return 'orange';
+        if ($unexcusedHours >= 30 || $totalDays >= 15) return 'yellow';
+        return null;
+    }
+
     private function exportExcel(array $data)
     {
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('74 soat hisobot');
 
-        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr',
-            'Guruh', 'Holat', 'Jami qoldirilgan', 'Sababsiz', 'Sababli',
-            '74 soatdan %', 'Fanlar soni', 'Fanlar tafsiloti'];
+        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh',
+            'Sababsiz (soat)', 'Sababli (soat)', 'Jami qoldirilgan soat',
+            'Jami qoldirilgan kun', 'Status'];
 
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
@@ -263,7 +215,14 @@ class AbsenceReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:N1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+
+        $statusLabels = [
+            'yellow' => 'Ogohlantirish (30-45 soat / 15-20 kun)',
+            'orange' => 'Xavfli (45-60 soat / 20-25 kun)',
+            'red' => 'Jiddiy (60-74 soat / 25-30 kun)',
+            'critical' => 'Chegara (74+ soat / 30+ kun)',
+        ];
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -272,25 +231,32 @@ class AbsenceReportController extends Controller
             $sheet->setCellValue([3, $row], $r['department_name']);
             $sheet->setCellValue([4, $row], $r['specialty_name']);
             $sheet->setCellValue([5, $row], $r['level_name']);
-            $sheet->setCellValue([6, $row], $r['semester_name']);
-            $sheet->setCellValue([7, $row], $r['group_name']);
-            $sheet->setCellValue([8, $row], $r['student_status_name']);
-            $sheet->setCellValue([9, $row], $r['total_absent']);
-            $sheet->setCellValue([10, $row], $r['unexcused_absent']);
-            $sheet->setCellValue([11, $row], $r['excused_absent']);
-            $sheet->setCellValue([12, $row], $r['threshold_percent'] . '%');
-            $sheet->setCellValue([13, $row], $r['subjects_count']);
-            $sheet->setCellValue([14, $row], $r['subjects_detail']);
+            $sheet->setCellValue([6, $row], $r['group_name']);
+            $sheet->setCellValue([7, $row], $r['unexcused_hours']);
+            $sheet->setCellValue([8, $row], $r['excused_hours']);
+            $sheet->setCellValue([9, $row], $r['total_hours']);
+            $sheet->setCellValue([10, $row], $r['total_days']);
+            $sheet->setCellValue([11, $row], $statusLabels[$r['status']] ?? '-');
+
+            // Status rangini qo'yish
+            $colors = ['yellow' => 'FFF3CD', 'orange' => 'FFE0B2', 'red' => 'FFCDD2', 'critical' => 'D32F2F'];
+            $fontColors = ['yellow' => '856404', 'orange' => 'E65100', 'red' => 'C62828', 'critical' => 'FFFFFF'];
+            if (isset($colors[$r['status']])) {
+                $sheet->getStyle("K{$row}")->applyFromArray([
+                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $colors[$r['status']]]],
+                    'font' => ['bold' => true, 'color' => ['rgb' => $fontColors[$r['status']]]],
+                ]);
+            }
         }
 
-        $widths = [5, 30, 25, 30, 8, 10, 15, 14, 16, 14, 14, 14, 12, 60];
+        $widths = [5, 30, 25, 30, 8, 15, 16, 16, 20, 20, 35];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

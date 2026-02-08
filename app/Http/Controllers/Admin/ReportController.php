@@ -1661,18 +1661,26 @@ class ReportController extends Controller
     public function loadVsPairReportData(Request $request)
     {
         try {
+            $cl = 'utf8mb4_unicode_ci';
+
             $query = DB::table('attendance_controls as ac')
-                ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'ac.group_id')
-                ->leftJoin('curricula as c', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                ->leftJoin('semesters as s', function ($join) {
-                    $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                        ->on('s.code', '=', 'ac.semester_code');
+                ->leftJoin('groups as g', function ($join) use ($cl) {
+                    $join->whereRaw("g.group_hemis_id COLLATE $cl = ac.group_id COLLATE $cl");
                 })
-                ->leftJoin('departments as f', function ($join) {
-                    $join->on('f.department_hemis_id', '=', 'c.department_hemis_id')
+                ->leftJoin('curricula as c', function ($join) use ($cl) {
+                    $join->whereRaw("g.curriculum_hemis_id COLLATE $cl = c.curricula_hemis_id COLLATE $cl");
+                })
+                ->leftJoin('semesters as s', function ($join) use ($cl) {
+                    $join->whereRaw("s.curriculum_hemis_id COLLATE $cl = c.curricula_hemis_id COLLATE $cl")
+                        ->whereRaw("s.code COLLATE $cl = ac.semester_code COLLATE $cl");
+                })
+                ->leftJoin('departments as f', function ($join) use ($cl) {
+                    $join->whereRaw("f.department_hemis_id COLLATE $cl = c.department_hemis_id COLLATE $cl")
                         ->where('f.structure_type_code', 11);
                 })
-                ->leftJoin('schedules as sch', 'sch.schedule_hemis_id', '=', 'ac.subject_schedule_id');
+                ->leftJoin('schedules as sch', function ($join) use ($cl) {
+                    $join->whereRaw("sch.schedule_hemis_id COLLATE $cl = ac.subject_schedule_id COLLATE $cl");
+                });
 
             // Filtrlar
             if ($request->filled('education_type')) {

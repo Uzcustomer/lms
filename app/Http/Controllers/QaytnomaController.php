@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
+use App\Models\Attendance;
 use App\Models\CurriculumSubject;
 use App\Models\Deadline;
 use App\Models\Department;
@@ -17,7 +18,6 @@ use App\Models\Teacher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use PhpOffice\PhpWord\TemplateProcessor;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Auth;
 class QaytnomaController extends Controller
 {
@@ -176,20 +176,13 @@ class QaytnomaController extends Controller
                 ->groupBy('students.id')
                 ->orderBy('students.hemis_id')
                 ->get();
-            $token = config('services.hemis.token');
             $jadval_students = [];
             $deadline = Deadline::where('level_code', $semester->level_code)->first();
             foreach ($students as $student) {
-                $qoldirgan = 0;
-                $response = Http::withoutVerifying()->withToken($token)
-                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
-
-                if ($response->successful()) {
-                    $data = $response->json()['data'];
-                    foreach ($data['items'] as $item) {
-                        $qoldirgan += $item['absent_off'];
-                    }
-                }
+                $qoldirgan = (int) Attendance::where('group_id', $group->group_hemis_id)
+                    ->where('subject_id', $subject->subject_id)
+                    ->where('student_hemis_id', $student->hemis_id)
+                    ->sum('absent_off');
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
                 $holat = "Ruxsat";
                 if ($student->jn < $deadline->joriy) {

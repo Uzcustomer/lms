@@ -7,6 +7,7 @@ use App\Exports\StudentGradesExport;
 use App\Exports\StudentGradesExportAdmin;
 use App\Http\Controllers\Controller;
 use App\Imports\StudentGradeUpdateViaExcel;
+use App\Models\Attendance;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumWeek;
@@ -28,7 +29,6 @@ use Illuminate\Http\Request;
     use App\Models\Student;
     use App\Services\StudentGradeService;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
@@ -44,6 +44,14 @@ class StudentController extends Controller
     {
         $this->token = config('services.hemis.token');
         $this->studentGradeService = new StudentGradeService;
+    }
+
+    private function getAbsentOffSum($groupId, $subjectId, $hemisId): int
+    {
+        return (int) Attendance::where('group_id', $groupId)
+            ->where('subject_id', $subjectId)
+            ->where('student_hemis_id', $hemisId)
+            ->sum('absent_off');
     }
 
     public function index(Request $request)
@@ -196,60 +204,30 @@ class StudentController extends Controller
 
     public function grades(Request $request, $hemis_id)
     {
-        $page = $request->input('page', 1);
-        $limit = 20;
+        $grades = StudentGrade::where('student_hemis_id', $hemis_id)
+            ->orderBy('lesson_date', 'desc')
+            ->paginate(20)
+            ->appends($request->query());
 
-
-        $response = Http::withoutVerifying()->withToken($this->token)
-            ->get("https://student.ttatf.uz/rest/v1/data/student-grade-list", [
-                '_student' => $hemis_id,
-                'page' => $page,
-                'limit' => $limit
-            ]);
-
-        if ($response->successful()) {
-            $data = $response->json('data.items');
-            $pagination = $response->json('data.pagination');
-
-            return view('admin.students.grades', compact('data', 'pagination', 'hemis_id'));
-        }
-
-        return view('admin.students.grades')->withErrors('Failed to fetch grades.');
+        return view('admin.students.grades', compact('grades', 'hemis_id'));
     }
 
 
     public function attendance(Request $request, string $hemisId): View
     {
-        $page = $request->input('page', 1);
-        $limit = $request->input('per_page', 20);
         $educationYear = $request->input('_education_year', date('Y'));
 
-        try {
-            $response = Http::withoutVerifying()->withToken($this->token)
-                ->get("https://student.ttatf.uz/rest/v1/data/attendance-list", [
-                    '_student' => $hemisId,
-                    '_education_year' => $educationYear,
-                    'page' => $page,
-                    'limit' => $limit
-                ]);
+        $query = Attendance::where('student_hemis_id', $hemisId);
 
-            $response->throw();  // This will throw an exception for 4xx and 5xx responses
-
-            $data = $response->json('data.items');
-            $pagination = $response->json('data.pagination');
-
-            return view('admin.students.attendance', compact('data', 'pagination', 'hemisId', 'educationYear'));
-        } catch (\Exception $e) {
-            // Log the error
-            \Log::error('Error fetching attendance data: ' . $e->getMessage());
-
-            // Return view with error message
-            return view('admin.students.attendance', [
-                'error' => 'Unable to fetch attendance data. Please try again later.',
-                'hemisId' => $hemisId,
-                'educationYear' => $educationYear
-            ]);
+        if ($educationYear) {
+            $query->where('education_year_code', $educationYear);
         }
+
+        $attendances = $query->orderBy('lesson_date', 'desc')
+            ->paginate(20)
+            ->appends($request->query());
+
+        return view('admin.students.attendance', compact('attendances', 'hemisId', 'educationYear'));
     }
 
     public function getStudents()
@@ -279,30 +257,17 @@ class StudentController extends Controller
 
     public function low_grades($hemis_id, Request $request)
     {
-        $page = $request->input('page', 1); // For pagination
-        $limit = 20; // Limit per page
+        $student = Student::where('hemis_id', $hemis_id)->first();
+        $threshold = ($student && $student->level_code == 16) ? 3 : 60;
 
-        // Fetch grades from the API
-        $response = Http::withoutVerifying()->withToken($this->token)
-            ->get("https://student.ttatf.uz/rest/v1/data/student-grade-list", [
-                '_student' => $hemis_id,
-                'limit' => $limit,
-                'page' => $page,
-            ]);
+        $grades = StudentGrade::where('student_hemis_id', $hemis_id)
+            ->where('grade', '<', $threshold)
+            ->whereNotNull('grade')
+            ->orderBy('lesson_date', 'desc')
+            ->paginate(20)
+            ->appends($request->query());
 
-        if ($response->successful()) {
-            // Filter grades less than 60
-            $grades = collect($response->json('data.items'))->filter(function ($grade) {
-                return $grade['grade'] < 60;
-            });
-
-            $pagination = $response->json('data.pagination');
-        } else {
-            $grades = [];
-            $pagination = ['page' => 1, 'pageCount' => 1];
-        }
-
-        return view('admin.students.low_grades', compact('grades', 'pagination', 'hemis_id'));
+        return view('admin.students.low_grades', compact('grades', 'hemis_id'));
     }
 
     public function student_low(Request $request, $hemisId)
@@ -1103,20 +1068,11 @@ class StudentController extends Controller
                 ->whereIn('students.hemis_id', json_decode($exam->sababli_studets ?? "[]"))
                 ->groupBy('students.id')
                 ->get();
-            $token = config('services.hemis.token');
+
             $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
-                $qoldirgan = 0;
-                $response = Http::withoutVerifying()->withToken($token)
-                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
-
-                if ($response->successful()) {
-                    $data = $response->json()['data'];
-                    foreach ($data['items'] as $item) {
-                        $qoldirgan += $item['absent_off'];
-                    }
-                }
+                $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
                 if ($student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
                     $students_shakl[] = [
@@ -1209,20 +1165,11 @@ class StudentController extends Controller
                 ->where('students.group_id', $group->group_hemis_id)
                 ->groupBy('students.id')
                 ->get();
-            $token = config('services.hemis.token');
+
             $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
-                $qoldirgan = 0;
-                $response = Http::withoutVerifying()->withToken($token)
-                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
-
-                if ($response->successful()) {
-                    $data = $response->json()['data'];
-                    foreach ($data['items'] as $item) {
-                        $qoldirgan += $item['absent_off'];
-                    }
-                }
+                $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
                 if ($student->test < 60 and $student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
                     $students_shakl[] = [
@@ -1338,20 +1285,11 @@ class StudentController extends Controller
                 ->where('students.group_id', $group->group_hemis_id)
                 ->groupBy('students.id')
                 ->get();
-            $token = config('services.hemis.token');
+
             $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
-                $qoldirgan = 0;
-                $response = Http::withoutVerifying()->withToken($token)
-                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
-
-                if ($response->successful()) {
-                    $data = $response->json()['data'];
-                    foreach ($data['items'] as $item) {
-                        $qoldirgan += $item['absent_off'];
-                    }
-                }
+                $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
                 if ($student->test < 60 and $student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
                     $students_shakl[] = [
@@ -1442,20 +1380,11 @@ class StudentController extends Controller
                 ->whereIn('students.hemis_id', json_decode($oski->sababli_studets ?? "[]"))
                 ->groupBy('students.id')
                 ->get();
-            $token = config('services.hemis.token');
+
             $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
-                $qoldirgan = 0;
-                $response = Http::withoutVerifying()->withToken($token)
-                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
-
-                if ($response->successful()) {
-                    $data = $response->json()['data'];
-                    foreach ($data['items'] as $item) {
-                        $qoldirgan += $item['absent_off'];
-                    }
-                }
+                $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
                 if ($student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
                     $students_shakl[] = [
@@ -1548,20 +1477,11 @@ class StudentController extends Controller
                 ->where('students.group_id', $group->group_hemis_id)
                 ->groupBy('students.id')
                 ->get();
-            $token = config('services.hemis.token');
+
             $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
-                $qoldirgan = 0;
-                $response = Http::withoutVerifying()->withToken($token)
-                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
-
-                if ($response->successful()) {
-                    $data = $response->json()['data'];
-                    foreach ($data['items'] as $item) {
-                        $qoldirgan += $item['absent_off'];
-                    }
-                }
+                $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
                 if ($student->oski < 60 and $student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
                     $students_shakl[] = [
@@ -1677,20 +1597,11 @@ class StudentController extends Controller
                 ->where('students.group_id', $group->group_hemis_id)
                 ->groupBy('students.id')
                 ->get();
-            $token = config('services.hemis.token');
+
             $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
-                $qoldirgan = 0;
-                $response = Http::withoutVerifying()->withToken($token)
-                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
-
-                if ($response->successful()) {
-                    $data = $response->json()['data'];
-                    foreach ($data['items'] as $item) {
-                        $qoldirgan += $item['absent_off'];
-                    }
-                }
+                $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
                 if ($student->oski < 60 and $student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
                     $students_shakl[] = [

@@ -61,6 +61,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         Route::get('/absence-report', [AbsenceReportController::class, 'index'])->name('absence_report.index');
+        Route::get('/absence-report/data', [AbsenceReportController::class, 'data'])->name('absence_report.data');
 
         Route::prefix('independent')->name('independent.')->group(function () {
             Route::get('', [IndependentController::class, 'index'])->name('index');

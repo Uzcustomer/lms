@@ -1163,6 +1163,7 @@ class ReportController extends Controller
      */
     public function absenceReportData(Request $request)
     {
+        try {
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         // 1-QADAM: Barcha schedule yozuvlarini olish
@@ -1374,17 +1375,15 @@ class ReportController extends Controller
             }
         }
 
-        // 5-QADAM: Faqat 25%+ sababsiz qoldirganlarni filtrlash
+        // 5-QADAM: Barcha talabalarni filtrlash
         $results = [];
         foreach ($studentSubjectData as $ssKey => $data) {
             $comboKey = $data['combo_key'];
             $totalAuditoryHours = $auditoryHours[$comboKey] ?? 0;
 
-            if ($totalAuditoryHours === 0) continue;
+            if ($totalAuditoryHours <= 0) continue;
 
             $unexcusedPercent = round(($data['unexcused_absent_hours'] / $totalAuditoryHours) * 100);
-
-            if ($unexcusedPercent < 25) continue;
 
             // Spravka muddati: oxirgi sababsiz dars kunidan boshlab hisoblash
             $absentDates = $data['unexcused_absent_dates'];
@@ -1506,6 +1505,10 @@ class ReportController extends Controller
             'current_page' => (int) $page,
             'last_page' => ceil($total / $perPage),
         ]);
+        } catch (\Throwable $e) {
+            \Log::error('Absence report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     /**

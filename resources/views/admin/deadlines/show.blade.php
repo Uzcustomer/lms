@@ -24,6 +24,28 @@
                         </div>
                     </div>
 
+                    <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <h3 class="text-sm font-semibold text-gray-800 mb-3">Mustaqil ta'lim topshiriq muddati sozlamalari</h3>
+                        <div class="flex flex-wrap gap-6">
+                            <div>
+                                <span class="text-sm font-medium text-gray-700">Muddat turi:</span>
+                                <span class="ml-2 text-sm font-bold text-blue-700">
+                                    @if(($mtDeadlineType ?? 'before_last') == 'before_last')
+                                        Oxirgi darsdan bitta oldingi darsda
+                                    @elseif($mtDeadlineType == 'last')
+                                        Oxirgi darsda
+                                    @elseif($mtDeadlineType == 'fixed_days')
+                                        Dars sanasidan + N kun
+                                    @endif
+                                </span>
+                            </div>
+                            <div>
+                                <span class="text-sm font-medium text-gray-700">Muddat vaqti:</span>
+                                <span class="ml-2 text-sm font-bold text-blue-700">{{ $mtDeadlineTime ?? '17:00' }}</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">

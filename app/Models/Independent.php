@@ -55,4 +55,13 @@ class Independent extends Model
         return $this->belongsTo(User::class, 'user_id', 'id');
     }
 
+    public function submissions()
+    {
+        return $this->hasMany(IndependentSubmission::class);
+    }
+
+    public function submissionByStudent($studentId)
+    {
+        return $this->submissions()->where('student_id', $studentId)->first();
+    }
 }

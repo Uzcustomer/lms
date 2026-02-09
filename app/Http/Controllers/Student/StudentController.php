@@ -7,13 +7,17 @@ use App\Models\Attendance;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumWeek;
 use App\Models\Group;
+use App\Models\Independent;
+use App\Models\IndependentSubmission;
 use App\Models\Schedule;
 use App\Models\Semester;
+use App\Models\Setting;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use App\Services\StudentGradeService;
 
 class StudentController extends Controller
@@ -344,6 +348,103 @@ class StudentController extends Controller
             ->get();
 
         return view('student.pending-lessons', compact('pendingLessons'));
+    }
+
+    public function getIndependents()
+    {
+        if ($redirect = $this->redirectIfPasswordChangeRequired()) {
+            return $redirect;
+        }
+
+        $student = Auth::guard('student')->user();
+
+        $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
+        $timeParts = explode(':', $mtDeadlineTime);
+        $hour = (int) ($timeParts[0] ?? 17);
+        $minute = (int) ($timeParts[1] ?? 0);
+
+        $independents = Independent::where('group_hemis_id', $student->group_id)
+            ->orderBy('deadline', 'asc')
+            ->get()
+            ->map(function ($independent) use ($student, $hour, $minute) {
+                $submission = $independent->submissionByStudent($student->id);
+                $grade = StudentGrade::where('student_id', $student->id)
+                    ->where('independent_id', $independent->id)
+                    ->first();
+
+                $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
+
+                return [
+                    'id' => $independent->id,
+                    'subject_name' => $independent->subject_name,
+                    'teacher_name' => $independent->teacher_short_name ?? $independent->teacher_name,
+                    'start_date' => $independent->start_date,
+                    'deadline' => $independent->deadline,
+                    'is_overdue' => Carbon::now()->gt($deadlineDateTime),
+                    'submission' => $submission,
+                    'grade' => $grade?->grade,
+                    'status' => $independent->status,
+                    'file_path' => $independent->file_path,
+                    'file_original_name' => $independent->file_original_name,
+                ];
+            });
+
+        return view('student.independents', compact('independents', 'mtDeadlineTime'));
+    }
+
+    public function submitIndependent(Request $request, $id)
+    {
+        if ($redirect = $this->redirectIfPasswordChangeRequired()) {
+            return $redirect;
+        }
+
+        $student = Auth::guard('student')->user();
+        $independent = Independent::where('id', $id)
+            ->where('group_hemis_id', $student->group_id)
+            ->firstOrFail();
+
+        // Check deadline using configured time from settings
+        $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
+        $timeParts = explode(':', $mtDeadlineTime);
+        $hour = (int) ($timeParts[0] ?? 17);
+        $minute = (int) ($timeParts[1] ?? 0);
+
+        $deadlineTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
+        if (Carbon::now()->gt($deadlineTime)) {
+            return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ')');
+        }
+
+        $request->validate([
+            'file' => 'required|file|max:2048|mimes:zip,doc,docx,ppt,pptx,pdf',
+        ], [
+            'file.required' => 'Fayl yuklash majburiy',
+            'file.max' => 'Fayl hajmi 2MB dan oshmasligi kerak',
+            'file.mimes' => 'Faqat zip, doc, docx, ppt, pptx, pdf formatdagi fayllar qabul qilinadi',
+        ]);
+
+        $file = $request->file('file');
+        $filePath = $file->store('independent-submissions/' . $student->hemis_id, 'public');
+
+        // Delete old file if resubmitting
+        $existing = IndependentSubmission::where('independent_id', $independent->id)
+            ->where('student_id', $student->id)
+            ->first();
+
+        if ($existing && $existing->file_path) {
+            Storage::disk('public')->delete($existing->file_path);
+        }
+
+        IndependentSubmission::updateOrCreate([
+            'independent_id' => $independent->id,
+            'student_id' => $student->id,
+        ], [
+            'student_hemis_id' => $student->hemis_id,
+            'file_path' => $filePath,
+            'file_original_name' => $file->getClientOriginalName(),
+            'submitted_at' => now(),
+        ]);
+
+        return back()->with('success', 'Fayl muvaffaqiyatli yuklandi');
     }
 
     public function profile()

@@ -37,6 +37,7 @@ class ImportSchedulesJob implements ShouldQueue
     {
         try {
             Artisan::call('import:schedules');
+            Artisan::call('command:independent-auto-create');
             Artisan::call('student:import-data');
             Artisan::call('grades:close-expired');
         } catch (\Exception $e) {

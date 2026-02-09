@@ -292,6 +292,8 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/subjects', [StudentController::class, 'getSubjects'])->name('subjects');
         Route::get('/subject/{id}', [StudentController::class, 'getSubjectGrades'])->name('subject.grades');
         Route::get('/pending-lessons', [StudentController::class, 'getPendingLessons'])->name('pending-lessons');
+        Route::get('/independents', [StudentController::class, 'getIndependents'])->name('independents');
+        Route::post('/independents/{id}/submit', [StudentController::class, 'submitIndependent'])->name('independents.submit');
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
 
         Route::post('/logout', [StudentAuthController::class, 'logout'])->name('logout');

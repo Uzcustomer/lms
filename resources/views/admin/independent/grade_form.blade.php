@@ -26,22 +26,35 @@
                                 @csrf
                                 <input type="hidden" value="{{$independent->id}}" name="independent">
                                 <dl class="divide-y divide-gray-100">
-                                    <div class="px-2 py-2 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+                                    <div class="px-2 py-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0">
                                         <dt class="mt-1 text-sm font-medium text-gray-900">Talaba</dt>
+                                        <dd class="mt-1 text-sm font-medium text-gray-900">Yuklangan fayl</dd>
                                         @if ($independent->status == 0)
-
                                         <dd class="mt-1 text-sm font-medium text-gray-900">Yangi baho</dd>
                                         @else
                                         <dd class="mt-1 text-sm font-medium text-gray-900">Baho</dd>
-
                                         @endif
-
                                     </div>
                                     @foreach ($students as $student)
-                                    <div class="px-2 py-2 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+                                    <div class="px-2 py-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0">
                                         <dt class="mt-1 text-sm font-medium text-gray-900">
                                             {{ $student->full_name }}
                                         </dt>
+                                        <dd class="mt-1 text-sm text-gray-700">
+                                            @if(isset($submissions[$student->id]))
+                                                @php $sub = $submissions[$student->id]; @endphp
+                                                <a href="{{ asset('storage/' . $sub->file_path) }}" target="_blank"
+                                                   class="inline-flex items-center text-blue-600 hover:text-blue-800 underline text-xs">
+                                                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                                    </svg>
+                                                    {{ $sub->file_original_name }}
+                                                </a>
+                                                <div class="text-xs text-gray-400">{{ $sub->submitted_at->format('d.m.Y H:i') }}</div>
+                                            @else
+                                                <span class="text-xs text-gray-400">Yuklanmagan</span>
+                                            @endif
+                                        </dd>
                                         @if ($independent->status == 0 || auth()->user()->hasRole(['admin']))
                                         <dd class="mt-1 text-sm font-medium text-gray-900">
                                             <input type="number" name="baho[{{ $student->id }}]" placeholder="0-100"

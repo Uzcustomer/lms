@@ -283,7 +283,8 @@ class JournalController extends Controller
             ->min();
 
         // Data source: get all JB grades with lesson_pair info and status fields
-        // Filter by minScheduleDate to exclude grades from previous education years
+        // Filter by education_year_code to exclude grades from previous education years
+        // Fall back to minScheduleDate for legacy records without education_year_code
         $jbGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
@@ -291,7 +292,14 @@ class JournalController extends Controller
             ->whereNotIn('training_type_name', $excludedTrainingTypes)
             ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->whereNotNull('lesson_date')
-            ->when($minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhere(function ($q3) use ($minScheduleDate) {
+                        $q3->whereNull('education_year_code')
+                            ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                    });
+            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
@@ -304,7 +312,14 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
-            ->when($minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhere(function ($q3) use ($minScheduleDate) {
+                        $q3->whereNull('education_year_code')
+                            ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                    });
+            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
@@ -559,13 +574,22 @@ class JournalController extends Controller
             ->get();
 
         // Get other averages (ON, OSKI, Test) with status-based grade calculation
-        // Filter by minScheduleDate to exclude old education year data
+        // Filter by education_year_code to exclude old education year data
         $otherGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->whereIn('training_type_code', [100, 101, 102])
-            ->when($minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhere(function ($q3) use ($minScheduleDate) {
+                        $q3->whereNull('education_year_code')
+                            ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
+                                $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
+                            }));
+                    });
+            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
                 $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
             }))
             ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason')
@@ -613,6 +637,10 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->where('training_type_code', 99)
             ->whereNull('lesson_date')
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->pluck('grade', 'student_hemis_id')
             ->toArray();
 
@@ -749,6 +777,13 @@ class JournalController extends Controller
 
         $now = now();
 
+        // Get education year from student's curriculum
+        $curriculum = DB::table('curricula')
+            ->where('curricula_hemis_id', $student->curriculum_id ?? null)
+            ->first();
+        $educationYearCode = $curriculum->education_year_code ?? null;
+        $educationYearName = $curriculum->education_year_name ?? null;
+
         if ($existingGrade) {
             // Update existing grade
             DB::table('student_grades')
@@ -765,6 +800,8 @@ class JournalController extends Controller
                 'student_hemis_id' => $studentHemisId,
                 'semester_code' => $semesterCode,
                 'semester_name' => $subject->semester_name ?? '',
+                'education_year_code' => $educationYearCode,
+                'education_year_name' => $educationYearName,
                 'subject_schedule_id' => 0,
                 'subject_id' => $subjectId,
                 'subject_name' => $subject->subject_name ?? '',
@@ -928,6 +965,13 @@ class JournalController extends Controller
 
         $now = now();
 
+        // Get education year from student's curriculum
+        $curriculum = DB::table('curricula')
+            ->where('curricula_hemis_id', $student->curriculum_id ?? null)
+            ->first();
+        $educationYearCode = $curriculum->education_year_code ?? null;
+        $educationYearName = $curriculum->education_year_name ?? null;
+
         // Create new student_grades record
         DB::table('student_grades')->insert([
             'hemis_id' => 0, // Manual entry
@@ -935,6 +979,8 @@ class JournalController extends Controller
             'student_hemis_id' => $studentHemisId,
             'semester_code' => $semesterCode,
             'semester_name' => $subject->semester_name ?? '',
+            'education_year_code' => $educationYearCode,
+            'education_year_name' => $educationYearName,
             'subject_schedule_id' => $schedule->id ?? 0,
             'subject_id' => $subjectId,
             'subject_name' => $subject->subject_name ?? '',

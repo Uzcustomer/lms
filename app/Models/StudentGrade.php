@@ -16,6 +16,8 @@ class StudentGrade extends Model
         'student_hemis_id',
         'semester_code',
         'semester_name',
+        'education_year_code',
+        'education_year_name',
         'subject_schedule_id',
         'subject_id',
         'subject_name',

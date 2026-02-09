@@ -180,6 +180,9 @@ if (!empty($_GET['training_type_code']) && hasCol($sgCols,'training_type_code'))
 if (!empty($_GET['semester_code']) && hasCol($sgCols,'semester_code')) {
   $where[]="sg.`semester_code` = ?"; $params[]=(string)$_GET['semester_code'];
 }
+if (!empty($_GET['education_year_code']) && hasCol($sgCols,'education_year_code')) {
+  $where[]="sg.`education_year_code` = ?"; $params[]=(string)$_GET['education_year_code'];
+}
 
 /* level_name (sg or s) */
 if ($levelNames) {

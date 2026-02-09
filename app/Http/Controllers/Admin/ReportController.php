@@ -550,6 +550,7 @@ class ReportController extends Controller
             'sch.subject_name',
             'sch.group_id',
             'sch.group_name',
+            'g.id as group_db_id',
             DB::raw('DATE(sch.lesson_date) as lesson_date_str')
         )->get();
 
@@ -612,6 +613,7 @@ class ReportController extends Controller
                     'subject_name' => $sch->subject_name,
                     'subject_id' => $sch->subject_id,
                     'group_id' => $sch->group_id,
+                    'group_db_id' => $sch->group_db_id,
                     'group_name' => $sch->group_name,
                     'semester_code' => $sch->semester_code,
                     'lesson_date' => $sch->lesson_date_str,

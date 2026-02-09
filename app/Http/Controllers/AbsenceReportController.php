@@ -129,7 +129,7 @@ class AbsenceReportController extends Controller
                 's.department_name',
                 's.specialty_name',
                 's.level_name',
-                's.semester_name',
+                'a.semester_name',
                 's.group_name',
                 DB::raw('SUM(a.absent_off) as unexcused_hours'),
                 DB::raw('SUM(a.absent_on) as excused_hours'),
@@ -137,7 +137,7 @@ class AbsenceReportController extends Controller
                 DB::raw('COUNT(DISTINCT DATE(a.lesson_date)) as total_days')
             )
             ->groupBy('a.student_hemis_id', 's.full_name', 's.department_name',
-                's.specialty_name', 's.level_name', 's.semester_name', 's.group_name')
+                's.specialty_name', 's.level_name', 'a.semester_name', 's.group_name')
             ->get();
 
         // 3. Statusga qarab filtrlash (minimal chegara: 30 soat sababsiz yoki 15 kun)

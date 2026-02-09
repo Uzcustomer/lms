@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote')->hourly();
 
 Schedule::command('import:attendance-controls')->dailyAt('02:00');
+Schedule::command('command:independent-auto-create')->dailyAt('06:00');

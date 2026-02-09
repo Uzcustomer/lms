@@ -48,6 +48,7 @@ class ImportGrades extends Command
     {
         $this->info('Starting import of student data from Hemis API...');
         Log::info('Starting import of student data from Hemis API...' . Carbon::now());
+
         $endpoints = ['attendance-list', 'student-grade-list'];
 
         foreach ($endpoints as $endpoint) {

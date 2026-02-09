@@ -8,6 +8,7 @@ use App\Models\CurriculumSubject;
 use App\Models\CurriculumWeek;
 use App\Models\Group;
 use App\Models\Independent;
+use App\Models\IndependentGradeHistory;
 use App\Models\IndependentSubmission;
 use App\Models\Schedule;
 use App\Models\Semester;
@@ -359,6 +360,7 @@ class StudentController extends Controller
         $student = Auth::guard('student')->user();
 
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
+        $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 2);
         $timeParts = explode(':', $mtDeadlineTime);
         $hour = (int) ($timeParts[0] ?? 17);
         $minute = (int) ($timeParts[1] ?? 0);
@@ -366,13 +368,21 @@ class StudentController extends Controller
         $independents = Independent::where('group_hemis_id', $student->group_id)
             ->orderBy('deadline', 'asc')
             ->get()
-            ->map(function ($independent) use ($student, $hour, $minute) {
+            ->map(function ($independent) use ($student, $hour, $minute, $mtMaxResubmissions) {
                 $submission = $independent->submissionByStudent($student->id);
                 $grade = StudentGrade::where('student_id', $student->id)
                     ->where('independent_id', $independent->id)
                     ->first();
 
+                $gradeHistory = IndependentGradeHistory::where('independent_id', $independent->id)
+                    ->where('student_id', $student->id)
+                    ->orderBy('submission_number')
+                    ->get();
+
                 $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
+                $submissionCount = $submission?->submission_count ?? 0;
+                $remainingAttempts = max(0, $mtMaxResubmissions - ($submissionCount - 1));
+                $gradeLocked = $grade && $grade->grade >= 60;
 
                 return [
                     'id' => $independent->id,
@@ -383,13 +393,18 @@ class StudentController extends Controller
                     'is_overdue' => Carbon::now()->gt($deadlineDateTime),
                     'submission' => $submission,
                     'grade' => $grade?->grade,
+                    'grade_locked' => $gradeLocked,
+                    'grade_history' => $gradeHistory,
+                    'submission_count' => $submissionCount,
+                    'remaining_attempts' => $remainingAttempts,
+                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < 60 && $remainingAttempts > 0 && !Carbon::now()->gt($deadlineDateTime),
                     'status' => $independent->status,
                     'file_path' => $independent->file_path,
                     'file_original_name' => $independent->file_original_name,
                 ];
             });
 
-        return view('student.independents', compact('independents', 'mtDeadlineTime'));
+        return view('student.independents', compact('independents', 'mtDeadlineTime', 'mtMaxResubmissions'));
     }
 
     public function submitIndependent(Request $request, $id)
@@ -403,6 +418,15 @@ class StudentController extends Controller
             ->where('group_hemis_id', $student->group_id)
             ->firstOrFail();
 
+        // Check if grade is locked (>= 60)
+        $existingGrade = StudentGrade::where('student_id', $student->id)
+            ->where('independent_id', $independent->id)
+            ->first();
+
+        if ($existingGrade && $existingGrade->grade >= 60) {
+            return back()->with('error', 'Baho 60 va undan yuqori — qayta yuklash mumkin emas.');
+        }
+
         // Check deadline using configured time from settings
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
         $timeParts = explode(':', $mtDeadlineTime);
@@ -412,6 +436,21 @@ class StudentController extends Controller
         $deadlineTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
         if (Carbon::now()->gt($deadlineTime)) {
             return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ')');
+        }
+
+        // Check resubmission limit
+        $existing = IndependentSubmission::where('independent_id', $independent->id)
+            ->where('student_id', $student->id)
+            ->first();
+
+        $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 2);
+
+        if ($existing && $existingGrade && $existingGrade->grade < 60) {
+            // This is a resubmission after low grade
+            $remainingAttempts = $mtMaxResubmissions - ($existing->submission_count - 1);
+            if ($remainingAttempts <= 0) {
+                return back()->with('error', 'Qayta yuklash imkoniyati tugagan (maksimum ' . $mtMaxResubmissions . ' marta).');
+            }
         }
 
         $request->validate([
@@ -426,13 +465,11 @@ class StudentController extends Controller
         $filePath = $file->store('independent-submissions/' . $student->hemis_id, 'public');
 
         // Delete old file if resubmitting
-        $existing = IndependentSubmission::where('independent_id', $independent->id)
-            ->where('student_id', $student->id)
-            ->first();
-
         if ($existing && $existing->file_path) {
             Storage::disk('public')->delete($existing->file_path);
         }
+
+        $newCount = $existing ? $existing->submission_count + 1 : 1;
 
         IndependentSubmission::updateOrCreate([
             'independent_id' => $independent->id,
@@ -442,7 +479,22 @@ class StudentController extends Controller
             'file_path' => $filePath,
             'file_original_name' => $file->getClientOriginalName(),
             'submitted_at' => now(),
+            'submission_count' => $newCount,
         ]);
+
+        // If resubmitting after low grade, archive old grade to history and remove current
+        if ($existingGrade && $existingGrade->grade < 60) {
+            IndependentGradeHistory::create([
+                'independent_id' => $independent->id,
+                'student_id' => $student->id,
+                'student_hemis_id' => $student->hemis_id,
+                'grade' => $existingGrade->grade,
+                'submission_number' => $existing ? $existing->submission_count - 1 : 1,
+                'graded_by' => $existingGrade->employee_name,
+                'graded_at' => $existingGrade->updated_at,
+            ]);
+            $existingGrade->delete();
+        }
 
         return back()->with('success', 'Fayl muvaffaqiyatli yuklandi');
     }

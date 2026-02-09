@@ -43,6 +43,11 @@
                                 <span class="text-sm font-medium text-gray-700">Muddat vaqti:</span>
                                 <span class="ml-2 text-sm font-bold text-blue-700">{{ $mtDeadlineTime ?? '17:00' }}</span>
                             </div>
+                            <div>
+                                <span class="text-sm font-medium text-gray-700">Qayta yuklash imkoniyati:</span>
+                                <span class="ml-2 text-sm font-bold text-blue-700">{{ $mtMaxResubmissions ?? 2 }} marta</span>
+                                <span class="text-xs text-gray-500">(baho 60 dan past bo'lsa)</span>
+                            </div>
                         </div>
                     </div>
 

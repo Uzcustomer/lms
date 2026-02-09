@@ -39,8 +39,9 @@ class DashboardController extends Controller
         $spravkaDays = Setting::get('spravka_deadline_days', 10);
         $mtDeadlineType = Setting::get('mt_deadline_type', 'before_last');
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
+        $mtMaxResubmissions = Setting::get('mt_max_resubmissions', 2);
 
-        return view('admin.deadlines.show', compact('deadlines', 'spravkaDays', 'mtDeadlineType', 'mtDeadlineTime'));
+        return view('admin.deadlines.show', compact('deadlines', 'spravkaDays', 'mtDeadlineType', 'mtDeadlineTime', 'mtMaxResubmissions'));
     }
 
     public function editDeadlines(): View
@@ -50,8 +51,9 @@ class DashboardController extends Controller
         $spravkaDays = Setting::get('spravka_deadline_days', 10);
         $mtDeadlineType = Setting::get('mt_deadline_type', 'before_last');
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
+        $mtMaxResubmissions = Setting::get('mt_max_resubmissions', 2);
 
-        return view('admin.deadlines.edit', compact('deadlines', 'spravkaDays', 'mtDeadlineType', 'mtDeadlineTime'));
+        return view('admin.deadlines.edit', compact('deadlines', 'spravkaDays', 'mtDeadlineType', 'mtDeadlineTime', 'mtMaxResubmissions'));
     }
 
     // Update deadlines
@@ -74,6 +76,10 @@ class DashboardController extends Controller
 
         if ($request->filled('mt_deadline_time')) {
             Setting::set('mt_deadline_time', $request->mt_deadline_time);
+        }
+
+        if ($request->filled('mt_max_resubmissions')) {
+            Setting::set('mt_max_resubmissions', (int) $request->mt_max_resubmissions);
         }
 
         foreach ($validated['deadlines'] as $levelCode => $deadlineData) {

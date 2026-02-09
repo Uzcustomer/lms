@@ -5,22 +5,24 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class IndependentSubmission extends Model
+class IndependentGradeHistory extends Model
 {
     use HasFactory;
+
+    protected $table = 'independent_grade_history';
 
     protected $fillable = [
         'independent_id',
         'student_id',
         'student_hemis_id',
-        'file_path',
-        'file_original_name',
-        'submitted_at',
-        'submission_count',
+        'grade',
+        'submission_number',
+        'graded_by',
+        'graded_at',
     ];
 
     protected $casts = [
-        'submitted_at' => 'datetime',
+        'graded_at' => 'datetime',
     ];
 
     public function independent()

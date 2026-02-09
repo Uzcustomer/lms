@@ -1207,10 +1207,17 @@ class ReportController extends Controller
 
         // Auditoriya soatlarini hisoblash: curriculum_subjects.subject_details dan
         // (Jurnal details bilan bir xil logika)
-        $groupCurriculumMap = DB::table('groups')
+        $groupsData = DB::table('groups')
             ->whereIn('group_hemis_id', $scheduleGroupIds)
-            ->pluck('curriculum_hemis_id', 'group_hemis_id')
-            ->toArray();
+            ->select('id', 'group_hemis_id', 'curriculum_hemis_id')
+            ->get();
+
+        $groupCurriculumMap = [];
+        $groupDbIdMap = [];
+        foreach ($groupsData as $g) {
+            $groupCurriculumMap[$g->group_hemis_id] = $g->curriculum_hemis_id;
+            $groupDbIdMap[$g->group_hemis_id] = $g->id;
+        }
 
         $comboKeys = [];
         foreach ($scheduleCombos as $row) {
@@ -1484,6 +1491,7 @@ class ReportController extends Controller
                 'first_attendance_after_25' => $r['first_attendance_after_25'],
                 'report_date' => $r['report_date'],
                 'group_id' => $r['group_id'],
+                'group_db_id' => $groupDbIdMap[$r['group_id']] ?? null,
                 'subject_id' => $r['subject_id'],
                 'semester_code' => $r['semester_code'],
             ];

@@ -341,15 +341,18 @@
             var calFrom = new ScrollCalendar('date_from');
             var calTo = new ScrollCalendar('date_to');
 
-            // Default: kechagi sana
-            var yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            var yy = yesterday.getFullYear();
-            var mm = String(yesterday.getMonth() + 1).padStart(2, '0');
-            var dd = String(yesterday.getDate()).padStart(2, '0');
-            var yesterdayStr = yy + '-' + mm + '-' + dd;
-            calFrom.setValue(yesterdayStr);
-            calTo.setValue(yesterdayStr);
+            // Default: kechagi sana (yakshanba bo'lsa shanbani tanla)
+            var defaultDate = new Date();
+            defaultDate.setDate(defaultDate.getDate() - 1);
+            if (defaultDate.getDay() === 0) {
+                defaultDate.setDate(defaultDate.getDate() - 1);
+            }
+            var yy = defaultDate.getFullYear();
+            var mm = String(defaultDate.getMonth() + 1).padStart(2, '0');
+            var dd = String(defaultDate.getDate()).padStart(2, '0');
+            var defaultDateStr = yy + '-' + mm + '-' + dd;
+            calFrom.setValue(defaultDateStr);
+            calTo.setValue(defaultDateStr);
 
             // Cascading dropdowns
             function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }

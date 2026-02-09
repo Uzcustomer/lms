@@ -561,11 +561,12 @@ class ReportController extends Controller
         // 2-QADAM: schedule_hemis_id lar bo'yicha davomat va baho mavjudligini tekshirish
         $allScheduleIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
 
-        // Chunk bo'yicha davomat mavjudligini tekshirish
+        // Chunk bo'yicha davomat mavjudligini tekshirish (attendance_controls da load bo'lsa = davomat olingan)
         $attendanceExists = collect();
         foreach (array_chunk($allScheduleIds, 5000) as $chunk) {
-            $result = DB::table('attendances')
+            $result = DB::table('attendance_controls')
                 ->whereIn('subject_schedule_id', $chunk)
+                ->where('load', '>', 0)
                 ->select('subject_schedule_id')
                 ->distinct()
                 ->pluck('subject_schedule_id');

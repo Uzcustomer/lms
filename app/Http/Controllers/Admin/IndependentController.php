@@ -7,6 +7,7 @@ use App\Models\Deadline;
 use App\Models\Department;
 use App\Models\Group;
 use App\Models\Independent;
+use App\Models\IndependentGradeHistory;
 use App\Models\IndependentSubmission;
 use App\Models\Semester;
 use App\Models\Student;
@@ -258,7 +259,13 @@ class IndependentController extends Controller
             ->get()
             ->keyBy('student_id');
 
-        return view('admin.independent.grade', compact('independent', 'students', 'submissions'));
+        $gradeHistory = IndependentGradeHistory::where('independent_id', $independent->id)
+            ->orderBy('student_id')
+            ->orderBy('submission_number')
+            ->get()
+            ->groupBy('student_id');
+
+        return view('admin.independent.grade', compact('independent', 'students', 'submissions', 'gradeHistory'));
 
     }
     function grade_form($id)
@@ -299,7 +306,13 @@ class IndependentController extends Controller
             ->get()
             ->keyBy('student_id');
 
-        return view('admin.independent.grade_form', compact('independent', 'students', 'submissions'));
+        $gradeHistory = IndependentGradeHistory::where('independent_id', $independent->id)
+            ->orderBy('student_id')
+            ->orderBy('submission_number')
+            ->get()
+            ->groupBy('student_id');
+
+        return view('admin.independent.grade_form', compact('independent', 'students', 'submissions', 'gradeHistory'));
 
     }
     function grade_teacher($id, Request $request)
@@ -331,7 +344,13 @@ class IndependentController extends Controller
             ->get()
             ->keyBy('student_id');
 
-        return view('teacher.independent.grade', compact('independent', 'students', 'submissions'));
+        $gradeHistory = IndependentGradeHistory::where('independent_id', $independent->id)
+            ->orderBy('student_id')
+            ->orderBy('submission_number')
+            ->get()
+            ->groupBy('student_id');
+
+        return view('teacher.independent.grade', compact('independent', 'students', 'submissions', 'gradeHistory'));
 
     }
     function grade_save(Request $request)

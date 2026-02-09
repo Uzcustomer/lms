@@ -8,6 +8,7 @@ use App\Models\CurriculumSubject;
 use App\Models\CurriculumWeek;
 use App\Models\Group;
 use App\Models\Independent;
+use App\Models\IndependentGradeHistory;
 use App\Models\IndependentSubmission;
 use App\Models\Schedule;
 use App\Models\Semester;
@@ -373,6 +374,11 @@ class StudentController extends Controller
                     ->where('independent_id', $independent->id)
                     ->first();
 
+                $gradeHistory = IndependentGradeHistory::where('independent_id', $independent->id)
+                    ->where('student_id', $student->id)
+                    ->orderBy('submission_number')
+                    ->get();
+
                 $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
                 $submissionCount = $submission?->submission_count ?? 0;
                 $remainingAttempts = max(0, $mtMaxResubmissions - ($submissionCount - 1));
@@ -388,6 +394,7 @@ class StudentController extends Controller
                     'submission' => $submission,
                     'grade' => $grade?->grade,
                     'grade_locked' => $gradeLocked,
+                    'grade_history' => $gradeHistory,
                     'submission_count' => $submissionCount,
                     'remaining_attempts' => $remainingAttempts,
                     'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < 60 && $remainingAttempts > 0 && !Carbon::now()->gt($deadlineDateTime),
@@ -475,8 +482,17 @@ class StudentController extends Controller
             'submission_count' => $newCount,
         ]);
 
-        // If resubmitting after low grade, reset the old grade so teacher can re-evaluate
+        // If resubmitting after low grade, archive old grade to history and remove current
         if ($existingGrade && $existingGrade->grade < 60) {
+            IndependentGradeHistory::create([
+                'independent_id' => $independent->id,
+                'student_id' => $student->id,
+                'student_hemis_id' => $student->hemis_id,
+                'grade' => $existingGrade->grade,
+                'submission_number' => $existing ? $existing->submission_count - 1 : 1,
+                'graded_by' => $existingGrade->employee_name,
+                'graded_at' => $existingGrade->updated_at,
+            ]);
             $existingGrade->delete();
         }
 

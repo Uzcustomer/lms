@@ -64,6 +64,11 @@
                                                 <dt class="mt-1 text-sm font-medium text-green-700">
                                                     {{ $student->grade }}
                                                     <span class="text-xs text-green-500 ml-1" title="Baho qulflangan (60+)">&#128274;</span>
+                                                    @if(isset($gradeHistory[$student->id]) && $gradeHistory[$student->id]->count() > 0)
+                                                        <div class="text-xs text-gray-400 font-normal mt-1">
+                                                            Oldingi: @foreach($gradeHistory[$student->id] as $h){{ $h->grade }}@if(!$loop->last), @endif @endforeach
+                                                        </div>
+                                                    @endif
                                                 </dt>
                                             @elseif ($needsGrading)
                                                 <dd class="mt-1 text-sm font-medium text-gray-900">
@@ -71,6 +76,11 @@
                                                         min="0" max="100" required onkeydown="focusNext(event)"
                                                         class="border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                                                         style="width:100px">
+                                                    @if(isset($gradeHistory[$student->id]) && $gradeHistory[$student->id]->count() > 0)
+                                                        <div class="text-xs text-gray-400 mt-1">
+                                                            Oldingi: @foreach($gradeHistory[$student->id] as $h)<span class="text-red-400">{{ $h->grade }}</span>@if(!$loop->last), @endif @endforeach
+                                                        </div>
+                                                    @endif
                                                 </dd>
                                             @else
                                                 <dt class="mt-1 text-sm font-medium text-gray-900">

@@ -58,6 +58,11 @@
                                             @if(is_numeric($student->grade) && (float)$student->grade >= 60)
                                                 <span class="text-xs text-green-500 ml-1" title="Baho qulflangan (60+)">&#128274;</span>
                                             @endif
+                                            @if(isset($gradeHistory[$student->id]) && $gradeHistory[$student->id]->count() > 0)
+                                                <div class="text-xs text-gray-400 font-normal mt-1">
+                                                    Oldingi: @foreach($gradeHistory[$student->id] as $h)<span class="{{ $h->grade >= 60 ? 'text-green-500' : 'text-red-400' }}">{{ $h->grade }}</span>@if(!$loop->last), @endif @endforeach
+                                                </div>
+                                            @endif
                                         </dt>
                                     </div>
                                 @endforeach

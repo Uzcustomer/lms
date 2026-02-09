@@ -102,6 +102,16 @@
                                                 @else
                                                     -
                                                 @endif
+                                                @if($item['grade_history']->count() > 0)
+                                                    <div class="mt-1 border-t border-gray-200 pt-1">
+                                                        <span class="text-xs text-gray-400">Oldingi:</span>
+                                                        @foreach($item['grade_history'] as $history)
+                                                            <span class="text-xs {{ $history->grade >= 60 ? 'text-green-500' : 'text-red-400' }}">
+                                                                {{ $history->grade }}
+                                                            </span>@if(!$loop->last), @endif
+                                                        @endforeach
+                                                    </div>
+                                                @endif
                                             </td>
                                             <td class="px-4 py-3 text-sm">
                                                 @if($item['grade_locked'])

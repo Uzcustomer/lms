@@ -43,7 +43,7 @@ services:
     container_name: lmsttatf_phpmyadmin
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8081:80"
+      - "8081:80"
     environment:
       PMA_HOST: host.docker.internal
       PMA_PORT: 3306

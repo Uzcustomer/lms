@@ -125,6 +125,7 @@
                                         <th><a href="#" class="sort-link" data-sort="department_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="unexcused_hours">Sababsiz <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="excused_hours">Sababli <span class="sort-icon">&#9650;&#9660;</span></a></th>
@@ -194,7 +195,14 @@
             return null;
         }
 
-        function toggleSemester() { document.getElementById('current-semester-toggle').classList.toggle('active'); }
+        var currentEducationYearCode = '{{ $currentEducationYear ?? '' }}';
+        function toggleSemester() {
+            var el = document.getElementById('current-semester-toggle');
+            el.classList.toggle('active');
+            if (el.classList.contains('active') && currentEducationYearCode) {
+                $('#education_year').val(currentEducationYearCode).trigger('change');
+            }
+        }
 
         function getFilters() {
             return {
@@ -269,6 +277,7 @@
                 html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
+                html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-unexcused">' + r.unexcused_hours + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-excused">' + r.excused_hours + '</span></td>';

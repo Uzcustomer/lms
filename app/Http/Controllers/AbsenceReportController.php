@@ -129,6 +129,7 @@ class AbsenceReportController extends Controller
                 's.department_name',
                 's.specialty_name',
                 's.level_name',
+                's.semester_name',
                 's.group_name',
                 DB::raw('SUM(a.absent_off) as unexcused_hours'),
                 DB::raw('SUM(a.absent_on) as excused_hours'),
@@ -136,7 +137,7 @@ class AbsenceReportController extends Controller
                 DB::raw('COUNT(DISTINCT DATE(a.lesson_date)) as total_days')
             )
             ->groupBy('a.student_hemis_id', 's.full_name', 's.department_name',
-                's.specialty_name', 's.level_name', 's.group_name')
+                's.specialty_name', 's.level_name', 's.semester_name', 's.group_name')
             ->get();
 
         // 3. Statusga qarab filtrlash (minimal chegara: 30 soat sababsiz yoki 15 kun)
@@ -152,6 +153,7 @@ class AbsenceReportController extends Controller
                 'department_name' => $r->department_name ?? '-',
                 'specialty_name' => $r->specialty_name ?? '-',
                 'level_name' => $r->level_name ?? '-',
+                'semester_name' => $r->semester_name ?? '-',
                 'group_name' => $r->group_name ?? '-',
                 'unexcused_hours' => (int) $r->unexcused_hours,
                 'excused_hours' => (int) $r->excused_hours,
@@ -374,7 +376,7 @@ class AbsenceReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('74 soat hisobot');
 
-        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh',
+        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
             'Sababsiz (soat)', 'Sababli (soat)', 'Jami qoldirilgan soat',
             'Jami qoldirilgan kun', '74 soat keyin qatnashgan', 'Hisobot sanasi', 'Status'];
 
@@ -388,7 +390,7 @@ class AbsenceReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:N1')->applyFromArray($headerStyle);
 
         $statusLabels = [
             'yellow' => 'Ogohlantirish (30-45 soat / 15-20 kun)',
@@ -406,34 +408,35 @@ class AbsenceReportController extends Controller
             $sheet->setCellValue([3, $row], $r['department_name']);
             $sheet->setCellValue([4, $row], $r['specialty_name']);
             $sheet->setCellValue([5, $row], $r['level_name']);
-            $sheet->setCellValue([6, $row], $r['group_name']);
-            $sheet->setCellValue([7, $row], $r['unexcused_hours']);
-            $sheet->setCellValue([8, $row], $r['excused_hours']);
-            $sheet->setCellValue([9, $row], $r['total_hours']);
-            $sheet->setCellValue([10, $row], $r['total_days']);
-            $sheet->setCellValue([11, $row], $r['attendance_after_74'] ?? '-');
-            $sheet->setCellValue([12, $row], $r['report_date'] ?? '-');
-            $sheet->setCellValue([13, $row], $statusLabels[$r['status']] ?? '-');
+            $sheet->setCellValue([6, $row], $r['semester_name']);
+            $sheet->setCellValue([7, $row], $r['group_name']);
+            $sheet->setCellValue([8, $row], $r['unexcused_hours']);
+            $sheet->setCellValue([9, $row], $r['excused_hours']);
+            $sheet->setCellValue([10, $row], $r['total_hours']);
+            $sheet->setCellValue([11, $row], $r['total_days']);
+            $sheet->setCellValue([12, $row], $r['attendance_after_74'] ?? '-');
+            $sheet->setCellValue([13, $row], $r['report_date'] ?? '-');
+            $sheet->setCellValue([14, $row], $statusLabels[$r['status']] ?? '-');
 
             // Status rangini qo'yish
             $colors = ['yellow' => 'FFF3CD', 'orange' => 'FFE0B2', 'red' => 'FFCDD2', 'critical' => 'D32F2F', 'late' => 'D32F2F', 'has_time' => '16A34A'];
             $fontColors = ['yellow' => '856404', 'orange' => 'E65100', 'red' => 'C62828', 'critical' => 'FFFFFF', 'late' => 'FFFFFF', 'has_time' => 'FFFFFF'];
             if (isset($colors[$r['status']])) {
-                $sheet->getStyle("M{$row}")->applyFromArray([
+                $sheet->getStyle("N{$row}")->applyFromArray([
                     'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $colors[$r['status']]]],
                     'font' => ['bold' => true, 'color' => ['rgb' => $fontColors[$r['status']]]],
                 ]);
             }
         }
 
-        $widths = [5, 30, 25, 30, 8, 15, 16, 16, 20, 20, 22, 18, 35];
+        $widths = [5, 30, 25, 30, 8, 12, 15, 16, 16, 20, 20, 22, 18, 35];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

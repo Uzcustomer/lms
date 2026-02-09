@@ -16,6 +16,7 @@ class IndependentSubmission extends Model
         'file_path',
         'file_original_name',
         'submitted_at',
+        'submission_count',
     ];
 
     protected $casts = [

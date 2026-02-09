@@ -53,8 +53,11 @@
                                                 <span class="text-xs text-gray-400">Yuklanmagan</span>
                                             @endif
                                         </dd>
-                                        <dt class="mt-1 text-sm font-medium text-gray-900">
+                                        <dt class="mt-1 text-sm font-medium {{ is_numeric($student->grade) && (float)$student->grade >= 60 ? 'text-green-700' : 'text-gray-900' }}">
                                             {{ $student->grade }}
+                                            @if(is_numeric($student->grade) && (float)$student->grade >= 60)
+                                                <span class="text-xs text-green-500 ml-1" title="Baho qulflangan (60+)">&#128274;</span>
+                                            @endif
                                         </dt>
                                     </div>
                                 @endforeach

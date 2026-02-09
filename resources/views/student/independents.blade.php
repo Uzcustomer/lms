@@ -69,7 +69,15 @@
                                                 <span class="text-xs block">{{ $mtDeadlineTime ?? '17:00' }} gacha</span>
                                             </td>
                                             <td class="px-4 py-3 text-sm">
-                                                @if($item['submission'])
+                                                @if($item['grade_locked'])
+                                                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                                        Qabul qilindi
+                                                    </span>
+                                                @elseif($item['submission'] && $item['grade'] !== null && $item['grade'] < 60)
+                                                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                                                        Qayta topshirish
+                                                    </span>
+                                                @elseif($item['submission'])
                                                     <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
                                                         Yuklangan
                                                     </span>
@@ -88,33 +96,60 @@
                                                     <span class="font-semibold {{ $item['grade'] >= 60 ? 'text-green-600' : 'text-red-600' }}">
                                                         {{ $item['grade'] }}
                                                     </span>
+                                                    @if($item['grade_locked'])
+                                                        <span class="text-xs text-green-500 block">Qulflangan</span>
+                                                    @endif
                                                 @else
                                                     -
                                                 @endif
                                             </td>
                                             <td class="px-4 py-3 text-sm">
-                                                @if($item['submission'])
+                                                @if($item['grade_locked'])
+                                                    {{-- Grade >= 60: show file info only, no upload --}}
+                                                    @if($item['submission'])
+                                                        <a href="{{ asset('storage/' . $item['submission']->file_path) }}" target="_blank"
+                                                           class="text-blue-500 hover:text-blue-700 text-xs underline">
+                                                            {{ $item['submission']->file_original_name }}
+                                                        </a>
+                                                        <div class="text-xs text-gray-400 mt-1">
+                                                            {{ $item['submission']->submitted_at->format('d.m.Y H:i') }}
+                                                        </div>
+                                                    @endif
+                                                @elseif($item['submission'])
                                                     <div class="flex items-center space-x-2">
                                                         <a href="{{ asset('storage/' . $item['submission']->file_path) }}" target="_blank"
                                                            class="text-blue-500 hover:text-blue-700 text-xs underline">
                                                             {{ $item['submission']->file_original_name }}
                                                         </a>
-                                                        @if(!$item['is_overdue'] && $item['status'] == 0)
-                                                            <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}"
-                                                                  enctype="multipart/form-data" class="inline">
-                                                                @csrf
-                                                                <label class="cursor-pointer text-xs text-orange-500 hover:text-orange-700 underline">
-                                                                    Qayta yuklash
-                                                                    <input type="file" name="file" class="hidden"
-                                                                           accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
-                                                                           onchange="this.form.submit()">
-                                                                </label>
-                                                            </form>
-                                                        @endif
                                                     </div>
                                                     <div class="text-xs text-gray-400 mt-1">
                                                         {{ $item['submission']->submitted_at->format('d.m.Y H:i') }}
                                                     </div>
+                                                    @if($item['can_resubmit'])
+                                                        <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}"
+                                                              enctype="multipart/form-data" class="mt-2">
+                                                            @csrf
+                                                            <label class="cursor-pointer text-xs text-orange-500 hover:text-orange-700 underline">
+                                                                Qayta yuklash ({{ $item['remaining_attempts'] }} marta qoldi)
+                                                                <input type="file" name="file" class="hidden"
+                                                                       accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
+                                                                       onchange="this.form.submit()">
+                                                            </label>
+                                                        </form>
+                                                    @elseif($item['grade'] !== null && $item['grade'] < 60 && $item['remaining_attempts'] <= 0)
+                                                        <p class="text-xs text-red-400 mt-1">Qayta yuklash imkoniyati tugagan</p>
+                                                    @elseif(!$item['is_overdue'] && $item['grade'] === null)
+                                                        <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}"
+                                                              enctype="multipart/form-data" class="inline mt-2">
+                                                            @csrf
+                                                            <label class="cursor-pointer text-xs text-orange-500 hover:text-orange-700 underline">
+                                                                Qayta yuklash
+                                                                <input type="file" name="file" class="hidden"
+                                                                       accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
+                                                                       onchange="this.form.submit()">
+                                                            </label>
+                                                        </form>
+                                                    @endif
                                                 @elseif(!$item['is_overdue'])
                                                     <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}"
                                                           enctype="multipart/form-data" class="flex items-center space-x-2">

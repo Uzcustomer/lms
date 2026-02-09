@@ -36,6 +36,11 @@
                                         @endif
                                     </div>
                                     @foreach ($students as $student)
+                                        @php
+                                            $gradeValue = is_numeric($student->grade) ? (float) $student->grade : null;
+                                            $isLocked = $gradeValue !== null && $gradeValue >= 60;
+                                            $needsGrading = $gradeValue === null || $gradeValue < 60;
+                                        @endphp
                                         <div class="px-2 py-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0">
                                             <dt class="mt-1 text-sm font-medium text-gray-900">
                                                 {{ $student->full_name }}
@@ -55,7 +60,12 @@
                                                     <span class="text-xs text-gray-400">Yuklanmagan</span>
                                                 @endif
                                             </dd>
-                                            @if ($independent->status == 0)
+                                            @if ($isLocked)
+                                                <dt class="mt-1 text-sm font-medium text-green-700">
+                                                    {{ $student->grade }}
+                                                    <span class="text-xs text-green-500 ml-1" title="Baho qulflangan (60+)">&#128274;</span>
+                                                </dt>
+                                            @elseif ($needsGrading)
                                                 <dd class="mt-1 text-sm font-medium text-gray-900">
                                                     <input type="number" name="baho[{{ $student->id }}]" placeholder="0-100"
                                                         min="0" max="100" required onkeydown="focusNext(event)"
@@ -70,8 +80,13 @@
                                         </div>
                                     @endforeach
                                 </dl>
-                                @if ($independent->status == 0)
-
+                                @php
+                                    $hasStudentsNeedingGrading = $students->contains(function ($s) {
+                                        $g = is_numeric($s->grade) ? (float) $s->grade : null;
+                                        return $g === null || $g < 60;
+                                    });
+                                @endphp
+                                @if ($hasStudentsNeedingGrading)
                                     <div class="mt-6">
                                         <button type="submit"
                                             class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">

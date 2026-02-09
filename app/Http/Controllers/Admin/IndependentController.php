@@ -313,17 +313,19 @@ class IndependentController extends Controller
         if (empty($independent)) {
             return back()->with('error', 'Bunday mustaqil ish topilmadi');
         }
-        if ($independent->status == 0) {
-            $students =
-                Student::select('id', 'full_name')->where('students.group_id', $independent->group_hemis_id)->get();
-        } else {
-            $students = Student::leftJoin('student_grades', 'students.hemis_id', '=', 'student_grades.student_hemis_id')
-                ->leftJoin('independents', 'independents.id', '=', 'student_grades.independent_id')
-                ->select('students.id', 'students.full_name', 'student_grades.grade')
-                ->where('independents.id', $independent->id)
-                ->where('students.group_id', $independent->group_hemis_id)
-                ->get();
-        }
+        $students = Student::leftJoin('student_grades', function ($join) use ($independent) {
+                $join->on('students.hemis_id', '=', 'student_grades.student_hemis_id')
+                    ->where('student_grades.independent_id', '=', $independent->id);
+            })
+            ->select(
+                'students.id',
+                'students.full_name',
+                'students.hemis_id',
+                DB::raw('COALESCE(student_grades.grade, "") as grade'),
+            )
+            ->where('students.group_id', $independent->group_hemis_id)
+            ->get();
+
         // Load student submissions for this independent
         $submissions = IndependentSubmission::where('independent_id', $independent->id)
             ->get()
@@ -342,6 +344,15 @@ class IndependentController extends Controller
             $independent->save();
             foreach ($request->baho as $key => $baho) {
                 $student = Student::find($key);
+
+                // Skip if student already has grade >= 60 (locked)
+                $existingGrade = StudentGrade::where('student_id', $student->id)
+                    ->where('independent_id', $independent->id)
+                    ->first();
+                if ($existingGrade && $existingGrade->grade >= 60) {
+                    continue;
+                }
+
                 StudentGrade::updateOrCreate([
                     'student_id' => $student->id,
                     'student_hemis_id' => $student->hemis_id,

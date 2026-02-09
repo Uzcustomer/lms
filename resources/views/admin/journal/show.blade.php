@@ -720,6 +720,11 @@
                                             $mtAverage = $totalMtDays > 0
                                                 ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
                                                 : 0;
+                                            // Manual MT grade overrides lesson-based average
+                                            $manualMt = $manualMtGrades[$student->hemis_id] ?? null;
+                                            if ($manualMt !== null) {
+                                                $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
+                                            }
 
                                             $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null];
 
@@ -855,6 +860,11 @@
                                             $mtAverage = $totalMtDays > 0
                                                 ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
                                                 : 0;
+                                            // Manual MT grade overrides lesson-based average
+                                            $manualMt = $manualMtGrades[$student->hemis_id] ?? null;
+                                            if ($manualMt !== null) {
+                                                $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
+                                            }
 
                                             $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null];
 
@@ -1058,6 +1068,11 @@
                                                 $mtAverage = $totalMtDays > 0
                                                     ? round($dailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
                                                     : 0;
+                                                // Manual MT grade overrides lesson-based average
+                                                $manualMt = $manualMtGrades[$student->hemis_id] ?? null;
+                                                if ($manualMt !== null) {
+                                                    $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
+                                                }
                                             @endphp
                                             <tr>
                                                 <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
@@ -1140,6 +1155,11 @@
                                             $mtAverage = $totalMtDays > 0
                                                 ? round($dailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
                                                 : 0;
+                                            // Manual MT grade overrides lesson-based average
+                                            $manualMt = $manualMtGrades[$student->hemis_id] ?? null;
+                                            if ($manualMt !== null) {
+                                                $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
+                                            }
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>

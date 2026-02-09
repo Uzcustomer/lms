@@ -781,8 +781,8 @@ class JournalController extends Controller
         $curriculum = DB::table('curricula')
             ->where('curricula_hemis_id', $student->curriculum_id ?? null)
             ->first();
-        $educationYearCode = $curriculum->education_year_code ?? null;
-        $educationYearName = $curriculum->education_year_name ?? null;
+        $educationYearCode = $curriculum?->education_year_code;
+        $educationYearName = $curriculum?->education_year_name;
 
         if ($existingGrade) {
             // Update existing grade
@@ -969,8 +969,8 @@ class JournalController extends Controller
         $curriculum = DB::table('curricula')
             ->where('curricula_hemis_id', $student->curriculum_id ?? null)
             ->first();
-        $educationYearCode = $curriculum->education_year_code ?? null;
-        $educationYearName = $curriculum->education_year_name ?? null;
+        $educationYearCode = $curriculum?->education_year_code;
+        $educationYearName = $curriculum?->education_year_name;
 
         // Create new student_grades record
         DB::table('student_grades')->insert([

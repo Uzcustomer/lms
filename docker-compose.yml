@@ -38,21 +38,15 @@ services:
     networks:
       - app-network
 
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin:latest
-    container_name: lmsttatf_phpmyadmin
+  adminer:
+    image: adminer:latest
+    container_name: lmsttatf_adminer
     restart: unless-stopped
     ports:
-      - "8081:80"
-    environment:
-      PMA_HOST: host.docker.internal
-      PMA_PORT: 3306
-      UPLOAD_LIMIT: 128M
-      PMA_ABSOLUTE_URI: https://mark.tashmedunitf.uz/phpmyadmin/
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "127.0.0.1:8082:8080"
     networks:
       - app-network
+
 
 networks:
   app-network:

@@ -148,9 +148,9 @@
                                         <th class="th-hour"><a href="#" class="sort-link" data-sort="total_absent_hours">Jami qoldirilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th class="th-hour"><a href="#" class="sort-link" data-sort="auditory_hours">Auditoriya soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="unexcused_percent">Sababsiz % <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th class="th-wrap">25% dan keyin darsga chiqqan</th>
                                         <th class="th-wrap">Hisobot sanasi</th>
                                         <th class="th-wrap">Spravka topshirish muddati</th>
-                                        <th class="th-wrap">25% dan keyin darsga chiqqan</th>
                                         <th style="text-align:center;">Ko'rish</th>
                                     </tr>
                                 </thead>
@@ -282,9 +282,9 @@
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.total_absent_hours + '</td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.auditory_hours + '</td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade-red">' + r.unexcused_percent + '%</span></td>';
+                html += '<td style="text-align:center;font-size:12px;color:#0f172a;">' + esc(r.first_attendance_after_25) + '</td>';
                 html += '<td style="text-align:center;font-size:12px;color:#0f172a;">' + esc(r.report_date) + '</td>';
                 html += '<td style="text-align:center;"><span class="badge ' + spravkaClass(r.spravka_status) + '">' + esc(r.spravka_status) + '</span></td>';
-                html += '<td style="text-align:center;font-size:12px;color:#0f172a;">' + esc(r.first_attendance_after_25) + '</td>';
                 if (r.group_db_id) {
                     html += '<td style="text-align:center;"><a href="/admin/journal/show/' + r.group_db_id + '/' + r.subject_id + '/' + r.semester_code + '" target="_blank" class="btn-view" title="Jurnalni ko\'rish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a></td>';
                 } else {

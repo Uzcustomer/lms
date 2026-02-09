@@ -13,7 +13,7 @@
                 <div class="filter-container">
                     <!-- Row 1 -->
                     <div class="filter-row">
-                        <div class="filter-item" style="min-width: 160px;">
+                        <div class="filter-item" style="min-width: 140px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
                             <select id="education_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -24,7 +24,7 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="flex: 1; min-width: 200px;">
+                        <div class="filter-item" style="flex: 1; min-width: 170px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
                             <select id="faculty" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -33,19 +33,19 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="flex: 1; min-width: 240px;">
+                        <div class="filter-item" style="flex: 1; min-width: 180px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 150px;">
+                        <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanadan</label>
                             <input type="text" id="date_from" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
                         </div>
-                        <div class="filter-item" style="min-width: 150px;">
+                        <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanagacha</label>
                             <input type="text" id="date_to" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
                         </div>
-                        <div class="filter-item" style="min-width: 90px;">
+                        <div class="filter-item" style="min-width: 80px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
                             <select id="per_page" class="select2" style="width: 100%;">
                                 @foreach([10, 25, 50, 100] as $ps)
@@ -53,7 +53,7 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 160px;">
+                        <div class="filter-item" style="min-width: 150px;">
                             <label class="filter-label">&nbsp;</label>
                             <div class="toggle-switch active" id="current-semester-toggle" onclick="toggleSemester()">
                                 <div class="toggle-track"><div class="toggle-thumb"></div></div>
@@ -63,19 +63,19 @@
                     </div>
                     <!-- Row 2 -->
                     <div class="filter-row">
-                        <div class="filter-item" style="min-width: 140px;">
+                        <div class="filter-item" style="min-width: 110px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
                             <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 150px;">
+                        <div class="filter-item" style="min-width: 120px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
                             <select id="semester_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 170px;">
+                        <div class="filter-item" style="min-width: 140px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                             <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="flex: 1; min-width: 220px;">
+                        <div class="filter-item" style="flex: 1; min-width: 180px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Kafedra</label>
                             <select id="department" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -84,11 +84,11 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="flex: 1; min-width: 280px;">
+                        <div class="filter-item" style="flex: 1; min-width: 200px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 200px;">
+                        <div class="filter-item" style="min-width: 170px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Holat</label>
                             <select id="status_filter" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -99,7 +99,7 @@
                                 <option value="all_done">Barchasi bajarilgan</option>
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 290px;">
+                        <div class="filter-item" style="min-width: 230px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
                                 <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
@@ -149,6 +149,7 @@
                                         <th><a href="#" class="sort-link" data-sort="has_attendance">Davomat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="has_grades">Baho <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="lesson_date">Dars sanasi <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th style="text-align:center;">Ko'rish</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -284,6 +285,7 @@
                 html += '<td style="text-align:center;">' + statusBadge(r.has_attendance) + '</td>';
                 html += '<td style="text-align:center;">' + statusBadge(r.has_grades) + '</td>';
                 html += '<td><span class="badge badge-date">' + formatDate(r.lesson_date) + '</span></td>';
+                html += '<td style="text-align:center;"><a href="/admin/journal/show/' + encodeURIComponent(r.group_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code) + '" class="btn-view-journal" title="Jurnalga o\'tish"><svg style="width:18px;height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></a></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -336,8 +338,18 @@
             });
 
             // Kalendarlarni yaratish
-            new ScrollCalendar('date_from');
-            new ScrollCalendar('date_to');
+            var calFrom = new ScrollCalendar('date_from');
+            var calTo = new ScrollCalendar('date_to');
+
+            // Default: kechagi sana
+            var yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            var yy = yesterday.getFullYear();
+            var mm = String(yesterday.getMonth() + 1).padStart(2, '0');
+            var dd = String(yesterday.getDate()).padStart(2, '0');
+            var yesterdayStr = yy + '-' + mm + '-' + dd;
+            calFrom.setValue(yesterdayStr);
+            calTo.setValue(yesterdayStr);
 
             // Cascading dropdowns
             function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
@@ -368,7 +380,7 @@
 
     <style>
         .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; }
-        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; }
+        .filter-row { display: flex; gap: 10px; flex-wrap: nowrap; margin-bottom: 10px; align-items: flex-end; overflow-x: auto; }
         .filter-row:last-child { margin-bottom: 0; }
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
@@ -435,6 +447,9 @@
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
         .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; max-width: 260px; white-space: normal; word-break: break-word; }
+
+        .btn-view-journal { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; color: #2b5ea7; background: #eff6ff; border: 1px solid #bfdbfe; transition: all 0.2s; text-decoration: none; }
+        .btn-view-journal:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; transform: scale(1.1); box-shadow: 0 2px 8px rgba(43,94,167,0.3); }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }

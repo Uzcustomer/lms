@@ -11,6 +11,7 @@ use App\Models\Independent;
 use App\Models\IndependentSubmission;
 use App\Models\Schedule;
 use App\Models\Semester;
+use App\Models\Setting;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use Carbon\Carbon;
@@ -357,14 +358,21 @@ class StudentController extends Controller
 
         $student = Auth::guard('student')->user();
 
+        $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
+        $timeParts = explode(':', $mtDeadlineTime);
+        $hour = (int) ($timeParts[0] ?? 17);
+        $minute = (int) ($timeParts[1] ?? 0);
+
         $independents = Independent::where('group_hemis_id', $student->group_id)
             ->orderBy('deadline', 'asc')
             ->get()
-            ->map(function ($independent) use ($student) {
+            ->map(function ($independent) use ($student, $hour, $minute) {
                 $submission = $independent->submissionByStudent($student->id);
                 $grade = StudentGrade::where('student_id', $student->id)
                     ->where('independent_id', $independent->id)
                     ->first();
+
+                $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
 
                 return [
                     'id' => $independent->id,
@@ -372,7 +380,7 @@ class StudentController extends Controller
                     'teacher_name' => $independent->teacher_short_name ?? $independent->teacher_name,
                     'start_date' => $independent->start_date,
                     'deadline' => $independent->deadline,
-                    'is_overdue' => Carbon::parse($independent->deadline)->endOfDay()->isPast(),
+                    'is_overdue' => Carbon::now()->gt($deadlineDateTime),
                     'submission' => $submission,
                     'grade' => $grade?->grade,
                     'status' => $independent->status,
@@ -381,7 +389,7 @@ class StudentController extends Controller
                 ];
             });
 
-        return view('student.independents', compact('independents'));
+        return view('student.independents', compact('independents', 'mtDeadlineTime'));
     }
 
     public function submitIndependent(Request $request, $id)
@@ -395,10 +403,15 @@ class StudentController extends Controller
             ->where('group_hemis_id', $student->group_id)
             ->firstOrFail();
 
-        // Check deadline (17:00 on deadline date)
-        $deadlineTime = Carbon::parse($independent->deadline)->setTime(17, 0, 0);
+        // Check deadline using configured time from settings
+        $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
+        $timeParts = explode(':', $mtDeadlineTime);
+        $hour = (int) ($timeParts[0] ?? 17);
+        $minute = (int) ($timeParts[1] ?? 0);
+
+        $deadlineTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
         if (Carbon::now()->gt($deadlineTime)) {
-            return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat 17:00)');
+            return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ')');
         }
 
         $request->validate([

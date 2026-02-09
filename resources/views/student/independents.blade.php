@@ -66,7 +66,7 @@
                                             <td class="px-4 py-3 text-sm text-gray-500">{{ $item['start_date'] }}</td>
                                             <td class="px-4 py-3 text-sm {{ $item['is_overdue'] ? 'text-red-600 font-semibold' : 'text-gray-500' }}">
                                                 {{ $item['deadline'] }}
-                                                <span class="text-xs block">17:00 gacha</span>
+                                                <span class="text-xs block">{{ $mtDeadlineTime ?? '17:00' }} gacha</span>
                                             </td>
                                             <td class="px-4 py-3 text-sm">
                                                 @if($item['submission'])

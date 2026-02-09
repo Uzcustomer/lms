@@ -10,6 +10,7 @@ use App\Models\Group;
 use App\Models\Independent;
 use App\Models\Schedule;
 use App\Models\Semester;
+use App\Models\Setting;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -31,15 +32,24 @@ class IndependentAutoCreate extends Command
      */
     private array $excludedGroups = [910, 911, 912, 913, 914, 915, 916, 917, 918, 919, 920, 921];
 
+    /**
+     * Deadline type: 'before_last', 'last', or 'fixed_days'
+     */
+    private string $deadlineType;
+
     public function handle()
     {
         $this->excludedTrainingTypes = config('app.training_type_code');
+        $this->deadlineType = Setting::get('mt_deadline_type', 'before_last');
 
         // Phase 1: Create/update Independent records for each schedule
         $this->createIndependents();
 
         // Phase 2: Recalculate deadlines using pattern prediction + CurriculumWeek
-        $this->recalculateDeadlines();
+        // Only applies for 'before_last' and 'last' types; 'fixed_days' uses Phase 1 dates
+        if ($this->deadlineType !== 'fixed_days') {
+            $this->recalculateDeadlines();
+        }
 
         $this->info('Independent assignments created and deadlines recalculated.');
     }
@@ -163,7 +173,9 @@ class IndependentAutoCreate extends Command
 
     /**
      * Calculate the deadline date for a specific (group, subject, semester) combination.
-     * Returns the second-to-last class date, or null if insufficient data.
+     * Based on mt_deadline_type setting:
+     * - 'before_last': returns the second-to-last class date
+     * - 'last': returns the last class date
      */
     private function calculateDeadlineForCombination($combo): ?string
     {
@@ -193,11 +205,16 @@ class IndependentAutoCreate extends Command
             $allDates = $knownDates;
         }
 
+        if ($this->deadlineType === 'last') {
+            // Deadline = last class date
+            return $allDates->last();
+        }
+
+        // Default: 'before_last' - deadline = second-to-last class date
         if ($allDates->count() < 2) {
             return null;
         }
 
-        // Return the second-to-last date
         return $allDates[$allDates->count() - 2];
     }
 

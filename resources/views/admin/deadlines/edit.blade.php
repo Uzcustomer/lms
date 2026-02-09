@@ -33,6 +33,48 @@
                             </div>
                         </div>
 
+                        <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <h3 class="text-sm font-semibold text-gray-800 mb-3">Mustaqil ta'lim topshiriq muddati sozlamalari</h3>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Topshiriq muddati qachon tugaydi?
+                                </label>
+                                <div class="space-y-2">
+                                    <label class="flex items-center">
+                                        <input type="radio" name="mt_deadline_type" value="before_last"
+                                            {{ old('mt_deadline_type', $mtDeadlineType) == 'before_last' ? 'checked' : '' }}
+                                            class="text-blue-600 focus:ring-blue-500">
+                                        <span class="ml-2 text-sm text-gray-700">Oxirgi darsdan bitta oldingi darsda</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="mt_deadline_type" value="last"
+                                            {{ old('mt_deadline_type', $mtDeadlineType) == 'last' ? 'checked' : '' }}
+                                            class="text-blue-600 focus:ring-blue-500">
+                                        <span class="ml-2 text-sm text-gray-700">Oxirgi darsda</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="mt_deadline_type" value="fixed_days"
+                                            {{ old('mt_deadline_type', $mtDeadlineType) == 'fixed_days' ? 'checked' : '' }}
+                                            class="text-blue-600 focus:ring-blue-500">
+                                        <span class="ml-2 text-sm text-gray-700">Dars sanasidan + N kun (yuqoridagi muddat kunlari asosida)</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label for="mt_deadline_time" class="block text-sm font-medium text-gray-700 mb-1">
+                                    Topshiriq muddati vaqti
+                                </label>
+                                <div class="flex items-center gap-3">
+                                    <input type="time" name="mt_deadline_time" id="mt_deadline_time"
+                                        class="block w-40 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                        value="{{ old('mt_deadline_time', $mtDeadlineTime ?? '17:00') }}">
+                                    <span class="text-sm text-gray-500">gacha (default: 17:00)</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-1 gap-6 mt-4 sm:grid-cols-3">
                             @foreach ($deadlines as $deadline)
                                 <div>

@@ -26,22 +26,35 @@
                                 @csrf
                                 <input type="hidden" value="{{$independent->id}}" name="independent">
                                 <dl class="divide-y divide-gray-100">
-                                    <div class="px-2 py-2 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+                                    <div class="px-2 py-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0">
                                         <dt class="mt-1 text-sm font-medium text-gray-900">Talaba</dt>
+                                        <dd class="mt-1 text-sm font-medium text-gray-900">Yuklangan fayl</dd>
                                         @if ($independent->status == 0)
-
                                             <dd class="mt-1 text-sm font-medium text-gray-900">Yangi baho</dd>
                                         @else
                                             <dd class="mt-1 text-sm font-medium text-gray-900">Baho</dd>
-
                                         @endif
-
                                     </div>
                                     @foreach ($students as $student)
-                                        <div class="px-2 py-2 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+                                        <div class="px-2 py-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0">
                                             <dt class="mt-1 text-sm font-medium text-gray-900">
                                                 {{ $student->full_name }}
                                             </dt>
+                                            <dd class="mt-1 text-sm text-gray-700">
+                                                @if(isset($submissions[$student->id]))
+                                                    @php $sub = $submissions[$student->id]; @endphp
+                                                    <a href="{{ asset('storage/' . $sub->file_path) }}" target="_blank"
+                                                       class="inline-flex items-center text-blue-600 hover:text-blue-800 underline text-xs">
+                                                        <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                                        </svg>
+                                                        {{ $sub->file_original_name }}
+                                                    </a>
+                                                    <div class="text-xs text-gray-400">{{ $sub->submitted_at->format('d.m.Y H:i') }}</div>
+                                                @else
+                                                    <span class="text-xs text-gray-400">Yuklanmagan</span>
+                                                @endif
+                                            </dd>
                                             @if ($independent->status == 0)
                                                 <dd class="mt-1 text-sm font-medium text-gray-900">
                                                     <input type="number" name="baho[{{ $student->id }}]" placeholder="0-100"
@@ -108,7 +121,12 @@
                                             {{$independent->start_date}}
                                         </dd>
                                     </div>
-
+                                    <div class="px-2 py-2 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+                                        <dt class="mt-1 text-sm/6 font-medium text-gray-900">Muddat</dt>
+                                        <dd class="mt-1 text-sm/6 text-gray-700 sm:col-span-2 sm:mt-0">
+                                            {{$independent->deadline}} (17:00 gacha)
+                                        </dd>
+                                    </div>
                                 </dl>
                             </div>
                         </div>
@@ -120,40 +138,10 @@
         </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-
-
-
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script>
-        const numberInput = document.getElementById('numberInput');
-        const errorMsg = document.getElementById('errorMsg');
-        const form = document.getElementById('numberForm');
-
-        form.addEventListener('submit', (e) => {
-            const value = parseInt(numberInput.value, 10);
-            if (isNaN(value) || value < 0 || value > 100) {
-                e.preventDefault(); // Formani yuborishni to'xtatadi
-                errorMsg.style.display = 'block';
-            } else {
-                errorMsg.style.display = 'none';
-                alert('Son qabul qilindi: ' + value);
-            }
-        });
-
-        numberInput.addEventListener('input', () => {
-            const value = parseInt(numberInput.value, 10);
-            if (value >= 0 && value <= 100) {
-                errorMsg.style.display = 'none';
-            }
-        });
-
         function focusNext(event) {
             if (event.key === "Enter") {
-                event.preventDefault(); // Enter bosilganda formani submit qilishni oldini oladi
+                event.preventDefault();
                 const inputs = Array.from(document.querySelectorAll("input[type='number']"));
                 const currentIndex = inputs.indexOf(event.target);
                 if (currentIndex !== -1 && currentIndex < inputs.length - 1) {
@@ -162,64 +150,4 @@
             }
         }
     </script>
-    <style>
-        .error {
-            color: red;
-            margin-top: 5px;
-            display: none;
-        }
-
-        .select2-container--classic .select2-selection--single {
-            height: 38px;
-            border: 1px solid #D1D5DB;
-            border-radius: 0.375rem;
-            background: white;
-        }
-
-        .select2-container--classic .select2-selection--single .select2-selection__rendered {
-            line-height: 36px;
-            padding-left: 12px;
-            padding-right: 45px;
-            color: #374151;
-        }
-
-        .select2-container--classic .select2-selection--single .select2-selection__clear {
-            position: absolute;
-            right: 30px;
-            font-size: 22px;
-            font-weight: 500;
-            color: #4B5563;
-            margin: 0;
-            height: 36px;
-            line-height: 36px;
-            padding: 0 5px;
-        }
-
-        .select2-container--classic .select2-selection--single .select2-selection__clear:hover {
-            color: #1F2937;
-        }
-
-        .select2-container--classic .select2-selection--single .select2-selection__arrow {
-            height: 36px;
-            width: 25px;
-            border-left: none;
-            border-radius: 0 0.375rem 0.375rem 0;
-            background: transparent;
-            position: absolute;
-            right: 0;
-            top: 0;
-        }
-
-        .select2-container--classic .select2-selection--single .select2-selection__arrow b {
-            border-color: #6B7280 transparent transparent transparent;
-        }
-
-        .select2-container--classic.select2-container--open .select2-selection--single .select2-selection__arrow b {
-            border-color: transparent transparent #6B7280 transparent;
-        }
-
-        .select2-container--classic .select2-selection--single.select2-selection--clearable .select2-selection__arrow {
-            right: 0;
-        }
-    </style>
-    </x-app-layout>
+</x-teacher-app-layout>

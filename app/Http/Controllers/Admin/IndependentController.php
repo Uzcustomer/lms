@@ -7,6 +7,7 @@ use App\Models\Deadline;
 use App\Models\Department;
 use App\Models\Group;
 use App\Models\Independent;
+use App\Models\IndependentSubmission;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentGrade;
@@ -253,7 +254,11 @@ class IndependentController extends Controller
                 ->where('students.group_id', $independent->group_hemis_id)
                 ->get();
         }
-        return view('admin.independent.grade', compact('independent', 'students'));
+        $submissions = IndependentSubmission::where('independent_id', $independent->id)
+            ->get()
+            ->keyBy('student_id');
+
+        return view('admin.independent.grade', compact('independent', 'students', 'submissions'));
 
     }
     function grade_form($id)
@@ -290,7 +295,11 @@ class IndependentController extends Controller
                 ->where('students.group_id', $independent->group_hemis_id)
                 ->get();
         }
-        return view('admin.independent.grade_form', compact('independent', 'students'));
+        $submissions = IndependentSubmission::where('independent_id', $independent->id)
+            ->get()
+            ->keyBy('student_id');
+
+        return view('admin.independent.grade_form', compact('independent', 'students', 'submissions'));
 
     }
     function grade_teacher($id, Request $request)
@@ -315,7 +324,12 @@ class IndependentController extends Controller
                 ->where('students.group_id', $independent->group_hemis_id)
                 ->get();
         }
-        return view('teacher.independent.grade', compact('independent', 'students'));
+        // Load student submissions for this independent
+        $submissions = IndependentSubmission::where('independent_id', $independent->id)
+            ->get()
+            ->keyBy('student_id');
+
+        return view('teacher.independent.grade', compact('independent', 'students', 'submissions'));
 
     }
     function grade_save(Request $request)

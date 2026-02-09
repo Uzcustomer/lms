@@ -151,6 +151,7 @@
                                         <th>Spravka topshirish muddati</th>
                                         <th>25% dan keyin darsga chiqqan</th>
                                         <th>Hisobot sanasi</th>
+                                        <th style="text-align:center;">Ko'rish</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -282,8 +283,13 @@
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.auditory_hours + '</td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade-red">' + r.unexcused_percent + '%</span></td>';
                 html += '<td style="text-align:center;"><span class="badge ' + spravkaClass(r.spravka_status) + '">' + esc(r.spravka_status) + '</span></td>';
-                html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.first_attendance_after_25) + '</td>';
-                html += '<td style="text-align:center;font-size:12px;color:#94a3b8;">' + esc(r.report_date) + '</td>';
+                html += '<td style="text-align:center;font-size:12px;color:#0f172a;">' + esc(r.first_attendance_after_25) + '</td>';
+                html += '<td style="text-align:center;font-size:12px;color:#0f172a;">' + esc(r.report_date) + '</td>';
+                if (r.group_db_id) {
+                    html += '<td style="text-align:center;"><a href="/admin/journal/show/' + r.group_db_id + '/' + r.subject_id + '/' + r.semester_code + '" target="_blank" class="btn-view" title="Jurnalni ko\'rish"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a></td>';
+                } else {
+                    html += '<td style="text-align:center;color:#94a3b8;">-</td>';
+                }
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -407,6 +413,9 @@
         .sort-link:hover { opacity: 0.75; }
         .sort-icon { font-size: 8px; opacity: 0.4; }
         .sort-icon.active { font-size: 11px; opacity: 1; color: #ef4444; }
+
+        .btn-view { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; color: #2b5ea7; background: #eff6ff; border: 1px solid #bfdbfe; transition: all 0.15s; text-decoration: none; }
+        .btn-view:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
 
         .journal-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
         .journal-table tbody tr:nth-child(even) { background: #f8fafc; }

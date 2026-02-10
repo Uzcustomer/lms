@@ -1068,7 +1068,7 @@
                                                     $hasResubmitted = \Carbon\Carbon::parse($submitTime)->gt(\Carbon\Carbon::parse($gradeTime));
                                                 }
                                             }
-                                            $canRegrade = $hasGrade && $manualGrade < 60 && $currentAttempt < $mtMaxResubmissions && $hasResubmitted;
+                                            $canRegrade = $hasGrade && $manualGrade < 60 && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
                                             $inputDisabled = $hasGrade || !$hasFile;
 
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade
@@ -1171,7 +1171,7 @@
                                                         style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #f97316; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                                                         Qayta baholash
                                                     </button>
-                                                @elseif($hasGrade && $manualGrade < 60 && $currentAttempt < $mtMaxResubmissions)
+                                                @elseif($hasGrade && $manualGrade < 60 && $currentAttempt <= $mtMaxResubmissions)
                                                     {{-- Grade < 60, waiting for student to resubmit --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #fef9c3; color: #92400e; border-radius: 6px;">
                                                         &#128274; Kutilmoqda

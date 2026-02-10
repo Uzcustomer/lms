@@ -632,14 +632,15 @@ class JournalController extends Controller
 
         // Get manual MT grades (entries without lesson_date)
         // No education_year_code filter: manual MT grades are unique per student/subject/semester
-        $manualMtGrades = DB::table('student_grades')
+        $manualMtGradesRaw = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->where('training_type_code', 99)
             ->whereNull('lesson_date')
-            ->pluck('grade', 'student_hemis_id')
-            ->toArray();
+            ->get()
+            ->keyBy('student_hemis_id');
+        $manualMtGrades = $manualMtGradesRaw->map(fn($g) => $g->grade)->toArray();
 
         // Get MT grade history for all students
         $mtGradeHistory = [];
@@ -696,9 +697,24 @@ class JournalController extends Controller
                 }
             }
 
-            // Count ungraded submissions for MT tab badge
+            // Count ungraded/resubmitted submissions for MT tab badge
             foreach ($mtSubmissions as $hemisId => $sub) {
-                if (!isset($manualMtGrades[$hemisId])) {
+                $gradeVal = $manualMtGrades[$hemisId] ?? null;
+                $gradeRowForBadge = $manualMtGradesRaw[$hemisId] ?? null;
+                $needsBadge = false;
+
+                if ($gradeVal === null) {
+                    // No grade yet - needs grading
+                    $needsBadge = true;
+                } elseif ($gradeVal < 60 && $gradeRowForBadge && $sub->submitted_at) {
+                    // Grade < 60: check if student resubmitted after grade
+                    $grTime = $gradeRowForBadge->updated_at ?? $gradeRowForBadge->created_at;
+                    if ($grTime && \Carbon\Carbon::parse($sub->submitted_at)->gt(\Carbon\Carbon::parse($grTime))) {
+                        $needsBadge = true;
+                    }
+                }
+
+                if ($needsBadge) {
                     $mtUngradedCount++;
                     if ($sub->submitted_at) {
                         $daysSince = \Carbon\Carbon::parse($sub->submitted_at)->diffInDays(now());
@@ -912,7 +928,7 @@ class JournalController extends Controller
             ], 403);
         }
 
-        // If existing grade exists but not a regrade request — it's locked, show regrade option
+        // If existing grade exists but not a regrade request — it's locked
         if ($existingGrade && !$isRegrade) {
             // Count previous attempts
             $attemptCount = DB::table('mt_grade_history')
@@ -923,10 +939,20 @@ class JournalController extends Controller
             $currentAttempt = $attemptCount + 1;
             $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
 
+            // Check if student has resubmitted after the grade
+            $hasResubmitted = false;
+            if ($studentSubmission && $existingGrade->grade < 60) {
+                $gradeTime = $existingGrade->updated_at ?? $existingGrade->created_at;
+                if ($gradeTime && $studentSubmission->submitted_at) {
+                    $hasResubmitted = \Carbon\Carbon::parse($studentSubmission->submitted_at)
+                        ->gt(\Carbon\Carbon::parse($gradeTime));
+                }
+            }
+
             return response()->json([
                 'success' => false,
                 'locked' => true,
-                'can_regrade' => $existingGrade->grade < 60 && $currentAttempt < $maxResubmissions,
+                'can_regrade' => $hasResubmitted && $existingGrade->grade < 60 && $currentAttempt < $maxResubmissions,
                 'message' => 'Baho allaqachon qo\'yilgan.',
                 'grade' => $existingGrade->grade,
                 'attempt' => $currentAttempt,
@@ -958,6 +984,23 @@ class JournalController extends Controller
         }
 
         if ($existingGrade && $isRegrade) {
+            // Verify student has resubmitted after the last grade
+            $gradeTime = $existingGrade->updated_at ?? $existingGrade->created_at;
+            $hasResubmitted = false;
+            if ($gradeTime && $studentSubmission->submitted_at) {
+                $hasResubmitted = \Carbon\Carbon::parse($studentSubmission->submitted_at)
+                    ->gt(\Carbon\Carbon::parse($gradeTime));
+            }
+            if (!$hasResubmitted) {
+                return response()->json([
+                    'success' => false,
+                    'locked' => true,
+                    'can_regrade' => false,
+                    'message' => 'Talaba hali qayta fayl yuklamagan. Qayta baholash mumkin emas.',
+                    'grade' => $existingGrade->grade,
+                ], 403);
+            }
+
             // Re-grading: archive old grade to history first
             $attemptCount = DB::table('mt_grade_history')
                 ->where('student_hemis_id', $studentHemisId)
@@ -1056,7 +1099,8 @@ class JournalController extends Controller
             'success' => true,
             'message' => 'Baho saqlandi',
             'locked' => true,
-            'can_regrade' => $grade < 60 && ($newAttempt ?? 1) < $maxResubmissions,
+            'can_regrade' => false, // Talaba qayta yuklamaguncha qayta baholab bo'lmaydi
+            'waiting_resubmit' => $grade < 60 && ($newAttempt ?? 1) < $maxResubmissions,
             'grade' => $grade,
             'attempt' => $newAttempt ?? 1,
             'max_attempts' => $maxResubmissions,

@@ -424,7 +424,7 @@
                                 </div>
 
                                 <div class="dav-section">
-                                    <span class="dav-label">Dav</span>
+                                    <span class="dav-label">Davomat</span>
                                     <div class="dav-track">
                                         <div class="dav-fill" style="width: {{ $davWidth }}%; background: {{ $davColor }};"></div>
                                     </div>

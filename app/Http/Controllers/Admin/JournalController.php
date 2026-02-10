@@ -657,7 +657,7 @@ class JournalController extends Controller
             $mtGradeHistory[$h->student_hemis_id][] = $h;
         }
 
-        $mtMaxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 2);
+        $mtMaxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
 
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
@@ -813,7 +813,7 @@ class JournalController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->count();
             $currentAttempt = $attemptCount + 1;
-            $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 2);
+            $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
 
             return response()->json([
                 'success' => false,
@@ -843,7 +843,7 @@ class JournalController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->count();
 
-            $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 2);
+            $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
             $currentAttempt = $attemptCount + 1; // current grade's attempt number
 
             if ($currentAttempt >= $maxResubmissions) {
@@ -920,7 +920,7 @@ class JournalController extends Controller
             ->map(fn($h) => ['attempt' => $h->attempt_number, 'grade' => round($h->grade)])
             ->toArray();
 
-        $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 2);
+        $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
 
         return response()->json([
             'success' => true,

@@ -14,7 +14,7 @@ return new class extends Migration {
 
         DB::table('settings')->updateOrInsert(
             ['key' => 'mt_max_resubmissions'],
-            ['value' => '2']
+            ['value' => '3']
         );
     }
 

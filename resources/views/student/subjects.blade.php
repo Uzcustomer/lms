@@ -177,6 +177,8 @@
         .btn-mt-gray { background: #f8fafc; color: #64748b; border-color: #cbd5e1; }
         .btn-mt-gray:hover { background: #f1f5f9; }
         .btn-mt-danger { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
+        .btn-mt-yellow { background: #fefce8; color: #854d0e; border-color: #facc15; }
+        .btn-mt-yellow:hover { background: #fef9c3; box-shadow: 0 4px 12px rgba(234, 179, 8, 0.2); }
         @keyframes mt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
         .btn-mt-pulse { animation: mt-pulse 2s ease-in-out infinite; }
 
@@ -452,7 +454,7 @@
                                                 </button>
                                             @elseif($mt['submission'] && $mt['is_viewed'])
                                                 {{-- Yuklangan + o'qituvchi ko'rgan: Tekshirilmoqda --}}
-                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-blue">
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-yellow">
                                                     Tekshirilmoqda
                                                 </button>
                                             @elseif($mt['submission'])

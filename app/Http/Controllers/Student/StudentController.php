@@ -975,8 +975,36 @@ class StudentController extends Controller
         $file = $request->file('file');
         $filePath = $file->store('independent-submissions/' . $student->hemis_id, 'public');
 
-        // Delete old file if resubmitting
-        if ($existing && $existing->file_path) {
+        // If resubmitting after low grade, archive old grade + old file to mt_grade_history BEFORE overwriting
+        if ($existingGrade && $existingGrade->grade < 60 && $existing) {
+            $attemptCount = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $student->hemis_id)
+                ->where('subject_id', $independent->subject_hemis_id)
+                ->where('semester_code', $independent->semester_code)
+                ->count();
+
+            $now = now();
+            // Archive with OLD file path (before overwrite)
+            DB::table('mt_grade_history')->insert([
+                'student_hemis_id' => $student->hemis_id,
+                'subject_id' => $existingGrade->subject_id,
+                'semester_code' => $independent->semester_code,
+                'attempt_number' => $attemptCount + 1,
+                'grade' => $existingGrade->grade,
+                'file_path' => $existing->file_path, // eski fayl
+                'file_original_name' => $existing->file_original_name,
+                'graded_by' => $existingGrade->employee_name ?? 'Admin',
+                'graded_at' => $existingGrade->updated_at ?? $existingGrade->created_at,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            // Delete old grade from student_grades
+            DB::table('student_grades')->where('id', $existingGrade->id)->delete();
+
+            // Do NOT delete old file — keep it for history download
+        } elseif ($existing && $existing->file_path && !$existingGrade) {
+            // No grade yet, just replacing file — delete old file
             Storage::disk('public')->delete($existing->file_path);
         }
 
@@ -993,20 +1021,6 @@ class StudentController extends Controller
             'submission_count' => $newCount,
             'viewed_at' => null, // Reset viewed status so teacher sees fresh submission
         ]);
-
-        // If resubmitting after low grade, archive old grade to history and remove current
-        if ($existingGrade && $existingGrade->grade < 60) {
-            IndependentGradeHistory::create([
-                'independent_id' => $independent->id,
-                'student_id' => $student->id,
-                'student_hemis_id' => $student->hemis_id,
-                'grade' => $existingGrade->grade,
-                'submission_number' => $existing ? $existing->submission_count - 1 : 1,
-                'graded_by' => $existingGrade->employee_name,
-                'graded_at' => $existingGrade->updated_at,
-            ]);
-            $existingGrade->delete();
-        }
 
         return back()->with('success', 'Fayl muvaffaqiyatli yuklandi');
     }

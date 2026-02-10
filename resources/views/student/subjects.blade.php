@@ -441,19 +441,14 @@
                                                     Baholangan <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['can_resubmit'])
-                                                {{-- Baho < 60, urinish bor: Qayta yuklash --}}
+                                                {{-- Baho < 60, deadline ichida, urinish bor: Qayta yuklash --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
                                                     Qayta yuklash
-                                                </button>
-                                            @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60 && $mt['remaining_attempts'] <= 0)
-                                                {{-- Baho < 60, urinish tugagan: Muddat (imkoniyat) tugagan --}}
-                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
-                                                    Muddat tugagan <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60)
-                                                {{-- Baho < 60, urinish bor: Qayta yuklash --}}
-                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
-                                                    Qayta yuklash
+                                                {{-- Baho < 60: deadline o'tgan yoki urinish tugagan --}}
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
+                                                    Muddat tugagan <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['submission'] && $mt['is_viewed'])
                                                 {{-- Yuklangan + o'qituvchi ko'rgan: Tekshirilmoqda --}}

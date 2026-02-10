@@ -275,10 +275,10 @@ class StudentController extends Controller
             }
         }
 
-        // Pre-load all schedule dates grouped by subject (for MT deadline calculation)
+        // Pre-load ALL schedule dates grouped by subject (for MT deadline calculation)
+        // Barcha dars turlari (ma'ruza, amaliy, ...) kiritiladi - "oxirgi dars" = shu fanning oxirgi darsi
         $allScheduleDatesBySubject = Schedule::where('group_id', $student->group_id)
             ->where('semester_code', $semesterCode)
-            ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->whereNotNull('lesson_date')
             ->orderBy('lesson_date')
             ->get()

@@ -49,6 +49,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
             return redirect()->route('admin.dashboard');
         });
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+        // Role switching
+        Route::post('/switch-role', function (\Illuminate\Http\Request $request) {
+            $user = auth()->user();
+            $role = $request->input('role');
+            if ($user && $user->hasRole($role)) {
+                session(['active_role' => $role]);
+            }
+            return back();
+        })->name('switch-role');
+
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
         Route::post('/students/{student}/reset-local-password', [AdminStudentController::class, 'resetLocalPassword'])->name('students.reset-local-password');
 
@@ -339,6 +350,16 @@ Route::prefix('teacher')->name('teacher.')->middleware(['web'])->group(function 
         });
         Route::get('/dashboard', [TeacherMainController::class, 'index'])->name('dashboard');
         Route::get('/info-me', [TeacherMainController::class, 'info'])->name('info-me');
+
+        // Role switching
+        Route::post('/switch-role', function (\Illuminate\Http\Request $request) {
+            $user = auth()->user();
+            $role = $request->input('role');
+            if ($user && $user->hasRole($role)) {
+                session(['active_role' => $role]);
+            }
+            return back();
+        })->name('switch-role');
         Route::get('/students', [TeacherMainController::class, 'students'])->name('students');
         Route::get('/student/{studentId}/subject/{subjectId}', [TeacherMainController::class, 'studentDetails'])->name('student.details');
         Route::put('/student-grades/{gradeId}', [TeacherMainController::class, 'updateGrade'])->name('update.grade');

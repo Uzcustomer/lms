@@ -1327,13 +1327,16 @@ class JournalController extends Controller
 
             $now = now();
 
+            // Check if auth user exists in users table (admin may use different auth table)
+            $gradedByUserId = DB::table('users')->where('id', auth()->id())->exists() ? auth()->id() : null;
+
             // Update the grade record with retake information
             DB::table('student_grades')
                 ->where('id', $gradeId)
                 ->update([
                     'retake_grade' => $retakeGrade,
                     'status' => 'retake',
-                    'graded_by_user_id' => auth()->id(),
+                    'graded_by_user_id' => $gradedByUserId,
                     'retake_graded_at' => $now,
                     'updated_at' => $now,
                 ]);
@@ -1423,6 +1426,9 @@ class JournalController extends Controller
                 $educationYearName = $curriculum?->education_year_name;
             }
 
+            // Check if auth user exists in users table (admin may use different auth table)
+            $gradedByUserId = DB::table('users')->where('id', auth()->id())->exists() ? auth()->id() : null;
+
             // Create new student_grades record
             DB::table('student_grades')->insert([
                 'hemis_id' => 0,
@@ -1450,7 +1456,7 @@ class JournalController extends Controller
                 'created_at_api' => $now,
                 'status' => 'retake',
                 'reason' => 'low_grade',
-                'graded_by_user_id' => auth()->id(),
+                'graded_by_user_id' => $gradedByUserId,
                 'retake_graded_at' => $now,
                 'created_at' => $now,
                 'updated_at' => $now,

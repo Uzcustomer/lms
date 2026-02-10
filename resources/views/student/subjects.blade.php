@@ -34,10 +34,10 @@
         .stat-card::before {
             content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
         }
-        .stat-card:nth-child(1)::before { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
-        .stat-card:nth-child(2)::before { background: linear-gradient(90deg, #0ea5e9, #06b6d4); }
-        .stat-card:nth-child(3)::before { background: linear-gradient(90deg, #10b981, #34d399); }
-        .stat-card:nth-child(4)::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .stat-card:nth-child(1)::before { background: linear-gradient(90deg, #ec4899, #f472b6); }
+        .stat-card:nth-child(2)::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+        .stat-card:nth-child(3)::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .stat-card:nth-child(4)::before { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
         .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 4px; }
         .stat-value { font-size: 22px; font-weight: 800; color: #0f172a; }
         .stat-value small { font-size: 13px; font-weight: 500; color: #94a3b8; }
@@ -48,7 +48,7 @@
 
         /* ===== TABLE ===== */
         .subjects-card {
-            background: linear-gradient(135deg, #1e3a5f 0%, #2b5ea7 50%, #6366f1 100%);
+            background: linear-gradient(135deg, #f472b6 0%, #a78bfa 40%, #fbbf24 100%);
             border-radius: 16px; padding: 2px;
         }
         .subjects-card-inner { background: white; border-radius: 14px; overflow: hidden; }
@@ -56,32 +56,32 @@
 
         .subjects-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .subjects-table thead th {
-            padding: 14px 8px; font-size: 11px; font-weight: 700;
+            padding: 14px 6px; font-size: 11px; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.05em;
             text-align: center; color: white; white-space: nowrap;
-            background: linear-gradient(135deg, #1e3a5f, #2b5ea7);
+            background: linear-gradient(135deg, #e879a8, #9b7fd4, #e8a940);
         }
         .subjects-table thead th:first-child { border-radius: 14px 0 0 0; }
         .subjects-table thead th:last-child { border-radius: 0 14px 0 0; }
         .subjects-table thead th.text-left { text-align: left; }
 
         .subject-row { transition: all 0.15s; border-left: 4px solid transparent; }
-        .subject-row:nth-child(odd) { background: #fafbff; }
+        .subject-row:nth-child(odd) { background: #fffbfe; }
         .subject-row:nth-child(even) { background: #ffffff; }
-        .subject-row:hover { background: linear-gradient(90deg, #eef2ff, #f5f3ff); border-left-color: #6366f1; }
+        .subject-row:hover { background: linear-gradient(90deg, #fdf2f8, #faf5ff, #fffbeb); border-left-color: #ec4899; }
         .dark .subject-row:nth-child(odd) { background: #1a2332; }
         .dark .subject-row:nth-child(even) { background: #1f2937; }
-        .dark .subject-row:hover { background: linear-gradient(90deg, #1e293b, #1e1b3a); border-left-color: #818cf8; }
-        .subject-row td { padding: 10px 6px; text-align: center; border-bottom: 1px solid #f1f5f9; }
+        .dark .subject-row:hover { background: linear-gradient(90deg, #2d1b2e, #1e1b3a); border-left-color: #f472b6; }
+        .subject-row td { padding: 10px 4px; text-align: center; border-bottom: 1px solid #f5f0f5; }
         .dark .subject-row td { border-bottom-color: #1e293b; }
 
         .subject-number {
             display: inline-flex; align-items: center; justify-content: center;
             width: 26px; height: 26px; border-radius: 50%;
             font-weight: 700; font-size: 11px;
-            background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #4338ca;
+            background: linear-gradient(135deg, #fce7f3, #f9a8d4); color: #be185d;
         }
-        .dark .subject-number { background: #312e81; color: #a5b4fc; }
+        .dark .subject-number { background: #831843; color: #f9a8d4; }
 
         .subject-name { font-weight: 600; color: #1e293b; font-size: 13px; line-height: 1.3; }
         .dark .subject-name { color: #e2e8f0; }
@@ -90,9 +90,9 @@
             display: inline-flex; align-items: center; justify-content: center;
             width: 30px; height: 30px; border-radius: 8px;
             font-weight: 800; font-size: 13px;
-            background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #1e40af;
+            background: linear-gradient(135deg, #ede9fe, #c4b5fd); color: #6d28d9;
         }
-        .dark .credit-badge { background: #1e3a5f; color: #93c5fd; }
+        .dark .credit-badge { background: #4c1d95; color: #c4b5fd; }
 
         /* Grade badges */
         .grade-badge {
@@ -121,43 +121,43 @@
         .btn-detail {
             display: inline-flex; align-items: center; gap: 5px;
             padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
-            background: linear-gradient(135deg, #1a3268, #2b5ea7);
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
             color: white; border: none; cursor: pointer; transition: all 0.15s;
-            box-shadow: 0 2px 6px rgba(26, 50, 104, 0.3);
+            box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
         }
-        .btn-detail:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(26, 50, 104, 0.4); }
+        .btn-detail:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(236, 72, 153, 0.35); }
 
         /* ===== MODAL ===== */
         .modal-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000;
+            position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000;
             display: flex; align-items: center; justify-content: center; padding: 20px;
             backdrop-filter: blur(4px);
         }
         .modal-box {
             background: #fff; border-radius: 16px; width: 100%; max-width: 1100px;
-            max-height: 90vh; box-shadow: 0 25px 60px rgba(0,0,0,0.25);
+            max-height: 90vh; box-shadow: 0 25px 60px rgba(0,0,0,0.2);
             overflow: hidden; display: flex; flex-direction: column;
         }
         .modal-header {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 16px 20px; background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff;
+            padding: 16px 20px; background: linear-gradient(135deg, #e879a8, #9b7fd4, #e8a940); color: #fff;
             flex-shrink: 0;
         }
         .modal-header h3 { font-size: 15px; font-weight: 700; color: #fff; margin: 0; }
         .modal-close {
             width: 32px; height: 32px; border: none;
-            background: rgba(255,255,255,0.15); color: #fff;
+            background: rgba(255,255,255,0.2); color: #fff;
             border-radius: 8px; font-size: 20px; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
             transition: all 0.15s;
         }
-        .modal-close:hover { background: rgba(255,255,255,0.3); }
+        .modal-close:hover { background: rgba(255,255,255,0.35); }
 
         .modal-scroll { overflow-y: auto; flex: 1; }
 
         .modal-info {
-            padding: 14px 20px; background: #f8fafc;
-            border-bottom: 1px solid #e2e8f0;
+            padding: 14px 20px; background: #fefcff;
+            border-bottom: 1px solid #f3e8f9;
         }
         .info-grid { display: flex; flex-wrap: wrap; gap: 20px; }
         .info-item { display: flex; flex-direction: column; }
@@ -167,7 +167,7 @@
         /* Modal tabs */
         .modal-tabs {
             display: flex; gap: 0; padding: 0 20px;
-            background: #f8fafc; border-bottom: 2px solid #e2e8f0;
+            background: #fefcff; border-bottom: 2px solid #f3e8f9;
             position: sticky; top: 0; z-index: 2;
         }
         .modal-tab-btn {
@@ -175,7 +175,7 @@
             color: #64748b; background: transparent; border: none; border-bottom: 2px solid transparent;
             margin-bottom: -2px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
         }
-        .modal-tab-btn.active { color: #1e40af; border-bottom-color: #2b5ea7; background: #fff; }
+        .modal-tab-btn.active { color: #9333ea; border-bottom-color: #a855f7; background: #fff; }
         .modal-tab-btn:hover:not(.active) { color: #475569; }
 
         /* ===== HORIZONTAL TABLE ===== */
@@ -183,10 +183,10 @@
         .h-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
         .h-table thead { position: sticky; top: 0; z-index: 1; }
         .h-table th {
-            background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+            background: linear-gradient(180deg, #fefcff, #faf5ff);
             padding: 6px 4px; text-align: center;
-            font-weight: 600; font-size: 10px; color: #475569;
-            border-bottom: 2px solid #e2e8f0;
+            font-weight: 600; font-size: 10px; color: #6b21a8;
+            border-bottom: 2px solid #e9d5ff;
             min-width: 48px; width: 48px; height: 80px; vertical-align: bottom;
         }
         .h-table th .date-text {
@@ -196,16 +196,16 @@
         }
         .h-table td {
             padding: 10px 4px; text-align: center;
-            border-bottom: 1px solid #f1f5f9; font-weight: 600; font-size: 13px;
+            border-bottom: 1px solid #faf5ff; font-weight: 600; font-size: 13px;
         }
-        .h-table tbody tr:hover td { background: #f0f4ff; }
+        .h-table tbody tr:hover td { background: #fdf4ff; }
         .h-table .avg-col {
-            background: linear-gradient(180deg, #f0fdf4, #dcfce7) !important;
-            font-weight: 800; border-left: 2px solid #bbf7d0; min-width: 70px;
+            background: linear-gradient(180deg, #fdf4ff, #f5d0fe) !important;
+            font-weight: 800; border-left: 2px solid #e9d5ff; min-width: 70px;
         }
         .h-table .avg-col.th-avg {
-            background: linear-gradient(180deg, #dcfce7, #bbf7d0) !important;
-            color: #065f46; vertical-align: middle; height: auto;
+            background: linear-gradient(180deg, #f5d0fe, #e9d5ff) !important;
+            color: #6b21a8; vertical-align: middle; height: auto;
         }
 
         .h-grade-cell {
@@ -219,7 +219,7 @@
         .h-grade-fail { background: #fee2e2; color: #991b1b; }
         .h-grade-nb { background: #fee2e2; color: #dc2626; font-size: 10px; }
         .h-grade-empty { color: #cbd5e1; }
-        .h-grade-qb { background: #d1fae5; color: #065f46; font-size: 10px; }
+        .h-grade-qb { background: #dbeafe; color: #1e40af; font-size: 10px; }
 
         .empty-state { text-align: center; padding: 40px 20px; color: #94a3b8; font-size: 13px; }
 
@@ -268,15 +268,16 @@
                         <table class="subjects-table">
                             <colgroup>
                                 <col style="width: 4%;">
-                                <col style="width: 26%;">
-                                <col style="width: 6%;">
-                                <col style="width: 8%;">
-                                <col style="width: 8%;">
-                                <col style="width: 8%;">
+                                <col style="width: 22%;">
+                                <col style="width: 5%;">
                                 <col style="width: 7%;">
                                 <col style="width: 7%;">
-                                <col style="width: 14%;">
-                                <col style="width: 12%;">
+                                <col style="width: 7%;">
+                                <col style="width: 7%;">
+                                <col style="width: 7%;">
+                                <col style="width: 7%;">
+                                <col style="width: 8%;">
+                                <col style="width: 10%;">
                             </colgroup>
                             <thead>
                                 <tr>
@@ -288,6 +289,7 @@
                                     <th>ON %</th>
                                     <th>OSKI</th>
                                     <th>Test</th>
+                                    <th>YN</th>
                                     <th>Dav %</th>
                                     <th>Batafsil</th>
                                 </tr>
@@ -320,17 +322,19 @@
                                         </td>
                                         <td><span class="grade-badge grade-empty">-</span></td>
                                         <td><span class="grade-badge grade-empty">-</span></td>
+                                        <td><span class="grade-badge grade-empty">-</span></td>
                                         <td>
                                             @php
                                                 $dp = $subject['dav_percent'];
-                                                $davColor = $dp >= 25 ? '#ef4444' : ($dp >= 15 ? '#f59e0b' : '#22c55e');
+                                                $davColor = $dp >= 25 ? '#ef4444' : ($dp >= 15 ? '#f59e0b' : '#8b5cf6');
+                                                $davBarColor = $dp >= 25 ? '#ef4444' : ($dp >= 15 ? '#f59e0b' : '#a78bfa');
                                                 $davWidth = min($dp * 2, 100);
                                             @endphp
                                             <span class="dav-text" style="color: {{ $davColor }};" title="Qoldirgan: {{ $subject['absent_hours'] }} soat / {{ $subject['auditorium_hours'] }} soat">
                                                 {{ number_format($dp, 2) }}%
                                             </span>
                                             <div class="dav-bar">
-                                                <div class="dav-bar-fill" style="width: {{ $davWidth }}%; background: {{ $davColor }};"></div>
+                                                <div class="dav-bar-fill" style="width: {{ $davWidth }}%; background: {{ $davBarColor }};"></div>
                                             </div>
                                         </td>
                                         <td>
@@ -401,7 +405,7 @@
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">Dav %</span>
-                                        <span class="info-value" style="color: {{ $subject['dav_percent'] >= 25 ? '#dc2626' : ($subject['dav_percent'] >= 15 ? '#d97706' : '#059669') }}">
+                                        <span class="info-value" style="color: {{ $subject['dav_percent'] >= 25 ? '#dc2626' : ($subject['dav_percent'] >= 15 ? '#d97706' : '#8b5cf6') }}">
                                             {{ number_format($subject['dav_percent'], 2) }}%
                                         </span>
                                     </div>

@@ -950,18 +950,23 @@
                                                         $gradeRecordId = null;
                                                         $hasRetake = false;
                                                         $isEmpty = false;
+                                                        $retakeType = null;
 
                                                         if ($isAbsent && isset($jbAbsences[$student->hemis_id][$col['date']][$col['pair']])) {
                                                             $absenceData = $jbAbsences[$student->hemis_id][$col['date']][$col['pair']];
                                                             $gradeRecordId = $absenceData['id'];
                                                             $hasRetake = $absenceData['retake_grade'] !== null;
                                                             $showRatingInput = $canRate && !$hasRetake;
-                                                        } elseif ($grade !== null && round($grade, 0) < 60 && $gradeData) {
+                                                            $retakeType = 'absent';
+                                                        } elseif ($gradeData && $gradeData['reason'] === 'low_grade' && $gradeData['retake_grade'] !== null) {
+                                                            // Otrabotka qilingan (original_grade < 60)
+                                                            $hasRetake = true;
+                                                            $retakeType = 'low_grade';
+                                                        } elseif ($gradeData && $gradeData['original_grade'] !== null && round($gradeData['original_grade'], 0) < 60 && ($gradeData['retake_grade'] ?? null) === null) {
+                                                            // 60 dan past, hali otrabotka qilinmagan
                                                             $gradeRecordId = $gradeData['id'];
-                                                            $hasRetake = $gradeData['retake_grade'] !== null;
-                                                            $showRatingInput = $canRate && !$hasRetake;
+                                                            $showRatingInput = $canRate;
                                                         } elseif (!$isAbsent && $grade === null) {
-                                                            // Empty cell - allow creating new grade
                                                             $isEmpty = true;
                                                             $showRatingInput = $canRate;
                                                         }
@@ -972,12 +977,15 @@
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
                                                                 <span class="text-red-600 font-medium">{{ round($grade, 0) }}</span>
                                                             </div>
-                                                        @elseif($hasRetake)
+                                                        @elseif($hasRetake && $retakeType === 'low_grade')
                                                             {{-- 60 dan past + otrabotka qilgan: diagonal split --}}
-                                                            @php $retakeVal = round($gradeData['retake_grade'], 0); @endphp
-                                                            <div class="split-cell" title="Oldingi: {{ round($grade, 0) }}, Otrabotka: {{ $retakeVal }}">
+                                                            @php
+                                                                $origVal = round($gradeData['original_grade'], 0);
+                                                                $retakeVal = round($gradeData['retake_grade'], 0);
+                                                            @endphp
+                                                            <div class="split-cell" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
-                                                                <span class="split-top text-red-600">{{ round($grade, 0) }}</span>
+                                                                <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
                                                         @else
@@ -2234,16 +2242,13 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Show success with calculated grade
-                    cellDiv.innerHTML = `<div class="flex items-center justify-center gap-1">
-                        <span class="grade-retake font-medium">${Math.round(data.retake_grade)}</span>
-                        <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan: ${data.percentage}%">✓</span>
-                    </div>`;
+                    // Bo'sh katak: oddiy baho sifatida ko'rsatish
+                    const gradeVal = Math.round(data.grade);
+                    cellDiv.innerHTML = `<span class="text-gray-900 font-medium">${gradeVal}</span>`;
 
-                    // Show success notification briefly
                     const notification = document.createElement('div');
                     notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
-                    notification.textContent = `Saqlandi: ${Math.round(data.retake_grade)} (${data.percentage}%)`;
+                    notification.textContent = `Saqlandi: ${gradeVal}`;
                     document.body.appendChild(notification);
 
                     setTimeout(() => {

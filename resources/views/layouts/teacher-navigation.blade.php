@@ -74,6 +74,58 @@
                         </x-dropdown>
                     </div>
                 </div>
+                @if(auth()->guard('teacher')->user()->hasRole(['registrator_ofisi']))
+                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                    <div class="flex items-center">
+                        <x-dropdown align="right" width="48">
+                            <x-slot name="trigger">
+                                <button
+                                    class="inline-flex items-center px-1 pt-1 text-sm font-medium leading-5 text-indigo-600 transition duration-150 ease-in-out border-b-2 border-transparent hover:text-indigo-800 hover:border-indigo-300">
+                                    Registrator
+                                    <svg class="w-4 h-4 ms-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd"
+                                            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                            clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+                            </x-slot>
+                            <x-slot name="content">
+                                <x-dropdown-link :href="route('admin.journal.index')">
+                                    Jurnal
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.students.index')">
+                                    Talabalar
+                                </x-dropdown-link>
+                                <div class="border-t border-gray-200 my-1"></div>
+                                <x-dropdown-link :href="route('admin.reports.jn')">
+                                    JN o'zlashtirish
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.reports.lesson-assignment')">
+                                    Dars belgilash
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.reports.schedule-report')">
+                                    Dars jadval mosligi
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.absence_report.index')">
+                                    74 soat dars qoldirish
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.reports.absence')">
+                                    25% sababsiz
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.reports.load-vs-pair')">
+                                    Yuklama vs Juftlik
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.reports.debtors')">
+                                    4≥qarzdorlar
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.reports.sababli-check')">
+                                    Sababli check
+                                </x-dropdown-link>
+                            </x-slot>
+                        </x-dropdown>
+                    </div>
+                </div>
+                @endif
                 <!-- <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('teacher.student-grades.index')"
                                 :active="request()->routeIs('teacher.student-grades.index')">
@@ -210,6 +262,42 @@
                         YN oldi qaydnoma
                     </x-nav-link>
                 </div>
+                @endif
+
+                @if(auth()->guard('teacher')->user()->hasRole(['registrator_ofisi']))
+                <div class="border-t border-gray-200 pt-2 mt-2">
+                    <div class="px-4 text-xs font-semibold text-indigo-600 uppercase">Registrator</div>
+                </div>
+                <x-responsive-nav-link :href="route('admin.journal.index')">
+                    Jurnal
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.students.index')">
+                    Talabalar
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.jn')">
+                    JN o'zlashtirish
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.lesson-assignment')">
+                    Dars belgilash
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.schedule-report')">
+                    Dars jadval mosligi
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.absence_report.index')">
+                    74 soat dars qoldirish
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.absence')">
+                    25% sababsiz
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.load-vs-pair')">
+                    Yuklama vs Juftlik
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.debtors')">
+                    4≥qarzdorlar
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.sababli-check')">
+                    Sababli check
+                </x-responsive-nav-link>
                 @endif
 
                 <!-- Authentication -->

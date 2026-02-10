@@ -59,6 +59,22 @@ class Teacher extends Authenticatable
         'telegram_verified_at' => 'datetime',
     ];
 
+    /**
+     * Accessor for admin layout compatibility (sidebar uses Auth::user()->name)
+     */
+    public function getNameAttribute()
+    {
+        return $this->full_name ?? $this->short_name;
+    }
+
+    /**
+     * Accessor for admin layout compatibility (sidebar uses Auth::user()->email)
+     */
+    public function getEmailAttribute()
+    {
+        return $this->login;
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

@@ -990,38 +990,70 @@
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 80px;">Baho</th>
-                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 60px;">Saqlash</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 120px;">Tarix</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 100px;">Amal</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach ($students as $index => $student)
                                         @php
-                                            // Get existing manual MT grade (without lesson_date)
                                             $manualGrade = $manualMtGrades[$student->hemis_id] ?? null;
-                                            $isLocked = $manualGrade !== null && $manualGrade >= 60;
+                                            $hasGrade = $manualGrade !== null;
+                                            $isLockedPermanent = $hasGrade && $manualGrade >= 60;
+                                            $history = $mtGradeHistory[$student->hemis_id] ?? [];
+                                            $currentAttempt = count($history) + ($hasGrade ? 1 : 0);
+                                            $canRegrade = $hasGrade && $manualGrade < 60 && $currentAttempt < $mtMaxResubmissions;
                                         @endphp
-                                        <tr>
+                                        <tr id="mt-row-{{ $student->hemis_id }}">
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
                                             <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
                                             <td class="px-1 py-1 text-center">
                                                 <input type="number"
                                                     id="mt-grade-{{ $student->hemis_id }}"
-                                                    class="mt-grade-input w-16 px-1 py-0.5 text-center text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500 {{ $isLocked ? 'bg-gray-100 text-gray-500' : '' }}"
+                                                    class="mt-grade-input w-16 px-1 py-0.5 text-center text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500 {{ $hasGrade ? 'bg-gray-100 text-gray-500' : '' }}"
                                                     min="0" max="100" step="1"
-                                                    value="{{ $manualGrade !== null ? round($manualGrade) : '' }}"
+                                                    value="{{ $hasGrade ? round($manualGrade) : '' }}"
                                                     data-student-id="{{ $student->hemis_id }}"
                                                     placeholder="0-100"
-                                                    {{ $isLocked ? 'disabled' : '' }}>
+                                                    {{ $hasGrade ? 'disabled' : '' }}>
                                             </td>
-                                            <td class="px-1 py-1 text-center">
-                                                @if($isLocked)
-                                                    <span class="save-btn px-2 py-0.5 text-xs bg-gray-300 text-gray-500 rounded cursor-not-allowed">🔒</span>
+                                            <td class="px-1 py-1 text-center" id="mt-history-{{ $student->hemis_id }}">
+                                                @if(count($history) > 0)
+                                                    @foreach($history as $h)
+                                                        <span class="inline-block px-1.5 py-0.5 text-xs rounded {{ $h->grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }} mr-0.5" title="{{ $h->attempt_number }}-urinish: {{ $h->graded_by ?? '' }}">
+                                                            {{ $h->attempt_number }}: {{ round($h->grade) }}
+                                                        </span>
+                                                    @endforeach
                                                 @else
+                                                    <span class="text-gray-300">—</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-1 py-1 text-center" id="mt-action-{{ $student->hemis_id }}">
+                                                @if(!$hasGrade)
+                                                    {{-- No grade yet: show Save button --}}
                                                     <button type="button"
                                                         onclick="saveMtGrade('{{ $student->hemis_id }}')"
                                                         class="save-btn px-2 py-0.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none">
                                                         Saqlash
                                                     </button>
+                                                @elseif($isLockedPermanent)
+                                                    {{-- Grade >= 60: permanently locked --}}
+                                                    <span class="inline-flex items-center px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">
+                                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
+                                                        Qabul qilindi
+                                                    </span>
+                                                @elseif($canRegrade)
+                                                    {{-- Grade < 60, can regrade --}}
+                                                    <button type="button"
+                                                        onclick="startRegrade('{{ $student->hemis_id }}')"
+                                                        class="regrade-btn px-2 py-0.5 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 focus:outline-none">
+                                                        Qayta baholash
+                                                    </button>
+                                                @else
+                                                    {{-- Grade < 60, max attempts reached --}}
+                                                    <span class="inline-flex items-center px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">
+                                                        Limit tugagan
+                                                    </span>
                                                 @endif
                                             </td>
                                         </tr>
@@ -1658,18 +1690,37 @@
             csrfToken: '{{ csrf_token() }}'
         };
 
-        function lockMtGradeRow(input, button, grade) {
-            input.value = Math.round(grade);
-            input.disabled = true;
-            input.classList.add('bg-gray-100', 'text-gray-500');
-            button.textContent = '🔒';
-            button.disabled = true;
-            button.classList.remove('bg-blue-500', 'bg-green-500', 'hover:bg-blue-600');
-            button.classList.add('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
-            button.removeAttribute('onclick');
+        function updateMtHistoryCell(studentHemisId, history) {
+            const cell = document.getElementById('mt-history-' + studentHemisId);
+            if (!cell || !history || history.length === 0) return;
+            let html = '';
+            history.forEach(h => {
+                const cls = h.grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+                html += '<span class="inline-block px-1.5 py-0.5 text-xs rounded ' + cls + ' mr-0.5">' +
+                        h.attempt + ': ' + Math.round(h.grade) + '</span>';
+            });
+            cell.innerHTML = html;
         }
 
-        function saveMtGrade(studentHemisId) {
+        function updateMtActionCell(studentHemisId, data) {
+            const cell = document.getElementById('mt-action-' + studentHemisId);
+            if (!cell) return;
+
+            const grade = parseFloat(data.grade);
+            if (grade >= 60) {
+                cell.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">' +
+                    '<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>' +
+                    'Qabul qilindi</span>';
+            } else if (data.can_regrade) {
+                cell.innerHTML = '<button type="button" onclick="startRegrade(\'' + studentHemisId + '\')" ' +
+                    'class="regrade-btn px-2 py-0.5 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 focus:outline-none">' +
+                    'Qayta baholash</button>';
+            } else {
+                cell.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">Limit tugagan</span>';
+            }
+        }
+
+        function saveMtGrade(studentHemisId, isRegrade) {
             const input = document.getElementById('mt-grade-' + studentHemisId);
             const grade = input.value;
 
@@ -1678,10 +1729,10 @@
                 return;
             }
 
-            const button = input.closest('tr').querySelector('.save-btn');
-            const originalText = button.textContent;
-            button.textContent = '...';
-            button.disabled = true;
+            // Disable input while saving
+            const actionCell = document.getElementById('mt-action-' + studentHemisId);
+            const buttons = actionCell.querySelectorAll('button');
+            buttons.forEach(b => { b.textContent = '...'; b.disabled = true; });
 
             fetch(mtGradeConfig.url, {
                 method: 'POST',
@@ -1694,43 +1745,69 @@
                     student_hemis_id: studentHemisId,
                     subject_id: mtGradeConfig.subjectId,
                     semester_code: mtGradeConfig.semesterCode,
-                    grade: parseFloat(grade)
+                    grade: parseFloat(grade),
+                    regrade: isRegrade ? true : false
                 })
             })
             .then(response => response.json().then(data => ({ ok: response.ok, data })))
             .then(({ ok, data }) => {
                 if (data.success) {
-                    if (data.locked) {
-                        // Grade >= 60: lock permanently
-                        lockMtGradeRow(input, button, data.grade);
-                    } else {
-                        // Grade < 60: show OK briefly, allow re-editing
-                        button.textContent = 'OK!';
-                        button.classList.remove('bg-blue-500');
-                        button.classList.add('bg-green-500');
-                        setTimeout(() => {
-                            button.textContent = originalText;
-                            button.classList.remove('bg-green-500');
-                            button.classList.add('bg-blue-500');
-                            button.disabled = false;
-                        }, 1500);
+                    // Lock the input
+                    input.value = Math.round(data.grade);
+                    input.disabled = true;
+                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    // Update history
+                    if (data.history) {
+                        updateMtHistoryCell(studentHemisId, data.history);
                     }
-                } else if (data.locked) {
-                    // Already locked on server
-                    lockMtGradeRow(input, button, data.grade);
+                    // Update action cell
+                    updateMtActionCell(studentHemisId, data);
+                } else if (data.locked && !data.can_regrade) {
+                    // Permanently locked
+                    input.value = Math.round(data.grade);
+                    input.disabled = true;
+                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    updateMtActionCell(studentHemisId, data);
                     alert(data.message);
+                } else if (data.locked && data.can_regrade) {
+                    // Already graded, can regrade
+                    input.value = Math.round(data.grade);
+                    input.disabled = true;
+                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    updateMtActionCell(studentHemisId, data);
                 } else {
                     alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
-                    button.textContent = originalText;
-                    button.disabled = false;
+                    buttons.forEach(b => { b.textContent = 'Saqlash'; b.disabled = false; });
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
-                button.textContent = originalText;
-                button.disabled = false;
+                buttons.forEach(b => { b.textContent = 'Saqlash'; b.disabled = false; });
             });
+        }
+
+        function startRegrade(studentHemisId) {
+            const input = document.getElementById('mt-grade-' + studentHemisId);
+            const actionCell = document.getElementById('mt-action-' + studentHemisId);
+
+            // Unlock input for new grade
+            input.disabled = false;
+            input.classList.remove('bg-gray-100', 'text-gray-500');
+            input.value = '';
+            input.focus();
+
+            // Show save button for regrade
+            actionCell.innerHTML =
+                '<button type="button" onclick="saveMtGrade(\'' + studentHemisId + '\', true)" ' +
+                'class="save-btn px-2 py-0.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none mr-1">Saqlash</button>' +
+                '<button type="button" onclick="cancelRegrade(\'' + studentHemisId + '\')" ' +
+                'class="px-2 py-0.5 text-xs bg-gray-400 text-white rounded hover:bg-gray-500 focus:outline-none">Bekor</button>';
+        }
+
+        function cancelRegrade(studentHemisId) {
+            // Reload the page to restore original state
+            location.reload();
         }
 
         function switchTab(tabName) {

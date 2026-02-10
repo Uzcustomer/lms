@@ -644,6 +644,21 @@ class JournalController extends Controller
             ->pluck('grade', 'student_hemis_id')
             ->toArray();
 
+        // Get MT grade history for all students
+        $mtGradeHistoryRaw = DB::table('mt_grade_history')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->orderBy('attempt_number')
+            ->get();
+
+        $mtGradeHistory = [];
+        foreach ($mtGradeHistoryRaw as $h) {
+            $mtGradeHistory[$h->student_hemis_id][] = $h;
+        }
+
+        $mtMaxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 2);
+
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
 
@@ -723,6 +738,8 @@ class JournalController extends Controller
             'otherGrades',
             'attendanceData',
             'manualMtGrades',
+            'mtGradeHistory',
+            'mtMaxResubmissions',
             'totalAcload',
             'auditoriumHours',
             'groupId',
@@ -747,6 +764,7 @@ class JournalController extends Controller
         $subjectId = $request->subject_id;
         $semesterCode = $request->semester_code;
         $grade = $request->grade;
+        $isRegrade = (bool) $request->input('regrade', false);
 
         // Get student info
         $student = DB::table('students')
@@ -775,13 +793,36 @@ class JournalController extends Controller
             ->whereNull('lesson_date')
             ->first();
 
-        // If existing grade >= 60, it's locked — cannot be changed
+        // If existing grade >= 60, it's permanently locked
         if ($existingGrade && $existingGrade->grade >= 60) {
             return response()->json([
                 'success' => false,
                 'locked' => true,
+                'can_regrade' => false,
                 'message' => 'Baho qulflangan (>= 60). O\'zgartirib bo\'lmaydi.',
                 'grade' => $existingGrade->grade,
+            ], 403);
+        }
+
+        // If existing grade exists but not a regrade request — it's locked, show regrade option
+        if ($existingGrade && !$isRegrade) {
+            // Count previous attempts
+            $attemptCount = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->count();
+            $currentAttempt = $attemptCount + 1;
+            $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 2);
+
+            return response()->json([
+                'success' => false,
+                'locked' => true,
+                'can_regrade' => $existingGrade->grade < 60 && $currentAttempt < $maxResubmissions,
+                'message' => 'Baho allaqachon qo\'yilgan.',
+                'grade' => $existingGrade->grade,
+                'attempt' => $currentAttempt,
+                'max_attempts' => $maxResubmissions,
             ], 403);
         }
 
@@ -794,18 +835,54 @@ class JournalController extends Controller
         $educationYearCode = $curriculum?->education_year_code;
         $educationYearName = $curriculum?->education_year_name;
 
-        if ($existingGrade) {
-            // Update existing grade
+        if ($existingGrade && $isRegrade) {
+            // Re-grading: archive old grade to history first
+            $attemptCount = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->count();
+
+            $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 2);
+            $currentAttempt = $attemptCount + 1; // current grade's attempt number
+
+            if ($currentAttempt >= $maxResubmissions) {
+                return response()->json([
+                    'success' => false,
+                    'locked' => true,
+                    'can_regrade' => false,
+                    'message' => "Qayta baholash limiti tugagan ({$maxResubmissions} urinish).",
+                    'grade' => $existingGrade->grade,
+                ], 403);
+            }
+
+            // Archive current grade to history
+            DB::table('mt_grade_history')->insert([
+                'student_hemis_id' => $studentHemisId,
+                'subject_id' => $subjectId,
+                'semester_code' => $semesterCode,
+                'attempt_number' => $currentAttempt,
+                'grade' => $existingGrade->grade,
+                'graded_by' => auth()->user()?->name ?? 'Admin',
+                'graded_at' => $existingGrade->updated_at ?? $existingGrade->created_at,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $newAttempt = $currentAttempt + 1;
+
+            // Update existing grade with new value
             DB::table('student_grades')
                 ->where('id', $existingGrade->id)
                 ->update([
                     'grade' => $grade,
                     'updated_at' => $now,
                 ]);
-        } else {
-            // Insert new manual grade
+        } elseif (!$existingGrade) {
+            $newAttempt = 1;
+            // Insert new manual grade (first attempt)
             DB::table('student_grades')->insert([
-                'hemis_id' => 0, // Manual entry
+                'hemis_id' => 0,
                 'student_id' => $student->id,
                 'student_hemis_id' => $studentHemisId,
                 'semester_code' => $semesterCode,
@@ -816,7 +893,7 @@ class JournalController extends Controller
                 'subject_id' => $subjectId,
                 'subject_name' => $subject->subject_name ?? '',
                 'subject_code' => $subject->subject_code ?? '',
-                'training_type_code' => 99, // MT
+                'training_type_code' => 99,
                 'training_type_name' => "Mustaqil ta'lim",
                 'employee_id' => 0,
                 'employee_name' => 'Manual Entry',
@@ -825,7 +902,7 @@ class JournalController extends Controller
                 'lesson_pair_start_time' => '00:00',
                 'lesson_pair_end_time' => '00:00',
                 'grade' => $grade,
-                'lesson_date' => null, // Manual entries have no lesson date
+                'lesson_date' => null,
                 'created_at_api' => $now,
                 'status' => 'recorded',
                 'created_at' => $now,
@@ -833,11 +910,27 @@ class JournalController extends Controller
             ]);
         }
 
+        // Get updated history for response
+        $history = DB::table('mt_grade_history')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->orderBy('attempt_number')
+            ->get()
+            ->map(fn($h) => ['attempt' => $h->attempt_number, 'grade' => round($h->grade)])
+            ->toArray();
+
+        $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 2);
+
         return response()->json([
             'success' => true,
-            'message' => 'Grade saved successfully',
-            'locked' => $grade >= 60,
+            'message' => 'Baho saqlandi',
+            'locked' => true,
+            'can_regrade' => $grade < 60 && ($newAttempt ?? 1) < $maxResubmissions,
             'grade' => $grade,
+            'attempt' => $newAttempt ?? 1,
+            'max_attempts' => $maxResubmissions,
+            'history' => $history,
         ]);
     }
 

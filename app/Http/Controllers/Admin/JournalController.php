@@ -645,53 +645,64 @@ class JournalController extends Controller
             ->toArray();
 
         // Get MT grade history for all students
-        $mtGradeHistoryRaw = DB::table('mt_grade_history')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->orderBy('attempt_number')
-            ->get();
-
         $mtGradeHistory = [];
-        foreach ($mtGradeHistoryRaw as $h) {
-            $mtGradeHistory[$h->student_hemis_id][] = $h;
+        $mtGradeHistoryRaw = collect();
+        if (\Schema::hasTable('mt_grade_history')) {
+            $mtGradeHistoryRaw = DB::table('mt_grade_history')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->orderBy('attempt_number')
+                ->get();
+
+            foreach ($mtGradeHistoryRaw as $h) {
+                $mtGradeHistory[$h->student_hemis_id][] = $h;
+            }
         }
 
         $mtMaxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
 
         // Get student file submissions for this subject's independent assignments
         $mtSubmissions = [];
-        $independentIds = DB::table('independents')
-            ->where('group_hemis_id', $group->group_hemis_id)
-            ->where('subject_hemis_id', $subject->curriculum_subject_hemis_id ?? 0)
-            ->where('semester_code', $semesterCode)
-            ->pluck('id')
-            ->toArray();
-
-        if (!empty($independentIds)) {
-            $submissionsRaw = DB::table('independent_submissions')
-                ->whereIn('independent_id', $independentIds)
-                ->get();
-            foreach ($submissionsRaw as $sub) {
-                // Keep latest submission per student (by submitted_at)
-                if (!isset($mtSubmissions[$sub->student_hemis_id])
-                    || $sub->submitted_at > $mtSubmissions[$sub->student_hemis_id]->submitted_at) {
-                    $mtSubmissions[$sub->student_hemis_id] = $sub;
-                }
-            }
-        }
-
-        // Count ungraded submissions for MT tab badge
         $mtUngradedCount = 0;
         $mtDangerCount = 0;
-        foreach ($mtSubmissions as $hemisId => $sub) {
-            if (!isset($manualMtGrades[$hemisId])) {
-                $mtUngradedCount++;
-                $daysSince = \Carbon\Carbon::parse($sub->submitted_at)->diffInDays(now());
-                if ($daysSince >= 3) {
-                    $mtDangerCount++;
+        try {
+            $subjectHemisId = $subject->curriculum_subject_hemis_id ?? null;
+            if ($subjectHemisId) {
+                $independentIds = DB::table('independents')
+                    ->where('group_hemis_id', $group->group_hemis_id)
+                    ->where('subject_hemis_id', $subjectHemisId)
+                    ->where('semester_code', $semesterCode)
+                    ->pluck('id')
+                    ->toArray();
+
+                if (!empty($independentIds) && \Schema::hasTable('independent_submissions')) {
+                    $submissionsRaw = DB::table('independent_submissions')
+                        ->whereIn('independent_id', $independentIds)
+                        ->get();
+                    foreach ($submissionsRaw as $sub) {
+                        if (!isset($mtSubmissions[$sub->student_hemis_id])
+                            || ($sub->submitted_at ?? '') > ($mtSubmissions[$sub->student_hemis_id]->submitted_at ?? '')) {
+                            $mtSubmissions[$sub->student_hemis_id] = $sub;
+                        }
+                    }
                 }
             }
+
+            // Count ungraded submissions for MT tab badge
+            foreach ($mtSubmissions as $hemisId => $sub) {
+                if (!isset($manualMtGrades[$hemisId])) {
+                    $mtUngradedCount++;
+                    if ($sub->submitted_at) {
+                        $daysSince = \Carbon\Carbon::parse($sub->submitted_at)->diffInDays(now());
+                        if ($daysSince >= 3) {
+                            $mtDangerCount++;
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning('MT submissions query failed: ' . $e->getMessage());
         }
 
         // Get total academic load from curriculum subject

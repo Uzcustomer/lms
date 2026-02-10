@@ -353,6 +353,28 @@ class StudentController extends Controller
                 ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                 : 0;
 
+            // JB daily data for horizontal view
+            $jbAbsentDates = [];
+            foreach ($jbGradesRaw as $g) {
+                if ($g->reason === 'absent') {
+                    $jbAbsentDates[$g->lesson_date] = true;
+                }
+            }
+            $jbDailyData = [];
+            foreach ($jbLessonDates as $date) {
+                $dayGradesH = $jbGradesByDatePair[$date] ?? [];
+                $pairsInDayH = $jbPairsPerDay[$date] ?? 1;
+                $hasGradesH = !empty($dayGradesH);
+                $gradeSumH = array_sum($dayGradesH);
+                $dayAvgH = $hasGradesH ? round($gradeSumH / $pairsInDayH, 0, PHP_ROUND_HALF_UP) : 0;
+                $jbDailyData[] = [
+                    'date' => $date,
+                    'average' => $dayAvgH,
+                    'has_grades' => $hasGradesH,
+                    'is_absent' => !$hasGradesH && isset($jbAbsentDates[$date]),
+                ];
+            }
+
             // ---- MT (Mustaqil ta'lim) ----
             $mtScheduleRows = DB::table('schedules')
                 ->where('group_id', $groupHemisId)
@@ -411,6 +433,28 @@ class StudentController extends Controller
             $mtAverage = $totalMtDays > 0
                 ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
                 : 0;
+
+            // MT daily data for horizontal view
+            $mtAbsentDates = [];
+            foreach ($mtGradesRaw as $g) {
+                if ($g->reason === 'absent') {
+                    $mtAbsentDates[$g->lesson_date] = true;
+                }
+            }
+            $mtDailyData = [];
+            foreach ($mtLessonDates as $date) {
+                $dayGradesH = $mtGradesByDatePair[$date] ?? [];
+                $pairsInDayH = $mtPairsPerDay[$date] ?? 1;
+                $hasGradesH = !empty($dayGradesH);
+                $gradeSumH = array_sum($dayGradesH);
+                $dayAvgH = $hasGradesH ? round($gradeSumH / $pairsInDayH, 0, PHP_ROUND_HALF_UP) : 0;
+                $mtDailyData[] = [
+                    'date' => $date,
+                    'average' => $dayAvgH,
+                    'has_grades' => $hasGradesH,
+                    'is_absent' => !$hasGradesH && isset($mtAbsentDates[$date]),
+                ];
+            }
 
             // Manual MT baho bo'lsa override
             $manualMt = DB::table('student_grades')
@@ -529,6 +573,16 @@ class StudentController extends Controller
                     ];
                 });
 
+            // Ma'ruza attendance grouped by date for horizontal view
+            $lectureByDate = $lectureAttendance->groupBy('lesson_date')->map(function($items, $date) {
+                $hasAbsent = $items->contains(fn($i) => $i['status'] === 'NB');
+                return [
+                    'date' => $date,
+                    'status' => $hasAbsent ? 'NB' : 'QB',
+                    'pairs' => $items->count(),
+                ];
+            })->sortKeys()->values()->toArray();
+
             // Baholarni tur bo'yicha ajratish
             $amaliyGrades = [];
             $mtDetailGrades = [];
@@ -569,6 +623,9 @@ class StudentController extends Controller
                 'lecture_attendance' => $lectureAttendance->toArray(),
                 'amaliy_grades' => $amaliyGrades,
                 'mt_grades' => $mtDetailGrades,
+                'jb_daily_data' => $jbDailyData,
+                'mt_daily_data' => $mtDailyData,
+                'lecture_by_date' => $lectureByDate,
             ];
         });
 

@@ -17,7 +17,7 @@
             Dashboard
         </a>
 
-        @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
+        @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
         <a href="{{ route('admin.journal.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.journal.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -195,7 +195,7 @@
             Sababli check
         </a>
 
-        @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya']))
+        @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya', 'registrator_ofisi']))
         <a href="{{ route('admin.examtest.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.examtest.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

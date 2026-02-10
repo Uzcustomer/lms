@@ -240,19 +240,19 @@
                                         </td>
                                         <td class="px-2 py-3 text-center">
                                             @php $v = $subject['jn_average']; @endphp
-                                            <span class="grade-badge {{ $v >= 86 ? 'grade-excellent' : ($v >= 71 ? 'grade-good' : ($v >= 60 ? 'grade-ok' : ($v > 0 ? 'grade-fail' : 'grade-empty'))) }}">
+                                            <span class="grade-badge {{ $v >= 90 ? 'grade-excellent' : ($v >= 70 ? 'grade-good' : ($v >= 60 ? 'grade-ok' : ($v > 0 ? 'grade-fail' : 'grade-empty'))) }}">
                                                 {{ $v > 0 ? $v : '-' }}
                                             </span>
                                         </td>
                                         <td class="px-2 py-3 text-center">
                                             @php $v = $subject['mt_average']; @endphp
-                                            <span class="grade-badge {{ $v >= 86 ? 'grade-excellent' : ($v >= 71 ? 'grade-good' : ($v >= 60 ? 'grade-ok' : ($v > 0 ? 'grade-fail' : 'grade-empty'))) }}">
+                                            <span class="grade-badge {{ $v >= 90 ? 'grade-excellent' : ($v >= 70 ? 'grade-good' : ($v >= 60 ? 'grade-ok' : ($v > 0 ? 'grade-fail' : 'grade-empty'))) }}">
                                                 {{ $v > 0 ? $v : '-' }}
                                             </span>
                                         </td>
                                         <td class="px-2 py-3 text-center">
                                             @php $v = $subject['on']; @endphp
-                                            <span class="grade-badge {{ $v !== null ? ($v >= 86 ? 'grade-excellent' : ($v >= 71 ? 'grade-good' : ($v >= 60 ? 'grade-ok' : 'grade-fail'))) : 'grade-empty' }}">
+                                            <span class="grade-badge {{ $v !== null ? ($v >= 90 ? 'grade-excellent' : ($v >= 70 ? 'grade-good' : ($v >= 60 ? 'grade-ok' : 'grade-fail'))) : 'grade-empty' }}">
                                                 {{ $v !== null ? $v : '-' }}
                                             </span>
                                         </td>
@@ -392,7 +392,7 @@
                                                                                     $statusText = 'Qayta';
                                                                                 }
                                                                                 $gradeNum = is_numeric($ag['retake_grade'] ?? null) ? $ag['retake_grade'] : (is_numeric($ag['grade']) ? $ag['grade'] : 0);
-                                                                                $gradeColor = $gradeNum >= 86 ? '#059669' : ($gradeNum >= 71 ? '#2563eb' : ($gradeNum >= 60 ? '#d97706' : '#dc2626'));
+                                                                                $gradeColor = $gradeNum >= 90 ? '#059669' : ($gradeNum >= 70 ? '#2563eb' : ($gradeNum >= 60 ? '#d97706' : '#dc2626'));
                                                                             @endphp
                                                                             <tr>
                                                                                 <td class="text-center text-gray-400">{{ $ai + 1 }}</td>
@@ -450,7 +450,7 @@
                                                                                     $statusText = 'Qayta';
                                                                                 }
                                                                                 $gradeNum = is_numeric($mg['retake_grade'] ?? null) ? $mg['retake_grade'] : (is_numeric($mg['grade']) ? $mg['grade'] : 0);
-                                                                                $gradeColor = $gradeNum >= 86 ? '#059669' : ($gradeNum >= 71 ? '#2563eb' : ($gradeNum >= 60 ? '#d97706' : '#dc2626'));
+                                                                                $gradeColor = $gradeNum >= 90 ? '#059669' : ($gradeNum >= 70 ? '#2563eb' : ($gradeNum >= 60 ? '#d97706' : '#dc2626'));
                                                                             @endphp
                                                                             <tr>
                                                                                 <td class="text-center text-gray-400">{{ $mi + 1 }}</td>

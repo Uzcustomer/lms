@@ -365,6 +365,7 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        @keyframes badge-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
         .tab-btn {
             padding: 10px 24px;
             font-size: 14px;
@@ -508,10 +509,10 @@
                             Amaliyot
                         </button>
                         <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
-                            class="tab-btn relative">
+                            class="tab-btn" style="position: relative;">
                             Mustaqil ta'lim
                             @if(($mtUngradedCount ?? 0) > 0)
-                                <span class="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white {{ ($mtDangerCount ?? 0) > 0 ? 'bg-red-500 animate-pulse' : 'bg-orange-400' }} rounded-full">{{ $mtUngradedCount }}</span>
+                                <span style="position: absolute; top: -6px; right: -6px; display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; font-size: 11px; font-weight: 700; color: #fff; background: {{ ($mtDangerCount ?? 0) > 0 ? '#ef4444' : '#f59e0b' }}; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);{{ ($mtDangerCount ?? 0) > 0 ? ' animation: badge-pulse 1.5s ease-in-out infinite;' : '' }}">{{ $mtUngradedCount }}</span>
                             @endif
                         </button>
                     </div>
@@ -645,17 +646,16 @@
             <div id="content-amaliyot" class="tab-content">
                 <div class="bg-white">
                     @if(($mtUngradedCount ?? 0) > 0)
-                        <div class="mx-2 mb-2 p-2.5 rounded-lg border cursor-pointer {{ ($mtDangerCount ?? 0) > 0 ? 'bg-red-50 border-red-300' : 'bg-yellow-50 border-yellow-300' }}" onclick="switchTab('mustaqil')">
-                            <div class="flex items-center gap-2">
-                                <span class="{{ ($mtDangerCount ?? 0) > 0 ? 'text-red-600 animate-pulse' : 'text-yellow-600' }} text-base">&#9888;</span>
-                                <span class="text-xs font-bold {{ ($mtDangerCount ?? 0) > 0 ? 'text-red-700' : 'text-yellow-700' }}">
-                                    {{ $mtUngradedCount }} ta MT topshiriq baholanmagan!
-                                    @if(($mtDangerCount ?? 0) > 0)
-                                        ({{ $mtDangerCount }} tasi 3+ kun)
-                                    @endif
-                                </span>
-                                <span class="text-xs {{ ($mtDangerCount ?? 0) > 0 ? 'text-red-500' : 'text-yellow-600' }} underline ml-auto">MT tabiga o'tish &rarr;</span>
-                            </div>
+                        @php $isDanger = ($mtDangerCount ?? 0) > 0; @endphp
+                        <div onclick="switchTab('mustaqil')" style="margin: 0 8px 8px; padding: 10px 14px; border-radius: 8px; border: 1px solid {{ $isDanger ? '#fca5a5' : '#fcd34d' }}; background: {{ $isDanger ? '#fef2f2' : '#fefce8' }}; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 16px;{{ $isDanger ? ' animation: badge-pulse 1.5s ease-in-out infinite;' : '' }}">&#9888;</span>
+                            <span style="font-size: 12px; font-weight: 700; color: {{ $isDanger ? '#991b1b' : '#92400e' }};">
+                                {{ $mtUngradedCount }} ta MT topshiriq baholanmagan!
+                                @if($isDanger)
+                                    ({{ $mtDangerCount }} tasi 3+ kun)
+                                @endif
+                            </span>
+                            <span style="font-size: 12px; color: {{ $isDanger ? '#dc2626' : '#d97706' }}; text-decoration: underline; margin-left: auto;">MT tabiga o'tish &rarr;</span>
                         </div>
                     @endif
                     @if($students->isEmpty())
@@ -1013,21 +1013,24 @@
                         @endphp
 
                         @if($mtUngradedCount > 0)
-                            <div class="mx-2 mb-3 p-3 rounded-lg border {{ $mtDangerCount > 0 ? 'bg-red-50 border-red-300' : ($warningCount > 0 ? 'bg-yellow-50 border-yellow-300' : 'bg-blue-50 border-blue-200') }}">
-                                <div class="flex items-center gap-2">
-                                    @if($mtDangerCount > 0)
-                                        <span class="text-red-600 text-lg animate-pulse">&#9888;</span>
-                                        <span class="text-sm font-bold text-red-700">{{ $mtUngradedCount }} ta baholanmagan topshiriq!</span>
-                                        <span class="text-xs text-red-500">({{ $mtDangerCount }} tasi 3+ kun kutmoqda)</span>
-                                    @elseif($warningCount > 0)
-                                        <span class="text-yellow-600 text-lg">&#9888;</span>
-                                        <span class="text-sm font-bold text-yellow-700">{{ $mtUngradedCount }} ta baholanmagan topshiriq</span>
-                                        <span class="text-xs text-yellow-600">({{ $warningCount }} tasi 1+ kun kutmoqda)</span>
-                                    @else
-                                        <span class="text-blue-500 text-lg">&#128276;</span>
-                                        <span class="text-sm font-medium text-blue-700">{{ $mtUngradedCount }} ta yangi topshiriq baholashni kutmoqda</span>
-                                    @endif
-                                </div>
+                            @php
+                                if ($mtDangerCount > 0) { $bannerBg = '#fef2f2'; $bannerBorder = '#fca5a5'; $bannerColor = '#991b1b'; }
+                                elseif ($warningCount > 0) { $bannerBg = '#fefce8'; $bannerBorder = '#fcd34d'; $bannerColor = '#92400e'; }
+                                else { $bannerBg = '#eff6ff'; $bannerBorder = '#93c5fd'; $bannerColor = '#1e40af'; }
+                            @endphp
+                            <div style="margin: 0 8px 12px; padding: 10px 14px; border-radius: 8px; border: 1px solid {{ $bannerBorder }}; background: {{ $bannerBg }}; display: flex; align-items: center; gap: 8px;">
+                                @if($mtDangerCount > 0)
+                                    <span style="font-size: 18px; animation: badge-pulse 1.5s ease-in-out infinite;">&#9888;</span>
+                                    <span style="font-size: 13px; font-weight: 700; color: {{ $bannerColor }};">{{ $mtUngradedCount }} ta baholanmagan topshiriq!</span>
+                                    <span style="font-size: 11px; color: #dc2626;">({{ $mtDangerCount }} tasi 3+ kun kutmoqda)</span>
+                                @elseif($warningCount > 0)
+                                    <span style="font-size: 18px;">&#9888;</span>
+                                    <span style="font-size: 13px; font-weight: 700; color: {{ $bannerColor }};">{{ $mtUngradedCount }} ta baholanmagan topshiriq</span>
+                                    <span style="font-size: 11px; color: #d97706;">({{ $warningCount }} tasi 1+ kun kutmoqda)</span>
+                                @else
+                                    <span style="font-size: 18px;">&#128276;</span>
+                                    <span style="font-size: 13px; font-weight: 600; color: {{ $bannerColor }};">{{ $mtUngradedCount }} ta yangi topshiriq baholashni kutmoqda</span>
+                                @endif
                             </div>
                         @endif
 

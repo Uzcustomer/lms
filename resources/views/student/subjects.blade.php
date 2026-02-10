@@ -835,12 +835,15 @@
                     @endif
 
                     {{-- Reminder text --}}
-                    <div style="padding: 8px 10px; border-radius: 8px; background: #fefce8; border: 1px solid #fde68a;">
-                        <p style="font-size: 10px; color: #854d0e; line-height: 1.5; margin: 0;">
-                            MT topshiriq muddati oxirgi darsdan bitta oldingi darsda soat 17.00 gacha yuklanishi shart.
-                            Muddatida yuklanmagan MT topshiriqlari ko'rib chiqilmaydi va baholanmaydi.
-                            MT dan qoniqarsiz baho olgan yoki baholanmagan talabalar fandan akademik qarzdor hisoblanadi.
-                        </p>
+                    <div style="padding: 8px 10px; border-radius: 8px; background: #fef9c3; border: 1px solid #facc15;">
+                        <div style="display: flex; align-items: flex-start; gap: 6px;">
+                            <span style="font-size: 14px; line-height: 1; flex-shrink: 0;">&#9888;</span>
+                            <p style="font-size: 10px; color: #854d0e; line-height: 1.5; margin: 0;">
+                                MT topshiriq muddati oxirgi darsdan bitta oldingi darsda soat 17.00 gacha yuklanishi shart.
+                                Muddatida yuklanmagan MT topshiriqlari ko'rib chiqilmaydi va baholanmaydi.
+                                MT dan qoniqarsiz baho olgan yoki baholanmagan talabalar fandan akademik qarzdor hisoblanadi.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

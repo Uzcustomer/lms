@@ -22,7 +22,7 @@
                         {{ __('Davomat') }}
                     </x-nav-link>
                     <x-nav-link :href="route('student.subjects')" :active="request()->routeIs('student.subjects')">
-                        {{ __('Fanlar') }}
+                        {{ __('Joriy fanlar') }}
                     </x-nav-link>
                     <x-nav-link :href="route('student.pending-lessons')" :active="request()->routeIs('student.pending-lessons')">
                         {{ __('Qayta topshirish fanlari') }}
@@ -88,7 +88,7 @@
                 {{ __('Davomat') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('student.subjects')" :active="request()->routeIs('student.subjects')">
-                {{ __('Fanlar') }}
+                {{ __('Joriy fanlar') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('student.pending-lessons')" :active="request()->routeIs('student.pending-lessons')">
                 {{ __('Qayta topshirish fanlari') }}

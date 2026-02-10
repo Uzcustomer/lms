@@ -247,6 +247,9 @@ class StudentController extends Controller
         $mtHour = (int) ($timeParts[0] ?? 17);
         $mtMinute = (int) ($timeParts[1] ?? 0);
 
+        // MT deadline type setting
+        $mtDeadlineType = Setting::get('mt_deadline_type', 'before_last');
+
         // Fetch independents for this student's group
         $allIndependents = Independent::where('group_hemis_id', $student->group_id)->get();
         // Index by subject_hemis_id (direct match with curriculum_subject_hemis_id)
@@ -295,7 +298,7 @@ class StudentController extends Controller
             $semesterCode, $studentHemisId, $groupHemisId, $educationYearCode,
             $excludedTrainingTypes, $excludedTrainingCodes, $gradingCutoffDate, $getEffectiveGrade,
             $student, $independentsByHemisId, $independentsBySubjectId, $independentsByName,
-            $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime
+            $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime, $mtDeadlineType
         ) {
             $subjectId = $cs->subject_id;
 
@@ -647,6 +650,101 @@ class StudentController extends Controller
             $subjectIndependents = $independentsByHemisId->get($cs->curriculum_subject_hemis_id)
                 ?? $independentsBySubjectId->get($cs->subject_id)
                 ?? $independentsByName->get($cs->subject_name);
+
+            // Auto-create Independent from Schedule if none found
+            if (!$subjectIndependents || $subjectIndependents->count() === 0) {
+                try {
+                    $scheduleRows = Schedule::where('group_id', $groupHemisId)
+                        ->where('subject_id', $cs->subject_id)
+                        ->where('semester_code', $semesterCode)
+                        ->whereNotIn('training_type_code', $excludedTrainingCodes)
+                        ->whereNotNull('lesson_date')
+                        ->orderBy('lesson_date')
+                        ->get();
+
+                    if ($scheduleRows->count() > 0) {
+                        $lessonDates = $scheduleRows->pluck('lesson_date')
+                            ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+                            ->unique()->sort()->values();
+
+                        // Semester end date from CurriculumWeek
+                        $grp = Group::where('group_hemis_id', $groupHemisId)->first();
+                        $semesterEndDate = null;
+                        $semModel = null;
+                        if ($grp) {
+                            $semModel = Semester::where('code', $semesterCode)
+                                ->where('curriculum_hemis_id', $grp->curriculum_hemis_id)
+                                ->first();
+                            if ($semModel) {
+                                $lastWeek = CurriculumWeek::where('semester_hemis_id', $semModel->semester_hemis_id)
+                                    ->orderBy('end_date', 'desc')
+                                    ->first();
+                                if ($lastWeek) $semesterEndDate = Carbon::parse($lastWeek->end_date);
+                            }
+                        }
+
+                        // Predict future class dates based on weekly pattern
+                        $allDates = $lessonDates;
+                        if ($semesterEndDate) {
+                            $lastKnown = Carbon::parse($lessonDates->last());
+                            if ($lastKnown->lt($semesterEndDate)) {
+                                $daysOfWeek = $lessonDates->map(fn($d) => Carbon::parse($d)->dayOfWeek)->unique();
+                                $predicted = collect($lessonDates->toArray());
+                                $cur = $lastKnown->copy()->addDay();
+                                while ($cur->lte($semesterEndDate)) {
+                                    if ($daysOfWeek->contains($cur->dayOfWeek)) {
+                                        $predicted->push($cur->format('Y-m-d'));
+                                    }
+                                    $cur->addDay();
+                                }
+                                $allDates = $predicted->unique()->sort()->values();
+                            }
+                        }
+
+                        // Calculate deadline: before_last = oxirgi darsdan bitta oldingi
+                        $deadlineDate = null;
+                        if ($mtDeadlineType === 'last') {
+                            $deadlineDate = $allDates->last();
+                        } elseif ($allDates->count() >= 2) {
+                            $deadlineDate = $allDates[$allDates->count() - 2];
+                        } else {
+                            $deadlineDate = $allDates->last();
+                        }
+
+                        if ($deadlineDate) {
+                            $latestSchedule = $scheduleRows->sortByDesc('lesson_date')->first();
+
+                            $independent = Independent::firstOrCreate(
+                                [
+                                    'group_hemis_id' => $groupHemisId,
+                                    'subject_hemis_id' => $cs->curriculum_subject_hemis_id,
+                                    'semester_code' => $semesterCode,
+                                ],
+                                [
+                                    'schedule_id' => $latestSchedule->id,
+                                    'group_name' => $latestSchedule->group_name,
+                                    'teacher_hemis_id' => $latestSchedule->employee_id,
+                                    'teacher_name' => $latestSchedule->employee_name ?? '',
+                                    'teacher_short_name' => '',
+                                    'department_hemis_id' => $latestSchedule->faculty_id ?? '',
+                                    'deportment_name' => $latestSchedule->faculty_name ?? '',
+                                    'start_date' => $lessonDates->first(),
+                                    'semester_hemis_id' => $semModel?->semester_hemis_id ?? '',
+                                    'semester_name' => $latestSchedule->semester_name ?? '',
+                                    'subject_name' => $cs->subject_name,
+                                    'user_id' => 0,
+                                    'deadline' => $deadlineDate,
+                                ]
+                            );
+
+                            $subjectIndependents = collect([$independent]);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Silent fail - MT button won't show
+                }
+            }
+
             if ($subjectIndependents && $subjectIndependents->count() > 0) {
                 $independent = $subjectIndependents->sortByDesc('deadline')->first();
                 $submission = $independent->submissionByStudent($student->id);

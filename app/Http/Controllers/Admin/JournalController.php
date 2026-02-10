@@ -1307,9 +1307,19 @@ class JournalController extends Controller
             ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
             ->first();
 
-        // Determine the percentage to apply
-        $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
-        $percentage = $isExcused ? 1.0 : 0.8; // 100% if excused, 80% otherwise
+        // Determine the percentage to apply based on reason:
+        // - absent + excused (sababli): 100%
+        // - absent + unexcused (sababsiz): 80%
+        // - low_grade (60 dan past, otrabotka): 80%
+        // - no reason (baho qo'yilmagan, talaba kelgan): 100%
+        if ($studentGrade->reason === 'absent') {
+            $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
+            $percentage = $isExcused ? 1.0 : 0.8;
+        } elseif ($studentGrade->reason === 'low_grade') {
+            $percentage = 0.8;
+        } else {
+            $percentage = 1.0;
+        }
 
         // Calculate final retake grade
         $retakeGrade = round($enteredGrade * $percentage, 2);
@@ -1395,10 +1405,9 @@ class JournalController extends Controller
             ->where('lesson_pair_code', $lessonPairCode)
             ->first();
 
-        // Determine the percentage to apply
-        // For empty cells, default to 80% unless it's an excused absence
-        $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
-        $percentage = $isExcused ? 1.0 : 0.8; // 100% if excused, 80% otherwise
+        // Bo'sh katak = talaba kelgan, lekin baho qo'yilmagan → 100%
+        // Hech qanday jarima qo'llanilmaydi
+        $percentage = 1.0;
 
         // Calculate final retake grade
         $retakeGrade = round($enteredGrade * $percentage, 2);

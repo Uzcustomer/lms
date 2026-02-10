@@ -775,6 +775,16 @@ class JournalController extends Controller
             ->whereNull('lesson_date')
             ->first();
 
+        // If existing grade >= 60, it's locked — cannot be changed
+        if ($existingGrade && $existingGrade->grade >= 60) {
+            return response()->json([
+                'success' => false,
+                'locked' => true,
+                'message' => 'Baho qulflangan (>= 60). O\'zgartirib bo\'lmaydi.',
+                'grade' => $existingGrade->grade,
+            ], 403);
+        }
+
         $now = now();
 
         // Get education year from student's curriculum
@@ -823,7 +833,12 @@ class JournalController extends Controller
             ]);
         }
 
-        return response()->json(['success' => true, 'message' => 'Grade saved successfully']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Grade saved successfully',
+            'locked' => $grade >= 60,
+            'grade' => $grade,
+        ]);
     }
 
     /**

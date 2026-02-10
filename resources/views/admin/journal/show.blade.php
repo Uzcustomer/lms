@@ -998,6 +998,7 @@
                                         @php
                                             // Get existing manual MT grade (without lesson_date)
                                             $manualGrade = $manualMtGrades[$student->hemis_id] ?? null;
+                                            $isLocked = $manualGrade !== null && $manualGrade >= 60;
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
@@ -1005,18 +1006,23 @@
                                             <td class="px-1 py-1 text-center">
                                                 <input type="number"
                                                     id="mt-grade-{{ $student->hemis_id }}"
-                                                    class="mt-grade-input w-16 px-1 py-0.5 text-center text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                                                    class="mt-grade-input w-16 px-1 py-0.5 text-center text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500 {{ $isLocked ? 'bg-gray-100 text-gray-500' : '' }}"
                                                     min="0" max="100" step="1"
                                                     value="{{ $manualGrade !== null ? round($manualGrade) : '' }}"
                                                     data-student-id="{{ $student->hemis_id }}"
-                                                    placeholder="0-100">
+                                                    placeholder="0-100"
+                                                    {{ $isLocked ? 'disabled' : '' }}>
                                             </td>
                                             <td class="px-1 py-1 text-center">
-                                                <button type="button"
-                                                    onclick="saveMtGrade('{{ $student->hemis_id }}')"
-                                                    class="save-btn px-2 py-0.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none">
-                                                    Saqlash
-                                                </button>
+                                                @if($isLocked)
+                                                    <span class="save-btn px-2 py-0.5 text-xs bg-gray-300 text-gray-500 rounded cursor-not-allowed">🔒</span>
+                                                @else
+                                                    <button type="button"
+                                                        onclick="saveMtGrade('{{ $student->hemis_id }}')"
+                                                        class="save-btn px-2 py-0.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none">
+                                                        Saqlash
+                                                    </button>
+                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach
@@ -1652,6 +1658,17 @@
             csrfToken: '{{ csrf_token() }}'
         };
 
+        function lockMtGradeRow(input, button, grade) {
+            input.value = Math.round(grade);
+            input.disabled = true;
+            input.classList.add('bg-gray-100', 'text-gray-500');
+            button.textContent = '🔒';
+            button.disabled = true;
+            button.classList.remove('bg-blue-500', 'bg-green-500', 'hover:bg-blue-600');
+            button.classList.add('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+            button.removeAttribute('onclick');
+        }
+
         function saveMtGrade(studentHemisId) {
             const input = document.getElementById('mt-grade-' + studentHemisId);
             const grade = input.value;
@@ -1680,18 +1697,28 @@
                     grade: parseFloat(grade)
                 })
             })
-            .then(response => response.json())
-            .then(data => {
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(({ ok, data }) => {
                 if (data.success) {
-                    button.textContent = 'OK!';
-                    button.classList.remove('bg-blue-500');
-                    button.classList.add('bg-green-500');
-                    setTimeout(() => {
-                        button.textContent = originalText;
-                        button.classList.remove('bg-green-500');
-                        button.classList.add('bg-blue-500');
-                        button.disabled = false;
-                    }, 1500);
+                    if (data.locked) {
+                        // Grade >= 60: lock permanently
+                        lockMtGradeRow(input, button, data.grade);
+                    } else {
+                        // Grade < 60: show OK briefly, allow re-editing
+                        button.textContent = 'OK!';
+                        button.classList.remove('bg-blue-500');
+                        button.classList.add('bg-green-500');
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                            button.classList.remove('bg-green-500');
+                            button.classList.add('bg-blue-500');
+                            button.disabled = false;
+                        }, 1500);
+                    }
+                } else if (data.locked) {
+                    // Already locked on server
+                    lockMtGradeRow(input, button, data.grade);
+                    alert(data.message);
                 } else {
                     alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
                     button.textContent = originalText;

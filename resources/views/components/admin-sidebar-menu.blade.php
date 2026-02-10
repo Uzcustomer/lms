@@ -452,9 +452,9 @@
         <!-- Profile Button (clickable) - Rasm, ism va faol rol -->
         <button @click="profileOpen = !profileOpen" class="w-full flex items-center px-2 py-2 rounded-lg transition-all duration-200 sidebar-profile-btn cursor-pointer">
             @if($userAvatar)
-            <img src="{{ $userAvatar }}" alt="{{ $userName }}" class="w-10 h-10 rounded-full object-cover mr-3 flex-shrink-0 sidebar-avatar-img">
+            <img src="{{ $userAvatar }}" alt="{{ $userName }}" class="rounded-full object-cover mr-3 flex-shrink-0 sidebar-avatar-img" style="width: 36px; height: 36px; min-width: 36px;">
             @else
-            <div class="w-10 h-10 rounded-full flex items-center justify-center mr-3 flex-shrink-0 sidebar-avatar">
+            <div class="rounded-full flex items-center justify-center mr-3 flex-shrink-0 sidebar-avatar" style="width: 36px; height: 36px; min-width: 36px;">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                 </svg>

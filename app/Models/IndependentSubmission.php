@@ -17,10 +17,12 @@ class IndependentSubmission extends Model
         'file_original_name',
         'submitted_at',
         'submission_count',
+        'viewed_at',
     ];
 
     protected $casts = [
         'submitted_at' => 'datetime',
+        'viewed_at' => 'datetime',
     ];
 
     public function independent()

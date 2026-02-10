@@ -434,18 +434,32 @@
                                         @if($subject['mt'])
                                             @php $mt = $subject['mt']; @endphp
                                             @if($mt['grade_locked'])
+                                                {{-- Baho >= 60: Baholangan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-green">
-                                                    Qabul <b>{{ $mt['grade'] }}</b>
+                                                    Baholangan <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['can_resubmit'])
+                                                {{-- Baho < 60, urinish bor: Qayta yuklash --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
                                                     Qayta yuklash
                                                 </button>
                                             @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60 && $mt['remaining_attempts'] <= 0)
+                                                {{-- Baho < 60, urinish tugagan: Muddat (imkoniyat) tugagan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
-                                                    Imkoniyat tugadi
+                                                    Muddat tugagan <b>{{ $mt['grade'] }}</b>
+                                                </button>
+                                            @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60)
+                                                {{-- Baho < 60, urinish bor: Qayta yuklash --}}
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
+                                                    Qayta yuklash
+                                                </button>
+                                            @elseif($mt['submission'] && $mt['is_viewed'])
+                                                {{-- Yuklangan + o'qituvchi ko'rgan: Tekshirilmoqda --}}
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-blue">
+                                                    Tekshirilmoqda
                                                 </button>
                                             @elseif($mt['submission'])
+                                                {{-- Yuklangan, o'qituvchi hali ko'rmagan: Yuklangan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-blue">
                                                     Yuklangan
                                                 </button>
@@ -835,12 +849,15 @@
                     @endif
 
                     {{-- Reminder text --}}
-                    <div style="padding: 8px 10px; border-radius: 8px; background: #fefce8; border: 1px solid #fde68a;">
-                        <p style="font-size: 10px; color: #854d0e; line-height: 1.5; margin: 0;">
-                            MT topshiriq muddati oxirgi darsdan bitta oldingi darsda soat 17.00 gacha yuklanishi shart.
-                            Muddatida yuklanmagan MT topshiriqlari ko'rib chiqilmaydi va baholanmaydi.
-                            MT dan qoniqarsiz baho olgan yoki baholanmagan talabalar fandan akademik qarzdor hisoblanadi.
-                        </p>
+                    <div style="padding: 8px 10px; border-radius: 8px; background: #fef9c3; border: 1px solid #facc15;">
+                        <div style="display: flex; align-items: flex-start; gap: 6px;">
+                            <span style="font-size: 14px; line-height: 1; flex-shrink: 0;">&#9888;</span>
+                            <p style="font-size: 10px; color: #854d0e; line-height: 1.5; margin: 0;">
+                                MT topshiriq muddati oxirgi darsdan bitta oldingi darsda soat 17.00 gacha yuklanishi shart.
+                                Muddatida yuklanmagan MT topshiriqlari ko'rib chiqilmaydi va baholanmaydi.
+                                MT dan qoniqarsiz baho olgan yoki baholanmagan talabalar fandan akademik qarzdor hisoblanadi.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

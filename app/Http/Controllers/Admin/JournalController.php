@@ -666,13 +666,23 @@ class JournalController extends Controller
         $mtSubmissions = [];
         $mtUngradedCount = 0;
         $mtDangerCount = 0;
+        $independentIds = [];
         try {
-            $subjectHemisId = $subject->curriculum_subject_hemis_id ?? null;
-            if ($subjectHemisId) {
+            // Cross-curriculum support: search all hemis_ids for this subject
+            $allCsHemisIds = DB::table('curriculum_subjects')
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->pluck('curriculum_subject_hemis_id')
+                ->toArray();
+
+            if (!empty($allCsHemisIds)) {
                 $independentIds = DB::table('independents')
                     ->where('group_hemis_id', $group->group_hemis_id)
-                    ->where('subject_hemis_id', $subjectHemisId)
                     ->where('semester_code', $semesterCode)
+                    ->where(function ($q) use ($allCsHemisIds, $subject) {
+                        $q->whereIn('subject_hemis_id', $allCsHemisIds)
+                          ->orWhere('subject_name', $subject->subject_name);
+                    })
                     ->pluck('id')
                     ->toArray();
 
@@ -704,6 +714,16 @@ class JournalController extends Controller
         } catch (\Exception $e) {
             \Log::warning('MT submissions query failed: ' . $e->getMessage());
         }
+
+        // Mark unviewed submissions as viewed (o'qituvchi jurnal sahifasini ko'rdi)
+        try {
+            if (!empty($independentIds ?? [])) {
+                DB::table('independent_submissions')
+                    ->whereIn('independent_id', $independentIds)
+                    ->whereNull('viewed_at')
+                    ->update(['viewed_at' => now()]);
+            }
+        } catch (\Exception $e) {}
 
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
@@ -834,12 +854,24 @@ class JournalController extends Controller
         }
 
         // Check if student has uploaded a file for this subject's MT assignment
-        $independentIds = DB::table('independents')
-            ->where('group_hemis_id', $student->group_id)
-            ->where('subject_hemis_id', $subject->curriculum_subject_hemis_id ?? 0)
+        // Search across all curriculum_subject_hemis_ids for this subject (cross-curriculum support)
+        $allCsHemisIds = DB::table('curriculum_subjects')
+            ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->pluck('id')
+            ->pluck('curriculum_subject_hemis_id')
             ->toArray();
+
+        $independents = DB::table('independents')
+            ->where('group_hemis_id', $student->group_id)
+            ->where('semester_code', $semesterCode)
+            ->where(function ($q) use ($allCsHemisIds, $subject) {
+                $q->whereIn('subject_hemis_id', !empty($allCsHemisIds) ? $allCsHemisIds : [0])
+                  ->orWhere('subject_name', $subject->subject_name);
+            })
+            ->get();
+
+        $independentIds = $independents->pluck('id')->toArray();
+        $matchedIndependentId = $independents->first()?->id;
 
         $studentSubmission = null;
         if (!empty($independentIds)) {
@@ -848,6 +880,11 @@ class JournalController extends Controller
                 ->where('student_hemis_id', $studentHemisId)
                 ->orderByDesc('submitted_at')
                 ->first();
+
+            // Track which independent the submission belongs to
+            if ($studentSubmission) {
+                $matchedIndependentId = $studentSubmission->independent_id;
+            }
         }
 
         if (!$studentSubmission) {
@@ -979,6 +1016,7 @@ class JournalController extends Controller
                 'lesson_pair_end_time' => '00:00',
                 'grade' => $grade,
                 'lesson_date' => null,
+                'independent_id' => $matchedIndependentId,
                 'created_at_api' => $now,
                 'status' => 'recorded',
                 'created_at' => $now,

@@ -459,6 +459,42 @@
         .grade-retake {
             color: #7c3aed !important;
         }
+        /* Diagonal split cell for retake grades */
+        .split-cell {
+            position: relative;
+            width: 100%;
+            height: 40px;
+            overflow: hidden;
+        }
+        .split-cell .split-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .split-cell .split-line line {
+            stroke: #94a3b8;
+            stroke-width: 1;
+        }
+        .split-cell .split-top {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1;
+        }
+        .split-cell .split-bottom {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1;
+            color: #7c3aed;
+        }
         .editable-cell {
             position: relative;
             min-height: 24px;
@@ -932,13 +968,17 @@
                                                     @endphp
                                                     @if($grade !== null)
                                                         @if($showRatingInput)
+                                                            {{-- 60 dan past baho — otrabotka qilish mumkin --}}
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
-                                                                <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                                <span class="text-red-600 font-medium">{{ round($grade, 0) }}</span>
                                                             </div>
                                                         @elseif($hasRetake)
-                                                            <div class="flex items-center justify-center gap-1">
-                                                                <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
-                                                                <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan">✓</span>
+                                                            {{-- 60 dan past + otrabotka qilgan: diagonal split --}}
+                                                            @php $retakeVal = round($gradeData['retake_grade'], 0); @endphp
+                                                            <div class="split-cell" title="Oldingi: {{ round($grade, 0) }}, Otrabotka: {{ $retakeVal }}">
+                                                                <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                                                                <span class="split-top text-red-600">{{ round($grade, 0) }}</span>
+                                                                <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
                                                         @else
                                                             <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
@@ -950,13 +990,17 @@
                                                             $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                         @endphp
                                                         @if($showRatingInput)
+                                                            {{-- NB — otrabotka qilish mumkin --}}
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
                                                                 <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                             </div>
                                                         @elseif($hasRetake)
-                                                            <div class="flex items-center justify-center gap-1">
-                                                                <span class="{{ $nbColorClass }} font-medium">NB</span>
-                                                                <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan">✓</span>
+                                                            {{-- NB + otrabotka qilgan: diagonal split --}}
+                                                            @php $retakeVal = round($absenceData['retake_grade'], 0); @endphp
+                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}">
+                                                                <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                                                                <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
+                                                                <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
                                                         @else
                                                             <span class="{{ $nbColorClass }} font-medium">NB</span>
@@ -2247,16 +2291,37 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Show success with calculated grade
-                    cellDiv.innerHTML = `<div class="flex items-center justify-center gap-1">
-                        <span class="grade-retake font-medium">${Math.round(data.retake_grade)}</span>
-                        <span class="text-green-600 text-xs" title="Retake bahosi qo'yilgan: ${data.percentage}%">✓</span>
-                    </div>`;
+                    const retakeVal = Math.round(data.retake_grade);
+                    // Diagonal split cell for NB and low grade retakes
+                    if (data.reason === 'absent') {
+                        // NB otrabotka: NB yuqorida, retake pastda
+                        const nbColor = data.is_excused ? 'color:#16a34a' : 'color:#dc2626';
+                        const nbTitle = data.is_excused ? 'sababli' : 'sababsiz';
+                        cellDiv.innerHTML = `<div class="split-cell" title="NB (${nbTitle}), Otrabotka: ${retakeVal}">
+                            <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                            <span class="split-top" style="${nbColor};font-size:10px;">NB</span>
+                            <span class="split-bottom">${retakeVal}</span>
+                        </div>`;
+                    } else if (data.reason === 'low_grade' && data.original_grade !== null) {
+                        // Past baho otrabotka: eski baho yuqorida (qizil), retake pastda
+                        const origVal = Math.round(data.original_grade);
+                        cellDiv.innerHTML = `<div class="split-cell" title="Oldingi: ${origVal}, Otrabotka: ${retakeVal}">
+                            <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                            <span class="split-top" style="color:#dc2626;">${origVal}</span>
+                            <span class="split-bottom">${retakeVal}</span>
+                        </div>`;
+                    } else {
+                        // Boshqa holatlar: checkmark
+                        cellDiv.innerHTML = `<div class="flex items-center justify-center gap-1">
+                            <span class="grade-retake font-medium">${retakeVal}</span>
+                            <span class="text-green-600 text-xs" title="Baho qo'yilgan: ${data.percentage}%">✓</span>
+                        </div>`;
+                    }
 
                     // Show success notification briefly
                     const notification = document.createElement('div');
                     notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
-                    notification.textContent = `Saqlandi: ${Math.round(data.retake_grade)} (${data.percentage}%)`;
+                    notification.textContent = `Saqlandi: ${retakeVal} (${data.percentage}%)`;
                     document.body.appendChild(notification);
 
                     setTimeout(() => {

@@ -1341,11 +1341,19 @@ class JournalController extends Controller
                     'updated_at' => $now,
                 ]);
 
+            // Determine display info for frontend diagonal cell
+            $isAbsentReason = $studentGrade->reason === 'absent';
+            $originalGrade = $studentGrade->grade;
+            $isExcusedForDisplay = $isAbsentReason && $attendance && ((int) $attendance->absent_on) > 0;
+
             return response()->json([
                 'success' => true,
                 'message' => 'Retake bahosi muvaffaqiyatli saqlandi',
                 'retake_grade' => $retakeGrade,
-                'percentage' => $percentage * 100
+                'percentage' => $percentage * 100,
+                'reason' => $studentGrade->reason,
+                'original_grade' => $originalGrade,
+                'is_excused' => $isExcusedForDisplay,
             ]);
         } catch (\Exception $e) {
             return response()->json([

@@ -25,139 +25,174 @@
     @endphp
 
     <style>
-        /* ===== STAT CARDS ===== */
-        .stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-        .stat-card {
-            background: white; border-radius: 12px; padding: 16px 18px;
-            border: 1px solid #e2e8f0; position: relative; overflow: hidden;
+        /* ===== SUMMARY BAR ===== */
+        .summary-bar {
+            display: flex; align-items: center; flex-wrap: wrap; gap: 20px;
+            padding: 14px 22px; background: white; border-radius: 12px;
+            margin-bottom: 20px; border: 1px solid #f1f5f9;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        .stat-card::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        .dark .summary-bar { background: #1e293b; border-color: #334155; }
+        .s-item { display: flex; align-items: center; gap: 8px; }
+        .s-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .s-text { font-size: 13px; color: #64748b; }
+        .s-text b { color: #1e293b; font-weight: 800; }
+        .dark .s-text { color: #94a3b8; }
+        .dark .s-text b { color: #f1f5f9; }
+        .s-sep { width: 1px; height: 20px; background: #e2e8f0; }
+        .dark .s-sep { background: #334155; }
+
+        /* ===== CARDS GRID ===== */
+        .cards-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
         }
-        .stat-card:nth-child(1)::before { background: linear-gradient(90deg, #ec4899, #f472b6); }
-        .stat-card:nth-child(2)::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
-        .stat-card:nth-child(3)::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-        .stat-card:nth-child(4)::before { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
-        .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 4px; }
-        .stat-value { font-size: 22px; font-weight: 800; color: #0f172a; }
-        .stat-value small { font-size: 13px; font-weight: 500; color: #94a3b8; }
-        .dark .stat-card { background: #1f2937; border-color: #374151; }
-        .dark .stat-label { color: #94a3b8; }
-        .dark .stat-value { color: #f1f5f9; }
-        @media (max-width: 768px) { .stat-cards { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 1200px) { .cards-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 640px) { .cards-grid { grid-template-columns: 1fr; } }
 
-        /* ===== TABLE ===== */
-        .subjects-card {
-            background: linear-gradient(135deg, #f472b6 0%, #a78bfa 40%, #fbbf24 100%);
-            border-radius: 16px; padding: 2px;
+        /* ===== SUBJECT CARD ===== */
+        .subject-card {
+            background: white; border-radius: 14px; overflow: hidden;
+            border: 1px solid #f1f5f9;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .subjects-card-inner { background: white; border-radius: 14px; overflow: hidden; }
-        .dark .subjects-card-inner { background: #1f2937; }
-
-        .subjects-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        .subjects-table thead th {
-            padding: 14px 6px; font-size: 11px; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.05em;
-            text-align: center; color: white; white-space: nowrap;
-            background: linear-gradient(135deg, #e879a8, #9b7fd4, #e8a940);
+        .subject-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.03);
+            border-color: #e0e7ff;
         }
-        .subjects-table thead th:first-child { border-radius: 14px 0 0 0; }
-        .subjects-table thead th:last-child { border-radius: 0 14px 0 0; }
-        .subjects-table thead th.text-left { text-align: left; }
+        .dark .subject-card { background: #1e293b; border-color: #334155; }
+        .dark .subject-card:hover { border-color: #4f46e5; box-shadow: 0 12px 28px rgba(0,0,0,0.25); }
 
-        .subject-row { transition: all 0.15s; border-left: 4px solid transparent; }
-        .subject-row:nth-child(odd) { background: #fffbfe; }
-        .subject-row:nth-child(even) { background: #ffffff; }
-        .subject-row:hover { background: linear-gradient(90deg, #fdf2f8, #faf5ff, #fffbeb); border-left-color: #ec4899; }
-        .dark .subject-row:nth-child(odd) { background: #1a2332; }
-        .dark .subject-row:nth-child(even) { background: #1f2937; }
-        .dark .subject-row:hover { background: linear-gradient(90deg, #2d1b2e, #1e1b3a); border-left-color: #f472b6; }
-        .subject-row td { padding: 10px 4px; text-align: center; border-bottom: 1px solid #f5f0f5; }
-        .dark .subject-row td { border-bottom-color: #1e293b; }
+        .card-accent { height: 4px; }
+        .card-body { padding: 18px; }
 
-        .subject-number {
+        .card-header {
+            display: flex; align-items: flex-start; justify-content: space-between;
+            gap: 10px; margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 13.5px; font-weight: 700; color: #0f172a;
+            line-height: 1.35; margin: 0; flex: 1;
+        }
+        .dark .card-title { color: #f1f5f9; }
+        .card-credit {
+            padding: 3px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 700;
+            background: #f1f5f9; color: #475569;
+            white-space: nowrap; flex-shrink: 0;
+        }
+        .dark .card-credit { background: #334155; color: #94a3b8; }
+
+        /* ===== GRADES GRID ===== */
+        .grades-grid {
+            display: grid; grid-template-columns: repeat(6, 1fr);
+            gap: 6px; margin-bottom: 14px;
+        }
+        .g-item { text-align: center; }
+        .g-label {
+            font-size: 9.5px; font-weight: 700; color: #94a3b8;
+            text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;
+        }
+        .g-value {
             display: inline-flex; align-items: center; justify-content: center;
-            width: 26px; height: 26px; border-radius: 50%;
-            font-weight: 700; font-size: 11px;
-            background: linear-gradient(135deg, #fce7f3, #f9a8d4); color: #be185d;
+            min-width: 36px; height: 32px; border-radius: 8px;
+            font-weight: 700; font-size: 14px; padding: 0 4px;
         }
-        .dark .subject-number { background: #831843; color: #f9a8d4; }
+        .g-excellent { background: #ecfdf5; color: #059669; }
+        .g-good { background: #eff6ff; color: #2563eb; }
+        .g-ok { background: #fffbeb; color: #d97706; }
+        .g-fail { background: #fef2f2; color: #dc2626; }
+        .g-none { background: #f8fafc; color: #cbd5e1; }
+        .dark .g-excellent { background: #064e3b; color: #6ee7b7; }
+        .dark .g-good { background: #1e3a5f; color: #93c5fd; }
+        .dark .g-ok { background: #78350f; color: #fcd34d; }
+        .dark .g-fail { background: #7f1d1d; color: #fca5a5; }
+        .dark .g-none { background: #1e293b; color: #475569; }
 
-        .subject-name { font-weight: 600; color: #1e293b; font-size: 13px; line-height: 1.3; }
-        .dark .subject-name { color: #e2e8f0; }
-
-        .credit-badge {
-            display: inline-flex; align-items: center; justify-content: center;
-            width: 30px; height: 30px; border-radius: 8px;
-            font-weight: 800; font-size: 13px;
-            background: linear-gradient(135deg, #ede9fe, #c4b5fd); color: #6d28d9;
+        /* ===== DAV SECTION ===== */
+        .dav-section {
+            display: flex; align-items: center; gap: 10px;
+            padding-top: 14px; margin-bottom: 14px;
+            border-top: 1px solid #f1f5f9;
         }
-        .dark .credit-badge { background: #4c1d95; color: #c4b5fd; }
-
-        /* Grade badges */
-        .grade-badge {
-            display: inline-flex; align-items: center; justify-content: center;
-            min-width: 42px; padding: 5px 10px; border-radius: 8px;
-            font-weight: 700; font-size: 13px;
+        .dark .dav-section { border-top-color: #334155; }
+        .dav-label {
+            font-size: 9.5px; font-weight: 700; color: #94a3b8;
+            text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
         }
-        .grade-excellent { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
-        .grade-good { background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #1e40af; }
-        .grade-ok { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #92400e; }
-        .grade-fail { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; }
-        .grade-empty { background: #f1f5f9; color: #94a3b8; }
-        .dark .grade-excellent { background: linear-gradient(135deg, #064e3b, #065f46); color: #6ee7b7; }
-        .dark .grade-good { background: linear-gradient(135deg, #1e3a5f, #1e40af); color: #93c5fd; }
-        .dark .grade-ok { background: linear-gradient(135deg, #78350f, #92400e); color: #fcd34d; }
-        .dark .grade-fail { background: linear-gradient(135deg, #7f1d1d, #991b1b); color: #fca5a5; }
-        .dark .grade-empty { background: #374151; color: #6b7280; }
+        .dav-track {
+            flex: 1; height: 6px; border-radius: 3px;
+            background: #f1f5f9; overflow: hidden;
+        }
+        .dark .dav-track { background: #334155; }
+        .dav-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+        .dav-value { font-size: 12px; font-weight: 700; white-space: nowrap; min-width: 50px; text-align: right; }
 
-        /* Dav% */
-        .dav-bar { height: 4px; border-radius: 2px; background: #e5e7eb; overflow: hidden; margin-top: 3px; }
-        .dark .dav-bar { background: #374151; }
-        .dav-bar-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
-        .dav-text { font-size: 12px; font-weight: 700; }
+        /* ===== CARD FOOTER ===== */
+        .card-footer {
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .card-hours { font-size: 11px; color: #94a3b8; }
+        .card-hours b { color: #64748b; }
+        .dark .card-hours { color: #64748b; }
+        .dark .card-hours b { color: #94a3b8; }
 
-        /* Batafsil button */
+        /* ===== BATAFSIL BUTTON ===== */
         .btn-detail {
             display: inline-flex; align-items: center; gap: 5px;
-            padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
-            background: linear-gradient(135deg, #8b5cf6, #ec4899);
-            color: white; border: none; cursor: pointer; transition: all 0.15s;
-            box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+            padding: 7px 16px; border-radius: 8px;
+            font-size: 12px; font-weight: 600;
+            border: 1.5px solid #e2e8f0; background: white;
+            color: #475569; cursor: pointer; transition: all 0.2s ease;
         }
-        .btn-detail:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(236, 72, 153, 0.35); }
+        .btn-detail:hover {
+            background: #6366f1; border-color: #6366f1; color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            transform: translateY(-1px);
+        }
+        .dark .btn-detail { border-color: #475569; background: #334155; color: #94a3b8; }
+        .dark .btn-detail:hover { background: #6366f1; border-color: #6366f1; color: white; }
+        .btn-detail svg { transition: transform 0.2s; }
+        .btn-detail:hover svg { transform: translateX(2px); }
+
+        .empty-page {
+            text-align: center; padding: 60px 20px; color: #94a3b8;
+            font-size: 14px; background: white; border-radius: 14px;
+            border: 1px solid #f1f5f9;
+        }
 
         /* ===== MODAL ===== */
         .modal-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000;
+            position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000;
             display: flex; align-items: center; justify-content: center; padding: 20px;
             backdrop-filter: blur(4px);
         }
         .modal-box {
             background: #fff; border-radius: 16px; width: 100%; max-width: 1100px;
-            max-height: 90vh; box-shadow: 0 25px 60px rgba(0,0,0,0.2);
+            max-height: 90vh; box-shadow: 0 25px 60px rgba(0,0,0,0.15);
             overflow: hidden; display: flex; flex-direction: column;
         }
         .modal-header {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 16px 20px; background: linear-gradient(135deg, #e879a8, #9b7fd4, #e8a940); color: #fff;
-            flex-shrink: 0;
+            padding: 16px 20px; background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff; flex-shrink: 0;
         }
         .modal-header h3 { font-size: 15px; font-weight: 700; color: #fff; margin: 0; }
         .modal-close {
             width: 32px; height: 32px; border: none;
-            background: rgba(255,255,255,0.2); color: #fff;
+            background: rgba(255,255,255,0.15); color: #fff;
             border-radius: 8px; font-size: 20px; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
             transition: all 0.15s;
         }
-        .modal-close:hover { background: rgba(255,255,255,0.35); }
+        .modal-close:hover { background: rgba(255,255,255,0.3); }
 
         .modal-scroll { overflow-y: auto; flex: 1; }
 
         .modal-info {
-            padding: 14px 20px; background: #fefcff;
-            border-bottom: 1px solid #f3e8f9;
+            padding: 14px 20px; background: #fafbff;
+            border-bottom: 1px solid #eef2ff;
         }
         .info-grid { display: flex; flex-wrap: wrap; gap: 20px; }
         .info-item { display: flex; flex-direction: column; }
@@ -167,15 +202,16 @@
         /* Modal tabs */
         .modal-tabs {
             display: flex; gap: 0; padding: 0 20px;
-            background: #fefcff; border-bottom: 2px solid #f3e8f9;
+            background: #fafbff; border-bottom: 2px solid #eef2ff;
             position: sticky; top: 0; z-index: 2;
         }
         .modal-tab-btn {
             padding: 10px 20px; font-size: 13px; font-weight: 600;
-            color: #64748b; background: transparent; border: none; border-bottom: 2px solid transparent;
+            color: #64748b; background: transparent; border: none;
+            border-bottom: 2px solid transparent;
             margin-bottom: -2px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
         }
-        .modal-tab-btn.active { color: #9333ea; border-bottom-color: #a855f7; background: #fff; }
+        .modal-tab-btn.active { color: #6366f1; border-bottom-color: #6366f1; background: #fff; }
         .modal-tab-btn:hover:not(.active) { color: #475569; }
 
         /* ===== HORIZONTAL TABLE ===== */
@@ -183,10 +219,9 @@
         .h-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
         .h-table thead { position: sticky; top: 0; z-index: 1; }
         .h-table th {
-            background: linear-gradient(180deg, #fefcff, #faf5ff);
-            padding: 6px 4px; text-align: center;
-            font-weight: 600; font-size: 10px; color: #6b21a8;
-            border-bottom: 2px solid #e9d5ff;
+            background: #fafbff; padding: 6px 4px; text-align: center;
+            font-weight: 600; font-size: 10px; color: #6366f1;
+            border-bottom: 2px solid #eef2ff;
             min-width: 48px; width: 48px; height: 80px; vertical-align: bottom;
         }
         .h-table th .date-text {
@@ -196,169 +231,155 @@
         }
         .h-table td {
             padding: 10px 4px; text-align: center;
-            border-bottom: 1px solid #faf5ff; font-weight: 600; font-size: 13px;
+            border-bottom: 1px solid #f8fafc; font-weight: 600; font-size: 13px;
         }
-        .h-table tbody tr:hover td { background: #fdf4ff; }
+        .h-table tbody tr:hover td { background: #fafbff; }
         .h-table .avg-col {
-            background: linear-gradient(180deg, #fdf4ff, #f5d0fe) !important;
-            font-weight: 800; border-left: 2px solid #e9d5ff; min-width: 70px;
+            background: #f0fdf4 !important;
+            font-weight: 800; border-left: 2px solid #d1fae5; min-width: 70px;
         }
         .h-table .avg-col.th-avg {
-            background: linear-gradient(180deg, #f5d0fe, #e9d5ff) !important;
-            color: #6b21a8; vertical-align: middle; height: auto;
+            background: #dcfce7 !important;
+            color: #059669; vertical-align: middle; height: auto;
         }
-
-        .h-grade-cell {
+        .h-cell {
             display: inline-flex; align-items: center; justify-content: center;
             width: 36px; height: 36px; border-radius: 8px;
             font-weight: 700; font-size: 12px;
         }
-        .h-grade-excellent { background: #d1fae5; color: #065f46; }
-        .h-grade-good { background: #dbeafe; color: #1e40af; }
-        .h-grade-ok { background: #fef3c7; color: #92400e; }
-        .h-grade-fail { background: #fee2e2; color: #991b1b; }
-        .h-grade-nb { background: #fee2e2; color: #dc2626; font-size: 10px; }
-        .h-grade-empty { color: #cbd5e1; }
-        .h-grade-qb { background: #dbeafe; color: #1e40af; font-size: 10px; }
+        .hc-excellent { background: #ecfdf5; color: #059669; }
+        .hc-good { background: #eff6ff; color: #2563eb; }
+        .hc-ok { background: #fffbeb; color: #d97706; }
+        .hc-fail { background: #fef2f2; color: #dc2626; }
+        .hc-nb { background: #fef2f2; color: #dc2626; font-size: 10px; }
+        .hc-qb { background: #eff6ff; color: #2563eb; font-size: 10px; }
+        .hc-empty { color: #cbd5e1; }
 
         .empty-state { text-align: center; padding: 40px 20px; color: #94a3b8; font-size: 13px; }
 
-        /* Responsive */
-        @media (max-width: 1024px) {
-            .responsive-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-            .subjects-table { table-layout: auto; }
-            .modal-box { max-width: 100vw; border-radius: 12px; }
-        }
         @media (max-width: 640px) {
-            .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-            .stat-card { padding: 12px 14px; }
-            .stat-value { font-size: 18px; }
-            .modal-box { border-radius: 8px; max-height: 95vh; }
-            .info-grid { gap: 12px; }
+            .summary-bar { gap: 10px; padding: 12px 14px; }
+            .s-sep { display: none; }
+            .modal-box { border-radius: 10px; max-height: 95vh; }
         }
     </style>
 
     <div class="py-6" x-data="subjectsApp()">
-        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-            {{-- Stat Cards --}}
-            <div class="stat-cards">
-                <div class="stat-card">
-                    <div class="stat-label">Jami fanlar</div>
-                    <div class="stat-value">{{ $subjectCount }} <small>ta</small></div>
+            {{-- Summary Bar --}}
+            <div class="summary-bar">
+                <div class="s-item">
+                    <span class="s-dot" style="background: #6366f1;"></span>
+                    <span class="s-text"><b>{{ $subjectCount }}</b> ta fan</span>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-label">Jami kredit</div>
-                    <div class="stat-value">{{ $totalCredit }}</div>
+                <span class="s-sep"></span>
+                <div class="s-item">
+                    <span class="s-dot" style="background: #8b5cf6;"></span>
+                    <span class="s-text"><b>{{ $totalCredit }}</b> kredit</span>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-label">O'rtacha JN</div>
-                    <div class="stat-value">{{ $avgJn }} <small>%</small></div>
+                <span class="s-sep"></span>
+                <div class="s-item">
+                    <span class="s-dot" style="background: #10b981;"></span>
+                    <span class="s-text">O'rt JN: <b>{{ $avgJn }}%</b></span>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-label">Qoldirgan soat</div>
-                    <div class="stat-value">{{ $totalAbsent }} <small>/ {{ $totalAuditorium }}</small></div>
+                <span class="s-sep"></span>
+                <div class="s-item">
+                    <span class="s-dot" style="background: {{ $totalAbsent > 0 ? '#f59e0b' : '#10b981' }};"></span>
+                    <span class="s-text">Qoldirgan: <b>{{ $totalAbsent }}</b> / {{ $totalAuditorium }} soat</span>
                 </div>
             </div>
 
-            {{-- Main Table --}}
-            <div class="subjects-card">
-                <div class="subjects-card-inner">
-                    <div class="responsive-table">
-                        <table class="subjects-table">
-                            <colgroup>
-                                <col style="width: 4%;">
-                                <col style="width: 22%;">
-                                <col style="width: 5%;">
-                                <col style="width: 7%;">
-                                <col style="width: 7%;">
-                                <col style="width: 7%;">
-                                <col style="width: 7%;">
-                                <col style="width: 7%;">
-                                <col style="width: 7%;">
-                                <col style="width: 8%;">
-                                <col style="width: 10%;">
-                            </colgroup>
-                            <thead>
-                                <tr>
-                                    <th>T/r</th>
-                                    <th class="text-left" style="padding-left: 12px;">Fan</th>
-                                    <th>Kredit</th>
-                                    <th>JN %</th>
-                                    <th>MT %</th>
-                                    <th>ON %</th>
-                                    <th>OSKI</th>
-                                    <th>Test</th>
-                                    <th>YN</th>
-                                    <th>Dav %</th>
-                                    <th>Batafsil</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($subjects as $index => $subject)
-                                    <tr class="subject-row">
-                                        <td><span class="subject-number">{{ $index + 1 }}</span></td>
-                                        <td style="text-align: left; padding-left: 12px;">
-                                            <span class="subject-name">{{ $subject['name'] }}</span>
-                                        </td>
-                                        <td><span class="credit-badge">{{ $subject['credit'] }}</span></td>
-                                        <td>
-                                            @php $v = $subject['jn_average']; @endphp
-                                            <span class="grade-badge {{ $v >= 90 ? 'grade-excellent' : ($v >= 70 ? 'grade-good' : ($v >= 60 ? 'grade-ok' : ($v > 0 ? 'grade-fail' : 'grade-empty'))) }}">
-                                                {{ $v > 0 ? $v : '-' }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            @php $v = $subject['mt_average']; @endphp
-                                            <span class="grade-badge {{ $v >= 90 ? 'grade-excellent' : ($v >= 70 ? 'grade-good' : ($v >= 60 ? 'grade-ok' : ($v > 0 ? 'grade-fail' : 'grade-empty'))) }}">
-                                                {{ $v > 0 ? $v : '-' }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            @php $v = $subject['on']; @endphp
-                                            <span class="grade-badge {{ $v !== null ? ($v >= 90 ? 'grade-excellent' : ($v >= 70 ? 'grade-good' : ($v >= 60 ? 'grade-ok' : 'grade-fail'))) : 'grade-empty' }}">
-                                                {{ $v !== null ? $v : '-' }}
-                                            </span>
-                                        </td>
-                                        <td><span class="grade-badge grade-empty">-</span></td>
-                                        <td><span class="grade-badge grade-empty">-</span></td>
-                                        <td><span class="grade-badge grade-empty">-</span></td>
-                                        <td>
-                                            @php
-                                                $dp = $subject['dav_percent'];
-                                                $davColor = $dp >= 25 ? '#ef4444' : ($dp >= 15 ? '#f59e0b' : '#8b5cf6');
-                                                $davBarColor = $dp >= 25 ? '#ef4444' : ($dp >= 15 ? '#f59e0b' : '#a78bfa');
-                                                $davWidth = min($dp * 2, 100);
-                                            @endphp
-                                            <span class="dav-text" style="color: {{ $davColor }};" title="Qoldirgan: {{ $subject['absent_hours'] }} soat / {{ $subject['auditorium_hours'] }} soat">
-                                                {{ number_format($dp, 2) }}%
-                                            </span>
-                                            <div class="dav-bar">
-                                                <div class="dav-bar-fill" style="width: {{ $davWidth }}%; background: {{ $davBarColor }};"></div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <button class="btn-detail" @click="openModal({{ $index }})">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                                Batafsil
-                                            </button>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
+            {{-- Cards Grid --}}
+            @if($subjects->isNotEmpty())
+                <div class="cards-grid">
+                    @foreach($subjects as $index => $subject)
+                        @php
+                            $jn = $subject['jn_average'];
+                            $accentBg = $jn >= 90 ? 'linear-gradient(90deg, #10b981, #34d399)'
+                                : ($jn >= 70 ? 'linear-gradient(90deg, #3b82f6, #60a5fa)'
+                                : ($jn >= 60 ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
+                                : ($jn > 0 ? 'linear-gradient(90deg, #ef4444, #f87171)'
+                                : 'linear-gradient(90deg, #e2e8f0, #cbd5e1)')));
 
-                    @if($subjects->isEmpty())
-                        <div class="empty-state" style="padding: 48px 20px;">
-                            <svg style="width: 48px; height: 48px; color: #cbd5e1; margin: 0 auto 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-                            </svg>
-                            Bu semestrda fanlar topilmadi
+                            $dp = $subject['dav_percent'];
+                            $davColor = $dp >= 25 ? '#ef4444' : ($dp >= 15 ? '#f59e0b' : '#6366f1');
+                            $davWidth = min($dp * 2, 100);
+
+                            $gradeClass = function($v, $isNull = false) {
+                                if ($isNull || $v === null) return 'g-none';
+                                if ($v >= 90) return 'g-excellent';
+                                if ($v >= 70) return 'g-good';
+                                if ($v >= 60) return 'g-ok';
+                                if ($v > 0) return 'g-fail';
+                                return 'g-none';
+                            };
+                        @endphp
+
+                        <div class="subject-card">
+                            <div class="card-accent" style="background: {{ $accentBg }};"></div>
+                            <div class="card-body">
+                                <div class="card-header">
+                                    <h3 class="card-title">{{ $subject['name'] }}</h3>
+                                    <span class="card-credit">{{ $subject['credit'] }} kr</span>
+                                </div>
+
+                                <div class="grades-grid">
+                                    <div class="g-item">
+                                        <div class="g-label">JN</div>
+                                        <div class="g-value {{ $gradeClass($jn) }}">{{ $jn > 0 ? $jn : '-' }}</div>
+                                    </div>
+                                    <div class="g-item">
+                                        @php $v = $subject['mt_average']; @endphp
+                                        <div class="g-label">MT</div>
+                                        <div class="g-value {{ $gradeClass($v) }}">{{ $v > 0 ? $v : '-' }}</div>
+                                    </div>
+                                    <div class="g-item">
+                                        @php $v = $subject['on']; @endphp
+                                        <div class="g-label">ON</div>
+                                        <div class="g-value {{ $gradeClass($v, $v === null) }}">{{ $v !== null ? $v : '-' }}</div>
+                                    </div>
+                                    <div class="g-item">
+                                        <div class="g-label">OSKI</div>
+                                        <div class="g-value g-none">-</div>
+                                    </div>
+                                    <div class="g-item">
+                                        <div class="g-label">Test</div>
+                                        <div class="g-value g-none">-</div>
+                                    </div>
+                                    <div class="g-item">
+                                        <div class="g-label">YN</div>
+                                        <div class="g-value g-none">-</div>
+                                    </div>
+                                </div>
+
+                                <div class="dav-section">
+                                    <span class="dav-label">Dav</span>
+                                    <div class="dav-track">
+                                        <div class="dav-fill" style="width: {{ $davWidth }}%; background: {{ $davColor }};"></div>
+                                    </div>
+                                    <span class="dav-value" style="color: {{ $davColor }};" title="Qoldirgan: {{ $subject['absent_hours'] }} / {{ $subject['auditorium_hours'] }} soat">{{ number_format($dp, 2) }}%</span>
+                                </div>
+
+                                <div class="card-footer">
+                                    <span class="card-hours"><b>{{ $subject['absent_hours'] }}</b> / {{ $subject['auditorium_hours'] }} soat</span>
+                                    <button class="btn-detail" @click="openModal({{ $index }})">
+                                        Batafsil
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    @endif
+                    @endforeach
                 </div>
-            </div>
+            @else
+                <div class="empty-page">
+                    <svg style="width: 48px; height: 48px; color: #cbd5e1; margin: 0 auto 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                    Bu semestrda fanlar topilmadi
+                </div>
+            @endif
         </div>
 
         {{-- ===== MODAL ===== --}}
@@ -373,18 +394,18 @@
              @click.self="closeModal()"
              @keydown.escape.window="closeModal()"
              style="display: none;">
-            <div class="modal-box" @click.stop>
-                {{-- Modal Header --}}
+            <div class="modal-box" @click.stop
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100">
                 <div class="modal-header">
                     <h3 x-text="modalTitle"></h3>
                     <button @click="closeModal()" class="modal-close">&times;</button>
                 </div>
 
-                {{-- Scrollable Content --}}
                 <div class="modal-scroll">
                     @foreach($subjects as $index => $subject)
                         <div x-show="activeSubject === {{ $index }}">
-                            {{-- Info Section --}}
                             <div class="modal-info">
                                 <div class="info-grid">
                                     <div class="info-item">
@@ -405,7 +426,7 @@
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">Dav %</span>
-                                        <span class="info-value" style="color: {{ $subject['dav_percent'] >= 25 ? '#dc2626' : ($subject['dav_percent'] >= 15 ? '#d97706' : '#8b5cf6') }}">
+                                        <span class="info-value" style="color: {{ $subject['dav_percent'] >= 25 ? '#dc2626' : ($subject['dav_percent'] >= 15 ? '#d97706' : '#6366f1') }}">
                                             {{ number_format($subject['dav_percent'], 2) }}%
                                         </span>
                                     </div>
@@ -416,7 +437,6 @@
                                 </div>
                             </div>
 
-                            {{-- Tabs --}}
                             <div class="modal-tabs">
                                 <button class="modal-tab-btn" :class="{ 'active': activeTab === 'amaliy' }" @click="activeTab = 'amaliy'">
                                     Amaliy (JN) <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['jb_daily_data']) }})</span>
@@ -429,10 +449,8 @@
                                 </button>
                             </div>
 
-                            {{-- Tab Content --}}
-
-                            {{-- AMALIY (JN) TAB --}}
-                            <div x-show="activeTab === 'amaliy'" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+                            {{-- AMALIY TAB --}}
+                            <div x-show="activeTab === 'amaliy'" x-transition.opacity.duration.150ms>
                                 @php $jbData = $subject['jb_daily_data']; @endphp
                                 @if(count($jbData) > 0)
                                     <div class="h-table-wrap">
@@ -451,17 +469,17 @@
                                                         <td>
                                                             @if($day['has_grades'])
                                                                 @php $v = $day['average']; @endphp
-                                                                <span class="h-grade-cell {{ $v >= 90 ? 'h-grade-excellent' : ($v >= 70 ? 'h-grade-good' : ($v >= 60 ? 'h-grade-ok' : 'h-grade-fail')) }}">{{ $v }}</span>
+                                                                <span class="h-cell {{ $v >= 90 ? 'hc-excellent' : ($v >= 70 ? 'hc-good' : ($v >= 60 ? 'hc-ok' : 'hc-fail')) }}">{{ $v }}</span>
                                                             @elseif($day['is_absent'])
-                                                                <span class="h-grade-cell h-grade-nb">NB</span>
+                                                                <span class="h-cell hc-nb">NB</span>
                                                             @else
-                                                                <span class="h-grade-empty">-</span>
+                                                                <span class="hc-empty">-</span>
                                                             @endif
                                                         </td>
                                                     @endforeach
                                                     <td class="avg-col">
                                                         @php $v = $subject['jn_average']; @endphp
-                                                        <span class="h-grade-cell {{ $v >= 90 ? 'h-grade-excellent' : ($v >= 70 ? 'h-grade-good' : ($v >= 60 ? 'h-grade-ok' : ($v > 0 ? 'h-grade-fail' : ''))) }}" style="width: auto; padding: 4px 12px; font-size: 14px;">
+                                                        <span class="h-cell {{ $v >= 90 ? 'hc-excellent' : ($v >= 70 ? 'hc-good' : ($v >= 60 ? 'hc-ok' : ($v > 0 ? 'hc-fail' : ''))) }}" style="width: auto; padding: 4px 12px; font-size: 14px;">
                                                             {{ $v > 0 ? $v : '-' }}
                                                         </span>
                                                     </td>
@@ -475,7 +493,7 @@
                             </div>
 
                             {{-- MA'RUZA TAB --}}
-                            <div x-show="activeTab === 'maruza'" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+                            <div x-show="activeTab === 'maruza'" x-transition.opacity.duration.150ms>
                                 @php $lecData = $subject['lecture_by_date']; @endphp
                                 @if(count($lecData) > 0)
                                     <div class="h-table-wrap">
@@ -492,9 +510,9 @@
                                                     @foreach($lecData as $day)
                                                         <td>
                                                             @if($day['status'] === 'NB')
-                                                                <span class="h-grade-cell h-grade-nb">NB</span>
+                                                                <span class="h-cell hc-nb">NB</span>
                                                             @else
-                                                                <span class="h-grade-cell h-grade-qb">QB</span>
+                                                                <span class="h-cell hc-qb">QB</span>
                                                             @endif
                                                         </td>
                                                     @endforeach
@@ -507,8 +525,8 @@
                                 @endif
                             </div>
 
-                            {{-- MUSTAQIL TA'LIM TAB --}}
-                            <div x-show="activeTab === 'mt'" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+                            {{-- MT TAB --}}
+                            <div x-show="activeTab === 'mt'" x-transition.opacity.duration.150ms>
                                 @php $mtData = $subject['mt_daily_data']; @endphp
                                 @if(count($mtData) > 0)
                                     <div class="h-table-wrap">
@@ -527,17 +545,17 @@
                                                         <td>
                                                             @if($day['has_grades'])
                                                                 @php $v = $day['average']; @endphp
-                                                                <span class="h-grade-cell {{ $v >= 90 ? 'h-grade-excellent' : ($v >= 70 ? 'h-grade-good' : ($v >= 60 ? 'h-grade-ok' : 'h-grade-fail')) }}">{{ $v }}</span>
+                                                                <span class="h-cell {{ $v >= 90 ? 'hc-excellent' : ($v >= 70 ? 'hc-good' : ($v >= 60 ? 'hc-ok' : 'hc-fail')) }}">{{ $v }}</span>
                                                             @elseif($day['is_absent'])
-                                                                <span class="h-grade-cell h-grade-nb">NB</span>
+                                                                <span class="h-cell hc-nb">NB</span>
                                                             @else
-                                                                <span class="h-grade-empty">-</span>
+                                                                <span class="hc-empty">-</span>
                                                             @endif
                                                         </td>
                                                     @endforeach
                                                     <td class="avg-col">
                                                         @php $v = $subject['mt_average']; @endphp
-                                                        <span class="h-grade-cell {{ $v >= 90 ? 'h-grade-excellent' : ($v >= 70 ? 'h-grade-good' : ($v >= 60 ? 'h-grade-ok' : ($v > 0 ? 'h-grade-fail' : ''))) }}" style="width: auto; padding: 4px 12px; font-size: 14px;">
+                                                        <span class="h-cell {{ $v >= 90 ? 'hc-excellent' : ($v >= 70 ? 'hc-good' : ($v >= 60 ? 'hc-ok' : ($v > 0 ? 'hc-fail' : ''))) }}" style="width: auto; padding: 4px 12px; font-size: 14px;">
                                                             {{ $v > 0 ? $v : '-' }}
                                                         </span>
                                                     </td>
@@ -549,7 +567,6 @@
                                     <div class="empty-state">Mustaqil ta'lim baholar mavjud emas</div>
                                 @endif
                             </div>
-
                         </div>
                     @endforeach
                 </div>

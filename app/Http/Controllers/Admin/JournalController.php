@@ -631,16 +631,13 @@ class JournalController extends Controller
             ->toArray();
 
         // Get manual MT grades (entries without lesson_date)
+        // No education_year_code filter: manual MT grades are unique per student/subject/semester
         $manualMtGrades = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->where('training_type_code', 99)
             ->whereNull('lesson_date')
-            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
-                $q2->where('education_year_code', $educationYearCode)
-                    ->orWhereNull('education_year_code');
-            }))
             ->pluck('grade', 'student_hemis_id')
             ->toArray();
 
@@ -939,12 +936,26 @@ class JournalController extends Controller
 
         $now = now();
 
-        // Get education year from student's curriculum
+        // Get education year: prefer schedule-based (same logic as show() method)
         $curriculum = DB::table('curricula')
             ->where('curricula_hemis_id', $student->curriculum_id ?? null)
             ->first();
         $educationYearCode = $curriculum?->education_year_code;
         $educationYearName = $curriculum?->education_year_name;
+
+        // Override with schedule's education_year_code if available (matches show() query)
+        $scheduleEduYear = DB::table('schedules')
+            ->where('group_id', $student->group_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('education_year_code')
+            ->orderBy('lesson_date', 'desc')
+            ->first(['education_year_code', 'education_year_name']);
+        if ($scheduleEduYear) {
+            $educationYearCode = $scheduleEduYear->education_year_code;
+            $educationYearName = $scheduleEduYear->education_year_name ?? $educationYearName;
+        }
 
         if ($existingGrade && $isRegrade) {
             // Re-grading: archive old grade to history first

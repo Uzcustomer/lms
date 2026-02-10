@@ -792,7 +792,7 @@
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span></td>
+                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < 60 ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
@@ -977,7 +977,7 @@
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span></td>
+                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < 60 ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
@@ -1079,78 +1079,89 @@
                                                 default => '',
                                             };
                                         @endphp
-                                        <tr id="mt-row-{{ $student->hemis_id }}" class="{{ $rowClass }}">
-                                            <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                        @php
+                                            $rowBg = match($urgency) {
+                                                'danger' => '#fef2f2',
+                                                'warning' => '#fefce8',
+                                                default => '',
+                                            };
+                                        @endphp
+                                        <tr id="mt-row-{{ $student->hemis_id }}" {!! $rowBg ? 'style="background:' . $rowBg . '"' : '' !!}>
+                                            <td class="px-2 py-1 text-center" style="color: #111827;">{{ $index + 1 }}</td>
+                                            <td class="px-2 py-1 uppercase" style="font-size: 12px; color: #111827;">{{ $student->full_name }}</td>
                                             <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
                                                 @if($hasFile)
-                                                    <div class="flex flex-col items-center gap-0.5">
+                                                    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
                                                         <a href="{{ route('admin.journal.download-submission', $submission->id) }}"
-                                                           class="text-blue-600 hover:text-blue-800 hover:underline text-xs truncate inline-block max-w-[130px]"
+                                                           style="color: #2563eb; font-size: 12px; text-decoration: none; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;"
                                                            title="{{ $student->full_name }} {{ $subject->subject_name }}_MT">
                                                             {{ Str::limit($submission->file_original_name, 20) }}
                                                         </a>
                                                         @if($urgency === 'warning')
-                                                            <span class="text-xs text-yellow-600 font-medium">{{ $daysSince }} kun o'tdi</span>
+                                                            <span style="font-size: 11px; color: #ca8a04; font-weight: 500;">{{ $daysSince }} kun o'tdi</span>
                                                         @elseif($urgency === 'danger')
-                                                            <span class="text-xs text-red-600 font-bold animate-pulse">{{ $daysSince }} kun o'tdi!</span>
+                                                            <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $daysSince }} kun o'tdi!</span>
                                                         @endif
                                                     </div>
                                                 @else
-                                                    <span class="text-red-400 text-xs font-medium">Yuklanmagan</span>
+                                                    <span style="color: #f87171; font-size: 12px; font-weight: 500;">Yuklanmagan</span>
                                                 @endif
                                             </td>
                                             <td class="px-1 py-1 text-center">
-                                                <input type="number"
-                                                    id="mt-grade-{{ $student->hemis_id }}"
-                                                    class="mt-grade-input w-16 px-1 py-0.5 text-center text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500 {{ $inputDisabled ? 'bg-gray-100 text-gray-500' : '' }}"
-                                                    min="0" max="100" step="1"
-                                                    value="{{ $hasGrade ? round($manualGrade) : '' }}"
-                                                    data-student-id="{{ $student->hemis_id }}"
-                                                    placeholder="0-100"
-                                                    {{ $inputDisabled ? 'disabled' : '' }}>
+                                                @if($hasFile)
+                                                    <input type="number"
+                                                        id="mt-grade-{{ $student->hemis_id }}"
+                                                        class="mt-grade-input"
+                                                        style="width: 60px; padding: 3px 4px; text-align: center; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; {{ $inputDisabled ? 'background: #f3f4f6; color: #6b7280;' : 'color: #111827;' }}"
+                                                        min="0" max="100" step="1"
+                                                        value="{{ $hasGrade ? round($manualGrade) : '' }}"
+                                                        data-student-id="{{ $student->hemis_id }}"
+                                                        placeholder="0-100"
+                                                        {{ $inputDisabled ? 'disabled' : '' }}>
+                                                @else
+                                                    <span style="color: #d1d5db;">—</span>
+                                                @endif
                                             </td>
                                             <td class="px-1 py-1 text-center" id="mt-history-{{ $student->hemis_id }}">
                                                 @if(count($history) > 0)
                                                     @foreach($history as $h)
-                                                        <span class="inline-flex items-center px-1.5 py-0.5 text-xs rounded {{ $h->grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }} mr-0.5" title="{{ $h->attempt_number }}-urinish: {{ $h->graded_by ?? '' }}">
+                                                        <span style="display: inline-flex; align-items: center; padding: 2px 6px; font-size: 11px; border-radius: 4px; {{ $h->grade >= 60 ? 'background: #dcfce7; color: #15803d;' : 'background: #fee2e2; color: #b91c1c;' }} margin-right: 2px;" title="{{ $h->attempt_number }}-urinish: {{ $h->graded_by ?? '' }}">
                                                             {{ $h->attempt_number }}: {{ round($h->grade) }}
                                                             @if($h->file_path)
-                                                                <a href="{{ route('admin.journal.download-history-file', $h->id) }}" class="ml-0.5 hover:text-blue-700" title="{{ $h->attempt_number }}-urinish fayli">&#128206;</a>
+                                                                <a href="{{ route('admin.journal.download-history-file', $h->id) }}" style="margin-left: 2px; color: inherit;" title="{{ $h->attempt_number }}-urinish fayli">&#128206;</a>
                                                             @endif
                                                         </span>
                                                     @endforeach
                                                 @else
-                                                    <span class="text-gray-300">—</span>
+                                                    <span style="color: #d1d5db;">—</span>
                                                 @endif
                                             </td>
                                             <td class="px-1 py-1 text-center" id="mt-action-{{ $student->hemis_id }}">
                                                 @if(!$hasFile)
                                                     {{-- No file: cannot grade --}}
-                                                    <span class="text-gray-400 text-xs">—</span>
+                                                    <span style="color: #9ca3af; font-size: 12px;">—</span>
                                                 @elseif(!$hasGrade)
                                                     {{-- Has file, no grade yet: show Save button --}}
                                                     <button type="button"
                                                         onclick="saveMtGrade('{{ $student->hemis_id }}')"
-                                                        class="save-btn px-2 py-0.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none">
+                                                        style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                                                         Saqlash
                                                     </button>
                                                 @elseif($isLockedPermanent)
                                                     {{-- Grade >= 60: permanently locked --}}
-                                                    <span class="inline-flex items-center px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">
-                                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
-                                                        Qabul qilindi
+                                                    <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #dcfce7; color: #15803d; border-radius: 6px;">
+                                                        &#128274; Qabul qilindi
                                                     </span>
                                                 @elseif($canRegrade)
                                                     {{-- Grade < 60, can regrade --}}
                                                     <button type="button"
                                                         onclick="startRegrade('{{ $student->hemis_id }}')"
-                                                        class="regrade-btn px-2 py-0.5 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 focus:outline-none">
+                                                        style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #f97316; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                                                         Qayta baholash
                                                     </button>
                                                 @else
                                                     {{-- Grade < 60, max attempts reached --}}
-                                                    <span class="inline-flex items-center px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">
+                                                    <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #fee2e2; color: #b91c1c; border-radius: 6px;">
                                                         Limit tugagan
                                                     </span>
                                                 @endif
@@ -1240,7 +1251,7 @@
                                                         @endif
                                                     </td>
                                                 @endforeach
-                                                <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalMtDays }})</span></td>
+                                                <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < 60 ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span><span style="color: #9ca3af; font-size: 11px;"> ({{ $totalMtDays }})</span></td>
                                             </tr>
                                         @endforeach
                                     </tbody>
@@ -1329,7 +1340,7 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $mtAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $mtAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalMtDays }})</span></td>
+                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < 60 ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span><span style="color: #9ca3af; font-size: 11px;"> ({{ $totalMtDays }})</span></td>
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -1813,15 +1824,13 @@
 
             const grade = parseFloat(data.grade);
             if (grade >= 60) {
-                cell.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">' +
-                    '<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>' +
-                    'Qabul qilindi</span>';
+                cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#dcfce7;color:#15803d;border-radius:6px;">&#128274; Qabul qilindi</span>';
             } else if (data.can_regrade) {
                 cell.innerHTML = '<button type="button" onclick="startRegrade(\'' + studentHemisId + '\')" ' +
-                    'class="regrade-btn px-2 py-0.5 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 focus:outline-none">' +
+                    'style="padding:6px 16px;font-size:13px;font-weight:600;background:#f97316;color:#fff;border:none;border-radius:6px;cursor:pointer;">' +
                     'Qayta baholash</button>';
             } else {
-                cell.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">Limit tugagan</span>';
+                cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#fee2e2;color:#b91c1c;border-radius:6px;">Limit tugagan</span>';
             }
         }
 
@@ -1860,33 +1869,41 @@
                     // Lock the input
                     input.value = Math.round(data.grade);
                     input.disabled = true;
-                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    input.style.background = '#f3f4f6';
+                    input.style.color = '#6b7280';
                     // Update history
                     if (data.history) {
                         updateMtHistoryCell(studentHemisId, data.history);
                     }
                     // Update action cell
                     updateMtActionCell(studentHemisId, data);
+                    // Update MT badge count
+                    updateMtBadge();
+                    // Update MT% cells in Amaliyot tab
+                    updateMtPercentCells(studentHemisId, data.grade);
                 } else if (data.locked && !data.can_regrade) {
                     // Permanently locked
                     input.value = Math.round(data.grade);
                     input.disabled = true;
-                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    input.style.background = '#f3f4f6';
+                    input.style.color = '#6b7280';
                     updateMtActionCell(studentHemisId, data);
                     alert(data.message);
                 } else if (data.locked && data.can_regrade) {
                     // Already graded, can regrade
                     input.value = Math.round(data.grade);
                     input.disabled = true;
-                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    input.style.background = '#f3f4f6';
+                    input.style.color = '#6b7280';
                     updateMtActionCell(studentHemisId, data);
                 } else if (data.no_file) {
                     // Student has no file uploaded
                     alert(data.message);
                     input.disabled = true;
-                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    input.style.background = '#f3f4f6';
+                    input.style.color = '#6b7280';
                     const actionCell = document.getElementById('mt-action-' + studentHemisId);
-                    actionCell.innerHTML = '<span class="text-gray-400 text-xs">—</span>';
+                    actionCell.innerHTML = '<span style="color:#9ca3af;font-size:12px;">—</span>';
                 } else {
                     alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
                     buttons.forEach(b => { b.textContent = 'Saqlash'; b.disabled = false; });
@@ -1905,21 +1922,46 @@
 
             // Unlock input for new grade
             input.disabled = false;
-            input.classList.remove('bg-gray-100', 'text-gray-500');
+            input.style.background = '#fff';
+            input.style.color = '#111827';
             input.value = '';
             input.focus();
 
             // Show save button for regrade
             actionCell.innerHTML =
                 '<button type="button" onclick="saveMtGrade(\'' + studentHemisId + '\', true)" ' +
-                'class="save-btn px-2 py-0.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none mr-1">Saqlash</button>' +
+                'style="padding:6px 14px;font-size:13px;font-weight:600;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;margin-right:4px;">Saqlash</button>' +
                 '<button type="button" onclick="cancelRegrade(\'' + studentHemisId + '\')" ' +
-                'class="px-2 py-0.5 text-xs bg-gray-400 text-white rounded hover:bg-gray-500 focus:outline-none">Bekor</button>';
+                'style="padding:6px 14px;font-size:13px;font-weight:600;background:#9ca3af;color:#fff;border:none;border-radius:6px;cursor:pointer;">Bekor</button>';
         }
 
         function cancelRegrade(studentHemisId) {
             // Reload the page to restore original state
             location.reload();
+        }
+
+        // Update MT tab badge count after grading
+        function updateMtBadge() {
+            var badge = document.getElementById('tab-mustaqil')?.querySelector('span');
+            if (!badge) return;
+            var count = parseInt(badge.textContent) || 0;
+            if (count > 1) {
+                badge.textContent = count - 1;
+            } else {
+                badge.remove();
+            }
+        }
+
+        // Update MT% cells across all tabs (Amaliyot, MT) after save
+        function updateMtPercentCells(studentHemisId, grade) {
+            var cells = document.querySelectorAll('.mt-cell-' + studentHemisId);
+            cells.forEach(function(cell) {
+                var span = cell.querySelector('span.font-bold');
+                if (span) {
+                    span.textContent = Math.round(grade);
+                    span.style.color = grade < 60 ? '#dc2626' : '#2563eb';
+                }
+            });
         }
 
         // MT grading urgency modal

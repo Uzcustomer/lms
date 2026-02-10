@@ -214,46 +214,66 @@
         .modal-tab-btn.active { color: #6366f1; border-bottom-color: #6366f1; background: #fff; }
         .modal-tab-btn:hover:not(.active) { color: #475569; }
 
-        /* ===== HORIZONTAL TABLE ===== */
-        .h-table-wrap { overflow-x: auto; padding: 16px 20px; }
-        .h-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
-        .h-table thead { position: sticky; top: 0; z-index: 1; }
-        .h-table th {
-            background: #fafbff; padding: 6px 4px; text-align: center;
-            font-weight: 600; font-size: 10px; color: #6366f1;
-            border-bottom: 2px solid #eef2ff;
-            min-width: 48px; width: 48px; height: 80px; vertical-align: bottom;
+        /* ===== JOURNAL TABLE (exact copy from admin journal) ===== */
+        .j-table-wrap { overflow-x: auto; padding: 16px 20px; }
+        .journal-table {
+            border: 1px solid #cbd5e1;
+            width: auto;
+            table-layout: auto;
+            border-collapse: collapse;
+            font-size: 12px;
         }
-        .h-table th .date-text {
-            writing-mode: vertical-rl; text-orientation: mixed;
-            transform: rotate(180deg); white-space: nowrap;
-            display: inline-block; font-size: 10.5px;
+        .journal-table th,
+        .journal-table td {
+            border: 1px solid #94a3b8 !important;
+            white-space: nowrap;
+            text-align: center;
+            vertical-align: middle;
         }
-        .h-table td {
-            padding: 10px 4px; text-align: center;
-            border-bottom: 1px solid #f8fafc; font-weight: 600; font-size: 13px;
+        .journal-table tbody tr:nth-child(odd) {
+            background-color: #ffffff;
         }
-        .h-table tbody tr:hover td { background: #fafbff; }
-        .h-table .avg-col {
-            background: #f0fdf4 !important;
-            font-weight: 800; border-left: 2px solid #d1fae5; min-width: 70px;
+        .journal-table tbody tr:nth-child(even) {
+            background-color: #f8fafc;
         }
-        .h-table .avg-col.th-avg {
-            background: #dcfce7 !important;
-            color: #059669; vertical-align: middle; height: auto;
+        .journal-table tbody td:hover {
+            background-color: #e0f2fe !important;
         }
-        .h-cell {
-            display: inline-flex; align-items: center; justify-content: center;
-            width: 36px; height: 36px; border-radius: 8px;
-            font-weight: 700; font-size: 12px;
+        .journal-table thead th {
+            background-color: #f3f4f6;
         }
-        .hc-excellent { background: #ecfdf5; color: #059669; }
-        .hc-good { background: #eff6ff; color: #2563eb; }
-        .hc-ok { background: #fffbeb; color: #d97706; }
-        .hc-fail { background: #fef2f2; color: #dc2626; }
-        .hc-nb { background: #fef2f2; color: #dc2626; font-size: 10px; }
-        .hc-qb { background: #eff6ff; color: #2563eb; font-size: 10px; }
-        .hc-empty { color: #cbd5e1; }
+        .journal-table .date-header-cell {
+            padding: 0 !important;
+            vertical-align: middle;
+        }
+        .journal-table .date-header-cell .date-text-wrapper {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            height: 90px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            line-height: 1.2;
+            margin: 0 auto;
+            padding: 2px 0;
+        }
+        .journal-table .joriy-header {
+            height: 44px;
+            font-size: 13px;
+            font-weight: 700 !important;
+            letter-spacing: 0.02em;
+        }
+        .date-separator {
+            border-left: 2px solid #94a3b8 !important;
+        }
+        .date-end {
+            border-right: 2px solid #94a3b8 !important;
+        }
+        .grade-fail {
+            color: #dc2626 !important;
+        }
 
         .empty-state { text-align: center; padding: 40px 20px; color: #94a3b8; font-size: 13px; }
 
@@ -451,37 +471,40 @@
 
                             {{-- AMALIY TAB --}}
                             <div x-show="activeTab === 'amaliy'" x-transition.opacity.duration.150ms>
-                                @php $jbData = $subject['jb_daily_data']; @endphp
-                                @if(count($jbData) > 0)
-                                    <div class="h-table-wrap">
-                                        <table class="h-table">
+                                @php $jbData = $subject['jb_daily_data']; $jbCount = count($jbData); @endphp
+                                @if($jbCount > 0)
+                                    <div class="j-table-wrap">
+                                        <table class="journal-table border-collapse text-xs">
                                             <thead>
                                                 <tr>
-                                                    @foreach($jbData as $day)
-                                                        <th><div class="date-text">{{ \Carbon\Carbon::parse($day['date'])->format('d.m.Y') }}</div></th>
+                                                    <th colspan="{{ $jbCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Joriy nazorat (kunlik o'rtacha)</th>
+                                                    <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">JN %</th>
+                                                </tr>
+                                                <tr>
+                                                    @foreach($jbData as $idx => $day)
+                                                        <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $jbCount - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px;">
+                                                            <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($day['date'])->format('d.m.Y') }}</div>
+                                                        </th>
                                                     @endforeach
-                                                    <th class="avg-col th-avg">O'rtacha</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <tr>
-                                                    @foreach($jbData as $day)
-                                                        <td>
+                                                    @foreach($jbData as $idx => $day)
+                                                        <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $jbCount - 1 ? 'date-end' : '' }}">
                                                             @if($day['has_grades'])
                                                                 @php $v = $day['average']; @endphp
-                                                                <span class="h-cell {{ $v >= 90 ? 'hc-excellent' : ($v >= 70 ? 'hc-good' : ($v >= 60 ? 'hc-ok' : 'hc-fail')) }}">{{ $v }}</span>
+                                                                <span class="font-medium text-gray-900">{{ $v }}</span>
                                                             @elseif($day['is_absent'])
-                                                                <span class="h-cell hc-nb">NB</span>
+                                                                <span class="text-red-600 font-medium">NB</span>
                                                             @else
-                                                                <span class="hc-empty">-</span>
+                                                                <span class="text-gray-300">-</span>
                                                             @endif
                                                         </td>
                                                     @endforeach
-                                                    <td class="avg-col">
+                                                    <td class="px-1 py-1 text-center">
                                                         @php $v = $subject['jn_average']; @endphp
-                                                        <span class="h-cell {{ $v >= 90 ? 'hc-excellent' : ($v >= 70 ? 'hc-good' : ($v >= 60 ? 'hc-ok' : ($v > 0 ? 'hc-fail' : ''))) }}" style="width: auto; padding: 4px 12px; font-size: 14px;">
-                                                            {{ $v > 0 ? $v : '-' }}
-                                                        </span>
+                                                        <span class="font-bold {{ $v < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $v > 0 ? $v : '-' }}</span>
                                                     </td>
                                                 </tr>
                                             </tbody>
@@ -494,25 +517,27 @@
 
                             {{-- MA'RUZA TAB --}}
                             <div x-show="activeTab === 'maruza'" x-transition.opacity.duration.150ms>
-                                @php $lecData = $subject['lecture_by_date']; @endphp
-                                @if(count($lecData) > 0)
-                                    <div class="h-table-wrap">
-                                        <table class="h-table">
+                                @php $lecData = $subject['lecture_by_date']; $lecCount = count($lecData); @endphp
+                                @if($lecCount > 0)
+                                    <div class="j-table-wrap">
+                                        <table class="journal-table border-collapse text-xs">
                                             <thead>
                                                 <tr>
-                                                    @foreach($lecData as $day)
-                                                        <th><div class="date-text">{{ \Carbon\Carbon::parse($day['date'])->format('d.m.Y') }}</div></th>
+                                                    @foreach($lecData as $idx => $day)
+                                                        <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $lecCount - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px;">
+                                                            <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($day['date'])->format('d.m.Y') }}</div>
+                                                        </th>
                                                     @endforeach
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <tr>
-                                                    @foreach($lecData as $day)
-                                                        <td>
+                                                    @foreach($lecData as $idx => $day)
+                                                        <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $lecCount - 1 ? 'date-end' : '' }}">
                                                             @if($day['status'] === 'NB')
-                                                                <span class="h-cell hc-nb">NB</span>
+                                                                <span class="text-red-600 font-medium">NB</span>
                                                             @else
-                                                                <span class="h-cell hc-qb">QB</span>
+                                                                <span class="text-green-600 font-bold">+</span>
                                                             @endif
                                                         </td>
                                                     @endforeach
@@ -527,37 +552,40 @@
 
                             {{-- MT TAB --}}
                             <div x-show="activeTab === 'mt'" x-transition.opacity.duration.150ms>
-                                @php $mtData = $subject['mt_daily_data']; @endphp
-                                @if(count($mtData) > 0)
-                                    <div class="h-table-wrap">
-                                        <table class="h-table">
+                                @php $mtData = $subject['mt_daily_data']; $mtCount = count($mtData); @endphp
+                                @if($mtCount > 0)
+                                    <div class="j-table-wrap">
+                                        <table class="journal-table border-collapse text-xs">
                                             <thead>
                                                 <tr>
-                                                    @foreach($mtData as $day)
-                                                        <th><div class="date-text">{{ \Carbon\Carbon::parse($day['date'])->format('d.m.Y') }}</div></th>
+                                                    <th colspan="{{ $mtCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Mustaqil ta'lim (kunlik o'rtacha)</th>
+                                                    <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
+                                                </tr>
+                                                <tr>
+                                                    @foreach($mtData as $idx => $day)
+                                                        <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $mtCount - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px;">
+                                                            <div class="date-text-wrapper">{{ \Carbon\Carbon::parse($day['date'])->format('d.m.Y') }}</div>
+                                                        </th>
                                                     @endforeach
-                                                    <th class="avg-col th-avg">O'rtacha</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <tr>
-                                                    @foreach($mtData as $day)
-                                                        <td>
+                                                    @foreach($mtData as $idx => $day)
+                                                        <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $mtCount - 1 ? 'date-end' : '' }}">
                                                             @if($day['has_grades'])
                                                                 @php $v = $day['average']; @endphp
-                                                                <span class="h-cell {{ $v >= 90 ? 'hc-excellent' : ($v >= 70 ? 'hc-good' : ($v >= 60 ? 'hc-ok' : 'hc-fail')) }}">{{ $v }}</span>
+                                                                <span class="font-medium text-gray-900">{{ $v }}</span>
                                                             @elseif($day['is_absent'])
-                                                                <span class="h-cell hc-nb">NB</span>
+                                                                <span class="text-red-600 font-medium">NB</span>
                                                             @else
-                                                                <span class="hc-empty">-</span>
+                                                                <span class="text-gray-300">-</span>
                                                             @endif
                                                         </td>
                                                     @endforeach
-                                                    <td class="avg-col">
+                                                    <td class="px-1 py-1 text-center">
                                                         @php $v = $subject['mt_average']; @endphp
-                                                        <span class="h-cell {{ $v >= 90 ? 'hc-excellent' : ($v >= 70 ? 'hc-good' : ($v >= 60 ? 'hc-ok' : ($v > 0 ? 'hc-fail' : ''))) }}" style="width: auto; padding: 4px 12px; font-size: 14px;">
-                                                            {{ $v > 0 ? $v : '-' }}
-                                                        </span>
+                                                        <span class="font-bold {{ $v < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $v > 0 ? $v : '-' }}</span>
                                                     </td>
                                                 </tr>
                                             </tbody>

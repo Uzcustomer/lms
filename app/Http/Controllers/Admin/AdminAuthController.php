@@ -38,11 +38,13 @@ class AdminAuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
+        $isTeacher = Auth::guard('teacher')->check();
+
         Auth::logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect('/');
+        return redirect($isTeacher ? route('teacher.login') : '/');
     }
 }

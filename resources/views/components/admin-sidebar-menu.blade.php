@@ -294,6 +294,18 @@
                 </div>
             </div>
 
+            @if(auth()->guard('teacher')->check())
+            <!-- Teacher panel link -->
+            <div class="py-1 sidebar-dropdown-divider-bottom">
+                <a href="{{ route('teacher.dashboard') }}" class="profile-dropdown-link">
+                    <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12"></path>
+                    </svg>
+                    O'qituvchi paneli
+                </a>
+            </div>
+            @endif
+
             @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
             <!-- Settings link -->
             <div class="py-1">

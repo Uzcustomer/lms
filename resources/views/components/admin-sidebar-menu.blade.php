@@ -1,3 +1,25 @@
+@php
+    $isTeacher = auth()->guard('teacher')->check();
+    $user = auth()->user();
+
+    // Route resolver - teacher yoki admin guardga qarab route aniqlash
+    $r = function($adminRoute, $teacherRoute = null) use ($isTeacher) {
+        if ($isTeacher && $teacherRoute) {
+            return route($teacherRoute);
+        }
+        return route($adminRoute);
+    };
+
+    // Active route check - ikkala guard uchun
+    $isActive = function($adminPattern, $teacherPattern = null) use ($isTeacher) {
+        if ($isTeacher && $teacherPattern) {
+            return request()->routeIs($teacherPattern);
+        }
+        return request()->routeIs($adminPattern);
+    };
+
+    $logoutRoute = $isTeacher ? route('teacher.logout') : route('admin.logout');
+@endphp
 <aside x-data="sidebarTheme()" :data-theme="theme"
        class="sidebar-themed w-64 flex flex-col fixed left-0 top-0 z-50"
        style="height: 100vh;">
@@ -9,15 +31,15 @@
 
     <!-- Navigation Menu -->
     <nav class="flex-1 py-3 px-3 overflow-y-auto sidebar-nav">
-        <a href="{{ route('admin.dashboard') }}"
-           class="sidebar-link {{ request()->routeIs('admin.dashboard') ? 'sidebar-active' : '' }}">
+        <a href="{{ $r('admin.dashboard', 'teacher.dashboard') }}"
+           class="sidebar-link {{ $isActive('admin.dashboard', 'teacher.dashboard') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
             </svg>
             Dashboard
         </a>
 
-        @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        @if($user->hasRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
         <a href="{{ route('admin.journal.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.journal.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -27,15 +49,15 @@
         </a>
         @endif
 
-        <a href="{{ route('admin.students.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.students.*') ? 'sidebar-active' : '' }}">
+        <a href="{{ $r('admin.students.index', $user->hasRole('registrator_ofisi') ? null : 'teacher.students') }}"
+           class="sidebar-link {{ $isActive('admin.students.*', 'teacher.students') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
             </svg>
             Talabalar
         </a>
 
-        @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
+        @if($user->hasRole(['superadmin', 'admin', 'kichik_admin']))
         <a href="{{ route('admin.users.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.users.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,49 +81,51 @@
             </svg>
             Baholar
         </a>
+        @endif
 
         <div class="sidebar-section">Qo'shimcha</div>
 
-        <a href="{{ route('admin.independent.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.independent.*') ? 'sidebar-active' : '' }}">
+        <a href="{{ $r('admin.independent.index', 'teacher.independent.index') }}"
+           class="sidebar-link {{ $isActive('admin.independent.*', 'teacher.independent.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
             </svg>
             Mustaqil ta'lim
         </a>
 
-        <a href="{{ route('admin.oraliqnazorat.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.oraliqnazorat.*') ? 'sidebar-active' : '' }}">
+        <a href="{{ $r('admin.oraliqnazorat.index', 'teacher.oraliqnazorat.index') }}"
+           class="sidebar-link {{ $isActive('admin.oraliqnazorat.*', 'teacher.oraliqnazorat.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
             </svg>
             Oraliq nazorat
         </a>
 
-        <a href="{{ route('admin.oski.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.oski.*') ? 'sidebar-active' : '' }}">
+        <a href="{{ $r('admin.oski.index', 'teacher.oski.index') }}"
+           class="sidebar-link {{ $isActive('admin.oski.*', 'teacher.oski.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
             </svg>
             OSKI
         </a>
 
-        <a href="{{ route('admin.examtest.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.examtest.*') ? 'sidebar-active' : '' }}">
+        <a href="{{ $r('admin.examtest.index', 'teacher.examtest.index') }}"
+           class="sidebar-link {{ $isActive('admin.examtest.*', 'teacher.examtest.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
             Test
         </a>
 
-        <a href="{{ route('admin.vedomost.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.vedomost.*') ? 'sidebar-active' : '' }}">
+        <a href="{{ $r('admin.vedomost.index', 'teacher.vedomost.index') }}"
+           class="sidebar-link {{ $isActive('admin.vedomost.*', 'teacher.vedomost.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
             Vedomost
         </a>
 
+        @if($user->hasRole(['superadmin', 'admin', 'kichik_admin']))
         <div class="sidebar-section">Darslar</div>
 
         <a href="{{ route('admin.lessons.create') }}"
@@ -121,14 +145,15 @@
         </a>
         @endif
 
-        <a href="{{ route('admin.qaytnoma.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.qaytnoma.*') ? 'sidebar-active' : '' }}">
+        <a href="{{ $r('admin.qaytnoma.index', 'teacher.qaytnoma.index') }}"
+           class="sidebar-link {{ $isActive('admin.qaytnoma.*', 'teacher.qaytnoma.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
             YN oldi qaydnoma
         </a>
 
+        @if($user->hasRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
         <div class="sidebar-section">Hisobotlar</div>
 
         <a href="{{ route('admin.reports.jn') }}"
@@ -195,7 +220,7 @@
             Sababli check
         </a>
 
-        @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya', 'registrator_ofisi']))
+        @if($user->hasRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya', 'registrator_ofisi']))
         <a href="{{ route('admin.examtest.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.examtest.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -203,6 +228,7 @@
             </svg>
             Test
         </a>
+        @endif
         @endif
     </nav>
 
@@ -221,7 +247,7 @@
 
             <!-- User email/info -->
             <div class="px-4 py-3 sidebar-dropdown-header" style="border-radius: 12px 12px 0 0;">
-                <p class="sidebar-dropdown-email">{{ Auth::user()->email ?? Auth::user()->name }}</p>
+                <p class="sidebar-dropdown-email">{{ $user->email ?? $user->name }}</p>
             </div>
 
             <!-- Theme switcher with cascade submenu -->
@@ -294,19 +320,7 @@
                 </div>
             </div>
 
-            @if(auth()->guard('teacher')->check())
-            <!-- Teacher panel link -->
-            <div class="py-1 sidebar-dropdown-divider-bottom">
-                <a href="{{ route('teacher.dashboard') }}" class="profile-dropdown-link">
-                    <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12"></path>
-                    </svg>
-                    O'qituvchi paneli
-                </a>
-            </div>
-            @endif
-
-            @if(auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
+            @if($user->hasRole(['superadmin', 'admin', 'kichik_admin']))
             <!-- Settings link -->
             <div class="py-1">
                 <a href="{{ route('admin.settings') }}" class="profile-dropdown-link">
@@ -323,7 +337,7 @@
 
             <!-- Logout -->
             <div class="py-1" style="border-radius: 0 0 12px 12px;">
-                <form method="POST" action="{{ route('admin.logout') }}">
+                <form method="POST" action="{{ $logoutRoute }}">
                     @csrf
                     <button type="submit" class="profile-dropdown-link w-full text-left sidebar-logout-btn">
                         <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -343,7 +357,7 @@
                 </svg>
             </div>
             <div class="flex-1 text-left min-w-0">
-                <span class="block truncate sidebar-username">{{ Auth::user()->name }}</span>
+                <span class="block truncate sidebar-username">{{ $user->name }}</span>
             </div>
             <svg class="w-4 h-4 flex-shrink-0 transition-transform duration-200 sidebar-chevron" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>

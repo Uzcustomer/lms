@@ -247,9 +247,30 @@ class StudentController extends Controller
         $mtHour = (int) ($timeParts[0] ?? 17);
         $mtMinute = (int) ($timeParts[1] ?? 0);
 
-        // Fetch independents for this student's group, indexed by subject_hemis_id
+        // Fetch independents for this student's group
         $allIndependents = Independent::where('group_hemis_id', $student->group_id)->get();
-        $independentsBySubject = $allIndependents->groupBy('subject_hemis_id');
+        // Index by subject_hemis_id (direct match with curriculum_subject_hemis_id)
+        $independentsByHemisId = $allIndependents->groupBy('subject_hemis_id');
+        // Also index by subject_name (fallback when hemis_ids differ across curricula)
+        $independentsByName = $allIndependents->groupBy('subject_name');
+        // Also build mapping: independent's subject_hemis_id -> subject_id (through CurriculumSubject)
+        $indHemisIds = $allIndependents->pluck('subject_hemis_id')->unique()->filter()->toArray();
+        $hemisToSubjectId = [];
+        if (!empty($indHemisIds)) {
+            $hemisToSubjectId = CurriculumSubject::whereIn('curriculum_subject_hemis_id', $indHemisIds)
+                ->pluck('subject_id', 'curriculum_subject_hemis_id')
+                ->toArray();
+        }
+        $independentsBySubjectId = collect();
+        foreach ($allIndependents as $ind) {
+            $resolvedSubjectId = $hemisToSubjectId[$ind->subject_hemis_id] ?? null;
+            if ($resolvedSubjectId) {
+                if (!$independentsBySubjectId->has($resolvedSubjectId)) {
+                    $independentsBySubjectId[$resolvedSubjectId] = collect();
+                }
+                $independentsBySubjectId[$resolvedSubjectId]->push($ind);
+            }
+        }
 
         $curriculumSubjects = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
             ->where('semester_code', $semesterCode)
@@ -273,7 +294,8 @@ class StudentController extends Controller
         $subjects = $curriculumSubjects->map(function ($cs) use (
             $semesterCode, $studentHemisId, $groupHemisId, $educationYearCode,
             $excludedTrainingTypes, $excludedTrainingCodes, $gradingCutoffDate, $getEffectiveGrade,
-            $student, $independentsBySubject, $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime
+            $student, $independentsByHemisId, $independentsBySubjectId, $independentsByName,
+            $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime
         ) {
             $subjectId = $cs->subject_id;
 
@@ -620,9 +642,11 @@ class StudentController extends Controller
                 }
             }
 
-            // MT data
+            // MT data (3-level fallback: hemis_id -> subject_id -> subject_name)
             $mtData = null;
-            $subjectIndependents = $independentsBySubject->get($cs->curriculum_subject_hemis_id);
+            $subjectIndependents = $independentsByHemisId->get($cs->curriculum_subject_hemis_id)
+                ?? $independentsBySubjectId->get($cs->subject_id)
+                ?? $independentsByName->get($cs->subject_name);
             if ($subjectIndependents && $subjectIndependents->count() > 0) {
                 $independent = $subjectIndependents->sortByDesc('deadline')->first();
                 $submission = $independent->submissionByStudent($student->id);

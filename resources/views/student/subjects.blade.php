@@ -688,7 +688,7 @@
     @foreach($subjects as $index => $subject)
         @if($subject['mt'])
             @php $mt = $subject['mt']; @endphp
-            <div id="mt-popover-{{ $index }}" class="hidden fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200" style="max-height: 80vh; overflow-y: auto; width: 320px;">
+            <div id="mt-popover-{{ $index }}" class="hidden fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200" style="max-height: 80vh; overflow-y: auto; width: 320px;" onclick="event.stopPropagation()">
                 <div style="padding: 16px;">
                     {{-- Header --}}
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
@@ -843,9 +843,6 @@
         @endif
     @endforeach
 
-    {{-- Overlay for closing popovers --}}
-    <div id="mt-popover-overlay" class="hidden fixed inset-0 z-[9998]" style="background: rgba(0,0,0,0.1);" onclick="closeAllMtPopovers()"></div>
-
     <script>
         // Alpine.js app for modal
         function subjectsApp() {
@@ -871,10 +868,11 @@
         }
 
         // MT Popover functions
+        var activeMtPopoverIndex = null;
+
         function toggleMtPopover(event, index) {
             event.stopPropagation();
             var popover = document.getElementById('mt-popover-' + index);
-            var overlay = document.getElementById('mt-popover-overlay');
             var isHidden = popover.classList.contains('hidden');
 
             closeAllMtPopovers();
@@ -898,19 +896,25 @@
                 popover.style.top = top + 'px';
                 popover.style.left = left + 'px';
                 popover.classList.remove('hidden');
-                overlay.classList.remove('hidden');
+                activeMtPopoverIndex = index;
             }
         }
 
         function closeAllMtPopovers() {
             document.querySelectorAll('[id^="mt-popover-"]').forEach(function(el) {
-                if (el.id !== 'mt-popover-overlay') {
-                    el.classList.add('hidden');
-                }
+                el.classList.add('hidden');
             });
-            var overlay = document.getElementById('mt-popover-overlay');
-            if (overlay) overlay.classList.add('hidden');
+            activeMtPopoverIndex = null;
         }
+
+        // Close popover on outside click (instead of overlay)
+        document.addEventListener('click', function(e) {
+            if (activeMtPopoverIndex === null) return;
+            var popover = document.getElementById('mt-popover-' + activeMtPopoverIndex);
+            if (popover && !popover.contains(e.target) && !e.target.closest('.btn-mt')) {
+                closeAllMtPopovers();
+            }
+        });
 
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') closeAllMtPopovers();

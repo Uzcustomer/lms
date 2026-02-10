@@ -447,8 +447,13 @@
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
                                                     Qayta yuklash
                                                 </button>
+                                            @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60 && $mt['remaining_attempts'] <= 0)
+                                                {{-- Baho < 60, urinish limiti tugagan --}}
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
+                                                    Limit tugagan <b>{{ $mt['grade'] }}</b>
+                                                </button>
                                             @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60)
-                                                {{-- Baho < 60: deadline o'tgan yoki urinish tugagan --}}
+                                                {{-- Baho < 60, deadline o'tgan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
                                                     Muddat tugagan <b>{{ $mt['grade'] }}</b>
                                                 </button>

@@ -7,7 +7,7 @@
 
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100">
 
                 <!-- Filters -->
                 <div class="filter-container">
@@ -285,7 +285,7 @@
                 html += '<td style="text-align:center;">' + statusBadge(r.has_attendance) + '</td>';
                 html += '<td style="text-align:center;">' + statusBadge(r.has_grades) + '</td>';
                 html += '<td><span class="badge badge-date">' + formatDate(r.lesson_date) + '</span></td>';
-                html += '<td style="text-align:center;"><a href="/admin/journal/show/' + encodeURIComponent(r.group_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code) + '" class="btn-view-journal" title="Jurnalga o\'tish"><svg style="width:18px;height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></a></td>';
+                html += '<td style="text-align:center;"><a href="/admin/journal/show/' + encodeURIComponent(r.group_db_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code) + '" target="_blank" class="btn-view-journal" title="Jurnalga o\'tish"><svg style="width:18px;height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></a></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -341,15 +341,18 @@
             var calFrom = new ScrollCalendar('date_from');
             var calTo = new ScrollCalendar('date_to');
 
-            // Default: kechagi sana
-            var yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            var yy = yesterday.getFullYear();
-            var mm = String(yesterday.getMonth() + 1).padStart(2, '0');
-            var dd = String(yesterday.getDate()).padStart(2, '0');
-            var yesterdayStr = yy + '-' + mm + '-' + dd;
-            calFrom.setValue(yesterdayStr);
-            calTo.setValue(yesterdayStr);
+            // Default: kechagi sana (yakshanba bo'lsa shanbani tanla)
+            var defaultDate = new Date();
+            defaultDate.setDate(defaultDate.getDate() - 1);
+            if (defaultDate.getDay() === 0) {
+                defaultDate.setDate(defaultDate.getDate() - 1);
+            }
+            var yy = defaultDate.getFullYear();
+            var mm = String(defaultDate.getMonth() + 1).padStart(2, '0');
+            var dd = String(defaultDate.getDate()).padStart(2, '0');
+            var defaultDateStr = yy + '-' + mm + '-' + dd;
+            calFrom.setValue(defaultDateStr);
+            calTo.setValue(defaultDateStr);
 
             // Cascading dropdowns
             function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
@@ -379,8 +382,8 @@
     </script>
 
     <style>
-        .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; }
-        .filter-row { display: flex; gap: 10px; flex-wrap: nowrap; margin-bottom: 10px; align-items: flex-end; overflow-x: auto; }
+        .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; overflow: visible; position: relative; z-index: 20; }
+        .filter-row { display: flex; gap: 10px; flex-wrap: nowrap; margin-bottom: 10px; align-items: flex-end; overflow: visible; }
         .filter-row:last-child { margin-bottom: 0; }
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumWeek;
 use App\Models\Group;
@@ -18,6 +19,7 @@ use App\Models\StudentGrade;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Services\StudentGradeService;
 
@@ -225,9 +227,18 @@ class StudentController extends Controller
         }
 
         $student = Auth::user();
-        $semester = $student->semester_code;
+        $semesterCode = $student->semester_code;
         $semester_name = $student->semester_name;
-        $currentDate = Carbon::now();
+        $studentHemisId = $student->hemis_id;
+        $groupHemisId = $student->group_id;
+
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
+        $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test"];
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+
+        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
 
         // MT settings
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
@@ -241,54 +252,373 @@ class StudentController extends Controller
         $independentsBySubject = $allIndependents->groupBy('subject_hemis_id');
 
         $curriculumSubjects = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
-            ->where('semester_code', $semester)
+            ->where('semester_code', $semesterCode)
             ->get();
 
-        $subjects = $curriculumSubjects->map(function ($cs) use ($semester, $currentDate, $student, $independentsBySubject, $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime) {
-            $subject_id = $cs->subject_id;
+        // Helper: effective grade (aynan jurnal mantiqidan)
+        $getEffectiveGrade = function ($row) {
+            if ($row->status === 'pending') return null;
+            if ($row->reason === 'absent' && $row->grade === null) {
+                return $row->retake_grade !== null ? $row->retake_grade : null;
+            }
+            if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+                return null;
+            }
+            if ($row->status === 'recorded') return $row->grade;
+            if ($row->status === 'closed') return $row->grade;
+            if ($row->retake_grade !== null) return $row->retake_grade;
+            return null;
+        };
 
-            $lessonDates = Schedule::where('subject_id', $subject_id)
-                ->where('group_id', $student->group_id)
-                ->where('semester_code', $semester)
-                ->whereNotIn('training_type_code', config('app.training_type_code'))
-                ->where('lesson_date', '<=', $currentDate)
-                ->distinct('lesson_date')
-                ->pluck('lesson_date')
-                ->map(function ($date) {
-                    return Carbon::parse($date);
-                })->unique()->sort();
+        $subjects = $curriculumSubjects->map(function ($cs) use (
+            $semesterCode, $studentHemisId, $groupHemisId, $educationYearCode,
+            $excludedTrainingTypes, $excludedTrainingCodes, $gradingCutoffDate, $getEffectiveGrade,
+            $student, $independentsBySubject, $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime
+        ) {
+            $subjectId = $cs->subject_id;
 
-            $startDate = $lessonDates->first();
-            $endDate = $lessonDates->last();
+            // Education year code: schedule dan aniqlash (admin jurnaldek)
+            $subjectEducationYearCode = $educationYearCode;
+            $scheduleEducationYear = DB::table('schedules')
+                ->where('group_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNotNull('lesson_date')
+                ->whereNotNull('education_year_code')
+                ->orderBy('lesson_date', 'desc')
+                ->value('education_year_code');
+            if ($scheduleEducationYear) {
+                $subjectEducationYearCode = $scheduleEducationYear;
+            }
 
-            $overallAverageGrade = 0;
-            if ($startDate && $endDate) {
-                $grades = StudentGrade::where('student_hemis_id', $student->hemis_id)
-                    ->where('subject_id', $subject_id)
-                    ->whereNotIn('training_type_code', config('app.training_type_code'))
-                    ->whereBetween('lesson_date', [$startDate, $endDate])
-                    ->get();
+            // ---- JB (Amaliyot) schedule va baholar ----
+            $jbScheduleRows = DB::table('schedules')
+                ->where('group_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                ->whereNotIn('training_type_name', $excludedTrainingTypes)
+                ->whereNotIn('training_type_code', $excludedTrainingCodes)
+                ->whereNotNull('lesson_date')
+                ->select('lesson_date', 'lesson_pair_code')
+                ->orderBy('lesson_date')
+                ->orderBy('lesson_pair_code')
+                ->get();
 
-                $gradeInfo = $this->studentGradeService->computeAverageGrade($grades, $semester) ?? [
-                    'average' => null,
-                    'days' => 0,
-                ];
-                if ($gradeInfo['average'] !== null) {
-                    $overallAverageGrade = $gradeInfo['average'];
+            $minScheduleDate = $jbScheduleRows->pluck('lesson_date')->min();
+
+            $jbGradesRaw = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNotIn('training_type_name', $excludedTrainingTypes)
+                ->whereNotIn('training_type_code', $excludedTrainingCodes)
+                ->whereNotNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                        });
+                }))
+                ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                ->get();
+
+            // JB kunlik o'rtachalar (jurnal mantiqidek)
+            $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
+                ->merge($jbGradesRaw->map(fn($g) => ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code]))
+                ->unique(fn($item) => $item['date'] . '_' . $item['pair'])
+                ->sortBy('date')
+                ->values();
+
+            $jbPairsPerDay = [];
+            foreach ($jbColumns as $col) {
+                $jbPairsPerDay[$col['date']] = ($jbPairsPerDay[$col['date']] ?? 0) + 1;
+            }
+
+            $jbLessonDates = $jbColumns->pluck('date')->unique()->sort()->values()->toArray();
+            $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
+                return Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
+            }));
+            $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
+            $totalJbDaysForAverage = count($jbLessonDatesForAverage);
+
+            $jbGradesByDatePair = [];
+            foreach ($jbGradesRaw as $g) {
+                $effectiveGrade = $getEffectiveGrade($g);
+                if ($effectiveGrade !== null) {
+                    $jbGradesByDatePair[$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
                 }
             }
 
-            $finalExamGrade = StudentGrade::where('student_hemis_id', $student->hemis_id)
-                ->where('subject_id', $subject_id)
-                ->where('semester_code', $semester)
-                ->where('training_type_code', 102)
-                ->avg('grade');
+            $dailySum = 0;
+            foreach ($jbLessonDates as $date) {
+                $dayGrades = $jbGradesByDatePair[$date] ?? [];
+                $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                $gradeSum = array_sum($dayGrades);
+                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                    $dailySum += $dayAverage;
+                }
+            }
+            $jnAverage = $totalJbDaysForAverage > 0
+                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                : 0;
 
-            $currentExamGrade = StudentGrade::where('student_hemis_id', $student->hemis_id)
-                ->where('subject_id', $subject_id)
-                ->where('semester_code', $semester)
-                ->where('training_type_code', 100)
-                ->avg('grade');
+            // JB daily data for horizontal view
+            $jbAbsentDates = [];
+            foreach ($jbGradesRaw as $g) {
+                if ($g->reason === 'absent') {
+                    $jbAbsentDates[$g->lesson_date] = true;
+                }
+            }
+            $jbDailyData = [];
+            foreach ($jbLessonDates as $date) {
+                $dayGradesH = $jbGradesByDatePair[$date] ?? [];
+                $pairsInDayH = $jbPairsPerDay[$date] ?? 1;
+                $hasGradesH = !empty($dayGradesH);
+                $gradeSumH = array_sum($dayGradesH);
+                $dayAvgH = $hasGradesH ? round($gradeSumH / $pairsInDayH, 0, PHP_ROUND_HALF_UP) : 0;
+                $jbDailyData[] = [
+                    'date' => $date,
+                    'average' => $dayAvgH,
+                    'has_grades' => $hasGradesH,
+                    'is_absent' => !$hasGradesH && isset($jbAbsentDates[$date]),
+                ];
+            }
+
+            // ---- MT (Mustaqil ta'lim) ----
+            $mtScheduleRows = DB::table('schedules')
+                ->where('group_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                ->where('training_type_code', 99)
+                ->whereNotNull('lesson_date')
+                ->select('lesson_date', 'lesson_pair_code')
+                ->get();
+
+            $mtGradesRaw = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', 99)
+                ->whereNotNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                        });
+                }))
+                ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                ->get();
+
+            $mtColumns = $mtScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
+                ->merge($mtGradesRaw->map(fn($g) => ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code]))
+                ->unique(fn($item) => $item['date'] . '_' . $item['pair'])
+                ->sortBy('date')
+                ->values();
+
+            $mtPairsPerDay = [];
+            foreach ($mtColumns as $col) {
+                $mtPairsPerDay[$col['date']] = ($mtPairsPerDay[$col['date']] ?? 0) + 1;
+            }
+            $mtLessonDates = $mtColumns->pluck('date')->unique()->sort()->values()->toArray();
+            $totalMtDays = count($mtLessonDates);
+
+            $mtGradesByDatePair = [];
+            foreach ($mtGradesRaw as $g) {
+                $effectiveGrade = $getEffectiveGrade($g);
+                if ($effectiveGrade !== null) {
+                    $mtGradesByDatePair[$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
+                }
+            }
+
+            $mtDailySum = 0;
+            foreach ($mtLessonDates as $date) {
+                $dayGrades = $mtGradesByDatePair[$date] ?? [];
+                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                $gradeSum = array_sum($dayGrades);
+                $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+            }
+            $mtAverage = $totalMtDays > 0
+                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                : 0;
+
+            // MT daily data for horizontal view
+            $mtAbsentDates = [];
+            foreach ($mtGradesRaw as $g) {
+                if ($g->reason === 'absent') {
+                    $mtAbsentDates[$g->lesson_date] = true;
+                }
+            }
+            $mtDailyData = [];
+            foreach ($mtLessonDates as $date) {
+                $dayGradesH = $mtGradesByDatePair[$date] ?? [];
+                $pairsInDayH = $mtPairsPerDay[$date] ?? 1;
+                $hasGradesH = !empty($dayGradesH);
+                $gradeSumH = array_sum($dayGradesH);
+                $dayAvgH = $hasGradesH ? round($gradeSumH / $pairsInDayH, 0, PHP_ROUND_HALF_UP) : 0;
+                $mtDailyData[] = [
+                    'date' => $date,
+                    'average' => $dayAvgH,
+                    'has_grades' => $hasGradesH,
+                    'is_absent' => !$hasGradesH && isset($mtAbsentDates[$date]),
+                ];
+            }
+
+            // Manual MT baho bo'lsa override
+            $manualMt = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', 99)
+                ->whereNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhereNull('education_year_code');
+                }))
+                ->value('grade');
+            if ($manualMt !== null) {
+                $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
+            }
+
+            // ---- ON, OSKI, Test (training_type_code: 100, 101, 102) ----
+            $otherGradesRaw = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereIn('training_type_code', [100, 101, 102])
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
+                                    $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
+                                }));
+                        });
+                }))
+                ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason')
+                ->get();
+
+            $otherGrades = ['on' => null, 'oski' => null, 'test' => null];
+            $otherByType = [];
+            foreach ($otherGradesRaw as $g) {
+                $effectiveGrade = $getEffectiveGrade($g);
+                if ($effectiveGrade !== null) {
+                    $otherByType[$g->training_type_code][] = $effectiveGrade;
+                }
+            }
+            if (!empty($otherByType[100])) $otherGrades['on'] = round(array_sum($otherByType[100]) / count($otherByType[100]), 0, PHP_ROUND_HALF_UP);
+            if (!empty($otherByType[101])) $otherGrades['oski'] = round(array_sum($otherByType[101]) / count($otherByType[101]), 0, PHP_ROUND_HALF_UP);
+            if (!empty($otherByType[102])) $otherGrades['test'] = round(array_sum($otherByType[102]) / count($otherByType[102]), 0, PHP_ROUND_HALF_UP);
+
+            // ---- Davomat (Attendance) ----
+            $excludedAttendanceCodes = [99, 100, 101, 102];
+            $absentOff = DB::table('attendances')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+                ->sum('absent_off');
+
+            // Auditoriya soatlari
+            $nonAuditoriumCodes = ['17'];
+            $auditoriumHours = 0;
+            if (is_array($cs->subject_details)) {
+                foreach ($cs->subject_details as $detail) {
+                    $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                    if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                        $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                    }
+                }
+            }
+            if ($auditoriumHours <= 0) {
+                $auditoriumHours = $cs->total_acload ?? 0;
+            }
+            $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
+
+            // ---- Batafsil uchun baholar (Ma'ruza, Amaliy, MT) ----
+            $detailGrades = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNotIn('training_type_code', [100, 101, 102])
+                ->whereNotNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                        });
+                }))
+                ->select('lesson_date', 'training_type_code', 'training_type_name', 'lesson_pair_name',
+                    'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_name',
+                    'grade', 'retake_grade', 'status', 'reason')
+                ->orderBy('lesson_date', 'desc')
+                ->get();
+
+            // Ma'ruza uchun davomat
+            $lectureAttendance = DB::table('attendances')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                ->where('training_type_code', 11)
+                ->whereNotNull('lesson_date')
+                ->select(DB::raw('DATE(lesson_date) as lesson_date'), 'lesson_pair_name',
+                    'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_name',
+                    'absent_on', 'absent_off')
+                ->orderBy('lesson_date', 'desc')
+                ->get()
+                ->map(function ($row) {
+                    $isAbsent = ((int) $row->absent_on) > 0 || ((int) $row->absent_off) > 0;
+                    return [
+                        'lesson_date' => $row->lesson_date,
+                        'lesson_pair_name' => $row->lesson_pair_name,
+                        'lesson_pair_start_time' => $row->lesson_pair_start_time,
+                        'lesson_pair_end_time' => $row->lesson_pair_end_time,
+                        'employee_name' => $row->employee_name,
+                        'status' => $isAbsent ? 'NB' : 'Qatnashdi',
+                    ];
+                });
+
+            // Ma'ruza attendance grouped by date for horizontal view
+            $lectureByDate = $lectureAttendance->groupBy('lesson_date')->map(function($items, $date) {
+                $hasAbsent = $items->contains(fn($i) => $i['status'] === 'NB');
+                return [
+                    'date' => $date,
+                    'status' => $hasAbsent ? 'NB' : 'QB',
+                    'pairs' => $items->count(),
+                ];
+            })->sortKeys()->values()->toArray();
+
+            // Baholarni tur bo'yicha ajratish
+            $amaliyGrades = [];
+            $mtDetailGrades = [];
+            foreach ($detailGrades as $g) {
+                $item = [
+                    'lesson_date' => $g->lesson_date,
+                    'lesson_pair_name' => $g->lesson_pair_name,
+                    'lesson_pair_start_time' => $g->lesson_pair_start_time,
+                    'lesson_pair_end_time' => $g->lesson_pair_end_time,
+                    'employee_name' => $g->employee_name,
+                    'grade' => $g->grade,
+                    'retake_grade' => $g->retake_grade,
+                    'status' => $g->status,
+                    'reason' => $g->reason,
+                ];
+                if ($g->training_type_code == 11) {
+                    // Ma'ruza baholar (agar bor bo'lsa) - odatda davomat orqali
+                    continue;
+                } elseif ($g->training_type_code == 99) {
+                    $mtDetailGrades[] = $item;
+                } else {
+                    $amaliyGrades[] = $item;
+                }
+            }
 
             // MT data
             $mtData = null;
@@ -340,15 +670,22 @@ class StudentController extends Controller
 
             return [
                 'name' => $cs->subject_name,
-                'code' => $cs->subject_code,
-                'total_acload' => $cs->total_acload,
                 'credit' => $cs->credit,
-                'subject_type' => $cs->subject_type_name,
-                'subject_id' => $cs->subject_id,
-                'overall_score' => 'Aniqlanmagan',
-                'final_exam' => $finalExamGrade ? round($finalExamGrade) : 'Aniqlanmagan',
-                'current_exam' => $currentExamGrade ? round($currentExamGrade) : 'Aniqlanmagan',
-                'average_grade' => round($overallAverageGrade),
+                'subject_id' => $subjectId,
+                'jn_average' => $jnAverage,
+                'mt_average' => $mtAverage,
+                'on' => $otherGrades['on'],
+                'oski' => $otherGrades['oski'],
+                'test' => $otherGrades['test'],
+                'dav_percent' => $davomatPercent,
+                'absent_hours' => $absentOff,
+                'auditorium_hours' => $auditoriumHours,
+                'lecture_attendance' => $lectureAttendance->toArray(),
+                'amaliy_grades' => $amaliyGrades,
+                'mt_grades' => $mtDetailGrades,
+                'jb_daily_data' => $jbDailyData,
+                'mt_daily_data' => $mtDailyData,
+                'lecture_by_date' => $lectureByDate,
                 'mt' => $mtData,
             ];
         });

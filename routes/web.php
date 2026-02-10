@@ -21,6 +21,7 @@ use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
+use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
 
@@ -170,6 +171,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/student-grades/{gradeId}/status', [AdminStudentController::class, 'updateStatus'])->name('student-grades.update-status');
 
         Route::get('/teachers', [TeacherController::class, 'index'])->name('teachers.index');
+        Route::get('/teachers/export-excel', [TeacherController::class, 'exportExcel'])->name('teachers.export-excel');
         Route::get('/teachers/{teacher}', [TeacherController::class, 'show'])->name('teachers.show');
         Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
         Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
@@ -179,9 +181,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
 
-        Route::get('/deadlines', [DashboardController::class, 'showDeadlines'])->name('deadlines');
-        Route::get('/deadlines/edit', [DashboardController::class, 'editDeadlines'])->name('deadlines.edit');
-        Route::post('/deadlines/update', [DashboardController::class, 'updateDeadlines'])->name('deadlines.update');
+        // Unified settings page
+        Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
+        Route::post('/settings/deadlines', [SettingsController::class, 'updateDeadlines'])->name('settings.update.deadlines');
+        Route::post('/settings/password', [SettingsController::class, 'updatePassword'])->name('settings.update.password');
+        Route::post('/settings/telegram', [SettingsController::class, 'updateTelegram'])->name('settings.update.telegram');
+
+        // Old routes — redirect to unified settings
+        Route::get('/deadlines', fn () => redirect()->route('admin.settings', ['tab' => 'deadlines']))->name('deadlines');
+        Route::get('/deadlines/edit', fn () => redirect()->route('admin.settings', ['tab' => 'deadlines']))->name('deadlines.edit');
+        Route::post('/deadlines/update', [SettingsController::class, 'updateDeadlines'])->name('deadlines.update');
 
         Route::get('/student-grades', [AdminStudentController::class, 'studentGradesWeek'])->name('student-grades-week');
         Route::get('/get-groups-by-department', [AdminStudentController::class, 'getGroupsByDepartment'])->name('get-groups-by-department');
@@ -242,10 +251,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari
     Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
-        Route::get('/password-settings', [PasswordSettingsController::class, 'index'])->name('password-settings.index');
-        Route::post('/password-settings', [PasswordSettingsController::class, 'update'])->name('password-settings.update');
-
-        Route::get('/synchronizes', [DashboardController::class, 'indexSynchronizes'])->name('synchronizes');
+        // Old routes — redirect to unified settings
+        Route::get('/password-settings', fn () => redirect()->route('admin.settings', ['tab' => 'password']))->name('password-settings.index');
+        Route::post('/password-settings', [SettingsController::class, 'updatePassword'])->name('password-settings.update');
+        Route::get('/synchronizes', fn () => redirect()->route('admin.settings', ['tab' => 'sync']))->name('synchronizes');
         Route::post('/synchronize', [DashboardController::class, 'importSchedulesPartialy'])->name('synchronize');
         Route::post('/synchronize/curricula', [DashboardController::class, 'importCurricula'])->name('synchronize.curricula');
         Route::post('/synchronize/curriculum-subjects', [DashboardController::class, 'importCurriculumSubjects'])->name('synchronize.curriculum-subjects');

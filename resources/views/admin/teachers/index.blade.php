@@ -98,6 +98,12 @@
                             </div>
 
                             <div style="display: flex; align-items: flex-end; gap: 6px; padding-bottom: 2px;">
+                                <a href="{{ route('admin.teachers.export-excel', request()->query()) }}" class="filter-export-btn" title="Excelga yuklash">
+                                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    Excel
+                                </a>
                                 @if(request()->hasAny(['search', 'department', 'staff_position', 'role', 'status', 'is_active']))
                                     <a href="{{ route('admin.teachers.index') }}" class="filter-clear-btn" title="Filtrlarni tozalash">
                                         <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -325,6 +331,29 @@
         .filter-input::placeholder {
             color: #94a3b8;
             font-weight: 400;
+        }
+
+        /* ===== Export Button ===== */
+        .filter-export-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #166534;
+            background: #dcfce7;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.2s;
+            white-space: nowrap;
+            height: 36px;
+        }
+        .filter-export-btn:hover {
+            background: #bbf7d0;
+            border-color: #86efac;
+            color: #14532d;
         }
 
         /* ===== Clear Button ===== */

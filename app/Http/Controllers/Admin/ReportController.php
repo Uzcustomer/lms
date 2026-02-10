@@ -550,6 +550,7 @@ class ReportController extends Controller
             'sch.subject_name',
             'sch.group_id',
             'sch.group_name',
+            'g.id as group_db_id',
             DB::raw('DATE(sch.lesson_date) as lesson_date_str')
         )->get();
 
@@ -560,11 +561,12 @@ class ReportController extends Controller
         // 2-QADAM: schedule_hemis_id lar bo'yicha davomat va baho mavjudligini tekshirish
         $allScheduleIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
 
-        // Chunk bo'yicha davomat mavjudligini tekshirish
+        // Chunk bo'yicha davomat mavjudligini tekshirish (attendance_controls da load bo'lsa = davomat olingan)
         $attendanceExists = collect();
         foreach (array_chunk($allScheduleIds, 5000) as $chunk) {
-            $result = DB::table('attendances')
+            $result = DB::table('attendance_controls')
                 ->whereIn('subject_schedule_id', $chunk)
+                ->where('load', '>', 0)
                 ->select('subject_schedule_id')
                 ->distinct()
                 ->pluck('subject_schedule_id');
@@ -612,6 +614,7 @@ class ReportController extends Controller
                     'subject_name' => $sch->subject_name,
                     'subject_id' => $sch->subject_id,
                     'group_id' => $sch->group_id,
+                    'group_db_id' => $sch->group_db_id,
                     'group_name' => $sch->group_name,
                     'semester_code' => $sch->semester_code,
                     'lesson_date' => $sch->lesson_date_str,

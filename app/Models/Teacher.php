@@ -80,12 +80,13 @@ class Teacher extends Authenticatable
             return 0;
         }
 
-        // Telefon kiritilgan vaqtdan 7 kun
+        $days = (int) Setting::get('telegram_deadline_days', 7);
+
         if (!$this->phone) {
-            return 7;
+            return $days;
         }
 
-        $deadline = $this->updated_at->copy()->addDays(7);
+        $deadline = $this->updated_at->copy()->addDays($days);
         $daysLeft = (int) now()->diffInDays($deadline, false);
 
         return max($daysLeft, 0);

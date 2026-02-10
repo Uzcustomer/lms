@@ -11,9 +11,7 @@ class SettingsController extends Controller
 {
     public function index(Request $request)
     {
-        $tab = $request->query('tab', 'deadlines');
-
-        $data = ['tab' => $tab];
+        $data = [];
 
         // Deadline data
         $data['deadlines'] = Deadline::with('level')->get();
@@ -68,7 +66,7 @@ class SettingsController extends Controller
             );
         }
 
-        return redirect()->route('admin.settings', ['tab' => 'deadlines'])->with('success', 'Muddatlar muvaffaqiyatli yangilandi!');
+        return redirect()->route('admin.settings')->with('success', 'Muddatlar muvaffaqiyatli yangilandi!');
     }
 
     public function updatePassword(Request $request)
@@ -81,7 +79,7 @@ class SettingsController extends Controller
         Setting::set('temp_password_days', $request->temp_password_days);
         Setting::set('changed_password_days', $request->changed_password_days);
 
-        return redirect()->route('admin.settings', ['tab' => 'password'])->with('success', 'Parol sozlamalari muvaffaqiyatli yangilandi.');
+        return redirect()->route('admin.settings')->with('success', 'Parol sozlamalari muvaffaqiyatli yangilandi.');
     }
 
     public function updateTelegram(Request $request)
@@ -92,6 +90,6 @@ class SettingsController extends Controller
 
         Setting::set('telegram_deadline_days', $request->telegram_deadline_days);
 
-        return redirect()->route('admin.settings', ['tab' => 'telegram'])->with('success', 'Telegram sozlamalari muvaffaqiyatli yangilandi.');
+        return redirect()->route('admin.settings')->with('success', 'Telegram sozlamalari muvaffaqiyatli yangilandi.');
     }
 }

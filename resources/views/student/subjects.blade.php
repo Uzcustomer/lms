@@ -688,7 +688,7 @@
     @foreach($subjects as $index => $subject)
         @if($subject['mt'])
             @php $mt = $subject['mt']; @endphp
-            <div id="mt-popover-{{ $index }}" class="hidden fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200" style="max-height: 80vh; overflow-y: auto; width: 320px;">
+            <div id="mt-popover-{{ $index }}" class="hidden fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200" style="max-height: 80vh; overflow-y: auto; width: 320px;" onclick="event.stopPropagation()">
                 <div style="padding: 16px;">
                     {{-- Header --}}
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">

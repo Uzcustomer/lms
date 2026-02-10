@@ -834,12 +834,24 @@ class JournalController extends Controller
         }
 
         // Check if student has uploaded a file for this subject's MT assignment
-        $independentIds = DB::table('independents')
-            ->where('group_hemis_id', $student->group_id)
-            ->where('subject_hemis_id', $subject->curriculum_subject_hemis_id ?? 0)
+        // Search across all curriculum_subject_hemis_ids for this subject (cross-curriculum support)
+        $allCsHemisIds = DB::table('curriculum_subjects')
+            ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->pluck('id')
+            ->pluck('curriculum_subject_hemis_id')
             ->toArray();
+
+        $independents = DB::table('independents')
+            ->where('group_hemis_id', $student->group_id)
+            ->where('semester_code', $semesterCode)
+            ->where(function ($q) use ($allCsHemisIds, $subject) {
+                $q->whereIn('subject_hemis_id', !empty($allCsHemisIds) ? $allCsHemisIds : [0])
+                  ->orWhere('subject_name', $subject->subject_name);
+            })
+            ->get();
+
+        $independentIds = $independents->pluck('id')->toArray();
+        $matchedIndependentId = $independents->first()?->id;
 
         $studentSubmission = null;
         if (!empty($independentIds)) {
@@ -848,6 +860,11 @@ class JournalController extends Controller
                 ->where('student_hemis_id', $studentHemisId)
                 ->orderByDesc('submitted_at')
                 ->first();
+
+            // Track which independent the submission belongs to
+            if ($studentSubmission) {
+                $matchedIndependentId = $studentSubmission->independent_id;
+            }
         }
 
         if (!$studentSubmission) {
@@ -979,6 +996,7 @@ class JournalController extends Controller
                 'lesson_pair_end_time' => '00:00',
                 'grade' => $grade,
                 'lesson_date' => null,
+                'independent_id' => $matchedIndependentId,
                 'created_at_api' => $now,
                 'status' => 'recorded',
                 'created_at' => $now,

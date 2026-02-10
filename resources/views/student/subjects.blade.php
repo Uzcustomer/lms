@@ -443,11 +443,15 @@
                                                 </button>
                                             @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60 && $mt['remaining_attempts'] <= 0)
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
-                                                    Imkoniyat tugadi
+                                                    Rad <b>{{ $mt['grade'] }}</b>
+                                                </button>
+                                            @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60)
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
+                                                    Qayta yuklash
                                                 </button>
                                             @elseif($mt['submission'])
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-blue">
-                                                    Yuklangan
+                                                    Tekshirilmoqda
                                                 </button>
                                             @elseif($mt['is_overdue'])
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-gray">

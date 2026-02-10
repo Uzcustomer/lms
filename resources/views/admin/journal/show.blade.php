@@ -989,9 +989,10 @@
                                     <tr>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 140px;">Fayl</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 80px;">Baho</th>
-                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 120px;">Tarix</th>
-                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 100px;">Amal</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 160px;">Tarix</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 110px;">Amal</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1003,25 +1004,42 @@
                                             $history = $mtGradeHistory[$student->hemis_id] ?? [];
                                             $currentAttempt = count($history) + ($hasGrade ? 1 : 0);
                                             $canRegrade = $hasGrade && $manualGrade < 60 && $currentAttempt < $mtMaxResubmissions;
+                                            $submission = $mtSubmissions[$student->hemis_id] ?? null;
+                                            $hasFile = $submission !== null;
+                                            $inputDisabled = $hasGrade || !$hasFile;
                                         @endphp
                                         <tr id="mt-row-{{ $student->hemis_id }}">
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
                                             <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
+                                                @if($hasFile)
+                                                    <a href="{{ asset('storage/' . $submission->file_path) }}" target="_blank"
+                                                       class="text-blue-600 hover:text-blue-800 hover:underline text-xs truncate inline-block max-w-[130px]"
+                                                       title="{{ $submission->file_original_name }}">
+                                                        {{ Str::limit($submission->file_original_name, 20) }}
+                                                    </a>
+                                                @else
+                                                    <span class="text-red-400 text-xs font-medium">Yuklanmagan</span>
+                                                @endif
+                                            </td>
                                             <td class="px-1 py-1 text-center">
                                                 <input type="number"
                                                     id="mt-grade-{{ $student->hemis_id }}"
-                                                    class="mt-grade-input w-16 px-1 py-0.5 text-center text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500 {{ $hasGrade ? 'bg-gray-100 text-gray-500' : '' }}"
+                                                    class="mt-grade-input w-16 px-1 py-0.5 text-center text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500 {{ $inputDisabled ? 'bg-gray-100 text-gray-500' : '' }}"
                                                     min="0" max="100" step="1"
                                                     value="{{ $hasGrade ? round($manualGrade) : '' }}"
                                                     data-student-id="{{ $student->hemis_id }}"
                                                     placeholder="0-100"
-                                                    {{ $hasGrade ? 'disabled' : '' }}>
+                                                    {{ $inputDisabled ? 'disabled' : '' }}>
                                             </td>
                                             <td class="px-1 py-1 text-center" id="mt-history-{{ $student->hemis_id }}">
                                                 @if(count($history) > 0)
                                                     @foreach($history as $h)
-                                                        <span class="inline-block px-1.5 py-0.5 text-xs rounded {{ $h->grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }} mr-0.5" title="{{ $h->attempt_number }}-urinish: {{ $h->graded_by ?? '' }}">
+                                                        <span class="inline-flex items-center px-1.5 py-0.5 text-xs rounded {{ $h->grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }} mr-0.5" title="{{ $h->attempt_number }}-urinish: {{ $h->graded_by ?? '' }}">
                                                             {{ $h->attempt_number }}: {{ round($h->grade) }}
+                                                            @if($h->file_path)
+                                                                <a href="{{ asset('storage/' . $h->file_path) }}" target="_blank" class="ml-0.5 hover:text-blue-700" title="{{ $h->file_original_name ?? 'Fayl' }}">&#128206;</a>
+                                                            @endif
                                                         </span>
                                                     @endforeach
                                                 @else
@@ -1029,8 +1047,11 @@
                                                 @endif
                                             </td>
                                             <td class="px-1 py-1 text-center" id="mt-action-{{ $student->hemis_id }}">
-                                                @if(!$hasGrade)
-                                                    {{-- No grade yet: show Save button --}}
+                                                @if(!$hasFile)
+                                                    {{-- No file: cannot grade --}}
+                                                    <span class="text-gray-400 text-xs">—</span>
+                                                @elseif(!$hasGrade)
+                                                    {{-- Has file, no grade yet: show Save button --}}
                                                     <button type="button"
                                                         onclick="saveMtGrade('{{ $student->hemis_id }}')"
                                                         class="save-btn px-2 py-0.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none">
@@ -1690,14 +1711,20 @@
             csrfToken: '{{ csrf_token() }}'
         };
 
+        const storageBase = '{{ asset("storage") }}/';
+
         function updateMtHistoryCell(studentHemisId, history) {
             const cell = document.getElementById('mt-history-' + studentHemisId);
             if (!cell || !history || history.length === 0) return;
             let html = '';
             history.forEach(h => {
                 const cls = h.grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
-                html += '<span class="inline-block px-1.5 py-0.5 text-xs rounded ' + cls + ' mr-0.5">' +
-                        h.attempt + ': ' + Math.round(h.grade) + '</span>';
+                let fileLink = '';
+                if (h.file_path) {
+                    fileLink = ' <a href="' + storageBase + h.file_path + '" target="_blank" class="ml-0.5 hover:text-blue-700" title="' + (h.file_name || 'Fayl') + '">&#128206;</a>';
+                }
+                html += '<span class="inline-flex items-center px-1.5 py-0.5 text-xs rounded ' + cls + ' mr-0.5">' +
+                        h.attempt + ': ' + Math.round(h.grade) + fileLink + '</span>';
             });
             cell.innerHTML = html;
         }
@@ -1775,6 +1802,13 @@
                     input.disabled = true;
                     input.classList.add('bg-gray-100', 'text-gray-500');
                     updateMtActionCell(studentHemisId, data);
+                } else if (data.no_file) {
+                    // Student has no file uploaded
+                    alert(data.message);
+                    input.disabled = true;
+                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    const actionCell = document.getElementById('mt-action-' + studentHemisId);
+                    actionCell.innerHTML = '<span class="text-gray-400 text-xs">—</span>';
                 } else {
                     alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
                     buttons.forEach(b => { b.textContent = 'Saqlash'; b.disabled = false; });

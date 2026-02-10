@@ -659,6 +659,28 @@ class JournalController extends Controller
 
         $mtMaxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
 
+        // Get student file submissions for this subject's independent assignments
+        $mtSubmissions = [];
+        $independentIds = DB::table('independents')
+            ->where('group_hemis_id', $group->group_hemis_id)
+            ->where('subject_hemis_id', $subject->curriculum_subject_hemis_id ?? 0)
+            ->where('semester_code', $semesterCode)
+            ->pluck('id')
+            ->toArray();
+
+        if (!empty($independentIds)) {
+            $submissionsRaw = DB::table('independent_submissions')
+                ->whereIn('independent_id', $independentIds)
+                ->get();
+            foreach ($submissionsRaw as $sub) {
+                // Keep latest submission per student (by submitted_at)
+                if (!isset($mtSubmissions[$sub->student_hemis_id])
+                    || $sub->submitted_at > $mtSubmissions[$sub->student_hemis_id]->submitted_at) {
+                    $mtSubmissions[$sub->student_hemis_id] = $sub;
+                }
+            }
+        }
+
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
 
@@ -740,6 +762,7 @@ class JournalController extends Controller
             'manualMtGrades',
             'mtGradeHistory',
             'mtMaxResubmissions',
+            'mtSubmissions',
             'totalAcload',
             'auditoriumHours',
             'groupId',
@@ -782,6 +805,31 @@ class JournalController extends Controller
 
         if (!$subject) {
             return response()->json(['success' => false, 'message' => 'Subject not found'], 404);
+        }
+
+        // Check if student has uploaded a file for this subject's MT assignment
+        $independentIds = DB::table('independents')
+            ->where('group_hemis_id', $student->group_id)
+            ->where('subject_hemis_id', $subject->curriculum_subject_hemis_id ?? 0)
+            ->where('semester_code', $semesterCode)
+            ->pluck('id')
+            ->toArray();
+
+        $studentSubmission = null;
+        if (!empty($independentIds)) {
+            $studentSubmission = DB::table('independent_submissions')
+                ->whereIn('independent_id', $independentIds)
+                ->where('student_hemis_id', $studentHemisId)
+                ->orderByDesc('submitted_at')
+                ->first();
+        }
+
+        if (!$studentSubmission) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Talaba fayl yuklamagan. Baholardan oldin fayl yuklashi kerak.',
+                'no_file' => true,
+            ], 422);
         }
 
         // Check if a manual MT grade already exists for this student/subject/semester
@@ -856,13 +904,15 @@ class JournalController extends Controller
                 ], 403);
             }
 
-            // Archive current grade to history
+            // Archive current grade to history (with file info)
             DB::table('mt_grade_history')->insert([
                 'student_hemis_id' => $studentHemisId,
                 'subject_id' => $subjectId,
                 'semester_code' => $semesterCode,
                 'attempt_number' => $currentAttempt,
                 'grade' => $existingGrade->grade,
+                'file_path' => $studentSubmission->file_path ?? null,
+                'file_original_name' => $studentSubmission->file_original_name ?? null,
                 'graded_by' => auth()->user()?->name ?? 'Admin',
                 'graded_at' => $existingGrade->updated_at ?? $existingGrade->created_at,
                 'created_at' => $now,
@@ -917,7 +967,12 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->orderBy('attempt_number')
             ->get()
-            ->map(fn($h) => ['attempt' => $h->attempt_number, 'grade' => round($h->grade)])
+            ->map(fn($h) => [
+                'attempt' => $h->attempt_number,
+                'grade' => round($h->grade),
+                'file_path' => $h->file_path,
+                'file_name' => $h->file_original_name,
+            ])
             ->toArray();
 
         $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);

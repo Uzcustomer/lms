@@ -15,6 +15,8 @@ return new class extends Migration
             $table->string('semester_code');
             $table->integer('attempt_number')->default(1);
             $table->decimal('grade', 5, 2);
+            $table->string('file_path')->nullable();
+            $table->string('file_original_name')->nullable();
             $table->string('graded_by')->nullable();
             $table->timestamp('graded_at')->nullable();
             $table->timestamps();

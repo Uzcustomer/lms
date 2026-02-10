@@ -9,7 +9,7 @@
         <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
             <div class="overflow-hidden bg-white shadow-xl sm:rounded-lg">
                 <div class="p-6 bg-white border-b border-gray-200">
-                    <h2 class="mb-4 text-lg font-semibold">Talaba parol muddatlari sozlamalari</h2>
+                    <h2 class="mb-4 text-lg font-semibold">Parol va muddat sozlamalari</h2>
 
                     @if (session('success'))
                         <div class="p-4 mb-4 text-sm text-green-700 bg-green-100 rounded-lg">
@@ -67,6 +67,31 @@
                                        class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                        value="{{ old('changed_password_days', $changedPasswordDays) }}">
                                 @error('changed_password_days')
+                                    <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <h3 class="mt-8 mb-4 text-lg font-semibold text-gray-800 border-t pt-6">Telegram tasdiqlash muddati</h3>
+
+                        <div class="p-4 mb-6 text-sm text-blue-700 bg-blue-50 rounded-lg">
+                            <p>O'qituvchilar tizimga kirgandan keyin belgilangan muddat ichida Telegram username ni tasdiqlashtlari kerak. Muddat o'tgandan keyin akkaunt bloklanadi.</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                            <div>
+                                <label for="telegram_deadline_days" class="block text-sm font-medium text-gray-700">
+                                    Telegram tasdiqlash muddati (kun)
+                                </label>
+                                <p class="text-xs text-gray-500 mt-1 mb-2">Telefon raqami kiritilganidan keyin necha kun ichida Telegram tasdiqlanishi kerak</p>
+                                <input type="number"
+                                       name="telegram_deadline_days"
+                                       id="telegram_deadline_days"
+                                       min="1"
+                                       max="365"
+                                       class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                       value="{{ old('telegram_deadline_days', $telegramDeadlineDays) }}">
+                                @error('telegram_deadline_days')
                                     <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>

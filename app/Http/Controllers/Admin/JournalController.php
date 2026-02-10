@@ -681,6 +681,19 @@ class JournalController extends Controller
             }
         }
 
+        // Count ungraded submissions for MT tab badge
+        $mtUngradedCount = 0;
+        $mtDangerCount = 0;
+        foreach ($mtSubmissions as $hemisId => $sub) {
+            if (!isset($manualMtGrades[$hemisId])) {
+                $mtUngradedCount++;
+                $daysSince = \Carbon\Carbon::parse($sub->submitted_at)->diffInDays(now());
+                if ($daysSince >= 3) {
+                    $mtDangerCount++;
+                }
+            }
+        }
+
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
 
@@ -763,6 +776,8 @@ class JournalController extends Controller
             'mtGradeHistory',
             'mtMaxResubmissions',
             'mtSubmissions',
+            'mtUngradedCount',
+            'mtDangerCount',
             'totalAcload',
             'auditoriumHours',
             'groupId',
@@ -968,10 +983,10 @@ class JournalController extends Controller
             ->orderBy('attempt_number')
             ->get()
             ->map(fn($h) => [
+                'id' => $h->id,
                 'attempt' => $h->attempt_number,
                 'grade' => round($h->grade),
-                'file_path' => $h->file_path,
-                'file_name' => $h->file_original_name,
+                'has_file' => !empty($h->file_path),
             ])
             ->toArray();
 
@@ -987,6 +1002,102 @@ class JournalController extends Controller
             'max_attempts' => $maxResubmissions,
             'history' => $history,
         ]);
+    }
+
+    /**
+     * Build custom download filename: "FISH FanNomi_MT[_vN].ext"
+     */
+    private function buildMtFileName(string $studentHemisId, string $subjectId, string $semesterCode, string $originalName, ?int $attempt = null): string
+    {
+        $ext = pathinfo($originalName, PATHINFO_EXTENSION);
+
+        $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
+        $fullName = $student->full_name ?? 'Talaba';
+
+        $subject = CurriculumSubject::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+        $subjectName = $subject->subject_name ?? 'Fan';
+
+        // Sanitize names for filename (remove special chars but keep spaces in FISH)
+        $fullName = preg_replace('/[\/\\\\:*?"<>|]/', '', $fullName);
+        $subjectName = preg_replace('/[\/\\\\:*?"<>|]/', '', $subjectName);
+
+        $mtPart = 'MT';
+        if ($attempt && $attempt > 1) {
+            $mtPart = 'MT_v' . $attempt;
+        }
+
+        return "{$fullName} {$subjectName}_{$mtPart}.{$ext}";
+    }
+
+    /**
+     * Download student submission file with custom name
+     */
+    public function downloadSubmission($submissionId)
+    {
+        $submission = DB::table('independent_submissions')->where('id', $submissionId)->first();
+        if (!$submission) {
+            abort(404, 'Fayl topilmadi');
+        }
+
+        $filePath = storage_path('app/public/' . $submission->file_path);
+        if (!file_exists($filePath)) {
+            abort(404, 'Fayl serverda topilmadi');
+        }
+
+        // Determine attempt number (current = history count + 1)
+        $independent = DB::table('independents')->where('id', $submission->independent_id)->first();
+        $subjectHemisId = $independent->subject_hemis_id ?? 0;
+        $semesterCode = $independent->semester_code ?? '';
+
+        $subject = CurriculumSubject::where('curriculum_subject_hemis_id', $subjectHemisId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+        $subjectId = $subject->subject_id ?? '';
+
+        $attemptCount = DB::table('mt_grade_history')
+            ->where('student_hemis_id', $submission->student_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->count();
+        $currentAttempt = $attemptCount + 1;
+
+        $downloadName = $this->buildMtFileName(
+            $submission->student_hemis_id,
+            $subjectId,
+            $semesterCode,
+            $submission->file_original_name,
+            $currentAttempt
+        );
+
+        return response()->download($filePath, $downloadName);
+    }
+
+    /**
+     * Download history file with custom name
+     */
+    public function downloadHistoryFile($historyId)
+    {
+        $history = DB::table('mt_grade_history')->where('id', $historyId)->first();
+        if (!$history || !$history->file_path) {
+            abort(404, 'Fayl topilmadi');
+        }
+
+        $filePath = storage_path('app/public/' . $history->file_path);
+        if (!file_exists($filePath)) {
+            abort(404, 'Fayl serverda topilmadi');
+        }
+
+        $downloadName = $this->buildMtFileName(
+            $history->student_hemis_id,
+            $history->subject_id,
+            $history->semester_code,
+            $history->file_original_name,
+            $history->attempt_number
+        );
+
+        return response()->download($filePath, $downloadName);
     }
 
     /**

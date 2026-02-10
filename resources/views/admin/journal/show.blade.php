@@ -508,8 +508,11 @@
                             Amaliyot
                         </button>
                         <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
-                            class="tab-btn">
+                            class="tab-btn relative">
                             Mustaqil ta'lim
+                            @if(($mtUngradedCount ?? 0) > 0)
+                                <span class="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white {{ ($mtDangerCount ?? 0) > 0 ? 'bg-red-500 animate-pulse' : 'bg-orange-400' }} rounded-full">{{ $mtUngradedCount }}</span>
+                            @endif
                         </button>
                     </div>
                 </nav>
@@ -982,6 +985,38 @@
                             <p>Bu guruhda talabalar mavjud emas.</p>
                         </div>
                     @else
+                        @php
+                            // Calculate warning count for the banner
+                            $warningCount = 0;
+                            foreach ($students as $st) {
+                                $sub = $mtSubmissions[$st->hemis_id] ?? null;
+                                $gr = $manualMtGrades[$st->hemis_id] ?? null;
+                                if ($sub && $gr === null) {
+                                    $days = \Carbon\Carbon::parse($sub->submitted_at)->diffInDays(now());
+                                    if ($days >= 1 && $days < 3) $warningCount++;
+                                }
+                            }
+                        @endphp
+
+                        @if($mtUngradedCount > 0)
+                            <div class="mx-2 mb-3 p-3 rounded-lg border {{ $mtDangerCount > 0 ? 'bg-red-50 border-red-300' : ($warningCount > 0 ? 'bg-yellow-50 border-yellow-300' : 'bg-blue-50 border-blue-200') }}">
+                                <div class="flex items-center gap-2">
+                                    @if($mtDangerCount > 0)
+                                        <span class="text-red-600 text-lg animate-pulse">&#9888;</span>
+                                        <span class="text-sm font-bold text-red-700">{{ $mtUngradedCount }} ta baholanmagan topshiriq!</span>
+                                        <span class="text-xs text-red-500">({{ $mtDangerCount }} tasi 3+ kun kutmoqda)</span>
+                                    @elseif($warningCount > 0)
+                                        <span class="text-yellow-600 text-lg">&#9888;</span>
+                                        <span class="text-sm font-bold text-yellow-700">{{ $mtUngradedCount }} ta baholanmagan topshiriq</span>
+                                        <span class="text-xs text-yellow-600">({{ $warningCount }} tasi 1+ kun kutmoqda)</span>
+                                    @else
+                                        <span class="text-blue-500 text-lg">&#128276;</span>
+                                        <span class="text-sm font-medium text-blue-700">{{ $mtUngradedCount }} ta yangi topshiriq baholashni kutmoqda</span>
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
+
                         <!-- Manual Grade Entry Table -->
                         <div class="overflow-x-auto">
                             <table class="journal-table border-collapse text-xs">
@@ -1007,17 +1042,43 @@
                                             $submission = $mtSubmissions[$student->hemis_id] ?? null;
                                             $hasFile = $submission !== null;
                                             $inputDisabled = $hasGrade || !$hasFile;
+
+                                            // Urgency: file uploaded but not graded
+                                            $urgency = 'none'; // none, fresh, warning, danger
+                                            if ($hasFile && !$hasGrade) {
+                                                $submittedAt = \Carbon\Carbon::parse($submission->submitted_at);
+                                                $daysSince = $submittedAt->diffInDays(now());
+                                                if ($daysSince >= 3) {
+                                                    $urgency = 'danger';
+                                                } elseif ($daysSince >= 1) {
+                                                    $urgency = 'warning';
+                                                } else {
+                                                    $urgency = 'fresh';
+                                                }
+                                            }
+                                            $rowClass = match($urgency) {
+                                                'danger' => 'bg-red-50',
+                                                'warning' => 'bg-yellow-50',
+                                                default => '',
+                                            };
                                         @endphp
-                                        <tr id="mt-row-{{ $student->hemis_id }}">
+                                        <tr id="mt-row-{{ $student->hemis_id }}" class="{{ $rowClass }}">
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
                                             <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
                                             <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
                                                 @if($hasFile)
-                                                    <a href="{{ asset('storage/' . $submission->file_path) }}" target="_blank"
-                                                       class="text-blue-600 hover:text-blue-800 hover:underline text-xs truncate inline-block max-w-[130px]"
-                                                       title="{{ $submission->file_original_name }}">
-                                                        {{ Str::limit($submission->file_original_name, 20) }}
-                                                    </a>
+                                                    <div class="flex flex-col items-center gap-0.5">
+                                                        <a href="{{ route('admin.journal.download-submission', $submission->id) }}"
+                                                           class="text-blue-600 hover:text-blue-800 hover:underline text-xs truncate inline-block max-w-[130px]"
+                                                           title="{{ $student->full_name }} {{ $subject->subject_name }}_MT">
+                                                            {{ Str::limit($submission->file_original_name, 20) }}
+                                                        </a>
+                                                        @if($urgency === 'warning')
+                                                            <span class="text-xs text-yellow-600 font-medium">{{ $daysSince }} kun o'tdi</span>
+                                                        @elseif($urgency === 'danger')
+                                                            <span class="text-xs text-red-600 font-bold animate-pulse">{{ $daysSince }} kun o'tdi!</span>
+                                                        @endif
+                                                    </div>
                                                 @else
                                                     <span class="text-red-400 text-xs font-medium">Yuklanmagan</span>
                                                 @endif
@@ -1038,7 +1099,7 @@
                                                         <span class="inline-flex items-center px-1.5 py-0.5 text-xs rounded {{ $h->grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }} mr-0.5" title="{{ $h->attempt_number }}-urinish: {{ $h->graded_by ?? '' }}">
                                                             {{ $h->attempt_number }}: {{ round($h->grade) }}
                                                             @if($h->file_path)
-                                                                <a href="{{ asset('storage/' . $h->file_path) }}" target="_blank" class="ml-0.5 hover:text-blue-700" title="{{ $h->file_original_name ?? 'Fayl' }}">&#128206;</a>
+                                                                <a href="{{ route('admin.journal.download-history-file', $h->id) }}" class="ml-0.5 hover:text-blue-700" title="{{ $h->attempt_number }}-urinish fayli">&#128206;</a>
                                                             @endif
                                                         </span>
                                                     @endforeach
@@ -1711,7 +1772,7 @@
             csrfToken: '{{ csrf_token() }}'
         };
 
-        const storageBase = '{{ asset("storage") }}/';
+        const historyDownloadBase = '{{ url("admin/journal/download-history-file") }}/';
 
         function updateMtHistoryCell(studentHemisId, history) {
             const cell = document.getElementById('mt-history-' + studentHemisId);
@@ -1720,8 +1781,8 @@
             history.forEach(h => {
                 const cls = h.grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
                 let fileLink = '';
-                if (h.file_path) {
-                    fileLink = ' <a href="' + storageBase + h.file_path + '" target="_blank" class="ml-0.5 hover:text-blue-700" title="' + (h.file_name || 'Fayl') + '">&#128206;</a>';
+                if (h.has_file && h.id) {
+                    fileLink = ' <a href="' + historyDownloadBase + h.id + '" class="ml-0.5 hover:text-blue-700" title="' + h.attempt + '-urinish fayli">&#128206;</a>';
                 }
                 html += '<span class="inline-flex items-center px-1.5 py-0.5 text-xs rounded ' + cls + ' mr-0.5">' +
                         h.attempt + ': ' + Math.round(h.grade) + fileLink + '</span>';
@@ -1844,12 +1905,56 @@
             location.reload();
         }
 
+        // MT grading urgency modal
+        const mtDangerCount = {{ $dangerCount ?? 0 }};
+        const mtUngradedCount = {{ $ungradedCount ?? 0 }};
+        let mtModalShown = false;
+
+        function showMtUrgencyModal() {
+            if (mtModalShown || mtDangerCount === 0) return;
+            mtModalShown = true;
+
+            const overlay = document.createElement('div');
+            overlay.id = 'mt-urgency-modal';
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-lg shadow-xl max-w-md mx-4 p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-4xl text-red-500 animate-pulse">&#9888;</span>
+                        <h3 class="text-lg font-bold text-red-700">Diqqat! Baholanmagan topshiriqlar</h3>
+                    </div>
+                    <p class="text-sm text-gray-700 mb-2">
+                        <strong>${mtDangerCount}</strong> ta topshiriq <strong>3 kundan oshiq</strong> baholanmagan!
+                    </p>
+                    <p class="text-sm text-gray-500 mb-4">
+                        Jami baholanmagan: ${mtUngradedCount} ta. Iltimos, tezroq baholang.
+                    </p>
+                    <div class="flex gap-2 justify-end">
+                        <button onclick="document.getElementById('mt-urgency-modal').remove()"
+                            class="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                            Keyinroq
+                        </button>
+                        <button onclick="document.getElementById('mt-urgency-modal').remove()"
+                            class="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 font-medium">
+                            Baholashni boshlash
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('content-' + tabName).classList.remove('hidden');
             const activeTab = document.getElementById('tab-' + tabName);
             activeTab.classList.add('active');
+
+            // Show urgency modal when MT tab is opened
+            if (tabName === 'mustaqil') {
+                showMtUrgencyModal();
+            }
         }
 
         function switchView(viewType) {

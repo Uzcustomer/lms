@@ -773,6 +773,7 @@ class StudentController extends Controller
                     'is_warning' => $isWarning,
                     'days_remaining' => $daysRemaining,
                     'submission' => $submission,
+                    'is_viewed' => (bool) $submission?->viewed_at,
                     'grade' => $grade?->grade,
                     'grade_locked' => $gradeLocked,
                     'grade_history' => $gradeHistory,
@@ -993,6 +994,7 @@ class StudentController extends Controller
             'file_original_name' => $file->getClientOriginalName(),
             'submitted_at' => now(),
             'submission_count' => $newCount,
+            'viewed_at' => null, // Reset viewed status so teacher sees fresh submission
         ]);
 
         // If resubmitting after low grade, archive old grade to history and remove current

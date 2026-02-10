@@ -666,13 +666,23 @@ class JournalController extends Controller
         $mtSubmissions = [];
         $mtUngradedCount = 0;
         $mtDangerCount = 0;
+        $independentIds = [];
         try {
-            $subjectHemisId = $subject->curriculum_subject_hemis_id ?? null;
-            if ($subjectHemisId) {
+            // Cross-curriculum support: search all hemis_ids for this subject
+            $allCsHemisIds = DB::table('curriculum_subjects')
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->pluck('curriculum_subject_hemis_id')
+                ->toArray();
+
+            if (!empty($allCsHemisIds)) {
                 $independentIds = DB::table('independents')
                     ->where('group_hemis_id', $group->group_hemis_id)
-                    ->where('subject_hemis_id', $subjectHemisId)
                     ->where('semester_code', $semesterCode)
+                    ->where(function ($q) use ($allCsHemisIds, $subject) {
+                        $q->whereIn('subject_hemis_id', $allCsHemisIds)
+                          ->orWhere('subject_name', $subject->subject_name);
+                    })
                     ->pluck('id')
                     ->toArray();
 
@@ -704,6 +714,16 @@ class JournalController extends Controller
         } catch (\Exception $e) {
             \Log::warning('MT submissions query failed: ' . $e->getMessage());
         }
+
+        // Mark unviewed submissions as viewed (o'qituvchi jurnal sahifasini ko'rdi)
+        try {
+            if (!empty($independentIds ?? [])) {
+                DB::table('independent_submissions')
+                    ->whereIn('independent_id', $independentIds)
+                    ->whereNull('viewed_at')
+                    ->update(['viewed_at' => now()]);
+            }
+        } catch (\Exception $e) {}
 
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;

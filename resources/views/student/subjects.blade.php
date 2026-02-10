@@ -434,24 +434,34 @@
                                         @if($subject['mt'])
                                             @php $mt = $subject['mt']; @endphp
                                             @if($mt['grade_locked'])
+                                                {{-- Baho >= 60: Baholangan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-green">
-                                                    Qabul <b>{{ $mt['grade'] }}</b>
+                                                    Baholangan <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['can_resubmit'])
+                                                {{-- Baho < 60, urinish bor: Qayta yuklash --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
                                                     Qayta yuklash
                                                 </button>
                                             @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60 && $mt['remaining_attempts'] <= 0)
+                                                {{-- Baho < 60, urinish tugagan: Muddat (imkoniyat) tugagan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
-                                                    Rad <b>{{ $mt['grade'] }}</b>
+                                                    Muddat tugagan <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60)
+                                                {{-- Baho < 60, urinish bor: Qayta yuklash --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
                                                     Qayta yuklash
                                                 </button>
-                                            @elseif($mt['submission'])
+                                            @elseif($mt['submission'] && $mt['is_viewed'])
+                                                {{-- Yuklangan + o'qituvchi ko'rgan: Tekshirilmoqda --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-blue">
                                                     Tekshirilmoqda
+                                                </button>
+                                            @elseif($mt['submission'])
+                                                {{-- Yuklangan, o'qituvchi hali ko'rmagan: Yuklangan --}}
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-blue">
+                                                    Yuklangan
                                                 </button>
                                             @elseif($mt['is_overdue'])
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-gray">

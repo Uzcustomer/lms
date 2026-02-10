@@ -170,6 +170,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/student-grades/{gradeId}/status', [AdminStudentController::class, 'updateStatus'])->name('student-grades.update-status');
 
         Route::get('/teachers', [TeacherController::class, 'index'])->name('teachers.index');
+        Route::get('/teachers/export-excel', [TeacherController::class, 'exportExcel'])->name('teachers.export-excel');
         Route::get('/teachers/{teacher}', [TeacherController::class, 'show'])->name('teachers.show');
         Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
         Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');

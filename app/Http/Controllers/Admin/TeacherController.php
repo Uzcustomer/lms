@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Enums\ProjectRole;
+use App\Exports\TeacherExport;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Teacher;
@@ -154,6 +155,12 @@ class TeacherController extends Controller
         $teacher->save();
 
         return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Aloqa ma\'lumotlari yangilandi');
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $export = new TeacherExport($request);
+        $export->export();
     }
 
     public function importTeachers()

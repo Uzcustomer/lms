@@ -1018,6 +1018,22 @@ class StudentController extends Controller
         return back()->with('success', 'Fayl muvaffaqiyatli yuklandi');
     }
 
+    public function downloadSubmission($submissionId)
+    {
+        $student = Auth::guard('student')->user();
+
+        $submission = IndependentSubmission::where('id', $submissionId)
+            ->where('student_id', $student->id)
+            ->firstOrFail();
+
+        $filePath = storage_path('app/public/' . $submission->file_path);
+        if (!file_exists($filePath)) {
+            abort(404, 'Fayl serverda topilmadi');
+        }
+
+        return response()->download($filePath, $submission->file_original_name);
+    }
+
     public function profile()
     {
         if ($redirect = $this->redirectIfPasswordChangeRequired()) {

@@ -717,7 +717,7 @@
                     @if($mt['submission'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #ecfdf5;">
                             <div style="font-size: 11px; font-weight: 600; color: #065f46; margin-bottom: 4px;">Yuklangan fayl</div>
-                            <a href="{{ asset('storage/' . $mt['submission']->file_path) }}" target="_blank"
+                            <a href="{{ route('student.independents.download', $mt['submission']->id) }}" target="_blank"
                                style="font-size: 11px; color: #2563eb; word-break: break-all;">
                                 {{ $mt['submission']->file_original_name }}
                             </a>

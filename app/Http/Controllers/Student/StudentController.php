@@ -265,12 +265,26 @@ class StudentController extends Controller
         ) {
             $subjectId = $cs->subject_id;
 
+            // Education year code: schedule dan aniqlash (admin jurnaldek)
+            $subjectEducationYearCode = $educationYearCode;
+            $scheduleEducationYear = DB::table('schedules')
+                ->where('group_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNotNull('lesson_date')
+                ->whereNotNull('education_year_code')
+                ->orderBy('lesson_date', 'desc')
+                ->value('education_year_code');
+            if ($scheduleEducationYear) {
+                $subjectEducationYearCode = $scheduleEducationYear;
+            }
+
             // ---- JB (Amaliyot) schedule va baholar ----
             $jbScheduleRows = DB::table('schedules')
                 ->where('group_id', $groupHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
-                ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->whereNotIn('training_type_name', $excludedTrainingTypes)
                 ->whereNotIn('training_type_code', $excludedTrainingCodes)
                 ->whereNotNull('lesson_date')
@@ -288,8 +302,8 @@ class StudentController extends Controller
                 ->whereNotIn('training_type_name', $excludedTrainingTypes)
                 ->whereNotIn('training_type_code', $excludedTrainingCodes)
                 ->whereNotNull('lesson_date')
-                ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $educationYearCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
                         ->orWhere(function ($q3) use ($minScheduleDate) {
                             $q3->whereNull('education_year_code')
                                 ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
@@ -344,7 +358,7 @@ class StudentController extends Controller
                 ->where('group_id', $groupHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
-                ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->where('training_type_code', 99)
                 ->whereNotNull('lesson_date')
                 ->select('lesson_date', 'lesson_pair_code')
@@ -356,8 +370,8 @@ class StudentController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->where('training_type_code', 99)
                 ->whereNotNull('lesson_date')
-                ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $educationYearCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
                         ->orWhere(function ($q3) use ($minScheduleDate) {
                             $q3->whereNull('education_year_code')
                                 ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
@@ -405,8 +419,8 @@ class StudentController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->where('training_type_code', 99)
                 ->whereNull('lesson_date')
-                ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
-                    $q2->where('education_year_code', $educationYearCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
                         ->orWhereNull('education_year_code');
                 }))
                 ->value('grade');
@@ -420,8 +434,8 @@ class StudentController extends Controller
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->whereIn('training_type_code', [100, 101, 102])
-                ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $educationYearCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
                         ->orWhere(function ($q3) use ($minScheduleDate) {
                             $q3->whereNull('education_year_code')
                                 ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
@@ -450,7 +464,7 @@ class StudentController extends Controller
                 ->where('student_hemis_id', $studentHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
-                ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->whereNotIn('training_type_code', $excludedAttendanceCodes)
                 ->sum('absent_off');
 
@@ -477,8 +491,8 @@ class StudentController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->whereNotIn('training_type_code', [100, 101, 102])
                 ->whereNotNull('lesson_date')
-                ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $educationYearCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
                         ->orWhere(function ($q3) use ($minScheduleDate) {
                             $q3->whereNull('education_year_code')
                                 ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
@@ -495,7 +509,7 @@ class StudentController extends Controller
                 ->where('student_hemis_id', $studentHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
-                ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->where('training_type_code', 11)
                 ->whereNotNull('lesson_date')
                 ->select(DB::raw('DATE(lesson_date) as lesson_date'), 'lesson_pair_name',

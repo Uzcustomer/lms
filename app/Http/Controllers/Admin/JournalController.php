@@ -1416,10 +1416,8 @@ class JournalController extends Controller
                 ->where('lesson_pair_code', $lessonPairCode)
                 ->first();
 
-            // Bo'sh katak = talaba kelgan, lekin baho qo'yilmagan → 100%
-            $percentage = 1.0;
-            $retakeGrade = round($enteredGrade * $percentage, 2);
-
+            // Bo'sh katak = talaba kelgan, baho qo'yilmagan
+            // Oddiy baho sifatida saqlanadi (retake emas, 100%)
             $now = now();
 
             // Get education year from schedule or student's curriculum
@@ -1437,7 +1435,7 @@ class JournalController extends Controller
             // Check if auth user exists in users table (admin may use different auth table)
             $gradedByUserId = DB::table('users')->where('id', auth()->id())->exists() ? auth()->id() : null;
 
-            // Create new student_grades record
+            // Create normal grade record (not retake)
             DB::table('student_grades')->insert([
                 'hemis_id' => 0,
                 'student_id' => $student->id,
@@ -1458,14 +1456,13 @@ class JournalController extends Controller
                 'lesson_pair_name' => $schedule->lesson_pair_name ?? '',
                 'lesson_pair_start_time' => $schedule->lesson_pair_start_time ?? '00:00',
                 'lesson_pair_end_time' => $schedule->lesson_pair_end_time ?? '00:00',
-                'grade' => 0,
-                'retake_grade' => $retakeGrade,
+                'grade' => $enteredGrade,
+                'retake_grade' => null,
                 'lesson_date' => $lessonDate,
                 'created_at_api' => $now,
-                'status' => 'retake',
-                'reason' => 'low_grade',
+                'status' => 'recorded',
+                'reason' => null,
                 'graded_by_user_id' => $gradedByUserId,
-                'retake_graded_at' => $now,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
@@ -1473,8 +1470,7 @@ class JournalController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Baho muvaffaqiyatli saqlandi',
-                'retake_grade' => $retakeGrade,
-                'percentage' => $percentage * 100
+                'grade' => $enteredGrade,
             ]);
         } catch (\Exception $e) {
             return response()->json([

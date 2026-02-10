@@ -333,6 +333,20 @@
                 </div>
             @endif
 
+            {{-- DEBUG: MT matching info (temporary) --}}
+            @if(isset($mtDebug))
+            <div style="margin-bottom: 12px; padding: 10px 16px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; font-size: 11px; color: #92400e; font-family: monospace;">
+                <b>MT DEBUG:</b>
+                Guruh ID: {{ $mtDebug['group_id'] }} |
+                Independents soni: {{ $mtDebug['total_independents'] }} |
+                Ind hemis_ids: [{{ implode(', ', $mtDebug['ind_subject_hemis_ids']) }}] |
+                Ind names: [{{ implode(', ', array_slice($mtDebug['ind_subject_names'], 0, 3)) }}] |
+                CS hemis_ids: [{{ implode(', ', array_slice($mtDebug['cs_hemis_ids'], 0, 3)) }}] |
+                CS subject_ids: [{{ implode(', ', array_slice($mtDebug['cs_subject_ids'], 0, 3)) }}] |
+                CS names: [{{ implode(', ', array_slice($mtDebug['cs_names'], 0, 3)) }}]
+            </div>
+            @endif
+
             {{-- Summary Bar --}}
             <div class="summary-bar">
                 <div class="s-item">

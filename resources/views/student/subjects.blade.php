@@ -453,7 +453,7 @@
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-gray">
                                                     Muddat tugagan
                                                 </button>
-                                            @elseif($mt['days_remaining'] !== null && $mt['days_remaining'] <= 3)
+                                            @elseif($mt['is_warning'])
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-red btn-mt-pulse">
                                                     MT yuklash
                                                 </button>
@@ -697,17 +697,21 @@
                     </div>
 
                     {{-- Deadline info --}}
-                    <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: {{ $mt['is_overdue'] ? '#fef2f2' : ($mt['days_remaining'] !== null && $mt['days_remaining'] <= 3 ? '#fff7ed' : '#eff6ff') }};">
+                    <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: {{ $mt['is_overdue'] ? '#fef2f2' : ($mt['is_warning'] ? '#fff7ed' : '#eff6ff') }};">
                         <div style="display: flex; align-items: center; justify-content: space-between;">
                             <span style="font-size: 11px; color: #64748b; font-weight: 500;">Muddat:</span>
-                            <span style="font-size: 11px; font-weight: 700; color: {{ $mt['is_overdue'] ? '#dc2626' : '#1e293b' }};">
+                            <span style="font-size: 11px; font-weight: 700; color: {{ $mt['is_overdue'] ? '#dc2626' : ($mt['is_warning'] ? '#ea580c' : '#1e293b') }};">
                                 {{ $mt['deadline'] }} ({{ $mt['deadline_time'] }} gacha)
                             </span>
                         </div>
                         @if($mt['is_overdue'])
                             <div style="font-size: 11px; color: #dc2626; font-weight: 600; text-align: right; margin-top: 4px;">Muddat tugagan</div>
+                        @elseif($mt['is_warning'])
+                            <div style="font-size: 11px; color: #ea580c; font-weight: 600; text-align: right; margin-top: 4px;">
+                                Qolgan: {{ $mt['days_remaining'] ?? 0 }} kun — Shoshiling!
+                            </div>
                         @elseif($mt['days_remaining'] !== null)
-                            <div style="font-size: 11px; color: {{ $mt['days_remaining'] <= 3 ? '#ea580c' : '#2563eb' }}; font-weight: {{ $mt['days_remaining'] <= 3 ? '600' : '500' }}; text-align: right; margin-top: 4px;">
+                            <div style="font-size: 11px; color: #2563eb; font-weight: 500; text-align: right; margin-top: 4px;">
                                 Qolgan: {{ $mt['days_remaining'] }} kun
                             </div>
                         @endif
@@ -717,7 +721,7 @@
                     @if($mt['submission'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #ecfdf5;">
                             <div style="font-size: 11px; font-weight: 600; color: #065f46; margin-bottom: 4px;">Yuklangan fayl</div>
-                            <a href="{{ asset('storage/' . $mt['submission']->file_path) }}" target="_blank"
+                            <a href="{{ route('student.independents.download', $mt['submission']->id) }}" target="_blank"
                                style="font-size: 11px; color: #2563eb; word-break: break-all;">
                                 {{ $mt['submission']->file_original_name }}
                             </a>

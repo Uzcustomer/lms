@@ -275,6 +275,15 @@ class StudentController extends Controller
             }
         }
 
+        // Pre-load ALL schedule dates grouped by subject (for MT deadline calculation)
+        // Barcha dars turlari (ma'ruza, amaliy, ...) kiritiladi - "oxirgi dars" = shu fanning oxirgi darsi
+        $allScheduleDatesBySubject = Schedule::where('group_id', $student->group_id)
+            ->where('semester_code', $semesterCode)
+            ->whereNotNull('lesson_date')
+            ->orderBy('lesson_date')
+            ->get()
+            ->groupBy('subject_id');
+
         $curriculumSubjects = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
             ->where('semester_code', $semesterCode)
             ->get();
@@ -298,7 +307,8 @@ class StudentController extends Controller
             $semesterCode, $studentHemisId, $groupHemisId, $educationYearCode,
             $excludedTrainingTypes, $excludedTrainingCodes, $gradingCutoffDate, $getEffectiveGrade,
             $student, $independentsByHemisId, $independentsBySubjectId, $independentsByName,
-            $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime, $mtDeadlineType
+            $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime, $mtDeadlineType,
+            $allScheduleDatesBySubject
         ) {
             $subjectId = $cs->subject_id;
 
@@ -645,101 +655,72 @@ class StudentController extends Controller
                 }
             }
 
-            // MT data (3-level fallback: hemis_id -> subject_id -> subject_name)
+            // MT data - haqiqiy dars sanalaridan deadline hisoblash
             $mtData = null;
+
+            // Get actual lesson dates for this subject from pre-loaded data
+            $subjectSchedules = $allScheduleDatesBySubject->get($cs->subject_id) ?? collect();
+            $lessonDates = $subjectSchedules->pluck('lesson_date')
+                ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->unique()->sort()->values();
+
+            // Calculate deadline and warning date from ACTUAL lesson dates (no prediction)
+            $correctDeadline = null;
+            $warningDate = null;
+            if ($lessonDates->count() >= 2) {
+                $correctDeadline = $mtDeadlineType === 'last'
+                    ? $lessonDates->last()
+                    : $lessonDates[$lessonDates->count() - 2]; // oxirgi darsdan bitta oldingi
+                // Warning date = deadline darsdan bitta oldingi dars
+                if ($mtDeadlineType === 'last' && $lessonDates->count() >= 2) {
+                    $warningDate = $lessonDates[$lessonDates->count() - 2];
+                } elseif ($lessonDates->count() >= 3) {
+                    $warningDate = $lessonDates[$lessonDates->count() - 3];
+                } else {
+                    $warningDate = $lessonDates->first(); // faqat 2 ta dars bo'lsa, boshidan ogohlantirish
+                }
+            } elseif ($lessonDates->count() === 1) {
+                $correctDeadline = $lessonDates->first();
+                $warningDate = $lessonDates->first();
+            }
+
+            // 3-level fallback: hemis_id -> subject_id -> subject_name
             $subjectIndependents = $independentsByHemisId->get($cs->curriculum_subject_hemis_id)
                 ?? $independentsBySubjectId->get($cs->subject_id)
                 ?? $independentsByName->get($cs->subject_name);
 
             // Auto-create Independent from Schedule if none found
-            if (!$subjectIndependents || $subjectIndependents->count() === 0) {
+            if ((!$subjectIndependents || $subjectIndependents->count() === 0) && $correctDeadline) {
                 try {
-                    $scheduleRows = Schedule::where('group_id', $groupHemisId)
-                        ->where('subject_id', $cs->subject_id)
-                        ->where('semester_code', $semesterCode)
-                        ->whereNotIn('training_type_code', $excludedTrainingCodes)
-                        ->whereNotNull('lesson_date')
-                        ->orderBy('lesson_date')
-                        ->get();
+                    $latestSchedule = $subjectSchedules->sortByDesc('lesson_date')->first();
+                    $grp = Group::where('group_hemis_id', $groupHemisId)->first();
+                    $semModel = $grp ? Semester::where('code', $semesterCode)
+                        ->where('curriculum_hemis_id', $grp->curriculum_hemis_id)->first() : null;
 
-                    if ($scheduleRows->count() > 0) {
-                        $lessonDates = $scheduleRows->pluck('lesson_date')
-                            ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
-                            ->unique()->sort()->values();
+                    $independent = Independent::updateOrCreate(
+                        [
+                            'group_hemis_id' => $groupHemisId,
+                            'subject_hemis_id' => $cs->curriculum_subject_hemis_id,
+                            'semester_code' => $semesterCode,
+                        ],
+                        [
+                            'schedule_id' => $latestSchedule->id,
+                            'group_name' => $latestSchedule->group_name,
+                            'teacher_hemis_id' => $latestSchedule->employee_id,
+                            'teacher_name' => $latestSchedule->employee_name ?? '',
+                            'teacher_short_name' => '',
+                            'department_hemis_id' => $latestSchedule->faculty_id ?? '',
+                            'deportment_name' => $latestSchedule->faculty_name ?? '',
+                            'start_date' => $lessonDates->first(),
+                            'semester_hemis_id' => $semModel?->semester_hemis_id ?? '',
+                            'semester_name' => $latestSchedule->semester_name ?? '',
+                            'subject_name' => $cs->subject_name,
+                            'user_id' => 0,
+                            'deadline' => $correctDeadline,
+                        ]
+                    );
 
-                        // Semester end date from CurriculumWeek
-                        $grp = Group::where('group_hemis_id', $groupHemisId)->first();
-                        $semesterEndDate = null;
-                        $semModel = null;
-                        if ($grp) {
-                            $semModel = Semester::where('code', $semesterCode)
-                                ->where('curriculum_hemis_id', $grp->curriculum_hemis_id)
-                                ->first();
-                            if ($semModel) {
-                                $lastWeek = CurriculumWeek::where('semester_hemis_id', $semModel->semester_hemis_id)
-                                    ->orderBy('end_date', 'desc')
-                                    ->first();
-                                if ($lastWeek) $semesterEndDate = Carbon::parse($lastWeek->end_date);
-                            }
-                        }
-
-                        // Predict future class dates based on weekly pattern
-                        $allDates = $lessonDates;
-                        if ($semesterEndDate) {
-                            $lastKnown = Carbon::parse($lessonDates->last());
-                            if ($lastKnown->lt($semesterEndDate)) {
-                                $daysOfWeek = $lessonDates->map(fn($d) => Carbon::parse($d)->dayOfWeek)->unique();
-                                $predicted = collect($lessonDates->toArray());
-                                $cur = $lastKnown->copy()->addDay();
-                                while ($cur->lte($semesterEndDate)) {
-                                    if ($daysOfWeek->contains($cur->dayOfWeek)) {
-                                        $predicted->push($cur->format('Y-m-d'));
-                                    }
-                                    $cur->addDay();
-                                }
-                                $allDates = $predicted->unique()->sort()->values();
-                            }
-                        }
-
-                        // Calculate deadline: before_last = oxirgi darsdan bitta oldingi
-                        $deadlineDate = null;
-                        if ($mtDeadlineType === 'last') {
-                            $deadlineDate = $allDates->last();
-                        } elseif ($allDates->count() >= 2) {
-                            $deadlineDate = $allDates[$allDates->count() - 2];
-                        } else {
-                            $deadlineDate = $allDates->last();
-                        }
-
-                        if ($deadlineDate) {
-                            $latestSchedule = $scheduleRows->sortByDesc('lesson_date')->first();
-
-                            $independent = Independent::firstOrCreate(
-                                [
-                                    'group_hemis_id' => $groupHemisId,
-                                    'subject_hemis_id' => $cs->curriculum_subject_hemis_id,
-                                    'semester_code' => $semesterCode,
-                                ],
-                                [
-                                    'schedule_id' => $latestSchedule->id,
-                                    'group_name' => $latestSchedule->group_name,
-                                    'teacher_hemis_id' => $latestSchedule->employee_id,
-                                    'teacher_name' => $latestSchedule->employee_name ?? '',
-                                    'teacher_short_name' => '',
-                                    'department_hemis_id' => $latestSchedule->faculty_id ?? '',
-                                    'deportment_name' => $latestSchedule->faculty_name ?? '',
-                                    'start_date' => $lessonDates->first(),
-                                    'semester_hemis_id' => $semModel?->semester_hemis_id ?? '',
-                                    'semester_name' => $latestSchedule->semester_name ?? '',
-                                    'subject_name' => $cs->subject_name,
-                                    'user_id' => 0,
-                                    'deadline' => $deadlineDate,
-                                ]
-                            );
-
-                            $subjectIndependents = collect([$independent]);
-                        }
-                    }
+                    $subjectIndependents = collect([$independent]);
                 } catch (\Exception $e) {
                     // Silent fail - MT button won't show
                 }
@@ -747,6 +728,12 @@ class StudentController extends Controller
 
             if ($subjectIndependents && $subjectIndependents->count() > 0) {
                 $independent = $subjectIndependents->sortByDesc('deadline')->first();
+
+                // Update deadline if incorrect (e.g. from old prediction)
+                if ($correctDeadline && $independent->deadline !== $correctDeadline) {
+                    $independent->update(['deadline' => $correctDeadline]);
+                }
+
                 $submission = $independent->submissionByStudent($student->id);
 
                 $grade = StudentGrade::where('student_id', $student->id)
@@ -772,11 +759,18 @@ class StudentController extends Controller
                     $daysRemaining = (int) Carbon::now()->diffInDays($deadlineDateTime, false);
                 }
 
+                // Warning: oxirgi muddatdan bitta oldingi darsdan boshlab qizil
+                $isWarning = false;
+                if ($warningDate && !$isOverdue) {
+                    $isWarning = Carbon::now()->gte(Carbon::parse($warningDate)->startOfDay());
+                }
+
                 $mtData = [
                     'id' => $independent->id,
-                    'deadline' => $independent->deadline,
+                    'deadline' => Carbon::parse($independent->deadline)->format('d.m.Y'),
                     'deadline_time' => $mtDeadlineTime,
                     'is_overdue' => $isOverdue,
+                    'is_warning' => $isWarning,
                     'days_remaining' => $daysRemaining,
                     'submission' => $submission,
                     'grade' => $grade?->grade,
@@ -1016,6 +1010,22 @@ class StudentController extends Controller
         }
 
         return back()->with('success', 'Fayl muvaffaqiyatli yuklandi');
+    }
+
+    public function downloadSubmission($submissionId)
+    {
+        $student = Auth::guard('student')->user();
+
+        $submission = IndependentSubmission::where('id', $submissionId)
+            ->where('student_id', $student->id)
+            ->firstOrFail();
+
+        $filePath = storage_path('app/public/' . $submission->file_path);
+        if (!file_exists($filePath)) {
+            abort(404, 'Fayl serverda topilmadi');
+        }
+
+        return response()->download($filePath, $submission->file_original_name);
     }
 
     public function profile()

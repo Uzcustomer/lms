@@ -156,6 +156,30 @@
         .btn-detail svg { transition: transform 0.2s; }
         .btn-detail:hover svg { transform: translateX(2px); }
 
+        /* ===== MT BUTTON ===== */
+        .btn-mt {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 6px 12px; border-radius: 8px;
+            font-size: 11px; font-weight: 600;
+            border: 1.5px solid; cursor: pointer; transition: all 0.2s ease;
+        }
+        .btn-mt:hover { transform: translateY(-1px); }
+        .btn-mt-amber { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
+        .btn-mt-amber:hover { background: #fef3c7; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
+        .btn-mt-red { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
+        .btn-mt-red:hover { background: #fee2e2; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+        .btn-mt-blue { background: #eff6ff; color: #1e40af; border-color: #93c5fd; }
+        .btn-mt-blue:hover { background: #dbeafe; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); }
+        .btn-mt-green { background: #ecfdf5; color: #065f46; border-color: #6ee7b7; }
+        .btn-mt-green:hover { background: #d1fae5; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+        .btn-mt-orange { background: #fff7ed; color: #9a3412; border-color: #fdba74; }
+        .btn-mt-orange:hover { background: #ffedd5; box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2); }
+        .btn-mt-gray { background: #f8fafc; color: #64748b; border-color: #cbd5e1; }
+        .btn-mt-gray:hover { background: #f1f5f9; }
+        .btn-mt-danger { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
+        @keyframes mt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .btn-mt-pulse { animation: mt-pulse 2s ease-in-out infinite; }
+
         .empty-page {
             text-align: center; padding: 60px 20px; color: #94a3b8;
             font-size: 14px; background: white; border-radius: 14px;
@@ -287,6 +311,28 @@
     <div class="py-6" x-data="subjectsApp()">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
+            @if (session('success'))
+                <div style="margin-bottom: 16px; padding: 10px 16px; background: #ecfdf5; border: 1px solid #6ee7b7; color: #065f46; border-radius: 8px; font-size: 13px;">
+                    {{ session('success') }}
+                </div>
+            @endif
+
+            @if (session('error'))
+                <div style="margin-bottom: 16px; padding: 10px 16px; background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; border-radius: 8px; font-size: 13px;">
+                    {{ session('error') }}
+                </div>
+            @endif
+
+            @if ($errors->any())
+                <div style="margin-bottom: 16px; padding: 10px 16px; background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; border-radius: 8px; font-size: 13px;">
+                    <ul style="list-style: disc; padding-left: 20px;">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             {{-- Summary Bar --}}
             <div class="summary-bar">
                 <div class="s-item">
@@ -383,10 +429,46 @@
 
                                 <div class="card-footer">
                                     <span class="card-hours"><b>{{ $subject['absent_hours'] }}</b> / {{ $subject['auditorium_hours'] }} soat</span>
-                                    <button class="btn-detail" @click="openModal({{ $index }})">
-                                        Batafsil
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                                    </button>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        {{-- MT yuklash button --}}
+                                        @if($subject['mt'])
+                                            @php $mt = $subject['mt']; @endphp
+                                            @if($mt['grade_locked'])
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-green">
+                                                    Qabul <b>{{ $mt['grade'] }}</b>
+                                                </button>
+                                            @elseif($mt['can_resubmit'])
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
+                                                    Qayta yuklash
+                                                </button>
+                                            @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60 && $mt['remaining_attempts'] <= 0)
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
+                                                    Imkoniyat tugadi
+                                                </button>
+                                            @elseif($mt['submission'])
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-blue">
+                                                    Yuklangan
+                                                </button>
+                                            @elseif($mt['is_overdue'])
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-gray">
+                                                    Muddat tugagan
+                                                </button>
+                                            @elseif($mt['days_remaining'] !== null && $mt['days_remaining'] <= 3)
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-red btn-mt-pulse">
+                                                    MT yuklash
+                                                </button>
+                                            @else
+                                                <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-amber">
+                                                    MT yuklash
+                                                </button>
+                                            @endif
+                                        @endif
+
+                                        <button class="btn-detail" @click="openModal({{ $index }})">
+                                            Batafsil
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -602,7 +684,170 @@
         </div>
     </div>
 
+    {{-- MT Popovers (outside Alpine scope, fixed position) --}}
+    @foreach($subjects as $index => $subject)
+        @if($subject['mt'])
+            @php $mt = $subject['mt']; @endphp
+            <div id="mt-popover-{{ $index }}" class="hidden fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200" style="max-height: 80vh; overflow-y: auto; width: 320px;">
+                <div style="padding: 16px;">
+                    {{-- Header --}}
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
+                        <h3 style="font-size: 13px; font-weight: 700; color: #1e293b; margin: 0;">Mustaqil ta'lim</h3>
+                        <button onclick="closeAllMtPopovers()" style="background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 18px; line-height: 1;">&times;</button>
+                    </div>
+
+                    {{-- Deadline info --}}
+                    <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: {{ $mt['is_overdue'] ? '#fef2f2' : ($mt['days_remaining'] !== null && $mt['days_remaining'] <= 3 ? '#fff7ed' : '#eff6ff') }};">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 11px; color: #64748b; font-weight: 500;">Muddat:</span>
+                            <span style="font-size: 11px; font-weight: 700; color: {{ $mt['is_overdue'] ? '#dc2626' : '#1e293b' }};">
+                                {{ $mt['deadline'] }} ({{ $mt['deadline_time'] }} gacha)
+                            </span>
+                        </div>
+                        @if($mt['is_overdue'])
+                            <div style="font-size: 11px; color: #dc2626; font-weight: 600; text-align: right; margin-top: 4px;">Muddat tugagan</div>
+                        @elseif($mt['days_remaining'] !== null)
+                            <div style="font-size: 11px; color: {{ $mt['days_remaining'] <= 3 ? '#ea580c' : '#2563eb' }}; font-weight: {{ $mt['days_remaining'] <= 3 ? '600' : '500' }}; text-align: right; margin-top: 4px;">
+                                Qolgan: {{ $mt['days_remaining'] }} kun
+                            </div>
+                        @endif
+                    </div>
+
+                    {{-- Current submission info --}}
+                    @if($mt['submission'])
+                        <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #ecfdf5;">
+                            <div style="font-size: 11px; font-weight: 600; color: #065f46; margin-bottom: 4px;">Yuklangan fayl</div>
+                            <a href="{{ asset('storage/' . $mt['submission']->file_path) }}" target="_blank"
+                               style="font-size: 11px; color: #2563eb; word-break: break-all;">
+                                {{ $mt['submission']->file_original_name }}
+                            </a>
+                            <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">
+                                {{ $mt['submission']->submitted_at ? $mt['submission']->submitted_at->format('d.m.Y H:i') : '' }}
+                            </div>
+                        </div>
+                    @endif
+
+                    {{-- Grade info --}}
+                    @if($mt['grade'] !== null)
+                        <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: {{ $mt['grade'] >= 60 ? '#ecfdf5' : '#fef2f2' }};">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <span style="font-size: 11px; color: #64748b; font-weight: 500;">Baho:</span>
+                                <span style="font-size: 14px; font-weight: 700; color: {{ $mt['grade'] >= 60 ? '#059669' : '#dc2626' }};">
+                                    {{ $mt['grade'] }}
+                                    @if($mt['grade_locked'])
+                                        <span style="font-size: 10px; font-weight: 400; color: #059669;">(Qabul qilindi)</span>
+                                    @else
+                                        <span style="font-size: 10px; font-weight: 400; color: #dc2626;">(Qoniqarsiz)</span>
+                                    @endif
+                                </span>
+                            </div>
+                        </div>
+                    @endif
+
+                    {{-- Grade history --}}
+                    @if($mt['grade_history']->count() > 0)
+                        <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
+                            <span style="font-size: 11px; color: #64748b; font-weight: 500;">Oldingi baholar:</span>
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
+                                @foreach($mt['grade_history'] as $history)
+                                    <span style="display: inline-flex; align-items: center; padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: 12px; background: {{ $history->grade >= 60 ? '#ecfdf5' : '#fef2f2' }}; color: {{ $history->grade >= 60 ? '#059669' : '#dc2626' }};">
+                                        {{ $history->grade }}
+                                    </span>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    {{-- File upload section --}}
+                    @if($mt['grade_locked'])
+                        {{-- Locked: no upload --}}
+                    @elseif($mt['can_resubmit'])
+                        <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #fff7ed; border: 1px solid #fdba74;">
+                            <div style="font-size: 11px; color: #9a3412; font-weight: 600; margin-bottom: 8px;">
+                                Qayta yuklash ({{ $mt['remaining_attempts'] }} marta qoldi)
+                            </div>
+                            <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data">
+                                @csrf
+                                <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
+                                       style="width: 100%; font-size: 11px; margin-bottom: 8px;">
+                                <button type="submit" style="width: 100%; padding: 6px 12px; background: #ea580c; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
+                                    Qayta yuklash
+                                </button>
+                            </form>
+                            <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 2MB (zip, doc, ppt, pdf)</p>
+                        </div>
+                    @elseif($mt['submission'] && $mt['grade'] === null && !$mt['is_overdue'])
+                        <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #eff6ff; border: 1px solid #93c5fd;">
+                            <div style="font-size: 11px; color: #1e40af; font-weight: 600; margin-bottom: 8px;">Faylni yangilash</div>
+                            <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data">
+                                @csrf
+                                <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
+                                       style="width: 100%; font-size: 11px; margin-bottom: 8px;">
+                                <button type="submit" style="width: 100%; padding: 6px 12px; background: #2563eb; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
+                                    Yangilash
+                                </button>
+                            </form>
+                            <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 2MB (zip, doc, ppt, pdf)</p>
+                        </div>
+                    @elseif(!$mt['submission'] && !$mt['is_overdue'])
+                        <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #fffbeb; border: 1px solid #fcd34d;">
+                            <div style="font-size: 11px; color: #92400e; font-weight: 600; margin-bottom: 8px;">Fayl yuklash</div>
+                            @if($mt['file_path'])
+                                <div style="margin-bottom: 8px;">
+                                    <a href="{{ asset('storage/' . $mt['file_path']) }}" target="_blank"
+                                       style="font-size: 11px; color: #2563eb;">
+                                        Topshiriq faylini ko'rish
+                                    </a>
+                                </div>
+                            @endif
+                            <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data">
+                                @csrf
+                                <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
+                                       style="width: 100%; font-size: 11px; margin-bottom: 8px;">
+                                <button type="submit" style="width: 100%; padding: 6px 12px; background: #d97706; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
+                                    Yuklash
+                                </button>
+                            </form>
+                            <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 2MB (zip, doc, ppt, pdf)</p>
+                        </div>
+                    @elseif($mt['is_overdue'] && !$mt['submission'])
+                        <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
+                            <span style="font-size: 11px; color: #dc2626; font-weight: 500;">Muddat tugagan — fayl yuklanmagan</span>
+                        </div>
+                    @elseif($mt['grade'] !== null && $mt['grade'] < 60 && $mt['remaining_attempts'] <= 0)
+                        <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
+                            <span style="font-size: 11px; color: #dc2626; font-weight: 500;">MT topshirig'ini qayta yuklash imkoniyati tugagan</span>
+                        </div>
+                    @endif
+
+                    {{-- Task file download --}}
+                    @if($mt['file_path'] && ($mt['submission'] || $mt['is_overdue']))
+                        <div style="margin-bottom: 12px;">
+                            <a href="{{ asset('storage/' . $mt['file_path']) }}" target="_blank"
+                               style="font-size: 11px; color: #2563eb;">
+                                Topshiriq faylini ko'rish
+                            </a>
+                        </div>
+                    @endif
+
+                    {{-- Reminder text --}}
+                    <div style="padding: 8px 10px; border-radius: 8px; background: #fefce8; border: 1px solid #fde68a;">
+                        <p style="font-size: 10px; color: #854d0e; line-height: 1.5; margin: 0;">
+                            MT topshiriq muddati oxirgi darsdan bitta oldingi darsda soat 17.00 gacha yuklanishi shart.
+                            Muddatida yuklanmagan MT topshiriqlari ko'rib chiqilmaydi va baholanmaydi.
+                            MT dan qoniqarsiz baho olgan yoki baholanmagan talabalar fandan akademik qarzdor hisoblanadi.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        @endif
+    @endforeach
+
+    {{-- Overlay for closing popovers --}}
+    <div id="mt-popover-overlay" class="hidden fixed inset-0 z-[9998]" style="background: rgba(0,0,0,0.1);" onclick="closeAllMtPopovers()"></div>
+
     <script>
+        // Alpine.js app for modal
         function subjectsApp() {
             return {
                 modalOpen: false,
@@ -624,5 +869,51 @@
                 }
             }
         }
+
+        // MT Popover functions
+        function toggleMtPopover(event, index) {
+            event.stopPropagation();
+            var popover = document.getElementById('mt-popover-' + index);
+            var overlay = document.getElementById('mt-popover-overlay');
+            var isHidden = popover.classList.contains('hidden');
+
+            closeAllMtPopovers();
+
+            if (isHidden) {
+                var rect = event.currentTarget.getBoundingClientRect();
+                var popoverWidth = 320;
+                var viewportWidth = window.innerWidth;
+                var viewportHeight = window.innerHeight;
+
+                var top = rect.bottom + 6;
+                var left = rect.right - popoverWidth;
+
+                if (left < 8) left = 8;
+                if (left + popoverWidth > viewportWidth - 8) left = viewportWidth - popoverWidth - 8;
+
+                if (top + 300 > viewportHeight) {
+                    top = Math.max(8, rect.top - 300 - 6);
+                }
+
+                popover.style.top = top + 'px';
+                popover.style.left = left + 'px';
+                popover.classList.remove('hidden');
+                overlay.classList.remove('hidden');
+            }
+        }
+
+        function closeAllMtPopovers() {
+            document.querySelectorAll('[id^="mt-popover-"]').forEach(function(el) {
+                if (el.id !== 'mt-popover-overlay') {
+                    el.classList.add('hidden');
+                }
+            });
+            var overlay = document.getElementById('mt-popover-overlay');
+            if (overlay) overlay.classList.add('hidden');
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeAllMtPopovers();
+        });
     </script>
 </x-student-app-layout>

@@ -644,6 +644,20 @@
             <!-- Amaliyot Tab Content -->
             <div id="content-amaliyot" class="tab-content">
                 <div class="bg-white">
+                    @if(($mtUngradedCount ?? 0) > 0)
+                        <div class="mx-2 mb-2 p-2.5 rounded-lg border cursor-pointer {{ ($mtDangerCount ?? 0) > 0 ? 'bg-red-50 border-red-300' : 'bg-yellow-50 border-yellow-300' }}" onclick="switchTab('mustaqil')">
+                            <div class="flex items-center gap-2">
+                                <span class="{{ ($mtDangerCount ?? 0) > 0 ? 'text-red-600 animate-pulse' : 'text-yellow-600' }} text-base">&#9888;</span>
+                                <span class="text-xs font-bold {{ ($mtDangerCount ?? 0) > 0 ? 'text-red-700' : 'text-yellow-700' }}">
+                                    {{ $mtUngradedCount }} ta MT topshiriq baholanmagan!
+                                    @if(($mtDangerCount ?? 0) > 0)
+                                        ({{ $mtDangerCount }} tasi 3+ kun)
+                                    @endif
+                                </span>
+                                <span class="text-xs {{ ($mtDangerCount ?? 0) > 0 ? 'text-red-500' : 'text-yellow-600' }} underline ml-auto">MT tabiga o'tish &rarr;</span>
+                            </div>
+                        </div>
+                    @endif
                     @if($students->isEmpty())
                         <div class="p-4 text-center text-gray-500">
                             <p>Bu guruhda talabalar mavjud emas.</p>

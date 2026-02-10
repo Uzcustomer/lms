@@ -1281,68 +1281,75 @@ class JournalController extends Controller
             'grade' => 'required|numeric|min:0|max:100',
         ]);
 
-        $gradeId = $request->grade_id;
-        $enteredGrade = $request->grade;
+        try {
+            $gradeId = $request->grade_id;
+            $enteredGrade = $request->grade;
 
-        // Get the student grade record
-        $studentGrade = DB::table('student_grades')
-            ->where('id', $gradeId)
-            ->first();
+            // Get the student grade record
+            $studentGrade = DB::table('student_grades')
+                ->where('id', $gradeId)
+                ->first();
 
-        if (!$studentGrade) {
-            return response()->json(['success' => false, 'message' => 'Grade record not found'], 404);
-        }
+            if (!$studentGrade) {
+                return response()->json(['success' => false, 'message' => 'Baho yozuvi topilmadi: id=' . $gradeId], 404);
+            }
 
-        // Check if retake grade already exists
-        if ($studentGrade->retake_grade !== null) {
-            return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
-        }
+            // Check if retake grade already exists
+            if ($studentGrade->retake_grade !== null) {
+                return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
+            }
 
-        // Check if there's an attendance record to determine if absence was excused
-        $attendance = DB::table('attendances')
-            ->where('student_hemis_id', $studentGrade->student_hemis_id)
-            ->where('subject_id', $studentGrade->subject_id)
-            ->where('semester_code', $studentGrade->semester_code)
-            ->where('lesson_date', $studentGrade->lesson_date)
-            ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
-            ->first();
+            // Check if there's an attendance record to determine if absence was excused
+            $attendance = DB::table('attendances')
+                ->where('student_hemis_id', $studentGrade->student_hemis_id)
+                ->where('subject_id', $studentGrade->subject_id)
+                ->where('semester_code', $studentGrade->semester_code)
+                ->whereDate('lesson_date', $studentGrade->lesson_date)
+                ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
+                ->first();
 
-        // Determine the percentage to apply based on reason:
-        // - absent + excused (sababli): 100%
-        // - absent + unexcused (sababsiz): 80%
-        // - low_grade (60 dan past, otrabotka): 80%
-        // - no reason (baho qo'yilmagan, talaba kelgan): 100%
-        if ($studentGrade->reason === 'absent') {
-            $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
-            $percentage = $isExcused ? 1.0 : 0.8;
-        } elseif ($studentGrade->reason === 'low_grade') {
-            $percentage = 0.8;
-        } else {
-            $percentage = 1.0;
-        }
+            // Determine the percentage to apply based on reason:
+            // - absent + excused (sababli): 100%
+            // - absent + unexcused (sababsiz): 80%
+            // - low_grade (60 dan past, otrabotka): 80%
+            // - no reason (baho qo'yilmagan, talaba kelgan): 100%
+            if ($studentGrade->reason === 'absent') {
+                $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
+                $percentage = $isExcused ? 1.0 : 0.8;
+            } elseif ($studentGrade->reason === 'low_grade') {
+                $percentage = 0.8;
+            } else {
+                $percentage = 1.0;
+            }
 
-        // Calculate final retake grade
-        $retakeGrade = round($enteredGrade * $percentage, 2);
+            // Calculate final retake grade
+            $retakeGrade = round($enteredGrade * $percentage, 2);
 
-        $now = now();
+            $now = now();
 
-        // Update the grade record with retake information
-        DB::table('student_grades')
-            ->where('id', $gradeId)
-            ->update([
+            // Update the grade record with retake information
+            DB::table('student_grades')
+                ->where('id', $gradeId)
+                ->update([
+                    'retake_grade' => $retakeGrade,
+                    'status' => 'retake',
+                    'graded_by_user_id' => auth()->id(),
+                    'retake_graded_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Retake bahosi muvaffaqiyatli saqlandi',
                 'retake_grade' => $retakeGrade,
-                'status' => 'retake',
-                'graded_by_user_id' => auth()->id(),
-                'retake_graded_at' => $now,
-                'updated_at' => $now,
+                'percentage' => $percentage * 100
             ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Retake bahosi muvaffaqiyatli saqlandi',
-            'retake_grade' => $retakeGrade,
-            'percentage' => $percentage * 100
-        ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Xatolik: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -1364,102 +1371,103 @@ class JournalController extends Controller
             'grade' => 'required|numeric|min:0|max:100',
         ]);
 
-        $studentHemisId = $request->student_hemis_id;
-        $lessonDate = $request->lesson_date;
-        $lessonPairCode = $request->lesson_pair_code;
-        $subjectId = $request->subject_id;
-        $semesterCode = $request->semester_code;
-        $enteredGrade = $request->grade;
+        try {
+            $studentHemisId = $request->student_hemis_id;
+            $lessonDate = $request->lesson_date;
+            $lessonPairCode = $request->lesson_pair_code;
+            $subjectId = $request->subject_id;
+            $semesterCode = $request->semester_code;
+            $enteredGrade = $request->grade;
 
-        // Get student info
-        $student = DB::table('students')
-            ->where('hemis_id', $studentHemisId)
-            ->first();
+            // Get student info
+            $student = DB::table('students')
+                ->where('hemis_id', $studentHemisId)
+                ->first();
 
-        if (!$student) {
-            return response()->json(['success' => false, 'message' => 'Student not found'], 404);
+            if (!$student) {
+                return response()->json(['success' => false, 'message' => 'Talaba topilmadi: ' . $studentHemisId], 404);
+            }
+
+            // Get subject info
+            $subject = CurriculumSubject::where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->first();
+
+            if (!$subject) {
+                return response()->json(['success' => false, 'message' => 'Fan topilmadi: subject_id=' . $subjectId . ', semester=' . $semesterCode], 404);
+            }
+
+            // Get schedule info for training type (whereDate for datetime column)
+            $schedule = DB::table('schedules')
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereDate('lesson_date', $lessonDate)
+                ->where('lesson_pair_code', $lessonPairCode)
+                ->first();
+
+            // Bo'sh katak = talaba kelgan, lekin baho qo'yilmagan → 100%
+            $percentage = 1.0;
+            $retakeGrade = round($enteredGrade * $percentage, 2);
+
+            $now = now();
+
+            // Get education year from schedule or student's curriculum
+            $educationYearCode = $schedule->education_year_code ?? null;
+            $educationYearName = $schedule->education_year_name ?? null;
+
+            if (!$educationYearCode) {
+                $curriculum = DB::table('curricula')
+                    ->where('curricula_hemis_id', $student->curriculum_id ?? null)
+                    ->first();
+                $educationYearCode = $curriculum?->education_year_code;
+                $educationYearName = $curriculum?->education_year_name;
+            }
+
+            // Create new student_grades record
+            DB::table('student_grades')->insert([
+                'hemis_id' => 0,
+                'student_id' => $student->id,
+                'student_hemis_id' => $studentHemisId,
+                'semester_code' => $semesterCode,
+                'semester_name' => $subject->semester_name ?? '',
+                'education_year_code' => $educationYearCode,
+                'education_year_name' => $educationYearName,
+                'subject_schedule_id' => $schedule->id ?? 0,
+                'subject_id' => $subjectId,
+                'subject_name' => $subject->subject_name ?? '',
+                'subject_code' => $subject->subject_code ?? '',
+                'training_type_code' => (string) ($schedule->training_type_code ?? '10'),
+                'training_type_name' => $schedule->training_type_name ?? 'Amaliyot',
+                'employee_id' => $schedule->employee_id ?? 0,
+                'employee_name' => $schedule->employee_name ?? 'Manual',
+                'lesson_pair_code' => $lessonPairCode,
+                'lesson_pair_name' => $schedule->lesson_pair_name ?? '',
+                'lesson_pair_start_time' => $schedule->lesson_pair_start_time ?? '00:00',
+                'lesson_pair_end_time' => $schedule->lesson_pair_end_time ?? '00:00',
+                'grade' => 0,
+                'retake_grade' => $retakeGrade,
+                'lesson_date' => $lessonDate,
+                'created_at_api' => $now,
+                'status' => 'retake',
+                'reason' => 'low_grade',
+                'graded_by_user_id' => auth()->id(),
+                'retake_graded_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Baho muvaffaqiyatli saqlandi',
+                'retake_grade' => $retakeGrade,
+                'percentage' => $percentage * 100
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Xatolik: ' . $e->getMessage()
+            ], 500);
         }
-
-        // Get subject info
-        $subject = CurriculumSubject::where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->first();
-
-        if (!$subject) {
-            return response()->json(['success' => false, 'message' => 'Subject not found'], 404);
-        }
-
-        // Get schedule info for training type
-        $schedule = DB::table('schedules')
-            ->where('subject_id', $subjectId)
-            ->where('lesson_date', $lessonDate)
-            ->where('lesson_pair_code', $lessonPairCode)
-            ->first();
-
-        // Check if there's an attendance record to determine if absence was excused
-        $attendance = DB::table('attendances')
-            ->where('student_hemis_id', $studentHemisId)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->where('lesson_date', $lessonDate)
-            ->where('lesson_pair_code', $lessonPairCode)
-            ->first();
-
-        // Bo'sh katak = talaba kelgan, lekin baho qo'yilmagan → 100%
-        // Hech qanday jarima qo'llanilmaydi
-        $percentage = 1.0;
-
-        // Calculate final retake grade
-        $retakeGrade = round($enteredGrade * $percentage, 2);
-
-        $now = now();
-
-        // Get education year from student's curriculum
-        $curriculum = DB::table('curricula')
-            ->where('curricula_hemis_id', $student->curriculum_id ?? null)
-            ->first();
-        $educationYearCode = $curriculum?->education_year_code;
-        $educationYearName = $curriculum?->education_year_name;
-
-        // Create new student_grades record
-        DB::table('student_grades')->insert([
-            'hemis_id' => 0, // Manual entry
-            'student_id' => $student->id,
-            'student_hemis_id' => $studentHemisId,
-            'semester_code' => $semesterCode,
-            'semester_name' => $subject->semester_name ?? '',
-            'education_year_code' => $educationYearCode,
-            'education_year_name' => $educationYearName,
-            'subject_schedule_id' => $schedule->id ?? 0,
-            'subject_id' => $subjectId,
-            'subject_name' => $subject->subject_name ?? '',
-            'subject_code' => $subject->subject_code ?? '',
-            'training_type_code' => $schedule->training_type_code ?? 10,
-            'training_type_name' => $schedule->training_type_name ?? 'Amaliyot',
-            'employee_id' => $schedule->employee_id ?? 0,
-            'employee_name' => $schedule->employee_name ?? 'Manual',
-            'lesson_pair_code' => $lessonPairCode,
-            'lesson_pair_name' => $schedule->lesson_pair_name ?? '',
-            'lesson_pair_start_time' => $schedule->lesson_pair_start_time ?? '00:00',
-            'lesson_pair_end_time' => $schedule->lesson_pair_end_time ?? '00:00',
-            'grade' => 0,
-            'retake_grade' => $retakeGrade,
-            'lesson_date' => $lessonDate,
-            'created_at_api' => $now,
-            'status' => 'retake',
-            'reason' => 'low_grade',
-            'graded_by_user_id' => auth()->id(),
-            'retake_graded_at' => $now,
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Retake bahosi muvaffaqiyatli saqlandi',
-            'retake_grade' => $retakeGrade,
-            'percentage' => $percentage * 100
-        ]);
     }
 
     // AJAX endpoints for cascading dropdowns

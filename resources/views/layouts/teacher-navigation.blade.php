@@ -159,13 +159,60 @@
                     </x-slot>
 
                     <x-slot name="content">
+                        <!-- Rollar -->
+                        @php
+                            $teacherRoles = Auth::guard('teacher')->user()->getRoleNames();
+                            $roleLabels = [
+                                'oqituvchi' => "O'qituvchi",
+                                'registrator_ofisi' => 'Registrator ofisi',
+                                'dekan' => 'Dekan',
+                                'kafedra_mudiri' => 'Kafedra mudiri',
+                                'fan_masuli' => "Fan mas'uli",
+                                'superadmin' => 'Superadmin',
+                                'admin' => 'Admin',
+                                'kichik_admin' => 'Kichik admin',
+                                'inspeksiya' => 'Inspeksiya',
+                                'oquv_prorektori' => "O'quv prorektori",
+                                'oquv_bolimi' => "O'quv bo'limi",
+                                'buxgalteriya' => 'Buxgalteriya',
+                                'manaviyat' => "Ma'naviyat",
+                                'tyutor' => 'Tyutor',
+                            ];
+                        @endphp
+                        @if($teacherRoles->count() > 1)
+                        <div class="px-4 py-2 border-b border-gray-200">
+                            <p class="text-xs text-gray-500 mb-1">Rollar:</p>
+                            <div class="flex flex-wrap gap-1">
+                                @foreach($teacherRoles as $role)
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                        {{ $role === 'registrator_ofisi' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-700' }}">
+                                        {{ $roleLabels[$role] ?? $role }}
+                                    </span>
+                                @endforeach
+                            </div>
+                        </div>
+                        @endif
+
                         <x-dropdown-link :href="route('teacher.info-me')">
                             {{ __('Profile') }}
                         </x-dropdown-link>
                         <x-dropdown-link :href="route('teacher.edit_credentials')">
                             {{ __('Login va Parol') }}
                         </x-dropdown-link>
+
+                        @if(Auth::guard('teacher')->user()->hasRole('registrator_ofisi'))
+                        <div class="border-t border-gray-200"></div>
+                        <x-dropdown-link :href="route('admin.dashboard')" class="text-indigo-600 font-medium">
+                            <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            Boshqaruv paneli
+                        </x-dropdown-link>
+                        @endif
+
                         <!-- Authentication -->
+                        <div class="border-t border-gray-200"></div>
                         <form method="POST" action="{{ route('teacher.logout') }}">
                             @csrf
 

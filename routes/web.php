@@ -44,7 +44,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
 
 
-    Route::middleware(['auth:web,teacher', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi'])->group(function () {
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('admin.dashboard');
         });

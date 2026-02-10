@@ -714,18 +714,7 @@ class StudentController extends Controller
             ];
         });
 
-        // Temporary debug info for MT matching
-        $mtDebug = [
-            'group_id' => $student->group_id,
-            'total_independents' => $allIndependents->count(),
-            'ind_subject_hemis_ids' => $allIndependents->pluck('subject_hemis_id')->unique()->values()->toArray(),
-            'ind_subject_names' => $allIndependents->pluck('subject_name')->unique()->values()->toArray(),
-            'cs_hemis_ids' => $curriculumSubjects->pluck('curriculum_subject_hemis_id')->values()->toArray(),
-            'cs_subject_ids' => $curriculumSubjects->pluck('subject_id')->values()->toArray(),
-            'cs_names' => $curriculumSubjects->pluck('subject_name')->values()->toArray(),
-        ];
-
-        return view('student.subjects', ['subjects' => $subjects, 'semester' => $semester_name, 'mtDeadlineTime' => $mtDeadlineTime, 'mtDebug' => $mtDebug]);
+        return view('student.subjects', ['subjects' => $subjects, 'semester' => $semester_name, 'mtDeadlineTime' => $mtDeadlineTime]);
     }
 
     // Fetch grades for a selected subject

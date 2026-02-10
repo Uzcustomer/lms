@@ -189,13 +189,15 @@
         /* ===== MODAL ===== */
         .modal-overlay {
             position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000;
-            display: flex; align-items: center; justify-content: center; padding: 20px;
+            display: flex !important; align-items: center; justify-content: center; padding: 20px;
             backdrop-filter: blur(4px);
         }
+        .modal-overlay[style*="display: none"] { display: none !important; }
         .modal-box {
             background: #fff; border-radius: 16px; width: 100%; max-width: 1100px;
             max-height: 90vh; box-shadow: 0 25px 60px rgba(0,0,0,0.15);
             overflow: hidden; display: flex; flex-direction: column;
+            margin: auto;
         }
         .modal-header {
             display: flex; align-items: center; justify-content: space-between;

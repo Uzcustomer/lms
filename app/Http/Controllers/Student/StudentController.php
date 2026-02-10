@@ -911,7 +911,7 @@ class StudentController extends Controller
                     'grade_history' => $gradeHistory,
                     'submission_count' => $submissionCount,
                     'remaining_attempts' => $remainingAttempts,
-                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < 60 && $remainingAttempts > 0 && !Carbon::now()->gt($deadlineDateTime),
+                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < 60 && $remainingAttempts > 0 && !$isOverdue,
                     'status' => $independent->status,
                     'file_path' => $independent->file_path,
                     'file_original_name' => $independent->file_original_name,

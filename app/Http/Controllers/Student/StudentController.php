@@ -229,11 +229,22 @@ class StudentController extends Controller
         $semester_name = $student->semester_name;
         $currentDate = Carbon::now();
 
+        // MT settings
+        $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
+        $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
+        $timeParts = explode(':', $mtDeadlineTime);
+        $mtHour = (int) ($timeParts[0] ?? 17);
+        $mtMinute = (int) ($timeParts[1] ?? 0);
+
+        // Fetch independents for this student's group, indexed by subject_hemis_id
+        $allIndependents = Independent::where('group_hemis_id', $student->group_id)->get();
+        $independentsBySubject = $allIndependents->groupBy('subject_hemis_id');
+
         $curriculumSubjects = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
             ->where('semester_code', $semester)
             ->get();
 
-        $subjects = $curriculumSubjects->map(function ($cs) use ($semester, $currentDate, $student) {
+        $subjects = $curriculumSubjects->map(function ($cs) use ($semester, $currentDate, $student, $independentsBySubject, $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime) {
             $subject_id = $cs->subject_id;
 
             $lessonDates = Schedule::where('subject_id', $subject_id)
@@ -279,6 +290,54 @@ class StudentController extends Controller
                 ->where('training_type_code', 100)
                 ->avg('grade');
 
+            // MT data
+            $mtData = null;
+            $subjectIndependents = $independentsBySubject->get($cs->curriculum_subject_hemis_id);
+            if ($subjectIndependents && $subjectIndependents->count() > 0) {
+                $independent = $subjectIndependents->sortByDesc('deadline')->first();
+                $submission = $independent->submissionByStudent($student->id);
+
+                $grade = StudentGrade::where('student_id', $student->id)
+                    ->where('independent_id', $independent->id)
+                    ->first();
+
+                $gradeHistory = collect();
+                try {
+                    $gradeHistory = IndependentGradeHistory::where('independent_id', $independent->id)
+                        ->where('student_id', $student->id)
+                        ->orderBy('submission_number')
+                        ->get();
+                } catch (\Exception $e) {}
+
+                $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($mtHour, $mtMinute, 0);
+                $submissionCount = $submission?->submission_count ?? 0;
+                $remainingAttempts = max(0, $mtMaxResubmissions - ($submissionCount - 1));
+                $gradeLocked = $grade && $grade->grade >= 60;
+                $isOverdue = Carbon::now()->gt($deadlineDateTime);
+
+                $daysRemaining = null;
+                if (!$isOverdue) {
+                    $daysRemaining = (int) Carbon::now()->diffInDays($deadlineDateTime, false);
+                }
+
+                $mtData = [
+                    'id' => $independent->id,
+                    'deadline' => $independent->deadline,
+                    'deadline_time' => $mtDeadlineTime,
+                    'is_overdue' => $isOverdue,
+                    'days_remaining' => $daysRemaining,
+                    'submission' => $submission,
+                    'grade' => $grade?->grade,
+                    'grade_locked' => $gradeLocked,
+                    'grade_history' => $gradeHistory,
+                    'submission_count' => $submissionCount,
+                    'remaining_attempts' => $remainingAttempts,
+                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < 60 && $remainingAttempts > 0 && !$isOverdue,
+                    'file_path' => $independent->file_path,
+                    'file_original_name' => $independent->file_original_name,
+                ];
+            }
+
             return [
                 'name' => $cs->subject_name,
                 'code' => $cs->subject_code,
@@ -290,10 +349,11 @@ class StudentController extends Controller
                 'final_exam' => $finalExamGrade ? round($finalExamGrade) : 'Aniqlanmagan',
                 'current_exam' => $currentExamGrade ? round($currentExamGrade) : 'Aniqlanmagan',
                 'average_grade' => round($overallAverageGrade),
+                'mt' => $mtData,
             ];
         });
 
-        return view('student.subjects', ['subjects' => $subjects, 'semester' => $semester_name]);
+        return view('student.subjects', ['subjects' => $subjects, 'semester' => $semester_name, 'mtDeadlineTime' => $mtDeadlineTime]);
     }
 
     // Fetch grades for a selected subject

@@ -747,7 +747,15 @@ class StudentController extends Controller
 
                 $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($mtHour, $mtMinute, 0);
                 $submissionCount = $submission?->submission_count ?? 0;
-                $remainingAttempts = max(0, $mtMaxResubmissions - ($submissionCount - 1));
+
+                // Use mt_grade_history count for accurate resubmission tracking
+                // (submission_count increments for every upload, including re-uploads before grading)
+                $mtHistoryCount = DB::table('mt_grade_history')
+                    ->where('student_hemis_id', $student->hemis_id)
+                    ->where('subject_id', $independent->subject_hemis_id)
+                    ->where('semester_code', $independent->semester_code)
+                    ->count();
+                $remainingAttempts = max(0, $mtMaxResubmissions - $mtHistoryCount);
                 $gradeLocked = $grade && $grade->grade >= 60;
                 $isOverdue = Carbon::now()->gt($deadlineDateTime);
 
@@ -892,7 +900,15 @@ class StudentController extends Controller
 
                 $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
                 $submissionCount = $submission?->submission_count ?? 0;
-                $remainingAttempts = max(0, $mtMaxResubmissions - ($submissionCount - 1));
+                $isOverdue = Carbon::now()->gt($deadlineDateTime);
+
+                // Use mt_grade_history count for accurate resubmission tracking
+                $mtHistoryCount = DB::table('mt_grade_history')
+                    ->where('student_hemis_id', $student->hemis_id)
+                    ->where('subject_id', $independent->subject_hemis_id)
+                    ->where('semester_code', $independent->semester_code)
+                    ->count();
+                $remainingAttempts = max(0, $mtMaxResubmissions - $mtHistoryCount);
                 $gradeLocked = $grade && $grade->grade >= 60;
 
                 return [
@@ -901,7 +917,7 @@ class StudentController extends Controller
                     'teacher_name' => $independent->teacher_short_name ?? $independent->teacher_name,
                     'start_date' => $independent->start_date,
                     'deadline' => $independent->deadline,
-                    'is_overdue' => Carbon::now()->gt($deadlineDateTime),
+                    'is_overdue' => $isOverdue,
                     'submission' => $submission,
                     'grade' => $grade?->grade,
                     'grade_locked' => $gradeLocked,
@@ -957,8 +973,13 @@ class StudentController extends Controller
         $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
 
         if ($existing && $existingGrade && $existingGrade->grade < 60) {
-            // This is a resubmission after low grade
-            $remainingAttempts = $mtMaxResubmissions - ($existing->submission_count - 1);
+            // Use mt_grade_history count for accurate resubmission tracking
+            $mtHistoryCount = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $student->hemis_id)
+                ->where('subject_id', $independent->subject_hemis_id)
+                ->where('semester_code', $independent->semester_code)
+                ->count();
+            $remainingAttempts = $mtMaxResubmissions - $mtHistoryCount;
             if ($remainingAttempts <= 0) {
                 return back()->with('error', 'Qayta yuklash imkoniyati tugagan (maksimum ' . $mtMaxResubmissions . ' marta).');
             }

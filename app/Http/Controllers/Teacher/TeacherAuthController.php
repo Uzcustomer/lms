@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
+use App\Models\Setting;
 
 class TeacherAuthController extends Controller
 {
@@ -117,8 +118,10 @@ class TeacherAuthController extends Controller
         $teacher->save();
 
         // Telefon saqlandi — dashboardga yo'naltiramiz (telegram hali majburiy emas)
+        $days = Setting::get('telegram_deadline_days', 7);
+
         return redirect()->route('teacher.dashboard')
-            ->with('success', 'Telefon raqami saqlandi. Telegram hisobingizni 7 kun ichida tasdiqlang.');
+            ->with('success', "Telefon raqami saqlandi. Telegram hisobingizni {$days} kun ichida tasdiqlang.");
     }
 
     public function saveTelegram(Request $request)

@@ -1,65 +1,86 @@
-<div class="bg-white rounded-lg shadow-sm border border-gray-200">
-    <div class="px-6 py-4 border-b border-gray-200">
-        <h3 class="text-lg font-semibold text-gray-900">Parol sozlamalari</h3>
-        <p class="mt-1 text-sm text-gray-500">Talaba parollarining amal qilish muddatlari</p>
-    </div>
-
-    <div class="p-6">
-        <div class="p-4 mb-6 text-sm text-blue-700 bg-blue-50 rounded-lg border border-blue-200">
-            <p class="font-semibold mb-2">Parolni tiklash jarayoni:</p>
-            <ol class="list-decimal list-inside space-y-1">
-                <li>Admin talabaning parolini tiklaydi (vaqtinchalik parol = talaba ID raqami)</li>
-                <li>Talaba vaqtinchalik parol bilan tizimga kiradi</li>
-                <li>Tizim talabani yangi parol o'rnatishga majbur qiladi</li>
-                <li>Yangi parol ham muddatli bo'ladi — talaba HEMIS parolini tiklab olguncha foydalanadi</li>
-            </ol>
+{{-- Info banner --}}
+<div style="background: linear-gradient(135deg, #eff6ff, #dbeafe); border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid #93c5fd;">
+    <div style="display: flex; gap: 14px;">
+        <div style="width: 40px; height: 40px; background: rgba(37,99,235,0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <svg style="width: 22px; height: 22px; color: #2563eb;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
         </div>
-
-        <form method="POST" action="{{ route('admin.settings.update.password') }}">
-            @csrf
-
-            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div>
-                    <label for="temp_password_days" class="block text-sm font-medium text-gray-700">
-                        Vaqtinchalik parol amal qilish muddati (kun)
-                    </label>
-                    <p class="text-xs text-gray-500 mt-1 mb-2">Admin tomonidan tiklanganidan keyin necha kun amal qiladi</p>
-                    <input type="number"
-                           name="temp_password_days"
-                           id="temp_password_days"
-                           min="1"
-                           max="365"
-                           class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                           value="{{ old('temp_password_days', $tempPasswordDays) }}">
-                    @error('temp_password_days')
-                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                    @enderror
-                </div>
-
-                <div>
-                    <label for="changed_password_days" class="block text-sm font-medium text-gray-700">
-                        O'zgartirilgan parol amal qilish muddati (kun)
-                    </label>
-                    <p class="text-xs text-gray-500 mt-1 mb-2">Talaba o'zi yangi parol o'rnatganidan keyin necha kun amal qiladi</p>
-                    <input type="number"
-                           name="changed_password_days"
-                           id="changed_password_days"
-                           min="1"
-                           max="365"
-                           class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                           value="{{ old('changed_password_days', $changedPasswordDays) }}">
-                    @error('changed_password_days')
-                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                    @enderror
-                </div>
+        <div>
+            <div style="font-size: 14px; font-weight: 600; color: #1e40af; margin-bottom: 8px;">Parolni tiklash jarayoni</div>
+            <div style="font-size: 13px; color: #1e40af; line-height: 1.6;">
+                1. Admin talabaning parolini tiklaydi (vaqtinchalik parol = talaba ID raqami)<br>
+                2. Talaba vaqtinchalik parol bilan tizimga kiradi<br>
+                3. Tizim talabani yangi parol o'rnatishga majbur qiladi<br>
+                4. Yangi parol ham muddatli bo'ladi — talaba HEMIS parolini tiklab olguncha foydalanadi
             </div>
-
-            <div class="flex justify-end mt-6 pt-4 border-t border-gray-200">
-                <button type="submit"
-                        class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    Saqlash
-                </button>
-            </div>
-        </form>
+        </div>
     </div>
 </div>
+
+<form method="POST" action="{{ route('admin.settings.update.password') }}">
+    @csrf
+
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 24px;">
+        {{-- Vaqtinchalik parol --}}
+        <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                <div style="width: 44px; height: 44px; background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                    <svg style="width: 24px; height: 24px; color: #d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #111827;">Vaqtinchalik parol</div>
+                    <div style="font-size: 12px; color: #6b7280;">Admin tiklaganidan keyin</div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="number" name="temp_password_days" id="temp_password_days" min="1" max="365"
+                       value="{{ old('temp_password_days', $tempPasswordDays) }}"
+                       style="width: 100px; padding: 10px 14px; border: 2px solid #fbbf24; border-radius: 10px; font-size: 22px; font-weight: 700; color: #92400e; text-align: center; background: #fffbeb;">
+                <span style="font-size: 16px; color: #92400e; font-weight: 600;">kun</span>
+            </div>
+            @error('temp_password_days')
+                <p style="margin-top: 8px; font-size: 13px; color: #dc2626;">{{ $message }}</p>
+            @enderror
+        </div>
+
+        {{-- O'zgartirilgan parol --}}
+        <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #10b981, #34d399);"></div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                <div style="width: 44px; height: 44px; background: linear-gradient(135deg, #d1fae5, #a7f3d0); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                    <svg style="width: 24px; height: 24px; color: #059669;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #111827;">O'zgartirilgan parol</div>
+                    <div style="font-size: 12px; color: #6b7280;">Talaba o'zi o'rnatganidan keyin</div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="number" name="changed_password_days" id="changed_password_days" min="1" max="365"
+                       value="{{ old('changed_password_days', $changedPasswordDays) }}"
+                       style="width: 100px; padding: 10px 14px; border: 2px solid #34d399; border-radius: 10px; font-size: 22px; font-weight: 700; color: #065f46; text-align: center; background: #ecfdf5;">
+                <span style="font-size: 16px; color: #065f46; font-weight: 600;">kun</span>
+            </div>
+            @error('changed_password_days')
+                <p style="margin-top: 8px; font-size: 13px; color: #dc2626;">{{ $message }}</p>
+            @enderror
+        </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end;">
+        <button type="submit"
+                style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: #2563eb; color: #ffffff; font-size: 14px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer;"
+                onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+            <svg style="width: 18px; height: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Saqlash
+        </button>
+    </div>
+</form>

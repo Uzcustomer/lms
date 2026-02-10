@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Str;
 
 class StudentAuthController extends Controller
 {
@@ -49,6 +50,10 @@ class StudentAuthController extends Controller
 
                 Auth::guard('student')->login($student);
 
+                if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
+                    return redirect()->route('student.complete-profile');
+                }
+
                 return redirect()->intended(route('student.dashboard'))->with('studentData', $studentData);
             } else {
                 return back()->withErrors(['login' => 'Talabaning ma\'lumotlarini olishda xatolik.']);
@@ -66,6 +71,10 @@ class StudentAuthController extends Controller
 
                 if ($student->must_change_password) {
                     return redirect()->route('student.password.edit');
+                }
+
+                if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
+                    return redirect()->route('student.complete-profile');
                 }
 
                 return redirect()->intended(route('student.dashboard'));
@@ -103,6 +112,73 @@ class StudentAuthController extends Controller
         return redirect()->route('student.dashboard')->with('success', "Parol muvaffaqiyatli yangilandi. Parol {$changedPasswordDays} kun amal qiladi. Shu muddat ichida HEMIS parolingizni tiklang.");
     }
 
+
+    public function showCompleteProfile()
+    {
+        $student = Auth::guard('student')->user();
+        if (!$student) {
+            return redirect()->route('student.login');
+        }
+
+        if ($student->isProfileComplete() && !$student->isTelegramDeadlinePassed() && $student->isTelegramVerified()) {
+            return redirect()->route('student.dashboard');
+        }
+
+        $botUsername = config('services.telegram.bot_username', '');
+        $verificationCode = $student->telegram_verification_code;
+
+        return view('student.complete-profile', compact('student', 'botUsername', 'verificationCode'));
+    }
+
+    public function savePhone(Request $request)
+    {
+        $request->validate([
+            'phone' => ['required', 'string', 'regex:/^\+\d{7,15}$/'],
+        ], [
+            'phone.regex' => 'Telefon raqami noto\'g\'ri formatda. Masalan: +998901234567',
+        ]);
+
+        $student = Auth::guard('student')->user();
+        $student->phone = $request->phone;
+        $student->save();
+
+        $days = Setting::get('telegram_deadline_days', 7);
+
+        return redirect()->route('student.dashboard')
+            ->with('success', "Telefon raqami saqlandi. Telegram hisobingizni {$days} kun ichida tasdiqlang.");
+    }
+
+    public function saveTelegram(Request $request)
+    {
+        $request->validate([
+            'telegram_username' => ['required', 'string', 'regex:/^@[a-zA-Z0-9_]{5,32}$/'],
+        ], [
+            'telegram_username.regex' => 'Telegram username @username formatida bo\'lishi kerak (kamida 5 belgi).',
+        ]);
+
+        $student = Auth::guard('student')->user();
+        $student->telegram_username = $request->telegram_username;
+
+        $code = strtoupper(Str::random(6));
+        $student->telegram_verification_code = $code;
+        $student->telegram_verified_at = null;
+        $student->telegram_chat_id = null;
+        $student->save();
+
+        return redirect()->route('student.complete-profile')
+            ->with('success', 'Telegram username saqlandi. Endi botga tasdiqlash kodini yuboring.');
+    }
+
+    public function checkTelegramVerification()
+    {
+        $student = Auth::guard('student')->user();
+
+        if ($student->telegram_verified_at) {
+            return response()->json(['verified' => true]);
+        }
+
+        return response()->json(['verified' => false]);
+    }
 
     public function refreshToken()
     {

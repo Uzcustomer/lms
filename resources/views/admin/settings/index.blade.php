@@ -218,8 +218,8 @@
                                 <svg width="20" height="20" style="width: 20px; height: 20px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                             </div>
                             <div style="text-align: left;">
-                                <div style="font-size: 16px; font-weight: 700; color: #0c4a6e;">Telegram sozlamalari</div>
-                                <div style="font-size: 12px; color: #0369a1;">Username tasdiqlash muddati</div>
+                                <div style="font-size: 16px; font-weight: 700; color: #0c4a6e;">Aloqa ma'lumotlari sozlamalari</div>
+                                <div style="font-size: 12px; color: #0369a1;">Telefon va Telegram tasdiqlash muddati (xodim va talaba uchun)</div>
                             </div>
                         </div>
                         <svg width="18" height="18" :style="open ? 'transform: rotate(180deg)' : ''" style="width: 18px; height: 18px; min-width: 18px; color: #0369a1; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -245,7 +245,7 @@
                                 <div style="display: flex; flex-direction: column; gap: 8px;">
                                     <div style="display: flex; gap: 10px; align-items: center;">
                                         <span style="width: 22px; height: 22px; min-width: 22px; background: #0284c7; color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">1</span>
-                                        <span style="font-size: 12px; color: #0c4a6e;">O'qituvchi telefon raqamini kiritadi</span>
+                                        <span style="font-size: 12px; color: #0c4a6e;">Foydalanuvchi (xodim/talaba) telefon raqamini kiritadi</span>
                                     </div>
                                     <div style="display: flex; gap: 10px; align-items: center;">
                                         <span style="width: 22px; height: 22px; min-width: 22px; background: #0284c7; color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">2</span>

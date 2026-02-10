@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Student;
 use App\Models\Teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -51,21 +52,29 @@ class TelegramWebhookController extends Controller
     {
         $code = strtoupper(trim($code));
 
-        $teacher = Teacher::where('telegram_verification_code', $code)
+        // Avval o'qituvchilardan qidiramiz
+        $user = Teacher::where('telegram_verification_code', $code)
             ->whereNull('telegram_verified_at')
             ->first();
 
-        if (!$teacher) {
+        // Topilmasa, talabalardan qidiramiz
+        if (!$user) {
+            $user = Student::where('telegram_verification_code', $code)
+                ->whereNull('telegram_verified_at')
+                ->first();
+        }
+
+        if (!$user) {
             $this->sendMessage($chatId, "Tasdiqlash kodi topilmadi yoki allaqachon tasdiqlangan. Iltimos, kodingizni tekshiring.");
             return response()->json(['ok' => true]);
         }
 
-        $teacher->telegram_chat_id = (string) $chatId;
-        $teacher->telegram_verified_at = now();
+        $user->telegram_chat_id = (string) $chatId;
+        $user->telegram_verified_at = now();
         if ($username) {
-            $teacher->telegram_username = '@' . $username;
+            $user->telegram_username = '@' . $username;
         }
-        $teacher->save();
+        $user->save();
 
         $this->sendMessage($chatId, "Telegram hisobingiz muvaffaqiyatli tasdiqlandi! Endi saytga qaytishingiz mumkin.");
 

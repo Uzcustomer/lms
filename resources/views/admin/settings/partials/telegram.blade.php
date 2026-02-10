@@ -12,8 +12,8 @@
                     </svg>
                 </div>
                 <div>
-                    <div style="font-size: 16px; font-weight: 700; color: #111827;">Telegram tasdiqlash muddati</div>
-                    <div style="font-size: 13px; color: #6b7280;">Telefon raqami kiritilganidan keyin</div>
+                    <div style="font-size: 16px; font-weight: 700; color: #111827;">Aloqa ma'lumotlari tasdiqlash muddati</div>
+                    <div style="font-size: 13px; color: #6b7280;">Telefon raqami kiritilganidan keyin (xodim va talaba uchun)</div>
                 </div>
             </div>
 
@@ -48,7 +48,7 @@
             <div style="display: flex; flex-direction: column; gap: 12px;">
                 <div style="display: flex; gap: 12px; align-items: flex-start;">
                     <div style="width: 28px; height: 28px; background: #0284c7; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0;">1</div>
-                    <div style="font-size: 13px; color: #0c4a6e; line-height: 1.5; padding-top: 4px;">O'qituvchi telefon raqamini kiritadi</div>
+                    <div style="font-size: 13px; color: #0c4a6e; line-height: 1.5; padding-top: 4px;">Foydalanuvchi (xodim/talaba) telefon raqamini kiritadi</div>
                 </div>
                 <div style="display: flex; gap: 12px; align-items: flex-start;">
                     <div style="width: 28px; height: 28px; background: #0284c7; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0;">2</div>

@@ -283,6 +283,11 @@ Route::prefix('student')->name('student.')->group(function () {
     Route::middleware(['auth:student'])->group(function () {
         Route::get('/change-password', [StudentAuthController::class, 'editPassword'])->name('password.edit');
         Route::put('/change-password', [StudentAuthController::class, 'updatePassword'])->name('password.update');
+
+        Route::get('/complete-profile', [StudentAuthController::class, 'showCompleteProfile'])->name('complete-profile');
+        Route::post('/complete-profile/phone', [StudentAuthController::class, 'savePhone'])->name('complete-profile.phone');
+        Route::post('/complete-profile/telegram', [StudentAuthController::class, 'saveTelegram'])->name('complete-profile.telegram');
+        Route::get('/verify-telegram/check', [StudentAuthController::class, 'checkTelegramVerification'])->name('verify-telegram.check');
     });
 
     Route::get('/login', function () {
@@ -293,7 +298,7 @@ Route::prefix('student')->name('student.')->group(function () {
         }
     })->name('login');
 
-    Route::middleware(['auth:student'])->group(function () {
+    Route::middleware(['auth:student', 'force.student.contact'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('student.dashboard');
         });

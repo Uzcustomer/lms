@@ -38,6 +38,11 @@ class Student extends Authenticatable
         'total_acload',
         'is_graduate',
         'other',
+        'phone',
+        'telegram_username',
+        'telegram_chat_id',
+        'telegram_verification_code',
+        'telegram_verified_at',
     ];
 
     protected $casts = [
@@ -49,11 +54,13 @@ class Student extends Authenticatable
         'hemis_updated_at' => 'datetime',
         'local_password_expires_at' => 'datetime',
         'must_change_password' => 'boolean',
+        'telegram_verified_at' => 'datetime',
     ];
 
     protected $hidden = [
         'local_password',
         'token',
+        'telegram_verification_code',
     ];
 
     public function studentGrades()
@@ -277,5 +284,36 @@ class Student extends Authenticatable
         return $this->hasMany(StudentGrade::class, 'student_hemis_id', 'hemis_id');
     }
 
+    public function isProfileComplete(): bool
+    {
+        return !empty($this->phone);
+    }
 
+    public function isTelegramVerified(): bool
+    {
+        return $this->telegram_verified_at !== null;
+    }
+
+    public function telegramDaysLeft(): int
+    {
+        if ($this->isTelegramVerified()) {
+            return 0;
+        }
+
+        $days = (int) Setting::get('telegram_deadline_days', 7);
+
+        if (!$this->phone) {
+            return $days;
+        }
+
+        $deadline = $this->updated_at->copy()->addDays($days);
+        $daysLeft = (int) now()->diffInDays($deadline, false);
+
+        return max($daysLeft, 0);
+    }
+
+    public function isTelegramDeadlinePassed(): bool
+    {
+        return !$this->isTelegramVerified() && $this->phone && $this->telegramDaysLeft() <= 0;
+    }
 }

@@ -70,7 +70,7 @@
             Dashboard
         </a>
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
         <a href="{{ route('admin.journal.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.journal.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,7 +184,7 @@
             YN oldi qaydnoma
         </a>
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
         <div class="sidebar-section">Hisobotlar</div>
 
         <a href="{{ route('admin.reports.jn') }}"
@@ -203,6 +203,7 @@
             Dars belgilash
         </a>
 
+        @if(!$hasActiveRole(['dekan']))
         <a href="{{ route('admin.reports.schedule-report') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.schedule-report*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,6 +211,7 @@
             </svg>
             Dars jadval mosligi
         </a>
+        @endif
 
         <a href="{{ route('admin.absence_report.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.absence_report.*') ? 'sidebar-active' : '' }}">
@@ -227,6 +229,7 @@
             25% sababsiz
         </a>
 
+        @if(!$hasActiveRole(['dekan']))
         <a href="{{ route('admin.reports.load-vs-pair') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.load-vs-pair*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -234,6 +237,7 @@
             </svg>
             Yuklama vs Juftlik
         </a>
+        @endif
 
         <a href="{{ route('admin.reports.debtors') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.debtors') ? 'sidebar-active' : '' }}">
@@ -243,6 +247,7 @@
             4≥qarzdorlar
         </a>
 
+        @if(!$hasActiveRole(['dekan']))
         <a href="{{ route('admin.reports.sababli-check') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.sababli-check') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -250,6 +255,7 @@
             </svg>
             Sababli check
         </a>
+        @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya', 'registrator_ofisi']))
         <a href="{{ route('admin.examtest.index') }}"

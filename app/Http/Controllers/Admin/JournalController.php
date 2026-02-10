@@ -738,6 +738,62 @@ class JournalController extends Controller
             }
         } catch (\Exception $e) {}
 
+        // Auto-archive: talaba qayta yuklagan bo'lsa, eski bahoni tarixga o'tkazish
+        // Bu sahifa yuklanganda Tarix ustunida oldingi baholar ko'rinadi
+        try {
+            foreach ($mtSubmissions as $hemisId => $sub) {
+                $gradeRow = $manualMtGradesRaw[$hemisId] ?? null;
+                if (!$gradeRow || $gradeRow->grade >= 60) continue; // only for low grades
+
+                $gradeTime = $gradeRow->updated_at ?? $gradeRow->created_at;
+                if (!$gradeTime || !$sub->submitted_at) continue;
+                if (!\Carbon\Carbon::parse($sub->submitted_at)->gt(\Carbon\Carbon::parse($gradeTime))) continue;
+
+                // Student resubmitted after low grade — archive old grade
+                $attemptCount = DB::table('mt_grade_history')
+                    ->where('student_hemis_id', $hemisId)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->count();
+
+                if ($attemptCount + 1 >= $mtMaxResubmissions) continue; // limit reached
+
+                $now = now();
+                // Get the OLD submission file (before resubmission) from history or current
+                // The current submission is the NEW one; we need the file that was graded
+                // For first attempt: file info might have changed. Use file_path from old submission or grade context
+                DB::table('mt_grade_history')->insert([
+                    'student_hemis_id' => $hemisId,
+                    'subject_id' => $subjectId,
+                    'semester_code' => $semesterCode,
+                    'attempt_number' => $attemptCount + 1,
+                    'grade' => $gradeRow->grade,
+                    'file_path' => $sub->file_path ?? null, // old file (before resubmission overwrite)
+                    'file_original_name' => $sub->file_original_name ?? null,
+                    'graded_by' => auth()->user()?->name ?? 'Admin',
+                    'graded_at' => $gradeTime,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+                // Clear old grade so teacher can enter new one
+                DB::table('student_grades')->where('id', $gradeRow->id)->delete();
+
+                // Update local data
+                unset($manualMtGrades[$hemisId]);
+                $manualMtGradesRaw->forget($hemisId);
+                $mtGradeHistory[$hemisId] = DB::table('mt_grade_history')
+                    ->where('student_hemis_id', $hemisId)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->orderBy('attempt_number')
+                    ->get()
+                    ->all();
+            }
+        } catch (\Exception $e) {
+            \Log::warning('Auto-archive MT grade failed: ' . $e->getMessage());
+        }
+
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
 
@@ -1046,8 +1102,14 @@ class JournalController extends Controller
                     'updated_at' => $now,
                 ]);
         } elseif (!$existingGrade) {
-            $newAttempt = 1;
-            // Insert new manual grade (first attempt)
+            // Attempt number = history count + 1 (could be 1st or resubmission after auto-archive)
+            $historyCount = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->count();
+            $newAttempt = $historyCount + 1;
+            // Insert manual grade
             DB::table('student_grades')->insert([
                 'hemis_id' => 0,
                 'student_id' => $student->id,

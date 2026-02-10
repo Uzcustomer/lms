@@ -1051,18 +1051,30 @@
                                     @foreach ($students as $index => $student)
                                         @php
                                             $manualGrade = $manualMtGrades[$student->hemis_id] ?? null;
+                                            $gradeRow = $manualMtGradesRaw[$student->hemis_id] ?? null;
                                             $hasGrade = $manualGrade !== null;
                                             $isLockedPermanent = $hasGrade && $manualGrade >= 60;
                                             $history = $mtGradeHistory[$student->hemis_id] ?? [];
                                             $currentAttempt = count($history) + ($hasGrade ? 1 : 0);
-                                            $canRegrade = $hasGrade && $manualGrade < 60 && $currentAttempt < $mtMaxResubmissions;
                                             $submission = $mtSubmissions[$student->hemis_id] ?? null;
                                             $hasFile = $submission !== null;
+
+                                            // canRegrade: talaba qayta yuklagan bo'lsa (submitted_at > grade updated_at)
+                                            $hasResubmitted = false;
+                                            if ($hasGrade && $hasFile && $gradeRow) {
+                                                $gradeTime = $gradeRow->updated_at ?? $gradeRow->created_at;
+                                                $submitTime = $submission->submitted_at;
+                                                if ($gradeTime && $submitTime) {
+                                                    $hasResubmitted = \Carbon\Carbon::parse($submitTime)->gt(\Carbon\Carbon::parse($gradeTime));
+                                                }
+                                            }
+                                            $canRegrade = $hasGrade && $manualGrade < 60 && $currentAttempt < $mtMaxResubmissions && $hasResubmitted;
                                             $inputDisabled = $hasGrade || !$hasFile;
 
-                                            // Urgency: file uploaded but not graded
+                                            // Urgency: file uploaded but not graded, OR resubmitted after low grade
                                             $urgency = 'none'; // none, fresh, warning, danger
-                                            if ($hasFile && !$hasGrade) {
+                                            $needsGrading = ($hasFile && !$hasGrade) || $hasResubmitted;
+                                            if ($needsGrading && $hasFile) {
                                                 $submittedAt = \Carbon\Carbon::parse($submission->submitted_at);
                                                 $daysSince = $submittedAt->diffInDays(now());
                                                 if ($daysSince >= 3) {
@@ -1153,12 +1165,17 @@
                                                         &#128274; Qabul qilindi
                                                     </span>
                                                 @elseif($canRegrade)
-                                                    {{-- Grade < 60, can regrade --}}
+                                                    {{-- Grade < 60, student resubmitted: can regrade --}}
                                                     <button type="button"
                                                         onclick="startRegrade('{{ $student->hemis_id }}')"
                                                         style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #f97316; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                                                         Qayta baholash
                                                     </button>
+                                                @elseif($hasGrade && $manualGrade < 60 && $currentAttempt < $mtMaxResubmissions)
+                                                    {{-- Grade < 60, waiting for student to resubmit --}}
+                                                    <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #fef9c3; color: #92400e; border-radius: 6px;">
+                                                        &#128274; Kutilmoqda
+                                                    </span>
                                                 @else
                                                     {{-- Grade < 60, max attempts reached --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #fee2e2; color: #b91c1c; border-radius: 6px;">
@@ -1829,6 +1846,9 @@
                 cell.innerHTML = '<button type="button" onclick="startRegrade(\'' + studentHemisId + '\')" ' +
                     'style="padding:6px 16px;font-size:13px;font-weight:600;background:#f97316;color:#fff;border:none;border-radius:6px;cursor:pointer;">' +
                     'Qayta baholash</button>';
+            } else if (data.waiting_resubmit) {
+                // Grade < 60, talaba qayta yuklashi kerak
+                cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#fef9c3;color:#92400e;border-radius:6px;">&#128274; Kutilmoqda</span>';
             } else {
                 cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#fee2e2;color:#b91c1c;border-radius:6px;">Limit tugagan</span>';
             }

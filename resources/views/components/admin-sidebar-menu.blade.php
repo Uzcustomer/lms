@@ -316,21 +316,8 @@
                      x-transition:leave-end="opacity-0"
                      class="sidebar-submenu"
                      style="position: fixed; left: 248px; width: 170px; z-index: 10000;"
-                     x-init="$nextTick(() => {
-                         const el = $el;
-                         const parent = $el.previousElementSibling;
-                         if (parent) {
-                             const rect = parent.getBoundingClientRect();
-                             el.style.top = (rect.top - 4) + 'px';
-                         }
-                     })"
-                     x-effect="if (themeOpen) {
-                         const parent = $el.previousElementSibling;
-                         if (parent) {
-                             const rect = parent.getBoundingClientRect();
-                             $el.style.top = (rect.top - 4) + 'px';
-                         }
-                     }">
+                     x-init="$nextTick(() => { positionSubmenu($el) })"
+                     x-effect="if (themeOpen) { $nextTick(() => positionSubmenu($el)) }">
                     <button @click="setTheme('kosmik'); themeOpen = false;"
                             class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
                         <span class="flex items-center">
@@ -387,21 +374,8 @@
                      x-transition:leave-end="opacity-0"
                      class="sidebar-submenu"
                      style="position: fixed; left: 248px; width: 200px; z-index: 10000;"
-                     x-init="$nextTick(() => {
-                         const el = $el;
-                         const parent = $el.previousElementSibling;
-                         if (parent) {
-                             const rect = parent.getBoundingClientRect();
-                             el.style.top = (rect.top - 4) + 'px';
-                         }
-                     })"
-                     x-effect="if (rolesSubOpen) {
-                         const parent = $el.previousElementSibling;
-                         if (parent) {
-                             const rect = parent.getBoundingClientRect();
-                             $el.style.top = (rect.top - 4) + 'px';
-                         }
-                     }">
+                     x-init="$nextTick(() => { positionSubmenu($el) })"
+                     x-effect="if (rolesSubOpen) { $nextTick(() => positionSubmenu($el)) }">
                     @foreach($userRoles as $role)
                     <form method="POST" action="{{ $switchRoleRoute }}">
                         @csrf
@@ -747,6 +721,24 @@
     </style>
 
     <script>
+        // Cascade submenu pozitsiyasini aniqlash - viewport ga sig'masa tepaga ochadi
+        function positionSubmenu(el) {
+            const btn = el.previousElementSibling;
+            if (!btn) return;
+            const btnRect = btn.getBoundingClientRect();
+            const elHeight = el.offsetHeight || el.scrollHeight;
+            const viewportH = window.innerHeight;
+            // Pastga sig'adimi?
+            if (btnRect.top + elHeight > viewportH - 10) {
+                // Sig'masa — pastki chegaraga yopishtirish
+                el.style.top = 'auto';
+                el.style.bottom = '10px';
+            } else {
+                el.style.bottom = 'auto';
+                el.style.top = (btnRect.top - 4) + 'px';
+            }
+        }
+
         function sidebarTheme() {
             return {
                 theme: localStorage.getItem('sidebar-theme') || 'kosmik',

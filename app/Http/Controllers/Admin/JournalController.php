@@ -644,6 +644,56 @@ class JournalController extends Controller
             ->pluck('grade', 'student_hemis_id')
             ->toArray();
 
+        // Get MT grade history for all students
+        $mtGradeHistoryRaw = DB::table('mt_grade_history')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->orderBy('attempt_number')
+            ->get();
+
+        $mtGradeHistory = [];
+        foreach ($mtGradeHistoryRaw as $h) {
+            $mtGradeHistory[$h->student_hemis_id][] = $h;
+        }
+
+        $mtMaxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
+
+        // Get student file submissions for this subject's independent assignments
+        $mtSubmissions = [];
+        $independentIds = DB::table('independents')
+            ->where('group_hemis_id', $group->group_hemis_id)
+            ->where('subject_hemis_id', $subject->curriculum_subject_hemis_id ?? 0)
+            ->where('semester_code', $semesterCode)
+            ->pluck('id')
+            ->toArray();
+
+        if (!empty($independentIds)) {
+            $submissionsRaw = DB::table('independent_submissions')
+                ->whereIn('independent_id', $independentIds)
+                ->get();
+            foreach ($submissionsRaw as $sub) {
+                // Keep latest submission per student (by submitted_at)
+                if (!isset($mtSubmissions[$sub->student_hemis_id])
+                    || $sub->submitted_at > $mtSubmissions[$sub->student_hemis_id]->submitted_at) {
+                    $mtSubmissions[$sub->student_hemis_id] = $sub;
+                }
+            }
+        }
+
+        // Count ungraded submissions for MT tab badge
+        $mtUngradedCount = 0;
+        $mtDangerCount = 0;
+        foreach ($mtSubmissions as $hemisId => $sub) {
+            if (!isset($manualMtGrades[$hemisId])) {
+                $mtUngradedCount++;
+                $daysSince = \Carbon\Carbon::parse($sub->submitted_at)->diffInDays(now());
+                if ($daysSince >= 3) {
+                    $mtDangerCount++;
+                }
+            }
+        }
+
         // Get total academic load from curriculum subject
         $totalAcload = $subject->total_acload ?? 0;
 
@@ -723,6 +773,11 @@ class JournalController extends Controller
             'otherGrades',
             'attendanceData',
             'manualMtGrades',
+            'mtGradeHistory',
+            'mtMaxResubmissions',
+            'mtSubmissions',
+            'mtUngradedCount',
+            'mtDangerCount',
             'totalAcload',
             'auditoriumHours',
             'groupId',
@@ -747,6 +802,7 @@ class JournalController extends Controller
         $subjectId = $request->subject_id;
         $semesterCode = $request->semester_code;
         $grade = $request->grade;
+        $isRegrade = (bool) $request->input('regrade', false);
 
         // Get student info
         $student = DB::table('students')
@@ -766,6 +822,31 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Subject not found'], 404);
         }
 
+        // Check if student has uploaded a file for this subject's MT assignment
+        $independentIds = DB::table('independents')
+            ->where('group_hemis_id', $student->group_id)
+            ->where('subject_hemis_id', $subject->curriculum_subject_hemis_id ?? 0)
+            ->where('semester_code', $semesterCode)
+            ->pluck('id')
+            ->toArray();
+
+        $studentSubmission = null;
+        if (!empty($independentIds)) {
+            $studentSubmission = DB::table('independent_submissions')
+                ->whereIn('independent_id', $independentIds)
+                ->where('student_hemis_id', $studentHemisId)
+                ->orderByDesc('submitted_at')
+                ->first();
+        }
+
+        if (!$studentSubmission) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Talaba fayl yuklamagan. Baholardan oldin fayl yuklashi kerak.',
+                'no_file' => true,
+            ], 422);
+        }
+
         // Check if a manual MT grade already exists for this student/subject/semester
         $existingGrade = DB::table('student_grades')
             ->where('student_hemis_id', $studentHemisId)
@@ -774,6 +855,39 @@ class JournalController extends Controller
             ->where('training_type_code', 99)
             ->whereNull('lesson_date')
             ->first();
+
+        // If existing grade >= 60, it's permanently locked
+        if ($existingGrade && $existingGrade->grade >= 60) {
+            return response()->json([
+                'success' => false,
+                'locked' => true,
+                'can_regrade' => false,
+                'message' => 'Baho qulflangan (>= 60). O\'zgartirib bo\'lmaydi.',
+                'grade' => $existingGrade->grade,
+            ], 403);
+        }
+
+        // If existing grade exists but not a regrade request — it's locked, show regrade option
+        if ($existingGrade && !$isRegrade) {
+            // Count previous attempts
+            $attemptCount = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->count();
+            $currentAttempt = $attemptCount + 1;
+            $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
+
+            return response()->json([
+                'success' => false,
+                'locked' => true,
+                'can_regrade' => $existingGrade->grade < 60 && $currentAttempt < $maxResubmissions,
+                'message' => 'Baho allaqachon qo\'yilgan.',
+                'grade' => $existingGrade->grade,
+                'attempt' => $currentAttempt,
+                'max_attempts' => $maxResubmissions,
+            ], 403);
+        }
 
         $now = now();
 
@@ -784,18 +898,56 @@ class JournalController extends Controller
         $educationYearCode = $curriculum?->education_year_code;
         $educationYearName = $curriculum?->education_year_name;
 
-        if ($existingGrade) {
-            // Update existing grade
+        if ($existingGrade && $isRegrade) {
+            // Re-grading: archive old grade to history first
+            $attemptCount = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->count();
+
+            $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
+            $currentAttempt = $attemptCount + 1; // current grade's attempt number
+
+            if ($currentAttempt >= $maxResubmissions) {
+                return response()->json([
+                    'success' => false,
+                    'locked' => true,
+                    'can_regrade' => false,
+                    'message' => "Qayta baholash limiti tugagan ({$maxResubmissions} urinish).",
+                    'grade' => $existingGrade->grade,
+                ], 403);
+            }
+
+            // Archive current grade to history (with file info)
+            DB::table('mt_grade_history')->insert([
+                'student_hemis_id' => $studentHemisId,
+                'subject_id' => $subjectId,
+                'semester_code' => $semesterCode,
+                'attempt_number' => $currentAttempt,
+                'grade' => $existingGrade->grade,
+                'file_path' => $studentSubmission->file_path ?? null,
+                'file_original_name' => $studentSubmission->file_original_name ?? null,
+                'graded_by' => auth()->user()?->name ?? 'Admin',
+                'graded_at' => $existingGrade->updated_at ?? $existingGrade->created_at,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $newAttempt = $currentAttempt + 1;
+
+            // Update existing grade with new value
             DB::table('student_grades')
                 ->where('id', $existingGrade->id)
                 ->update([
                     'grade' => $grade,
                     'updated_at' => $now,
                 ]);
-        } else {
-            // Insert new manual grade
+        } elseif (!$existingGrade) {
+            $newAttempt = 1;
+            // Insert new manual grade (first attempt)
             DB::table('student_grades')->insert([
-                'hemis_id' => 0, // Manual entry
+                'hemis_id' => 0,
                 'student_id' => $student->id,
                 'student_hemis_id' => $studentHemisId,
                 'semester_code' => $semesterCode,
@@ -806,7 +958,7 @@ class JournalController extends Controller
                 'subject_id' => $subjectId,
                 'subject_name' => $subject->subject_name ?? '',
                 'subject_code' => $subject->subject_code ?? '',
-                'training_type_code' => 99, // MT
+                'training_type_code' => 99,
                 'training_type_name' => "Mustaqil ta'lim",
                 'employee_id' => 0,
                 'employee_name' => 'Manual Entry',
@@ -815,7 +967,7 @@ class JournalController extends Controller
                 'lesson_pair_start_time' => '00:00',
                 'lesson_pair_end_time' => '00:00',
                 'grade' => $grade,
-                'lesson_date' => null, // Manual entries have no lesson date
+                'lesson_date' => null,
                 'created_at_api' => $now,
                 'status' => 'recorded',
                 'created_at' => $now,
@@ -823,7 +975,129 @@ class JournalController extends Controller
             ]);
         }
 
-        return response()->json(['success' => true, 'message' => 'Grade saved successfully']);
+        // Get updated history for response
+        $history = DB::table('mt_grade_history')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->orderBy('attempt_number')
+            ->get()
+            ->map(fn($h) => [
+                'id' => $h->id,
+                'attempt' => $h->attempt_number,
+                'grade' => round($h->grade),
+                'has_file' => !empty($h->file_path),
+            ])
+            ->toArray();
+
+        $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Baho saqlandi',
+            'locked' => true,
+            'can_regrade' => $grade < 60 && ($newAttempt ?? 1) < $maxResubmissions,
+            'grade' => $grade,
+            'attempt' => $newAttempt ?? 1,
+            'max_attempts' => $maxResubmissions,
+            'history' => $history,
+        ]);
+    }
+
+    /**
+     * Build custom download filename: "FISH FanNomi_MT[_vN].ext"
+     */
+    private function buildMtFileName(string $studentHemisId, string $subjectId, string $semesterCode, string $originalName, ?int $attempt = null): string
+    {
+        $ext = pathinfo($originalName, PATHINFO_EXTENSION);
+
+        $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
+        $fullName = $student->full_name ?? 'Talaba';
+
+        $subject = CurriculumSubject::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+        $subjectName = $subject->subject_name ?? 'Fan';
+
+        // Sanitize names for filename (remove special chars but keep spaces in FISH)
+        $fullName = preg_replace('/[\/\\\\:*?"<>|]/', '', $fullName);
+        $subjectName = preg_replace('/[\/\\\\:*?"<>|]/', '', $subjectName);
+
+        $mtPart = 'MT';
+        if ($attempt && $attempt > 1) {
+            $mtPart = 'MT_v' . $attempt;
+        }
+
+        return "{$fullName} {$subjectName}_{$mtPart}.{$ext}";
+    }
+
+    /**
+     * Download student submission file with custom name
+     */
+    public function downloadSubmission($submissionId)
+    {
+        $submission = DB::table('independent_submissions')->where('id', $submissionId)->first();
+        if (!$submission) {
+            abort(404, 'Fayl topilmadi');
+        }
+
+        $filePath = storage_path('app/public/' . $submission->file_path);
+        if (!file_exists($filePath)) {
+            abort(404, 'Fayl serverda topilmadi');
+        }
+
+        // Determine attempt number (current = history count + 1)
+        $independent = DB::table('independents')->where('id', $submission->independent_id)->first();
+        $subjectHemisId = $independent->subject_hemis_id ?? 0;
+        $semesterCode = $independent->semester_code ?? '';
+
+        $subject = CurriculumSubject::where('curriculum_subject_hemis_id', $subjectHemisId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+        $subjectId = $subject->subject_id ?? '';
+
+        $attemptCount = DB::table('mt_grade_history')
+            ->where('student_hemis_id', $submission->student_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->count();
+        $currentAttempt = $attemptCount + 1;
+
+        $downloadName = $this->buildMtFileName(
+            $submission->student_hemis_id,
+            $subjectId,
+            $semesterCode,
+            $submission->file_original_name,
+            $currentAttempt
+        );
+
+        return response()->download($filePath, $downloadName);
+    }
+
+    /**
+     * Download history file with custom name
+     */
+    public function downloadHistoryFile($historyId)
+    {
+        $history = DB::table('mt_grade_history')->where('id', $historyId)->first();
+        if (!$history || !$history->file_path) {
+            abort(404, 'Fayl topilmadi');
+        }
+
+        $filePath = storage_path('app/public/' . $history->file_path);
+        if (!file_exists($filePath)) {
+            abort(404, 'Fayl serverda topilmadi');
+        }
+
+        $downloadName = $this->buildMtFileName(
+            $history->student_hemis_id,
+            $history->subject_id,
+            $history->semester_code,
+            $history->file_original_name,
+            $history->attempt_number
+        );
+
+        return response()->download($filePath, $downloadName);
     }
 
     /**

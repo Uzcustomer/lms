@@ -76,12 +76,12 @@
 
                             <div class="mt-4">
                                 <label for="mt_max_resubmissions" class="block text-sm font-medium text-gray-700 mb-1">
-                                    Baho past bo'lganda qayta yuklash imkoniyati (necha marta)
+                                    MT topshirig'ini qayta yuklash imkoniyati (necha marta)
                                 </label>
                                 <div class="flex items-center gap-3">
                                     <input type="number" name="mt_max_resubmissions" id="mt_max_resubmissions"
                                         class="block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                        value="{{ old('mt_max_resubmissions', $mtMaxResubmissions ?? 2) }}" min="0" max="10">
+                                        value="{{ old('mt_max_resubmissions', $mtMaxResubmissions ?? 3) }}" min="0" max="10">
                                     <span class="text-sm text-gray-500">marta (baho 60 dan past bo'lsa)</span>
                                 </div>
                                 <p class="text-xs text-gray-400 mt-1">0 = qayta yuklash mumkin emas. Baho 60 va undan yuqori bo'lsa, baho qulflanadi.</p>

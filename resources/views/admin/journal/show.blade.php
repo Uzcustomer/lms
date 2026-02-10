@@ -508,8 +508,11 @@
                             Amaliyot
                         </button>
                         <button id="tab-mustaqil" onclick="switchTab('mustaqil')"
-                            class="tab-btn">
+                            class="tab-btn relative">
                             Mustaqil ta'lim
+                            @if(($mtUngradedCount ?? 0) > 0)
+                                <span class="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold text-white {{ ($mtDangerCount ?? 0) > 0 ? 'bg-red-500 animate-pulse' : 'bg-orange-400' }} rounded-full">{{ $mtUngradedCount }}</span>
+                            @endif
                         </button>
                     </div>
                 </nav>
@@ -641,6 +644,20 @@
             <!-- Amaliyot Tab Content -->
             <div id="content-amaliyot" class="tab-content">
                 <div class="bg-white">
+                    @if(($mtUngradedCount ?? 0) > 0)
+                        <div class="mx-2 mb-2 p-2.5 rounded-lg border cursor-pointer {{ ($mtDangerCount ?? 0) > 0 ? 'bg-red-50 border-red-300' : 'bg-yellow-50 border-yellow-300' }}" onclick="switchTab('mustaqil')">
+                            <div class="flex items-center gap-2">
+                                <span class="{{ ($mtDangerCount ?? 0) > 0 ? 'text-red-600 animate-pulse' : 'text-yellow-600' }} text-base">&#9888;</span>
+                                <span class="text-xs font-bold {{ ($mtDangerCount ?? 0) > 0 ? 'text-red-700' : 'text-yellow-700' }}">
+                                    {{ $mtUngradedCount }} ta MT topshiriq baholanmagan!
+                                    @if(($mtDangerCount ?? 0) > 0)
+                                        ({{ $mtDangerCount }} tasi 3+ kun)
+                                    @endif
+                                </span>
+                                <span class="text-xs {{ ($mtDangerCount ?? 0) > 0 ? 'text-red-500' : 'text-yellow-600' }} underline ml-auto">MT tabiga o'tish &rarr;</span>
+                            </div>
+                        </div>
+                    @endif
                     @if($students->isEmpty())
                         <div class="p-4 text-center text-gray-500">
                             <p>Bu guruhda talabalar mavjud emas.</p>
@@ -982,6 +999,38 @@
                             <p>Bu guruhda talabalar mavjud emas.</p>
                         </div>
                     @else
+                        @php
+                            // Calculate warning count for the banner
+                            $warningCount = 0;
+                            foreach ($students as $st) {
+                                $sub = $mtSubmissions[$st->hemis_id] ?? null;
+                                $gr = $manualMtGrades[$st->hemis_id] ?? null;
+                                if ($sub && $gr === null) {
+                                    $days = \Carbon\Carbon::parse($sub->submitted_at)->diffInDays(now());
+                                    if ($days >= 1 && $days < 3) $warningCount++;
+                                }
+                            }
+                        @endphp
+
+                        @if($mtUngradedCount > 0)
+                            <div class="mx-2 mb-3 p-3 rounded-lg border {{ $mtDangerCount > 0 ? 'bg-red-50 border-red-300' : ($warningCount > 0 ? 'bg-yellow-50 border-yellow-300' : 'bg-blue-50 border-blue-200') }}">
+                                <div class="flex items-center gap-2">
+                                    @if($mtDangerCount > 0)
+                                        <span class="text-red-600 text-lg animate-pulse">&#9888;</span>
+                                        <span class="text-sm font-bold text-red-700">{{ $mtUngradedCount }} ta baholanmagan topshiriq!</span>
+                                        <span class="text-xs text-red-500">({{ $mtDangerCount }} tasi 3+ kun kutmoqda)</span>
+                                    @elseif($warningCount > 0)
+                                        <span class="text-yellow-600 text-lg">&#9888;</span>
+                                        <span class="text-sm font-bold text-yellow-700">{{ $mtUngradedCount }} ta baholanmagan topshiriq</span>
+                                        <span class="text-xs text-yellow-600">({{ $warningCount }} tasi 1+ kun kutmoqda)</span>
+                                    @else
+                                        <span class="text-blue-500 text-lg">&#128276;</span>
+                                        <span class="text-sm font-medium text-blue-700">{{ $mtUngradedCount }} ta yangi topshiriq baholashni kutmoqda</span>
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
+
                         <!-- Manual Grade Entry Table -->
                         <div class="overflow-x-auto">
                             <table class="journal-table border-collapse text-xs">
@@ -989,34 +1038,119 @@
                                     <tr>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 35px;">T/R</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 140px;">Fayl</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 80px;">Baho</th>
-                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 60px;">Saqlash</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 160px;">Tarix</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 110px;">Amal</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach ($students as $index => $student)
                                         @php
-                                            // Get existing manual MT grade (without lesson_date)
                                             $manualGrade = $manualMtGrades[$student->hemis_id] ?? null;
+                                            $hasGrade = $manualGrade !== null;
+                                            $isLockedPermanent = $hasGrade && $manualGrade >= 60;
+                                            $history = $mtGradeHistory[$student->hemis_id] ?? [];
+                                            $currentAttempt = count($history) + ($hasGrade ? 1 : 0);
+                                            $canRegrade = $hasGrade && $manualGrade < 60 && $currentAttempt < $mtMaxResubmissions;
+                                            $submission = $mtSubmissions[$student->hemis_id] ?? null;
+                                            $hasFile = $submission !== null;
+                                            $inputDisabled = $hasGrade || !$hasFile;
+
+                                            // Urgency: file uploaded but not graded
+                                            $urgency = 'none'; // none, fresh, warning, danger
+                                            if ($hasFile && !$hasGrade) {
+                                                $submittedAt = \Carbon\Carbon::parse($submission->submitted_at);
+                                                $daysSince = $submittedAt->diffInDays(now());
+                                                if ($daysSince >= 3) {
+                                                    $urgency = 'danger';
+                                                } elseif ($daysSince >= 1) {
+                                                    $urgency = 'warning';
+                                                } else {
+                                                    $urgency = 'fresh';
+                                                }
+                                            }
+                                            $rowClass = match($urgency) {
+                                                'danger' => 'bg-red-50',
+                                                'warning' => 'bg-yellow-50',
+                                                default => '',
+                                            };
                                         @endphp
-                                        <tr>
+                                        <tr id="mt-row-{{ $student->hemis_id }}" class="{{ $rowClass }}">
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
                                             <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
+                                                @if($hasFile)
+                                                    <div class="flex flex-col items-center gap-0.5">
+                                                        <a href="{{ route('admin.journal.download-submission', $submission->id) }}"
+                                                           class="text-blue-600 hover:text-blue-800 hover:underline text-xs truncate inline-block max-w-[130px]"
+                                                           title="{{ $student->full_name }} {{ $subject->subject_name }}_MT">
+                                                            {{ Str::limit($submission->file_original_name, 20) }}
+                                                        </a>
+                                                        @if($urgency === 'warning')
+                                                            <span class="text-xs text-yellow-600 font-medium">{{ $daysSince }} kun o'tdi</span>
+                                                        @elseif($urgency === 'danger')
+                                                            <span class="text-xs text-red-600 font-bold animate-pulse">{{ $daysSince }} kun o'tdi!</span>
+                                                        @endif
+                                                    </div>
+                                                @else
+                                                    <span class="text-red-400 text-xs font-medium">Yuklanmagan</span>
+                                                @endif
+                                            </td>
                                             <td class="px-1 py-1 text-center">
                                                 <input type="number"
                                                     id="mt-grade-{{ $student->hemis_id }}"
-                                                    class="mt-grade-input w-16 px-1 py-0.5 text-center text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                                                    class="mt-grade-input w-16 px-1 py-0.5 text-center text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500 {{ $inputDisabled ? 'bg-gray-100 text-gray-500' : '' }}"
                                                     min="0" max="100" step="1"
-                                                    value="{{ $manualGrade !== null ? round($manualGrade) : '' }}"
+                                                    value="{{ $hasGrade ? round($manualGrade) : '' }}"
                                                     data-student-id="{{ $student->hemis_id }}"
-                                                    placeholder="0-100">
+                                                    placeholder="0-100"
+                                                    {{ $inputDisabled ? 'disabled' : '' }}>
                                             </td>
-                                            <td class="px-1 py-1 text-center">
-                                                <button type="button"
-                                                    onclick="saveMtGrade('{{ $student->hemis_id }}')"
-                                                    class="save-btn px-2 py-0.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none">
-                                                    Saqlash
-                                                </button>
+                                            <td class="px-1 py-1 text-center" id="mt-history-{{ $student->hemis_id }}">
+                                                @if(count($history) > 0)
+                                                    @foreach($history as $h)
+                                                        <span class="inline-flex items-center px-1.5 py-0.5 text-xs rounded {{ $h->grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }} mr-0.5" title="{{ $h->attempt_number }}-urinish: {{ $h->graded_by ?? '' }}">
+                                                            {{ $h->attempt_number }}: {{ round($h->grade) }}
+                                                            @if($h->file_path)
+                                                                <a href="{{ route('admin.journal.download-history-file', $h->id) }}" class="ml-0.5 hover:text-blue-700" title="{{ $h->attempt_number }}-urinish fayli">&#128206;</a>
+                                                            @endif
+                                                        </span>
+                                                    @endforeach
+                                                @else
+                                                    <span class="text-gray-300">—</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-1 py-1 text-center" id="mt-action-{{ $student->hemis_id }}">
+                                                @if(!$hasFile)
+                                                    {{-- No file: cannot grade --}}
+                                                    <span class="text-gray-400 text-xs">—</span>
+                                                @elseif(!$hasGrade)
+                                                    {{-- Has file, no grade yet: show Save button --}}
+                                                    <button type="button"
+                                                        onclick="saveMtGrade('{{ $student->hemis_id }}')"
+                                                        class="save-btn px-2 py-0.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none">
+                                                        Saqlash
+                                                    </button>
+                                                @elseif($isLockedPermanent)
+                                                    {{-- Grade >= 60: permanently locked --}}
+                                                    <span class="inline-flex items-center px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">
+                                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
+                                                        Qabul qilindi
+                                                    </span>
+                                                @elseif($canRegrade)
+                                                    {{-- Grade < 60, can regrade --}}
+                                                    <button type="button"
+                                                        onclick="startRegrade('{{ $student->hemis_id }}')"
+                                                        class="regrade-btn px-2 py-0.5 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 focus:outline-none">
+                                                        Qayta baholash
+                                                    </button>
+                                                @else
+                                                    {{-- Grade < 60, max attempts reached --}}
+                                                    <span class="inline-flex items-center px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">
+                                                        Limit tugagan
+                                                    </span>
+                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach
@@ -1652,7 +1786,43 @@
             csrfToken: '{{ csrf_token() }}'
         };
 
-        function saveMtGrade(studentHemisId) {
+        const historyDownloadBase = '{{ url("admin/journal/download-history-file") }}/';
+
+        function updateMtHistoryCell(studentHemisId, history) {
+            const cell = document.getElementById('mt-history-' + studentHemisId);
+            if (!cell || !history || history.length === 0) return;
+            let html = '';
+            history.forEach(h => {
+                const cls = h.grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+                let fileLink = '';
+                if (h.has_file && h.id) {
+                    fileLink = ' <a href="' + historyDownloadBase + h.id + '" class="ml-0.5 hover:text-blue-700" title="' + h.attempt + '-urinish fayli">&#128206;</a>';
+                }
+                html += '<span class="inline-flex items-center px-1.5 py-0.5 text-xs rounded ' + cls + ' mr-0.5">' +
+                        h.attempt + ': ' + Math.round(h.grade) + fileLink + '</span>';
+            });
+            cell.innerHTML = html;
+        }
+
+        function updateMtActionCell(studentHemisId, data) {
+            const cell = document.getElementById('mt-action-' + studentHemisId);
+            if (!cell) return;
+
+            const grade = parseFloat(data.grade);
+            if (grade >= 60) {
+                cell.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">' +
+                    '<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>' +
+                    'Qabul qilindi</span>';
+            } else if (data.can_regrade) {
+                cell.innerHTML = '<button type="button" onclick="startRegrade(\'' + studentHemisId + '\')" ' +
+                    'class="regrade-btn px-2 py-0.5 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 focus:outline-none">' +
+                    'Qayta baholash</button>';
+            } else {
+                cell.innerHTML = '<span class="inline-flex items-center px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">Limit tugagan</span>';
+            }
+        }
+
+        function saveMtGrade(studentHemisId, isRegrade) {
             const input = document.getElementById('mt-grade-' + studentHemisId);
             const grade = input.value;
 
@@ -1661,10 +1831,10 @@
                 return;
             }
 
-            const button = input.closest('tr').querySelector('.save-btn');
-            const originalText = button.textContent;
-            button.textContent = '...';
-            button.disabled = true;
+            // Disable input while saving
+            const actionCell = document.getElementById('mt-action-' + studentHemisId);
+            const buttons = actionCell.querySelectorAll('button');
+            buttons.forEach(b => { b.textContent = '...'; b.disabled = true; });
 
             fetch(mtGradeConfig.url, {
                 method: 'POST',
@@ -1677,33 +1847,115 @@
                     student_hemis_id: studentHemisId,
                     subject_id: mtGradeConfig.subjectId,
                     semester_code: mtGradeConfig.semesterCode,
-                    grade: parseFloat(grade)
+                    grade: parseFloat(grade),
+                    regrade: isRegrade ? true : false
                 })
             })
-            .then(response => response.json())
-            .then(data => {
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(({ ok, data }) => {
                 if (data.success) {
-                    button.textContent = 'OK!';
-                    button.classList.remove('bg-blue-500');
-                    button.classList.add('bg-green-500');
-                    setTimeout(() => {
-                        button.textContent = originalText;
-                        button.classList.remove('bg-green-500');
-                        button.classList.add('bg-blue-500');
-                        button.disabled = false;
-                    }, 1500);
+                    // Lock the input
+                    input.value = Math.round(data.grade);
+                    input.disabled = true;
+                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    // Update history
+                    if (data.history) {
+                        updateMtHistoryCell(studentHemisId, data.history);
+                    }
+                    // Update action cell
+                    updateMtActionCell(studentHemisId, data);
+                } else if (data.locked && !data.can_regrade) {
+                    // Permanently locked
+                    input.value = Math.round(data.grade);
+                    input.disabled = true;
+                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    updateMtActionCell(studentHemisId, data);
+                    alert(data.message);
+                } else if (data.locked && data.can_regrade) {
+                    // Already graded, can regrade
+                    input.value = Math.round(data.grade);
+                    input.disabled = true;
+                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    updateMtActionCell(studentHemisId, data);
+                } else if (data.no_file) {
+                    // Student has no file uploaded
+                    alert(data.message);
+                    input.disabled = true;
+                    input.classList.add('bg-gray-100', 'text-gray-500');
+                    const actionCell = document.getElementById('mt-action-' + studentHemisId);
+                    actionCell.innerHTML = '<span class="text-gray-400 text-xs">—</span>';
                 } else {
                     alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
-                    button.textContent = originalText;
-                    button.disabled = false;
+                    buttons.forEach(b => { b.textContent = 'Saqlash'; b.disabled = false; });
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
-                button.textContent = originalText;
-                button.disabled = false;
+                buttons.forEach(b => { b.textContent = 'Saqlash'; b.disabled = false; });
             });
+        }
+
+        function startRegrade(studentHemisId) {
+            const input = document.getElementById('mt-grade-' + studentHemisId);
+            const actionCell = document.getElementById('mt-action-' + studentHemisId);
+
+            // Unlock input for new grade
+            input.disabled = false;
+            input.classList.remove('bg-gray-100', 'text-gray-500');
+            input.value = '';
+            input.focus();
+
+            // Show save button for regrade
+            actionCell.innerHTML =
+                '<button type="button" onclick="saveMtGrade(\'' + studentHemisId + '\', true)" ' +
+                'class="save-btn px-2 py-0.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none mr-1">Saqlash</button>' +
+                '<button type="button" onclick="cancelRegrade(\'' + studentHemisId + '\')" ' +
+                'class="px-2 py-0.5 text-xs bg-gray-400 text-white rounded hover:bg-gray-500 focus:outline-none">Bekor</button>';
+        }
+
+        function cancelRegrade(studentHemisId) {
+            // Reload the page to restore original state
+            location.reload();
+        }
+
+        // MT grading urgency modal
+        const mtDangerCount = {{ $dangerCount ?? 0 }};
+        const mtUngradedCount = {{ $ungradedCount ?? 0 }};
+        let mtModalShown = false;
+
+        function showMtUrgencyModal() {
+            if (mtModalShown || mtDangerCount === 0) return;
+            mtModalShown = true;
+
+            const overlay = document.createElement('div');
+            overlay.id = 'mt-urgency-modal';
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-lg shadow-xl max-w-md mx-4 p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-4xl text-red-500 animate-pulse">&#9888;</span>
+                        <h3 class="text-lg font-bold text-red-700">Diqqat! Baholanmagan topshiriqlar</h3>
+                    </div>
+                    <p class="text-sm text-gray-700 mb-2">
+                        <strong>${mtDangerCount}</strong> ta topshiriq <strong>3 kundan oshiq</strong> baholanmagan!
+                    </p>
+                    <p class="text-sm text-gray-500 mb-4">
+                        Jami baholanmagan: ${mtUngradedCount} ta. Iltimos, tezroq baholang.
+                    </p>
+                    <div class="flex gap-2 justify-end">
+                        <button onclick="document.getElementById('mt-urgency-modal').remove()"
+                            class="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                            Keyinroq
+                        </button>
+                        <button onclick="document.getElementById('mt-urgency-modal').remove()"
+                            class="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 font-medium">
+                            Baholashni boshlash
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
         }
 
         function switchTab(tabName) {
@@ -1712,6 +1964,11 @@
             document.getElementById('content-' + tabName).classList.remove('hidden');
             const activeTab = document.getElementById('tab-' + tabName);
             activeTab.classList.add('active');
+
+            // Show urgency modal when MT tab is opened
+            if (tabName === 'mustaqil') {
+                showMtUrgencyModal();
+            }
         }
 
         function switchView(viewType) {

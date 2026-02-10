@@ -360,7 +360,7 @@ class StudentController extends Controller
         $student = Auth::guard('student')->user();
 
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
-        $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 2);
+        $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
         $timeParts = explode(':', $mtDeadlineTime);
         $hour = (int) ($timeParts[0] ?? 17);
         $minute = (int) ($timeParts[1] ?? 0);
@@ -443,7 +443,7 @@ class StudentController extends Controller
             ->where('student_id', $student->id)
             ->first();
 
-        $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 2);
+        $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
 
         if ($existing && $existingGrade && $existingGrade->grade < 60) {
             // This is a resubmission after low grade

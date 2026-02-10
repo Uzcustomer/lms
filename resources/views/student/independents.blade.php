@@ -147,7 +147,7 @@
                                                             </label>
                                                         </form>
                                                     @elseif($item['grade'] !== null && $item['grade'] < 60 && $item['remaining_attempts'] <= 0)
-                                                        <p class="text-xs text-red-400 mt-1">Qayta yuklash imkoniyati tugagan</p>
+                                                        <p class="text-xs text-red-400 mt-1">MT topshirig'ini qayta yuklash imkoniyati tugagan</p>
                                                     @elseif(!$item['is_overdue'] && $item['grade'] === null)
                                                         <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}"
                                                               enctype="multipart/form-data" class="inline mt-2">

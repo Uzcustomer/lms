@@ -756,7 +756,7 @@ class JournalController extends Controller
                     ->where('semester_code', $semesterCode)
                     ->count();
 
-                if ($attemptCount + 1 >= $mtMaxResubmissions) continue; // limit reached
+                if ($attemptCount + 1 > $mtMaxResubmissions) continue; // limit reached
 
                 $now = now();
                 // Get the OLD submission file (before resubmission) from history or current
@@ -1008,7 +1008,7 @@ class JournalController extends Controller
             return response()->json([
                 'success' => false,
                 'locked' => true,
-                'can_regrade' => $hasResubmitted && $existingGrade->grade < 60 && $currentAttempt < $maxResubmissions,
+                'can_regrade' => $hasResubmitted && $existingGrade->grade < 60 && $currentAttempt <= $maxResubmissions,
                 'message' => 'Baho allaqachon qo\'yilgan.',
                 'grade' => $existingGrade->grade,
                 'attempt' => $currentAttempt,
@@ -1067,7 +1067,7 @@ class JournalController extends Controller
             $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
             $currentAttempt = $attemptCount + 1; // current grade's attempt number
 
-            if ($currentAttempt >= $maxResubmissions) {
+            if ($currentAttempt > $maxResubmissions) {
                 return response()->json([
                     'success' => false,
                     'locked' => true,
@@ -1162,7 +1162,7 @@ class JournalController extends Controller
             'message' => 'Baho saqlandi',
             'locked' => true,
             'can_regrade' => false, // Talaba qayta yuklamaguncha qayta baholab bo'lmaydi
-            'waiting_resubmit' => $grade < 60 && ($newAttempt ?? 1) < $maxResubmissions,
+            'waiting_resubmit' => $grade < 60 && ($newAttempt ?? 1) <= $maxResubmissions,
             'grade' => $grade,
             'attempt' => $newAttempt ?? 1,
             'max_attempts' => $maxResubmissions,

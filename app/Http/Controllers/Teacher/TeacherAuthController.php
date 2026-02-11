@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
@@ -37,6 +38,26 @@ class TeacherAuthController extends Controller
             'password' => ['required'],
         ]);
 
+        // DEBUG: Login jarayonini tekshirish
+        $debugLogin = $credentials['login'];
+        $debugPassword = $credentials['password'];
+        $teacher = Teacher::where('login', $debugLogin)->first();
+
+        if (!$teacher) {
+            Log::warning("LOGIN DEBUG: Teacher topilmadi. Login: '{$debugLogin}'");
+
+            // login bo'yicha topilmasa, employee_id_number bo'yicha izlaymiz
+            $teacherByEid = Teacher::where('employee_id_number', $debugLogin)->first();
+            if ($teacherByEid) {
+                Log::warning("LOGIN DEBUG: employee_id_number bo'yicha topildi, lekin login maydoni boshqacha: '{$teacherByEid->login}'");
+            }
+        } else {
+            $hashCheck = Hash::check($debugPassword, $teacher->password);
+            Log::warning("LOGIN DEBUG: Teacher topildi. ID: {$teacher->id}, Login: '{$teacher->login}', Hash::check natijasi: " . ($hashCheck ? 'TRUE' : 'FALSE'));
+            Log::warning("LOGIN DEBUG: Parol hash boshlanishi: " . substr($teacher->password, 0, 20) . "...");
+            Log::warning("LOGIN DEBUG: Parol uzunligi: " . strlen($teacher->password));
+        }
+
         if (Auth::guard('teacher')->attempt($credentials)) {
             $teacher = Auth::guard('teacher')->user();
 
@@ -61,8 +82,19 @@ class TeacherAuthController extends Controller
             return redirect()->intended(route('teacher.dashboard'));
         }
 
+        // DEBUG: Xato sababini ko'rsatish
+        $debugMsg = "Login yoki parol noto'g'ri.";
+        if (!$teacher) {
+            $debugMsg .= " (Sabab: '{$debugLogin}' login topilmadi)";
+        } else {
+            $hashOk = Hash::check($debugPassword, $teacher->password);
+            if (!$hashOk) {
+                $debugMsg .= " (Sabab: parol mos kelmadi. Hash: " . substr($teacher->password, 0, 7) . "... Uzunlik: " . strlen($teacher->password) . ")";
+            }
+        }
+
         return back()->withErrors([
-            'login' => "Login yoki parol noto'g'ri.",
+            'login' => $debugMsg,
         ])->onlyInput('login', '_profile');
     }
 

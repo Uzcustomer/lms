@@ -1,4 +1,8 @@
 <x-guest-layout>
+    <style>
+        .country-item:hover { background-color: #eff6ff; }
+        .country-item.active { background-color: #eff6ff; color: #1d4ed8; }
+    </style>
     {{-- Logout tugmasi --}}
     <div class="flex items-center justify-between mb-5">
         <div>
@@ -141,8 +145,9 @@
                                 <template x-for="c in filteredCountries" :key="c.name + c.code">
                                     <button type="button"
                                             @click="selectCountry(c)"
-                                            class="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-blue-50 transition-colors"
-                                            :class="selectedCode === c.code && selectedName === c.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
+                                            class="country-item"
+                                            :class="selectedCode === c.code && selectedName === c.name ? 'active' : ''"
+                                            style="width:100%; display:flex; align-items:center; justify-content:space-between; padding:8px 12px; font-size:14px; color:#374151; border:none; background:none; cursor:pointer; transition:background-color 0.15s;"
                                         <span class="flex items-center gap-2">
                                             <span class="text-base" x-text="c.flag"></span>
                                             <span x-text="c.name" class="truncate"></span>
@@ -173,7 +178,8 @@
                     <input type="hidden" name="phone" :value="'+' + selectedCode + phoneNumber">
                 </div>
                 <button type="submit"
-                        class="w-full inline-flex justify-center items-center px-3 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+                        style="width:100%; padding:12px 16px; font-size:16px; font-weight:600; color:#fff; background-color:#2563eb; border:none; border-radius:8px; cursor:pointer; transition:background-color 0.15s;"
+                        onmouseover="this.style.backgroundColor='#1d4ed8'" onmouseout="this.style.backgroundColor='#2563eb'">
                     Saqlash va davom etish
                 </button>
             </form>

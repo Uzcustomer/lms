@@ -62,7 +62,7 @@ class IndependentController extends Controller
         $teacher = Auth::guard('teacher')->user();
         $user = Auth::user();
         if ($user->hasRole(['dekan'])) {
-            $query = Independent::where('department_hemis_id', $teacher->department_hemis_id);
+            $query = Independent::whereIn('department_hemis_id', $teacher->dean_faculty_ids);
         } else {
             $query = Independent::where('teacher_hemis_id', $teacher->hemis_id);
         }
@@ -92,9 +92,7 @@ class IndependentController extends Controller
         $perPage = $request->get('per_page', 50);
         $independents = $query->orderBy('id', 'desc')->paginate($perPage)->appends($request->query());
         if ($teacher->hasRole('dekan')) {
-            $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)->get();
-            // $teachingGroups = $teacher->groups;
-            // $groups = $departmentGroups->merge($teachingGroups)->unique('id');
+            $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         } else {
             $groups = $teacher->groups;
             if (count($groups) < 1) {
@@ -122,12 +120,11 @@ class IndependentController extends Controller
         }
         $teacher = Auth::guard('teacher')->user();
 
-        $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)
+        $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)
             ->select('group_hemis_id as id', 'name')
             ->get();
         $lastFilters = session('last_lesson_filters', []);
-        $departments = Department::where('department_hemis_id', $teacher->department_hemis_id)->get();
-        // return view('teacher.qaytnoma.create', compact('departments', 'groups', 'lastFilters'));
+        $departments = Department::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         return view('teacher.independent.create', compact('departments', 'groups', 'lastFilters'));
 
     }
@@ -319,7 +316,7 @@ class IndependentController extends Controller
     {
         $user = Auth::user();
         if ($user->hasRole(['dekan'])) {
-            $independent = Independent::where('id', $id)->where('department_hemis_id', $request->user()->department_hemis_id)->first();
+            $independent = Independent::where('id', $id)->whereIn('department_hemis_id', $request->user()->dean_faculty_ids)->first();
         } else {
             $independent = Independent::where('id', $id)->where('teacher_hemis_id', $request->user()->hemis_id)->first();
         }

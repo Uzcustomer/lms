@@ -56,7 +56,7 @@ class QaytnomaController extends Controller
             return back();
         }
         $query = new Qaytnoma();
-        $query = $query->where('department_hemis_id', $teacher->department_hemis_id);
+        $query = $query->whereIn('department_hemis_id', $teacher->dean_faculty_ids);
         // if ($request->full_name) {
         //     $query = $query->where('teacher_name', "LIKE", "%" . $request->full_name . "%");
         // }
@@ -73,9 +73,7 @@ class QaytnomaController extends Controller
         // with('department', 'teacher', 'group', 'semester', 'subject');
         $perPage = $request->get('per_page', 50);
         $qaytnomas = $query->orderBy('id', 'desc')->paginate($perPage);
-        $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)->get();
-        // $teachingGroups = $teacher->groups;
-        // $groups = $departmentGroups->merge($teachingGroups)->unique('id');
+        $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         return view('teacher.qaytnoma.index', compact('qaytnomas', 'groups'));
     }
 
@@ -98,11 +96,11 @@ class QaytnomaController extends Controller
         }
         $teacher = Auth::guard('teacher')->user();
 
-        $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)
+        $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)
             ->select('group_hemis_id as id', 'name')
             ->get();
         $lastFilters = session('last_lesson_filters', []);
-        $departments = Department::where('department_hemis_id', $teacher->department_hemis_id)->get();
+        $departments = Department::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         return view('teacher.qaytnoma.create', compact('departments', 'groups', 'lastFilters'));
     }
     public function store(Request $request)
@@ -256,7 +254,7 @@ class QaytnomaController extends Controller
             if ($other_teacher_text == "") {
                 $other_teacher_text = "!!!";
             }
-            $dekan = Teacher::where('department_hemis_id', $deportment->department_hemis_id)
+            $dekan = Teacher::whereHas('deanFaculties', fn ($q) => $q->where('department_hemis_id', $deportment->department_hemis_id))
                 ->whereHas('roles', fn ($q) => $q->where('name', ProjectRole::DEAN->value))
                 ->first()->full_name ?? "";
             $data = [

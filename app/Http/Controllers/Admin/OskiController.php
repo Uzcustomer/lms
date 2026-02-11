@@ -61,7 +61,7 @@ class OskiController extends Controller
         $teacher = Auth::guard('teacher')->user();
         // dd($teacher);
 
-        $query = Oski::where('department_hemis_id', $teacher->department_hemis_id);
+        $query = Oski::whereIn('department_hemis_id', $teacher->dean_faculty_ids);
         // if ($request->department) {
         //     $query = $query->where('department_id', $request->department);
         // }
@@ -90,9 +90,7 @@ class OskiController extends Controller
         $perPage = $request->get('per_page', 50);
         $oskis = $query->orderBy('id', 'desc')->paginate($perPage)->appends($request->query());
         if ($teacher->hasRole('dekan')) {
-            $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)->get();
-            // $teachingGroups = $teacher->groups;
-            // $groups = $departmentGroups->merge($teachingGroups)->unique('id');
+            $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         } else {
             $groups = $teacher->groups;
             if (count($groups) < 1) {
@@ -247,11 +245,11 @@ class OskiController extends Controller
         }
         $teacher = Auth::guard('teacher')->user();
 
-        $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)
+        $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)
             ->select('group_hemis_id as id', 'name')
             ->get();
         $lastFilters = session('last_lesson_filters', []);
-        $departments = Department::where('department_hemis_id', $teacher->department_hemis_id)->get();
+        $departments = Department::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         return view('teacher.oski.create', compact('departments', 'groups', 'lastFilters'));
     }
     function delete(Request $request, $id)
@@ -287,7 +285,7 @@ class OskiController extends Controller
     function grade_teacher($id, Request $request)
     {
         $teacher = Auth::guard('teacher')->user();
-        $oski = Oski::where('id', $id)->where('department_hemis_id', $teacher->department_hemis_id)->first();
+        $oski = Oski::where('id', $id)->whereIn('department_hemis_id', $teacher->dean_faculty_ids)->first();
         if (empty($oski)) {
             return back()->with('error', 'Bunday mustaqil ish topilmadi');
         }

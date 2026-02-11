@@ -24,8 +24,8 @@ if (!function_exists('is_active_dekan')) {
 
 if (!function_exists('get_dekan_faculty')) {
     /**
-     * Dekan foydalanuvchining fakultetini olish (Department model)
-     * Faqat teacher guard orqali kirgan dekanlar uchun ishlaydi
+     * Dekan foydalanuvchining birinchi fakultetini olish (Department model)
+     * Ko'p fakultetli dekanlar uchun get_dekan_faculties() dan foydalaning
      *
      * @return \App\Models\Department|null
      */
@@ -34,19 +34,46 @@ if (!function_exists('get_dekan_faculty')) {
         if (!is_active_dekan()) return null;
 
         $user = auth()->user();
-        $departmentHemisId = $user->department_hemis_id ?? null;
 
-        if (!$departmentHemisId) return null;
+        return $user->deanFaculties()->first();
+    }
+}
 
-        return Department::where('department_hemis_id', $departmentHemisId)
-            ->where('structure_type_code', 11)
-            ->first();
+if (!function_exists('get_dekan_faculties')) {
+    /**
+     * Dekan foydalanuvchining barcha fakultetlarini olish
+     *
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    function get_dekan_faculties(): \Illuminate\Database\Eloquent\Collection
+    {
+        if (!is_active_dekan()) return new \Illuminate\Database\Eloquent\Collection();
+
+        $user = auth()->user();
+
+        return $user->deanFaculties;
+    }
+}
+
+if (!function_exists('get_dekan_faculty_ids')) {
+    /**
+     * Dekan foydalanuvchining barcha fakultet department_hemis_id lari
+     *
+     * @return array
+     */
+    function get_dekan_faculty_ids(): array
+    {
+        if (!is_active_dekan()) return [];
+
+        $user = auth()->user();
+
+        return $user->dean_faculty_ids;
     }
 }
 
 if (!function_exists('get_dekan_faculty_id')) {
     /**
-     * Dekan foydalanuvchining fakultet ID sini olish
+     * Dekan foydalanuvchining birinchi fakultet ID sini olish
      *
      * @return int|null
      */

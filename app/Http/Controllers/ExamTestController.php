@@ -62,7 +62,7 @@ class ExamTestController extends Controller
         $teacher = Auth::guard('teacher')->user();
         // dd($teacher);
 
-        $query = ExamTest::where('department_hemis_id', $teacher->department_hemis_id);
+        $query = ExamTest::whereIn('department_hemis_id', $teacher->dean_faculty_ids);
         // if ($request->department) {
         //     $query = $query->where('department_id', $request->department);
         // }
@@ -91,9 +91,7 @@ class ExamTestController extends Controller
         $perPage = $request->get('per_page', 50);
         $examtests = $query->orderBy('id', 'desc')->paginate($perPage)->appends($request->query());
         if ($teacher->hasRole('dekan')) {
-            $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)->get();
-            // $teachingGroups = $teacher->groups;
-            // $groups = $departmentGroups->merge($teachingGroups)->unique('id');
+            $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         } else {
             $groups = $teacher->groups;
             if (count($groups) < 1) {
@@ -120,11 +118,11 @@ class ExamTestController extends Controller
         }
         $teacher = Auth::guard('teacher')->user();
 
-        $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)
+        $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)
             ->select('group_hemis_id as id', 'name')
             ->get();
         $lastFilters = session('last_lesson_filters', []);
-        $departments = Department::where('department_hemis_id', $teacher->department_hemis_id)->get();
+        $departments = Department::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         return view('teacher.exam_test.create', compact('departments', 'groups', 'lastFilters'));
     }
     public function store(Request $request)

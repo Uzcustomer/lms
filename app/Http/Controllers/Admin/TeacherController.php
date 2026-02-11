@@ -120,12 +120,10 @@ class TeacherController extends Controller
         $request->validate([
             'roles' => 'nullable|array',
             'roles.*' => 'in:' . implode(',', $validRoleValues),
-            'department_hemis_id' => [
-                $isDean ? 'required' : 'nullable',
-                'exists:departments,department_hemis_id',
-            ],
+            'dean_faculties' => [$isDean ? 'required' : 'nullable', 'array'],
+            'dean_faculties.*' => 'exists:departments,department_hemis_id',
         ], [
-            'department_hemis_id.required' => 'Dekan roli uchun fakultetni tanlash majburiy.',
+            'dean_faculties.required' => 'Dekan roli uchun kamida bitta fakultetni tanlash majburiy.',
         ]);
 
         foreach ($roles as $roleName) {
@@ -134,10 +132,11 @@ class TeacherController extends Controller
 
         $teacher->syncRoles($roles);
 
-        $teacher->department_hemis_id = $isDean
-            ? $request->department_hemis_id
-            : null;
-        $teacher->save();
+        if ($isDean) {
+            $teacher->deanFaculties()->sync($request->input('dean_faculties', []));
+        } else {
+            $teacher->deanFaculties()->detach();
+        }
 
         return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Rollar muvaffaqiyatli yangilandi');
     }

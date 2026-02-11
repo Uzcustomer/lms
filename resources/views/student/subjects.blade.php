@@ -59,12 +59,12 @@
         .subject-card:hover {
             transform: translateY(-3px);
             box-shadow: 0 12px 28px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.03);
-            border-color: #e0e7ff;
+            border-color: var(--card-hover-border, #e0e7ff);
         }
-        .dark .subject-card { background: #1e293b; border-color: #334155; }
-        .dark .subject-card:hover { border-color: #4f46e5; box-shadow: 0 12px 28px rgba(0,0,0,0.25); }
+        .dark .subject-card { background: #1e293b !important; border-color: #334155; }
+        .dark .subject-card:hover { border-color: var(--card-hover-border, #4f46e5); box-shadow: 0 12px 28px rgba(0,0,0,0.25); }
 
-        .card-accent { height: 4px; }
+        .card-accent { height: 5px; }
         .card-body { padding: 18px; }
 
         .card-header {
@@ -362,15 +362,26 @@
 
             {{-- Cards Grid --}}
             @if($subjects->isNotEmpty())
+                @php
+                    $cardThemes = [
+                        ['bg' => '#f5f3ff', 'border' => '#c4b5fd', 'accent' => 'linear-gradient(135deg, #7c3aed, #a78bfa)', 'creditBg' => '#ede9fe', 'creditColor' => '#6d28d9', 'hoverBorder' => '#a78bfa'],
+                        ['bg' => '#ecfdf5', 'border' => '#6ee7b7', 'accent' => 'linear-gradient(135deg, #059669, #34d399)', 'creditBg' => '#d1fae5', 'creditColor' => '#047857', 'hoverBorder' => '#6ee7b7'],
+                        ['bg' => '#fff7ed', 'border' => '#fdba74', 'accent' => 'linear-gradient(135deg, #ea580c, #fb923c)', 'creditBg' => '#ffedd5', 'creditColor' => '#c2410c', 'hoverBorder' => '#fdba74'],
+                        ['bg' => '#fdf2f8', 'border' => '#f9a8d4', 'accent' => 'linear-gradient(135deg, #db2777, #f472b6)', 'creditBg' => '#fce7f3', 'creditColor' => '#be185d', 'hoverBorder' => '#f9a8d4'],
+                        ['bg' => '#ecfeff', 'border' => '#67e8f9', 'accent' => 'linear-gradient(135deg, #0891b2, #22d3ee)', 'creditBg' => '#cffafe', 'creditColor' => '#0e7490', 'hoverBorder' => '#67e8f9'],
+                        ['bg' => '#eef2ff', 'border' => '#a5b4fc', 'accent' => 'linear-gradient(135deg, #4f46e5, #818cf8)', 'creditBg' => '#e0e7ff', 'creditColor' => '#4338ca', 'hoverBorder' => '#a5b4fc'],
+                        ['bg' => '#fefce8', 'border' => '#fde047', 'accent' => 'linear-gradient(135deg, #ca8a04, #facc15)', 'creditBg' => '#fef9c3', 'creditColor' => '#a16207', 'hoverBorder' => '#fde047'],
+                        ['bg' => '#fef2f2', 'border' => '#fca5a5', 'accent' => 'linear-gradient(135deg, #dc2626, #f87171)', 'creditBg' => '#fee2e2', 'creditColor' => '#b91c1c', 'hoverBorder' => '#fca5a5'],
+                        ['bg' => '#f0fdf4', 'border' => '#86efac', 'accent' => 'linear-gradient(135deg, #16a34a, #4ade80)', 'creditBg' => '#dcfce7', 'creditColor' => '#15803d', 'hoverBorder' => '#86efac'],
+                        ['bg' => '#faf5ff', 'border' => '#d8b4fe', 'accent' => 'linear-gradient(135deg, #9333ea, #c084fc)', 'creditBg' => '#f3e8ff', 'creditColor' => '#7e22ce', 'hoverBorder' => '#d8b4fe'],
+                    ];
+                @endphp
                 <div class="cards-grid">
                     @foreach($subjects as $index => $subject)
                         @php
+                            $theme = $cardThemes[$index % count($cardThemes)];
+
                             $jn = $subject['jn_average'];
-                            $accentBg = $jn >= 90 ? 'linear-gradient(90deg, #10b981, #34d399)'
-                                : ($jn >= 70 ? 'linear-gradient(90deg, #3b82f6, #60a5fa)'
-                                : ($jn >= 60 ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
-                                : ($jn > 0 ? 'linear-gradient(90deg, #ef4444, #f87171)'
-                                : 'linear-gradient(90deg, #e2e8f0, #cbd5e1)')));
 
                             $dp = $subject['dav_percent'];
                             $davColor = $dp >= 25 ? '#ef4444' : ($dp >= 15 ? '#f59e0b' : '#6366f1');
@@ -386,12 +397,12 @@
                             };
                         @endphp
 
-                        <div class="subject-card">
-                            <div class="card-accent" style="background: {{ $accentBg }};"></div>
+                        <div class="subject-card" style="background: {{ $theme['bg'] }}; --card-hover-border: {{ $theme['hoverBorder'] }};">
+                            <div class="card-accent" style="background: {{ $theme['accent'] }};"></div>
                             <div class="card-body">
                                 <div class="card-header">
                                     <h3 class="card-title">{{ $subject['name'] }}</h3>
-                                    <span class="card-credit">{{ $subject['credit'] }} kr</span>
+                                    <span class="card-credit" style="background: {{ $theme['creditBg'] }}; color: {{ $theme['creditColor'] }};">{{ $subject['credit'] }} kr</span>
                                 </div>
 
                                 <div class="grades-grid">

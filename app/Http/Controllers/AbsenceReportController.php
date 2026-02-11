@@ -12,14 +12,14 @@ class AbsenceReportController extends Controller
 {
     public function index(Request $request)
     {
-        $dekanFacultyId = get_dekan_faculty_id();
+        $dekanFacultyIds = get_dekan_faculty_ids();
 
         $facultyQuery = Department::where('structure_type_code', 11)
             ->where('active', true)
             ->orderBy('name');
 
-        if ($dekanFacultyId) {
-            $facultyQuery->where('id', $dekanFacultyId);
+        if (!empty($dekanFacultyIds)) {
+            $facultyQuery->whereIn('id', $dekanFacultyIds);
         }
 
         $faculties = $facultyQuery->get();
@@ -63,16 +63,16 @@ class AbsenceReportController extends Controller
             'studentStatuses',
             'educationYears',
             'currentEducationYear',
-            'dekanFacultyId'
+            'dekanFacultyIds'
         ));
     }
 
     public function data(Request $request)
     {
         // Dekan uchun fakultet majburiy filtr
-        $dekanFacultyId = get_dekan_faculty_id();
-        if ($dekanFacultyId && !$request->filled('faculty')) {
-            $request->merge(['faculty' => $dekanFacultyId]);
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
         // 1. attendances jadvalidan talabalar bo'yicha jami soatlarni hisoblash

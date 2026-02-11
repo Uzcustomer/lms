@@ -20,14 +20,14 @@ class ReportController extends Controller
      */
     public function jnReport(Request $request)
     {
-        $dekanFacultyId = get_dekan_faculty_id();
+        $dekanFacultyIds = get_dekan_faculty_ids();
 
         $facultyQuery = Department::where('structure_type_code', 11)
             ->where('active', true)
             ->orderBy('name');
 
-        if ($dekanFacultyId) {
-            $facultyQuery->where('id', $dekanFacultyId);
+        if (!empty($dekanFacultyIds)) {
+            $facultyQuery->whereIn('id', $dekanFacultyIds);
         }
 
         $faculties = $facultyQuery->get();
@@ -60,8 +60,8 @@ class ReportController extends Controller
         if ($selectedEducationType) {
             $kafedraQuery->where('c.education_type_code', $selectedEducationType);
         }
-        if ($dekanFacultyId) {
-            $kafedraQuery->where('f.id', $dekanFacultyId);
+        if (!empty($dekanFacultyIds)) {
+            $kafedraQuery->whereIn('f.id', $dekanFacultyIds);
         } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
@@ -78,7 +78,7 @@ class ReportController extends Controller
             'educationTypes',
             'selectedEducationType',
             'kafedras',
-            'dekanFacultyId'
+            'dekanFacultyIds'
         ));
     }
 
@@ -89,9 +89,9 @@ class ReportController extends Controller
     public function jnReportData(Request $request)
     {
         // Dekan uchun fakultet majburiy filtr
-        $dekanFacultyId = get_dekan_faculty_id();
-        if ($dekanFacultyId && !$request->filled('faculty')) {
-            $request->merge(['faculty' => $dekanFacultyId]);
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
@@ -426,14 +426,14 @@ class ReportController extends Controller
      */
     public function lessonAssignment(Request $request)
     {
-        $dekanFacultyId = get_dekan_faculty_id();
+        $dekanFacultyIds = get_dekan_faculty_ids();
 
         $facultyQuery = Department::where('structure_type_code', 11)
             ->where('active', true)
             ->orderBy('name');
 
-        if ($dekanFacultyId) {
-            $facultyQuery->where('id', $dekanFacultyId);
+        if (!empty($dekanFacultyIds)) {
+            $facultyQuery->whereIn('id', $dekanFacultyIds);
         }
 
         $faculties = $facultyQuery->get();
@@ -466,8 +466,8 @@ class ReportController extends Controller
         if ($selectedEducationType) {
             $kafedraQuery->where('c.education_type_code', $selectedEducationType);
         }
-        if ($dekanFacultyId) {
-            $kafedraQuery->where('f.id', $dekanFacultyId);
+        if (!empty($dekanFacultyIds)) {
+            $kafedraQuery->whereIn('f.id', $dekanFacultyIds);
         } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
@@ -484,7 +484,7 @@ class ReportController extends Controller
             'educationTypes',
             'selectedEducationType',
             'kafedras',
-            'dekanFacultyId'
+            'dekanFacultyIds'
         ));
     }
 
@@ -494,9 +494,9 @@ class ReportController extends Controller
     public function lessonAssignmentData(Request $request)
     {
         // Dekan uchun fakultet majburiy filtr
-        $dekanFacultyId = get_dekan_faculty_id();
-        if ($dekanFacultyId && !$request->filled('faculty')) {
-            $request->merge(['faculty' => $dekanFacultyId]);
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
@@ -1135,14 +1135,14 @@ class ReportController extends Controller
      */
     public function absenceReport(Request $request)
     {
-        $dekanFacultyId = get_dekan_faculty_id();
+        $dekanFacultyIds = get_dekan_faculty_ids();
 
         $facultyQuery = Department::where('structure_type_code', 11)
             ->where('active', true)
             ->orderBy('name');
 
-        if ($dekanFacultyId) {
-            $facultyQuery->where('id', $dekanFacultyId);
+        if (!empty($dekanFacultyIds)) {
+            $facultyQuery->whereIn('id', $dekanFacultyIds);
         }
 
         $faculties = $facultyQuery->get();
@@ -1175,8 +1175,8 @@ class ReportController extends Controller
         if ($selectedEducationType) {
             $kafedraQuery->where('c.education_type_code', $selectedEducationType);
         }
-        if ($dekanFacultyId) {
-            $kafedraQuery->where('f.id', $dekanFacultyId);
+        if (!empty($dekanFacultyIds)) {
+            $kafedraQuery->whereIn('f.id', $dekanFacultyIds);
         } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
@@ -1202,7 +1202,7 @@ class ReportController extends Controller
             'selectedEducationType',
             'kafedras',
             'studentStatuses',
-            'dekanFacultyId'
+            'dekanFacultyIds'
         ));
     }
 
@@ -1212,9 +1212,9 @@ class ReportController extends Controller
     public function absenceReportData(Request $request)
     {
         // Dekan uchun fakultet majburiy filtr
-        $dekanFacultyId = get_dekan_faculty_id();
-        if ($dekanFacultyId && !$request->filled('faculty')) {
-            $request->merge(['faculty' => $dekanFacultyId]);
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
         try {

@@ -47,23 +47,16 @@
                                 <label class="filter-label fl-emerald">
                                     <span class="fl-dot" style="background:#10b981;"></span> Fakultet
                                 </label>
-                                <select name="faculty" id="faculty" class="select2" style="width: 100%;" {{ isset($dekanFacultyId) && $dekanFacultyId ? 'disabled' : '' }}>
-                                    @if(isset($dekanFacultyId) && $dekanFacultyId)
-                                        @foreach($faculties as $faculty)
-                                            <option value="{{ $faculty->id }}" selected>{{ $faculty->name }}</option>
-                                        @endforeach
-                                    @else
+                                <select name="faculty" id="faculty" class="select2" style="width: 100%;">
+                                    @if(!isset($dekanFacultyIds) || empty($dekanFacultyIds))
                                         <option value="">Barchasi</option>
-                                        @foreach($faculties as $faculty)
-                                            <option value="{{ $faculty->id }}" {{ request('faculty') == $faculty->id ? 'selected' : '' }}>
-                                                {{ $faculty->name }}
-                                            </option>
-                                        @endforeach
                                     @endif
+                                    @foreach($faculties as $faculty)
+                                        <option value="{{ $faculty->id }}" {{ request('faculty') == $faculty->id ? 'selected' : '' }}>
+                                            {{ $faculty->name }}
+                                        </option>
+                                    @endforeach
                                 </select>
-                                @if(isset($dekanFacultyId) && $dekanFacultyId)
-                                    <input type="hidden" name="faculty" value="{{ $dekanFacultyId }}">
-                                @endif
                             </div>
 
                             <div class="filter-item" style="flex: 1; min-width: 240px;">

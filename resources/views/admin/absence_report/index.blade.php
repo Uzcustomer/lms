@@ -35,21 +35,14 @@
                         </div>
                         <div class="filter-item">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
-                            <select id="faculty" class="select2" style="width: 100%;" {{ isset($dekanFacultyId) && $dekanFacultyId ? 'disabled' : '' }}>
-                                @if(isset($dekanFacultyId) && $dekanFacultyId)
-                                    @foreach($faculties as $faculty)
-                                        <option value="{{ $faculty->id }}" selected>{{ $faculty->name }}</option>
-                                    @endforeach
-                                @else
+                            <select id="faculty" class="select2" style="width: 100%;">
+                                @if(!isset($dekanFacultyIds) || empty($dekanFacultyIds))
                                     <option value="">Barchasi</option>
-                                    @foreach($faculties as $faculty)
-                                        <option value="{{ $faculty->id }}">{{ $faculty->name }}</option>
-                                    @endforeach
                                 @endif
+                                @foreach($faculties as $faculty)
+                                    <option value="{{ $faculty->id }}">{{ $faculty->name }}</option>
+                                @endforeach
                             </select>
-                            @if(isset($dekanFacultyId) && $dekanFacultyId)
-                                <input type="hidden" id="dekan_faculty_id" value="{{ $dekanFacultyId }}">
-                            @endif
                         </div>
                         <div class="filter-item">
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>

@@ -16,9 +16,9 @@ class AdminMultiGuardAuth
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Registrator_ofisi va dekan teacher uchun teacher guard afzal
+        // Registrator_ofisi, dekan va oqituvchi teacher uchun teacher guard afzal
         $teacher = Auth::guard('teacher')->user();
-        if ($teacher && ($teacher->hasRole('registrator_ofisi') || $teacher->hasRole('dekan'))) {
+        if ($teacher && ($teacher->hasRole('registrator_ofisi') || $teacher->hasRole('dekan') || $teacher->hasRole('oqituvchi') || $teacher->hasRole('kafedra_mudiri') || $teacher->hasRole('fan_masuli'))) {
             Auth::shouldUse('teacher');
             return $next($request);
         }

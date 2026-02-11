@@ -10,8 +10,10 @@ use App\Models\Group;
 use App\Models\Semester;
 use App\Models\Specialty;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class JournalController extends Controller
 {
@@ -19,6 +21,19 @@ class JournalController extends Controller
     {
         // Dekan uchun fakultet cheklovi
         $dekanFacultyIds = get_dekan_faculty_ids();
+
+        // O'qituvchi uchun fanga biriktirilgan cheklovi
+        $isOqituvchi = is_active_oqituvchi();
+        $teacherSubjectIds = [];
+        $teacherGroupIds = [];
+        if ($isOqituvchi) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+                $teacherSubjectIds = $assignments['subject_ids'];
+                $teacherGroupIds = $assignments['group_ids'];
+            }
+        }
 
         // Get filter options for dropdowns
         $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
@@ -83,6 +98,10 @@ class JournalController extends Controller
         } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
+        if ($isOqituvchi && !empty($teacherSubjectIds)) {
+            $kafedraQuery->whereIn('cs.subject_id', $teacherSubjectIds);
+        }
         if ($request->get('current_semester', '1') == '1') {
             $kafedraQuery->where('s.current', true);
         }
@@ -130,6 +149,14 @@ class JournalController extends Controller
             }
         } elseif ($request->filled('faculty')) {
             $query->where('f.id', $request->faculty);
+        }
+
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar va guruhlar
+        if ($isOqituvchi && !empty($teacherSubjectIds)) {
+            $query->whereIn('cs.subject_id', $teacherSubjectIds);
+        }
+        if ($isOqituvchi && !empty($teacherGroupIds)) {
+            $query->whereIn('g.group_hemis_id', $teacherGroupIds);
         }
 
         if ($request->filled('department')) {
@@ -193,7 +220,8 @@ class JournalController extends Controller
             'kafedras',
             'sortColumn',
             'sortDirection',
-            'dekanFacultyIds'
+            'dekanFacultyIds',
+            'isOqituvchi'
         ));
     }
 
@@ -1604,6 +1632,17 @@ class JournalController extends Controller
             $query->where('s.current', true);
         }
 
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
+        if (is_active_oqituvchi()) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+                if (!empty($assignments['subject_ids'])) {
+                    $query->whereIn('cs.subject_id', $assignments['subject_ids']);
+                }
+            }
+        }
+
         return $query->select('cs.subject_id', 'cs.subject_name')
             ->groupBy('cs.subject_id', 'cs.subject_name')
             ->orderBy('cs.subject_name')
@@ -1676,6 +1715,17 @@ class JournalController extends Controller
             $curriculaIds = CurriculumSubject::where('subject_id', $request->subject_id)
                 ->pluck('curricula_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // O'qituvchi uchun faqat o'zi o'tadigan guruhlar
+        if (is_active_oqituvchi()) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+                if (!empty($assignments['group_ids'])) {
+                    $query->whereIn('group_hemis_id', $assignments['group_ids']);
+                }
+            }
         }
 
         return $query->select('id', 'name')
@@ -2060,6 +2110,16 @@ class JournalController extends Controller
         // Dekan uchun fakultet cheklovi
         $dekanFacultyIds = get_dekan_faculty_ids();
 
+        // O'qituvchi uchun fanga biriktirilgan cheklovi
+        $isOqituvchi = is_active_oqituvchi();
+        $teacherAssignments = ['subject_ids' => [], 'group_ids' => []];
+        if ($isOqituvchi) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $teacherAssignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+            }
+        }
+
         // Fakultet department_hemis_id (reused in multiple queries)
         $facultyDeptHemisId = null;
         if ($request->filled('faculty_id')) {
@@ -2168,6 +2228,10 @@ class JournalController extends Controller
                 }
             });
         }
+        // O'qituvchi uchun faqat o'zi o'tadigan guruhlar
+        if ($isOqituvchi && !empty($teacherAssignments['group_ids'])) {
+            $groupsQuery->whereIn('g.group_hemis_id', $teacherAssignments['group_ids']);
+        }
         $groups = $groupsQuery
             ->select('g.id', 'g.name')
             ->orderBy('g.name')
@@ -2198,6 +2262,10 @@ class JournalController extends Controller
         }
         if ($facultyDeptHemisId) {
             $subjectsQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
+        if ($isOqituvchi && !empty($teacherAssignments['subject_ids'])) {
+            $subjectsQuery->whereIn('cs.subject_id', $teacherAssignments['subject_ids']);
         }
         $subjects = $subjectsQuery
             ->select('cs.subject_id', 'cs.subject_name')
@@ -2240,5 +2308,90 @@ class JournalController extends Controller
             'teacher_data' => $teacherData,
             'kafedra_name' => $kafedraName,
         ]);
+    }
+
+    /**
+     * O'qituvchiga biriktirilgan fanlar ro'yxatini HEMIS API dan olish.
+     * /v1/data/curriculum-subject-teacher-list API dan foydalanadi.
+     *
+     * @param int $employeeHemisId O'qituvchining HEMIS ID si
+     * @return array ['subject_ids' => [...], 'group_ids' => [...]] yoki bo'sh array
+     */
+    private function getTeacherSubjectAssignments(int $employeeHemisId): array
+    {
+        $cacheKey = "teacher_subject_assignments_{$employeeHemisId}";
+
+        return Cache::remember($cacheKey, now()->addMinutes(30), function () use ($employeeHemisId) {
+            $baseUrl = rtrim(config('services.hemis.base_url', 'https://student.ttatf.uz/rest/v1/'), '/');
+            $token = config('services.hemis.token');
+
+            $subjectIds = [];
+            $groupIds = [];
+            $page = 1;
+            $hasMore = true;
+
+            while ($hasMore) {
+                try {
+                    $response = Http::withoutVerifying()
+                        ->withToken($token)
+                        ->timeout(30)
+                        ->get($baseUrl . '/data/curriculum-subject-teacher-list', [
+                            'page' => $page,
+                            'limit' => 200,
+                        ]);
+
+                    if (!$response->successful()) {
+                        Log::warning('HEMIS curriculum-subject-teacher-list API xatolik', [
+                            'status' => $response->status(),
+                            'employee_hemis_id' => $employeeHemisId,
+                        ]);
+                        break;
+                    }
+
+                    $data = $response->json();
+
+                    if (!($data['success'] ?? false) || empty($data['data']['items'])) {
+                        break;
+                    }
+
+                    foreach ($data['data']['items'] as $item) {
+                        $itemEmployeeId = $item['employee']['id'] ?? null;
+
+                        if ((int) $itemEmployeeId === $employeeHemisId) {
+                            if (isset($item['subject']['id'])) {
+                                $subjectIds[] = (int) $item['subject']['id'];
+                            }
+                            if (isset($item['_group'])) {
+                                $groupIds[] = (int) $item['_group'];
+                            }
+                        }
+                    }
+
+                    $pagination = $data['data']['pagination'] ?? null;
+                    if (is_array($pagination)) {
+                        $pagination = $pagination[0] ?? $pagination;
+                    }
+
+                    if ($pagination && isset($pagination['page'], $pagination['pageCount'])) {
+                        $hasMore = $pagination['page'] < $pagination['pageCount'];
+                    } else {
+                        $hasMore = false;
+                    }
+
+                    $page++;
+                } catch (\Exception $e) {
+                    Log::error('HEMIS curriculum-subject-teacher-list API istisno', [
+                        'message' => $e->getMessage(),
+                        'employee_hemis_id' => $employeeHemisId,
+                    ]);
+                    break;
+                }
+            }
+
+            return [
+                'subject_ids' => array_unique($subjectIds),
+                'group_ids' => array_unique($groupIds),
+            ];
+        });
     }
 }

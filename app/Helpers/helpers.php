@@ -84,6 +84,45 @@ if (!function_exists('get_dekan_faculty_id')) {
     }
 }
 
+if (!function_exists('is_active_oqituvchi')) {
+    /**
+     * Joriy foydalanuvchining faol roli o'qituvchi ekanligini tekshirish
+     */
+    function is_active_oqituvchi(): bool
+    {
+        $user = auth()->user();
+        if (!$user) return false;
+
+        $roles = $user->getRoleNames()->toArray();
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        return $activeRole === 'oqituvchi';
+    }
+}
+
+if (!function_exists('get_teacher_hemis_id')) {
+    /**
+     * Joriy foydalanuvchining HEMIS ID sini olish (Teacher model uchun)
+     */
+    function get_teacher_hemis_id(): ?int
+    {
+        $user = auth()->user();
+        if (!$user) return null;
+
+        // Teacher guard orqali kirgan bo'lsa
+        if ($user instanceof \App\Models\Teacher) {
+            return $user->hemis_id;
+        }
+
+        // Web guard orqali kirgan bo'lsa, teachers jadvalidan qidirish
+        $teacher = \App\Models\Teacher::where('login', $user->email)->first();
+        return $teacher?->hemis_id;
+    }
+}
+
 if (!function_exists('format_date')) {
     /**
      * Sanani dd.mm.yyyy formatda chiqarish

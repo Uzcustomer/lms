@@ -2165,7 +2165,14 @@ class ReportController extends Controller
             }
 
             if ($request->filled('education_type')) {
-                $scheduleQuery->where('sch.education_type_code', $request->education_type);
+                $educationGroupIds = DB::table('groups')
+                    ->whereIn('curriculum_hemis_id',
+                        Curriculum::where('education_type_code', $request->education_type)
+                            ->pluck('curricula_hemis_id')
+                    )
+                    ->pluck('group_hemis_id')
+                    ->toArray();
+                $scheduleQuery->whereIn('sch.group_id', $educationGroupIds);
             }
             if ($request->filled('semester_code')) {
                 $scheduleQuery->where('sch.semester_code', $request->semester_code);

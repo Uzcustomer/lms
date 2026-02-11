@@ -58,7 +58,7 @@ class StudentAuthController extends Controller
 
                 return redirect()->intended(route('student.dashboard'))->with('studentData', $studentData);
             } else {
-                return back()->withErrors(['login' => 'Talabaning ma\'lumotlarini olishda xatolik.']);
+                return back()->withErrors(['login' => 'Talabaning ma\'lumotlarini olishda xatolik.'])->onlyInput('login', '_profile');
             }
         } else {
             $student = Student::where('student_id_number', $request->login)->first();
@@ -83,7 +83,7 @@ class StudentAuthController extends Controller
                 return redirect()->intended(route('student.dashboard'));
             }
 
-            return back()->withErrors(['login' => "Login yoki parol noto'g'ri."]);
+            return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
         }
     }
 

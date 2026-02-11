@@ -569,6 +569,7 @@
                         </div>
                     @else
                         @php
+                            $isDekan = is_active_dekan();
                             $totalLectureDays = count($lectureLessonDates);
                             $lecturePairsByDate = collect($lectureColumns)
                                 ->groupBy('date')
@@ -1121,7 +1122,7 @@
                                                 }
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < 60 && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
-                                            $inputDisabled = $hasGrade || !$hasFile;
+                                            $inputDisabled = $isDekan || $hasGrade || !$hasFile;
 
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade
                                             $urgency = 'none'; // none, fresh, warning, danger
@@ -1206,11 +1207,13 @@
                                                     <span style="color: #9ca3af; font-size: 12px;">—</span>
                                                 @elseif(!$hasGrade)
                                                     {{-- Has file, no grade yet: show Save button --}}
+                                                    @if(!$isDekan)
                                                     <button type="button"
                                                         onclick="saveMtGrade('{{ $student->hemis_id }}')"
                                                         style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                                                         Saqlash
                                                     </button>
+                                                    @endif
                                                 @elseif($isLockedPermanent)
                                                     {{-- Grade >= 60: permanently locked --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #dcfce7; color: #15803d; border-radius: 6px;">
@@ -1218,11 +1221,13 @@
                                                     </span>
                                                 @elseif($canRegrade)
                                                     {{-- Grade < 60, student resubmitted: can regrade --}}
+                                                    @if(!$isDekan)
                                                     <button type="button"
                                                         onclick="startRegrade('{{ $student->hemis_id }}')"
                                                         style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #f97316; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                                                         Qayta baholash
                                                     </button>
+                                                    @endif
                                                 @elseif($hasGrade && $manualGrade < 60 && $currentAttempt <= $mtMaxResubmissions)
                                                     {{-- Grade < 60, waiting for student to resubmit --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #fef9c3; color: #92400e; border-radius: 6px;">

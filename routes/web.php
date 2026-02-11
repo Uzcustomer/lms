@@ -232,6 +232,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/load-vs-pair/data', [ReportController::class, 'loadVsPairReportData'])->name('reports.load-vs-pair.data');
 
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
+        Route::get('/reports/debtors/data', [ReportController::class, 'debtorsReportData'])->name('reports.debtors.data');
 
         Route::get('/reports/sababli-check', [ReportController::class, 'sababliCheckReport'])->name('reports.sababli-check');
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');

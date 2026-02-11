@@ -7,7 +7,8 @@
 
         <title>TDTU Termiz filiali mark platformasi</title>
 
-        <link rel="icon" href="{{ asset('logo.png') }}" type="image/png">
+        <link rel="icon" href="{{ asset('favicon.png') }}" type="image/png">
+        <link rel="shortcut icon" href="{{ asset('favicon.ico') }}">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

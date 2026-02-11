@@ -44,34 +44,46 @@ class ImportTeachers extends Command
             $this->info("Processing page $page of $totalPages...");
 
             foreach ($employees as $employeeData) {
+                // Dekan roliga ega xodimning department_hemis_id sini
+                // ustiga yozmaslik uchun avval mavjud teacherni tekshiramiz
+                $existingTeacher = Teacher::where('employee_id_number', $employeeData['employee_id_number'])->first();
+                $isDean = $existingTeacher && $existingTeacher->hasRole(ProjectRole::DEAN->value);
+
+                $updateData = [
+                    'hemis_id' => $employeeData['id'],
+                    'meta_id' => $employeeData['meta_id'],
+                    'full_name' => $employeeData['full_name'],
+                    'short_name' => $employeeData['short_name'],
+                    'first_name' => $employeeData['first_name'],
+                    'second_name' => $employeeData['second_name'],
+                    'third_name' => $employeeData['third_name'] ?? null,
+                    'birth_date' => date('Y-m-d', $employeeData['birth_date']),
+                    'image' => $employeeData['image'] ?? null,
+                    'year_of_enter' => $employeeData['year_of_enter'],
+                    'specialty' => $employeeData['specialty'] ?? null,
+                    'gender' => $employeeData['gender']['name'] ?? null,
+                    'department' => $employeeData['department']['name'] ?? null,
+                    'employment_form' => $employeeData['employmentForm']['name'] ?? null,
+                    'employment_staff' => $employeeData['employmentStaff']['name'] ?? null,
+                    'staff_position' => $employeeData['staffPosition']['name'] ?? null,
+                    'employee_status' => $employeeData['employeeStatus']['name'] ?? null,
+                    'employee_type' => $employeeData['employeeType']['name'] ?? null,
+                    'contract_number' => $employeeData['contract_number'],
+                    'decree_number' => $employeeData['decree_number'] ?? 0,
+                    'contract_date' => date('Y-m-d', $employeeData['contract_date']),
+                    'decree_date' => date('Y-m-d', $employeeData['decree_date']),
+                    'is_active' => true,
+                ];
+
+                // Dekan bo'lmagan xodimlar uchun department_hemis_id ni HEMIS'dan yangilaymiz
+                // Dekan bo'lsa — fakultet bog'lanishini saqlab qolamiz
+                if (!$isDean) {
+                    $updateData['department_hemis_id'] = $employeeData['department']['id'] ?? null;
+                }
+
                 $teacher = Teacher::updateOrCreate(
                     ['employee_id_number' => $employeeData['employee_id_number']],
-                    [
-                        'hemis_id' => $employeeData['id'],
-                        'meta_id' => $employeeData['meta_id'],
-                        'full_name' => $employeeData['full_name'],
-                        'short_name' => $employeeData['short_name'],
-                        'first_name' => $employeeData['first_name'],
-                        'second_name' => $employeeData['second_name'],
-                        'third_name' => $employeeData['third_name'] ?? null,
-                        'birth_date' => date('Y-m-d', $employeeData['birth_date']),
-                        'image' => $employeeData['image'] ?? null,
-                        'year_of_enter' => $employeeData['year_of_enter'],
-                        'specialty' => $employeeData['specialty'] ?? null,
-                        'gender' => $employeeData['gender']['name'] ?? null,
-                        'department' => $employeeData['department']['name'] ?? null,
-                        'department_hemis_id' => $employeeData['department']['id'] ?? null,
-                        'employment_form' => $employeeData['employmentForm']['name'] ?? null,
-                        'employment_staff' => $employeeData['employmentStaff']['name'] ?? null,
-                        'staff_position' => $employeeData['staffPosition']['name'] ?? null,
-                        'employee_status' => $employeeData['employeeStatus']['name'] ?? null,
-                        'employee_type' => $employeeData['employeeType']['name'] ?? null,
-                        'contract_number' => $employeeData['contract_number'],
-                        'decree_number' => $employeeData['decree_number'] ?? 0,
-                        'contract_date' => date('Y-m-d', $employeeData['contract_date']),
-                        'decree_date' => date('Y-m-d', $employeeData['decree_date']),
-                        'is_active' => true,
-                    ]
+                    $updateData
                 );
 
                 $importedEmployeeIds[] = $employeeData['employee_id_number'];

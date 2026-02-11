@@ -309,7 +309,7 @@
                         Rollarni boshqarish
                     </div>
                     <div class="card-body">
-                        <form action="{{ route('admin.teachers.update-roles', $teacher) }}" method="POST">
+                        <form action="{{ route('admin.teachers.update-roles', $teacher) }}" method="POST" onsubmit="return validateRolesForm()">
                             @csrf
                             @method('PUT')
                             <div class="roles-grid">
@@ -378,6 +378,19 @@
                 edit.style.display = 'none';
                 btn.classList.remove('contact-edit-active');
             }
+        }
+
+        function validateRolesForm() {
+            var dekanCheckbox = document.querySelector('input[value="dekan"]');
+            if (dekanCheckbox && dekanCheckbox.checked) {
+                var dept = document.getElementById('department_hemis_id');
+                if (!dept || !dept.value) {
+                    alert('Dekan roli uchun fakultetni tanlash majburiy!');
+                    dept.focus();
+                    return false;
+                }
+            }
+            return true;
         }
 
         function toggleRole(checkbox) {

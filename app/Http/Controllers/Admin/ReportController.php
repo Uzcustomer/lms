@@ -2299,7 +2299,7 @@ class ReportController extends Controller
             $deadlines = Deadline::all()->keyBy('level_code');
 
             // Vedomost ma'lumotlarini olish (oski_percent, test_percent, oraliq_percent)
-            $vedomosts = DB::table('vedomost')
+            $vedomosts = DB::table('vedomosts')
                 ->whereIn('semester_code', $validSemesterCodes)
                 ->select('group_name', 'subject_name', 'semester_code',
                     'oski_percent', 'test_percent', 'oraliq_percent',

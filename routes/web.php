@@ -267,14 +267,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{activityLog}', [ActivityLogController::class, 'show'])->name('show');
         });
 
-        Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
-
-    });
-
-    // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
-    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin'])->group(function () {
+        // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
         Route::post('/impersonate/student/{student}', [ImpersonateController::class, 'impersonateStudent'])->name('impersonate.student');
         Route::post('/impersonate/teacher/{teacher}', [ImpersonateController::class, 'impersonateTeacher'])->name('impersonate.teacher');
+
+        Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
+
     });
 
     // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari

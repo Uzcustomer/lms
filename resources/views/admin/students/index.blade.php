@@ -256,7 +256,7 @@
                                                         onclick="openResetModal('{{ $student->id }}', '{{ addslashes($student->full_name) }}', '{{ $student->student_id_number }}')">
                                                     Parolni tiklash
                                                 </button>
-                                                @if(auth()->guard('web')->user()?->hasRole('superadmin'))
+                                                @if(auth()->user()?->hasRole('superadmin'))
                                                     <form action="{{ route('admin.impersonate.student', $student->id) }}" method="POST" onsubmit="return confirm('{{ addslashes($student->full_name) }} sifatida tizimga kirasizmi?')">
                                                         @csrf
                                                         <button type="submit"

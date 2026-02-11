@@ -178,7 +178,8 @@
                     <input type="hidden" name="phone" :value="'+' + selectedCode + phoneNumber">
                 </div>
                 <button type="submit"
-                        class="w-full inline-flex justify-center items-center px-3 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+                        style="width:100%; padding:12px 16px; font-size:16px; font-weight:600; color:#fff; background-color:#2563eb; border:none; border-radius:8px; cursor:pointer; transition:background-color 0.15s;"
+                        onmouseover="this.style.backgroundColor='#1d4ed8'" onmouseout="this.style.backgroundColor='#2563eb'">
                     Saqlash va davom etish
                 </button>
             </form>

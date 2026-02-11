@@ -355,7 +355,7 @@ Route::prefix('student')->name('student.')->group(function () {
     });
 });
 
-Route::prefix('teacher')->name('teacher.')->middleware(['web'])->group(function () {
+Route::prefix('teacher')->name('teacher.')->group(function () {
     Route::middleware('guest:teacher')->group(function () {
         Route::post('/login', [TeacherAuthController::class, 'login'])->name('login.post');
     });

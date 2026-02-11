@@ -267,7 +267,7 @@ class StudentAuthController extends Controller
 
         $changedPasswordDays = (int) Setting::get('changed_password_days', 30);
 
-        $student->local_password = Hash::make($request->password);
+        $student->local_password = $request->password;
         $student->local_password_expires_at = now()->addDays($changedPasswordDays);
         $student->must_change_password = false;
         $student->save();

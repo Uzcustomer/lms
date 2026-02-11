@@ -7,7 +7,6 @@ use App\Models\Group;
 use App\Models\Teacher;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 
 class ImportTeachers extends Command
@@ -81,7 +80,7 @@ class ImportTeachers extends Command
                     $teacher->save();
                 }
                 if (!$teacher->password) {
-                    $teacher->password = Hash::make('12345678');
+                    $teacher->password = '12345678';
                     $teacher->save();
                 }
 

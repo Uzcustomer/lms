@@ -240,7 +240,7 @@ class TeacherAuthController extends Controller
         ]);
 
         $teacher = Auth::guard('teacher')->user();
-        $teacher->password = Hash::make($request->password);
+        $teacher->password = $request->password;
         $teacher->must_change_password = false;
         $teacher->save();
 
@@ -338,7 +338,7 @@ class TeacherAuthController extends Controller
         }
 
         $teacher->login = $request->login;
-        $teacher->password = Hash::make($request->password);
+        $teacher->password = $request->password;
         $teacher->save();
 
         return back()->with('success', 'Login va parol muvaffaqiyatli yangilandi.');

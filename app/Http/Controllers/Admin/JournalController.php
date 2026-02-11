@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
+use App\Models\CurriculumSubjectTeacher;
 use App\Models\Department;
 use App\Models\Group;
 use App\Models\Semester;
@@ -19,6 +20,19 @@ class JournalController extends Controller
     {
         // Dekan uchun fakultet cheklovi
         $dekanFacultyIds = get_dekan_faculty_ids();
+
+        // O'qituvchi uchun fanga biriktirilgan cheklovi
+        $isOqituvchi = is_active_oqituvchi();
+        $teacherSubjectIds = [];
+        $teacherGroupIds = [];
+        if ($isOqituvchi) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+                $teacherSubjectIds = $assignments['subject_ids'];
+                $teacherGroupIds = $assignments['group_ids'];
+            }
+        }
 
         // Get filter options for dropdowns
         $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
@@ -83,6 +97,10 @@ class JournalController extends Controller
         } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
+        if ($isOqituvchi && !empty($teacherSubjectIds)) {
+            $kafedraQuery->whereIn('cs.subject_id', $teacherSubjectIds);
+        }
         if ($request->get('current_semester', '1') == '1') {
             $kafedraQuery->where('s.current', true);
         }
@@ -130,6 +148,14 @@ class JournalController extends Controller
             }
         } elseif ($request->filled('faculty')) {
             $query->where('f.id', $request->faculty);
+        }
+
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar va guruhlar
+        if ($isOqituvchi && !empty($teacherSubjectIds)) {
+            $query->whereIn('cs.subject_id', $teacherSubjectIds);
+        }
+        if ($isOqituvchi && !empty($teacherGroupIds)) {
+            $query->whereIn('g.group_hemis_id', $teacherGroupIds);
         }
 
         if ($request->filled('department')) {
@@ -193,7 +219,8 @@ class JournalController extends Controller
             'kafedras',
             'sortColumn',
             'sortDirection',
-            'dekanFacultyIds'
+            'dekanFacultyIds',
+            'isOqituvchi'
         ));
     }
 
@@ -1604,6 +1631,17 @@ class JournalController extends Controller
             $query->where('s.current', true);
         }
 
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
+        if (is_active_oqituvchi()) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+                if (!empty($assignments['subject_ids'])) {
+                    $query->whereIn('cs.subject_id', $assignments['subject_ids']);
+                }
+            }
+        }
+
         return $query->select('cs.subject_id', 'cs.subject_name')
             ->groupBy('cs.subject_id', 'cs.subject_name')
             ->orderBy('cs.subject_name')
@@ -1676,6 +1714,17 @@ class JournalController extends Controller
             $curriculaIds = CurriculumSubject::where('subject_id', $request->subject_id)
                 ->pluck('curricula_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // O'qituvchi uchun faqat o'zi o'tadigan guruhlar
+        if (is_active_oqituvchi()) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+                if (!empty($assignments['group_ids'])) {
+                    $query->whereIn('group_hemis_id', $assignments['group_ids']);
+                }
+            }
         }
 
         return $query->select('id', 'name')
@@ -2060,6 +2109,16 @@ class JournalController extends Controller
         // Dekan uchun fakultet cheklovi
         $dekanFacultyIds = get_dekan_faculty_ids();
 
+        // O'qituvchi uchun fanga biriktirilgan cheklovi
+        $isOqituvchi = is_active_oqituvchi();
+        $teacherAssignments = ['subject_ids' => [], 'group_ids' => []];
+        if ($isOqituvchi) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $teacherAssignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+            }
+        }
+
         // Fakultet department_hemis_id (reused in multiple queries)
         $facultyDeptHemisId = null;
         if ($request->filled('faculty_id')) {
@@ -2168,6 +2227,10 @@ class JournalController extends Controller
                 }
             });
         }
+        // O'qituvchi uchun faqat o'zi o'tadigan guruhlar
+        if ($isOqituvchi && !empty($teacherAssignments['group_ids'])) {
+            $groupsQuery->whereIn('g.group_hemis_id', $teacherAssignments['group_ids']);
+        }
         $groups = $groupsQuery
             ->select('g.id', 'g.name')
             ->orderBy('g.name')
@@ -2198,6 +2261,10 @@ class JournalController extends Controller
         }
         if ($facultyDeptHemisId) {
             $subjectsQuery->where('g.department_hemis_id', $facultyDeptHemisId);
+        }
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
+        if ($isOqituvchi && !empty($teacherAssignments['subject_ids'])) {
+            $subjectsQuery->whereIn('cs.subject_id', $teacherAssignments['subject_ids']);
         }
         $subjects = $subjectsQuery
             ->select('cs.subject_id', 'cs.subject_name')
@@ -2240,5 +2307,22 @@ class JournalController extends Controller
             'teacher_data' => $teacherData,
             'kafedra_name' => $kafedraName,
         ]);
+    }
+
+    /**
+     * O'qituvchiga biriktirilgan fanlar va guruhlarni lokal jadvaldan olish.
+     * curriculum_subject_teachers jadvalidagi ma'lumotdan foydalanadi.
+     *
+     * @param int $employeeHemisId O'qituvchining HEMIS ID si
+     * @return array ['subject_ids' => [...], 'group_ids' => [...]]
+     */
+    private function getTeacherSubjectAssignments(int $employeeHemisId): array
+    {
+        $records = CurriculumSubjectTeacher::where('employee_id', $employeeHemisId)->get();
+
+        return [
+            'subject_ids' => $records->pluck('subject_id')->unique()->filter()->values()->toArray(),
+            'group_ids' => $records->pluck('group_id')->unique()->filter()->values()->toArray(),
+        ];
     }
 }

@@ -57,7 +57,7 @@ if (!function_exists('get_dekan_faculties')) {
 
 if (!function_exists('get_dekan_faculty_ids')) {
     /**
-     * Dekan foydalanuvchining barcha fakultet department_hemis_id lari
+     * Dekan foydalanuvchining barcha fakultet id (departments.id) lari
      *
      * @return array
      */
@@ -67,7 +67,7 @@ if (!function_exists('get_dekan_faculty_ids')) {
 
         $user = auth()->user();
 
-        return $user->dean_faculty_ids;
+        return $user->deanFaculties()->pluck('departments.id')->toArray();
     }
 }
 

@@ -123,7 +123,7 @@ class JournalController extends Controller
 
         // Dekan uchun fakultet majburiy filtr
         if (!empty($dekanFacultyIds)) {
-            if ($request->filled('faculty') && in_array($request->faculty, $dekanFacultyIds)) {
+            if ($request->filled('faculty') && in_array((int) $request->faculty, $dekanFacultyIds)) {
                 $query->where('f.id', $request->faculty);
             } else {
                 $query->whereIn('f.id', $dekanFacultyIds);

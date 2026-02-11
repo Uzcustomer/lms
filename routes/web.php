@@ -26,6 +26,8 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\ImpersonateController;
+use App\Http\Controllers\MoodleImportController;
+
 
 Route::get('/', function () {
     return view('welcome');
@@ -461,8 +463,13 @@ Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 });
 
+// Moodle → LMSTTATF sync endpoint (server-to-server)
+Route::post('/moodle/import', [MoodleImportController::class, 'import'])
+    ->name('moodle.import');
+
 // Telegram bot webhook (CSRF excluded in bootstrap/app.php)
 Route::post('/telegram/webhook/{token}', [\App\Http\Controllers\TelegramWebhookController::class, 'handle'])
     ->name('telegram.webhook');
+
 
 require __DIR__ . '/auth.php';

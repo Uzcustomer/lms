@@ -2,11 +2,11 @@
     <!-- Tabs -->
     <div class="flex mb-6 border-b border-gray-200 dark:border-gray-700">
         <a href="{{ route('student.login') }}"
-           class="flex-1 text-center py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded-t-lg transition">
+           class="flex-1 text-center py-2.5 text-sm font-medium border-b-2 border-transparent text-blue-400 dark:text-blue-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-t-lg transition">
             Talaba
         </a>
         <a href="{{ route('teacher.login') }}"
-           class="flex-1 text-center py-2.5 text-sm font-semibold border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-t-lg">
+           class="flex-1 text-center py-2.5 text-sm font-semibold border-b-2 border-blue-600 text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 rounded-t-lg">
             Xodim
         </a>
     </div>

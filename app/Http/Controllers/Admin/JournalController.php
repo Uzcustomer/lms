@@ -5,15 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
+use App\Models\CurriculumSubjectTeacher;
 use App\Models\Department;
 use App\Models\Group;
 use App\Models\Semester;
 use App\Models\Specialty;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 class JournalController extends Controller
 {
@@ -2311,87 +2310,19 @@ class JournalController extends Controller
     }
 
     /**
-     * O'qituvchiga biriktirilgan fanlar ro'yxatini HEMIS API dan olish.
-     * /v1/data/curriculum-subject-teacher-list API dan foydalanadi.
+     * O'qituvchiga biriktirilgan fanlar va guruhlarni lokal jadvaldan olish.
+     * curriculum_subject_teachers jadvalidagi ma'lumotdan foydalanadi.
      *
      * @param int $employeeHemisId O'qituvchining HEMIS ID si
-     * @return array ['subject_ids' => [...], 'group_ids' => [...]] yoki bo'sh array
+     * @return array ['subject_ids' => [...], 'group_ids' => [...]]
      */
     private function getTeacherSubjectAssignments(int $employeeHemisId): array
     {
-        $cacheKey = "teacher_subject_assignments_{$employeeHemisId}";
+        $records = CurriculumSubjectTeacher::where('employee_id', $employeeHemisId)->get();
 
-        return Cache::remember($cacheKey, now()->addMinutes(30), function () use ($employeeHemisId) {
-            $baseUrl = rtrim(config('services.hemis.base_url', 'https://student.ttatf.uz/rest/v1/'), '/');
-            $token = config('services.hemis.token');
-
-            $subjectIds = [];
-            $groupIds = [];
-            $page = 1;
-            $hasMore = true;
-
-            while ($hasMore) {
-                try {
-                    $response = Http::withoutVerifying()
-                        ->withToken($token)
-                        ->timeout(30)
-                        ->get($baseUrl . '/data/curriculum-subject-teacher-list', [
-                            'page' => $page,
-                            'limit' => 200,
-                        ]);
-
-                    if (!$response->successful()) {
-                        Log::warning('HEMIS curriculum-subject-teacher-list API xatolik', [
-                            'status' => $response->status(),
-                            'employee_hemis_id' => $employeeHemisId,
-                        ]);
-                        break;
-                    }
-
-                    $data = $response->json();
-
-                    if (!($data['success'] ?? false) || empty($data['data']['items'])) {
-                        break;
-                    }
-
-                    foreach ($data['data']['items'] as $item) {
-                        $itemEmployeeId = $item['employee']['id'] ?? null;
-
-                        if ((int) $itemEmployeeId === $employeeHemisId) {
-                            if (isset($item['subject']['id'])) {
-                                $subjectIds[] = (int) $item['subject']['id'];
-                            }
-                            if (isset($item['_group'])) {
-                                $groupIds[] = (int) $item['_group'];
-                            }
-                        }
-                    }
-
-                    $pagination = $data['data']['pagination'] ?? null;
-                    if (is_array($pagination)) {
-                        $pagination = $pagination[0] ?? $pagination;
-                    }
-
-                    if ($pagination && isset($pagination['page'], $pagination['pageCount'])) {
-                        $hasMore = $pagination['page'] < $pagination['pageCount'];
-                    } else {
-                        $hasMore = false;
-                    }
-
-                    $page++;
-                } catch (\Exception $e) {
-                    Log::error('HEMIS curriculum-subject-teacher-list API istisno', [
-                        'message' => $e->getMessage(),
-                        'employee_hemis_id' => $employeeHemisId,
-                    ]);
-                    break;
-                }
-            }
-
-            return [
-                'subject_ids' => array_unique($subjectIds),
-                'group_ids' => array_unique($groupIds),
-            ];
-        });
+        return [
+            'subject_ids' => $records->pluck('subject_id')->unique()->filter()->values()->toArray(),
+            'group_ids' => $records->pluck('group_id')->unique()->filter()->values()->toArray(),
+        ];
     }
 }

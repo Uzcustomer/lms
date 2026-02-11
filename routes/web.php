@@ -290,6 +290,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/synchronize/students', [DashboardController::class, 'importStudents'])->name('synchronize.students');
         Route::post('/synchronize/teachers', [DashboardController::class, 'importTeachers'])->name('synchronize.teachers');
         Route::post('/synchronize/attendance-controls', [DashboardController::class, 'importAttendanceControls'])->name('synchronize.attendance-controls');
+        Route::post('/synchronize/curriculum-subject-teachers', [DashboardController::class, 'importCurriculumSubjectTeachers'])->name('synchronize.curriculum-subject-teachers');
     });
 });
 

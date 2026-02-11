@@ -43,6 +43,16 @@
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $studentGrade->student->group_name }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $studentGrade->curriculumSubject()->subject_name }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            @if(session('impersonating'))
+                                                <form action="{{ route('impersonate.switch-to-student', $studentGrade->student_id) }}" method="POST" onsubmit="return confirm('{{ addslashes($studentGrade->student->full_name) }} sifatida tizimga kirasizmi?')">
+                                                    @csrf
+                                                    <button type="submit"
+                                                            class="px-2 py-1 text-xs rounded"
+                                                            style="background-color: #3b82f6; color: white;">
+                                                        Login as
+                                                    </button>
+                                                </form>
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforeach

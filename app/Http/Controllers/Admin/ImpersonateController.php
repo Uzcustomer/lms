@@ -74,6 +74,43 @@ class ImpersonateController extends Controller
     }
 
     /**
+     * Impersonatsiya paytida teacher'dan student'ga o'tish.
+     */
+    public function switchToStudent(Student $student): RedirectResponse
+    {
+        if (!session('impersonating') || !session('impersonator_id')) {
+            abort(403);
+        }
+
+        $impersonatorId = session('impersonator_id');
+
+        // Joriy guard'dan chiqish (teacher)
+        foreach (['student', 'teacher'] as $guard) {
+            if (Auth::guard($guard)->check()) {
+                Auth::guard($guard)->logout();
+            }
+        }
+
+        ActivityLogService::log(
+            'impersonate',
+            'auth',
+            "Talaba sifatida kirdi (o'tish): {$student->full_name} (ID: {$student->student_id_number})",
+            $student
+        );
+
+        session([
+            'impersonating' => true,
+            'impersonator_id' => $impersonatorId,
+            'impersonator_guard' => 'web',
+            'impersonated_name' => $student->full_name,
+        ]);
+
+        Auth::guard('student')->login($student);
+
+        return redirect()->route('student.dashboard');
+    }
+
+    /**
      * Impersonatsiyani to'xtatish — asl superadmin hisobiga qaytish.
      */
     public function stopImpersonation(): RedirectResponse

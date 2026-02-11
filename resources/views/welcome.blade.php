@@ -19,7 +19,7 @@
         }
         .input-group {
             position: relative;
-            border-left: 3px solid #f97316;
+            border-left: 3px solid #3b82f6;
             background: #fff;
             border-radius: 0 8px 8px 0;
             overflow: hidden;
@@ -87,25 +87,25 @@
         }
         .role-btn:active { transform: translateY(0); }
         .role-btn-student-active {
-            background: #10b981;
+            background: #1e40af;
             color: #fff;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+            box-shadow: 0 4px 12px rgba(30, 64, 175, 0.35);
         }
         .role-btn-student-inactive {
-            background: #ecfdf5;
-            color: #059669;
+            background: #dbeafe;
+            color: #1e40af;
         }
-        .role-btn-student-inactive:hover { background: #d1fae5; }
+        .role-btn-student-inactive:hover { background: #bfdbfe; }
         .role-btn-teacher-active {
-            background: #f59e0b;
+            background: #1e40af;
             color: #fff;
-            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+            box-shadow: 0 4px 12px rgba(30, 64, 175, 0.35);
         }
         .role-btn-teacher-inactive {
-            background: #fffbeb;
-            color: #d97706;
+            background: #dbeafe;
+            color: #1e40af;
         }
-        .role-btn-teacher-inactive:hover { background: #fef3c7; }
+        .role-btn-teacher-inactive:hover { background: #bfdbfe; }
         .role-btn-admin-active {
             background: #8b5cf6;
             color: #fff;
@@ -121,10 +121,10 @@
 <body class="bg-slate-50 antialiased">
 
 <div class="min-h-screen flex items-center justify-center p-4" x-data="{
-    tab: '{{ old('_profile', 'student') }}',
+    tab: '{{ old('_profile') }}' || localStorage.getItem('lastLoginTab') || 'student',
     c: 0, adm: false,
     tap() { this.c++; if(this.c>=5){this.adm=true;this.tab='admin';} }
-}">
+}" x-init="$watch('tab', val => localStorage.setItem('lastLoginTab', val))">
     <div class="login-card">
 
         {{-- Logo --}}

@@ -86,20 +86,15 @@ if (!function_exists('get_dekan_faculty_id')) {
 
 if (!function_exists('is_active_oqituvchi')) {
     /**
-     * Joriy foydalanuvchining faol roli o'qituvchi ekanligini tekshirish.
-     * Teacher guard va web guard uchun alohida tekshiradi (impersonatsiya uchun ham ishlaydi).
+     * Joriy foydalanuvchi o'qituvchi sifatida ishlayotganini tekshirish.
+     * Teacher guard orqali kirgan barcha foydalanuvchilar o'qituvchi hisoblanadi.
+     * Web guard uchun session('active_role') tekshiriladi.
      */
     function is_active_oqituvchi(): bool
     {
         // Teacher guard orqali kirilganmi tekshirish (impersonatsiya va oddiy kirish)
-        $teacher = auth()->guard('teacher')->user();
-        if ($teacher) {
-            $roles = $teacher->getRoleNames()->toArray();
-            $activeRole = session('active_role', $roles[0] ?? '');
-            if (!in_array($activeRole, $roles) && count($roles) > 0) {
-                $activeRole = $roles[0];
-            }
-            return $activeRole === 'oqituvchi';
+        if (auth()->guard('teacher')->check()) {
+            return true;
         }
 
         // Web guard orqali kirgan bo'lsa

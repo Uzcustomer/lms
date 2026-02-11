@@ -42,11 +42,16 @@ class JournalController extends Controller
 
         $selectedEducationType = $request->get('education_type');
         if (!$request->has('education_type')) {
-            $selectedEducationType = $educationTypes
-                ->first(function ($type) {
-                    return str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr');
-                })
-                ?->education_type_code;
+            if ($isOqituvchi && !empty($teacherSubjectIds)) {
+                // O'qituvchi uchun: ta'lim turi filtrini qo'llamaydi (barcha ta'lim turlari ko'rinadi)
+                $selectedEducationType = null;
+            } else {
+                $selectedEducationType = $educationTypes
+                    ->first(function ($type) {
+                        return str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr');
+                    })
+                    ?->education_type_code;
+            }
         }
 
         $educationYears = Curriculum::select('education_year_code', 'education_year_name')
@@ -86,7 +91,8 @@ class JournalController extends Controller
             ->whereNotNull('cs.department_id')
             ->whereNotNull('cs.department_name');
 
-        if ($selectedEducationType) {
+        // O'qituvchining fanlari mavjud bo'lsa, ta'lim turi filtrini qo'llamaydi
+        if (!($isOqituvchi && !empty($teacherSubjectIds)) && $selectedEducationType) {
             $kafedraQuery->where('c.education_type_code', $selectedEducationType);
         }
         if ($request->filled('education_year')) {
@@ -131,7 +137,8 @@ class JournalController extends Controller
             ->distinct();
 
         // Apply filters
-        if ($selectedEducationType) {
+        // O'qituvchining fanlari mavjud bo'lsa, ta'lim turi filtrini qo'llamaydi
+        if (!($isOqituvchi && !empty($teacherSubjectIds)) && $selectedEducationType) {
             $query->where('c.education_type_code', $selectedEducationType);
         }
 
@@ -1606,7 +1613,20 @@ class JournalController extends Controller
             ->where('g.department_active', true)
             ->where('g.active', true);
 
-        if ($request->filled('education_type')) {
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
+        $isOqituvchi = is_active_oqituvchi();
+        $teacherSubjectIds = [];
+        if ($isOqituvchi) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+                $teacherSubjectIds = $assignments['subject_ids'];
+            }
+        }
+
+        // O'qituvchining fanlari mavjud bo'lsa, ta'lim turi filtrini qo'llamaydi
+        // (chunki o'qituvchi bir nechta ta'lim turida dars berishi mumkin)
+        if (!($isOqituvchi && !empty($teacherSubjectIds)) && $request->filled('education_type')) {
             $query->where('c.education_type_code', $request->education_type);
         }
         if ($request->filled('education_year')) {
@@ -1631,15 +1651,8 @@ class JournalController extends Controller
             $query->where('s.current', true);
         }
 
-        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
-        if (is_active_oqituvchi()) {
-            $teacherHemisId = get_teacher_hemis_id();
-            if ($teacherHemisId) {
-                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
-                if (!empty($assignments['subject_ids'])) {
-                    $query->whereIn('cs.subject_id', $assignments['subject_ids']);
-                }
-            }
+        if ($isOqituvchi && !empty($teacherSubjectIds)) {
+            $query->whereIn('cs.subject_id', $teacherSubjectIds);
         }
 
         return $query->select('cs.subject_id', 'cs.subject_name')
@@ -1652,6 +1665,17 @@ class JournalController extends Controller
     public function getGroups(Request $request)
     {
         $query = Group::where('department_active', true)->where('active', true);
+
+        // O'qituvchi uchun faqat o'zi o'tadigan guruhlar
+        $isOqituvchi = is_active_oqituvchi();
+        $teacherGroupIds = [];
+        if ($isOqituvchi) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+                $teacherGroupIds = $assignments['group_ids'];
+            }
+        }
 
         if ($request->filled('faculty_id')) {
             $faculty = Department::find($request->faculty_id);
@@ -1673,7 +1697,8 @@ class JournalController extends Controller
         }
 
         // Ta'lim turi bo'yicha filtrlash (curriculum orqali)
-        if ($request->filled('education_type')) {
+        // O'qituvchining guruhlari mavjud bo'lsa, ta'lim turi filtrini qo'llamaydi
+        if (!($isOqituvchi && !empty($teacherGroupIds)) && $request->filled('education_type')) {
             $curriculaIds = Curriculum::where('education_type_code', $request->education_type)
                 ->pluck('curricula_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
@@ -1716,15 +1741,8 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // O'qituvchi uchun faqat o'zi o'tadigan guruhlar
-        if (is_active_oqituvchi()) {
-            $teacherHemisId = get_teacher_hemis_id();
-            if ($teacherHemisId) {
-                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
-                if (!empty($assignments['group_ids'])) {
-                    $query->whereIn('group_hemis_id', $assignments['group_ids']);
-                }
-            }
+        if ($isOqituvchi && !empty($teacherGroupIds)) {
+            $query->whereIn('group_hemis_id', $teacherGroupIds);
         }
 
         return $query->select('id', 'name')

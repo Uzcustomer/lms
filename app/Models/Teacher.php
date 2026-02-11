@@ -48,15 +48,19 @@ class Teacher extends Authenticatable
         'telegram_chat_id',
         'telegram_verification_code',
         'telegram_verified_at',
+        'login_code',
+        'login_code_expires_at',
     ];
 
     protected $hidden = [
         'password',
         'telegram_verification_code',
+        'login_code',
     ];
 
     protected $casts = [
         'telegram_verified_at' => 'datetime',
+        'login_code_expires_at' => 'datetime',
     ];
 
     /**

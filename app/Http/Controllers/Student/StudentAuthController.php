@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Services\ActivityLogService;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use App\Models\Student;
 use Illuminate\Support\Facades\Auth;
@@ -49,6 +50,11 @@ class StudentAuthController extends Controller
                     ]
                 );
 
+                // Telegram 2FA: agar foydalanuvchi Telegram tasdiqlangan bo'lsa
+                if ($student->telegram_chat_id) {
+                    return $this->sendLoginCode($student, $request);
+                }
+
                 Auth::guard('student')->login($student);
                 ActivityLogService::logLogin('student');
 
@@ -69,6 +75,11 @@ class StudentAuthController extends Controller
                 (!$student->local_password_expires_at || $student->local_password_expires_at->isFuture()) &&
                 Hash::check($request->password, $student->local_password)
             ) {
+                // Telegram 2FA: agar foydalanuvchi Telegram tasdiqlangan bo'lsa
+                if ($student->telegram_chat_id) {
+                    return $this->sendLoginCode($student, $request);
+                }
+
                 Auth::guard('student')->login($student);
                 ActivityLogService::logLogin('student');
 
@@ -85,6 +96,151 @@ class StudentAuthController extends Controller
 
             return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
         }
+    }
+
+    /**
+     * Login tasdiqlash kodini yaratib, Telegramga yuborish
+     */
+    private function sendLoginCode(Student $student, Request $request)
+    {
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        $student->login_code = $code;
+        $student->login_code_expires_at = now()->addMinutes(5);
+        $student->save();
+
+        $telegramService = new TelegramService();
+        $sent = $telegramService->sendToUser(
+            $student->telegram_chat_id,
+            "Tizimga kirish uchun tasdiqlash kodi: {$code}\n\nKod 5 daqiqa amal qiladi. Agar siz kirmoqchi bo'lmagan bo'lsangiz, bu xabarni e'tiborsiz qoldiring."
+        );
+
+        if (!$sent) {
+            // Telegram yuborilmasa, oddiy login qilish
+            Auth::guard('student')->login($student);
+            ActivityLogService::logLogin('student');
+
+            if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
+                return redirect()->route('student.complete-profile');
+            }
+
+            return redirect()->intended(route('student.dashboard'));
+        }
+
+        $request->session()->put('login_verify_student_id', $student->id);
+
+        return redirect()->route('student.verify-login');
+    }
+
+    /**
+     * Login tasdiqlash sahifasini ko'rsatish
+     */
+    public function showVerifyLogin(Request $request)
+    {
+        if (!$request->session()->has('login_verify_student_id')) {
+            return redirect()->route('student.login');
+        }
+
+        $student = Student::find($request->session()->get('login_verify_student_id'));
+        if (!$student) {
+            $request->session()->forget('login_verify_student_id');
+            return redirect()->route('student.login');
+        }
+
+        $maskedChat = substr($student->telegram_username ?? 'Telegram', 0, 3) . '***';
+
+        return view('auth.verify-login', [
+            'guard' => 'student',
+            'maskedContact' => $maskedChat,
+        ]);
+    }
+
+    /**
+     * Login tasdiqlash kodini tekshirish
+     */
+    public function verifyLoginCode(Request $request)
+    {
+        $request->validate([
+            'code' => ['required', 'string', 'size:6'],
+        ]);
+
+        $studentId = $request->session()->get('login_verify_student_id');
+        if (!$studentId) {
+            return redirect()->route('student.login')
+                ->withErrors(['code' => 'Sessiya tugagan. Qaytadan kiring.']);
+        }
+
+        $student = Student::find($studentId);
+        if (!$student) {
+            $request->session()->forget('login_verify_student_id');
+            return redirect()->route('student.login');
+        }
+
+        // Muddati tekshiruvi
+        if (!$student->login_code_expires_at || $student->login_code_expires_at->isPast()) {
+            $student->login_code = null;
+            $student->login_code_expires_at = null;
+            $student->save();
+            $request->session()->forget('login_verify_student_id');
+
+            return redirect()->route('student.login')
+                ->withErrors(['code' => 'Tasdiqlash kodi muddati tugagan. Qaytadan kiring.']);
+        }
+
+        // Kod tekshiruvi
+        if ($student->login_code !== $request->code) {
+            return back()->withErrors(['code' => 'Tasdiqlash kodi noto\'g\'ri.']);
+        }
+
+        // Tasdiqlash muvaffaqiyatli
+        $student->login_code = null;
+        $student->login_code_expires_at = null;
+        $student->save();
+
+        $request->session()->forget('login_verify_student_id');
+
+        Auth::guard('student')->login($student);
+        ActivityLogService::logLogin('student');
+
+        if ($student->must_change_password) {
+            return redirect()->route('student.password.edit');
+        }
+
+        if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
+            return redirect()->route('student.complete-profile');
+        }
+
+        return redirect()->intended(route('student.dashboard'));
+    }
+
+    /**
+     * Tasdiqlash kodini qayta yuborish
+     */
+    public function resendLoginCode(Request $request)
+    {
+        $studentId = $request->session()->get('login_verify_student_id');
+        if (!$studentId) {
+            return redirect()->route('student.login');
+        }
+
+        $student = Student::find($studentId);
+        if (!$student || !$student->telegram_chat_id) {
+            $request->session()->forget('login_verify_student_id');
+            return redirect()->route('student.login');
+        }
+
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $student->login_code = $code;
+        $student->login_code_expires_at = now()->addMinutes(5);
+        $student->save();
+
+        $telegramService = new TelegramService();
+        $telegramService->sendToUser(
+            $student->telegram_chat_id,
+            "Tizimga kirish uchun yangi tasdiqlash kodi: {$code}\n\nKod 5 daqiqa amal qiladi."
+        );
+
+        return back()->with('success', 'Yangi tasdiqlash kodi Telegramga yuborildi.');
     }
 
     public function editPassword()

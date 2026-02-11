@@ -313,6 +313,11 @@ Route::prefix('student')->name('student.')->group(function () {
         //        Route::post('/refresh-token', [StudentAuthController::class, 'refreshToken'])->name('refresh-token');
     });
 
+    // Telegram 2FA login tasdiqlash (auth kerak emas)
+    Route::get('/verify-login', [StudentAuthController::class, 'showVerifyLogin'])->name('verify-login');
+    Route::post('/verify-login', [StudentAuthController::class, 'verifyLoginCode'])->name('verify-login.post');
+    Route::post('/verify-login/resend', [StudentAuthController::class, 'resendLoginCode'])->name('verify-login.resend');
+
     Route::middleware(['auth:student'])->group(function () {
         Route::get('/change-password', [StudentAuthController::class, 'editPassword'])->name('password.edit');
         Route::put('/change-password', [StudentAuthController::class, 'updatePassword'])->name('password.update');
@@ -355,6 +360,11 @@ Route::prefix('teacher')->name('teacher.')->middleware(['web'])->group(function 
         Route::post('/login', [TeacherAuthController::class, 'login'])->name('login.post');
     });
     Route::get('/login', [TeacherAuthController::class, 'showLoginForm'])->name('login');
+
+    // Telegram 2FA login tasdiqlash (auth kerak emas)
+    Route::get('/verify-login', [TeacherAuthController::class, 'showVerifyLogin'])->name('verify-login');
+    Route::post('/verify-login', [TeacherAuthController::class, 'verifyLoginCode'])->name('verify-login.post');
+    Route::post('/verify-login/resend', [TeacherAuthController::class, 'resendLoginCode'])->name('verify-login.resend');
 
     Route::middleware(['auth:teacher'])->group(function () {
         Route::get('/force-change-password', [TeacherAuthController::class, 'showForceChangePassword'])->name('force-change-password');

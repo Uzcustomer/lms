@@ -43,6 +43,8 @@ class Student extends Authenticatable
         'telegram_chat_id',
         'telegram_verification_code',
         'telegram_verified_at',
+        'login_code',
+        'login_code_expires_at',
     ];
 
     protected $casts = [
@@ -55,12 +57,14 @@ class Student extends Authenticatable
         'local_password_expires_at' => 'datetime',
         'must_change_password' => 'boolean',
         'telegram_verified_at' => 'datetime',
+        'login_code_expires_at' => 'datetime',
     ];
 
     protected $hidden = [
         'local_password',
         'token',
         'telegram_verification_code',
+        'login_code',
     ];
 
     public function studentGrades()

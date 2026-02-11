@@ -60,6 +60,19 @@
                                         {{ \App\Enums\ProjectRole::tryFrom($role->name)?->label() ?? $role->name }}
                                     </span>
                                 @endforeach
+                                @if($teacher->hasRole('dekan') && $teacher->department_hemis_id)
+                                    @php
+                                        $deanFaculty = $departments->firstWhere('department_hemis_id', $teacher->department_hemis_id);
+                                    @endphp
+                                    @if($deanFaculty)
+                                        <span class="badge badge-dean-faculty">
+                                            <svg style="width: 12px; height: 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                                            </svg>
+                                            {{ $deanFaculty->name }}
+                                        </span>
+                                    @endif
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -98,6 +111,17 @@
                             <span class="info-label">Kafedra</span>
                             <span class="info-value">{{ $teacher->department ?? '-' }}</span>
                         </div>
+                        @if($teacher->hasRole('dekan') && $teacher->department_hemis_id)
+                            @php
+                                $deanFacultyInfo = $departments->firstWhere('department_hemis_id', $teacher->department_hemis_id);
+                            @endphp
+                            @if($deanFacultyInfo)
+                            <div class="info-row">
+                                <span class="info-label">Dekan fakulteti</span>
+                                <span class="info-value" style="color: #0369a1;">{{ $deanFacultyInfo->name }}</span>
+                            </div>
+                            @endif
+                        @endif
                         <div class="info-row">
                             <span class="info-label">Jinsi</span>
                             <span class="info-value">{{ $teacher->gender ?? '-' }}</span>
@@ -495,6 +519,14 @@
         .badge-yellow { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
         .badge-indigo {
             background: linear-gradient(135deg, #1a3268, #2b5ea7);
+            color: #ffffff;
+            border: none;
+        }
+        .badge-dean-faculty {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: linear-gradient(135deg, #0c4a6e, #0369a1);
             color: #ffffff;
             border: none;
         }

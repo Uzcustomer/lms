@@ -296,6 +296,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
 // Impersonatsiyani to'xtatish (har qanday guard'dan)
 Route::post('/stop-impersonation', [ImpersonateController::class, 'stopImpersonation'])->name('impersonate.stop');
 
+// Impersonatsiya paytida teacher'dan student'ga o'tish
+Route::post('/switch-impersonate/student/{student}', [ImpersonateController::class, 'switchToStudent'])->name('impersonate.switch-to-student');
+
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

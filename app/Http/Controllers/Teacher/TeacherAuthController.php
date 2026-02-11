@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -36,6 +37,7 @@ class TeacherAuthController extends Controller
 
         if (Auth::guard('teacher')->attempt($credentials)) {
             $request->session()->regenerate();
+            ActivityLogService::logLogin('teacher');
 
             $teacher = Auth::guard('teacher')->user();
             if ($teacher->must_change_password) {
@@ -56,6 +58,7 @@ class TeacherAuthController extends Controller
 
     public function logout(Request $request)
     {
+        ActivityLogService::logLogout('teacher');
         Auth::guard('teacher')->logout();
 
         $request->session()->invalidate();

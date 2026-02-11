@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use App\Models\Student;
 use Illuminate\Support\Facades\Auth;
@@ -49,6 +50,7 @@ class StudentAuthController extends Controller
                 );
 
                 Auth::guard('student')->login($student);
+                ActivityLogService::logLogin('student');
 
                 if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
                     return redirect()->route('student.complete-profile');
@@ -68,6 +70,7 @@ class StudentAuthController extends Controller
                 Hash::check($request->password, $student->local_password)
             ) {
                 Auth::guard('student')->login($student);
+                ActivityLogService::logLogin('student');
 
                 if ($student->must_change_password) {
                     return redirect()->route('student.password.edit');
@@ -207,6 +210,7 @@ class StudentAuthController extends Controller
 
     public function logout(Request $request)
     {
+        ActivityLogService::logLogout('student');
         $student = Auth::guard('student')->user();
         if ($student) {
             $student->token = null;

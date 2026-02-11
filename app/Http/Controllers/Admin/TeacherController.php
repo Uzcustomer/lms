@@ -7,6 +7,7 @@ use App\Exports\TeacherExport;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Teacher;
+use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -106,6 +107,8 @@ class TeacherController extends Controller
         $teacher->must_change_password = true;
         $teacher->save();
 
+        ActivityLogService::log('update', 'teacher', "Xodim paroli tiklandi: {$teacher->full_name}", $teacher);
+
         return redirect()->route('admin.teachers.show', $teacher)
             ->with('success', 'Parol tiklandi (' . $newPassword . '). Xodim keyingi kirishda parolni o\'zgartirishi kerak.');
     }
@@ -126,12 +129,19 @@ class TeacherController extends Controller
             Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
         }
 
+        $oldRoles = $teacher->getRoleNames()->toArray();
         $teacher->syncRoles($roles);
 
         $teacher->department_hemis_id = in_array(ProjectRole::DEAN->value, $roles)
             ? $request->department_hemis_id
             : null;
         $teacher->save();
+
+        ActivityLogService::log('update', 'teacher', "Xodim rollari yangilandi: {$teacher->full_name}", $teacher, [
+            'roles' => $oldRoles,
+        ], [
+            'roles' => $roles,
+        ]);
 
         return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Rollar muvaffaqiyatli yangilandi');
     }
@@ -159,6 +169,7 @@ class TeacherController extends Controller
 
     public function exportExcel(Request $request)
     {
+        ActivityLogService::log('export', 'teacher', 'Xodimlar ro\'yxati eksport qilindi');
         $export = new TeacherExport($request);
         $export->export();
     }
@@ -166,6 +177,7 @@ class TeacherController extends Controller
     public function importTeachers()
     {
         Artisan::call('import:teachers');
+        ActivityLogService::log('import', 'teacher', 'Xodimlar HEMIS dan import qilindi');
         return redirect()->back()->with('success', 'Xodimlar import qilindi');
     }
 }

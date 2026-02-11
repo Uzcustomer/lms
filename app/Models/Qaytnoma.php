@@ -2,10 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 
 class Qaytnoma extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'qaytnoma';
     protected $fillable = [
         'user_id',
         'department_hemis_id',

@@ -7,6 +7,7 @@ use App\Exports\StudentGradesExport;
 use App\Exports\StudentGradesExportAdmin;
 use App\Http\Controllers\Controller;
 use App\Imports\StudentGradeUpdateViaExcel;
+use App\Services\ActivityLogService;
 use App\Models\Attendance;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
@@ -705,6 +706,7 @@ class StudentController extends Controller
     }
     public function exportStudentGrades(Request $request)
     {
+        ActivityLogService::log('export', 'student_grade', 'Talaba baholari eksport qilindi');
         $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject']);
         return Excel::download(new StudentGradesExportAdmin($filters), 'student_grades.xlsx');
     }
@@ -718,6 +720,7 @@ class StudentController extends Controller
 
     public function exportStudentGradesBox(Request $request)
     {
+        ActivityLogService::log('export', 'student_grade', 'Talaba baholari (box) eksport qilindi');
         $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject']);
         $export = new StudentGradeBox($filters);
         return $export->export();
@@ -732,6 +735,7 @@ class StudentController extends Controller
 
         try {
             Excel::import(new StudentGradeUpdateViaExcel(), $request->file('file'));
+            ActivityLogService::log('import', 'student_grade', 'Talaba baholari Excel orqali import qilindi');
             return back()->with('success', 'Ma\'lumotlar muvaffaqiyatli yuklandi va qayta ishlandi.');
         } catch (\Exception $e) {
             return back()->with('error', 'Xatolik yuz berdi: ' . $e->getMessage());

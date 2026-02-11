@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Oski extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsActivity;
+
+    protected static string $activityModule = 'oski';
     protected $fillable = [
         'user_id',
         'department_hemis_id',

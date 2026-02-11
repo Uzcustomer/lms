@@ -7,6 +7,7 @@ use App\Jobs\ImportSchedulesPartiallyJob;
 use App\Models\Deadline;
 use App\Models\Setting;
 use App\Models\Student;
+use App\Services\ActivityLogService;
 use App\Services\TelegramService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -111,6 +112,7 @@ class DashboardController extends Controller
 
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Jadvallar sinxronizatsiyasi boshlandi ({$data['start_date']} — {$data['end_date']})");
 
+        ActivityLogService::log('import', 'schedule', "Jadvallar sinxronizatsiyasi boshlandi: {$data['start_date']} — {$data['end_date']}");
         ImportSchedulesPartiallyJob::dispatch(
             $data['start_date'],
             $data['end_date']
@@ -124,6 +126,7 @@ class DashboardController extends Controller
     public function importCurricula(): RedirectResponse
     {
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan O'quv rejalar sinxronizatsiyasi boshlandi");
+        ActivityLogService::log('import', 'curriculum', "O'quv rejalar sinxronizatsiyasi boshlandi");
         Artisan::queue('import:curricula');
         return back()->with('success', 'O\'quv rejalarini import qilish boshlandi (fon rejimida).');
     }
@@ -131,6 +134,7 @@ class DashboardController extends Controller
     public function importCurriculumSubjects(): RedirectResponse
     {
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan O'quv reja fanlari sinxronizatsiyasi boshlandi");
+        ActivityLogService::log('import', 'curriculum_subject', "O'quv reja fanlari sinxronizatsiyasi boshlandi");
         Artisan::queue('import:curriculum-subjects');
         return back()->with('success', 'O\'quv reja fanlarini import qilish boshlandi (fon rejimida).');
     }
@@ -138,6 +142,7 @@ class DashboardController extends Controller
     public function importGroups(): RedirectResponse
     {
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Guruhlar sinxronizatsiyasi boshlandi");
+        ActivityLogService::log('import', 'group', 'Guruhlar sinxronizatsiyasi boshlandi');
         Artisan::queue('import:groups');
         return back()->with('success', 'Guruhlarni import qilish boshlandi (fon rejimida).');
     }
@@ -145,6 +150,7 @@ class DashboardController extends Controller
     public function importSemesters(): RedirectResponse
     {
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Semestrlar sinxronizatsiyasi boshlandi");
+        ActivityLogService::log('import', 'semester', 'Semestrlar sinxronizatsiyasi boshlandi');
         Artisan::queue('import:semesters');
         return back()->with('success', 'Semestrlarni import qilish boshlandi (fon rejimida).');
     }
@@ -152,6 +158,7 @@ class DashboardController extends Controller
     public function importSpecialtiesDepartments(): RedirectResponse
     {
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Mutaxassislik/Kafedralar sinxronizatsiyasi boshlandi");
+        ActivityLogService::log('import', 'department', 'Mutaxassislik/Kafedralar sinxronizatsiyasi boshlandi');
         Artisan::queue('import:specialties-departments');
         return back()->with('success', 'Mutaxassislik va kafedralarni import qilish boshlandi (fon rejimida).');
     }
@@ -159,6 +166,7 @@ class DashboardController extends Controller
     public function importStudents(): RedirectResponse
     {
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Talabalar sinxronizatsiyasi boshlandi");
+        ActivityLogService::log('import', 'student', 'Talabalar sinxronizatsiyasi boshlandi');
         Artisan::queue('students:import');
         return back()->with('success', 'Talabalarni import qilish boshlandi (fon rejimida).');
     }
@@ -166,6 +174,7 @@ class DashboardController extends Controller
     public function importTeachers(): RedirectResponse
     {
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan O'qituvchilar sinxronizatsiyasi boshlandi");
+        ActivityLogService::log('import', 'teacher', "O'qituvchilar sinxronizatsiyasi boshlandi");
         Artisan::queue('import:teachers');
         return back()->with('success', 'O\'qituvchilarni import qilish boshlandi (fon rejimida).');
     }
@@ -173,6 +182,7 @@ class DashboardController extends Controller
     public function importAttendanceControls(): RedirectResponse
     {
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Davomat nazorati sinxronizatsiyasi boshlandi");
+        ActivityLogService::log('import', 'attendance', 'Davomat nazorati sinxronizatsiyasi boshlandi');
         Artisan::queue('import:attendance-controls');
         return back()->with('success', 'Davomat nazorati import qilish boshlandi (fon rejimida).');
     }

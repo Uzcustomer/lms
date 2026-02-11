@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Independent extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsActivity;
+
+    protected static string $activityModule = 'independent';
     protected $fillable = [
         'user_id',
         'teacher_hemis_id',

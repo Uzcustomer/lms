@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class OraliqNazorat extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsActivity;
+
+    protected static string $activityModule = 'oraliq_nazorat';
     protected $fillable = [
         'user_id',
         'teacher_hemis_id',

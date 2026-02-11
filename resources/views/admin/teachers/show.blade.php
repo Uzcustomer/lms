@@ -312,19 +312,23 @@
                         <form action="{{ route('admin.teachers.update-roles', $teacher) }}" method="POST" onsubmit="return validateRolesForm()">
                             @csrf
                             @method('PUT')
+                            @php
+                                $oldRoles = old('roles', $teacher->getRoleNames()->toArray());
+                            @endphp
                             <div class="roles-grid">
                                 @foreach($roles as $role)
-                                    <label class="role-card {{ $teacher->hasRole($role->value) ? 'role-active' : '' }}">
+                                    @php $isChecked = in_array($role->value, $oldRoles); @endphp
+                                    <label class="role-card {{ $isChecked ? 'role-active' : '' }}">
                                         <input type="checkbox" name="roles[]" value="{{ $role->value }}"
-                                               {{ $teacher->hasRole($role->value) ? 'checked' : '' }}
+                                               {{ $isChecked ? 'checked' : '' }}
                                                onchange="toggleRole(this)" style="display: none;">
-                                        <div class="role-icon {{ $teacher->hasRole($role->value) ? 'role-icon-active' : '' }}" data-icon>
+                                        <div class="role-icon {{ $isChecked ? 'role-icon-active' : '' }}" data-icon>
                                             <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                                             </svg>
                                         </div>
                                         <span class="role-name">{{ $role->label() }}</span>
-                                        <div class="check-indicator {{ $teacher->hasRole($role->value) ? '' : 'hidden' }}">
+                                        <div class="check-indicator {{ $isChecked ? '' : 'hidden' }}">
                                             <svg style="width: 14px; height: 14px; color: #f59e0b;" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                             </svg>
@@ -340,7 +344,7 @@
                                         <option value="">-- Tanlang --</option>
                                         @foreach($departments as $department)
                                             <option value="{{ $department->department_hemis_id }}"
-                                                {{ $teacher->department_hemis_id == $department->department_hemis_id ? 'selected' : '' }}>
+                                                {{ old('department_hemis_id', $teacher->department_hemis_id) == $department->department_hemis_id ? 'selected' : '' }}>
                                                 {{ $department->name }}
                                             </option>
                                         @endforeach

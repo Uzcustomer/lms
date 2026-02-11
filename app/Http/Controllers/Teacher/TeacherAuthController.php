@@ -52,8 +52,8 @@ class TeacherAuthController extends Controller
         }
 
         return back()->withErrors([
-            'login' => 'The provided credentials do not match our records.',
-        ]);
+            'login' => "Login yoki parol noto'g'ri.",
+        ])->onlyInput('login', '_profile');
     }
 
     public function logout(Request $request)

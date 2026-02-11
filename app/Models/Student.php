@@ -54,6 +54,7 @@ class Student extends Authenticatable
         'total_credit' => 'decimal:2',
         'hemis_created_at' => 'datetime',
         'hemis_updated_at' => 'datetime',
+        'local_password' => 'hashed',
         'local_password_expires_at' => 'datetime',
         'must_change_password' => 'boolean',
         'telegram_verified_at' => 'datetime',

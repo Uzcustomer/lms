@@ -11,7 +11,6 @@ use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 
 class TeacherController extends Controller
@@ -85,7 +84,7 @@ class TeacherController extends Controller
 
         $teacher->login = $request->login;
         if ($request->filled('password')) {
-            $teacher->password = Hash::make($request->password);
+            $teacher->password = $request->password;
         }
         $teacher->status = $request->status;
         $teacher->save();
@@ -103,7 +102,7 @@ class TeacherController extends Controller
         $birthDate = Carbon::parse($teacher->birth_date);
         $newPassword = $birthDate->format('dmY'); // ddmmyyyy
 
-        $teacher->password = Hash::make($newPassword);
+        $teacher->password = $newPassword;
         $teacher->must_change_password = true;
         $teacher->save();
 

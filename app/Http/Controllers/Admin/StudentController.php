@@ -31,7 +31,6 @@ use Illuminate\Http\Request;
     use App\Services\StudentGradeService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
@@ -164,7 +163,7 @@ class StudentController extends Controller
 
             $tempDays = (int) Setting::get('temp_password_days', 3);
 
-            $student->local_password = Hash::make($temporaryPassword);
+            $student->local_password = $temporaryPassword;
             $student->local_password_expires_at = now()->addDays($tempDays);
             $student->must_change_password = true;
             $student->save();

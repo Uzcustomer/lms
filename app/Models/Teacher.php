@@ -59,6 +59,7 @@ class Teacher extends Authenticatable
     ];
 
     protected $casts = [
+        'password' => 'hashed',
         'telegram_verified_at' => 'datetime',
         'login_code_expires_at' => 'datetime',
     ];

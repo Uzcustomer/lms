@@ -35,25 +35,33 @@ class TeacherAuthController extends Controller
             'password' => ['required'],
         ]);
 
-        if (Auth::guard('teacher')->attempt($credentials)) {
-            $request->session()->regenerate();
-            ActivityLogService::logLogin('teacher');
+        $teacher = \App\Models\Teacher::where('login', $credentials['login'])->first();
 
-            $teacher = Auth::guard('teacher')->user();
-            if ($teacher->must_change_password) {
-                return redirect()->route('teacher.force-change-password');
-            }
-
-            if (!$teacher->isProfileComplete() || $teacher->isTelegramDeadlinePassed()) {
-                return redirect()->route('teacher.complete-profile');
-            }
-
-            return redirect()->intended(route('teacher.dashboard'));
+        if (!$teacher) {
+            return back()->withErrors([
+                'login' => "Bu login tizimda topilmadi.",
+            ])->onlyInput('login', '_profile');
         }
 
-        return back()->withErrors([
-            'login' => "Login yoki parol noto'g'ri.",
-        ])->onlyInput('login', '_profile');
+        if (!Hash::check($credentials['password'], $teacher->password)) {
+            return back()->withErrors([
+                'login' => "Parol noto'g'ri.",
+            ])->onlyInput('login', '_profile');
+        }
+
+        Auth::guard('teacher')->login($teacher);
+        $request->session()->regenerate();
+        ActivityLogService::logLogin('teacher');
+
+        if ($teacher->must_change_password) {
+            return redirect()->route('teacher.force-change-password');
+        }
+
+        if (!$teacher->isProfileComplete() || $teacher->isTelegramDeadlinePassed()) {
+            return redirect()->route('teacher.complete-profile');
+        }
+
+        return redirect()->intended(route('teacher.dashboard'));
     }
 
     public function logout(Request $request)

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Curriculum;
+use App\Models\Deadline;
 use App\Models\Setting;
 use App\Models\CurriculumSubject;
 use Carbon\Carbon;
@@ -2052,9 +2053,671 @@ class ReportController extends Controller
         ])->deleteFileAfterSend(true);
     }
 
-    public function debtorsReport()
+    /**
+     * 4 va undan ortiq qarzdorlar hisoboti sahifasi
+     */
+    public function debtorsReport(Request $request)
     {
-        return view('admin.reports.debtors');
+        $dekanFacultyId = get_dekan_faculty_id();
+
+        $facultyQuery = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name');
+
+        if ($dekanFacultyId) {
+            $facultyQuery->where('id', $dekanFacultyId);
+        }
+
+        $faculties = $facultyQuery->get();
+
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $selectedEducationType = $request->get('education_type');
+        if (!$request->has('education_type')) {
+            $selectedEducationType = $educationTypes
+                ->first(fn($type) => str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr'))
+                ?->education_type_code;
+        }
+
+        $kafedraQuery = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
+            ->whereNotNull('cs.department_id')
+            ->whereNotNull('cs.department_name');
+
+        if ($selectedEducationType) {
+            $kafedraQuery->where('c.education_type_code', $selectedEducationType);
+        }
+        if ($dekanFacultyId) {
+            $kafedraQuery->where('f.id', $dekanFacultyId);
+        } elseif ($request->filled('faculty')) {
+            $kafedraQuery->where('f.id', $request->faculty);
+        }
+        $kafedraQuery->where('s.current', true);
+
+        $kafedras = $kafedraQuery
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
+            ->get();
+
+        $studentStatuses = DB::table('students')
+            ->select('student_status_code', 'student_status_name')
+            ->whereNotNull('student_status_code')
+            ->groupBy('student_status_code', 'student_status_name')
+            ->orderBy('student_status_name')
+            ->get();
+
+        return view('admin.reports.debtors', compact(
+            'faculties',
+            'educationTypes',
+            'selectedEducationType',
+            'kafedras',
+            'studentStatuses',
+            'dekanFacultyId'
+        ));
+    }
+
+    /**
+     * AJAX: 4 va undan ortiq qarzdorlar hisobot ma'lumotlarini hisoblash
+     */
+    public function debtorsReportData(Request $request)
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyId]);
+        }
+
+        try {
+            ini_set('memory_limit', '512M');
+            set_time_limit(120);
+
+            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+            $minDebtCount = (int) $request->get('min_debt_count', 4);
+
+            // 1-QADAM: Schedule dan unique (group, subject, semester) olish
+            $scheduleQuery = DB::table('schedules as sch')
+                ->whereNotIn('sch.training_type_code', $excludedCodes)
+                ->whereNotNull('sch.lesson_date')
+                ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code')
+                ->distinct();
+
+            $isCurrentSemester = $request->get('current_semester', '1') == '1';
+            if ($isCurrentSemester) {
+                $scheduleQuery
+                    ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
+                    ->join('semesters as sem', function ($join) {
+                        $join->on('sem.code', '=', 'sch.semester_code')
+                            ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
+                    })
+                    ->where('sem.current', true)
+                    ->where('sch.education_year_current', true);
+            }
+
+            if ($request->filled('education_type')) {
+                $scheduleQuery->where('sch.education_type_code', $request->education_type);
+            }
+            if ($request->filled('semester_code')) {
+                $scheduleQuery->where('sch.semester_code', $request->semester_code);
+            }
+            if ($request->filled('group')) {
+                $scheduleQuery->where('sch.group_id', $request->group);
+            }
+            if ($request->filled('subject')) {
+                $scheduleQuery->where('sch.subject_id', $request->subject);
+            }
+            if ($request->filled('department')) {
+                $deptSubjectIds = DB::table('curriculum_subjects')
+                    ->where('department_id', $request->department)
+                    ->pluck('subject_id')
+                    ->unique()
+                    ->values()
+                    ->toArray();
+                if (!empty($deptSubjectIds)) {
+                    $scheduleQuery->whereIn('sch.subject_id', $deptSubjectIds);
+                }
+            }
+
+            $scheduleCombos = $scheduleQuery->get();
+            if ($scheduleCombos->isEmpty()) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $scheduleGroupIds = $scheduleCombos->pluck('group_id')->unique()->toArray();
+            $validSubjectIds = $scheduleCombos->pluck('subject_id')->unique()->toArray();
+            $validSemesterCodes = $scheduleCombos->pluck('semester_code')->unique()->toArray();
+
+            // Auditoriya soatlarini hisoblash
+            $groupsData = DB::table('groups')
+                ->whereIn('group_hemis_id', $scheduleGroupIds)
+                ->select('id', 'group_hemis_id', 'curriculum_hemis_id')
+                ->get();
+
+            $groupCurriculumMap = [];
+            $groupDbIdMap = [];
+            foreach ($groupsData as $g) {
+                $groupCurriculumMap[$g->group_hemis_id] = $g->curriculum_hemis_id;
+                $groupDbIdMap[$g->group_hemis_id] = $g->id;
+            }
+
+            $comboKeys = [];
+            foreach ($scheduleCombos as $row) {
+                $comboKeys[$row->group_id . '|' . $row->subject_id . '|' . $row->semester_code] = [
+                    'group_id' => $row->group_id,
+                    'subject_id' => $row->subject_id,
+                    'semester_code' => $row->semester_code,
+                ];
+            }
+
+            $curriculumSubjects = CurriculumSubject::whereIn('curricula_hemis_id', array_unique(array_values($groupCurriculumMap)))
+                ->whereIn('subject_id', $validSubjectIds)
+                ->whereIn('semester_code', $validSemesterCodes)
+                ->get()
+                ->keyBy(function ($item) {
+                    return $item->curricula_hemis_id . '|' . $item->subject_id . '|' . $item->semester_code;
+                });
+
+            $nonAuditoriumCodes = ['17'];
+            $auditoryHours = [];
+            foreach ($comboKeys as $comboKey => $combo) {
+                $currHemisId = $groupCurriculumMap[$combo['group_id']] ?? null;
+                if (!$currHemisId) continue;
+
+                $csKey = $currHemisId . '|' . $combo['subject_id'] . '|' . $combo['semester_code'];
+                $cs = $curriculumSubjects[$csKey] ?? null;
+                if (!$cs) continue;
+
+                $hours = 0;
+                if (is_array($cs->subject_details)) {
+                    foreach ($cs->subject_details as $detail) {
+                        $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                        if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                            $hours += (float) ($detail['academic_load'] ?? 0);
+                        }
+                    }
+                }
+                if ($hours <= 0) {
+                    $hours = (float) ($cs->total_acload ?? 0);
+                }
+
+                $auditoryHours[$comboKey] = $hours;
+            }
+
+            // 2-QADAM: Talabalar ro'yxati
+            $studentQuery = DB::table('students as s')
+                ->select('s.hemis_id', 's.group_id', 's.level_code', 's.student_status_code');
+
+            if ($request->filled('student_status')) {
+                $studentQuery->where('s.student_status_code', $request->student_status);
+            }
+            if ($request->filled('faculty')) {
+                $faculty = Department::find($request->faculty);
+                if ($faculty) {
+                    $studentQuery->where('s.department_id', $faculty->department_hemis_id);
+                }
+            }
+            if ($request->filled('specialty')) {
+                $studentQuery->where('s.specialty_id', $request->specialty);
+            }
+            if ($request->filled('level_code')) {
+                $studentQuery->where('s.level_code', $request->level_code);
+            }
+            if ($request->filled('group')) {
+                $studentQuery->where('s.group_id', $request->group);
+            }
+            if ($request->filled('education_type')) {
+                $studentQuery->where('s.education_type_code', $request->education_type);
+            }
+
+            $students = $studentQuery->whereIn('s.group_id', $scheduleGroupIds)->get();
+            if ($students->isEmpty()) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $studentHemisIds = $students->pluck('hemis_id')->toArray();
+            $studentGroupMap = $students->pluck('group_id', 'hemis_id')->toArray();
+            $studentLevelMap = $students->pluck('level_code', 'hemis_id')->toArray();
+
+            // Deadline ma'lumotlarini olish
+            $deadlines = Deadline::all()->keyBy('level_code');
+
+            // Vedomost ma'lumotlarini olish (oski_percent, test_percent, oraliq_percent)
+            $vedomosts = DB::table('vedomost')
+                ->whereIn('semester_code', $validSemesterCodes)
+                ->select('group_name', 'subject_name', 'semester_code',
+                    'oski_percent', 'test_percent', 'oraliq_percent',
+                    'jb_percent', 'independent_percent', 'shakl')
+                ->get();
+
+            $vedomostMap = [];
+            foreach ($vedomosts as $v) {
+                $vKey = $v->group_name . '|' . $v->subject_name . '|' . $v->semester_code;
+                if (!isset($vedomostMap[$vKey]) || $v->shakl > ($vedomostMap[$vKey]->shakl ?? 0)) {
+                    $vedomostMap[$vKey] = $v;
+                }
+            }
+
+            // Group name map
+            $groupNameMap = DB::table('groups')
+                ->whereIn('group_hemis_id', $scheduleGroupIds)
+                ->pluck('name', 'group_hemis_id')
+                ->toArray();
+
+            // Subject name map
+            $subjectNameMap = [];
+
+            // 3-QADAM: student_grades dan baholarni hisoblash
+            $studentSubjectData = [];
+
+            foreach (array_chunk($studentHemisIds, 1000) as $hemisChunk) {
+                $gradesChunk = DB::table('student_grades')
+                    ->whereIn('student_hemis_id', $hemisChunk)
+                    ->whereIn('subject_id', $validSubjectIds)
+                    ->whereIn('semester_code', $validSemesterCodes)
+                    ->whereNotNull('lesson_date')
+                    ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
+                        'training_type_code', 'grade', 'lesson_date', 'reason', 'status',
+                        'oski_id', 'test_id')
+                    ->get();
+
+                foreach ($gradesChunk as $g) {
+                    $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
+                    if (!$groupId) continue;
+
+                    $ssKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code;
+
+                    if (!isset($studentSubjectData[$ssKey])) {
+                        $subjectNameMap[$g->subject_id] = $g->subject_name;
+                        $studentSubjectData[$ssKey] = [
+                            'student_hemis_id' => $g->student_hemis_id,
+                            'subject_id' => $g->subject_id,
+                            'subject_name' => $g->subject_name,
+                            'semester_code' => $g->semester_code,
+                            'group_id' => $groupId,
+                            'jb_grades' => [],
+                            'mt_grades' => [],
+                            'on_grades' => [],
+                            'oski_grades' => [],
+                            'test_grades' => [],
+                            'total_absent_hours' => 0,
+                            'unexcused_absent_hours' => 0,
+                        ];
+                    }
+
+                    $code = (int) $g->training_type_code;
+                    $dateKey = substr($g->lesson_date, 0, 10);
+
+                    // Davomatni hisoblash (auditoriya darslari - excludedCodes dan tashqari)
+                    if (!in_array($code, $excludedCodes)) {
+                        if ($g->reason === 'absent') {
+                            $studentSubjectData[$ssKey]['total_absent_hours'] += 2;
+                            if ($g->status !== 'retake') {
+                                $studentSubjectData[$ssKey]['unexcused_absent_hours'] += 2;
+                            }
+                        }
+                    }
+
+                    // Baholarni yig'ish (training_type_code bo'yicha)
+                    if ($g->grade !== null && $g->grade > 0) {
+                        if (!in_array($code, $excludedCodes)) {
+                            // JB (auditoriya darslari)
+                            $studentSubjectData[$ssKey]['jb_grades'][$dateKey][] = (float) $g->grade;
+                        } elseif ($code === 99) {
+                            $studentSubjectData[$ssKey]['mt_grades'][$dateKey][] = (float) $g->grade;
+                        } elseif ($code === 100) {
+                            $studentSubjectData[$ssKey]['on_grades'][$dateKey][] = (float) $g->grade;
+                        } elseif ($code === 101) {
+                            $studentSubjectData[$ssKey]['oski_grades'][$dateKey][] = (float) $g->grade;
+                        } elseif ($code === 102) {
+                            $studentSubjectData[$ssKey]['test_grades'][$dateKey][] = (float) $g->grade;
+                        }
+                    }
+                }
+                unset($gradesChunk);
+            }
+
+            // 4-QADAM: Har bir talaba/fan uchun yiqilish sabablarini aniqlash
+            $studentDebts = []; // student_hemis_id => [debts]
+
+            foreach ($studentSubjectData as $ssKey => $data) {
+                $comboKey = $data['group_id'] . '|' . $data['subject_id'] . '|' . $data['semester_code'];
+                $totalAuditoryHours = $auditoryHours[$comboKey] ?? 0;
+
+                $levelCode = $studentLevelMap[$data['student_hemis_id']] ?? null;
+                $deadline = $deadlines[$levelCode] ?? null;
+                $joriyMin = $deadline->joriy ?? 60;
+                $mtMin = $deadline->mustaqil_talim ?? 60;
+
+                $groupName = $groupNameMap[$data['group_id']] ?? '';
+                $vKey = $groupName . '|' . $data['subject_name'] . '|' . $data['semester_code'];
+                $vedomost = $vedomostMap[$vKey] ?? null;
+
+                $hasOski = $vedomost && $vedomost->oski_percent > 0;
+                $hasTest = $vedomost && $vedomost->test_percent > 0;
+                $hasOn = $vedomost && ($vedomost->oraliq_percent ?? 0) > 0;
+
+                // O'rtacha baholarni hisoblash
+                $jbAvg = $this->calcDailyAverage($data['jb_grades']);
+                $mtAvg = $this->calcDailyAverage($data['mt_grades']);
+                $onAvg = $this->calcDailyAverage($data['on_grades']);
+                $oskiAvg = $this->calcDailyAverage($data['oski_grades']);
+                $testAvg = $this->calcDailyAverage($data['test_grades']);
+
+                // JN o'rtachasi hisoblash
+                $jnAvg = 0;
+                if ($vedomost) {
+                    $jbPct = $vedomost->jb_percent ?? 0;
+                    $mtPct = $vedomost->independent_percent ?? 0;
+                    $onPct = $vedomost->oraliq_percent ?? 0;
+                    $totalPct = $jbPct + $mtPct + $onPct;
+                    if ($totalPct > 0) {
+                        $jnRaw = round($jbAvg) * $jbPct / 100 + round($mtAvg) * $mtPct / 100 + ($hasOn ? round($onAvg) * $onPct / 100 : 0);
+                        $jnAvg = round($jnRaw / $totalPct * 100);
+                    }
+                } else {
+                    $jnAvg = round($jbAvg);
+                }
+
+                // Davomatdan sababsiz %
+                $absencePercent = $totalAuditoryHours > 0
+                    ? round(($data['unexcused_absent_hours'] / $totalAuditoryHours) * 100)
+                    : 0;
+
+                // Yiqilish sabablarini aniqlash
+                $reasons = [];
+
+                if ($jnAvg < 60) {
+                    $reasons[] = 'JN% < 60 (' . $jnAvg . ')';
+                }
+                if (round($mtAvg) < $mtMin) {
+                    $reasons[] = 'MT < ' . $mtMin . ' (' . round($mtAvg) . ')';
+                }
+                if ($hasOn && round($onAvg) < 60) {
+                    $reasons[] = 'ON < 60 (' . round($onAvg) . ')';
+                }
+                if ($hasOski && round($oskiAvg) < 60) {
+                    $reasons[] = 'OSKI < 60 (' . round($oskiAvg) . ')';
+                }
+                if ($hasTest && round($testAvg) < 60) {
+                    $reasons[] = 'Test < 60 (' . round($testAvg) . ')';
+                }
+                if ($absencePercent > 25) {
+                    $reasons[] = 'Davomat > 25% (' . $absencePercent . '%)';
+                }
+
+                if (empty($reasons)) continue;
+
+                $hemis = $data['student_hemis_id'];
+                if (!isset($studentDebts[$hemis])) {
+                    $studentDebts[$hemis] = [];
+                }
+
+                $studentDebts[$hemis][] = [
+                    'subject_id' => $data['subject_id'],
+                    'subject_name' => $data['subject_name'],
+                    'semester_code' => $data['semester_code'],
+                    'group_id' => $data['group_id'],
+                    'jb' => round($jbAvg),
+                    'mt' => round($mtAvg),
+                    'on' => $hasOn ? round($onAvg) : null,
+                    'oski' => $hasOski ? round($oskiAvg) : null,
+                    'test' => $hasTest ? round($testAvg) : null,
+                    'jn_percent' => $jnAvg,
+                    'absence_percent' => $absencePercent,
+                    'auditory_hours' => $totalAuditoryHours,
+                    'unexcused_hours' => $data['unexcused_absent_hours'],
+                    'reasons' => $reasons,
+                ];
+            }
+
+            // 5-QADAM: minDebtCount bo'yicha filtrlash
+            $studentDebts = array_filter($studentDebts, fn($debts) => count($debts) >= $minDebtCount);
+
+            if (empty($studentDebts)) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            // Talaba ma'lumotlarini biriktirish
+            $hemisIds = array_keys($studentDebts);
+            $studentInfo = DB::table('students')
+                ->whereIn('hemis_id', $hemisIds)
+                ->select('hemis_id', 'full_name', 'student_id_number', 'department_name',
+                    'specialty_name', 'level_name', 'semester_name', 'group_name', 'group_id')
+                ->get()
+                ->keyBy('hemis_id');
+
+            $finalResults = [];
+            foreach ($studentDebts as $hemisId => $debts) {
+                $st = $studentInfo[$hemisId] ?? null;
+                if (!$st) continue;
+
+                $finalResults[] = [
+                    'hemis_id' => $hemisId,
+                    'full_name' => $st->full_name ?? 'Noma\'lum',
+                    'student_id_number' => $st->student_id_number ?? '-',
+                    'department_name' => $st->department_name ?? '-',
+                    'specialty_name' => $st->specialty_name ?? '-',
+                    'level_name' => $st->level_name ?? '-',
+                    'semester_name' => $st->semester_name ?? '-',
+                    'group_name' => $st->group_name ?? '-',
+                    'group_id' => $st->group_id ?? '',
+                    'debt_count' => count($debts),
+                    'subjects' => implode(', ', array_column($debts, 'subject_name')),
+                    'debts' => $debts,
+                ];
+            }
+
+            // Saralash (default: qarzdorlik soni kamayib borish tartibida)
+            $sortColumn = $request->get('sort', 'debt_count');
+            $sortDirection = $request->get('direction', 'desc');
+
+            usort($finalResults, function ($a, $b) use ($sortColumn, $sortDirection) {
+                $valA = $a[$sortColumn] ?? '';
+                $valB = $b[$sortColumn] ?? '';
+                $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
+                return $sortDirection === 'desc' ? -$cmp : $cmp;
+            });
+
+            // Excel eksport
+            if ($request->get('export') === 'summary') {
+                return $this->exportDebtorsSummaryExcel($finalResults);
+            }
+            if ($request->get('export') === 'full') {
+                return $this->exportDebtorsFullExcel($finalResults);
+            }
+
+            // Sahifalash
+            $page = $request->get('page', 1);
+            $perPage = $request->get('per_page', 50);
+            $total = count($finalResults);
+            $offset = ($page - 1) * $perPage;
+            $pageData = array_slice($finalResults, $offset, $perPage);
+
+            foreach ($pageData as $i => &$item) {
+                $item['row_num'] = $offset + $i + 1;
+            }
+            unset($item);
+
+            return response()->json([
+                'data' => $pageData,
+                'total' => $total,
+                'per_page' => $perPage,
+                'current_page' => (int) $page,
+                'last_page' => ceil($total / $perPage),
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Debtors report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Kunlik o'rtacha hisoblash (har bir kun uchun o'rtacha -> umumiy o'rtacha)
+     */
+    private function calcDailyAverage(array $dayGrades): float
+    {
+        if (empty($dayGrades)) return 0;
+        $dayAverages = [];
+        foreach ($dayGrades as $dateKey => $grades) {
+            $dayAverages[] = round(array_sum($grades) / count($grades));
+        }
+        return count($dayAverages) > 0 ? array_sum($dayAverages) / count($dayAverages) : 0;
+    }
+
+    /**
+     * Qarzdorlar hisoboti - Excel (qisqacha: talaba guruhlangan)
+     */
+    private function exportDebtorsSummaryExcel(array $data)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Qarzdorlar hisoboti');
+
+        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
+            'Qarzdor fanlar soni', 'Qarzdor fanlar'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
+
+        foreach ($data as $i => $r) {
+            $row = $i + 2;
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $r['full_name']);
+            $sheet->setCellValueExplicit([3, $row], $r['student_id_number'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $sheet->setCellValue([4, $row], $r['department_name']);
+            $sheet->setCellValue([5, $row], $r['specialty_name']);
+            $sheet->setCellValue([6, $row], $r['level_name']);
+            $sheet->setCellValue([7, $row], $r['semester_name']);
+            $sheet->setCellValue([8, $row], $r['group_name']);
+            $sheet->setCellValue([9, $row], $r['debt_count']);
+            $sheet->setCellValue([10, $row], $r['subjects']);
+        }
+
+        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 12, 60];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
+
+        $lastRow = count($data) + 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:J{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            ]);
+        }
+
+        $fileName = 'qarzdorlar_hisobot_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'dbt_');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Qarzdorlar hisoboti - Excel (to'liq: har bir fan alohida qator)
+     */
+    private function exportDebtorsFullExcel(array $data)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Qarzdorlar toliq');
+
+        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
+            'Fan', 'JB', 'MT', 'ON', 'JN%', 'OSKI', 'Test', 'Davomat %', 'Sababsiz soat', 'Auditoriya soati', 'Sabab'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $sheet->getStyle('A1:S1')->applyFromArray($headerStyle);
+
+        $rowNum = 2;
+        $idx = 1;
+        foreach ($data as $student) {
+            foreach ($student['debts'] as $debt) {
+                $sheet->setCellValue([1, $rowNum], $idx);
+                $sheet->setCellValue([2, $rowNum], $student['full_name']);
+                $sheet->setCellValueExplicit([3, $rowNum], $student['student_id_number'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValue([4, $rowNum], $student['department_name']);
+                $sheet->setCellValue([5, $rowNum], $student['specialty_name']);
+                $sheet->setCellValue([6, $rowNum], $student['level_name']);
+                $sheet->setCellValue([7, $rowNum], $student['semester_name']);
+                $sheet->setCellValue([8, $rowNum], $student['group_name']);
+                $sheet->setCellValue([9, $rowNum], $debt['subject_name']);
+                $sheet->setCellValue([10, $rowNum], $debt['jb']);
+                $sheet->setCellValue([11, $rowNum], $debt['mt']);
+                $sheet->setCellValue([12, $rowNum], $debt['on'] ?? '-');
+                $sheet->setCellValue([13, $rowNum], $debt['jn_percent']);
+                $sheet->setCellValue([14, $rowNum], $debt['oski'] ?? '-');
+                $sheet->setCellValue([15, $rowNum], $debt['test'] ?? '-');
+                $sheet->setCellValue([16, $rowNum], $debt['absence_percent'] . '%');
+                $sheet->setCellValue([17, $rowNum], $debt['unexcused_hours']);
+                $sheet->setCellValue([18, $rowNum], $debt['auditory_hours']);
+                $sheet->setCellValue([19, $rowNum], implode('; ', $debt['reasons']));
+
+                // Qizil fon yiqilgan ballarga
+                $redFill = [
+                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFF0F0']],
+                ];
+                if ($debt['jn_percent'] < 60) $sheet->getStyle("M{$rowNum}")->applyFromArray($redFill);
+                if ($debt['mt'] < 60) $sheet->getStyle("K{$rowNum}")->applyFromArray($redFill);
+                if ($debt['on'] !== null && $debt['on'] < 60) $sheet->getStyle("L{$rowNum}")->applyFromArray($redFill);
+                if ($debt['oski'] !== null && $debt['oski'] < 60) $sheet->getStyle("N{$rowNum}")->applyFromArray($redFill);
+                if ($debt['test'] !== null && $debt['test'] < 60) $sheet->getStyle("O{$rowNum}")->applyFromArray($redFill);
+                if ($debt['absence_percent'] > 25) $sheet->getStyle("P{$rowNum}")->applyFromArray($redFill);
+
+                $rowNum++;
+                $idx++;
+            }
+        }
+
+        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 35, 8, 8, 8, 8, 8, 8, 12, 12, 12, 40];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
+
+        $lastRow = $rowNum - 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:S{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            ]);
+        }
+
+        $fileName = 'qarzdorlar_toliq_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'dbt_full_');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     /**

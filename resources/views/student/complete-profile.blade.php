@@ -1,21 +1,33 @@
 <x-guest-layout>
-    <div class="mb-5">
-        <div class="flex items-center mb-3">
-            <svg class="w-5 h-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-            </svg>
-            <h2 class="text-lg font-bold text-gray-900">Profilni to'ldiring</h2>
-        </div>
-        <p class="text-sm text-gray-500">
-            @if(!$student->phone)
-                Davom etish uchun telefon raqamingizni kiriting.
-            @else
-                Telegram hisobingizni tasdiqlang.
-                @if(!$student->isTelegramVerified())
-                    <span class="font-medium text-orange-600">({{ $student->telegramDaysLeft() }} kun muhlat)</span>
+    {{-- Logout tugmasi --}}
+    <div class="flex items-center justify-between mb-5">
+        <div>
+            <div class="flex items-center mb-1">
+                <svg class="w-5 h-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+                <h2 class="text-lg font-bold text-gray-900">Profilni to'ldiring</h2>
+            </div>
+            <p class="text-sm text-gray-500">
+                @if(!$student->phone)
+                    Davom etish uchun telefon raqamingizni kiriting.
+                @else
+                    Telegram hisobingizni tasdiqlang.
+                    @if(!$student->isTelegramVerified())
+                        <span class="font-medium text-orange-600">({{ $student->telegramDaysLeft() }} kun muhlat)</span>
+                    @endif
                 @endif
-            @endif
-        </p>
+            </p>
+        </div>
+        <form method="POST" action="{{ route('student.logout') }}">
+            @csrf
+            <button type="submit" class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-red-600 transition" title="Chiqish">
+                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+                Chiqish
+            </button>
+        </form>
     </div>
 
     @if (session('success'))
@@ -88,63 +100,65 @@
                   x-data="phoneInput()" x-init="init()">
                 @csrf
                 <div class="mb-3">
-                    {{-- Country selector --}}
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Mamlakat</label>
-                    <div class="relative mb-2" @click.away="open = false">
+                    <label class="block text-xs font-medium text-gray-600 mb-1.5">Telefon raqami</label>
+                    <div class="relative flex items-stretch rounded-lg border border-gray-300 bg-white shadow-sm focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-visible">
+                        {{-- Country selector button --}}
                         <button type="button" @click="open = !open"
-                                class="w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg border border-gray-300 bg-white shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-left">
-                            <span class="flex items-center">
-                                <span class="text-lg mr-2" x-text="selectedFlag"></span>
-                                <span x-text="selectedName" class="text-gray-900"></span>
-                            </span>
-                            <span class="flex items-center text-gray-400">
-                                <span x-text="'+' + selectedCode" class="text-xs font-medium text-gray-500 mr-2"></span>
-                                <svg class="w-4 h-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                </svg>
-                            </span>
+                                class="flex items-center gap-1.5 px-2.5 bg-gray-50 border-r border-gray-300 hover:bg-gray-100 transition rounded-l-lg shrink-0"
+                                @click.away="open = false">
+                            <span class="text-base" x-text="selectedFlag"></span>
+                            <span class="text-xs font-semibold text-gray-700" x-text="'+' + selectedCode"></span>
+                            <svg class="w-3 h-3 text-gray-400 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+                            </svg>
                         </button>
 
-                        {{-- Dropdown --}}
-                        <div x-show="open" x-transition
-                             class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-hidden">
+                        {{-- Phone input --}}
+                        <input type="tel" x-model="phoneNumber" x-ref="phoneInput"
+                               placeholder="90 123 45 67"
+                               maxlength="15"
+                               class="flex-1 min-w-0 text-sm border-0 focus:ring-0 py-2.5 px-3"
+                               oninput="this.value = this.value.replace(/[^\d]/g, '')">
+
+                        {{-- Country dropdown --}}
+                        <div x-show="open" x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-100"
+                             x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+                             @click.away="open = false"
+                             class="absolute left-0 top-full z-50 mt-1.5 w-full bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden"
+                             style="display: none;">
                             {{-- Search --}}
-                            <div class="p-2 border-b border-gray-100">
-                                <input type="text" x-model="search" x-ref="searchInput"
-                                       placeholder="Qidirish..."
-                                       class="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 py-1.5">
+                            <div class="p-2 border-b border-gray-100 bg-gray-50">
+                                <div class="relative">
+                                    <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                    </svg>
+                                    <input type="text" x-model="search" x-ref="searchInput"
+                                           @keydown.escape="open = false"
+                                           placeholder="Mamlakat qidirish..."
+                                           class="w-full text-sm rounded-md border-gray-300 pl-8 py-1.5 focus:border-blue-500 focus:ring-blue-500">
+                                </div>
                             </div>
                             {{-- List --}}
-                            <div class="overflow-y-auto max-h-48">
-                                <template x-for="c in filteredCountries" :key="c.code">
+                            <div class="overflow-y-auto max-h-48 overscroll-contain">
+                                <template x-for="c in filteredCountries" :key="c.name + c.code">
                                     <button type="button"
                                             @click="selectCountry(c)"
-                                            class="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-blue-50 transition"
-                                            :class="selectedCode === c.code ? 'bg-blue-50' : ''">
-                                        <span class="flex items-center">
-                                            <span class="text-lg mr-2" x-text="c.flag"></span>
-                                            <span x-text="c.name" class="text-gray-800"></span>
+                                            class="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-blue-50 transition-colors"
+                                            :class="selectedCode === c.code && selectedName === c.name ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
+                                        <span class="flex items-center gap-2">
+                                            <span class="text-base" x-text="c.flag"></span>
+                                            <span x-text="c.name" class="truncate"></span>
                                         </span>
-                                        <span x-text="'+' + c.code" class="text-xs text-gray-400 font-medium"></span>
+                                        <span class="text-xs text-gray-400 font-medium ml-2 shrink-0" x-text="'+' + c.code"></span>
                                     </button>
                                 </template>
-                                <div x-show="filteredCountries.length === 0" class="px-3 py-2 text-xs text-gray-400 text-center">
-                                    Topilmadi
+                                <div x-show="filteredCountries.length === 0" class="px-3 py-4 text-xs text-gray-400 text-center">
+                                    Hech narsa topilmadi
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    {{-- Phone input --}}
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Telefon raqami</label>
-                    <div class="flex items-center">
-                        <span class="inline-flex items-center px-3 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 border border-r-0 border-gray-300 rounded-l-lg"
-                              x-text="'+' + selectedCode"></span>
-                        <input type="tel" x-model="phoneNumber" x-ref="phoneInput"
-                               placeholder="901234567"
-                               maxlength="15"
-                               class="flex-1 text-sm rounded-r-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2.5"
-                               oninput="this.value = this.value.replace(/[^\d]/g, '')">
                     </div>
                     <input type="hidden" name="phone" :value="'+' + selectedCode + phoneNumber">
                 </div>
@@ -352,15 +366,22 @@
                 ],
                 get filteredCountries() {
                     if (!this.search) return this.countries;
-                    let s = this.search.toLowerCase();
+                    let s = this.search.toLowerCase().replace(/^\+/, '');
                     return this.countries.filter(c =>
                         c.name.toLowerCase().includes(s) || c.code.includes(s)
                     );
                 },
                 init() {
                     this.$watch('open', v => {
-                        if (v) this.$nextTick(() => this.$refs.searchInput && this.$refs.searchInput.focus());
-                        else this.search = '';
+                        if (v) {
+                            this.$nextTick(() => {
+                                if (this.$refs.searchInput) {
+                                    this.$refs.searchInput.focus();
+                                }
+                            });
+                        } else {
+                            this.search = '';
+                        }
                     });
                 },
                 selectCountry(c) {
@@ -368,7 +389,9 @@
                     this.selectedName = c.name;
                     this.selectedFlag = c.flag;
                     this.open = false;
-                    this.$nextTick(() => this.$refs.phoneInput && this.$refs.phoneInput.focus());
+                    this.$nextTick(() => {
+                        if (this.$refs.phoneInput) this.$refs.phoneInput.focus();
+                    });
                 }
             };
         }

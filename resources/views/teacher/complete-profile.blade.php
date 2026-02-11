@@ -1,7 +1,43 @@
 <x-guest-layout>
     <style>
-        .country-item:hover { background-color: #eff6ff; }
-        .country-item.active { background-color: #eff6ff; color: #1d4ed8; }
+        .country-item {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            padding: 10px 14px;
+            font-size: 15px;
+            color: #1a1a1a;
+            border: none;
+            background: none;
+            cursor: pointer;
+            transition: background-color 0.12s ease;
+            gap: 12px;
+            text-align: left;
+        }
+        .country-item:hover {
+            background-color: #f0f2f5;
+        }
+        .country-item.active {
+            background-color: #e3f0ff;
+        }
+        .country-item .country-flag {
+            font-size: 22px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        .country-item .country-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 15px;
+        }
+        .country-item .country-code {
+            font-size: 13px;
+            color: #8e8e93;
+            flex-shrink: 0;
+            margin-left: 8px;
+        }
     </style>
     {{-- Logout tugmasi --}}
     <div class="flex items-center justify-between mb-5">
@@ -146,13 +182,10 @@
                                     <button type="button"
                                             @click="selectCountry(c)"
                                             class="country-item"
-                                            :class="selectedCode === c.code && selectedName === c.name ? 'active' : ''"
-                                            style="width:100%; display:flex; align-items:center; justify-content:space-between; padding:8px 12px; font-size:14px; color:#374151; border:none; background:none; cursor:pointer; transition:background-color 0.15s;"
-                                        <span class="flex items-center gap-2">
-                                            <span class="text-base" x-text="c.flag"></span>
-                                            <span x-text="c.name" class="truncate"></span>
-                                        </span>
-                                        <span class="text-xs text-gray-400 font-medium ml-2 shrink-0" x-text="'+' + c.code"></span>
+                                            :class="selectedCode === c.code && selectedName === c.name ? 'active' : ''">
+                                        <span class="country-flag" x-text="c.flag"></span>
+                                        <span class="country-name" x-text="c.name"></span>
+                                        <span class="country-code" x-text="'+' + c.code"></span>
                                     </button>
                                 </template>
                                 <div x-show="filteredCountries.length === 0" class="px-3 py-4 text-xs text-gray-400 text-center">

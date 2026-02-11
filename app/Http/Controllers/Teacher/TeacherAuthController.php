@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
+use App\Models\Teacher;
 use App\Services\ActivityLogService;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -36,10 +38,18 @@ class TeacherAuthController extends Controller
         ]);
 
         if (Auth::guard('teacher')->attempt($credentials)) {
+            $teacher = Auth::guard('teacher')->user();
+
+            // Telegram 2FA: agar foydalanuvchi Telegram tasdiqlangan bo'lsa
+            if ($teacher->telegram_chat_id) {
+                // Login qilingan holatda emas — logout qilib, 2FA tekshiruvga yo'naltiramiz
+                Auth::guard('teacher')->logout();
+                return $this->sendLoginCode($teacher, $request);
+            }
+
             $request->session()->regenerate();
             ActivityLogService::logLogin('teacher');
 
-            $teacher = Auth::guard('teacher')->user();
             if ($teacher->must_change_password) {
                 return redirect()->route('teacher.force-change-password');
             }
@@ -54,6 +64,153 @@ class TeacherAuthController extends Controller
         return back()->withErrors([
             'login' => 'The provided credentials do not match our records.',
         ]);
+    }
+
+    /**
+     * Login tasdiqlash kodini yaratib, Telegramga yuborish
+     */
+    private function sendLoginCode(Teacher $teacher, Request $request)
+    {
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        $teacher->login_code = $code;
+        $teacher->login_code_expires_at = now()->addMinutes(5);
+        $teacher->save();
+
+        $telegramService = new TelegramService();
+        $sent = $telegramService->sendToUser(
+            $teacher->telegram_chat_id,
+            "Tizimga kirish uchun tasdiqlash kodi: {$code}\n\nKod 5 daqiqa amal qiladi. Agar siz kirmoqchi bo'lmagan bo'lsangiz, bu xabarni e'tiborsiz qoldiring."
+        );
+
+        if (!$sent) {
+            // Telegram yuborilmasa, oddiy login qilish
+            Auth::guard('teacher')->login($teacher);
+            $request->session()->regenerate();
+            ActivityLogService::logLogin('teacher');
+
+            if (!$teacher->isProfileComplete() || $teacher->isTelegramDeadlinePassed()) {
+                return redirect()->route('teacher.complete-profile');
+            }
+
+            return redirect()->intended(route('teacher.dashboard'));
+        }
+
+        $request->session()->put('login_verify_teacher_id', $teacher->id);
+
+        return redirect()->route('teacher.verify-login');
+    }
+
+    /**
+     * Login tasdiqlash sahifasini ko'rsatish
+     */
+    public function showVerifyLogin(Request $request)
+    {
+        if (!$request->session()->has('login_verify_teacher_id')) {
+            return redirect()->route('teacher.login');
+        }
+
+        $teacher = Teacher::find($request->session()->get('login_verify_teacher_id'));
+        if (!$teacher) {
+            $request->session()->forget('login_verify_teacher_id');
+            return redirect()->route('teacher.login');
+        }
+
+        $maskedChat = substr($teacher->telegram_username ?? 'Telegram', 0, 3) . '***';
+
+        return view('auth.verify-login', [
+            'guard' => 'teacher',
+            'maskedContact' => $maskedChat,
+        ]);
+    }
+
+    /**
+     * Login tasdiqlash kodini tekshirish
+     */
+    public function verifyLoginCode(Request $request)
+    {
+        $request->validate([
+            'code' => ['required', 'string', 'size:6'],
+        ]);
+
+        $teacherId = $request->session()->get('login_verify_teacher_id');
+        if (!$teacherId) {
+            return redirect()->route('teacher.login')
+                ->withErrors(['code' => 'Sessiya tugagan. Qaytadan kiring.']);
+        }
+
+        $teacher = Teacher::find($teacherId);
+        if (!$teacher) {
+            $request->session()->forget('login_verify_teacher_id');
+            return redirect()->route('teacher.login');
+        }
+
+        // Muddati tekshiruvi
+        if (!$teacher->login_code_expires_at || $teacher->login_code_expires_at->isPast()) {
+            $teacher->login_code = null;
+            $teacher->login_code_expires_at = null;
+            $teacher->save();
+            $request->session()->forget('login_verify_teacher_id');
+
+            return redirect()->route('teacher.login')
+                ->withErrors(['code' => 'Tasdiqlash kodi muddati tugagan. Qaytadan kiring.']);
+        }
+
+        // Kod tekshiruvi
+        if ($teacher->login_code !== $request->code) {
+            return back()->withErrors(['code' => 'Tasdiqlash kodi noto\'g\'ri.']);
+        }
+
+        // Tasdiqlash muvaffaqiyatli
+        $teacher->login_code = null;
+        $teacher->login_code_expires_at = null;
+        $teacher->save();
+
+        $request->session()->forget('login_verify_teacher_id');
+
+        Auth::guard('teacher')->login($teacher);
+        $request->session()->regenerate();
+        ActivityLogService::logLogin('teacher');
+
+        if ($teacher->must_change_password) {
+            return redirect()->route('teacher.force-change-password');
+        }
+
+        if (!$teacher->isProfileComplete() || $teacher->isTelegramDeadlinePassed()) {
+            return redirect()->route('teacher.complete-profile');
+        }
+
+        return redirect()->intended(route('teacher.dashboard'));
+    }
+
+    /**
+     * Tasdiqlash kodini qayta yuborish
+     */
+    public function resendLoginCode(Request $request)
+    {
+        $teacherId = $request->session()->get('login_verify_teacher_id');
+        if (!$teacherId) {
+            return redirect()->route('teacher.login');
+        }
+
+        $teacher = Teacher::find($teacherId);
+        if (!$teacher || !$teacher->telegram_chat_id) {
+            $request->session()->forget('login_verify_teacher_id');
+            return redirect()->route('teacher.login');
+        }
+
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $teacher->login_code = $code;
+        $teacher->login_code_expires_at = now()->addMinutes(5);
+        $teacher->save();
+
+        $telegramService = new TelegramService();
+        $telegramService->sendToUser(
+            $teacher->telegram_chat_id,
+            "Tizimga kirish uchun yangi tasdiqlash kodi: {$code}\n\nKod 5 daqiqa amal qiladi."
+        );
+
+        return back()->with('success', 'Yangi tasdiqlash kodi Telegramga yuborildi.');
     }
 
     public function logout(Request $request)

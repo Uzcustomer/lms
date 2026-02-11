@@ -52,7 +52,7 @@
                                                         Login as
                                                     </button>
                                                 </form>
-                                            @elseif(auth()->guard('web')->user()?->hasRole('superadmin'))
+                                            @elseif(auth()->user()?->hasRole('superadmin'))
                                                 <form action="{{ route('admin.impersonate.student', $studentGrade->student_id) }}" method="POST" onsubmit="return confirm('{{ addslashes($studentGrade->student->full_name) }} sifatida tizimga kirasizmi?')">
                                                     @csrf
                                                     <button type="submit"

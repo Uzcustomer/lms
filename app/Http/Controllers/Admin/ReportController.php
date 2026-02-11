@@ -1394,6 +1394,7 @@ class ReportController extends Controller
 
         // 4-QADAM: Har bir talaba/fan uchun davomat ma'lumotlarini hisoblash
         $studentSubjectData = [];
+        $studentAllAttendanceDates = []; // Talabaning ISTALGAN fandan darsga chiqqan kunlari
         $now = Carbon::now('Asia/Tashkent');
         $spravkaDays = (int) Setting::get('spravka_deadline_days', 10);
 
@@ -1443,11 +1444,41 @@ class ReportController extends Controller
                 } else {
                     if ($g->grade !== null && $g->grade > 0) {
                         $studentSubjectData[$ssKey]['attendance_dates'][$dateKey] = true;
+                        // Istalgan fandan grade > 0 bo'lsa, talabaning umumiy davomatiga qo'shish
+                        $studentAllAttendanceDates[$g->student_hemis_id][$dateKey] = true;
                     }
                 }
             }
             unset($gradesChunk);
         }
+
+        // attendance_controls dan istalgan fandan dars o'tilgan kunlarni olish (load > 0)
+        $groupStudentsMap = [];
+        foreach ($studentGroupMap as $studentHemisId => $groupId) {
+            $groupStudentsMap[$groupId][] = $studentHemisId;
+        }
+
+        $allGroupHemisIds = array_unique(array_values($studentGroupMap));
+        foreach (array_chunk($allGroupHemisIds, 1000) as $groupChunk) {
+            $acRecords = DB::table('attendance_controls')
+                ->whereIn('group_id', $groupChunk)
+                ->where('load', '>', 0)
+                ->whereNotNull('lesson_date')
+                ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
+                ->select('group_id', DB::raw('DATE(lesson_date) as lesson_date'))
+                ->distinct()
+                ->get();
+
+            foreach ($acRecords as $ac) {
+                $dateKey = $ac->lesson_date;
+                $studentsInGroup = $groupStudentsMap[$ac->group_id] ?? [];
+                foreach ($studentsInGroup as $studentHemisId) {
+                    $studentAllAttendanceDates[$studentHemisId][$dateKey] = true;
+                }
+            }
+            unset($acRecords);
+        }
+        unset($groupStudentsMap);
 
         // 5-QADAM: Foiz chegarasi bo'yicha filtrlash
         $minPercent = (int) $request->get('min_percent', 15);
@@ -1486,9 +1517,10 @@ class ReportController extends Controller
             }
 
             if ($thresholdDate) {
-                $gradeDates = array_keys($data['attendance_dates']);
-                sort($gradeDates);
-                foreach ($gradeDates as $gDate) {
+                // Istalgan fandan darsga chiqqan kunlar (student_grades grade>0 YOKI attendance_controls load>0)
+                $allDates = array_keys($studentAllAttendanceDates[$data['student_hemis_id']] ?? []);
+                sort($allDates);
+                foreach ($allDates as $gDate) {
                     if ($gDate > $thresholdDate) {
                         $firstAttendanceAfter25 = Carbon::parse($gDate)->format('d.m.Y');
                         break;

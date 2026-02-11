@@ -18,7 +18,7 @@ class JournalController extends Controller
     public function index(Request $request)
     {
         // Dekan uchun fakultet cheklovi
-        $dekanFacultyId = get_dekan_faculty_id();
+        $dekanFacultyIds = get_dekan_faculty_ids();
 
         // Get filter options for dropdowns
         $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
@@ -45,9 +45,9 @@ class JournalController extends Controller
             ->where('active', true)
             ->orderBy('name');
 
-        // Dekan faqat o'z fakultetini ko'radi
-        if ($dekanFacultyId) {
-            $facultyQuery->where('id', $dekanFacultyId);
+        // Dekan faqat o'z fakultetlarini ko'radi
+        if (!empty($dekanFacultyIds)) {
+            $facultyQuery->whereIn('id', $dekanFacultyIds);
         }
 
         $faculties = $facultyQuery->get();
@@ -78,8 +78,8 @@ class JournalController extends Controller
         if ($request->filled('education_year')) {
             $kafedraQuery->where('c.education_year_code', $request->education_year);
         }
-        if ($dekanFacultyId) {
-            $kafedraQuery->where('f.id', $dekanFacultyId);
+        if (!empty($dekanFacultyIds)) {
+            $kafedraQuery->whereIn('f.id', $dekanFacultyIds);
         } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
@@ -122,8 +122,12 @@ class JournalController extends Controller
         }
 
         // Dekan uchun fakultet majburiy filtr
-        if ($dekanFacultyId) {
-            $query->where('f.id', $dekanFacultyId);
+        if (!empty($dekanFacultyIds)) {
+            if ($request->filled('faculty') && in_array($request->faculty, $dekanFacultyIds)) {
+                $query->where('f.id', $request->faculty);
+            } else {
+                $query->whereIn('f.id', $dekanFacultyIds);
+            }
         } elseif ($request->filled('faculty')) {
             $query->where('f.id', $request->faculty);
         }
@@ -189,7 +193,7 @@ class JournalController extends Controller
             'kafedras',
             'sortColumn',
             'sortDirection',
-            'dekanFacultyId'
+            'dekanFacultyIds'
         ));
     }
 
@@ -2045,10 +2049,7 @@ class JournalController extends Controller
     public function getSidebarOptions(Request $request)
     {
         // Dekan uchun fakultet cheklovi
-        $dekanFacultyId = get_dekan_faculty_id();
-        if ($dekanFacultyId && !$request->filled('faculty_id')) {
-            $request->merge(['faculty_id' => $dekanFacultyId]);
-        }
+        $dekanFacultyIds = get_dekan_faculty_ids();
 
         // Fakultet department_hemis_id (reused in multiple queries)
         $facultyDeptHemisId = null;
@@ -2061,8 +2062,8 @@ class JournalController extends Controller
             ->where('active', true)
             ->orderBy('name');
 
-        if ($dekanFacultyId) {
-            $facultyQuery->where('id', $dekanFacultyId);
+        if (!empty($dekanFacultyIds)) {
+            $facultyQuery->whereIn('id', $dekanFacultyIds);
         }
 
         $faculties = $facultyQuery->pluck('name', 'id');

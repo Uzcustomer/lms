@@ -71,12 +71,49 @@
         .btn-submit:active { transform: translateY(0); }
         .role-btn {
             transition: all .2s ease;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 9px 0;
+            border-radius: 10px;
+            cursor: pointer;
+            flex: 1;
+            border: none;
         }
         .role-btn:hover {
             transform: translateY(-1px);
-            filter: brightness(1.05);
+            filter: brightness(1.08);
         }
         .role-btn:active { transform: translateY(0); }
+        .role-btn-student-active {
+            background: #10b981;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+        }
+        .role-btn-student-inactive {
+            background: #ecfdf5;
+            color: #059669;
+        }
+        .role-btn-student-inactive:hover { background: #d1fae5; }
+        .role-btn-teacher-active {
+            background: #f59e0b;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+        }
+        .role-btn-teacher-inactive {
+            background: #fffbeb;
+            color: #d97706;
+        }
+        .role-btn-teacher-inactive:hover { background: #fef3c7; }
+        .role-btn-admin-active {
+            background: #8b5cf6;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
+        }
+        .role-btn-admin-inactive {
+            background: #f5f3ff;
+            color: #7c3aed;
+        }
+        .role-btn-admin-inactive:hover { background: #ede9fe; }
     </style>
 </head>
 <body class="bg-slate-50 antialiased">
@@ -107,25 +144,19 @@
             {{-- Rol tugmalari --}}
             <div class="flex gap-2.5 mb-5">
                 <button @click="tab = 'student'"
-                        :class="tab === 'student'
-                            ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200'
-                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'"
-                        class="role-btn flex-1 py-2 rounded-lg text-[13px] font-semibold cursor-pointer">
+                        :class="tab === 'student' ? 'role-btn-student-active' : 'role-btn-student-inactive'"
+                        class="role-btn">
                     Talaba
                 </button>
                 <button @click="tab = 'teacher'"
-                        :class="tab === 'teacher'
-                            ? 'bg-amber-500 text-white shadow-md shadow-amber-200'
-                            : 'bg-amber-50 text-amber-600 hover:bg-amber-100'"
-                        class="role-btn flex-1 py-2 rounded-lg text-[13px] font-semibold cursor-pointer">
+                        :class="tab === 'teacher' ? 'role-btn-teacher-active' : 'role-btn-teacher-inactive'"
+                        class="role-btn">
                     Xodim
                 </button>
                 <template x-if="adm">
                     <button @click="tab = 'admin'"
-                            :class="tab === 'admin'
-                                ? 'bg-violet-500 text-white shadow-md shadow-violet-200'
-                                : 'bg-violet-50 text-violet-600 hover:bg-violet-100'"
-                            class="role-btn flex-1 py-2 rounded-lg text-[13px] font-semibold cursor-pointer">
+                            :class="tab === 'admin' ? 'role-btn-admin-active' : 'role-btn-admin-inactive'"
+                            class="role-btn">
                         Admin
                     </button>
                 </template>
@@ -166,7 +197,7 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn-submit w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold rounded-lg">
+                <button type="submit" class="btn-submit w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-[15px] font-bold rounded-xl tracking-wide">
                     Kirish
                 </button>
             </form>
@@ -196,7 +227,7 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn-submit w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold rounded-lg">
+                <button type="submit" class="btn-submit w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-[15px] font-bold rounded-xl tracking-wide">
                     Kirish
                 </button>
             </form>
@@ -227,7 +258,7 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn-submit w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold rounded-lg">
+                    <button type="submit" class="btn-submit w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-[15px] font-bold rounded-xl tracking-wide">
                         Kirish
                     </button>
                 </form>

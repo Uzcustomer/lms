@@ -33,6 +33,10 @@ class StudentController extends Controller
 
     private function redirectIfPasswordChangeRequired()
     {
+        if (session('impersonating')) {
+            return null;
+        }
+
         if (Auth::guard('student')->user()?->must_change_password) {
             return redirect()->route('student.password.edit');
         }

@@ -89,6 +89,10 @@ class StudentAuthController extends Controller
 
     public function editPassword()
     {
+        if (session('impersonating')) {
+            return redirect()->route('student.dashboard');
+        }
+
         return view('student.change-password');
     }
 

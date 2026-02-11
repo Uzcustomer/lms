@@ -86,11 +86,24 @@ if (!function_exists('get_dekan_faculty_id')) {
 
 if (!function_exists('is_active_oqituvchi')) {
     /**
-     * Joriy foydalanuvchining faol roli o'qituvchi ekanligini tekshirish
+     * Joriy foydalanuvchining faol roli o'qituvchi ekanligini tekshirish.
+     * Teacher guard va web guard uchun alohida tekshiradi (impersonatsiya uchun ham ishlaydi).
      */
     function is_active_oqituvchi(): bool
     {
-        $user = auth()->user();
+        // Teacher guard orqali kirilganmi tekshirish (impersonatsiya va oddiy kirish)
+        $teacher = auth()->guard('teacher')->user();
+        if ($teacher) {
+            $roles = $teacher->getRoleNames()->toArray();
+            $activeRole = session('active_role', $roles[0] ?? '');
+            if (!in_array($activeRole, $roles) && count($roles) > 0) {
+                $activeRole = $roles[0];
+            }
+            return $activeRole === 'oqituvchi';
+        }
+
+        // Web guard orqali kirgan bo'lsa
+        $user = auth()->guard('web')->user();
         if (!$user) return false;
 
         $roles = $user->getRoleNames()->toArray();
@@ -105,19 +118,21 @@ if (!function_exists('is_active_oqituvchi')) {
 
 if (!function_exists('get_teacher_hemis_id')) {
     /**
-     * Joriy foydalanuvchining HEMIS ID sini olish (Teacher model uchun)
+     * Joriy foydalanuvchining HEMIS ID sini olish (Teacher model uchun).
+     * Teacher guard va web guard uchun alohida tekshiradi (impersonatsiya uchun ham ishlaydi).
      */
     function get_teacher_hemis_id(): ?int
     {
-        $user = auth()->user();
-        if (!$user) return null;
-
         // Teacher guard orqali kirgan bo'lsa
-        if ($user instanceof \App\Models\Teacher) {
-            return $user->hemis_id;
+        $teacher = auth()->guard('teacher')->user();
+        if ($teacher) {
+            return $teacher->hemis_id;
         }
 
         // Web guard orqali kirgan bo'lsa, teachers jadvalidan qidirish
+        $user = auth()->guard('web')->user();
+        if (!$user) return null;
+
         $teacher = \App\Models\Teacher::where('login', $user->email)->first();
         return $teacher?->hemis_id;
     }

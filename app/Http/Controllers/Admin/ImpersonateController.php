@@ -34,7 +34,9 @@ class ImpersonateController extends Controller
             'impersonator_id' => $admin->id,
             'impersonator_guard' => 'web',
             'impersonated_name' => $student->full_name,
+            'impersonator_active_role' => session('active_role'),
         ]);
+        session()->forget('active_role');
 
         Auth::guard('web')->logout();
         Auth::guard('student')->login($student);
@@ -65,7 +67,9 @@ class ImpersonateController extends Controller
             'impersonator_id' => $admin->id,
             'impersonator_guard' => 'web',
             'impersonated_name' => $teacher->full_name,
+            'impersonator_active_role' => session('active_role'),
         ]);
+        session()->forget('active_role');
 
         Auth::guard('web')->logout();
         Auth::guard('teacher')->login($teacher);
@@ -103,6 +107,7 @@ class ImpersonateController extends Controller
             'impersonator_id' => $impersonatorId,
             'impersonator_guard' => 'web',
             'impersonated_name' => $student->full_name,
+            'impersonator_active_role' => session('impersonator_active_role'),
         ]);
 
         Auth::guard('student')->login($student);
@@ -129,8 +134,15 @@ class ImpersonateController extends Controller
             }
         }
 
+        // Asl adminning active_role ni tiklash
+        $previousActiveRole = session('impersonator_active_role');
+
         // Sessiyadan impersonatsiya ma'lumotlarini tozalash
-        session()->forget(['impersonating', 'impersonator_id', 'impersonator_guard', 'impersonated_name']);
+        session()->forget(['impersonating', 'impersonator_id', 'impersonator_guard', 'impersonated_name', 'impersonator_active_role', 'active_role']);
+
+        if ($previousActiveRole) {
+            session(['active_role' => $previousActiveRole]);
+        }
 
         // Asl adminni qayta tiklash
         $admin = \App\Models\User::find($impersonatorId);

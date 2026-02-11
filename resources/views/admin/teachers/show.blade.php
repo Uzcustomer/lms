@@ -88,6 +88,18 @@
                                 Parolni tiklash
                             </button>
                         </form>
+                        @if(auth()->user() && auth()->user()->hasRole('superadmin'))
+                            <form action="{{ route('admin.impersonate.teacher', $teacher) }}" method="POST"
+                                  onsubmit="return confirm('{{ addslashes($teacher->full_name) }} sifatida tizimga kirasizmi?')">
+                                @csrf
+                                <button type="submit" style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; border-radius: 10px; cursor: pointer; transition: all 0.2s; white-space: nowrap; box-shadow: 0 2px 8px rgba(59,130,246,0.3);">
+                                    <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+                                    </svg>
+                                    Login as
+                                </button>
+                            </form>
+                        @endif
                     </div>
                 </div>
             </div>

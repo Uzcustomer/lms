@@ -37,6 +37,23 @@
                     </header>
                 @endisset
 
+                {{-- Impersonatsiya banneri --}}
+                @if(session('impersonating'))
+                    <div class="bg-red-600 text-white">
+                        <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between">
+                            <span class="text-sm font-medium">
+                                Siz hozir <strong>{{ session('impersonated_name') }}</strong> sifatida kirgansiz (Superadmin rejimi)
+                            </span>
+                            <form action="{{ route('impersonate.stop') }}" method="POST" class="inline">
+                                @csrf
+                                <button type="submit" class="ml-4 px-3 py-1 bg-white text-red-600 text-xs font-bold rounded hover:bg-red-50 transition">
+                                    Orqaga qaytish
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                @endif
+
                 <!-- Page Content -->
                 <main class="p-6">
                     {{ $slot }}

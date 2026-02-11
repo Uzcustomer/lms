@@ -249,12 +249,24 @@
                                         <td class="px-2 py-2 whitespace-nowrap text-gray-500">{{ $student->avg_gpa }}</td>
                                         <td class="px-2 py-2 whitespace-nowrap text-gray-500">{{ format_datetime($student->updated_at) }}</td>
                                         <td class="px-2 py-2 whitespace-nowrap">
-                                            <button type="button"
-                                                    class="px-2 py-1 text-xs rounded"
-                                                    style="background-color: #f59e0b; color: white;"
-                                                    onclick="openResetModal('{{ $student->id }}', '{{ addslashes($student->full_name) }}', '{{ $student->student_id_number }}')">
-                                                Parolni tiklash
-                                            </button>
+                                            <div class="flex items-center gap-1">
+                                                <button type="button"
+                                                        class="px-2 py-1 text-xs rounded"
+                                                        style="background-color: #f59e0b; color: white;"
+                                                        onclick="openResetModal('{{ $student->id }}', '{{ addslashes($student->full_name) }}', '{{ $student->student_id_number }}')">
+                                                    Parolni tiklash
+                                                </button>
+                                                @if(auth()->user() && auth()->user()->hasRole('superadmin'))
+                                                    <form action="{{ route('admin.impersonate.student', $student->id) }}" method="POST" onsubmit="return confirm('{{ addslashes($student->full_name) }} sifatida tizimga kirasizmi?')">
+                                                        @csrf
+                                                        <button type="submit"
+                                                                class="px-2 py-1 text-xs rounded"
+                                                                style="background-color: #3b82f6; color: white;">
+                                                            Login as
+                                                        </button>
+                                                    </form>
+                                                @endif
+                                            </div>
                                         </td>
                                     </tr>
                                 @endforeach

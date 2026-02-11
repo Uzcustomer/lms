@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Teacher;
 use App\Exports\StudentGradeBox;
 use App\Exports\StudentGradesExportAdmin;
 use App\Http\Controllers\Controller;
+use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumWeek;
 use App\Models\Department;
@@ -45,11 +46,20 @@ class TeacherMainController extends Controller
 
     public function students(Request $request)
     {
+        $teacher = auth()->guard('teacher')->user();
+        $userRoles = $teacher->getRoleNames()->toArray();
+        $activeRole = session('active_role', $userRoles[0] ?? '');
+        if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
+            $activeRole = $userRoles[0];
+        }
+
+        $adminRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oquv_prorektori', 'oquv_bolimi', 'inspeksiya'];
+        if (in_array($activeRole, $adminRoles)) {
+            return $this->studentsAdmin($request);
+        }
+
         $query = StudentGrade::with(['student', 'teacher'])
-            ->where('employee_id', auth()->guard('teacher')->user()->hemis_id);
-        //            ->whereHas('student', function ($q) {
-//                $q->whereIn('level_code', [14, 15, 16]);
-//            });
+            ->where('employee_id', $teacher->hemis_id);
 
         if ($request->has('search')) {
             $searchTerm = $request->search;
@@ -66,6 +76,94 @@ class TeacherMainController extends Controller
         });
 
         return view('teacher.students', compact('groupedStudents', 'studentGrades'));
+    }
+
+    private function studentsAdmin(Request $request)
+    {
+        $query = Student::query();
+
+        if ($request->filled('student_id_number')) {
+            $query->where('student_id_number', 'like', '%' . $request->student_id_number . '%');
+        }
+
+        if ($request->filled('full_name')) {
+            $query->where('full_name', 'like', '%' . $request->full_name . '%');
+        }
+
+        if ($request->filled('level_code')) {
+            $query->where('level_code', $request->level_code);
+        }
+        if ($request->filled('semester_code')) {
+            $query->where('semester_code', $request->semester_code);
+        }
+
+        if ($request->filled('department')) {
+            $query->where('department_id', $request->department);
+        }
+
+        if ($request->filled('specialty')) {
+            $query->where('specialty_id', $request->specialty);
+        }
+
+        if ($request->filled('group')) {
+            $query->where('group_id', $request->group);
+        }
+        if ($request->filled('curriculum')) {
+            $query->where('curriculum_id', $request->curriculum);
+        }
+
+        $perPage = $request->get('per_page', 50);
+        $students = $query->paginate($perPage)->appends($request->query());
+
+        $departments = Student::select('department_id', 'department_name', 'department_code')
+            ->distinct()
+            ->orderBy('department_name')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->department_id,
+                    'name' => $item->department_name . ' (' . $item->department_code . ')'
+                ];
+            });
+
+        $specialties = Student::select('specialty_id', 'specialty_name', 'specialty_code')
+            ->distinct()
+            ->orderBy('specialty_name')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->specialty_id,
+                    'name' => $item->specialty_name . ' (' . $item->specialty_code . ')'
+                ];
+            });
+
+        $groups = Student::select('group_id', 'group_name')
+            ->distinct()
+            ->orderBy('group_name')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->group_id,
+                    'name' => $item->group_name
+                ];
+            });
+
+        $semesters = Student::select('semester_code', 'semester_name')
+            ->distinct()
+            ->orderBy('semester_code')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->semester_code,
+                    'name' => $item->semester_name
+                ];
+            });
+
+        $curriculums = Curriculum::select('curricula_hemis_id', 'name')
+            ->orderBy('name')
+            ->get();
+
+        return view('teacher.students-admin', compact('students', 'departments', 'specialties', 'groups', 'curriculums', 'semesters'));
     }
 
     public function studentDetails(Request $request, $studentId, $subjectId)

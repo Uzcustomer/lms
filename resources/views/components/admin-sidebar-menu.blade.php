@@ -2,26 +2,6 @@
     $isTeacher = auth()->guard('teacher')->check();
     $user = auth()->user();
 
-    // Route resolver - teacher yoki admin guardga qarab route aniqlash
-    $r = function($adminRoute, $teacherRoute = null) use ($isTeacher) {
-        if ($isTeacher && $teacherRoute) {
-            return route($teacherRoute);
-        }
-        return route($adminRoute);
-    };
-
-    // Active route check - ikkala guard uchun
-    $isActive = function($adminPattern, $teacherPattern = null) use ($isTeacher) {
-        if ($isTeacher && $teacherPattern) {
-            return request()->routeIs($teacherPattern);
-        }
-        return request()->routeIs($adminPattern);
-    };
-
-    $logoutRoute = $isTeacher ? route('teacher.logout') : route('admin.logout');
-    $switchRoleRoute = $isTeacher ? route('teacher.switch-role') : route('admin.switch-role');
-    $profileRoute = $isTeacher ? route('teacher.info-me') : null;
-
     // Foydalanuvchi rollari va faol rol
     $userRoles = $user->getRoleNames()->toArray();
     $activeRole = session('active_role', $userRoles[0] ?? '');
@@ -30,10 +10,34 @@
         $activeRole = $userRoles[0];
     }
 
+    // Admin rollar - har doim admin route ishlatadi
+    $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
+
     // Faol rolga qarab menyu ko'rsatish
     $hasActiveRole = function($roles) use ($activeRole) {
         return in_array($activeRole, (array) $roles);
     };
+
+    // Route resolver - teacher yoki admin guardga qarab route aniqlash
+    $r = function($adminRoute, $teacherRoute = null) use ($isTeacher, $activeRole, $adminRoles) {
+        if ($isTeacher && $teacherRoute && !in_array($activeRole, $adminRoles)) {
+            return route($teacherRoute);
+        }
+        return route($adminRoute);
+    };
+
+    // Active route check - ikkala guard uchun
+    $isActive = function($adminPattern, $teacherPattern = null) use ($isTeacher, $activeRole, $adminRoles) {
+        if ($isTeacher && $teacherPattern && !in_array($activeRole, $adminRoles)) {
+            return request()->routeIs($teacherPattern);
+        }
+        return request()->routeIs($adminPattern);
+    };
+
+    $useTeacherRoutes = $isTeacher && !in_array($activeRole, $adminRoles);
+    $logoutRoute = $useTeacherRoutes ? route('teacher.logout') : route('admin.logout');
+    $switchRoleRoute = $useTeacherRoutes ? route('teacher.switch-role') : route('admin.switch-role');
+    $profileRoute = $useTeacherRoutes ? route('teacher.info-me') : null;
 
     // Rol labellarini olish
     $roleLabels = [];

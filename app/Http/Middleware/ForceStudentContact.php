@@ -17,6 +17,11 @@ class ForceStudentContact
             return $next($request);
         }
 
+        // Impersonatsiya rejimida profil majburiy emas
+        if (session('impersonating')) {
+            return $next($request);
+        }
+
         $allowedRoutes = [
             'student.complete-profile*',
             'student.verify-telegram*',

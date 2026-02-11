@@ -17,6 +17,11 @@ class ForcePasswordChange
             return $next($request);
         }
 
+        // Impersonatsiya rejimida majburiy tekshiruvlar o'tkazilmaydi
+        if (session('impersonating')) {
+            return $next($request);
+        }
+
         $allowedRoutes = [
             'teacher.force-change-password*',
             'teacher.complete-profile*',

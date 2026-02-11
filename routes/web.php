@@ -25,6 +25,7 @@ use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
+use App\Http\Controllers\Admin\ImpersonateController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -268,6 +269,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     });
 
+    // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
+    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin'])->group(function () {
+        Route::post('/impersonate/student/{student}', [ImpersonateController::class, 'impersonateStudent'])->name('impersonate.student');
+        Route::post('/impersonate/teacher/{teacher}', [ImpersonateController::class, 'impersonateTeacher'])->name('impersonate.teacher');
+    });
+
     // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari
     Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
         // Old routes — redirect to unified settings
@@ -285,6 +292,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/synchronize/attendance-controls', [DashboardController::class, 'importAttendanceControls'])->name('synchronize.attendance-controls');
     });
 });
+
+// Impersonatsiyani to'xtatish (har qanday guard'dan)
+Route::post('/stop-impersonation', [ImpersonateController::class, 'stopImpersonation'])->name('impersonate.stop');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

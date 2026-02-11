@@ -51,14 +51,26 @@
                         <x-dropdown-link :href="route('student.profile')">
                             {{ __('Talaba ma\'lumoti') }}
                         </x-dropdown-link>
-                        <form method="POST" action="{{ route('student.logout') }}">
-                            @csrf
-                            <x-dropdown-link :href="route('student.logout')"
-                                             onclick="event.preventDefault();
-                                                this.closest('form').submit();">
-                                {{ __('Chiqish') }}
-                            </x-dropdown-link>
-                        </form>
+                        @if(session('impersonating'))
+                            <form method="POST" action="{{ route('impersonate.stop') }}">
+                                @csrf
+                                <x-dropdown-link :href="route('impersonate.stop')"
+                                                 onclick="event.preventDefault();
+                                                    this.closest('form').submit();"
+                                                 class="text-red-600">
+                                    {{ __('Orqaga qaytish (Admin)') }}
+                                </x-dropdown-link>
+                            </form>
+                        @else
+                            <form method="POST" action="{{ route('student.logout') }}">
+                                @csrf
+                                <x-dropdown-link :href="route('student.logout')"
+                                                 onclick="event.preventDefault();
+                                                    this.closest('form').submit();">
+                                    {{ __('Chiqish') }}
+                                </x-dropdown-link>
+                            </form>
+                        @endif
                     </x-slot>
                 </x-dropdown>
             </div>
@@ -109,14 +121,26 @@
                 <x-responsive-nav-link :href="route('student.profile')">
                     {{ __('Talaba ma\'lumoti') }}
                 </x-responsive-nav-link>
-                <form method="POST" action="{{ route('student.logout') }}">
-                    @csrf
-                    <x-responsive-nav-link :href="route('student.logout')"
-                                           onclick="event.preventDefault();
-                                        this.closest('form').submit();">
-                        {{ __('Chiqish') }}
-                    </x-responsive-nav-link>
-                </form>
+                @if(session('impersonating'))
+                    <form method="POST" action="{{ route('impersonate.stop') }}">
+                        @csrf
+                        <x-responsive-nav-link :href="route('impersonate.stop')"
+                                               onclick="event.preventDefault();
+                                            this.closest('form').submit();"
+                                               class="text-red-600">
+                            {{ __('Orqaga qaytish (Admin)') }}
+                        </x-responsive-nav-link>
+                    </form>
+                @else
+                    <form method="POST" action="{{ route('student.logout') }}">
+                        @csrf
+                        <x-responsive-nav-link :href="route('student.logout')"
+                                               onclick="event.preventDefault();
+                                            this.closest('form').submit();">
+                            {{ __('Chiqish') }}
+                        </x-responsive-nav-link>
+                    </form>
+                @endif
             </div>
         </div>
     </div>

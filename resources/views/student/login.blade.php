@@ -1,12 +1,12 @@
 <x-guest-layout>
     <!-- Tabs -->
-    <div class="flex mb-6 border-b border-gray-200 dark:border-gray-700">
+    <div style="display: flex; margin-bottom: 1.2rem; border-bottom: 2px solid #e5e7eb;">
         <a href="{{ route('student.login') }}"
-           class="flex-1 text-center py-2.5 text-sm font-semibold border-b-2 border-blue-600 text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 rounded-t-lg">
+           style="flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 600; text-decoration: none; border-bottom: 3px solid #1d4ed8; color: #1e40af; background-color: #dbeafe; border-radius: 8px 8px 0 0; margin-bottom: -2px;">
             Talaba
         </a>
         <a href="{{ route('teacher.login') }}"
-           class="flex-1 text-center py-2.5 text-sm font-medium border-b-2 border-transparent text-blue-400 dark:text-blue-500 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-t-lg transition">
+           style="flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent; color: #93c5fd; border-radius: 8px 8px 0 0; margin-bottom: -2px;">
             Xodim
         </a>
     </div>
@@ -47,7 +47,7 @@
         </div>
     </form>
 
-    <p class="mt-3 text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed">
+    <p style="margin-top: 12px; font-size: 11px; color: #9ca3af; line-height: 1.5;">
         HEMIS login va parol bilan kiring. Parol esdan chiqqan bo'lsa, dekanatga murojaat qiling.
     </p>
 </x-guest-layout>

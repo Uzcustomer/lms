@@ -242,6 +242,12 @@ class JournalController extends Controller
             ->where('curricula_hemis_id', $group->curriculum_hemis_id)
             ->where('semester_code', $semesterCode)
             ->first();
+        // Fallback: semester_code HEMIS nomuvofiqligini hal qilish (curriculum_subjects va schedules farq qilishi mumkin)
+        if (!$subject) {
+            $subject = CurriculumSubject::where('subject_id', $subjectId)
+                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->first();
+        }
         if (!$subject) {
             abort(404, "Fan topilmadi (subject_id: {$subjectId}, semester: {$semesterCode})");
         }
@@ -250,6 +256,22 @@ class JournalController extends Controller
         $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
             ->where('code', $semesterCode)
             ->first();
+        if (!$semester) {
+            $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('code', $subject->semester_code)
+                ->first();
+        }
+
+        // Detect actual semester_code from schedules (HEMIS ma'lumotlarida semester_code farq qilishi mumkin)
+        $scheduleSemesterCode = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->whereNotNull('lesson_date')
+            ->orderBy('lesson_date', 'desc')
+            ->value('semester_code');
+        if ($scheduleSemesterCode) {
+            $semesterCode = $scheduleSemesterCode;
+        }
 
         // Current education year: determine from schedules (most reliable source)
         // Pick the education_year_code that has the latest lesson_date for this group/subject/semester
@@ -975,6 +997,10 @@ class JournalController extends Controller
         $subject = CurriculumSubject::where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->first();
+        // Fallback: HEMIS semester_code nomuvofiqligini hal qilish
+        if (!$subject) {
+            $subject = CurriculumSubject::where('subject_id', $subjectId)->first();
+        }
 
         if (!$subject) {
             return response()->json(['success' => false, 'message' => 'Subject not found'], 404);
@@ -987,6 +1013,13 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->pluck('curriculum_subject_hemis_id')
             ->toArray();
+        // Fallback: semester_code bo'yicha topilmasa, barcha semester_code'lardan qidirish
+        if (empty($allCsHemisIds)) {
+            $allCsHemisIds = DB::table('curriculum_subjects')
+                ->where('subject_id', $subjectId)
+                ->pluck('curriculum_subject_hemis_id')
+                ->toArray();
+        }
 
         $independents = DB::table('independents')
             ->where('group_hemis_id', $student->group_id)
@@ -1461,6 +1494,10 @@ class JournalController extends Controller
             $subject = CurriculumSubject::where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->first();
+            // Fallback: HEMIS semester_code nomuvofiqligini hal qilish
+            if (!$subject) {
+                $subject = CurriculumSubject::where('subject_id', $subjectId)->first();
+            }
 
             if (!$subject) {
                 return response()->json(['success' => false, 'message' => 'Fan topilmadi: subject_id=' . $subjectId . ', semester=' . $semesterCode], 404);
@@ -1473,6 +1510,14 @@ class JournalController extends Controller
                 ->whereDate('lesson_date', $lessonDate)
                 ->where('lesson_pair_code', $lessonPairCode)
                 ->first();
+            // Fallback: semester_code bo'yicha topilmasa, faqat sana va juftlik bo'yicha qidirish
+            if (!$schedule) {
+                $schedule = DB::table('schedules')
+                    ->where('subject_id', $subjectId)
+                    ->whereDate('lesson_date', $lessonDate)
+                    ->where('lesson_pair_code', $lessonPairCode)
+                    ->first();
+            }
 
             // Bo'sh katak = talaba kelgan, baho qo'yilmagan
             // Oddiy baho sifatida saqlanadi (retake emas, 100%)

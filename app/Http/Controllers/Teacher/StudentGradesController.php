@@ -30,7 +30,7 @@ class StudentGradesController extends Controller
         $teacher = Auth::guard('teacher')->user()->load('groups');
         $groups = collect();
         if ($teacher->hasRole('dekan')) {
-            $departmentGroups = Group::where('department_hemis_id', $teacher->department_hemis_id)->get();
+            $departmentGroups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
             $teachingGroups = $teacher->groups;
             $groups = $departmentGroups->merge($teachingGroups)->unique('id');
         } else {
@@ -43,7 +43,9 @@ class StudentGradesController extends Controller
         $dates = collect();
         $subject = null;
         $teacherName = $teacher->full_name;
-        $departmentId = Department::where('department_hemis_id', $teacher->department_hemis_id)->first()?->id;
+        $departmentId = $teacher->hasRole('dekan')
+            ? $teacher->deanFaculties()->first()?->id
+            : Department::where('department_hemis_id', $teacher->department_hemis_id)->first()?->id;
         $viewType = $request->input('viewType', 'week');
 
         $averageGradesForSubject = [];
@@ -56,7 +58,7 @@ class StudentGradesController extends Controller
                 abort(404, 'Guruh topilmadi.');
             }
             $hasAccess = $teacher->hasRole('dekan')
-                ? ($group->department_hemis_id === $teacher->department_hemis_id || $teacher->groups->contains($group))
+                ? (in_array($group->department_hemis_id, $teacher->dean_faculty_ids) || $teacher->groups->contains($group))
                 : $teacher->groups->contains($group);
             if (!$hasAccess) {
                 abort(403, 'Siz bu guruhga bog\'lanmagansiz.');
@@ -70,7 +72,7 @@ class StudentGradesController extends Controller
             $semester = Semester::findOrFail($request->semester);
 
             $hasAccess = $teacher->hasRole('dekan')
-                ? ($group->department_hemis_id === $teacher->department_hemis_id || $teacher->groups->contains($group))
+                ? (in_array($group->department_hemis_id, $teacher->dean_faculty_ids) || $teacher->groups->contains($group))
                 : $teacher->groups->contains($group);
 
             if (!$hasAccess) {

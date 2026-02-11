@@ -123,4 +123,21 @@ class Teacher extends Authenticatable
         return $this->belongsToMany(Group::class, 'group_teacher', 'teacher_id', 'group_id');
     }
 
+    /**
+     * Dekan sifatida bog'langan fakultetlar (ko'p-ko'p)
+     */
+    public function deanFaculties()
+    {
+        return $this->belongsToMany(Department::class, 'dean_faculties', 'teacher_id', 'department_hemis_id', 'id', 'department_hemis_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Dekan fakultetlarining department_hemis_id ro'yxati
+     */
+    public function getDeanFacultyIdsAttribute(): array
+    {
+        return $this->deanFaculties()->pluck('departments.department_hemis_id')->toArray();
+    }
+
 }

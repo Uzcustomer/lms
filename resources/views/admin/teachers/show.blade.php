@@ -60,18 +60,15 @@
                                         {{ \App\Enums\ProjectRole::tryFrom($role->name)?->label() ?? $role->name }}
                                     </span>
                                 @endforeach
-                                @if($teacher->hasRole('dekan') && $teacher->department_hemis_id)
-                                    @php
-                                        $deanFaculty = $departments->firstWhere('department_hemis_id', $teacher->department_hemis_id);
-                                    @endphp
-                                    @if($deanFaculty)
+                                @if($teacher->hasRole('dekan'))
+                                    @foreach($teacher->deanFaculties as $deanFaculty)
                                         <span class="badge badge-dean-faculty">
                                             <svg style="width: 12px; height: 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
                                             </svg>
                                             {{ $deanFaculty->name }}
                                         </span>
-                                    @endif
+                                    @endforeach
                                 @endif
                             </div>
                         </div>
@@ -111,16 +108,13 @@
                             <span class="info-label">Kafedra</span>
                             <span class="info-value">{{ $teacher->department ?? '-' }}</span>
                         </div>
-                        @if($teacher->hasRole('dekan') && $teacher->department_hemis_id)
-                            @php
-                                $deanFacultyInfo = $departments->firstWhere('department_hemis_id', $teacher->department_hemis_id);
-                            @endphp
-                            @if($deanFacultyInfo)
+                        @if($teacher->hasRole('dekan') && $teacher->deanFaculties->count())
                             <div class="info-row">
-                                <span class="info-label">Dekan fakulteti</span>
-                                <span class="info-value" style="color: #0369a1;">{{ $deanFacultyInfo->name }}</span>
+                                <span class="info-label">Dekan fakultet{{ $teacher->deanFaculties->count() > 1 ? 'lari' : 'i' }}</span>
+                                <span class="info-value" style="color: #0369a1;">
+                                    {{ $teacher->deanFaculties->pluck('name')->join(', ') }}
+                                </span>
                             </div>
-                            @endif
                         @endif
                         <div class="info-row">
                             <span class="info-label">Jinsi</span>
@@ -337,18 +331,23 @@
                                 @endforeach
                             </div>
 
+                            @php
+                                $oldDeanFaculties = old('dean_faculties', $teacher->deanFaculties->pluck('department_hemis_id')->toArray());
+                            @endphp
                             <div id="department-section" style="display: none; margin-top: 10px;">
                                 <div style="padding: 10px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">
-                                    <label style="font-size: 11px; font-weight: 600; color: #1e40af; display: block; margin-bottom: 4px;">Dekan roli uchun fakultet:</label>
-                                    <select name="department_hemis_id" id="department_hemis_id" class="form-input">
-                                        <option value="">-- Tanlang --</option>
+                                    <label style="font-size: 11px; font-weight: 600; color: #1e40af; display: block; margin-bottom: 6px;">Dekan roli uchun fakultetlar (bir nechta tanlash mumkin):</label>
+                                    <div style="display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;">
                                         @foreach($departments as $department)
-                                            <option value="{{ $department->department_hemis_id }}"
-                                                {{ old('department_hemis_id', $teacher->department_hemis_id) == $department->department_hemis_id ? 'selected' : '' }}>
+                                            <label style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                                                   onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='transparent'">
+                                                <input type="checkbox" name="dean_faculties[]" value="{{ $department->department_hemis_id }}"
+                                                    {{ in_array($department->department_hemis_id, $oldDeanFaculties) ? 'checked' : '' }}
+                                                    style="accent-color: #2563eb;">
                                                 {{ $department->name }}
-                                            </option>
+                                            </label>
                                         @endforeach
-                                    </select>
+                                    </div>
                                 </div>
                             </div>
 
@@ -387,10 +386,9 @@
         function validateRolesForm() {
             var dekanCheckbox = document.querySelector('input[value="dekan"]');
             if (dekanCheckbox && dekanCheckbox.checked) {
-                var dept = document.getElementById('department_hemis_id');
-                if (!dept || !dept.value) {
-                    alert('Dekan roli uchun fakultetni tanlash majburiy!');
-                    dept.focus();
+                var checked = document.querySelectorAll('input[name="dean_faculties[]"]:checked');
+                if (checked.length === 0) {
+                    alert('Dekan roli uchun kamida bitta fakultetni tanlash majburiy!');
                     return false;
                 }
             }

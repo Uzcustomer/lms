@@ -118,9 +118,7 @@ class TeacherMainController extends Controller
         $groups = collect();
 
         if ($teacher->hasRole('dekan')) {
-            $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)->get();
-            // $teachingGroups = $teacher->groups;
-            // $groups = $departmentGroups->merge($teachingGroups)->unique('id');
+            $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         } else {
             $groups = $teacher->groups;
             if (count($groups) < 1) {
@@ -139,7 +137,9 @@ class TeacherMainController extends Controller
         $dates = collect();
         $subject = null;
         $teacherName = $teacher->full_name;
-        $departmentId = Department::where('department_hemis_id', $teacher->department_hemis_id)->first()?->id;
+        $departmentId = $teacher->hasRole('dekan')
+            ? $teacher->deanFaculties()->first()?->id
+            : Department::where('department_hemis_id', $teacher->department_hemis_id)->first()?->id;
         $viewType = $request->input('viewType', 'week');
 
         $averageGradesForSubject = [];
@@ -384,9 +384,7 @@ class TeacherMainController extends Controller
             return response()->json(['error' => 'Guruh topilmadi'], 404);
         }
         if ($teacher->hasRole('dekan')) {
-            $groups = Group::where('department_hemis_id', $teacher->department_hemis_id);
-            // $teachingGroups = $teacher->groups;
-            // $groups = $departmentGroups->merge($teachingGroups)->unique('id');
+            $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids);
         } else {
             $groups = $teacher->groups;
             if (count($groups) < 1) {
@@ -438,9 +436,7 @@ class TeacherMainController extends Controller
         }
 
         if ($teacher->hasRole('dekan')) {
-            $groups = Group::where('department_hemis_id', $teacher->department_hemis_id);
-            // $teachingGroups = $teacher->groups;
-            // $groups = $departmentGroups->merge($teachingGroups)->unique('id');
+            $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids);
         } else {
             $groups = $teacher->groups;
             if (count($groups) < 1) {

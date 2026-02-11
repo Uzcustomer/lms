@@ -60,7 +60,7 @@ class OraliqNazoratController extends Controller
         // dd($teacher);
         $user = Auth::user();
         if ($user->hasRole(['dekan'])) {
-            $query = OraliqNazorat::where('department_hemis_id', $teacher->department_hemis_id);
+            $query = OraliqNazorat::whereIn('department_hemis_id', $teacher->dean_faculty_ids);
         } else {
             $query = OraliqNazorat::where('teacher_hemis_id', $teacher->hemis_id);
         }
@@ -92,9 +92,7 @@ class OraliqNazoratController extends Controller
         $perPage = $request->get('per_page', 50);
         $oraliqnazorats = $query->orderBy('id', 'desc')->paginate($perPage)->appends($request->query());
         if ($teacher->hasRole('dekan')) {
-            $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)->get();
-            // $teachingGroups = $teacher->groups;
-            // $groups = $departmentGroups->merge($teachingGroups)->unique('id');
+            $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         } else {
             $groups = $teacher->groups;
             if (count($groups) < 1) {
@@ -122,11 +120,11 @@ class OraliqNazoratController extends Controller
         }
         $teacher = Auth::guard('teacher')->user();
 
-        $groups = Group::where('department_hemis_id', $teacher->department_hemis_id)
+        $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)
             ->select('group_hemis_id as id', 'name')
             ->get();
         $lastFilters = session('last_lesson_filters', []);
-        $departments = Department::where('department_hemis_id', $teacher->department_hemis_id)->get();
+        $departments = Department::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
         return view('teacher.oraliqnazorat.create', compact('departments', 'groups', 'lastFilters'));
 
     }

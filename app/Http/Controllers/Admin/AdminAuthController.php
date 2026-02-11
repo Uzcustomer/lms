@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\ProjectRole;
 use App\Http\Controllers\Controller;
+use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,6 +23,7 @@ class AdminAuthController extends Controller
             $staffRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
             if ($user->hasRole($staffRoleValues)) {
                 $request->session()->regenerate();
+                ActivityLogService::logLogin('web');
                 return redirect()->intended(route('admin.dashboard'));
             } else {
                 Auth::logout();
@@ -39,6 +41,8 @@ class AdminAuthController extends Controller
     public function logout(Request $request): RedirectResponse
     {
         $isTeacher = Auth::guard('teacher')->check();
+
+        ActivityLogService::logLogout($isTeacher ? 'teacher' : 'web');
 
         Auth::logout();
 

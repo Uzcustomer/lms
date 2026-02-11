@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\ProjectRole;
 use App\Http\Controllers\Controller;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Spatie\Permission\Models\Role;
@@ -47,6 +48,9 @@ class UserController extends Controller
         ]);
 
         $user->syncRoles($request->roles);
+        ActivityLogService::log('create', 'user', "Yangi foydalanuvchi yaratildi: {$user->name}", $user, null, [
+            'roles' => $request->roles,
+        ]);
 
         return redirect()->route('admin.users.index')->with('success', "Foydalanuvchi yaratildi");
     }
@@ -62,6 +66,8 @@ class UserController extends Controller
             'roles.*' => 'in:' . implode(',', $validRoleValues),
         ]);
 
+        $oldRoles = $user->getRoleNames()->toArray();
+
         $user->update([
             'name' => $request->name,
             'email' => $request->email,
@@ -72,6 +78,11 @@ class UserController extends Controller
         }
 
         $user->syncRoles($request->roles);
+        ActivityLogService::log('update', 'user', "Foydalanuvchi yangilandi: {$user->name}", $user, [
+            'roles' => $oldRoles,
+        ], [
+            'roles' => $request->roles,
+        ]);
 
         return redirect()->route('admin.users.index')->with('success', "Foydalanuvchi yangilandi");
     }

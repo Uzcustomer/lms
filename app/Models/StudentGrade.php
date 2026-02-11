@@ -2,13 +2,20 @@
 
 namespace App\Models;
 
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 class StudentGrade extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsActivity;
+
+    protected static string $activityModule = 'student_grade';
+    protected static array $logOnly = [
+        'grade', 'status', 'reason', 'retake_grade', 'retake_graded_at',
+        'retake_file_path', 'retake_by', 'graded_by_user_id',
+    ];
 
     protected $fillable = [
         'hemis_id',

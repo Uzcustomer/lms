@@ -2,10 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 
 class Setting extends Model
 {
+    use LogsActivity;
+
+    protected static string $activityModule = 'settings';
     protected $fillable = ['key', 'value'];
 
     public static function get(string $key, $default = null)

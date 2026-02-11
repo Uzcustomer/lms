@@ -1,4 +1,16 @@
 <x-guest-layout>
+    <!-- Tabs -->
+    <div class="flex mb-6 border-b border-gray-200 dark:border-gray-700">
+        <a href="{{ route('student.login') }}"
+           class="flex-1 text-center py-2.5 text-sm font-semibold border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-t-lg">
+            Talaba
+        </a>
+        <a href="{{ route('teacher.login') }}"
+           class="flex-1 text-center py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded-t-lg transition">
+            Xodim
+        </a>
+    </div>
+
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
     <form method="POST" action="{{ route('student.login.post') }}">
@@ -35,9 +47,7 @@
         </div>
     </form>
 
-    <div class="mt-4 p-3 rounded-lg" style="background-color: #eff6ff; border: 1px solid #bfdbfe;">
-        <p class="text-xs" style="color: #1e40af;">
-            HEMIS login va parol bilan kiring. Agar HEMIS parolingiz esdan chiqqan bo'lsa, admin yoki dekanatga murojaat qiling — vaqtinchalik parol beriladi.
-        </p>
-    </div>
+    <p class="mt-3 text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed">
+        HEMIS login va parol bilan kiring. Parol esdan chiqqan bo'lsa, dekanatga murojaat qiling.
+    </p>
 </x-guest-layout>

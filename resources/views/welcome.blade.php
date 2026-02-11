@@ -64,13 +64,29 @@
         }
         .eye-btn:hover { color: #475569; }
         .btn-submit {
-            transition: all .2s ease;
+            transition: all .25s ease;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%);
+            padding: 14px 0;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            border-radius: 14px;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
         .btn-submit:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(30, 64, 175, 0.4);
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
         }
-        .btn-submit:active { transform: translateY(0); }
+        .btn-submit:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(30, 64, 175, 0.3);
+        }
         .role-btn {
             transition: all .2s ease;
             font-weight: 600;
@@ -199,7 +215,8 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn-submit w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-[15px] font-bold rounded-xl tracking-wide">
+                <button type="submit" class="btn-submit w-full text-white">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3-3l3-3m0 0l-3-3m3 3H9" /></svg>
                     Kirish
                 </button>
             </form>
@@ -229,7 +246,8 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn-submit w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-[15px] font-bold rounded-xl tracking-wide">
+                <button type="submit" class="btn-submit w-full text-white">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3-3l3-3m0 0l-3-3m3 3H9" /></svg>
                     Kirish
                 </button>
             </form>
@@ -260,7 +278,8 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn-submit w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-[15px] font-bold rounded-xl tracking-wide">
+                    <button type="submit" class="btn-submit w-full text-white">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3-3l3-3m0 0l-3-3m3 3H9" /></svg>
                         Kirish
                     </button>
                 </form>

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Teacher;
 use App\Services\ActivityLogService;
+use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -107,6 +108,15 @@ class TeacherController extends Controller
         $teacher->save();
 
         ActivityLogService::log('update', 'teacher', "Xodim paroli tiklandi: {$teacher->full_name}", $teacher);
+
+        // Telegram orqali login va yangi parolni yuborish
+        if ($teacher->telegram_chat_id) {
+            $telegramService = new TelegramService();
+            $telegramService->sendToUser(
+                $teacher->telegram_chat_id,
+                "Sizning parolingiz tiklandi.\n\nLogin: {$teacher->login}\nYangi parol: {$newPassword}\n\nTizimga kirganingizda parolni o'zgartiring."
+            );
+        }
 
         return redirect()->route('admin.teachers.show', $teacher)
             ->with('success', 'Parol tiklandi (' . $newPassword . '). Xodim keyingi kirishda parolni o\'zgartirishi kerak.');

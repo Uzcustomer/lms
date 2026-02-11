@@ -18,10 +18,9 @@
         <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100 dark:bg-gray-900">
             <div>
                 <a href="/">
-                    <x-application-logo class="w-20 h-20 fill-current text-gray-500" />
+                    <img src="{{ asset('logo.png') }}" alt="Logo" class="w-20 h-20 object-contain" />
                 </a>
             </div>
-{{--            <h1 class="text-4xl font-bold text-blue-500 text-center mt-4 mb-4 shadow-sm">Talabalar uchun</h1>--}}
 
             <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white dark:bg-gray-800 shadow-md overflow-visible sm:rounded-lg">
                 {{ $slot }}

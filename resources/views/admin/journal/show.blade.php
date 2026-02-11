@@ -946,7 +946,7 @@
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @php
-                                                        $canRate = auth()->user()->hasRole('admin');
+                                                        $canRate = !$isDekan && auth()->user()->hasRole('admin');
                                                         $showRatingInput = false;
                                                         $gradeRecordId = null;
                                                         $hasRetake = false;
@@ -1866,6 +1866,7 @@
             csrfToken: '{{ csrf_token() }}'
         };
 
+        const isDekan = {{ $isDekan ? 'true' : 'false' }};
         const historyDownloadBase = '{{ url("admin/journal/download-history-file") }}/';
 
         function updateMtHistoryCell(studentHemisId, history) {
@@ -1891,7 +1892,7 @@
             const grade = parseFloat(data.grade);
             if (grade >= 60) {
                 cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#dcfce7;color:#15803d;border-radius:6px;">&#128274; Qabul qilindi</span>';
-            } else if (data.can_regrade) {
+            } else if (data.can_regrade && !isDekan) {
                 cell.innerHTML = '<button type="button" onclick="startRegrade(\'' + studentHemisId + '\')" ' +
                     'style="padding:6px 16px;font-size:13px;font-weight:600;background:#f97316;color:#fff;border:none;border-radius:6px;cursor:pointer;">' +
                     'Qayta baholash</button>';
@@ -1904,6 +1905,7 @@
         }
 
         function saveMtGrade(studentHemisId, isRegrade) {
+            if (isDekan) return;
             const input = document.getElementById('mt-grade-' + studentHemisId);
             const grade = input.value;
 
@@ -1986,6 +1988,7 @@
         }
 
         function startRegrade(studentHemisId) {
+            if (isDekan) return;
             const input = document.getElementById('mt-grade-' + studentHemisId);
             const actionCell = document.getElementById('mt-action-' + studentHemisId);
 
@@ -2110,6 +2113,7 @@
         let currentEditingCell = null;
 
         function makeEditable(cellDiv, gradeId) {
+            if (isDekan) return;
             // Prevent multiple edits at once
             if (currentEditingCell) {
                 return;
@@ -2159,6 +2163,7 @@
         }
 
         function makeEditableEmpty(cellDiv, studentHemisId, lessonDate, lessonPair, subjectId, semesterCode) {
+            if (isDekan) return;
             // Prevent multiple edits at once
             if (currentEditingCell) {
                 return;

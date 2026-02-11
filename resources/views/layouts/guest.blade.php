@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'TDTU Termiz filiali mark platformasi') }}</title>
+        <title>TDTU Termiz filiali mark platformasi</title>
 
         <link rel="icon" href="{{ asset('logo.png') }}" type="image/png">
 

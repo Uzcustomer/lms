@@ -17,6 +17,9 @@ class JournalController extends Controller
 {
     public function index(Request $request)
     {
+        // Dekan uchun fakultet cheklovi
+        $dekanFacultyId = get_dekan_faculty_id();
+
         // Get filter options for dropdowns
         $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
             ->whereNotNull('education_type_code')
@@ -38,10 +41,16 @@ class JournalController extends Controller
             ->orderBy('education_year_code', 'desc')
             ->get();
 
-        $faculties = Department::where('structure_type_code', 11)
+        $facultyQuery = Department::where('structure_type_code', 11)
             ->where('active', true)
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name');
+
+        // Dekan faqat o'z fakultetini ko'radi
+        if ($dekanFacultyId) {
+            $facultyQuery->where('id', $dekanFacultyId);
+        }
+
+        $faculties = $facultyQuery->get();
 
         // Base query builder (umumiy join va filtrlar)
         $baseQuery = function () {
@@ -69,7 +78,9 @@ class JournalController extends Controller
         if ($request->filled('education_year')) {
             $kafedraQuery->where('c.education_year_code', $request->education_year);
         }
-        if ($request->filled('faculty')) {
+        if ($dekanFacultyId) {
+            $kafedraQuery->where('f.id', $dekanFacultyId);
+        } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
         if ($request->get('current_semester', '1') == '1') {
@@ -110,7 +121,10 @@ class JournalController extends Controller
             $query->where('c.education_year_code', $request->education_year);
         }
 
-        if ($request->filled('faculty')) {
+        // Dekan uchun fakultet majburiy filtr
+        if ($dekanFacultyId) {
+            $query->where('f.id', $dekanFacultyId);
+        } elseif ($request->filled('faculty')) {
             $query->where('f.id', $request->faculty);
         }
 
@@ -174,7 +188,8 @@ class JournalController extends Controller
             'faculties',
             'kafedras',
             'sortColumn',
-            'sortDirection'
+            'sortDirection',
+            'dekanFacultyId'
         ));
     }
 
@@ -891,6 +906,11 @@ class JournalController extends Controller
      */
     public function saveMtGrade(Request $request)
     {
+        // Dekan faqat ko'rish huquqiga ega
+        if (is_active_dekan()) {
+            return response()->json(['success' => false, 'message' => 'Sizda tahrirlash huquqi yo\'q'], 403);
+        }
+
         $request->validate([
             'student_hemis_id' => 'required',
             'subject_id' => 'required',
@@ -2024,17 +2044,28 @@ class JournalController extends Controller
      */
     public function getSidebarOptions(Request $request)
     {
+        // Dekan uchun fakultet cheklovi
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && !$request->filled('faculty_id')) {
+            $request->merge(['faculty_id' => $dekanFacultyId]);
+        }
+
         // Fakultet department_hemis_id (reused in multiple queries)
         $facultyDeptHemisId = null;
         if ($request->filled('faculty_id')) {
             $facultyDeptHemisId = Department::where('id', $request->faculty_id)->value('department_hemis_id');
         }
 
-        // 1. Fakultet - erkin, hamma faol fakultetlar
-        $faculties = Department::where('structure_type_code', 11)
+        // 1. Fakultet - erkin, hamma faol fakultetlar (dekan uchun faqat o'ziniki)
+        $facultyQuery = Department::where('structure_type_code', 11)
             ->where('active', true)
-            ->orderBy('name')
-            ->pluck('name', 'id');
+            ->orderBy('name');
+
+        if ($dekanFacultyId) {
+            $facultyQuery->where('id', $dekanFacultyId);
+        }
+
+        $faculties = $facultyQuery->pluck('name', 'id');
 
         // 2. Yo'nalish - fakultetga bog'liq
         $specialtiesQuery = DB::table('specialties as sp')

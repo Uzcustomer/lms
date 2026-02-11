@@ -35,12 +35,21 @@
                         </div>
                         <div class="filter-item">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
-                            <select id="faculty" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                                @foreach($faculties as $faculty)
-                                    <option value="{{ $faculty->id }}">{{ $faculty->name }}</option>
-                                @endforeach
+                            <select id="faculty" class="select2" style="width: 100%;" {{ isset($dekanFacultyId) && $dekanFacultyId ? 'disabled' : '' }}>
+                                @if(isset($dekanFacultyId) && $dekanFacultyId)
+                                    @foreach($faculties as $faculty)
+                                        <option value="{{ $faculty->id }}" selected>{{ $faculty->name }}</option>
+                                    @endforeach
+                                @else
+                                    <option value="">Barchasi</option>
+                                    @foreach($faculties as $faculty)
+                                        <option value="{{ $faculty->id }}">{{ $faculty->name }}</option>
+                                    @endforeach
+                                @endif
                             </select>
+                            @if(isset($dekanFacultyId) && $dekanFacultyId)
+                                <input type="hidden" id="dekan_faculty_id" value="{{ $dekanFacultyId }}">
+                            @endif
                         </div>
                         <div class="filter-item">
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
@@ -205,10 +214,11 @@
         }
 
         function getFilters() {
+            var dekanFaculty = document.getElementById('dekan_faculty_id');
             return {
                 education_year: $('#education_year').val() || '',
                 education_type: $('#education_type').val() || '',
-                faculty: $('#faculty').val() || '',
+                faculty: dekanFaculty ? dekanFaculty.value : ($('#faculty').val() || ''),
                 specialty: $('#specialty').val() || '',
                 level_code: $('#level_code').val() || '',
                 semester: $('#semester').val() || '',
@@ -392,9 +402,10 @@
             });
 
             function fp() {
+                var df = document.getElementById('dekan_faculty_id');
                 return {
                     education_type: $('#education_type').val() || '',
-                    faculty_id: $('#faculty').val() || '',
+                    faculty_id: df ? df.value : ($('#faculty').val() || ''),
                     specialty_id: $('#specialty').val() || '',
                     level_code: $('#level_code').val() || '',
                     current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0'

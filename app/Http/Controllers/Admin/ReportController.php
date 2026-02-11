@@ -2204,6 +2204,33 @@ class ReportController extends Controller
             $validSubjectIds = $scheduleCombos->pluck('subject_id')->unique()->toArray();
             $validSemesterCodes = $scheduleCombos->pluck('semester_code')->unique()->toArray();
 
+            // Darslar soni - har bir guruh uchun necha kun dars o'tilgan
+            $lessonDaysQuery = DB::table('schedules as sch2')
+                ->whereNotIn('sch2.training_type_code', $excludedCodes)
+                ->whereNotNull('sch2.lesson_date')
+                ->whereIn('sch2.group_id', $scheduleGroupIds);
+
+            if ($isCurrentSemester) {
+                $lessonDaysQuery
+                    ->join('groups as gr2', 'gr2.group_hemis_id', '=', 'sch2.group_id')
+                    ->join('semesters as sem2', function ($join) {
+                        $join->on('sem2.code', '=', 'sch2.semester_code')
+                            ->on('sem2.curriculum_hemis_id', '=', 'gr2.curriculum_hemis_id');
+                    })
+                    ->where('sem2.current', true)
+                    ->where('sch2.education_year_current', true);
+            }
+
+            if ($request->filled('semester_code')) {
+                $lessonDaysQuery->where('sch2.semester_code', $request->semester_code);
+            }
+
+            $lessonDayCounts = $lessonDaysQuery
+                ->select('sch2.group_id', DB::raw('COUNT(DISTINCT sch2.lesson_date) as days_count'))
+                ->groupBy('sch2.group_id')
+                ->pluck('days_count', 'sch2.group_id')
+                ->toArray();
+
             // Auditoriya soatlarini hisoblash
             $groupsData = DB::table('groups')
                 ->whereIn('group_hemis_id', $scheduleGroupIds)
@@ -2393,8 +2420,8 @@ class ReportController extends Controller
                 unset($gradesChunk);
             }
 
-            // 4-QADAM: Har bir talaba/fan uchun yiqilish sabablarini aniqlash
-            $studentDebts = []; // student_hemis_id => [debts]
+            // 4-QADAM: Har bir talaba/fan uchun JN va yiqilish sabablarini hisoblash
+            $allStudentResults = [];
 
             foreach ($studentSubjectData as $ssKey => $data) {
                 $comboKey = $data['group_id'] . '|' . $data['subject_id'] . '|' . $data['semester_code'];
@@ -2462,14 +2489,12 @@ class ReportController extends Controller
                     $reasons[] = 'Davomat > 25% (' . $absencePercent . '%)';
                 }
 
-                if (empty($reasons)) continue;
-
                 $hemis = $data['student_hemis_id'];
-                if (!isset($studentDebts[$hemis])) {
-                    $studentDebts[$hemis] = [];
+                if (!isset($allStudentResults[$hemis])) {
+                    $allStudentResults[$hemis] = [];
                 }
 
-                $studentDebts[$hemis][] = [
+                $allStudentResults[$hemis][] = [
                     'subject_id' => $data['subject_id'],
                     'subject_name' => $data['subject_name'],
                     'semester_code' => $data['semester_code'],
@@ -2486,6 +2511,32 @@ class ReportController extends Controller
                     'reasons' => $reasons,
                 ];
             }
+
+            // 4.5-QADAM: Dublikat fanlarni filtrlash
+            // "Umumiy xirurgiya (a)", "(b)", "(c)" kabi fanlardan faqat eng yuqori JN baholi variantni saqlash
+            $studentDebts = [];
+            foreach ($allStudentResults as $hemisId => $results) {
+                $grouped = [];
+                foreach ($results as $r) {
+                    $baseName = preg_replace('/\s*\([a-zA-Zа-яА-Яa-zа-я]\)\s*$/u', '', $r['subject_name']);
+                    $grouped[$baseName][] = $r;
+                }
+
+                foreach ($grouped as $variants) {
+                    if (count($variants) > 1) {
+                        // Eng yuqori JN baholi variantni tanlash
+                        usort($variants, fn($a, $b) => $b['jn_percent'] <=> $a['jn_percent']);
+                    }
+                    $best = $variants[0];
+                    if (!empty($best['reasons'])) {
+                        if (!isset($studentDebts[$hemisId])) {
+                            $studentDebts[$hemisId] = [];
+                        }
+                        $studentDebts[$hemisId][] = $best;
+                    }
+                }
+            }
+            unset($allStudentResults);
 
             // 5-QADAM: minDebtCount bo'yicha filtrlash
             $studentDebts = array_filter($studentDebts, fn($debts) => count($debts) >= $minDebtCount);
@@ -2519,7 +2570,7 @@ class ReportController extends Controller
                     'group_name' => $st->group_name ?? '-',
                     'group_id' => $st->group_id ?? '',
                     'debt_count' => count($debts),
-                    'subjects' => implode(', ', array_column($debts, 'subject_name')),
+                    'lesson_days' => $lessonDayCounts[$st->group_id] ?? 0,
                     'debts' => $debts,
                 ];
             }
@@ -2591,7 +2642,7 @@ class ReportController extends Controller
         $sheet->setTitle('Qarzdorlar hisoboti');
 
         $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            'Qarzdor fanlar soni', 'Qarzdor fanlar'];
+            'Qarzdor fanlar soni', 'Darslar soni (kun)'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -2615,7 +2666,7 @@ class ReportController extends Controller
             $sheet->setCellValue([7, $row], $r['semester_name']);
             $sheet->setCellValue([8, $row], $r['group_name']);
             $sheet->setCellValue([9, $row], $r['debt_count']);
-            $sheet->setCellValue([10, $row], $r['subjects']);
+            $sheet->setCellValue([10, $row], $r['lesson_days']);
         }
 
         $widths = [5, 30, 15, 25, 30, 8, 10, 15, 12, 60];

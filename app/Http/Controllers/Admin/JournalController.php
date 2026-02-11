@@ -1648,16 +1648,25 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Semestr bo'yicha filtrlash
-        if ($request->filled('semester_code')) {
-            $curriculaIds = Semester::where('code', $request->semester_code)
+        // Joriy semestr bo'yicha filtrlash
+        if ($request->get('current_semester') == '1') {
+            $curriculaIds = Semester::where('current', true)
                 ->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Kurs bo'yicha filtrlash
+        // Semestr bo'yicha filtrlash (joriy semestr orqali guruh aniqlanadi)
+        if ($request->filled('semester_code')) {
+            $curriculaIds = Semester::where('code', $request->semester_code)
+                ->where('current', true)
+                ->pluck('curriculum_hemis_id');
+            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+        }
+
+        // Kurs bo'yicha filtrlash (joriy semestr orqali guruh kursini aniqlash)
         if ($request->filled('level_code')) {
             $curriculaIds = Semester::where('level_code', $request->level_code)
+                ->where('current', true)
                 ->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }

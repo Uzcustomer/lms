@@ -90,34 +90,32 @@
         </div>
     @endif
 
-    {{-- Progress Steps --}}
-    <div class="flex items-center mb-6">
-        {{-- Step 1: Telefon --}}
-        <div class="flex items-center">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                {{ $student->phone ? 'bg-green-500 text-white' : 'bg-blue-600 text-white' }}">
-                @if($student->phone)
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                @else
-                    1
-                @endif
-            </div>
-            <span class="ml-2 text-xs font-medium {{ $student->phone ? 'text-green-600' : 'text-blue-600' }}">Telefon</span>
+    {{-- Progress Tabs --}}
+    <div style="display:flex; gap:8px; margin-bottom:20px;">
+        {{-- Tab 1: Telefon --}}
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:10px 14px; border-radius:10px; font-size:14px; font-weight:600;
+            {{ $student->phone ? 'background:#ecfdf5; color:#059669; border:2px solid #a7f3d0;' : 'background:#eff6ff; color:#2563eb; border:2px solid #93c5fd;' }}">
+            @if($student->phone)
+                <svg style="width:18px; height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+            @else
+                <svg style="width:18px; height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                </svg>
+            @endif
+            Telefon
         </div>
 
-        <div class="flex-1 h-0.5 mx-3 {{ $student->phone ? 'bg-green-300' : 'bg-gray-200' }}"></div>
-
-        {{-- Step 2: Telegram --}}
-        <div class="flex items-center">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                {{ $student->telegram_verified_at ? 'bg-green-500 text-white' : ($student->phone ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-500') }}">
-                @if($student->telegram_verified_at)
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                @else
-                    2
-                @endif
-            </div>
-            <span class="ml-2 text-xs font-medium {{ $student->telegram_verified_at ? 'text-green-600' : ($student->phone ? 'text-blue-600' : 'text-gray-400') }}">Telegram</span>
+        {{-- Tab 2: Telegram --}}
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:10px 14px; border-radius:10px; font-size:14px; font-weight:600;
+            {{ $student->telegram_verified_at ? 'background:#ecfdf5; color:#059669; border:2px solid #a7f3d0;' : ($student->phone ? 'background:#eff6ff; color:#2563eb; border:2px solid #93c5fd;' : 'background:#f9fafb; color:#9ca3af; border:2px solid #e5e7eb;') }}">
+            @if($student->telegram_verified_at)
+                <svg style="width:18px; height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+            @else
+                <svg style="width:18px; height:18px;" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                </svg>
+            @endif
+            Telegram
         </div>
     </div>
 

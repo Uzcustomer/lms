@@ -174,6 +174,10 @@
             </svg>
             Dars tarixi
         </a>
+        @endif
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+        <div class="sidebar-section">Monitoring</div>
 
         <a href="{{ route('admin.activity-log.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.activity-log.*') ? 'sidebar-active' : '' }}">

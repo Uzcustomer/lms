@@ -114,13 +114,19 @@ class TeacherController extends Controller
     {
         $validRoleValues = array_values(array_map(fn ($r) => $r->value, ProjectRole::staffRoles()));
 
+        $roles = $request->input('roles', []);
+        $isDean = in_array(ProjectRole::DEAN->value, $roles);
+
         $request->validate([
             'roles' => 'nullable|array',
             'roles.*' => 'in:' . implode(',', $validRoleValues),
-            'department_hemis_id' => 'nullable|exists:departments,department_hemis_id',
+            'department_hemis_id' => [
+                $isDean ? 'required' : 'nullable',
+                'exists:departments,department_hemis_id',
+            ],
+        ], [
+            'department_hemis_id.required' => 'Dekan roli uchun fakultetni tanlash majburiy.',
         ]);
-
-        $roles = $request->input('roles', []);
 
         foreach ($roles as $roleName) {
             Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
@@ -128,7 +134,7 @@ class TeacherController extends Controller
 
         $teacher->syncRoles($roles);
 
-        $teacher->department_hemis_id = in_array(ProjectRole::DEAN->value, $roles)
+        $teacher->department_hemis_id = $isDean
             ? $request->department_hemis_id
             : null;
         $teacher->save();

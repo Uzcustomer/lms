@@ -15,6 +15,7 @@ use App\Models\Qaytnoma;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\Teacher;
+use App\Enums\ProjectRole;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use PhpOffice\PhpWord\TemplateProcessor;
@@ -255,7 +256,9 @@ class QaytnomaController extends Controller
             if ($other_teacher_text == "") {
                 $other_teacher_text = "!!!";
             }
-            $dekan = Teacher::where('department_hemis_id', $deportment->department_hemis_id)->where('role', 'dekan')->first()->full_name ?? "";
+            $dekan = Teacher::where('department_hemis_id', $deportment->department_hemis_id)
+                ->whereHas('roles', fn ($q) => $q->where('name', ProjectRole::DEAN->value))
+                ->first()->full_name ?? "";
             $data = [
                 'fakultet_name' => $deportment->name,
                 "kurs" => $semester->level_name,

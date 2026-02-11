@@ -99,26 +99,21 @@
             <form method="POST" action="{{ route('student.complete-profile.phone') }}"
                   x-data="phoneInput()" x-init="init()">
                 @csrf
-                <div class="mb-3">
-                    <label class="block text-xs font-medium text-gray-600 mb-1.5">Telefon raqami</label>
-                    <div class="relative flex items-stretch rounded-lg border border-gray-300 bg-white shadow-sm focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-visible">
-                        {{-- Country selector button --}}
+                <div class="mb-3 space-y-2">
+                    {{-- Mamlakat tanlash --}}
+                    <div class="relative">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Mamlakat kodi</label>
                         <button type="button" @click="open = !open"
-                                class="flex items-center gap-1.5 px-2.5 bg-gray-50 border-r border-gray-300 hover:bg-gray-100 transition rounded-l-lg shrink-0"
-                                @click.away="open = false">
-                            <span class="text-base" x-text="selectedFlag"></span>
-                            <span class="text-xs font-semibold text-gray-700" x-text="'+' + selectedCode"></span>
-                            <svg class="w-3 h-3 text-gray-400 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+                                class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition text-left">
+                            <span class="flex items-center gap-2">
+                                <span class="text-lg leading-none" x-text="selectedFlag"></span>
+                                <span class="text-gray-800" x-text="selectedName"></span>
+                                <span class="text-gray-400 font-medium" x-text="'+' + selectedCode"></span>
+                            </span>
+                            <svg class="w-4 h-4 text-gray-400 transition-transform shrink-0" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
                         </button>
-
-                        {{-- Phone input --}}
-                        <input type="tel" x-model="phoneNumber" x-ref="phoneInput"
-                               placeholder="90 123 45 67"
-                               maxlength="15"
-                               class="flex-1 min-w-0 text-sm border-0 focus:ring-0 py-2.5 px-3"
-                               oninput="this.value = this.value.replace(/[^\d]/g, '')">
 
                         {{-- Country dropdown --}}
                         <div x-show="open" x-transition:enter="transition ease-out duration-150"
@@ -126,7 +121,7 @@
                              x-transition:leave="transition ease-in duration-100"
                              x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
                              @click.away="open = false"
-                             class="absolute left-0 top-full z-50 mt-1.5 w-full bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden"
+                             class="absolute left-0 top-full z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden"
                              style="display: none;">
                             {{-- Search --}}
                             <div class="p-2 border-b border-gray-100 bg-gray-50">
@@ -158,6 +153,20 @@
                                     Hech narsa topilmadi
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    {{-- Telefon raqam --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Telefon raqami</label>
+                        <div class="flex">
+                            <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 border border-r-0 border-gray-300 rounded-l-lg select-none"
+                                  x-text="'+' + selectedCode"></span>
+                            <input type="tel" x-model="phoneNumber" x-ref="phoneInput"
+                                   placeholder="90 123 45 67"
+                                   maxlength="15"
+                                   class="flex-1 min-w-0 text-sm rounded-r-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500 py-2"
+                                   oninput="this.value = this.value.replace(/[^\d]/g, '')">
                         </div>
                     </div>
                     <input type="hidden" name="phone" :value="'+' + selectedCode + phoneNumber">

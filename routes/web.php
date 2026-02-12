@@ -150,6 +150,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
             Route::post('/open-lesson', [JournalController::class, 'openLesson'])->name('open-lesson');
             Route::post('/close-lesson', [JournalController::class, 'closeLesson'])->name('close-lesson');
+            Route::get('/download-lesson-file/{lessonOpening}', [JournalController::class, 'downloadLessonFile'])->name('download-lesson-file');
             Route::post('/save-opened-lesson-grade', [JournalController::class, 'saveOpenedLessonGrade'])->name('save-opened-lesson-grade');
             Route::get('/get-specialties', [JournalController::class, 'getSpecialties'])->name('get-specialties');
             Route::get('/get-level-codes', [JournalController::class, 'getLevelCodes'])->name('get-level-codes');

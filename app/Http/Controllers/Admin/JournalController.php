@@ -2569,6 +2569,18 @@ class JournalController extends Controller
     }
 
     /**
+     * Dars ochish faylini yuklab olish
+     */
+    public function downloadLessonFile(LessonOpening $lessonOpening)
+    {
+        if (!$lessonOpening->file_path || !\Storage::disk('public')->exists($lessonOpening->file_path)) {
+            abort(404, 'Fayl topilmadi');
+        }
+
+        return \Storage::disk('public')->download($lessonOpening->file_path, $lessonOpening->file_original_name);
+    }
+
+    /**
      * O'qituvchi uchun: ochilgan dars kuniga baho qo'yish
      */
     public function saveOpenedLessonGrade(Request $request)

@@ -749,13 +749,9 @@
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="O'tkazib yuborilgan kun — Dars ochish">
                                                         <button type="button" onclick="openLessonModal('{{ $dateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
                                                     </div>
-                                                @elseif($isActiveOpened)
-                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="Dars ochilgan: {{ $openingInfo['deadline'] }} gacha">
-                                                        <span style="background: #10b981; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: inline-flex; align-items: center; justify-content: center;">&#10003;</span>
-                                                    </div>
-                                                @elseif($isOpened && $openingInfo['status'] !== 'active')
-                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="Dars ochilish muddati tugagan">
-                                                        <span style="background: #9ca3af; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: inline-flex; align-items: center; justify-content: center;">&#10003;</span>
+                                                @elseif($isOpened)
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="{{ $openingInfo['file_original_name'] ?? 'Fayl' }} — {{ $isActiveOpened ? 'Ochilgan: ' . $openingInfo['deadline'] . ' gacha' : 'Muddati tugagan' }}">
+                                                        <a href="{{ route('admin.journal.download-lesson-file', $openingInfo['id']) }}" style="background: {{ $isActiveOpened ? '#10b981' : '#9ca3af' }}; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;">&#128206;</a>
                                                     </div>
                                                 @endif
                                             </th>
@@ -910,9 +906,9 @@
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
                                                         <button type="button" onclick="openLessonModal('{{ $dDateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Dars ochish">!</button>
                                                     </div>
-                                                @elseif($dIsActiveOpened && $isFirstOfDate)
-                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="Ochilgan: {{ $dOpeningInfo['deadline'] }} gacha">
-                                                        <span style="background: #10b981; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: inline-flex; align-items: center; justify-content: center;">&#10003;</span>
+                                                @elseif($dOpeningInfo && $isFirstOfDate)
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="{{ $dOpeningInfo['file_original_name'] ?? 'Fayl' }} — {{ $dIsActiveOpened ? 'Ochilgan: ' . $dOpeningInfo['deadline'] . ' gacha' : 'Muddati tugagan' }}">
+                                                        <a href="{{ route('admin.journal.download-lesson-file', $dOpeningInfo['id']) }}" style="background: {{ $dIsActiveOpened ? '#10b981' : '#9ca3af' }}; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;">&#128206;</a>
                                                     </div>
                                                 @endif
                                             </th>

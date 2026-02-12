@@ -1074,8 +1074,12 @@
                                                     @else
                                                         @if($canEditOpened && $isEmpty)
                                                             {{-- O'qituvchi uchun: ochilgan darsga baho qo'yish --}}
-                                                            <div class="editable-cell cursor-pointer hover:bg-green-50"
-                                                                 onclick="makeEditableOpened(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}', '{{ $groupId }}')"
+                                                            <div class="editable-cell grade-cell-opened cursor-pointer hover:bg-green-50"
+                                                                 data-row="{{ $index }}" data-col="{{ $colIndex }}"
+                                                                 data-student="{{ $student->hemis_id }}" data-date="{{ $col['date'] }}"
+                                                                 data-pair="{{ $col['pair'] }}" data-subject="{{ $subjectId }}"
+                                                                 data-semester="{{ $semesterCode }}" data-group="{{ $groupId }}"
+                                                                 onclick="startEditOpened(this)"
                                                                  title="Dars ochilgan — baho kiriting" style="background: #f0fdf4;">
                                                                 <span class="text-green-400">-</span>
                                                             </div>
@@ -2603,69 +2607,287 @@
     </script>
     @endif
 
-    {{-- ===== OCHILGAN DARSGA BAHO QO'YISH (O'QITUVCHI) ===== --}}
-    <script>
-        function makeEditableOpened(cellDiv, studentHemisId, lessonDate, pairCode, subjectId, semesterCode, groupHemisId) {
-            if (cellDiv.querySelector('input')) return;
-            const currentVal = cellDiv.querySelector('span') ? cellDiv.querySelector('span').textContent.trim() : '';
-            const numVal = currentVal === '-' ? '' : currentVal;
+    {{-- ===== OCHILGAN DARSGA BAHO QO'YISH (O'QITUVCHI) - EXCEL-STYLE ===== --}}
+    {{-- Floating save panel --}}
+    <div id="pending-save-panel" style="display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:9999;
+        background:linear-gradient(135deg, #f59e0b, #d97706); color:#fff; padding:12px 24px; border-radius:16px;
+        box-shadow:0 8px 32px rgba(0,0,0,0.25); align-items:center; gap:16px; font-size:14px; font-weight:600;">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>Saqlanmagan baholar: <b id="pending-count">0</b> ta</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-left:8px;">
+            <button id="save-all-btn" onclick="saveAllPendingGrades()"
+                style="background:#fff; color:#d97706; border:none; padding:8px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.15); transition:all 0.2s;">
+                Saqlash
+            </button>
+        </div>
+    </div>
 
-            cellDiv.innerHTML = `
-                <input type="number" min="0" max="100" step="1" value="${numVal}"
-                    style="width:48px; padding:2px 4px; text-align:center; font-size:12px; border:2px solid #10b981; border-radius:4px; outline:none; background:#f0fdf4;"
-                    onkeydown="if(event.key==='Enter'){saveOpenedGrade(this, '${studentHemisId}', '${lessonDate}', '${pairCode}', '${subjectId}', '${semesterCode}', '${groupHemisId}')}"
-                    onblur="saveOpenedGrade(this, '${studentHemisId}', '${lessonDate}', '${pairCode}', '${subjectId}', '${semesterCode}', '${groupHemisId}')"
-                    autofocus>
-            `;
-            cellDiv.querySelector('input').focus();
+    <script>
+        // ===== PENDING GRADES STORE =====
+        let pendingOpenedGrades = {};
+
+        function getGradeKey(cellDiv) {
+            return `${cellDiv.dataset.student}_${cellDiv.dataset.date}_${cellDiv.dataset.pair}`;
         }
 
-        function saveOpenedGrade(input, studentHemisId, lessonDate, pairCode, subjectId, semesterCode, groupHemisId) {
-            const grade = parseInt(input.value);
-            const cellDiv = input.parentElement;
+        function startEditOpened(cellDiv) {
+            // Agar allaqachon input bo'lsa, qayta yaratmaslik
+            if (cellDiv.querySelector('input')) return;
 
-            if (isNaN(grade) || grade < 0 || grade > 100) {
+            const key = getGradeKey(cellDiv);
+            const pending = pendingOpenedGrades[key];
+            const currentSpan = cellDiv.querySelector('span');
+            const currentVal = currentSpan ? currentSpan.textContent.trim() : '';
+            const numVal = pending ? String(pending.grade) : (currentVal === '-' ? '' : currentVal);
+
+            // Input yaratish
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.max = '100';
+            input.step = '1';
+            input.value = numVal;
+            input.style.cssText = 'width:48px; padding:2px 4px; text-align:center; font-size:12px; border:2px solid #10b981; border-radius:4px; outline:none; background:#f0fdf4;';
+
+            cellDiv.innerHTML = '';
+            cellDiv.appendChild(input);
+            input.focus();
+            input.select();
+
+            // Keyboard navigation
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    storePendingGrade(cellDiv, input.value);
+                    moveToCell(cellDiv, 'down');
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    storePendingGrade(cellDiv, input.value);
+                    moveToCell(cellDiv, 'up');
+                } else if (e.key === 'Tab') {
+                    e.preventDefault();
+                    storePendingGrade(cellDiv, input.value);
+                    moveToCell(cellDiv, e.shiftKey ? 'left' : 'right');
+                } else if (e.key === 'Escape') {
+                    // Bekor qilish — pending bo'lsa ko'rsatish, bo'lmasa dash
+                    if (pending) {
+                        showPendingInCell(cellDiv, pending.grade);
+                    } else {
+                        cellDiv.innerHTML = '<span class="text-green-400">-</span>';
+                        cellDiv.style.background = '#f0fdf4';
+                    }
+                }
+            });
+
+            // Blur — tashqariga bosilsa saqlash
+            input.addEventListener('blur', function() {
+                // Timeout — keyingi cell ga o'tishda blur bo'lmasligi uchun
+                setTimeout(() => {
+                    if (!cellDiv.querySelector('input')) return;
+                    storePendingGrade(cellDiv, input.value);
+                }, 150);
+            });
+        }
+
+        function storePendingGrade(cellDiv, value) {
+            const key = getGradeKey(cellDiv);
+            const grade = parseInt(value);
+
+            if (value.trim() === '' || isNaN(grade) || grade < 0 || grade > 100) {
+                // Bo'sh yoki noto'g'ri — pending dan o'chirish
+                if (pendingOpenedGrades[key]) {
+                    delete pendingOpenedGrades[key];
+                }
                 cellDiv.innerHTML = '<span class="text-green-400">-</span>';
+                cellDiv.style.background = '#f0fdf4';
+                updatePendingPanel();
                 return;
             }
 
-            input.disabled = true;
-            input.style.opacity = '0.5';
+            // Pending ga qo'shish
+            pendingOpenedGrades[key] = {
+                student_hemis_id: cellDiv.dataset.student,
+                lesson_date: cellDiv.dataset.date,
+                lesson_pair_code: cellDiv.dataset.pair,
+                subject_id: cellDiv.dataset.subject,
+                semester_code: cellDiv.dataset.semester,
+                group_hemis_id: cellDiv.dataset.group,
+                grade: grade,
+                cellDiv: cellDiv
+            };
 
-            fetch('{{ route("admin.journal.save-opened-lesson-grade") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    student_hemis_id: studentHemisId,
-                    lesson_date: lessonDate,
-                    lesson_pair_code: pairCode,
-                    subject_id: subjectId,
-                    semester_code: semesterCode,
-                    group_hemis_id: groupHemisId,
-                    grade: grade
+            showPendingInCell(cellDiv, grade);
+            updatePendingPanel();
+        }
+
+        function showPendingInCell(cellDiv, grade) {
+            const color = grade < 60 ? 'color:#dc2626' : 'color:#111827';
+            cellDiv.innerHTML = `<span class="font-medium" style="${color}">${grade}</span>`;
+            cellDiv.style.background = '#fef9c3'; // Sariq — pending
+        }
+
+        function moveToCell(currentCell, direction) {
+            const allCells = Array.from(document.querySelectorAll('.grade-cell-opened'));
+            if (allCells.length === 0) return;
+
+            const currentRow = parseInt(currentCell.dataset.row);
+            const currentCol = parseInt(currentCell.dataset.col);
+            let targetCell = null;
+
+            if (direction === 'down') {
+                // Keyingi qator, o'sha ustun
+                let minRowDiff = Infinity;
+                allCells.forEach(c => {
+                    const r = parseInt(c.dataset.row);
+                    const col = parseInt(c.dataset.col);
+                    if (col === currentCol && r > currentRow && (r - currentRow) < minRowDiff) {
+                        minRowDiff = r - currentRow;
+                        targetCell = c;
+                    }
+                });
+            } else if (direction === 'up') {
+                // Oldingi qator, o'sha ustun
+                let minRowDiff = Infinity;
+                allCells.forEach(c => {
+                    const r = parseInt(c.dataset.row);
+                    const col = parseInt(c.dataset.col);
+                    if (col === currentCol && r < currentRow && (currentRow - r) < minRowDiff) {
+                        minRowDiff = currentRow - r;
+                        targetCell = c;
+                    }
+                });
+            } else if (direction === 'right') {
+                // O'sha qator, keyingi ustun
+                let minColDiff = Infinity;
+                allCells.forEach(c => {
+                    const r = parseInt(c.dataset.row);
+                    const col = parseInt(c.dataset.col);
+                    if (r === currentRow && col > currentCol && (col - currentCol) < minColDiff) {
+                        minColDiff = col - currentCol;
+                        targetCell = c;
+                    }
+                });
+            } else if (direction === 'left') {
+                // O'sha qator, oldingi ustun
+                let minColDiff = Infinity;
+                allCells.forEach(c => {
+                    const r = parseInt(c.dataset.row);
+                    const col = parseInt(c.dataset.col);
+                    if (r === currentRow && col < currentCol && (currentCol - col) < minColDiff) {
+                        minColDiff = currentCol - col;
+                        targetCell = c;
+                    }
+                });
+            }
+
+            if (targetCell) {
+                startEditOpened(targetCell);
+            }
+        }
+
+        function updatePendingPanel() {
+            const count = Object.keys(pendingOpenedGrades).length;
+            const panel = document.getElementById('pending-save-panel');
+            if (count > 0) {
+                panel.style.display = 'flex';
+                document.getElementById('pending-count').textContent = count;
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+
+        function saveAllPendingGrades() {
+            const grades = Object.values(pendingOpenedGrades);
+            if (grades.length === 0) return;
+
+            const btn = document.getElementById('save-all-btn');
+            btn.disabled = true;
+            btn.textContent = 'Saqlanmoqda...';
+            btn.style.opacity = '0.7';
+
+            const saveUrl = '{{ route("admin.journal.save-opened-lesson-grade") }}';
+            const csrfToken = '{{ csrf_token() }}';
+
+            const promises = grades.map(g => {
+                return fetch(saveUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        student_hemis_id: g.student_hemis_id,
+                        lesson_date: g.lesson_date,
+                        lesson_pair_code: g.lesson_pair_code,
+                        subject_id: g.subject_id,
+                        semester_code: g.semester_code,
+                        group_hemis_id: g.group_hemis_id,
+                        grade: g.grade
+                    })
                 })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    const gradeVal = Math.round(data.grade);
-                    const color = gradeVal < 60 ? 'color:#dc2626' : 'color:#111827';
-                    cellDiv.innerHTML = `<span class="font-medium" style="${color}">${gradeVal}</span>`;
-                    cellDiv.style.background = '#ecfdf5';
+                .then(r => r.json())
+                .then(data => ({ data, gradeInfo: g }))
+                .catch(err => ({ error: err, gradeInfo: g }));
+            });
+
+            Promise.all(promises).then(results => {
+                let successCount = 0;
+                let errorCount = 0;
+
+                results.forEach(({ data, error, gradeInfo }) => {
+                    const cellDiv = gradeInfo.cellDiv;
+                    const key = getGradeKey(cellDiv);
+
+                    if (error || !data?.success) {
+                        // Xatolik — sariq qoladi
+                        errorCount++;
+                        const msg = data?.message || 'Saqlanmadi';
+                        cellDiv.title = 'Xatolik: ' + msg;
+                        cellDiv.style.background = '#fecaca'; // Qizil fon
+                    } else {
+                        // Muvaffaqiyat
+                        successCount++;
+                        const gradeVal = Math.round(data.grade);
+                        const color = gradeVal < 60 ? 'color:#dc2626' : 'color:#111827';
+                        cellDiv.innerHTML = `<span class="font-medium" style="${color}">${gradeVal}</span>`;
+                        cellDiv.style.background = '#ecfdf5'; // Yashil fon
+                        // Pending dan o'chirish
+                        delete pendingOpenedGrades[key];
+                        // Cell ni non-editable qilish
+                        cellDiv.classList.remove('grade-cell-opened');
+                        cellDiv.onclick = null;
+                    }
+                });
+
+                updatePendingPanel();
+                btn.disabled = false;
+                btn.textContent = 'Saqlash';
+                btn.style.opacity = '1';
+
+                // Notification
+                const notifDiv = document.createElement('div');
+                notifDiv.className = 'fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-lg text-white font-semibold';
+                if (errorCount === 0) {
+                    notifDiv.style.background = '#10b981';
+                    notifDiv.textContent = `${successCount} ta baho muvaffaqiyatli saqlandi!`;
                 } else {
-                    alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
-                    cellDiv.innerHTML = '<span class="text-green-400">-</span>';
+                    notifDiv.style.background = '#ef4444';
+                    notifDiv.textContent = `${successCount} ta saqlandi, ${errorCount} ta xatolik!`;
                 }
-            })
-            .catch(err => {
-                console.error('Error:', err);
-                alert('Xatolik yuz berdi');
-                cellDiv.innerHTML = '<span class="text-green-400">-</span>';
+                document.body.appendChild(notifDiv);
+                setTimeout(() => notifDiv.remove(), 4000);
             });
         }
+
+        // Sahifadan chiqishda ogohlantirish
+        window.addEventListener('beforeunload', function(e) {
+            if (Object.keys(pendingOpenedGrades).length > 0) {
+                e.preventDefault();
+                e.returnValue = 'Saqlanmagan baholar bor. Sahifadan chiqmoqchimisiz?';
+            }
+        });
     </script>
 </x-app-layout>

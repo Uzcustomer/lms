@@ -15,19 +15,6 @@
 
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
-    {{-- Diagnostika paneli - DOIM ko'rinadi --}}
-    @if(session('login_diagnostic'))
-        <div style="padding: 10px 12px; margin-bottom: 12px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; font-size: 12px; color: #92400e;">
-            <div style="font-weight: 600; margin-bottom: 4px;">Diagnostika:</div>
-            {{ session('login_diagnostic') }}
-        </div>
-    @endif
-
-    {{-- Guard holati --}}
-    <div style="padding: 6px 10px; margin-bottom: 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; font-size: 10px; color: #0369a1;">
-        Guard: {{ Auth::guard('teacher')->check() ? 'autentifikatsiya qilingan (ID: ' . Auth::guard('teacher')->id() . ')' : 'guest' }} |
-        Session: {{ substr(session()->getId(), 0, 8) }}...
-    </div>
 
     <form method="POST" action="{{ route('teacher.login.post') }}">
         @csrf

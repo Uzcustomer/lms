@@ -10,7 +10,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
@@ -21,22 +20,15 @@ class TeacherAuthController extends Controller
     public function showLoginForm()
     {
         if (Auth::guard('teacher')->check()) {
-            $teacher = Auth::guard('teacher')->user();
-            Log::info('[Teacher Login Page] Eski sessiya mavjud, dashboardga yo\'naltirilmoqda', [
-                'teacher_id' => $teacher?->id,
-                'teacher_name' => $teacher?->full_name,
-                'must_change_password' => $teacher?->must_change_password,
-            ]);
             return redirect()->intended(route('teacher.dashboard'));
-        } else {
-            return view('teacher.login');
         }
+
+        return view('teacher.login');
     }
 
     public function login(Request $request)
     {
         if (Auth::guard('teacher')->check()) {
-            Log::info('[Teacher Login] Allaqachon autentifikatsiya qilingan, dashboardga yo\'naltirilmoqda');
             return redirect()->intended(route('teacher.dashboard'));
         }
 
@@ -49,42 +41,16 @@ class TeacherAuthController extends Controller
         $teacher = Teacher::where('login', $credentials['login'])->first();
 
         if (!$teacher) {
-            Log::warning('[Teacher Login] Foydalanuvchi topilmadi', ['login' => $credentials['login']]);
             return back()
-                ->with('login_diagnostic', "Foydalanuvchi topilmadi: '{$credentials['login']}' login bazada yo'q.")
                 ->withErrors(['login' => "Login yoki parol noto'g'ri."])
                 ->withInput($request->only('login', '_profile'));
         }
 
-        // Parolni qo'lda tekshiramiz (diagnostika uchun)
-        $passwordValid = Hash::check($credentials['password'], $teacher->getAuthPassword());
-        Log::info('[Teacher Login] Parol tekshiruvi', [
-            'login' => $credentials['login'],
-            'teacher_id' => $teacher->id,
-            'is_active' => $teacher->is_active,
-            'has_password' => !empty($teacher->getAuthPassword()),
-            'password_valid' => $passwordValid,
-            'password_starts_with' => substr($teacher->getAuthPassword(), 0, 7),
-            'must_change_password' => $teacher->must_change_password,
-            'has_telegram' => !empty($teacher->telegram_chat_id),
-            'roles' => $teacher->getRoleNames()->toArray(),
-        ]);
-
         if (Auth::guard('teacher')->attempt($credentials)) {
             $teacher = Auth::guard('teacher')->user();
 
-            Log::info('[Teacher Login] Muvaffaqiyatli kirish', [
-                'teacher_id' => $teacher->id,
-                'full_name' => $teacher->full_name,
-                'has_telegram_chat_id' => !empty($teacher->telegram_chat_id),
-                'must_change_password' => $teacher->must_change_password,
-            ]);
-
             // Telegram 2FA: agar foydalanuvchi Telegram tasdiqlangan bo'lsa
             if ($teacher->telegram_chat_id) {
-                Log::info('[Teacher Login] Telegram 2FA faol, verify sahifasiga yo\'naltirilmoqda', [
-                    'teacher_id' => $teacher->id,
-                ]);
                 // Login qilingan holatda emas — logout qilib, 2FA tekshiruvga yo'naltiramiz
                 Auth::guard('teacher')->logout();
                 return $this->sendLoginCode($teacher, $request);
@@ -94,7 +60,6 @@ class TeacherAuthController extends Controller
             ActivityLogService::logLogin('teacher');
 
             if ($teacher->must_change_password) {
-                Log::info('[Teacher Login] Parol o\'zgartirish majburiy, force-change sahifasiga yo\'naltirilmoqda');
                 return redirect()->route('teacher.force-change-password');
             }
 
@@ -105,21 +70,7 @@ class TeacherAuthController extends Controller
             return redirect()->intended(route('teacher.dashboard'));
         }
 
-        Log::warning('[Teacher Login] Kirish muvaffaqiyatsiz (attempt rad etdi)', [
-            'login' => $credentials['login'],
-            'teacher_id' => $teacher->id,
-            'manual_password_check' => $passwordValid,
-        ]);
-
-        $diagnostic = "Teacher topildi (ID: {$teacher->id}, {$teacher->full_name}). "
-            . "Parol tekshiruvi: " . ($passwordValid ? 'TO\'G\'RI' : 'NOTO\'G\'RI') . ". "
-            . "birth_date: " . ($teacher->birth_date ?? 'YO\'Q') . ", "
-            . "is_active: " . ($teacher->is_active ? 'Ha' : 'Yo\'q') . ", "
-            . "must_change_password: " . ($teacher->must_change_password ? 'Ha' : 'Yo\'q') . ", "
-            . "Rollar: " . ($teacher->getRoleNames()->join(', ') ?: 'yo\'q');
-
         return back()
-            ->with('login_diagnostic', $diagnostic)
             ->withErrors(['login' => "Login yoki parol noto'g'ri."])
             ->withInput($request->only('login', '_profile'));
     }

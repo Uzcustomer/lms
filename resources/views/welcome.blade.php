@@ -183,13 +183,6 @@
             {{-- Xatoliklar --}}
             <x-auth-session-status class="mb-3" :status="session('status')" />
 
-            {{-- Diagnostika paneli --}}
-            @if(session('login_diagnostic'))
-                <div style="padding: 8px 10px; margin-bottom: 10px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; font-size: 11px; color: #92400e;">
-                    <div style="font-weight: 600; margin-bottom: 3px;">Diagnostika:</div>
-                    {{ session('login_diagnostic') }}
-                </div>
-            @endif
 
             @if($errors->any())
                 <div class="mb-3 p-2.5 rounded-lg bg-red-50 border border-red-100">
@@ -235,11 +228,6 @@
                 @csrf
                 <input type="hidden" name="_profile" value="teacher">
 
-                {{-- Guard holati (diagnostika) --}}
-                <div style="padding: 4px 8px; margin-bottom: 8px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; font-size: 9px; color: #0369a1;">
-                    Guard: {{ Auth::guard('teacher')->check() ? 'autentifikatsiya qilingan (ID: ' . Auth::guard('teacher')->id() . ')' : 'guest' }} |
-                    Session: {{ substr(session()->getId(), 0, 8) }}...
-                </div>
 
                 <div class="mb-3">
                     <label class="input-label">Login</label>

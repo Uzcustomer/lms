@@ -53,7 +53,7 @@ class TeacherAuthController extends Controller
             return back()
                 ->with('login_diagnostic', "Foydalanuvchi topilmadi: '{$credentials['login']}' login bazada yo'q.")
                 ->withErrors(['login' => "Login yoki parol noto'g'ri."])
-                ->onlyInput('login');
+                ->withInput($request->only('login', '_profile'));
         }
 
         // Parolni qo'lda tekshiramiz (diagnostika uchun)
@@ -121,7 +121,7 @@ class TeacherAuthController extends Controller
         return back()
             ->with('login_diagnostic', $diagnostic)
             ->withErrors(['login' => "Login yoki parol noto'g'ri."])
-            ->onlyInput('login');
+            ->withInput($request->only('login', '_profile'));
     }
 
     /**

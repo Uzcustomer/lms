@@ -2437,7 +2437,7 @@
 
             <form id="lessonOpenForm" enctype="multipart/form-data">
                 @csrf
-                <input type="hidden" name="group_hemis_id" value="{{ $groupId }}">
+                <input type="hidden" name="group_hemis_id" value="{{ $group->group_hemis_id }}">
                 <input type="hidden" name="subject_id" value="{{ $subjectId }}">
                 <input type="hidden" name="semester_code" value="{{ $semesterCode }}">
                 <input type="hidden" name="lesson_date" id="lessonOpenDate" value="">

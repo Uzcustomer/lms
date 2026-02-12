@@ -926,6 +926,7 @@ class JournalController extends Controller
             'otherGrades',
             'attendanceData',
             'manualMtGrades',
+            'manualMtGradesRaw',
             'mtGradeHistory',
             'mtMaxResubmissions',
             'mtSubmissions',

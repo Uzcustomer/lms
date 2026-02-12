@@ -356,9 +356,7 @@ Route::prefix('student')->name('student.')->group(function () {
 });
 
 Route::prefix('teacher')->name('teacher.')->group(function () {
-    Route::middleware('guest:teacher')->group(function () {
-        Route::post('/login', [TeacherAuthController::class, 'login'])->name('login.post');
-    });
+    Route::post('/login', [TeacherAuthController::class, 'login'])->name('login.post');
     Route::get('/login', [TeacherAuthController::class, 'showLoginForm'])->name('login');
 
     // Telegram 2FA login tasdiqlash (auth kerak emas)

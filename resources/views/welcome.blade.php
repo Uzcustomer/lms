@@ -182,6 +182,15 @@
 
             {{-- Xatoliklar --}}
             <x-auth-session-status class="mb-3" :status="session('status')" />
+
+            {{-- Diagnostika paneli --}}
+            @if(session('login_diagnostic'))
+                <div style="padding: 8px 10px; margin-bottom: 10px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; font-size: 11px; color: #92400e;">
+                    <div style="font-weight: 600; margin-bottom: 3px;">Diagnostika:</div>
+                    {{ session('login_diagnostic') }}
+                </div>
+            @endif
+
             @if($errors->any())
                 <div class="mb-3 p-2.5 rounded-lg bg-red-50 border border-red-100">
                     @foreach($errors->all() as $error)

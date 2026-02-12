@@ -987,7 +987,7 @@
                                                         $canRate = !$isDekan && auth()->user()->hasRole('admin');
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
-                                                        $canEditOpened = $isOpenedDate && ($isOqituvchi || $canRate);
+                                                        $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && ($isOqituvchi || $canRate);
                                                         $showRatingInput = false;
                                                         $gradeRecordId = null;
                                                         $hasRetake = false;

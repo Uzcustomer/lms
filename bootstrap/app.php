@@ -49,5 +49,37 @@ return Application::configure(basePath: dirname(__DIR__))
 //        $schedule->command('app:test-cron')->everyFifteenSeconds();
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->renderable(function (\Spatie\Permission\Exceptions\UnauthorizedException $e, $request) {
+            $guard = \Illuminate\Support\Facades\Auth::getDefaultDriver();
+            $user = auth()->user();
+            $userRoles = $user?->getRoleNames()?->join(', ') ?? 'rollarsiz';
+            $userName = $user?->full_name ?? $user?->name ?? 'noma\'lum';
+
+            Log::warning('Ruxsat berilmadi (UnauthorizedException)', [
+                'guard' => $guard,
+                'user' => $userName,
+                'user_roles' => $userRoles,
+                'url' => $request->fullUrl(),
+                'message' => $e->getMessage(),
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Sizda bu amalni bajarish huquqi yo\'q.',
+                    'debug' => config('app.debug') ? [
+                        'guard' => $guard,
+                        'user' => $userName,
+                        'roles' => $userRoles,
+                        'error' => $e->getMessage(),
+                    ] : null,
+                ], 403);
+            }
+
+            $errorMessage = 'Sizda bu amalni bajarish huquqi yo\'q.';
+            if (config('app.debug')) {
+                $errorMessage .= " (Guard: {$guard}, Foydalanuvchi: {$userName}, Rollar: {$userRoles})";
+            }
+
+            return redirect()->back()->with('error', $errorMessage);
+        });
     })->create();

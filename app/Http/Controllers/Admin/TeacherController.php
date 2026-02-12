@@ -12,6 +12,8 @@ use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Role;
 
 class TeacherController extends Controller
@@ -100,26 +102,57 @@ class TeacherController extends Controller
                 ->with('error', 'Xodimning tug\'ilgan sanasi mavjud emas, parolni tiklab bo\'lmaydi.');
         }
 
-        $birthDate = Carbon::parse($teacher->birth_date);
-        $newPassword = $birthDate->format('dmY'); // ddmmyyyy
+        try {
+            $birthDate = Carbon::parse($teacher->birth_date);
+            $newPassword = $birthDate->format('dmY'); // ddmmyyyy
 
-        $teacher->password = $newPassword;
-        $teacher->must_change_password = true;
-        $teacher->save();
+            $teacher->password = $newPassword;
+            $teacher->must_change_password = true;
+            $teacher->save();
 
-        ActivityLogService::log('update', 'teacher', "Xodim paroli tiklandi: {$teacher->full_name}", $teacher);
+            // Agar admin teacher guard orqali kirib, o'z parolini tiklayotgan bo'lsa,
+            // sessiyani yangilash kerak (aks holda password hash mos kelmay logout bo'ladi)
+            $currentTeacher = Auth::guard('teacher')->user();
+            if ($currentTeacher && $currentTeacher->id === $teacher->id) {
+                // Sessiyada saqlangan password hash ni yangilash
+                Auth::guard('teacher')->login($teacher->fresh());
+            }
 
-        // Telegram orqali login va yangi parolni yuborish
-        if ($teacher->telegram_chat_id) {
-            $telegramService = new TelegramService();
-            $telegramService->sendToUser(
-                $teacher->telegram_chat_id,
-                "Sizning parolingiz tiklandi.\n\nLogin: {$teacher->login}\nYangi parol: {$newPassword}\n\nTizimga kirganingizda parolni o'zgartiring."
-            );
+            try {
+                ActivityLogService::log('update', 'teacher', "Xodim paroli tiklandi: {$teacher->full_name}", $teacher);
+            } catch (\Throwable $e) {
+                Log::warning('Parol tiklash activity log xatosi: ' . $e->getMessage());
+            }
+
+            // Telegram orqali login va yangi parolni yuborish
+            if ($teacher->telegram_chat_id) {
+                try {
+                    $telegramService = new TelegramService();
+                    $telegramService->sendToUser(
+                        $teacher->telegram_chat_id,
+                        "Sizning parolingiz tiklandi.\n\nLogin: {$teacher->login}\nYangi parol: {$newPassword}\n\nTizimga kirganingizda parolni o'zgartiring."
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('Parol tiklash telegram xatosi: ' . $e->getMessage());
+                }
+            }
+
+            return redirect()->route('admin.teachers.show', $teacher)
+                ->with('success', 'Parol tiklandi. Login: ' . $teacher->login . ', Yangi parol: ' . $newPassword . '. Xodim keyingi kirishda parolni o\'zgartirishi kerak.');
+
+        } catch (\Throwable $e) {
+            Log::error('Parol tiklashda xato', [
+                'teacher_id' => $teacher->id,
+                'teacher_name' => $teacher->full_name,
+                'guard' => Auth::getDefaultDriver(),
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->route('admin.teachers.show', $teacher)
+                ->with('error', 'Parol tiklashda xato yuz berdi: ' . $e->getMessage());
         }
-
-        return redirect()->route('admin.teachers.show', $teacher)
-            ->with('success', 'Parol tiklandi (' . $newPassword . '). Xodim keyingi kirishda parolni o\'zgartirishi kerak.');
     }
 
     public function updateRoles(Request $request, Teacher $teacher)

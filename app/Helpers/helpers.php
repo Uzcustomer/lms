@@ -87,27 +87,33 @@ if (!function_exists('get_dekan_faculty_id')) {
 if (!function_exists('is_active_oqituvchi')) {
     /**
      * Joriy foydalanuvchi o'qituvchi sifatida ishlayotganini tekshirish.
-     * Teacher guard orqali kirgan barcha foydalanuvchilar o'qituvchi hisoblanadi.
-     * Web guard uchun session('active_role') tekshiriladi.
+     * Web guard foydalanuvchisi uchun session('active_role') tekshiriladi.
+     * Teacher guard faqat web guard yo'q bo'lganda (sof o'qituvchi kirishi) ishlatiladi.
+     *
+     * Muhim: Web guard birinchi tekshiriladi, chunki admin foydalanuvchisi
+     * bir vaqtda teacher guard sessiyasiga ham ega bo'lishi mumkin
+     * (impersonatsiya yoki parallel kirish natijasida).
      */
     function is_active_oqituvchi(): bool
     {
-        // Teacher guard orqali kirilganmi tekshirish (impersonatsiya va oddiy kirish)
+        // Web guard orqali kirgan bo'lsa, faqat active_role ga qarab qaror qilish
+        $webUser = auth()->guard('web')->user();
+        if ($webUser) {
+            $roles = $webUser->getRoleNames()->toArray();
+            $activeRole = session('active_role', $roles[0] ?? '');
+            if (!in_array($activeRole, $roles) && count($roles) > 0) {
+                $activeRole = $roles[0];
+            }
+
+            return $activeRole === 'oqituvchi';
+        }
+
+        // Teacher guard orqali kirilganmi tekshirish (faqat web guard yo'q bo'lganda)
         if (auth()->guard('teacher')->check()) {
             return true;
         }
 
-        // Web guard orqali kirgan bo'lsa
-        $user = auth()->guard('web')->user();
-        if (!$user) return false;
-
-        $roles = $user->getRoleNames()->toArray();
-        $activeRole = session('active_role', $roles[0] ?? '');
-        if (!in_array($activeRole, $roles) && count($roles) > 0) {
-            $activeRole = $roles[0];
-        }
-
-        return $activeRole === 'oqituvchi';
+        return false;
     }
 }
 

@@ -750,8 +750,18 @@
                                                         <button type="button" onclick="openLessonModal('{{ $dateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
                                                     </div>
                                                 @elseif($isOpened)
-                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="{{ $openingInfo['file_original_name'] ?? 'Fayl' }} — {{ $isActiveOpened ? 'Ochilgan: ' . $openingInfo['deadline'] . ' gacha' : 'Muddati tugagan' }}">
-                                                        <a href="{{ route('admin.journal.download-lesson-file', $openingInfo['id']) }}" style="background: {{ $isActiveOpened ? '#10b981' : '#9ca3af' }}; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;">&#128206;</a>
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
+                                                        <button type="button" onclick="showOpeningInfo({!! htmlspecialchars(json_encode([
+                                                            'date' => format_date($date),
+                                                            'opened_at' => $openingInfo['opened_at'],
+                                                            'opened_by' => $openingInfo['opened_by_name'],
+                                                            'deadline' => $openingInfo['deadline'],
+                                                            'status' => $isActiveOpened ? 'active' : $openingInfo['status'],
+                                                            'grade_count' => $openingInfo['grade_count'],
+                                                            'last_grade_at' => $openingInfo['last_grade_at'],
+                                                            'file_name' => $openingInfo['file_original_name'],
+                                                            'file_url' => route('admin.journal.download-lesson-file', $openingInfo['id']),
+                                                        ]), ENT_QUOTES, 'UTF-8') !!})" style="background: {{ $isActiveOpened ? '#10b981' : '#9ca3af' }}; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">&#128206;</button>
                                                     </div>
                                                 @endif
                                             </th>
@@ -907,8 +917,18 @@
                                                         <button type="button" onclick="openLessonModal('{{ $dDateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Dars ochish">!</button>
                                                     </div>
                                                 @elseif($dOpeningInfo && $isFirstOfDate)
-                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="{{ $dOpeningInfo['file_original_name'] ?? 'Fayl' }} — {{ $dIsActiveOpened ? 'Ochilgan: ' . $dOpeningInfo['deadline'] . ' gacha' : 'Muddati tugagan' }}">
-                                                        <a href="{{ route('admin.journal.download-lesson-file', $dOpeningInfo['id']) }}" style="background: {{ $dIsActiveOpened ? '#10b981' : '#9ca3af' }}; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;">&#128206;</a>
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
+                                                        <button type="button" onclick="showOpeningInfo({!! htmlspecialchars(json_encode([
+                                                            'date' => format_date($col['date']),
+                                                            'opened_at' => $dOpeningInfo['opened_at'],
+                                                            'opened_by' => $dOpeningInfo['opened_by_name'],
+                                                            'deadline' => $dOpeningInfo['deadline'],
+                                                            'status' => $dIsActiveOpened ? 'active' : $dOpeningInfo['status'],
+                                                            'grade_count' => $dOpeningInfo['grade_count'],
+                                                            'last_grade_at' => $dOpeningInfo['last_grade_at'],
+                                                            'file_name' => $dOpeningInfo['file_original_name'],
+                                                            'file_url' => route('admin.journal.download-lesson-file', $dOpeningInfo['id']),
+                                                        ]), ENT_QUOTES, 'UTF-8') !!})" style="background: {{ $dIsActiveOpened ? '#10b981' : '#9ca3af' }}; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">&#128206;</button>
                                                     </div>
                                                 @endif
                                             </th>
@@ -2442,6 +2462,91 @@
             </form>
         </div>
     </div>
+
+    {{-- Dars ochilishi haqida ma'lumot modali --}}
+    <div id="opening-info-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:50; align-items:center; justify-content:center;">
+        <div style="background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-width:420px; width:90%; margin:auto; overflow:hidden;">
+            <div id="oim-header" style="padding:14px 20px; color:#fff; display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-weight:700; font-size:15px;" id="oim-title"></span>
+                <button onclick="document.getElementById('opening-info-modal').style.display='none'" style="background:none; border:none; color:#fff; font-size:20px; cursor:pointer; line-height:1;">&times;</button>
+            </div>
+            <div style="padding:16px 20px;">
+                <table style="width:100%; font-size:13px; border-collapse:collapse;">
+                    <tr>
+                        <td style="padding:6px 0; color:#6b7280; width:140px;">Dars ochilgan:</td>
+                        <td style="padding:6px 0; font-weight:600;" id="oim-opened-at"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:6px 0; color:#6b7280;">Kim ochgan:</td>
+                        <td style="padding:6px 0; font-weight:600;" id="oim-opened-by"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:6px 0; color:#6b7280;">Muddat:</td>
+                        <td style="padding:6px 0; font-weight:600;" id="oim-deadline"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:6px 0; color:#6b7280;">Holat:</td>
+                        <td style="padding:6px 0;" id="oim-status"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:6px 0; color:#6b7280;">Baholar soni:</td>
+                        <td style="padding:6px 0; font-weight:600;" id="oim-grade-count"></td>
+                    </tr>
+                    <tr id="oim-grade-row" style="display:none;">
+                        <td style="padding:6px 0; color:#6b7280;">Oxirgi baho:</td>
+                        <td style="padding:6px 0; font-weight:600;" id="oim-last-grade"></td>
+                    </tr>
+                </table>
+                <div style="margin-top:14px; padding-top:14px; border-top:1px solid #e5e7eb; display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:18px;">&#128206;</span>
+                    <a id="oim-file-link" href="#" target="_blank" style="color:#2563eb; font-size:13px; font-weight:600; text-decoration:none; word-break:break-all;"></a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showOpeningInfo(data) {
+            const modal = document.getElementById('opening-info-modal');
+            const header = document.getElementById('oim-header');
+            const isActive = data.status === 'active';
+
+            document.getElementById('oim-title').textContent = 'Dars: ' + data.date;
+            header.style.background = isActive ? '#10b981' : '#6b7280';
+            document.getElementById('oim-opened-at').textContent = data.opened_at;
+            document.getElementById('oim-opened-by').textContent = data.opened_by;
+            document.getElementById('oim-deadline').textContent = data.deadline;
+
+            const statusEl = document.getElementById('oim-status');
+            if (isActive) {
+                statusEl.innerHTML = '<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Faol</span>';
+            } else if (data.status === 'expired') {
+                statusEl.innerHTML = '<span style="background:#fef2f2; color:#991b1b; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Muddati tugagan</span>';
+            } else {
+                statusEl.innerHTML = '<span style="background:#f3f4f6; color:#374151; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Yopilgan</span>';
+            }
+
+            document.getElementById('oim-grade-count').textContent = data.grade_count + ' ta';
+
+            const gradeRow = document.getElementById('oim-grade-row');
+            if (data.last_grade_at) {
+                gradeRow.style.display = '';
+                document.getElementById('oim-last-grade').textContent = data.last_grade_at;
+            } else {
+                gradeRow.style.display = 'none';
+            }
+
+            const fileLink = document.getElementById('oim-file-link');
+            fileLink.href = data.file_url;
+            fileLink.textContent = data.file_name || 'Faylni ko\'rish';
+
+            modal.style.display = 'flex';
+        }
+
+        document.getElementById('opening-info-modal').addEventListener('click', function(e) {
+            if (e.target === this) this.style.display = 'none';
+        });
+    </script>
 
     <script>
         function openLessonModal(dateStr) {

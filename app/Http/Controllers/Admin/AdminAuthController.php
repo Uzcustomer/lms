@@ -23,6 +23,14 @@ class AdminAuthController extends Controller
             $staffRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
             if ($user->hasRole($staffRoleValues)) {
                 $request->session()->regenerate();
+
+                // Eng yuqori huquqli rolni default active_role sifatida o'rnatish
+                // ProjectRole enum tartibi = prioritet tartibi (superadmin > admin > ... > oqituvchi)
+                $userRoles = $user->getRoleNames()->toArray();
+                $defaultRole = collect($staffRoleValues)
+                    ->first(fn ($role) => in_array($role, $userRoles)) ?? ($userRoles[0] ?? '');
+                session(['active_role' => $defaultRole]);
+
                 ActivityLogService::logLogin('web');
                 return redirect()->intended(route('admin.dashboard'));
             } else {

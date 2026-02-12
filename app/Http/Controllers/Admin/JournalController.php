@@ -422,35 +422,28 @@ class JournalController extends Controller
             return null;
         };
 
-        // Build unique date+pair columns for detailed view from schedules (calendar source).
-        // Merge grade date+pair as fallback for old data where schedule rows might be missing.
+        // Build unique date+pair columns for detailed view from schedules only.
+        // Schedule is the single source of truth — soft-deleted schedules won't appear.
         $jbColumns = $jbScheduleRows->map(function ($schedule) {
             return ['date' => $schedule->lesson_date, 'pair' => $schedule->lesson_pair_code];
-        })->merge($jbGradesRaw->map(function ($grade) {
-            return ['date' => $grade->lesson_date, 'pair' => $grade->lesson_pair_code];
-        }))->unique(function ($item) {
+        })->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
         })->sort(function ($a, $b) {
             return strcmp($a['date'], $b['date']) ?: strcmp($a['pair'], $b['pair']);
         })->values()->toArray();
 
-        // Build unique date+pair columns for detailed view from schedules (calendar source).
-        // Merge grade date+pair as fallback for old data where schedule rows might be missing.
+        // Build unique date+pair columns for MT from schedules only.
         $mtColumns = $mtScheduleRows->map(function ($schedule) {
             return ['date' => $schedule->lesson_date, 'pair' => $schedule->lesson_pair_code];
-        })->merge($mtGradesRaw->map(function ($grade) {
-            return ['date' => $grade->lesson_date, 'pair' => $grade->lesson_pair_code];
-        }))->unique(function ($item) {
+        })->unique(function ($item) {
             return $item['date'] . '_' . $item['pair'];
         })->sort(function ($a, $b) {
             return strcmp($a['date'], $b['date']) ?: strcmp($a['pair'], $b['pair']);
         })->values()->toArray();
 
-        // Get distinct dates for compact view from schedules (calendar source).
-        // Merge grade dates as a fallback for old data where schedule rows might be missing.
+        // Get distinct dates for compact view from schedules only.
         $jbLessonDates = $jbScheduleRows
             ->pluck('lesson_date')
-            ->merge($jbGradesRaw->pluck('lesson_date'))
             ->unique()
             ->sort()
             ->values()
@@ -458,7 +451,6 @@ class JournalController extends Controller
 
         $mtLessonDates = $mtScheduleRows
             ->pluck('lesson_date')
-            ->merge($mtGradesRaw->pluck('lesson_date'))
             ->unique()
             ->sort()
             ->values()

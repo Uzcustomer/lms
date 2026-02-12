@@ -235,6 +235,12 @@
                 @csrf
                 <input type="hidden" name="_profile" value="teacher">
 
+                {{-- Guard holati (diagnostika) --}}
+                <div style="padding: 4px 8px; margin-bottom: 8px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; font-size: 9px; color: #0369a1;">
+                    Guard: {{ Auth::guard('teacher')->check() ? 'autentifikatsiya qilingan (ID: ' . Auth::guard('teacher')->id() . ')' : 'guest' }} |
+                    Session: {{ substr(session()->getId(), 0, 8) }}...
+                </div>
+
                 <div class="mb-3">
                     <label class="input-label">Login</label>
                     <div class="input-group">

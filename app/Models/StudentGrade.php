@@ -51,7 +51,8 @@ class StudentGrade extends Model
         'independent_id',
         'oraliq_nazorat_id',
         "oski_id",
-        "test_id"
+        "test_id",
+        "quiz_result_id"
 
     ];
 

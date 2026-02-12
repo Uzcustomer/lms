@@ -31,6 +31,20 @@
         </div>
     @endif
 
+    @if(config('app.debug'))
+        <div class="max-w-full mx-auto sm:px-4 lg:px-6 mt-3">
+            <div style="padding: 8px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; font-size: 11px; color: #0369a1;">
+                <strong>Debug:</strong>
+                Guard: {{ Auth::getDefaultDriver() ?? 'null' }} |
+                User: {{ auth()->user()?->full_name ?? auth()->user()?->name ?? 'null' }} (ID: {{ auth()->id() ?? 'null' }}) |
+                Roles: {{ auth()->user()?->getRoleNames()?->join(', ') ?? 'null' }} |
+                Teacher birth_date: {{ $teacher->birth_date ?? 'YO\'Q' }} |
+                Teacher login: {{ $teacher->login ?? 'YO\'Q' }} |
+                must_change_password: {{ $teacher->must_change_password ? 'Ha' : 'Yo\'q' }}
+            </div>
+        </div>
+    @endif
+
     <div style="padding: 16px 0;">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
 
@@ -79,16 +93,18 @@
                             <span class="profile-id-value">{{ $teacher->employee_id_number }}</span>
                         </div>
                         <form action="{{ route('admin.teachers.reset-password', $teacher) }}" method="POST"
-                              onsubmit="return confirm('Parolni tiklashni tasdiqlaysizmi? Yangi parol: tug\'ilgan sana (ddmmyyyy)')">
+                              id="reset-password-form"
+                              onsubmit="return handleResetSubmit(this)">
                             @csrf
-                            <button type="submit" class="btn-reset-password" {{ !$teacher->birth_date ? 'disabled' : '' }}>
+                            <button type="submit" class="btn-reset-password" id="reset-password-btn" {{ !$teacher->birth_date ? 'disabled' : '' }}
+                                    {{ !$teacher->birth_date ? 'title=Tug\'ilgan sana mavjud emas' : '' }}>
                                 <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
                                 </svg>
-                                Parolni tiklash
+                                <span id="reset-btn-text">Parolni tiklash</span>
                             </button>
                         </form>
-                        @if(auth()->user() && auth()->user()->hasRole('superadmin'))
+                        @if(auth()->user()?->hasRole('superadmin'))
                             <form action="{{ route('admin.impersonate.teacher', $teacher) }}" method="POST"
                                   onsubmit="return confirm('{{ addslashes($teacher->full_name) }} sifatida tizimga kirasizmi?')">
                                 @csrf
@@ -164,7 +180,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
                         </svg>
                         Aloqa ma'lumotlari
-                        @if(auth()->user()->hasAnyRole(['superadmin', 'admin', 'kichik_admin']))
+                        @if(auth()->user()?->hasAnyRole(['superadmin', 'admin', 'kichik_admin']))
                             <button type="button" onclick="toggleContactEdit()" class="contact-edit-toggle" id="contact-edit-btn" title="Tahrirlash">
                                 <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
@@ -213,7 +229,7 @@
                         </div>
 
                         {{-- Tahrirlash rejimi (faqat admin rollar uchun) --}}
-                        @if(auth()->user()->hasAnyRole(['superadmin', 'admin', 'kichik_admin']))
+                        @if(auth()->user()?->hasAnyRole(['superadmin', 'admin', 'kichik_admin']))
                         <form action="{{ route('admin.teachers.update-contact', $teacher) }}" method="POST" id="contact-edit" style="display: none;">
                             @csrf
                             @method('PUT')
@@ -380,6 +396,18 @@
     </div>
 
     <script>
+        function handleResetSubmit(form) {
+            if (!confirm('Parolni tiklashni tasdiqlaysizmi? Yangi parol: tug\'ilgan sana (ddmmyyyy)')) {
+                return false;
+            }
+            var btn = document.getElementById('reset-password-btn');
+            var btnText = document.getElementById('reset-btn-text');
+            btn.disabled = true;
+            btnText.textContent = 'Tiklanmoqda...';
+            btn.style.opacity = '0.7';
+            return true;
+        }
+
         function toggleContactEdit() {
             var view = document.getElementById('contact-view');
             var edit = document.getElementById('contact-edit');

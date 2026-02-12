@@ -45,20 +45,18 @@ class TeacherAuthController extends Controller
             'password' => ['required'],
         ]);
 
-        // Debug: foydalanuvchini bazadan qidiramiz
+        // Foydalanuvchini bazadan qidiramiz
         $teacher = Teacher::where('login', $credentials['login'])->first();
 
         if (!$teacher) {
             Log::warning('[Teacher Login] Foydalanuvchi topilmadi', ['login' => $credentials['login']]);
-            return back()->withErrors([
-                'login' => "Login yoki parol noto'g'ri.",
-                'debug_info' => config('app.debug')
-                    ? "Foydalanuvchi '{$credentials['login']}' bazada topilmadi."
-                    : null,
-            ])->onlyInput('login');
+            return back()
+                ->with('login_diagnostic', "Foydalanuvchi topilmadi: '{$credentials['login']}' login bazada yo'q.")
+                ->withErrors(['login' => "Login yoki parol noto'g'ri."])
+                ->onlyInput('login');
         }
 
-        // Debug: parolni tekshiramiz
+        // Parolni qo'lda tekshiramiz (diagnostika uchun)
         $passwordValid = Hash::check($credentials['password'], $teacher->getAuthPassword());
         Log::info('[Teacher Login] Parol tekshiruvi', [
             'login' => $credentials['login'],
@@ -66,6 +64,7 @@ class TeacherAuthController extends Controller
             'is_active' => $teacher->is_active,
             'has_password' => !empty($teacher->getAuthPassword()),
             'password_valid' => $passwordValid,
+            'password_starts_with' => substr($teacher->getAuthPassword(), 0, 7),
             'must_change_password' => $teacher->must_change_password,
             'has_telegram' => !empty($teacher->telegram_chat_id),
             'roles' => $teacher->getRoleNames()->toArray(),
@@ -83,6 +82,9 @@ class TeacherAuthController extends Controller
 
             // Telegram 2FA: agar foydalanuvchi Telegram tasdiqlangan bo'lsa
             if ($teacher->telegram_chat_id) {
+                Log::info('[Teacher Login] Telegram 2FA faol, verify sahifasiga yo\'naltirilmoqda', [
+                    'teacher_id' => $teacher->id,
+                ]);
                 // Login qilingan holatda emas — logout qilib, 2FA tekshiruvga yo'naltiramiz
                 Auth::guard('teacher')->logout();
                 return $this->sendLoginCode($teacher, $request);
@@ -92,6 +94,7 @@ class TeacherAuthController extends Controller
             ActivityLogService::logLogin('teacher');
 
             if ($teacher->must_change_password) {
+                Log::info('[Teacher Login] Parol o\'zgartirish majburiy, force-change sahifasiga yo\'naltirilmoqda');
                 return redirect()->route('teacher.force-change-password');
             }
 
@@ -102,24 +105,23 @@ class TeacherAuthController extends Controller
             return redirect()->intended(route('teacher.dashboard'));
         }
 
-        Log::warning('[Teacher Login] Kirish muvaffaqiyatsiz', [
+        Log::warning('[Teacher Login] Kirish muvaffaqiyatsiz (attempt rad etdi)', [
             'login' => $credentials['login'],
-            'teacher_found' => $teacher ? true : false,
-            'password_check' => $passwordValid ?? false,
+            'teacher_id' => $teacher->id,
+            'manual_password_check' => $passwordValid,
         ]);
 
-        $debugMsg = null;
-        if (config('app.debug') && $teacher) {
-            $debugMsg = "Teacher topildi (ID: {$teacher->id}), lekin parol mos kelmadi. "
-                . "birth_date: " . ($teacher->birth_date ?? 'YO\'Q') . ", "
-                . "is_active: " . ($teacher->is_active ? 'Ha' : 'Yo\'q') . ", "
-                . "must_change_password: " . ($teacher->must_change_password ? 'Ha' : 'Yo\'q');
-        }
+        $diagnostic = "Teacher topildi (ID: {$teacher->id}, {$teacher->full_name}). "
+            . "Parol tekshiruvi: " . ($passwordValid ? 'TO\'G\'RI' : 'NOTO\'G\'RI') . ". "
+            . "birth_date: " . ($teacher->birth_date ?? 'YO\'Q') . ", "
+            . "is_active: " . ($teacher->is_active ? 'Ha' : 'Yo\'q') . ", "
+            . "must_change_password: " . ($teacher->must_change_password ? 'Ha' : 'Yo\'q') . ", "
+            . "Rollar: " . ($teacher->getRoleNames()->join(', ') ?: 'yo\'q');
 
-        return back()->withErrors(array_filter([
-            'login' => "Login yoki parol noto'g'ri.",
-            'debug_info' => $debugMsg,
-        ]))->onlyInput('login');
+        return back()
+            ->with('login_diagnostic', $diagnostic)
+            ->withErrors(['login' => "Login yoki parol noto'g'ri."])
+            ->onlyInput('login');
     }
 
     /**

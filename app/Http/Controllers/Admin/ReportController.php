@@ -1389,6 +1389,7 @@ class ReportController extends Controller
         if ($isCurrentSemester) {
             $minScheduleDate = DB::table('schedules')
                 ->where('education_year_current', true)
+                ->whereNull('deleted_at')
                 ->whereNotNull('lesson_date')
                 ->min('lesson_date');
         }

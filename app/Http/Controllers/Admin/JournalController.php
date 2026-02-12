@@ -12,7 +12,11 @@ use App\Models\LessonOpening;
 use App\Models\Semester;
 use App\Models\Setting;
 use App\Models\Specialty;
+use App\Jobs\ImportSchedulesPartiallyJob;
+use App\Services\ActivityLogService;
+use App\Services\ScheduleImportService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -261,6 +265,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
             ->whereNotNull('lesson_date')
             ->whereNotNull('education_year_code')
             ->orderBy('lesson_date', 'desc')
@@ -285,6 +290,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->whereNotIn('training_type_name', $excludedTrainingTypes)
             ->whereNotIn('training_type_code', $excludedTrainingCodes)
@@ -298,6 +304,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
@@ -310,6 +317,7 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->where('training_type_code', 11)
             ->whereNotNull('lesson_date')
@@ -994,6 +1002,50 @@ class JournalController extends Controller
     }
 
     /**
+     * O'qituvchi jurnaldan dars jadvalini HEMIS bilan sinxronlash (sinxron, guruh+fan bo'yicha)
+     */
+    public function syncSchedule(Request $request)
+    {
+        $data = $request->validate([
+            'group_id' => 'required',
+            'subject_id' => 'required',
+        ]);
+
+        $cacheKey = "schedule_sync_{$data['group_id']}_{$data['subject_id']}";
+        if (Cache::has($cacheKey)) {
+            $seconds = (int) Cache::get($cacheKey) - now()->timestamp;
+            $minutes = ceil($seconds / 60);
+            return response()->json([
+                'success' => false,
+                'message' => "Sinxronizatsiya 5 daqiqada 1 marta mumkin. ~{$minutes} daqiqa kuting.",
+            ], 429);
+        }
+
+        $userName = auth()->user()?->name ?? auth()->guard('teacher')->user()?->name ?? 'Noma\'lum';
+
+        try {
+            $service = app(ScheduleImportService::class);
+            $result = $service->importForGroupSubject((int) $data['group_id'], (int) $data['subject_id']);
+
+            Cache::put($cacheKey, now()->addMinutes(5)->timestamp, 300);
+
+            ActivityLogService::log('import', 'schedule',
+                "Jurnal orqali jadval sinxronizatsiyasi: {$userName} (guruh: {$data['group_id']}, fan: {$data['subject_id']}) — {$result['count']} ta yozuv"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Jadval yangilandi. {$result['count']} ta yozuv sinxronlandi.",
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sinxronizatsiyada xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Save manual MT grade for a student
      */
     public function saveMtGrade(Request $request)
@@ -1142,6 +1194,7 @@ class JournalController extends Controller
             ->where('group_id', $student->group_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
             ->whereNotNull('lesson_date')
             ->whereNotNull('education_year_code')
             ->orderBy('lesson_date', 'desc')
@@ -1524,6 +1577,7 @@ class JournalController extends Controller
             $schedule = DB::table('schedules')
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
                 ->whereDate('lesson_date', $lessonDate)
                 ->where('lesson_pair_code', $lessonPairCode)
                 ->first();
@@ -2133,6 +2187,7 @@ class JournalController extends Controller
             ->where('group_id', $groupHemisId)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
             ->whereNotNull('employee_name')
             ->where('employee_name', '!=', 'Manual Entry')
             ->where('employee_name', '!=', '')

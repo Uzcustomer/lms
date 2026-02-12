@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Schedule;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -78,6 +79,141 @@ class ScheduleImportService
         } while ($page <= $pages);
 
         $this->notifyTelegram("✅ Jadval importi tugadi ({$from->toDateString()} — {$to->toDateString()})");
+    }
+
+    /**
+     * Joriy o'quv yili bo'yicha jadval import (cron uchun)
+     */
+    public function importByEducationYear(): void
+    {
+        $educationYearCode = DB::table('semesters')
+            ->where('current', true)
+            ->value('education_year');
+
+        if (!$educationYearCode) {
+            $this->notifyTelegram("❌ Joriy o'quv yili topilmadi (semesters jadvalida current=true yo'q)");
+            Log::channel('import_schedule')->error('Joriy o\'quv yili topilmadi');
+            return;
+        }
+
+        $this->notifyTelegram("🟢 Cron: Jadval importi boshlandi (o'quv yili: {$educationYearCode})");
+
+        $token = config('services.hemis.token');
+        $limit = 50;
+        $page = 1;
+
+        // Joriy o'quv yili bo'yicha soft-delete
+        $deleted = Schedule::where('education_year_code', $educationYearCode)->delete();
+        $this->notifyTelegram("🗑 {$deleted} ta eski jadval o'chirildi (education_year: {$educationYearCode})");
+
+        $totalImported = 0;
+
+        do {
+            $response = Http::withoutVerifying()
+                ->timeout(60)
+                ->withToken($token)
+                ->get('https://student.ttatf.uz/rest/v1/data/schedule-list', [
+                    '_education_year' => $educationYearCode,
+                    'limit' => $limit,
+                    'page' => $page,
+                ]);
+
+            if (!$response->successful()) {
+                Log::channel('import_schedule')->error('HEMIS API request failed', ['page' => $page, 'status' => $response->status()]);
+                $this->notifyTelegram("❌ API xatolik sahifa {$page} (status {$response->status()})");
+                break;
+            }
+
+            $data = $response->json('data', []);
+            $items = $data['items'] ?? [];
+            $pages = $data['pagination']['pageCount'] ?? 1;
+
+            if ($page === 1) {
+                $this->notifyTelegram("📄 Jami sahifalar: {$pages}");
+                $startTime = microtime(true);
+            }
+
+            foreach ($items as $item) {
+                $schedule = Schedule::withTrashed()->firstOrNew(['schedule_hemis_id' => $item['id']]);
+                $schedule->fill($this->map($item));
+                if ($schedule->trashed()) {
+                    $schedule->restore();
+                }
+                $schedule->save();
+                $totalImported++;
+            }
+
+            if ($page % 10 === 0 || $page === $pages) {
+                $elapsed = microtime(true) - $startTime;
+                $remaining = max(0, $pages - $page);
+                $eta = round(($elapsed / $page) * $remaining);
+                $this->notifyTelegram("⌛ {$remaining} sahifa qoldi, ~{$eta} soniya");
+            }
+
+            $page++;
+            sleep(1);
+        } while ($page <= $pages);
+
+        $this->notifyTelegram("✅ Cron: Jadval importi tugadi ({$educationYearCode}) — {$totalImported} ta yozuv");
+    }
+
+    /**
+     * Guruh + fan bo'yicha HEMIS'dan jadval import qilish (sinxron, jurnal uchun)
+     */
+    public function importForGroupSubject(int $groupId, int $subjectId): array
+    {
+        $token = config('services.hemis.token');
+        $limit = 200;
+        $page = 1;
+        $totalImported = 0;
+
+        // Faqat shu guruh+fan kombinatsiyasini soft-delete
+        Schedule::where('group_id', $groupId)
+            ->where('subject_id', $subjectId)
+            ->delete();
+
+        do {
+            $response = Http::withoutVerifying()
+                ->timeout(30)
+                ->withToken($token)
+                ->get('https://student.ttatf.uz/rest/v1/data/schedule-list', [
+                    '_group' => $groupId,
+                    '_subject' => $subjectId,
+                    'limit' => $limit,
+                    'page' => $page,
+                ]);
+
+            if (!$response->successful()) {
+                Log::channel('import_schedule')->error('HEMIS API xatolik (guruh+fan sync)', [
+                    'group_id' => $groupId,
+                    'subject_id' => $subjectId,
+                    'page' => $page,
+                    'status' => $response->status(),
+                ]);
+                break;
+            }
+
+            $data = $response->json('data', []);
+            $items = $data['items'] ?? [];
+            $pages = $data['pagination']['pageCount'] ?? 1;
+
+            foreach ($items as $item) {
+                $schedule = Schedule::withTrashed()->firstOrNew(['schedule_hemis_id' => $item['id']]);
+                $schedule->fill($this->map($item));
+                if ($schedule->trashed()) {
+                    $schedule->restore();
+                }
+                $schedule->save();
+                $totalImported++;
+            }
+
+            $page++;
+            if ($page <= $pages) {
+                sleep(1);
+            }
+        } while ($page <= $pages);
+
+        return ['count' => $totalImported];
     }
 
     protected function map(array $d): array

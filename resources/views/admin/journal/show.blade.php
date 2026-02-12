@@ -521,6 +521,10 @@
         .editable-cell:hover::after {
             opacity: 0.7;
         }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
     </style>
 
     <div class="py-2" style="padding-top: 15vh;">
@@ -550,6 +554,12 @@
                             @if(($mtUngradedCount ?? 0) > 0)
                                 <span style="position: absolute; top: -6px; right: -6px; display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; font-size: 11px; font-weight: 700; color: #fff; background: {{ ($mtDangerCount ?? 0) > 0 ? '#ef4444' : '#f59e0b' }}; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);{{ ($mtDangerCount ?? 0) > 0 ? ' animation: badge-pulse 1.5s ease-in-out infinite;' : '' }}">{{ $mtUngradedCount }}</span>
                             @endif
+                        </button>
+                    </div>
+                    <div style="display: flex; align-items: center; padding-bottom: 6px;">
+                        <button id="syncScheduleBtn" onclick="syncSchedule()" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600; color: #1e40af; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#bfdbfe'" onmouseout="this.style.background='#dbeafe'">
+                            <svg id="syncIcon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+                            <span id="syncBtnText">Jadvalni yangilash</span>
                         </button>
                     </div>
                 </nav>
@@ -1640,6 +1650,72 @@
         const topicsUrl = '{{ route("admin.journal.get-topics") }}';
         const currentSemesterHemisId = '{{ $semester?->semester_hemis_id ?? '' }}';
         const currentCurriculumHemisId = '{{ $group->curriculum_hemis_id ?? '' }}';
+
+        // ====== Jadval sinxronizatsiya ======
+        function syncSchedule() {
+            const btn = document.getElementById('syncScheduleBtn');
+            const icon = document.getElementById('syncIcon');
+            const text = document.getElementById('syncBtnText');
+
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            btn.style.cursor = 'not-allowed';
+            icon.style.animation = 'spin 1s linear infinite';
+            text.textContent = 'Sinxronlanmoqda...';
+
+            fetch('{{ route("admin.journal.sync-schedule") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    group_id: currentGroupId,
+                    subject_id: currentSubjectId
+                })
+            })
+            .then(r => r.json().then(data => ({ ok: r.ok, status: r.status, data })))
+            .then(({ ok, status, data }) => {
+                icon.style.animation = '';
+                if (ok && data.success) {
+                    text.textContent = 'Yangilandi!';
+                    btn.style.background = '#d1fae5';
+                    btn.style.color = '#065f46';
+                    btn.style.borderColor = '#6ee7b7';
+                    setTimeout(() => { location.reload(); }, 2000);
+                } else if (status === 429) {
+                    text.textContent = data.message || '5 daqiqa kuting';
+                    btn.style.background = '#fef3c7';
+                    btn.style.color = '#92400e';
+                    btn.style.borderColor = '#fcd34d';
+                    setTimeout(() => resetBtn(), 10000);
+                } else {
+                    text.textContent = data.message || 'Xatolik';
+                    btn.style.background = '#fee2e2';
+                    btn.style.color = '#991b1b';
+                    btn.style.borderColor = '#fca5a5';
+                    setTimeout(() => resetBtn(), 10000);
+                }
+            })
+            .catch(() => {
+                icon.style.animation = '';
+                text.textContent = 'Tarmoq xatoligi';
+                btn.style.background = '#fee2e2';
+                btn.style.color = '#991b1b';
+                setTimeout(() => resetBtn(), 10000);
+            });
+
+            function resetBtn() {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                btn.style.background = '#dbeafe';
+                btn.style.color = '#1e40af';
+                btn.style.borderColor = '#93c5fd';
+                text.textContent = 'Jadvalni yangilash';
+            }
+        }
 
         // URL params - navigatsiyada filtr qiymatlarini saqlash uchun
         const urlParams = new URLSearchParams(window.location.search);

@@ -84,6 +84,7 @@
         </a>
         @endif
 
+        @if(!$hasActiveRole('test_markazi'))
         <a href="{{ $r('admin.students.index', $hasActiveRole('registrator_ofisi') ? null : 'teacher.students') }}"
            class="sidebar-link {{ $isActive('admin.students.*', 'teacher.students') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,6 +92,7 @@
             </svg>
             Talabalar
         </a>
+        @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
         <a href="{{ route('admin.users.index') }}"
@@ -118,6 +120,19 @@
         </a>
         @endif
 
+        @if($hasActiveRole('test_markazi'))
+        {{-- Test markazi roli uchun faqat Diagnostika --}}
+        <div class="sidebar-section">Test markazi</div>
+
+        <a href="{{ $r('admin.diagnostika.index', 'teacher.diagnostika.index') }}"
+           class="sidebar-link {{ $isActive('admin.diagnostika.*', 'teacher.diagnostika.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+            </svg>
+            Diagnostika
+        </a>
+        @else
+        {{-- Boshqa rollar uchun Qo'shimcha --}}
         <div class="sidebar-section">Qo'shimcha</div>
 
         <a href="{{ $r('admin.independent.index', 'teacher.independent.index') }}"
@@ -152,16 +167,6 @@
             Test
         </a>
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'test_markazi']))
-        <a href="{{ $r('admin.quiz-results.index', 'teacher.quiz-results.index') }}"
-           class="sidebar-link {{ $isActive('admin.quiz-results.*', 'teacher.quiz-results.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
-            </svg>
-            Quiz natijalar
-        </a>
-        @endif
-
         <a href="{{ $r('admin.vedomost.index', 'teacher.vedomost.index') }}"
            class="sidebar-link {{ $isActive('admin.vedomost.*', 'teacher.vedomost.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -169,6 +174,7 @@
             </svg>
             Vedomost
         </a>
+        @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
         <div class="sidebar-section">Darslar</div>
@@ -202,6 +208,7 @@
         </a>
         @endif
 
+        @if(!$hasActiveRole('test_markazi'))
         <a href="{{ $r('admin.qaytnoma.index', 'teacher.qaytnoma.index') }}"
            class="sidebar-link {{ $isActive('admin.qaytnoma.*', 'teacher.qaytnoma.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -209,6 +216,7 @@
             </svg>
             YN oldi qaydnoma
         </a>
+        @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
         <div class="sidebar-section">Hisobotlar</div>

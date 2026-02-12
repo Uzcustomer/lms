@@ -24,6 +24,105 @@ class QuizResultController extends Controller
         return auth()->guard('teacher')->check() ? 'teacher' : 'admin';
     }
 
+    /**
+     * Diagnostika sahifasi — yangi dizayn bilan.
+     */
+    public function diagnostikaPage(Request $request)
+    {
+        $faculties = HemisQuizResult::where('is_active', 1)
+            ->whereNotNull('faculty')->where('faculty', '!=', '')
+            ->distinct()->pluck('faculty')->sort()->values();
+
+        $directions = HemisQuizResult::where('is_active', 1)
+            ->whereNotNull('direction')->where('direction', '!=', '')
+            ->distinct()->pluck('direction')->sort()->values();
+
+        $semesters = HemisQuizResult::where('is_active', 1)
+            ->whereNotNull('semester')->where('semester', '!=', '')
+            ->distinct()->pluck('semester')->sort()->values();
+
+        $quizTypes = HemisQuizResult::where('is_active', 1)
+            ->whereNotNull('quiz_type')->where('quiz_type', '!=', '')
+            ->distinct()->pluck('quiz_type')->sort()->values();
+
+        $routePrefix = $this->routePrefix();
+
+        return view('admin.diagnostika.index', compact(
+            'faculties', 'directions', 'semesters', 'quizTypes', 'routePrefix'
+        ));
+    }
+
+    /**
+     * Diagnostika sahifasi uchun AJAX data endpoint.
+     */
+    public function diagnostikaData(Request $request)
+    {
+        $query = HemisQuizResult::where('is_active', 1);
+
+        if ($request->filled('faculty')) {
+            $query->where('faculty', $request->faculty);
+        }
+        if ($request->filled('direction')) {
+            $query->where('direction', $request->direction);
+        }
+        if ($request->filled('semester')) {
+            $query->where('semester', $request->semester);
+        }
+        if ($request->filled('fan_name')) {
+            $query->where('fan_name', 'LIKE', '%' . $request->fan_name . '%');
+        }
+        if ($request->filled('student_name')) {
+            $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
+        }
+        if ($request->filled('student_id')) {
+            $query->where('student_id', $request->student_id);
+        }
+        if ($request->filled('quiz_type')) {
+            $query->where('quiz_type', $request->quiz_type);
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('date_finish', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('date_finish', '<=', $request->date_to);
+        }
+
+        // Excel export
+        if ($request->input('export') === 'excel') {
+            return (new QuizResultExport($request))->export();
+        }
+
+        $perPage = $request->input('per_page', 50);
+        $paginated = $query->orderByDesc('date_finish')->paginate($perPage);
+
+        $data = collect($paginated->items())->map(function ($item, $i) use ($paginated) {
+            return [
+                'id' => $item->id,
+                'row_num' => $paginated->firstItem() + $i,
+                'student_id' => $item->student_id,
+                'student_name' => $item->student_name,
+                'faculty' => $item->faculty,
+                'direction' => $item->direction,
+                'semester' => $item->semester,
+                'fan_name' => $item->fan_name,
+                'quiz_type' => $item->quiz_type,
+                'shakl' => $item->shakl,
+                'grade' => $item->grade,
+                'old_grade' => $item->old_grade,
+                'date_start' => $item->date_start ? $item->date_start->format('d.m.Y H:i') : '',
+                'date_finish' => $item->date_finish ? $item->date_finish->format('d.m.Y H:i') : '',
+            ];
+        });
+
+        return response()->json([
+            'data' => $data,
+            'total' => $paginated->total(),
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+            'per_page' => $paginated->perPage(),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $query = HemisQuizResult::where('is_active', 1);

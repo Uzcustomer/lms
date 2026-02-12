@@ -268,9 +268,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{activityLog}', [ActivityLogController::class, 'show'])->name('show');
         });
 
-        // Test markazi: Quiz natijalarni ko'rish, export va import
+        // Diagnostika sahifasi (yangi dizayn)
+        Route::prefix('diagnostika')->name('diagnostika.')->group(function () {
+            Route::get('/', [QuizResultController::class, 'diagnostikaPage'])->name('index');
+            Route::get('/data', [QuizResultController::class, 'diagnostikaData'])->name('data');
+        });
+
+        // Test markazi: Quiz natijalar API (diagnostika, upload, import, export, destroy)
         Route::prefix('quiz-results')->name('quiz-results.')->group(function () {
-            Route::get('/', [QuizResultController::class, 'index'])->name('index');
             Route::get('/export', [QuizResultController::class, 'exportExcel'])->name('export');
             Route::post('/import', [QuizResultController::class, 'import'])->name('import');
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
@@ -476,9 +481,14 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
 
         });
 
-        // Test markazi: Quiz natijalarni ko'rish, export, diagnostika va yuklash
+        // Diagnostika sahifasi (yangi dizayn)
+        Route::prefix('diagnostika')->name('diagnostika.')->group(function () {
+            Route::get('/', [QuizResultController::class, 'diagnostikaPage'])->name('index');
+            Route::get('/data', [QuizResultController::class, 'diagnostikaData'])->name('data');
+        });
+
+        // Test markazi: Quiz natijalar API (diagnostika, upload, import, export, destroy)
         Route::prefix('quiz-results')->name('quiz-results.')->group(function () {
-            Route::get('/', [QuizResultController::class, 'index'])->name('index');
             Route::get('/export', [QuizResultController::class, 'exportExcel'])->name('export');
             Route::post('/import', [QuizResultController::class, 'import'])->name('import');
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');

@@ -2621,10 +2621,6 @@
                 style="background:#fff; color:#d97706; border:none; padding:8px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.15); transition:all 0.2s;">
                 Saqlash
             </button>
-            <button onclick="cancelAllPending()"
-                style="background:rgba(255,255,255,0.2); color:#fff; border:1px solid rgba(255,255,255,0.4); padding:8px 16px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; transition:all 0.2s;">
-                Bekor qilish
-            </button>
         </div>
     </div>
 
@@ -2884,20 +2880,6 @@
                 document.body.appendChild(notifDiv);
                 setTimeout(() => notifDiv.remove(), 4000);
             });
-        }
-
-        function cancelAllPending() {
-            if (Object.keys(pendingOpenedGrades).length === 0) return;
-            if (!confirm('Barcha saqlanmagan baholarni bekor qilmoqchimisiz?')) return;
-
-            Object.values(pendingOpenedGrades).forEach(g => {
-                const cellDiv = g.cellDiv;
-                cellDiv.innerHTML = '<span class="text-green-400">-</span>';
-                cellDiv.style.background = '#f0fdf4';
-            });
-
-            pendingOpenedGrades = {};
-            updatePendingPanel();
         }
 
         // Sahifadan chiqishda ogohlantirish

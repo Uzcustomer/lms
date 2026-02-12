@@ -1030,13 +1030,6 @@
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
-                                                        @elseif($canEditOpened && !$hasRetake)
-                                                            {{-- O'qituvchi: ochilgan darsda mavjud bahoni tahrirlash --}}
-                                                            <div class="editable-cell cursor-pointer hover:bg-green-50"
-                                                                 onclick="makeEditableOpened(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}', '{{ $groupId }}')"
-                                                                 title="Dars ochilgan — tahrirlash" style="background: #f0fdf4;">
-                                                                <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
-                                                            </div>
                                                         @else
                                                             <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif

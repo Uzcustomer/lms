@@ -894,10 +894,8 @@ class JournalController extends Controller
         $teacherName = $lectureTeacher['name'] ?? ($practiceTeachers[0]['name'] ?? '');
 
         // ===== Dars ochish: o'tkazib yuborilgan kunlarni aniqlash =====
-        // Jadvalda dars bor lekin hech qanday baho yoki attendance yuklanmagan kunlar
+        // Jadvalda dars bor lekin baho qo'yilmagan kunlar (davomat bo'lsa ham baho yo'q bo'lsa missed)
         $jbGradeDates = collect($jbGradesRaw)->pluck('lesson_date')->unique()->toArray();
-        $jbAttendanceDates = $jbAttendanceRaw->pluck('lesson_date')->unique()->toArray();
-        $coveredDates = array_unique(array_merge($jbGradeDates, $jbAttendanceDates));
 
         $missedDates = [];
         $today = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
@@ -905,7 +903,8 @@ class JournalController extends Controller
             $dateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
             // Faqat o'tgan kunlarni tekshirish (bugundan oldingi)
             if ($dateStr >= $today) continue;
-            if (!in_array($dateStr, $coveredDates)) {
+            // Baho yo'q bo'lsa — missed
+            if (!in_array($dateStr, $jbGradeDates)) {
                 $missedDates[] = $dateStr;
             }
         }
@@ -2648,20 +2647,7 @@ class JournalController extends Controller
         $now = now();
 
         if ($existing) {
-            // Mavjud bahoni yangilash
-            DB::table('student_grades')
-                ->where('id', $existing->id)
-                ->update([
-                    'grade' => $gradeValue,
-                    'status' => 'recorded',
-                    'updated_at' => $now,
-                ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Baho yangilandi',
-                'grade' => $gradeValue,
-            ]);
+            return response()->json(['success' => false, 'message' => 'Bu katak uchun baho allaqachon mavjud. Faqat baho yo\'q kataklarga yozish mumkin.'], 409);
         }
 
         // Yangi baho yaratish

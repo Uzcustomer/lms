@@ -894,8 +894,10 @@ class JournalController extends Controller
         $teacherName = $lectureTeacher['name'] ?? ($practiceTeachers[0]['name'] ?? '');
 
         // ===== Dars ochish: o'tkazib yuborilgan kunlarni aniqlash =====
-        // Jadvalda dars bor lekin baho qo'yilmagan kunlar (davomat bo'lsa ham baho yo'q bo'lsa missed)
+        // Jadvalda dars bor lekin na baho na davomat qo'yilmagan kunlar
         $jbGradeDates = collect($jbGradesRaw)->pluck('lesson_date')->unique()->toArray();
+        $jbAttendanceDates = collect($jbAttendanceRaw)->pluck('lesson_date')->unique()->toArray();
+        $jbRecordedDates = array_unique(array_merge($jbGradeDates, $jbAttendanceDates));
 
         $missedDates = [];
         $today = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
@@ -903,8 +905,8 @@ class JournalController extends Controller
             $dateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
             // Faqat o'tgan kunlarni tekshirish (bugundan oldingi)
             if ($dateStr >= $today) continue;
-            // Baho yo'q bo'lsa — missed
-            if (!in_array($dateStr, $jbGradeDates)) {
+            // Baho ham davomat ham yo'q bo'lsa — missed
+            if (!in_array($dateStr, $jbRecordedDates)) {
                 $missedDates[] = $dateStr;
             }
         }

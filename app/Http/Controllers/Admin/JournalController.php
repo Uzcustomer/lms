@@ -2499,15 +2499,14 @@ class JournalController extends Controller
             'file' => 'required|file|max:10240',
         ]);
 
-        // Avval mavjud faol ochilish bormi tekshirish
+        // Avval mavjud ochilish bormi tekshirish (har qanday statusda)
         $existing = LessonOpening::where('group_hemis_id', $request->group_hemis_id)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
             ->where('lesson_date', $request->lesson_date)
-            ->where('status', 'active')
             ->first();
 
-        if ($existing && $existing->isActive()) {
+        if ($existing) {
             return response()->json(['success' => false, 'message' => 'Bu kun uchun dars allaqachon ochilgan'], 409);
         }
 

@@ -10,6 +10,8 @@ use App\Models\Department;
 use App\Models\Group;
 use App\Models\Semester;
 use App\Models\Specialty;
+use App\Jobs\ImportSchedulesPartiallyJob;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -941,6 +943,47 @@ class JournalController extends Controller
             'subjectId',
             'semesterCode'
         ));
+    }
+
+    /**
+     * O'qituvchi jurnaldan dars jadvalini HEMIS bilan sinxronlash
+     */
+    public function syncSchedule(Request $request)
+    {
+        $data = $request->validate([
+            'group_id' => 'required',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+        ]);
+
+        // Shu guruh/fan uchun jadval sanalaridan oraliqni aniqlash
+        $dateRange = DB::table('schedules')
+            ->where('group_id', $data['group_id'])
+            ->where('subject_id', $data['subject_id'])
+            ->where('semester_code', $data['semester_code'])
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->selectRaw('MIN(lesson_date) as min_date, MAX(lesson_date) as max_date')
+            ->first();
+
+        $from = $dateRange?->min_date
+            ? \Carbon\Carbon::parse($dateRange->min_date)->toDateString()
+            : now()->subDays(14)->toDateString();
+
+        $to = $dateRange?->max_date
+            ? \Carbon\Carbon::parse($dateRange->max_date)->toDateString()
+            : now()->addDays(14)->toDateString();
+
+        $userName = auth()->user()?->name ?? auth()->guard('teacher')->user()?->name ?? 'Noma\'lum';
+
+        ActivityLogService::log('import', 'schedule', "Jurnal orqali jadval sinxronizatsiyasi: {$userName} ({$from} — {$to})");
+
+        ImportSchedulesPartiallyJob::dispatch($from, $to);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Jadval sinxronizatsiyasi boshlandi ({$from} — {$to}). Jarayon fon rejimida ishlaydi.",
+        ]);
     }
 
     /**

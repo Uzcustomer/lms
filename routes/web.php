@@ -166,6 +166,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-topics', [JournalController::class, 'getTopics'])->name('get-topics');
             Route::get('/download-submission/{submissionId}', [JournalController::class, 'downloadSubmission'])->name('download-submission');
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');
+            Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');

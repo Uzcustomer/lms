@@ -11,6 +11,20 @@
                     Excelga yuklash
                 </a>
 
+                {{-- Diagnostika --}}
+                <button type="button" id="btn-diagnostika"
+                        class="inline-flex justify-center items-center px-4 py-2 bg-yellow-500 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-yellow-600 active:bg-yellow-700 focus:outline-none focus:ring focus:ring-yellow-200 transition shadow-md hover:shadow-lg disabled:opacity-50"
+                        disabled>
+                    Diagnostika
+                </button>
+
+                {{-- Sistemaga yuklash --}}
+                <button type="button" id="btn-upload"
+                        class="inline-flex justify-center items-center px-4 py-2 bg-purple-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-purple-700 active:bg-purple-800 focus:outline-none focus:ring focus:ring-purple-200 transition shadow-md hover:shadow-lg disabled:opacity-50"
+                        disabled style="display:none;">
+                    Sistemaga yuklash
+                </button>
+
                 {{-- Excel orqali import --}}
                 <form action="{{ route('admin.quiz-results.import') }}" method="POST" enctype="multipart/form-data"
                       class="flex items-center">
@@ -86,6 +100,35 @@
             </ul>
         </div>
     @endif
+
+    {{-- Diagnostika natijalari paneli --}}
+    <div id="diagnostika-panel" class="mb-4" style="display:none;">
+        <div id="diagnostika-loading" class="bg-blue-50 border border-blue-300 text-blue-700 px-4 py-3 rounded mb-2" style="display:none;">
+            Diagnostika tekshirilmoqda...
+        </div>
+        <div id="diagnostika-summary" class="px-4 py-3 rounded mb-2" style="display:none;"></div>
+        <div id="diagnostika-errors" style="display:none;">
+            <div class="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded">
+                <strong class="font-bold">Xato natijalar:</strong>
+                <table class="min-w-full divide-y divide-gray-200 mt-2">
+                    <thead class="bg-red-100">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Student ID</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Talaba</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Fan</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Baho</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Sababi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="diagnostika-errors-body" class="bg-white divide-y divide-gray-200">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {{-- Upload natijasi --}}
+    <div id="upload-result" class="mb-4" style="display:none;"></div>
 
     <div class="py-12">
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
@@ -191,10 +234,13 @@
                                 <p>Hozircha quiz natijalar mavjud emas.</p>
                             </div>
                         @else
-                            <table class="min-w-full divide-y divide-gray-200">
+                            <table class="min-w-full divide-y divide-gray-200" id="results-table">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">№</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <input type="checkbox" id="select-all" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        </th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Talaba</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fakultet</th>
@@ -207,11 +253,15 @@
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Eski baho</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Boshlanish</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tugash</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amal</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
                                     @foreach($results as $index => $result)
-                                        <tr>
+                                        <tr id="row-{{ $result->id }}" class="result-row">
+                                            <td class="px-4 py-3 whitespace-nowrap">
+                                                <input type="checkbox" class="row-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" value="{{ $result->id }}">
+                                            </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ $results->firstItem() + $index }}</td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ $result->student_id }}</td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ $result->student_name }}</td>
@@ -225,12 +275,20 @@
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ $result->old_grade }}</td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ $result->date_start ? $result->date_start->format('d.m.Y H:i') : '' }}</td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ $result->date_finish ? $result->date_finish->format('d.m.Y H:i') : '' }}</td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                                <button type="button" class="btn-delete-row text-red-600 hover:text-red-800 font-medium" data-id="{{ $result->id }}">
+                                                    O'chirish
+                                                </button>
+                                            </td>
                                         </tr>
                                     @endforeach
                                 </tbody>
                             </table>
 
-                            <div class="p-4">
+                            <div class="p-4 flex items-center justify-between">
+                                <div id="selection-info" class="text-sm text-gray-600">
+                                    <span id="selected-count">0</span> ta tanlangan
+                                </div>
                                 {{ $results->links() }}
                             </div>
                         @endif
@@ -246,6 +304,13 @@
 
     <script>
     $(document).ready(function() {
+        var csrfToken = '{{ csrf_token() }}';
+        var diagnostikaUrl = '{{ route("admin.quiz-results.diagnostika") }}';
+        var uploadUrl = '{{ route("admin.quiz-results.upload") }}';
+        var destroyUrlBase = '{{ url("/admin/quiz-results") }}';
+        var diagnostikaRan = false;
+
+        // Select2
         $('.select2').each(function() {
             $(this).select2({
                 theme: 'classic',
@@ -255,10 +320,210 @@
             });
         });
 
-        // Fayl tanlanganda nomini ko'rsatish
+        // Fayl nomi
         $('#file-upload').on('change', function() {
             var fileName = $(this).val().split('\\').pop();
             $('#file-name').text(fileName);
+        });
+
+        // Tanlangan IDlarni olish
+        function getSelectedIds() {
+            var ids = [];
+            $('.row-checkbox:checked').each(function() {
+                ids.push(parseInt($(this).val()));
+            });
+            return ids;
+        }
+
+        // Tugmalar holatini yangilash
+        function updateButtons() {
+            var count = getSelectedIds().length;
+            $('#selected-count').text(count);
+            $('#btn-diagnostika').prop('disabled', count === 0);
+
+            // Diagnostika qaytadan ishlatilishi kerak bo'lganda upload tugmasini yashirish
+            if (diagnostikaRan && count > 0) {
+                diagnostikaRan = false;
+                $('#btn-upload').hide().prop('disabled', true);
+                $('#diagnostika-panel').hide();
+                $('#upload-result').hide();
+            }
+        }
+
+        // Hammasi tanlash
+        $('#select-all').on('change', function() {
+            var checked = $(this).is(':checked');
+            $('.row-checkbox').prop('checked', checked);
+            updateButtons();
+        });
+
+        // Bitta checkbox o'zgarganda
+        $(document).on('change', '.row-checkbox', function() {
+            updateButtons();
+            // Agar hechbiri tanlanmasa, select-all ni olib tashlash
+            var total = $('.row-checkbox').length;
+            var checked = $('.row-checkbox:checked').length;
+            $('#select-all').prop('checked', total > 0 && checked === total);
+        });
+
+        // Qatorni o'chirish (is_active=0)
+        $(document).on('click', '.btn-delete-row', function() {
+            var id = $(this).data('id');
+            var row = $('#row-' + id);
+
+            if (!confirm("Bu natijani o'chirishni xohlaysizmi?")) return;
+
+            $.ajax({
+                url: destroyUrlBase + '/' + id,
+                type: 'DELETE',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                success: function() {
+                    row.fadeOut(300, function() { $(this).remove(); });
+                    updateButtons();
+                },
+                error: function(xhr) {
+                    alert("Xato yuz berdi: " + (xhr.responseJSON?.message || 'Server xatosi'));
+                }
+            });
+        });
+
+        // DIAGNOSTIKA
+        $('#btn-diagnostika').on('click', function() {
+            var ids = getSelectedIds();
+            if (ids.length === 0) return;
+
+            var btn = $(this);
+            btn.prop('disabled', true).text('Tekshirilmoqda...');
+            $('#diagnostika-panel').show();
+            $('#diagnostika-loading').show();
+            $('#diagnostika-summary').hide();
+            $('#diagnostika-errors').hide();
+            $('#btn-upload').hide().prop('disabled', true);
+            $('#upload-result').hide();
+
+            $.ajax({
+                url: diagnostikaUrl,
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                contentType: 'application/json',
+                data: JSON.stringify({ ids: ids }),
+                success: function(data) {
+                    $('#diagnostika-loading').hide();
+                    diagnostikaRan = true;
+
+                    // Summary
+                    var summaryClass, summaryText;
+                    if (data.error_count === 0) {
+                        summaryClass = 'bg-green-100 border border-green-400 text-green-800';
+                        summaryText = 'Hammasi tayyor! ' + data.ok_count + ' ta natija muammosiz yuklanishi mumkin.';
+                    } else if (data.ok_count === 0) {
+                        summaryClass = 'bg-red-100 border border-red-400 text-red-800';
+                        summaryText = 'Hech bir natija yuklanmaydi. ' + data.error_count + ' ta xato topildi.';
+                    } else {
+                        summaryClass = 'bg-yellow-100 border border-yellow-400 text-yellow-800';
+                        summaryText = data.ok_count + ' ta tayyor, ' + data.error_count + ' ta xato. Xatolarni tuzating va qayta diagnostika qiling.';
+                    }
+                    $('#diagnostika-summary').attr('class', 'px-4 py-3 rounded mb-2 font-semibold ' + summaryClass).text(summaryText).show();
+
+                    // Xatolar jadvali
+                    if (data.error_count > 0) {
+                        var tbody = $('#diagnostika-errors-body');
+                        tbody.empty();
+                        data.errors.forEach(function(err) {
+                            tbody.append(
+                                '<tr>' +
+                                    '<td class="px-4 py-2 text-sm text-gray-900">' + (err.student_id || '') + '</td>' +
+                                    '<td class="px-4 py-2 text-sm text-gray-900">' + (err.student_name || '') + '</td>' +
+                                    '<td class="px-4 py-2 text-sm text-gray-900">' + (err.fan_name || '') + '</td>' +
+                                    '<td class="px-4 py-2 text-sm text-gray-900">' + (err.grade || '') + '</td>' +
+                                    '<td class="px-4 py-2 text-sm text-red-600 font-medium">' + (err.error || '') + '</td>' +
+                                '</tr>'
+                            );
+                        });
+                        $('#diagnostika-errors').show();
+                    }
+
+                    // Upload tugmasini ko'rsatish
+                    if (data.ok_count > 0) {
+                        $('#btn-upload').show().prop('disabled', false).text('Sistemaga yuklash (' + data.ok_count + ' ta)');
+                    }
+                },
+                error: function(xhr) {
+                    $('#diagnostika-loading').hide();
+                    var msg = xhr.responseJSON?.message || 'Server xatosi';
+                    $('#diagnostika-summary').attr('class', 'px-4 py-3 rounded mb-2 font-semibold bg-red-100 border border-red-400 text-red-800').text('Xato: ' + msg).show();
+                },
+                complete: function() {
+                    btn.prop('disabled', false).text('DIAGNOSTIKA');
+                }
+            });
+        });
+
+        // SISTEMAGA YUKLASH
+        $('#btn-upload').on('click', function() {
+            var ids = getSelectedIds();
+            if (ids.length === 0) return;
+
+            if (!confirm("Tanlangan " + ids.length + " ta natijani student_grades ga yuklashni tasdiqlaysizmi?")) return;
+
+            var btn = $(this);
+            btn.prop('disabled', true).text('Yuklanmoqda...');
+
+            $.ajax({
+                url: uploadUrl,
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                contentType: 'application/json',
+                data: JSON.stringify({ ids: ids }),
+                success: function(data) {
+                    var html = '';
+                    if (data.success_count > 0) {
+                        html += '<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-2">';
+                        html += '<strong>Muvaffaqiyatli!</strong> ' + data.success_count + ' ta natija student_grades ga yuklandi.';
+                        html += '</div>';
+                    }
+                    if (data.error_count > 0) {
+                        html += '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-2">';
+                        html += '<strong>' + data.error_count + ' ta xato:</strong><ul class="mt-1 list-disc list-inside">';
+                        data.errors.forEach(function(err) {
+                            html += '<li>' + (err.student_name || '') + ' — ' + (err.fan_name || '') + ': ' + (err.error || '') + '</li>';
+                        });
+                        html += '</ul></div>';
+                    }
+                    $('#upload-result').html(html).show();
+                    btn.hide();
+                    $('#diagnostika-panel').hide();
+
+                    // Muvaffaqiyatli yuklangandan keyin checkboxlarni olib tashlash
+                    if (data.success_count > 0) {
+                        $('.row-checkbox:checked').each(function() {
+                            var rowId = $(this).val();
+                            // Xato bo'lmagan qatorlarni belgilash (yashil rang)
+                            var hasError = false;
+                            if (data.errors) {
+                                data.errors.forEach(function(err) {
+                                    if (err.id == rowId) hasError = true;
+                                });
+                            }
+                            if (!hasError) {
+                                $('#row-' + rowId).addClass('bg-green-50').find('.row-checkbox').prop('checked', false).prop('disabled', true);
+                                $('#row-' + rowId).find('.btn-delete-row').remove();
+                            }
+                        });
+                        updateButtons();
+                    }
+                },
+                error: function(xhr) {
+                    var msg = xhr.responseJSON?.message || 'Server xatosi';
+                    $('#upload-result').html(
+                        '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-2">' +
+                        '<strong>Xato!</strong> ' + msg + '</div>'
+                    ).show();
+                },
+                complete: function() {
+                    btn.prop('disabled', false).text('SISTEMAGA YUKLASH');
+                }
+            });
         });
     });
     </script>

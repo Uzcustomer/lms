@@ -895,8 +895,8 @@ class JournalController extends Controller
 
         // ===== Dars ochish: o'tkazib yuborilgan kunlarni aniqlash =====
         // Jadvalda dars bor lekin na baho na davomat qo'yilmagan kunlar
-        $jbGradeDates = collect($jbGradesRaw)->pluck('lesson_date')->unique()->toArray();
-        $jbAttendanceDates = collect($jbAttendanceRaw)->pluck('lesson_date')->unique()->toArray();
+        $jbGradeDates = collect($jbGradesRaw)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
+        $jbAttendanceDates = collect($jbAttendanceRaw)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
         $jbRecordedDates = array_unique(array_merge($jbGradeDates, $jbAttendanceDates));
 
         $missedDates = [];

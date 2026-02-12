@@ -356,7 +356,7 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'created_at')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -916,12 +916,21 @@ class JournalController extends Controller
         $lessonOpenings = LessonOpening::getAllOpenings($group->group_hemis_id, $subjectId, $semesterCode);
         $lessonOpeningsMap = [];
         foreach ($lessonOpenings as $lo) {
-            $lessonOpeningsMap[$lo->lesson_date->format('Y-m-d')] = [
+            $loDateStr = $lo->lesson_date->format('Y-m-d');
+            // Shu kun uchun qo'yilgan baholar statistikasi
+            $dateGrades = $jbGradesRaw->filter(fn($g) => \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d') === $loDateStr && $g->grade !== null);
+            $gradeCount = $dateGrades->count();
+            $lastGradeAt = $gradeCount > 0 ? $dateGrades->max('created_at') : null;
+
+            $lessonOpeningsMap[$loDateStr] = [
                 'id' => $lo->id,
                 'status' => $lo->isActive() ? 'active' : $lo->status,
                 'deadline' => $lo->deadline->format('Y-m-d H:i'),
+                'opened_at' => $lo->created_at->format('d.m.Y H:i'),
                 'opened_by_name' => $lo->opened_by_name,
                 'file_original_name' => $lo->file_original_name,
+                'grade_count' => $gradeCount,
+                'last_grade_at' => $lastGradeAt ? \Carbon\Carbon::parse($lastGradeAt)->format('d.m.Y H:i') : null,
             ];
         }
 
@@ -2566,6 +2575,18 @@ class JournalController extends Controller
             'success' => true,
             'message' => 'Dars yopildi',
         ]);
+    }
+
+    /**
+     * Dars ochish faylini yuklab olish
+     */
+    public function downloadLessonFile(LessonOpening $lessonOpening)
+    {
+        if (!$lessonOpening->file_path || !\Storage::disk('public')->exists($lessonOpening->file_path)) {
+            abort(404, 'Fayl topilmadi');
+        }
+
+        return \Storage::disk('public')->download($lessonOpening->file_path, $lessonOpening->file_original_name);
     }
 
     /**

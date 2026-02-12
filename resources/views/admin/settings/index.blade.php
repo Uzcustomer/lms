@@ -45,7 +45,7 @@
                         @csrf
 
                         {{-- Quick settings row --}}
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
                             {{-- Spravka --}}
                             <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 14px; padding: 20px; border: 1px solid #fbbf24; position: relative; overflow: hidden;">
                                 <div style="position: absolute; top: 0; right: 0; width: 80px; height: 80px; background: rgba(245,158,11,0.1); border-radius: 0 0 0 80px;"></div>
@@ -87,6 +87,22 @@
                                     <span style="font-size: 15px; color: #5b21b6; font-weight: 600;">marta</span>
                                 </div>
                                 <div style="font-size: 11px; color: #7c3aed; margin-top: 6px;">baho 60 dan past bo'lsa</div>
+                            </div>
+
+                            {{-- Dars ochish muddati --}}
+                            <div style="background: linear-gradient(135deg, #dcfce7, #bbf7d0); border-radius: 14px; padding: 20px; border: 1px solid #4ade80; position: relative; overflow: hidden;">
+                                <div style="position: absolute; top: 0; right: 0; width: 80px; height: 80px; background: rgba(34,197,94,0.1); border-radius: 0 0 0 80px;"></div>
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+                                    <div style="width: 36px; height: 36px; min-width: 36px; background: rgba(34,197,94,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                                        <svg width="20" height="20" style="width: 20px; height: 20px; color: #15803d;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                                    </div>
+                                    <div style="font-size: 13px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: 0.5px;">Dars ochish</div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="number" name="lesson_opening_days" value="{{ old('lesson_opening_days', $lessonOpeningDays ?? 3) }}" min="1" max="30" style="width: 80px; padding: 10px 14px; border: 2px solid #22c55e; border-radius: 10px; font-size: 24px; font-weight: 800; color: #166534; text-align: center; background: rgba(255,255,255,0.7); outline: none;">
+                                    <span style="font-size: 15px; color: #166534; font-weight: 600;">kun</span>
+                                </div>
+                                <div style="font-size: 11px; color: #22c55e; margin-top: 6px;">baho qo'yish muddati</div>
                             </div>
                         </div>
 

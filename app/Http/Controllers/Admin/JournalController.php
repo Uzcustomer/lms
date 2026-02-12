@@ -8,11 +8,14 @@ use App\Models\CurriculumSubject;
 use App\Models\CurriculumSubjectTeacher;
 use App\Models\Department;
 use App\Models\Group;
+use App\Models\LessonOpening;
 use App\Models\Semester;
+use App\Models\Setting;
 use App\Models\Specialty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 class JournalController extends Controller
 {
@@ -890,6 +893,43 @@ class JournalController extends Controller
         $practiceTeachers = $teacherData['practice_teachers'];
         $teacherName = $lectureTeacher['name'] ?? ($practiceTeachers[0]['name'] ?? '');
 
+        // ===== Dars ochish: o'tkazib yuborilgan kunlarni aniqlash =====
+        // Jadvalda dars bor lekin hech qanday baho yoki attendance yuklanmagan kunlar
+        $jbGradeDates = collect($jbGradesRaw)->pluck('lesson_date')->unique()->toArray();
+        $jbAttendanceDates = $jbAttendanceRaw->pluck('lesson_date')->unique()->toArray();
+        $coveredDates = array_unique(array_merge($jbGradeDates, $jbAttendanceDates));
+
+        $missedDates = [];
+        $today = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
+        foreach ($jbLessonDates as $date) {
+            $dateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
+            // Faqat o'tgan kunlarni tekshirish (bugundan oldingi)
+            if ($dateStr >= $today) continue;
+            if (!in_array($dateStr, $coveredDates)) {
+                $missedDates[] = $dateStr;
+            }
+        }
+
+        // Mavjud dars ochilishlarini olish
+        LessonOpening::expireOverdue();
+        $lessonOpenings = LessonOpening::getAllOpenings($group->group_hemis_id, $subjectId, $semesterCode);
+        $lessonOpeningsMap = [];
+        foreach ($lessonOpenings as $lo) {
+            $lessonOpeningsMap[$lo->lesson_date->format('Y-m-d')] = [
+                'id' => $lo->id,
+                'status' => $lo->isActive() ? 'active' : $lo->status,
+                'deadline' => $lo->deadline->format('Y-m-d H:i'),
+                'opened_by_name' => $lo->opened_by_name,
+                'file_original_name' => $lo->file_original_name,
+            ];
+        }
+
+        // Dars ochish sozlamasi
+        $lessonOpeningDays = (int) Setting::get('lesson_opening_days', 3);
+
+        // O'qituvchi uchun: ochilgan va muddati tugamagan darslar
+        $activeOpenedDates = LessonOpening::getActiveOpenings($group->group_hemis_id, $subjectId, $semesterCode);
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
@@ -935,7 +975,11 @@ class JournalController extends Controller
             'auditoriumHours',
             'groupId',
             'subjectId',
-            'semesterCode'
+            'semesterCode',
+            'missedDates',
+            'lessonOpeningsMap',
+            'lessonOpeningDays',
+            'activeOpenedDates'
         ));
     }
 
@@ -944,8 +988,8 @@ class JournalController extends Controller
      */
     public function saveMtGrade(Request $request)
     {
-        // Dekan faqat ko'rish huquqiga ega
-        if (is_active_dekan()) {
+        // Dekan va registrator faqat ko'rish huquqiga ega
+        if (is_active_dekan() || is_active_registrator()) {
             return response()->json(['success' => false, 'message' => 'Sizda tahrirlash huquqi yo\'q'], 403);
         }
 
@@ -2423,5 +2467,236 @@ class JournalController extends Controller
             'subject_ids' => array_values(array_unique(array_filter($subjectIds))),
             'group_ids' => array_values(array_unique(array_filter($groupIds))),
         ];
+    }
+
+    /**
+     * Dars ochish - o'tkazib yuborilgan kun uchun baho qo'yishni ochish
+     */
+    public function openLesson(Request $request)
+    {
+        // Faqat admin, kichik_admin, superadmin, registrator_ofisi
+        $user = auth()->user();
+        $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
+        if (!$user->hasAnyRole($allowedRoles)) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'group_hemis_id' => 'required',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'lesson_date' => 'required|date',
+            'file' => 'required|file|max:10240',
+        ]);
+
+        // Avval mavjud faol ochilish bormi tekshirish
+        $existing = LessonOpening::where('group_hemis_id', $request->group_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('lesson_date', $request->lesson_date)
+            ->where('status', 'active')
+            ->first();
+
+        if ($existing && $existing->isActive()) {
+            return response()->json(['success' => false, 'message' => 'Bu kun uchun dars allaqachon ochilgan'], 409);
+        }
+
+        // Faylni yuklash
+        $file = $request->file('file');
+        $filePath = $file->store('lesson-openings', 'public');
+        $fileOriginalName = $file->getClientOriginalName();
+
+        // Muddat hisoblash
+        $days = (int) Setting::get('lesson_opening_days', 3);
+        $deadline = \Carbon\Carbon::now('Asia/Tashkent')->addDays($days)->endOfDay();
+
+        // Guard va foydalanuvchi ma'lumotlari
+        $guard = auth()->guard('teacher')->check() ? 'teacher' : 'web';
+
+        $opening = LessonOpening::create([
+            'group_hemis_id' => $request->group_hemis_id,
+            'subject_id' => $request->subject_id,
+            'semester_code' => $request->semester_code,
+            'lesson_date' => $request->lesson_date,
+            'file_path' => $filePath,
+            'file_original_name' => $fileOriginalName,
+            'opened_by_id' => $user->id,
+            'opened_by_name' => $user->name ?? $user->full_name ?? 'Unknown',
+            'opened_by_guard' => $guard,
+            'deadline' => $deadline,
+            'status' => 'active',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Dars muvaffaqiyatli ochildi',
+            'opening' => [
+                'id' => $opening->id,
+                'deadline' => $opening->deadline->format('Y-m-d H:i'),
+                'opened_by_name' => $opening->opened_by_name,
+                'file_original_name' => $opening->file_original_name,
+            ],
+        ]);
+    }
+
+    /**
+     * Dars ochishni yopish
+     */
+    public function closeLesson(Request $request)
+    {
+        $user = auth()->user();
+        $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
+        if (!$user->hasAnyRole($allowedRoles)) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'opening_id' => 'required|integer',
+        ]);
+
+        $opening = LessonOpening::find($request->opening_id);
+        if (!$opening) {
+            return response()->json(['success' => false, 'message' => 'Dars ochilishi topilmadi'], 404);
+        }
+
+        $opening->update(['status' => 'closed']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Dars yopildi',
+        ]);
+    }
+
+    /**
+     * O'qituvchi uchun: ochilgan dars kuniga baho qo'yish
+     */
+    public function saveOpenedLessonGrade(Request $request)
+    {
+        $request->validate([
+            'student_hemis_id' => 'required',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'lesson_date' => 'required|date',
+            'lesson_pair_code' => 'required',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        // Tekshirish: bu kun uchun faol dars ochilishi bormi
+        $groupHemisId = $request->group_hemis_id;
+        $opening = LessonOpening::where('group_hemis_id', $groupHemisId)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('lesson_date', $request->lesson_date)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$opening || !$opening->isActive()) {
+            return response()->json(['success' => false, 'message' => 'Bu kun uchun dars ochilmagan yoki muddati tugagan'], 403);
+        }
+
+        // O'qituvchi ekanligini va shu guruhga biriktirilganligini tekshirish
+        $isAdmin = auth()->user()->hasAnyRole(['superadmin', 'admin', 'kichik_admin']);
+        $isTeacher = is_active_oqituvchi();
+
+        if ($isTeacher && !$isAdmin) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if (!$teacherHemisId) {
+                return response()->json(['success' => false, 'message' => 'O\'qituvchi topilmadi'], 403);
+            }
+
+            // Jadvaldagi o'qituvchini tekshirish
+            $isAssigned = DB::table('schedules')
+                ->where('group_id', $groupHemisId)
+                ->where('subject_id', $request->subject_id)
+                ->where('semester_code', $request->semester_code)
+                ->where('employee_id', $teacherHemisId)
+                ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+                ->exists();
+
+            if (!$isAssigned) {
+                return response()->json(['success' => false, 'message' => 'Siz bu guruh/fanga biriktirilmagansiz'], 403);
+            }
+        } elseif (!$isAdmin) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        // Jadvaldan dars ma'lumotlarini olish
+        $schedule = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->whereDate('lesson_date', $request->lesson_date)
+            ->where('lesson_pair_code', $request->lesson_pair_code)
+            ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+            ->first();
+
+        if (!$schedule) {
+            return response()->json(['success' => false, 'message' => 'Jadvalda bu dars topilmadi'], 404);
+        }
+
+        // Mavjud baho bormi tekshirish
+        $existing = DB::table('student_grades')
+            ->where('student_hemis_id', $request->student_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->whereDate('lesson_date', $request->lesson_date)
+            ->where('lesson_pair_code', $request->lesson_pair_code)
+            ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+            ->first();
+
+        $gradeValue = (float) $request->grade;
+        $now = now();
+
+        if ($existing) {
+            // Mavjud bahoni yangilash
+            DB::table('student_grades')
+                ->where('id', $existing->id)
+                ->update([
+                    'grade' => $gradeValue,
+                    'status' => 'recorded',
+                    'updated_at' => $now,
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Baho yangilandi',
+                'grade' => $gradeValue,
+            ]);
+        }
+
+        // Yangi baho yaratish
+        DB::table('student_grades')->insert([
+            'hemis_id' => 88888888,
+            'student_hemis_id' => $request->student_hemis_id,
+            'subject_id' => $request->subject_id,
+            'subject_name' => $schedule->subject_name,
+            'subject_code' => $schedule->subject_code,
+            'semester_code' => $request->semester_code,
+            'semester_name' => $schedule->semester_name,
+            'subject_schedule_id' => $schedule->schedule_hemis_id,
+            'training_type_code' => $schedule->training_type_code,
+            'training_type_name' => $schedule->training_type_name,
+            'employee_id' => $schedule->employee_id,
+            'employee_name' => $schedule->employee_name,
+            'lesson_pair_code' => $schedule->lesson_pair_code,
+            'lesson_pair_name' => $schedule->lesson_pair_name,
+            'lesson_pair_start_time' => $schedule->lesson_pair_start_time,
+            'lesson_pair_end_time' => $schedule->lesson_pair_end_time,
+            'lesson_date' => $schedule->lesson_date,
+            'grade' => $gradeValue,
+            'status' => 'recorded',
+            'reason' => null,
+            'education_year_code' => $schedule->education_year_code ?? null,
+            'education_year_name' => $schedule->education_year_name ?? null,
+            'created_at_api' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Baho saqlandi',
+            'grade' => $gradeValue,
+        ]);
     }
 }

@@ -84,6 +84,25 @@ if (!function_exists('get_dekan_faculty_id')) {
     }
 }
 
+if (!function_exists('is_active_registrator')) {
+    /**
+     * Joriy foydalanuvchining faol roli registrator_ofisi ekanligini tekshirish
+     */
+    function is_active_registrator(): bool
+    {
+        $user = auth()->user();
+        if (!$user) return false;
+
+        $roles = $user->getRoleNames()->toArray();
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        return $activeRole === 'registrator_ofisi';
+    }
+}
+
 if (!function_exists('is_active_oqituvchi')) {
     /**
      * Joriy foydalanuvchi o'qituvchi sifatida ishlayotganini tekshirish.

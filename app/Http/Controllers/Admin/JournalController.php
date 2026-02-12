@@ -12,7 +12,9 @@ use App\Models\Semester;
 use App\Models\Specialty;
 use App\Jobs\ImportSchedulesPartiallyJob;
 use App\Services\ActivityLogService;
+use App\Services\ScheduleImportService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
@@ -946,44 +948,47 @@ class JournalController extends Controller
     }
 
     /**
-     * O'qituvchi jurnaldan dars jadvalini HEMIS bilan sinxronlash
+     * O'qituvchi jurnaldan dars jadvalini HEMIS bilan sinxronlash (sinxron, guruh+fan bo'yicha)
      */
     public function syncSchedule(Request $request)
     {
         $data = $request->validate([
             'group_id' => 'required',
             'subject_id' => 'required',
-            'semester_code' => 'required',
         ]);
 
-        // Shu guruh/fan uchun jadval sanalaridan oraliqni aniqlash
-        $dateRange = DB::table('schedules')
-            ->where('group_id', $data['group_id'])
-            ->where('subject_id', $data['subject_id'])
-            ->where('semester_code', $data['semester_code'])
-            ->whereNull('deleted_at')
-            ->whereNotNull('lesson_date')
-            ->selectRaw('MIN(lesson_date) as min_date, MAX(lesson_date) as max_date')
-            ->first();
-
-        $from = $dateRange?->min_date
-            ? \Carbon\Carbon::parse($dateRange->min_date)->toDateString()
-            : now()->subDays(14)->toDateString();
-
-        $to = $dateRange?->max_date
-            ? \Carbon\Carbon::parse($dateRange->max_date)->toDateString()
-            : now()->addDays(14)->toDateString();
+        $cacheKey = "schedule_sync_{$data['group_id']}_{$data['subject_id']}";
+        if (Cache::has($cacheKey)) {
+            $seconds = (int) Cache::get($cacheKey) - now()->timestamp;
+            $minutes = ceil($seconds / 60);
+            return response()->json([
+                'success' => false,
+                'message' => "Sinxronizatsiya 5 daqiqada 1 marta mumkin. ~{$minutes} daqiqa kuting.",
+            ], 429);
+        }
 
         $userName = auth()->user()?->name ?? auth()->guard('teacher')->user()?->name ?? 'Noma\'lum';
 
-        ActivityLogService::log('import', 'schedule', "Jurnal orqali jadval sinxronizatsiyasi: {$userName} ({$from} — {$to})");
+        try {
+            $service = app(ScheduleImportService::class);
+            $result = $service->importForGroupSubject((int) $data['group_id'], (int) $data['subject_id']);
 
-        ImportSchedulesPartiallyJob::dispatch($from, $to);
+            Cache::put($cacheKey, now()->addMinutes(5)->timestamp, 300);
 
-        return response()->json([
-            'success' => true,
-            'message' => "Jadval sinxronizatsiyasi boshlandi ({$from} — {$to}). Jarayon fon rejimida ishlaydi.",
-        ]);
+            ActivityLogService::log('import', 'schedule',
+                "Jurnal orqali jadval sinxronizatsiyasi: {$userName} (guruh: {$data['group_id']}, fan: {$data['subject_id']}) — {$result['count']} ta yozuv"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Jadval yangilandi. {$result['count']} ta yozuv sinxronlandi.",
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sinxronizatsiyada xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

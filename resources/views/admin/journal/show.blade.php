@@ -1604,41 +1604,49 @@
                 },
                 body: JSON.stringify({
                     group_id: currentGroupId,
-                    subject_id: currentSubjectId,
-                    semester_code: currentSemesterCode
+                    subject_id: currentSubjectId
                 })
             })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    text.textContent = 'Boshlandi!';
+            .then(r => r.json().then(data => ({ ok: r.ok, status: r.status, data })))
+            .then(({ ok, status, data }) => {
+                icon.style.animation = '';
+                if (ok && data.success) {
+                    text.textContent = 'Yangilandi!';
                     btn.style.background = '#d1fae5';
                     btn.style.color = '#065f46';
                     btn.style.borderColor = '#6ee7b7';
-                    setTimeout(() => { location.reload(); }, 15000);
+                    setTimeout(() => { location.reload(); }, 2000);
+                } else if (status === 429) {
+                    text.textContent = data.message || '5 daqiqa kuting';
+                    btn.style.background = '#fef3c7';
+                    btn.style.color = '#92400e';
+                    btn.style.borderColor = '#fcd34d';
+                    setTimeout(() => resetBtn(), 10000);
                 } else {
                     text.textContent = data.message || 'Xatolik';
                     btn.style.background = '#fee2e2';
                     btn.style.color = '#991b1b';
+                    btn.style.borderColor = '#fca5a5';
+                    setTimeout(() => resetBtn(), 10000);
                 }
             })
             .catch(() => {
-                text.textContent = 'Xatolik yuz berdi';
+                icon.style.animation = '';
+                text.textContent = 'Tarmoq xatoligi';
                 btn.style.background = '#fee2e2';
                 btn.style.color = '#991b1b';
-            })
-            .finally(() => {
-                icon.style.animation = '';
-                setTimeout(() => {
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.cursor = 'pointer';
-                    btn.style.background = '#dbeafe';
-                    btn.style.color = '#1e40af';
-                    btn.style.borderColor = '#93c5fd';
-                    text.textContent = 'Jadvalni yangilash';
-                }, 30000);
+                setTimeout(() => resetBtn(), 10000);
             });
+
+            function resetBtn() {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                btn.style.background = '#dbeafe';
+                btn.style.color = '#1e40af';
+                btn.style.borderColor = '#93c5fd';
+                text.textContent = 'Jadvalni yangilash';
+            }
         }
 
         // URL params - navigatsiyada filtr qiymatlarini saqlash uchun

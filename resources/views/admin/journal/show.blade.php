@@ -987,7 +987,7 @@
                                                         $canRate = !$isDekan && auth()->user()->hasRole('admin');
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
-                                                        $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && ($isOqituvchi || $canRate);
+                                                        $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi;
                                                         $showRatingInput = false;
                                                         $gradeRecordId = null;
                                                         $hasRetake = false;
@@ -1056,21 +1056,19 @@
                                                             <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                         @endif
                                                     @else
-                                                        @if(($canRate || $canEditOpened) && $isEmpty)
-                                                            @if($canEditOpened && !$canRate)
-                                                                {{-- O'qituvchi uchun: ochilgan darsga baho qo'yish --}}
-                                                                <div class="editable-cell cursor-pointer hover:bg-green-50"
-                                                                     onclick="makeEditableOpened(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}', '{{ $groupId }}')"
-                                                                     title="Dars ochilgan — baho kiriting" style="background: #f0fdf4;">
-                                                                    <span class="text-green-400">-</span>
-                                                                </div>
-                                                            @else
-                                                                <div class="editable-cell cursor-pointer hover:bg-blue-50"
-                                                                     onclick="makeEditableEmpty(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}')"
-                                                                     title="Bosib baho kiriting">
-                                                                    <span class="text-gray-400">-</span>
-                                                                </div>
-                                                            @endif
+                                                        @if($canEditOpened && $isEmpty)
+                                                            {{-- O'qituvchi uchun: ochilgan darsga baho qo'yish --}}
+                                                            <div class="editable-cell cursor-pointer hover:bg-green-50"
+                                                                 onclick="makeEditableOpened(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}', '{{ $groupId }}')"
+                                                                 title="Dars ochilgan — baho kiriting" style="background: #f0fdf4;">
+                                                                <span class="text-green-400">-</span>
+                                                            </div>
+                                                        @elseif($canRate && $isEmpty)
+                                                            <div class="editable-cell cursor-pointer hover:bg-blue-50"
+                                                                 onclick="makeEditableEmpty(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}')"
+                                                                 title="Bosib baho kiriting">
+                                                                <span class="text-gray-400">-</span>
+                                                            </div>
                                                         @else
                                                             <span class="text-gray-300">-</span>
                                                         @endif

@@ -1640,6 +1640,7 @@
         // Zanjir: Fakultet(erkin) → Yo'nalish → Kurs → Semestr → [Guruh ↔ Fan]
         // Kafedra erkin, fanga ta'sir qiladi.
         const currentGroupId = '{{ $groupId }}';
+        const currentGroupHemisId = '{{ $group->group_hemis_id }}';
         const currentSubjectId = '{{ $subjectId }}';
         const currentSemesterCode = '{{ $semesterCode }}';
         const currentFacultyId = '{{ $facultyId }}';
@@ -1671,7 +1672,7 @@
                     'Accept': 'application/json'
                 },
                 body: JSON.stringify({
-                    group_id: currentGroupId,
+                    group_id: currentGroupHemisId,
                     subject_id: currentSubjectId
                 })
             })

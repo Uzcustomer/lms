@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\IndependentController;
 use App\Http\Controllers\Admin\JournalController;
 use App\Http\Controllers\Admin\OraliqNazoratController;
 use App\Http\Controllers\Admin\OskiController;
+use App\Http\Controllers\Admin\QuizResultController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\ExamTestController;
 use App\Http\Controllers\ProfileController;
@@ -265,6 +266,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('activity-log')->name('activity-log.')->group(function () {
             Route::get('/', [ActivityLogController::class, 'index'])->name('index');
             Route::get('/{activityLog}', [ActivityLogController::class, 'show'])->name('show');
+        });
+
+        // Test markazi: Quiz natijalarni ko'rish, export va import
+        Route::prefix('quiz-results')->name('quiz-results.')->group(function () {
+            Route::get('/', [QuizResultController::class, 'index'])->name('index');
+            Route::get('/export', [QuizResultController::class, 'exportExcel'])->name('export');
+            Route::post('/import', [QuizResultController::class, 'import'])->name('import');
         });
 
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)

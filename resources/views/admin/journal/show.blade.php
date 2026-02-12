@@ -2608,25 +2608,29 @@
     @endif
 
     {{-- ===== OCHILGAN DARSGA BAHO QO'YISH (O'QITUVCHI) - EXCEL-STYLE ===== --}}
-    {{-- Floating save panel --}}
-    <div id="pending-save-panel" style="display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:9999;
-        background:linear-gradient(135deg, #f59e0b, #d97706); color:#fff; padding:12px 24px; border-radius:16px;
-        box-shadow:0 8px 32px rgba(0,0,0,0.25); align-items:center; gap:16px; font-size:14px; font-weight:600;">
-        <div style="display:flex; align-items:center; gap:8px;">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <span>Saqlanmagan baholar: <b id="pending-count">0</b> ta</span>
-        </div>
-        <div style="display:flex; gap:8px; margin-left:8px;">
-            <button id="save-all-btn" onclick="saveAllPendingGrades()"
-                style="background:#fff; color:#d97706; border:none; padding:8px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.15); transition:all 0.2s;">
-                Saqlash
-            </button>
-        </div>
-    </div>
-
     <script>
         // ===== PENDING GRADES STORE =====
         let pendingOpenedGrades = {};
+
+        // Save panelni document.body ga qo'shish (position:fixed parent transform ta'siridan chiqish uchun)
+        (function() {
+            const panel = document.createElement('div');
+            panel.id = 'pending-save-panel';
+            panel.style.cssText = 'display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:99999; background:linear-gradient(135deg, #f59e0b, #d97706); color:#fff; padding:12px 24px; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.25); align-items:center; gap:16px; font-size:14px; font-weight:600;';
+            panel.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>Saqlanmagan baholar: <b id="pending-count">0</b> ta</span>
+                </div>
+                <div style="display:flex; gap:8px; margin-left:8px;">
+                    <button id="save-all-btn" onclick="saveAllPendingGrades()"
+                        style="background:#fff; color:#d97706; border:none; padding:8px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+                        Saqlash
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(panel);
+        })();
 
         function getGradeKey(cellDiv) {
             return `${cellDiv.dataset.student}_${cellDiv.dataset.date}_${cellDiv.dataset.pair}`;

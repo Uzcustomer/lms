@@ -6,7 +6,7 @@
             </h2>
             <div class="flex items-center gap-4">
                 {{-- Excel yuklab olish --}}
-                <a href="{{ route('admin.quiz-results.export', request()->query()) }}"
+                <a href="{{ route($routePrefix . '.quiz-results.export', request()->query()) }}"
                    class="inline-flex justify-center items-center px-4 py-2 bg-green-500 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-600 active:bg-green-700 focus:outline-none focus:ring focus:ring-green-200 transition shadow-md hover:shadow-lg">
                     Excelga yuklash
                 </a>
@@ -26,7 +26,7 @@
                 </button>
 
                 {{-- Excel orqali import --}}
-                <form action="{{ route('admin.quiz-results.import') }}" method="POST" enctype="multipart/form-data"
+                <form action="{{ route($routePrefix . '.quiz-results.import') }}" method="POST" enctype="multipart/form-data"
                       class="flex items-center">
                     @csrf
                     <div class="relative mr-2">
@@ -134,7 +134,7 @@
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg">
                 {{-- Filtr formasi --}}
-                <form id="search-form" method="GET" action="{{ route('admin.quiz-results.index') }}" class="p-6 bg-gray-50">
+                <form id="search-form" method="GET" action="{{ route($routePrefix . '.quiz-results.index') }}" class="p-6 bg-gray-50">
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
                             <label class="block mb-2 text-sm font-medium text-gray-700">Fakultet</label>
@@ -305,9 +305,9 @@
     <script>
     $(document).ready(function() {
         var csrfToken = '{{ csrf_token() }}';
-        var diagnostikaUrl = '{{ route("admin.quiz-results.diagnostika") }}';
-        var uploadUrl = '{{ route("admin.quiz-results.upload") }}';
-        var destroyUrlBase = '{{ url("/admin/quiz-results") }}';
+        var diagnostikaUrl = '{{ route($routePrefix . ".quiz-results.diagnostika") }}';
+        var uploadUrl = '{{ route($routePrefix . ".quiz-results.upload") }}';
+        var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
         var diagnostikaRan = false;
 
         // Select2

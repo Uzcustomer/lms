@@ -16,6 +16,14 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class QuizResultController extends Controller
 {
+    /**
+     * Joriy guard bo'yicha route prefiksini aniqlash (admin yoki teacher).
+     */
+    private function routePrefix(): string
+    {
+        return auth()->guard('teacher')->check() ? 'teacher' : 'admin';
+    }
+
     public function index(Request $request)
     {
         $query = HemisQuizResult::where('is_active', 1);
@@ -78,8 +86,10 @@ class QuizResultController extends Controller
             ->pluck('quiz_type')
             ->sort();
 
+        $routePrefix = $this->routePrefix();
+
         return view('admin.quiz_results.index', compact(
-            'results', 'faculties', 'semesters', 'quizTypes'
+            'results', 'faculties', 'semesters', 'quizTypes', 'routePrefix'
         ));
     }
 
@@ -100,14 +110,16 @@ class QuizResultController extends Controller
         $successCount = $import->successCount;
         $errors = $import->errors;
 
+        $indexRoute = $this->routePrefix() . '.quiz-results.index';
+
         if (count($errors) > 0) {
-            return redirect()->route('admin.quiz-results.index')
+            return redirect()->route($indexRoute)
                 ->with('success', "$successCount ta natija student_grades ga muvaffaqiyatli yuklandi.")
                 ->with('import_errors', $errors)
                 ->with('error_count', count($errors));
         }
 
-        return redirect()->route('admin.quiz-results.index')
+        return redirect()->route($indexRoute)
             ->with('success', "$successCount ta natija student_grades ga muvaffaqiyatli yuklandi.");
     }
 

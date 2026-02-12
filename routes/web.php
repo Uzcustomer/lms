@@ -473,6 +473,17 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/store', [VedomostController::class, 'store'])->name('store');
 
         });
+
+        // Test markazi: Quiz natijalarni ko'rish, export, diagnostika va yuklash
+        Route::prefix('quiz-results')->name('quiz-results.')->group(function () {
+            Route::get('/', [QuizResultController::class, 'index'])->name('index');
+            Route::get('/export', [QuizResultController::class, 'exportExcel'])->name('export');
+            Route::post('/import', [QuizResultController::class, 'import'])->name('import');
+            Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
+            Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
+            Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
+        });
+
         Route::get('/get-groups/semester', [LessonController::class, 'getGroups_semester'])->name('get.groups_semester');
         Route::get('/get-students', [LessonController::class, 'getStudents'])->name('get.students');
         // Route::get('/get-semesters', [LessonController::class, 'getSemesters'])->name('get.semesters');

@@ -19,6 +19,7 @@ class SettingsController extends Controller
         $data['mtDeadlineType'] = Setting::get('mt_deadline_type', 'before_last');
         $data['mtDeadlineTime'] = Setting::get('mt_deadline_time', '17:00');
         $data['mtMaxResubmissions'] = Setting::get('mt_max_resubmissions', 3);
+        $data['lessonOpeningDays'] = Setting::get('lesson_opening_days', 3);
 
         // Password data
         $data['tempPasswordDays'] = Setting::get('temp_password_days', 3);
@@ -53,6 +54,10 @@ class SettingsController extends Controller
 
         if ($request->filled('mt_max_resubmissions')) {
             Setting::set('mt_max_resubmissions', (int) $request->mt_max_resubmissions);
+        }
+
+        if ($request->filled('lesson_opening_days')) {
+            Setting::set('lesson_opening_days', (int) $request->lesson_opening_days);
         }
 
         foreach ($validated['deadlines'] as $levelCode => $deadlineData) {

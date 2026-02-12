@@ -148,6 +148,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/save-mt-grade', [JournalController::class, 'saveMtGrade'])->name('save-mt-grade');
             Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade');
             Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
+            Route::post('/open-lesson', [JournalController::class, 'openLesson'])->name('open-lesson');
+            Route::post('/close-lesson', [JournalController::class, 'closeLesson'])->name('close-lesson');
+            Route::post('/save-opened-lesson-grade', [JournalController::class, 'saveOpenedLessonGrade'])->name('save-opened-lesson-grade');
             Route::get('/get-specialties', [JournalController::class, 'getSpecialties'])->name('get-specialties');
             Route::get('/get-level-codes', [JournalController::class, 'getLevelCodes'])->name('get-level-codes');
             Route::get('/get-semesters', [JournalController::class, 'getSemesters'])->name('get-semesters');

@@ -570,6 +570,7 @@
                     @else
                         @php
                             $isDekan = is_active_dekan();
+                            $isRegistrator = is_active_registrator();
                             $totalLectureDays = count($lectureLessonDates);
                             $lecturePairsByDate = collect($lectureColumns)
                                 ->groupBy('date')
@@ -704,6 +705,10 @@
                             $totalJbDays = count($jbLessonDates);
                             $totalMtDays = count($mtLessonDates);
                             $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+                            $canOpenLesson = auth()->user()->hasAnyRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']);
+                            $isOqituvchi = is_active_oqituvchi();
+                            $missedDatesLookup = array_flip($missedDates ?? []);
+                            $activeOpenedDatesLookup = array_flip($activeOpenedDates ?? []);
                             $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
                                 return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
                             }));
@@ -731,8 +736,28 @@
                                     </tr>
                                     <tr>
                                         @forelse($jbLessonDates as $idx => $date)
-                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px;">
+                                            @php
+                                                $dateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
+                                                $isMissed = isset($missedDatesLookup[$dateStr]);
+                                                $isOpened = isset(($lessonOpeningsMap ?? [])[$dateStr]);
+                                                $openingInfo = ($lessonOpeningsMap ?? [])[$dateStr] ?? null;
+                                                $isActiveOpened = $openingInfo && $openingInfo['status'] === 'active';
+                                            @endphp
+                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px; position: relative; {{ $isMissed && !$isOpened ? 'background: #fef2f2;' : '' }}{{ $isActiveOpened ? 'background: #ecfdf5;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($date) }}</div>
+                                                @if($canOpenLesson && $isMissed && !$isOpened)
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="O'tkazib yuborilgan kun — Dars ochish">
+                                                        <button type="button" onclick="openLessonModal('{{ $dateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
+                                                    </div>
+                                                @elseif($isActiveOpened)
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="Dars ochilgan: {{ $openingInfo['deadline'] }} gacha">
+                                                        <span style="background: #10b981; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: inline-flex; align-items: center; justify-content: center;">&#10003;</span>
+                                                    </div>
+                                                @elseif($isOpened && $openingInfo['status'] !== 'active')
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="Dars ochilish muddati tugagan">
+                                                        <span style="background: #9ca3af; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: inline-flex; align-items: center; justify-content: center;">&#10003;</span>
+                                                    </div>
+                                                @endif
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -874,9 +899,22 @@
                                                 $isFirstOfDate = $prevDate !== $col['date'];
                                                 $isLastOfDate = !isset($jbColumns[$colIndex + 1]) || $jbColumns[$colIndex + 1]['date'] !== $col['date'];
                                                 $prevDate = $col['date'];
+                                                $dDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                $dIsMissed = isset($missedDatesLookup[$dDateStr]);
+                                                $dOpeningInfo = ($lessonOpeningsMap ?? [])[$dDateStr] ?? null;
+                                                $dIsActiveOpened = $dOpeningInfo && $dOpeningInfo['status'] === 'active';
                                             @endphp
-                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px;">
+                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px; position: relative; {{ $dIsMissed && !$dOpeningInfo ? 'background: #fef2f2;' : '' }}{{ $dIsActiveOpened ? 'background: #ecfdf5;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($col['date']) }}({{ $col['pair'] }})</div>
+                                                @if($canOpenLesson && $dIsMissed && !$dOpeningInfo && $isFirstOfDate)
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
+                                                        <button type="button" onclick="openLessonModal('{{ $dDateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Dars ochish">!</button>
+                                                    </div>
+                                                @elseif($dIsActiveOpened && $isFirstOfDate)
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="Ochilgan: {{ $dOpeningInfo['deadline'] }} gacha">
+                                                        <span style="background: #10b981; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; display: inline-flex; align-items: center; justify-content: center;">&#10003;</span>
+                                                    </div>
+                                                @endif
                                             </th>
                                         @empty
                                             <th class="px-1 py-1 text-gray-400 text-center">-</th>
@@ -947,6 +985,9 @@
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @php
                                                         $canRate = !$isDekan && auth()->user()->hasRole('admin');
+                                                        $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                        $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
+                                                        $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi;
                                                         $showRatingInput = false;
                                                         $gradeRecordId = null;
                                                         $hasRetake = false;
@@ -1015,7 +1056,14 @@
                                                             <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                         @endif
                                                     @else
-                                                        @if($canRate && $isEmpty)
+                                                        @if($canEditOpened && $isEmpty)
+                                                            {{-- O'qituvchi uchun: ochilgan darsga baho qo'yish --}}
+                                                            <div class="editable-cell cursor-pointer hover:bg-green-50"
+                                                                 onclick="makeEditableOpened(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}', '{{ $groupId }}')"
+                                                                 title="Dars ochilgan — baho kiriting" style="background: #f0fdf4;">
+                                                                <span class="text-green-400">-</span>
+                                                            </div>
+                                                        @elseif($canRate && $isEmpty)
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50"
                                                                  onclick="makeEditableEmpty(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}')"
                                                                  title="Bosib baho kiriting">
@@ -1122,7 +1170,7 @@
                                                 }
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < 60 && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
-                                            $inputDisabled = $isDekan || $hasGrade || !$hasFile;
+                                            $inputDisabled = $isDekan || $isRegistrator || $hasGrade || !$hasFile;
 
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade
                                             $urgency = 'none'; // none, fresh, warning, danger
@@ -2353,6 +2401,169 @@
                 alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
                 cellDiv.innerHTML = originalContent;
                 currentEditingCell = null;
+            });
+        }
+    </script>
+
+    {{-- ===== DARS OCHISH MODAL ===== --}}
+    @if($canOpenLesson ?? false)
+    <div id="lessonOpenModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
+        <div style="background:#fff; border-radius:16px; padding:28px; max-width:460px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+                <div style="width:44px; height:44px; background:linear-gradient(135deg,#f59e0b,#d97706); border-radius:12px; display:flex; align-items:center; justify-content:center;">
+                    <svg width="22" height="22" style="color:#fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                </div>
+                <div>
+                    <div style="font-size:17px; font-weight:700; color:#1e293b;">Dars ochish</div>
+                    <div style="font-size:13px; color:#64748b;" id="lessonOpenDateLabel">Sana: —</div>
+                </div>
+            </div>
+
+            <form id="lessonOpenForm" enctype="multipart/form-data">
+                @csrf
+                <input type="hidden" name="group_hemis_id" value="{{ $groupId }}">
+                <input type="hidden" name="subject_id" value="{{ $subjectId }}">
+                <input type="hidden" name="semester_code" value="{{ $semesterCode }}">
+                <input type="hidden" name="lesson_date" id="lessonOpenDate" value="">
+
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:6px;">O'qituvchi bildirgisi (fayl) <span style="color:#ef4444;">*</span></label>
+                    <input type="file" name="file" id="lessonOpenFile" required accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.heic"
+                        style="width:100%; padding:10px; border:2px dashed #d1d5db; border-radius:10px; font-size:13px; color:#374151; background:#f9fafb; cursor:pointer;">
+                    <div style="font-size:11px; color:#9ca3af; margin-top:4px;">PDF, DOC, DOCX, JPG, PNG — max 10MB</div>
+                </div>
+
+                <div style="background:#eff6ff; border-radius:10px; padding:12px 14px; margin-bottom:18px; border:1px solid #bfdbfe;">
+                    <div style="font-size:12px; color:#1e40af; line-height:1.6;">
+                        Dars ochilgach o'qituvchiga <b>{{ $lessonOpeningDays ?? 3 }} kun</b> (soat 23:59 gacha) baho qo'yish imkoniyati beriladi.
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:10px; justify-content:flex-end;">
+                    <button type="button" onclick="closeLessonModal()" style="padding:10px 20px; background:#f1f5f9; color:#475569; font-size:14px; font-weight:600; border-radius:10px; border:1px solid #e2e8f0; cursor:pointer;">Bekor qilish</button>
+                    <button type="submit" id="lessonOpenSubmit" style="padding:10px 24px; background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; font-size:14px; font-weight:600; border-radius:10px; border:none; cursor:pointer; box-shadow:0 4px 12px rgba(245,158,11,0.3);">Dars ochish</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openLessonModal(dateStr) {
+            document.getElementById('lessonOpenDate').value = dateStr;
+            document.getElementById('lessonOpenDateLabel').textContent = 'Sana: ' + dateStr;
+            document.getElementById('lessonOpenFile').value = '';
+            document.getElementById('lessonOpenModal').style.display = 'flex';
+        }
+
+        function closeLessonModal() {
+            document.getElementById('lessonOpenModal').style.display = 'none';
+        }
+
+        document.getElementById('lessonOpenForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('lessonOpenSubmit');
+            btn.disabled = true;
+            btn.textContent = 'Yuklanmoqda...';
+
+            const formData = new FormData(this);
+
+            fetch('{{ route("admin.journal.open-lesson") }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    closeLessonModal();
+                    // Sahifani qayta yuklash
+                    window.location.reload();
+                } else {
+                    alert('Xatolik: ' + (data.message || 'Dars ochilmadi'));
+                    btn.disabled = false;
+                    btn.textContent = 'Dars ochish';
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                alert('Xatolik yuz berdi');
+                btn.disabled = false;
+                btn.textContent = 'Dars ochish';
+            });
+        });
+
+        // Modal tashqarisiga bosilsa yopish
+        document.getElementById('lessonOpenModal').addEventListener('click', function(e) {
+            if (e.target === this) closeLessonModal();
+        });
+    </script>
+    @endif
+
+    {{-- ===== OCHILGAN DARSGA BAHO QO'YISH (O'QITUVCHI) ===== --}}
+    <script>
+        function makeEditableOpened(cellDiv, studentHemisId, lessonDate, pairCode, subjectId, semesterCode, groupHemisId) {
+            if (cellDiv.querySelector('input')) return;
+            const currentVal = cellDiv.querySelector('span') ? cellDiv.querySelector('span').textContent.trim() : '';
+            const numVal = currentVal === '-' ? '' : currentVal;
+
+            cellDiv.innerHTML = `
+                <input type="number" min="0" max="100" step="1" value="${numVal}"
+                    style="width:48px; padding:2px 4px; text-align:center; font-size:12px; border:2px solid #10b981; border-radius:4px; outline:none; background:#f0fdf4;"
+                    onkeydown="if(event.key==='Enter'){saveOpenedGrade(this, '${studentHemisId}', '${lessonDate}', '${pairCode}', '${subjectId}', '${semesterCode}', '${groupHemisId}')}"
+                    onblur="saveOpenedGrade(this, '${studentHemisId}', '${lessonDate}', '${pairCode}', '${subjectId}', '${semesterCode}', '${groupHemisId}')"
+                    autofocus>
+            `;
+            cellDiv.querySelector('input').focus();
+        }
+
+        function saveOpenedGrade(input, studentHemisId, lessonDate, pairCode, subjectId, semesterCode, groupHemisId) {
+            const grade = parseInt(input.value);
+            const cellDiv = input.parentElement;
+
+            if (isNaN(grade) || grade < 0 || grade > 100) {
+                cellDiv.innerHTML = '<span class="text-green-400">-</span>';
+                return;
+            }
+
+            input.disabled = true;
+            input.style.opacity = '0.5';
+
+            fetch('{{ route("admin.journal.save-opened-lesson-grade") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    student_hemis_id: studentHemisId,
+                    lesson_date: lessonDate,
+                    lesson_pair_code: pairCode,
+                    subject_id: subjectId,
+                    semester_code: semesterCode,
+                    group_hemis_id: groupHemisId,
+                    grade: grade
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const gradeVal = Math.round(data.grade);
+                    const color = gradeVal < 60 ? 'color:#dc2626' : 'color:#111827';
+                    cellDiv.innerHTML = `<span class="font-medium" style="${color}">${gradeVal}</span>`;
+                    cellDiv.style.background = '#ecfdf5';
+                } else {
+                    alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
+                    cellDiv.innerHTML = '<span class="text-green-400">-</span>';
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                alert('Xatolik yuz berdi');
+                cellDiv.innerHTML = '<span class="text-green-400">-</span>';
             });
         }
     </script>

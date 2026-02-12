@@ -2612,26 +2612,6 @@
         // ===== PENDING GRADES STORE =====
         let pendingOpenedGrades = {};
 
-        // Save panelni document.body ga qo'shish (position:fixed parent transform ta'siridan chiqish uchun)
-        (function() {
-            const panel = document.createElement('div');
-            panel.id = 'pending-save-panel';
-            panel.style.cssText = 'display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:99999; background:linear-gradient(135deg, #f59e0b, #d97706); color:#fff; padding:12px 24px; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.25); align-items:center; gap:16px; font-size:14px; font-weight:600;';
-            panel.innerHTML = `
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span>Saqlanmagan baholar: <b id="pending-count">0</b> ta</span>
-                </div>
-                <div style="display:flex; gap:8px; margin-left:8px;">
-                    <button id="save-all-btn" onclick="saveAllPendingGrades()"
-                        style="background:#fff; color:#d97706; border:none; padding:8px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.15);">
-                        Saqlash
-                    </button>
-                </div>
-            `;
-            document.body.appendChild(panel);
-        })();
-
         function getGradeKey(cellDiv) {
             return `${cellDiv.dataset.student}_${cellDiv.dataset.date}_${cellDiv.dataset.pair}`;
         }
@@ -2791,12 +2771,42 @@
             }
         }
 
+        function createPendingPanel() {
+            var panel = document.createElement('div');
+            panel.id = 'pending-save-panel';
+            panel.setAttribute('style', 'display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:99999; background:linear-gradient(135deg, #f59e0b, #d97706); color:#fff; padding:12px 24px; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.25); display:flex; align-items:center; gap:16px; font-size:14px; font-weight:600;');
+            panel.style.display = 'none';
+
+            var infoDiv = document.createElement('div');
+            infoDiv.setAttribute('style', 'display:flex; align-items:center; gap:8px;');
+            infoDiv.innerHTML = '<span>Saqlanmagan baholar: <b id="pending-count">0</b> ta</span>';
+            panel.appendChild(infoDiv);
+
+            var btnDiv = document.createElement('div');
+            btnDiv.setAttribute('style', 'display:flex; gap:8px; margin-left:8px;');
+
+            var saveBtn = document.createElement('button');
+            saveBtn.id = 'save-all-btn';
+            saveBtn.textContent = 'Saqlash';
+            saveBtn.setAttribute('style', 'background:#fff; color:#d97706; border:none; padding:8px 20px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.15);');
+            saveBtn.addEventListener('click', function() { saveAllPendingGrades(); });
+            btnDiv.appendChild(saveBtn);
+
+            panel.appendChild(btnDiv);
+            document.body.appendChild(panel);
+            return panel;
+        }
+
         function updatePendingPanel() {
-            const count = Object.keys(pendingOpenedGrades).length;
-            const panel = document.getElementById('pending-save-panel');
+            var count = Object.keys(pendingOpenedGrades).length;
+            var panel = document.getElementById('pending-save-panel');
+            if (!panel) {
+                panel = createPendingPanel();
+            }
             if (count > 0) {
                 panel.style.display = 'flex';
-                document.getElementById('pending-count').textContent = count;
+                var countEl = document.getElementById('pending-count');
+                if (countEl) countEl.textContent = count;
             } else {
                 panel.style.display = 'none';
             }

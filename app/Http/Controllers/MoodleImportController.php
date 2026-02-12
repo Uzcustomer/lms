@@ -10,6 +10,7 @@ class MoodleImportController extends Controller
 {
     public function import(Request $request): JsonResponse
     {
+        // 1) AUTH (server-to-server)
         $secret = (string) env('MOODLE_SYNC_SECRET', '');
         $got = (string) $request->header('X-SYNC-SECRET', '');
 
@@ -17,27 +18,53 @@ class MoodleImportController extends Controller
             return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
         }
 
-        $mode = (string) $request->input('mode', 'smart');
+        // 2) Input
+        $mode = (string) $request->input('mode', '');
         $records = $request->input('records', []);
         if (!is_array($records)) $records = [];
 
         $now = now();
 
+        // =========================
+        // MODE: smart_start
+        // Reset all to inactive ONCE per run
+        // =========================
+        if ($mode === 'smart_start') {
+            $affected = DB::table('hemis_quiz_results')->update([
+                'is_active' => 0,
+                'updated_at' => $now,
+            ]);
+
+            return response()->json([
+                'ok' => true,
+                'mode' => $mode,
+                'reset' => true,
+                'affected' => (int)$affected,
+            ]);
+        }
+
+        // =========================
+        // MODE: ids_grade
+        // Update existing rows found in Moodle: set active=1 + grades
+        // records: [{attempt_id, old_grade, grade_rounded}]
+        // =========================
         if ($mode === 'ids_grade') {
-            // records: [{attempt_id, grade, old_grade, grade_rounded}]
             $updated = 0;
 
             foreach ($records as $r) {
                 $aid = (int)($r['attempt_id'] ?? 0);
                 if ($aid <= 0) continue;
 
+                // old_grade decimal, grade_rounded int (or null)
+                $oldGrade = array_key_exists('old_grade', $r) ? $r['old_grade'] : null;
+                $gradeRounded = array_key_exists('grade_rounded', $r) ? $r['grade_rounded'] : null;
+
                 DB::table('hemis_quiz_results')
                     ->where('attempt_id', $aid)
                     ->update([
                         'is_active' => 1,
-                        'old_grade' => $r['old_grade'] ?? null,
-                        // WP table grade DECIMAL(10,2). If you send rounded int, it still fits.
-                        'grade'     => $r['grade_rounded'] ?? ($r['grade'] ?? null),
+                        'old_grade' => $oldGrade,
+                        'grade'     => $gradeRounded, // your column is DECIMAL, int fits OK
                         'synced_at' => $now,
                         'updated_at'=> $now,
                     ]);
@@ -45,13 +72,25 @@ class MoodleImportController extends Controller
                 $updated++;
             }
 
-            return response()->json(['ok' => true, 'mode' => $mode, 'updated' => $updated]);
+            return response()->json([
+                'ok' => true,
+                'mode' => $mode,
+                'received' => count($records),
+                'updated' => $updated,
+            ]);
         }
 
+        // =========================
+        // MODE: full_new
+        // Upsert NEW attempts (and updates if duplicates appear)
+        // records: full objects from exporter
+        // We expect each record already contains:
+        // - old_grade (decimal)
+        // - grade (rounded int)
+        // =========================
         if ($mode === 'full_new') {
-            // records: full row objects from exporter
-            // We'll UPSERT by attempt_id
             $rows = [];
+
             foreach ($records as $r) {
                 $aid = (int)($r['attempt_id'] ?? 0);
                 if ($aid <= 0) continue;
@@ -74,8 +113,8 @@ class MoodleImportController extends Controller
                     'attempt_name'    => $r['attempt_name'] ?? null,
                     'shakl'           => $r['shakl'] ?? null,
                     'attempt_number'  => $r['attempt_number'] ?? 1,
-                    'grade'           => $r['grade'] ?? null,
-                    'old_grade'       => $r['old_grade'] ?? null,
+                    'grade'           => $r['grade'] ?? null,      // rounded int
+                    'old_grade'       => $r['old_grade'] ?? null,  // original decimal
                     'course_id'       => $r['course_id'] ?? null,
                     'course_idnumber' => $r['course_idnumber'] ?? null,
                     'is_valid_format' => $r['is_valid_format'] ?? 0,
@@ -92,14 +131,20 @@ class MoodleImportController extends Controller
                     ['attempt_id'],
                     [
                         'date_start','date_finish','category_path','category_id','category_name',
-                        'faculty','direction','semester','student_id','student_name','fan_id','fan_name',
-                        'quiz_type','attempt_name','shakl','attempt_number','grade','old_grade',
-                        'course_id','course_idnumber','is_valid_format','is_active','synced_at','updated_at'
+                        'faculty','direction','semester','student_id','student_name',
+                        'fan_id','fan_name','quiz_type','attempt_name','shakl','attempt_number',
+                        'grade','old_grade','course_id','course_idnumber','is_valid_format',
+                        'is_active','synced_at','updated_at'
                     ]
                 );
             }
 
-            return response()->json(['ok' => true, 'mode' => $mode, 'upserted' => count($rows)]);
+            return response()->json([
+                'ok' => true,
+                'mode' => $mode,
+                'received' => count($records),
+                'upserted' => count($rows),
+            ]);
         }
 
         return response()->json(['ok' => false, 'error' => 'Unknown mode'], 422);

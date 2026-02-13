@@ -237,7 +237,7 @@
                             <label class="filter-label">&nbsp;</label>
                             <button type="button" id="btn-sh-load" class="btn-tartibga" style="background: linear-gradient(135deg, #16a34a, #22c55e); box-shadow: 0 2px 6px rgba(22,163,74,0.3);" onclick="loadSaqlanganHisobot()">
                                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M16 3H8v4h8V3z"/></svg>
-                                Saqlangan ma'lumotlar
+                                Sistemaga yuklangan
                             </button>
                         </div>
                     </div>
@@ -260,8 +260,8 @@
                 <div id="sh-result-area">
                     <div id="sh-empty-state" class="empty-state">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#86efac;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M16 3H8v4h8V3z"/></svg>
-                        <p style="color:#64748b;font-size:15px;font-weight:600;">Sanalarni tanlang va "Saqlangan ma'lumotlar" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Sistemaga saqlangan quiz natijalarini Moodle formatida ko'rish</p>
+                        <p style="color:#64748b;font-size:15px;font-weight:600;">Sanalarni tanlang va "Sistemaga yuklangan" tugmasini bosing</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Sistemaga yuklangan quiz natijalarini ko'rish</p>
                     </div>
                     <div id="sh-loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>

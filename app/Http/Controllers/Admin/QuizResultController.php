@@ -29,27 +29,9 @@ class QuizResultController extends Controller
      */
     public function diagnostikaPage(Request $request)
     {
-        $faculties = HemisQuizResult::where('is_active', 1)
-            ->whereNotNull('faculty')->where('faculty', '!=', '')
-            ->distinct()->pluck('faculty')->sort()->values();
-
-        $directions = HemisQuizResult::where('is_active', 1)
-            ->whereNotNull('direction')->where('direction', '!=', '')
-            ->distinct()->pluck('direction')->sort()->values();
-
-        $semesters = HemisQuizResult::where('is_active', 1)
-            ->whereNotNull('semester')->where('semester', '!=', '')
-            ->distinct()->pluck('semester')->sort()->values();
-
-        $quizTypes = HemisQuizResult::where('is_active', 1)
-            ->whereNotNull('quiz_type')->where('quiz_type', '!=', '')
-            ->distinct()->pluck('quiz_type')->sort()->values();
-
         $routePrefix = $this->routePrefix();
 
-        return view('admin.diagnostika.index', compact(
-            'faculties', 'directions', 'semesters', 'quizTypes', 'routePrefix'
-        ));
+        return view('admin.diagnostika.index', compact('routePrefix'));
     }
 
     /**
@@ -108,9 +90,7 @@ class QuizResultController extends Controller
                 'quiz_type' => $item->quiz_type,
                 'shakl' => $item->shakl,
                 'grade' => $item->grade,
-                'old_grade' => $item->old_grade,
-                'date_start' => $item->date_start ? $item->date_start->format('d.m.Y H:i') : '',
-                'date_finish' => $item->date_finish ? $item->date_finish->format('d.m.Y H:i') : '',
+                'date' => $item->date_finish ? $item->date_finish->format('d.m.Y') : '',
             ];
         });
 
@@ -120,6 +100,87 @@ class QuizResultController extends Controller
             'current_page' => $paginated->currentPage(),
             'last_page' => $paginated->lastPage(),
             'per_page' => $paginated->perPage(),
+        ]);
+    }
+
+    /**
+     * Tartibga solish — natijalarni jurnal shaklida ko'rsatish.
+     * FISH, fakultet, yo'nalish, kurs, semestr, guruh students jadvalidan olinadi.
+     * Quiz turi bo'yicha YN turi ustunida Test yoki OSKI deb ko'rsatiladi.
+     * Barcha urinishlar ko'rsatiladi.
+     */
+    public function tartibgaSol(Request $request)
+    {
+        $query = HemisQuizResult::where('is_active', 1);
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('date_finish', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('date_finish', '<=', $request->date_to);
+        }
+
+        $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')->get();
+
+        // Barcha student_id larni yig'ish va bulk query
+        $studentIds = $results->pluck('student_id')->unique()->values()->toArray();
+
+        $students = Student::where(function ($q) use ($studentIds) {
+            $q->whereIn('hemis_id', $studentIds)
+              ->orWhereIn('student_id_number', $studentIds);
+        })->get();
+
+        // Lookup yaratish (hemis_id va student_id_number bo'yicha)
+        $studentLookup = [];
+        foreach ($students as $student) {
+            $studentLookup[$student->hemis_id] = $student;
+            if ($student->student_id_number) {
+                $studentLookup[$student->student_id_number] = $student;
+            }
+        }
+
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+        $data = [];
+        $rowNum = 0;
+
+        foreach ($results as $result) {
+            $student = $studentLookup[$result->student_id] ?? null;
+            if (!$student) continue;
+
+            $kurs = $student->semester_code ? ceil($student->semester_code / 2) : null;
+
+            // YN turi aniqlash
+            $ynTuri = '-';
+            if (in_array($result->quiz_type, $testTypes)) {
+                $ynTuri = 'Test';
+            } elseif (in_array($result->quiz_type, $oskiTypes)) {
+                $ynTuri = 'OSKI';
+            }
+
+            $rowNum++;
+            $data[] = [
+                'id' => $result->id,
+                'row_num' => $rowNum,
+                'student_id' => $result->student_id,
+                'full_name' => $student->full_name,
+                'faculty' => $student->department_name,
+                'direction' => $student->specialty_name,
+                'kurs' => $kurs ? $kurs . '-kurs' : '-',
+                'semester' => $student->semester_name,
+                'group' => $student->group_name,
+                'fan_name' => $result->fan_name,
+                'yn_turi' => $ynTuri,
+                'shakl' => $result->shakl,
+                'grade' => $result->grade,
+                'date' => $result->date_finish ? $result->date_finish->format('d.m.Y') : '',
+            ];
+        }
+
+        return response()->json([
+            'data' => $data,
+            'total' => count($data),
         ]);
     }
 
@@ -257,8 +318,10 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Talabani topish
-            $student = Student::where('hemis_id', $result->student_id)->first();
+            // Talabani topish (avval hemis_id, keyin student_id_number bo'yicha)
+            $student = Student::where('hemis_id', $result->student_id)
+                ->orWhere('student_id_number', $result->student_id)
+                ->first();
             if (!$student) {
                 $row['error'] = "Talaba topilmadi (student_id: {$result->student_id})";
                 $errors[] = $row;
@@ -346,7 +409,9 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            $student = Student::where('hemis_id', $result->student_id)->first();
+            $student = Student::where('hemis_id', $result->student_id)
+                ->orWhere('student_id_number', $result->student_id)
+                ->first();
             if (!$student) {
                 $rowInfo['error'] = "Talaba topilmadi (student_id: {$result->student_id})";
                 $errors[] = $rowInfo;

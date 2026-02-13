@@ -715,7 +715,9 @@
                             $totalJbDays = count($jbLessonDates);
                             $totalMtDays = count($mtLessonDates);
                             $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
-                            $canOpenLesson = auth()->user()->hasAnyRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']);
+                            $openLessonRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
+                            $canOpenLesson = (auth()->guard('web')->user()?->hasAnyRole($openLessonRoles) ?? false)
+                                || (auth()->guard('teacher')->user()?->hasAnyRole($openLessonRoles) ?? false);
                             $isOqituvchi = is_active_oqituvchi();
                             $missedDatesLookup = array_flip($missedDates ?? []);
                             $activeOpenedDatesLookup = array_flip($activeOpenedDates ?? []);

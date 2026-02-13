@@ -2539,9 +2539,10 @@ class JournalController extends Controller
     public function openLesson(Request $request)
     {
         // Faqat admin, kichik_admin, superadmin, registrator_ofisi
-        $user = auth()->user();
         $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
-        if (!$user->hasAnyRole($allowedRoles)) {
+        $hasRole = (auth()->guard('web')->user()?->hasAnyRole($allowedRoles) ?? false)
+            || (auth()->guard('teacher')->user()?->hasAnyRole($allowedRoles) ?? false);
+        if (!$hasRole) {
             return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
         }
 
@@ -2607,9 +2608,10 @@ class JournalController extends Controller
      */
     public function closeLesson(Request $request)
     {
-        $user = auth()->user();
         $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
-        if (!$user->hasAnyRole($allowedRoles)) {
+        $hasRole = (auth()->guard('web')->user()?->hasAnyRole($allowedRoles) ?? false)
+            || (auth()->guard('teacher')->user()?->hasAnyRole($allowedRoles) ?? false);
+        if (!$hasRole) {
             return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
         }
 

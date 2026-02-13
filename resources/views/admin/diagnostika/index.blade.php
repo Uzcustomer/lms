@@ -60,8 +60,12 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Sanagacha</label>
                             <input type="text" id="date_to" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
                         </div>
-                        <div class="filter-item filter-buttons">
+                        <div class="filter-item filter-buttons" style="display:flex;gap:6px;align-items:flex-end;">
                             <label class="filter-label">&nbsp;</label>
+                            <button type="button" id="btn-tartibga" class="btn-tartibga" onclick="loadTartibgaSol()">
+                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
+                                Tartibga solish
+                            </button>
                             <button type="button" id="btn-search" class="btn-calc" onclick="loadData(1)">
                                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                                 Qidirish
@@ -146,7 +150,7 @@
                         <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
                             <table class="journal-table" id="results-table">
                                 <thead>
-                                    <tr>
+                                    <tr id="table-header-row">
                                         <th style="width:40px;padding-left:14px;">
                                             <input type="checkbox" id="select-all" class="cb-styled">
                                         </th>
@@ -160,9 +164,7 @@
                                         <th>Quiz turi</th>
                                         <th>Shakl</th>
                                         <th>Baho</th>
-                                        <th>Eski baho</th>
-                                        <th>Boshlanish</th>
-                                        <th>Tugash</th>
+                                        <th>Sana</th>
                                         <th style="width:60px;"></th>
                                     </tr>
                                 </thead>
@@ -185,12 +187,14 @@
     <script>
         var csrfToken = '{{ csrf_token() }}';
         var dataUrl = '{{ route($routePrefix . ".diagnostika.data") }}';
+        var tartibgaSolUrl = '{{ route($routePrefix . ".diagnostika.tartibga-sol") }}';
         var diagnostikaUrl = '{{ route($routePrefix . ".quiz-results.diagnostika") }}';
         var uploadUrl = '{{ route($routePrefix . ".quiz-results.upload") }}';
         var importUrl = '{{ route($routePrefix . ".quiz-results.import") }}';
         var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
         var diagnostikaRan = false;
         var currentPage = 1;
+        var isTartibgaMode = false;
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
@@ -221,6 +225,12 @@
             var params = getFilters();
             params.page = currentPage;
             params.per_page = 50;
+
+            // Tartibga rejimidan chiqish
+            if (isTartibgaMode) {
+                isTartibgaMode = false;
+                setDefaultHeaders();
+            }
 
             $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();
             $('#btn-search').prop('disabled', true).css('opacity', '0.6');
@@ -257,6 +267,113 @@
             });
         }
 
+        // Tartibga solish — jurnal ko'rinishi
+        function loadTartibgaSol() {
+            var params = getFilters();
+            isTartibgaMode = true;
+
+            $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();
+            $('#btn-tartibga').prop('disabled', true).css('opacity', '0.6');
+            $('#diagnostika-panel').hide();
+            $('#upload-result').hide();
+            diagnostikaRan = false;
+            $('#btn-upload').hide().prop('disabled', true);
+
+            $.ajax({
+                url: tartibgaSolUrl, type: 'GET', data: params, timeout: 120000,
+                success: function(res) {
+                    $('#loading-state').hide();
+                    $('#btn-tartibga').prop('disabled', false).css('opacity', '1');
+                    if (!res.data || res.data.length === 0) {
+                        $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
+                        $('#table-area').hide();
+                        $('#btn-excel').prop('disabled', true);
+                        $('#total-info').hide();
+                        return;
+                    }
+                    $('#total-info').text('Jami: ' + res.total + ' ta talaba').show();
+                    setTartibgaHeaders();
+                    renderTartibgaTable(res.data);
+                    $('#pagination-area').html('');
+                    $('#table-area').show();
+                    $('#btn-excel').prop('disabled', false);
+                    // Tartibga solish rejimida checkbox, diagnostika, upload kerak emas
+                    $('#btn-diagnostika').prop('disabled', true);
+                    $('#selected-count').text('0');
+                },
+                error: function() {
+                    $('#loading-state').hide();
+                    $('#btn-tartibga').prop('disabled', false).css('opacity', '1');
+                    $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                }
+            });
+        }
+
+        function setTartibgaHeaders() {
+            var headerHtml = '<tr id="table-header-row">';
+            headerHtml += '<th class="th-num">#</th>';
+            headerHtml += '<th>Student ID</th>';
+            headerHtml += '<th>FISH</th>';
+            headerHtml += '<th>Fakultet</th>';
+            headerHtml += '<th>Yo\'nalish</th>';
+            headerHtml += '<th>Kurs</th>';
+            headerHtml += '<th>Semestr</th>';
+            headerHtml += '<th>Guruh</th>';
+            headerHtml += '<th>Fan</th>';
+            headerHtml += '<th style="text-align:center;">Test</th>';
+            headerHtml += '<th style="text-align:center;">OSKI</th>';
+            headerHtml += '<th>Sana</th>';
+            headerHtml += '</tr>';
+            $('#results-table thead').html(headerHtml);
+        }
+
+        function setDefaultHeaders() {
+            var headerHtml = '<tr id="table-header-row">';
+            headerHtml += '<th style="width:40px;padding-left:14px;"><input type="checkbox" id="select-all" class="cb-styled"></th>';
+            headerHtml += '<th class="th-num">#</th>';
+            headerHtml += '<th>Student ID</th>';
+            headerHtml += '<th>Talaba</th>';
+            headerHtml += '<th>Fakultet</th>';
+            headerHtml += '<th>Yo\'nalish</th>';
+            headerHtml += '<th>Semestr</th>';
+            headerHtml += '<th>Fan</th>';
+            headerHtml += '<th>Quiz turi</th>';
+            headerHtml += '<th>Shakl</th>';
+            headerHtml += '<th>Baho</th>';
+            headerHtml += '<th>Sana</th>';
+            headerHtml += '<th style="width:60px;"></th>';
+            headerHtml += '</tr>';
+            $('#results-table thead').html(headerHtml);
+            // Re-bind select-all
+            $('#select-all').on('change', function() {
+                var checked = $(this).is(':checked');
+                $('.row-checkbox').prop('checked', checked);
+                updateButtons();
+            });
+        }
+
+        function renderTartibgaTable(data) {
+            var html = '';
+            for (var i = 0; i < data.length; i++) {
+                var r = data[i];
+                html += '<tr class="journal-row">';
+                html += '<td class="td-num">' + r.row_num + '</td>';
+                html += '<td><span class="badge badge-indigo">' + esc(r.student_id) + '</span></td>';
+                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
+                html += '<td><span class="text-cell text-emerald">' + esc(r.faculty) + '</span></td>';
+                html += '<td><span class="text-cell text-cyan">' + esc(r.direction) + '</span></td>';
+                html += '<td><span class="badge" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;">' + esc(r.kurs) + '</span></td>';
+                html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
+                html += '<td><span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">' + esc(r.group) + '</span></td>';
+                html += '<td><span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span></td>';
+                html += '<td style="text-align:center;">' + (r.test !== null ? '<span class="badge badge-grade">' + esc(r.test) + '</span>' : '<span style="color:#cbd5e1;">—</span>') + '</td>';
+                html += '<td style="text-align:center;">' + (r.oski !== null ? '<span class="badge" style="background:#fce7f3;color:#9d174d;border:1px solid #fbcfe8;font-weight:800;min-width:32px;text-align:center;">' + esc(r.oski) + '</span>' : '<span style="color:#cbd5e1;">—</span>') + '</td>';
+                html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
+                html += '</tr>';
+            }
+            $('#table-body').html(html);
+        }
+
         function renderTable(data) {
             var html = '';
             for (var i = 0; i < data.length; i++) {
@@ -273,9 +390,7 @@
                 html += '<td><span class="badge badge-violet">' + esc(r.quiz_type) + '</span></td>';
                 html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade">' + esc(r.grade) + '</span></td>';
-                html += '<td style="text-align:center;color:#64748b;font-size:12px;">' + esc(r.old_grade) + '</td>';
-                html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date_start) + '</td>';
-                html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date_finish) + '</td>';
+                html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
                 html += '<td style="text-align:center;"><button class="btn-del" onclick="deleteRow(' + r.id + ')" title="O\'chirish">';
                 html += '<svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>';
                 html += '</button></td>';
@@ -545,6 +660,9 @@
         .import-group { display: flex; align-items: center; gap: 4px; }
 
         /* === BUTTONS === */
+        .btn-tartibga { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background: linear-gradient(135deg, #0891b2, #06b6d4); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(8,145,178,0.3); height: 36px; white-space: nowrap; }
+        .btn-tartibga:hover { background: linear-gradient(135deg, #0e7490, #0891b2); transform: translateY(-1px); }
+        .btn-tartibga:disabled { cursor: not-allowed; opacity: 0.4; }
         .btn-calc { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(43,94,167,0.3); height: 36px; white-space: nowrap; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); transform: translateY(-1px); }
         .btn-excel { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(22,163,74,0.3); height: 32px; white-space: nowrap; }

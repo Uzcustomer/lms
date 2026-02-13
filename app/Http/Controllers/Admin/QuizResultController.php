@@ -108,9 +108,7 @@ class QuizResultController extends Controller
                 'quiz_type' => $item->quiz_type,
                 'shakl' => $item->shakl,
                 'grade' => $item->grade,
-                'old_grade' => $item->old_grade,
-                'date_start' => $item->date_start ? $item->date_start->format('d.m.Y H:i') : '',
-                'date_finish' => $item->date_finish ? $item->date_finish->format('d.m.Y H:i') : '',
+                'date' => $item->date_finish ? $item->date_finish->format('d.m.Y') : '',
             ];
         });
 
@@ -120,6 +118,109 @@ class QuizResultController extends Controller
             'current_page' => $paginated->currentPage(),
             'last_page' => $paginated->lastPage(),
             'per_page' => $paginated->perPage(),
+        ]);
+    }
+
+    /**
+     * Tartibga solish — natijalarni jurnal shaklida ko'rsatish.
+     * FISH, fakultet, yo'nalish, kurs, semestr, guruh students jadvalidan olinadi.
+     * Quiz turi bo'yicha Test va OSKI ustunlariga ajratiladi.
+     * Faqat 1-urinish (attempt_number=1) natijalari ko'rsatiladi.
+     */
+    public function tartibgaSol(Request $request)
+    {
+        $query = HemisQuizResult::where('is_active', 1)
+            ->where('attempt_number', 1);
+
+        if ($request->filled('faculty')) {
+            $query->where('faculty', $request->faculty);
+        }
+        if ($request->filled('direction')) {
+            $query->where('direction', $request->direction);
+        }
+        if ($request->filled('semester')) {
+            $query->where('semester', $request->semester);
+        }
+        if ($request->filled('quiz_type')) {
+            $query->where('quiz_type', $request->quiz_type);
+        }
+        if ($request->filled('student_name')) {
+            $search = $request->student_name;
+            $query->where(function ($q) use ($search) {
+                $q->where('student_name', 'LIKE', '%' . $search . '%')
+                  ->orWhere('student_id', 'LIKE', '%' . $search . '%');
+            });
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('date_finish', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('date_finish', '<=', $request->date_to);
+        }
+
+        $results = $query->orderBy('student_id')->orderBy('fan_id')->get();
+
+        // Barcha student_id larni yig'ish va bulk query
+        $studentIds = $results->pluck('student_id')->unique()->values()->toArray();
+
+        $students = Student::where(function ($q) use ($studentIds) {
+            $q->whereIn('hemis_id', $studentIds)
+              ->orWhereIn('student_id_number', $studentIds);
+        })->get();
+
+        // Lookup yaratish (hemis_id va student_id_number bo'yicha)
+        $studentLookup = [];
+        foreach ($students as $student) {
+            $studentLookup[$student->hemis_id] = $student;
+            if ($student->student_id_number) {
+                $studentLookup[$student->student_id_number] = $student;
+            }
+        }
+
+        // student_id + fan_id bo'yicha guruhlash
+        $grouped = [];
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+        foreach ($results as $result) {
+            $student = $studentLookup[$result->student_id] ?? null;
+            if (!$student) continue;
+
+            $key = $result->student_id . '_' . $result->fan_id;
+
+            if (!isset($grouped[$key])) {
+                $kurs = $student->semester_code ? ceil($student->semester_code / 2) : null;
+                $grouped[$key] = [
+                    'student_id' => $result->student_id,
+                    'full_name' => $student->full_name,
+                    'faculty' => $student->department_name,
+                    'direction' => $student->specialty_name,
+                    'kurs' => $kurs ? $kurs . '-kurs' : '-',
+                    'semester' => $student->semester_name,
+                    'group' => $student->group_name,
+                    'fan_name' => $result->fan_name,
+                    'test' => null,
+                    'oski' => null,
+                    'date' => $result->date_finish ? $result->date_finish->format('d.m.Y') : '',
+                ];
+            }
+
+            $quizType = $result->quiz_type;
+            if (in_array($quizType, $testTypes)) {
+                $grouped[$key]['test'] = $result->grade;
+            } elseif (in_array($quizType, $oskiTypes)) {
+                $grouped[$key]['oski'] = $result->grade;
+            }
+        }
+
+        $data = array_values($grouped);
+        foreach ($data as $i => &$row) {
+            $row['row_num'] = $i + 1;
+        }
+
+        return response()->json([
+            'data' => $data,
+            'total' => count($data),
         ]);
     }
 

@@ -16,7 +16,7 @@ class ImportSchedules extends Command
         $this->info('Jadval importi boshlanmoqda (joriy o\'quv yili bo\'yicha)...');
 
         try {
-            $service->importByEducationYear();
+            $service->importByEducationYear(fn($msg) => $this->line($msg));
             $this->info('Jadval importi muvaffaqiyatli yakunlandi.');
             return self::SUCCESS;
         } catch (\Throwable $e) {

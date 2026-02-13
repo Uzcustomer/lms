@@ -105,7 +105,7 @@ class ScheduleImportService
     /**
      * Joriy o'quv yili bo'yicha jadval import (cron uchun)
      */
-    public function importByEducationYear(): void
+    public function importByEducationYear(?\Closure $log = null): void
     {
         $educationYearCode = DB::table('semesters')
             ->where('current', true)
@@ -118,6 +118,7 @@ class ScheduleImportService
         }
 
         $this->notifyTelegram("🟢 Cron: Jadval importi boshlandi (o'quv yili: {$educationYearCode})");
+        if ($log) $log("O'quv yili: {$educationYearCode}");
 
         $token = config('services.hemis.token');
         $limit = 50;
@@ -138,18 +139,19 @@ class ScheduleImportService
                 $status = $response ? $response->status() : 'timeout';
                 Log::channel('import_schedule')->warning("HEMIS API sahifa {$page} o'tkazib yuborildi (status {$status})");
                 $failedPages[] = $page;
+                if ($log) $log("  ❌ Sahifa {$page}/{$pages} — xato (status {$status}), o'tkazib yuborildi");
 
-                // Agar birinchi sahifa ham xato bo'lsa — jami sahifalar noma'lum, to'xtatamiz
                 if ($page === 1) {
                     $this->notifyTelegram("❌ API birinchi sahifada xato (status {$status}) — import to'xtatildi");
+                    if ($log) $log("Birinchi sahifa xato — import to'xtatildi");
                     break;
                 }
 
-                // Ketma-ket 5 ta sahifa xato bo'lsa — API butunlay ishlamayapti
                 if (count($failedPages) >= 5) {
                     $lastFive = array_slice($failedPages, -5);
                     if ($lastFive[4] - $lastFive[0] === 4) {
                         $this->notifyTelegram("❌ Ketma-ket 5 ta sahifa xato — import to'xtatildi (sahifa {$page})");
+                        if ($log) $log("Ketma-ket 5 ta xato — import to'xtatildi");
                         break;
                     }
                 }
@@ -162,9 +164,12 @@ class ScheduleImportService
             $data = $response->json('data', []);
             $items = $data['items'] ?? [];
             $pages = $data['pagination']['pageCount'] ?? 1;
+            $count = count($items);
+            $total = count($importedHemisIds) + $count;
 
             if ($page === 1) {
                 $this->notifyTelegram("📄 Jami sahifalar: {$pages}");
+                if ($log) $log("Jami sahifalar: {$pages}");
             }
 
             foreach ($items as $item) {
@@ -176,6 +181,8 @@ class ScheduleImportService
                 $schedule->save();
                 $importedHemisIds[] = $item['id'];
             }
+
+            if ($log) $log("  ✓ Sahifa {$page}/{$pages} — {$count} ta yozuv (jami: {$total})");
 
             if ($page % 50 === 0 || $page === $pages) {
                 $elapsed = microtime(true) - $startTime;
@@ -207,6 +214,7 @@ class ScheduleImportService
             $msg .= " ({$failedCount} ta sahifa o'tkazib yuborildi)";
         }
         $this->notifyTelegram($msg);
+        if ($log) $log($msg);
     }
 
     /**

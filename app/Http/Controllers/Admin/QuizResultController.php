@@ -382,14 +382,15 @@ class QuizResultController extends Controller
             }
             $duplicateTracker[$key] = $result->id;
 
-            // YN turi tekshiruvi
-            $ynTuri = strtoupper(trim($result->yn_turi ?? ''));
-            if ($ynTuri === 'OSKI') {
+            // YN turini quiz_type dan aniqlash
+            $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+            $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+            if (in_array($result->quiz_type, $oskiTypes)) {
                 $row['jurnal_ustun'] = 'OSKI';
-            } elseif ($ynTuri === 'TEST') {
+            } elseif (in_array($result->quiz_type, $testTypes)) {
                 $row['jurnal_ustun'] = 'Test';
             } else {
-                $row['error'] = "YN turi aniqlanmadi: '{$result->yn_turi}' (faqat OSKI yoki Test bo'lishi kerak)";
+                $row['error'] = "Quiz turi aniqlanmadi: '{$result->quiz_type}' (OSKI yoki YN test bo'lishi kerak)";
                 $errors[] = $row;
                 continue;
             }
@@ -493,16 +494,17 @@ class QuizResultController extends Controller
             }
             $duplicateTracker[$key] = $result->id;
 
-            // YN turiga qarab training_type_code va name aniqlash
-            $ynTuri = strtoupper(trim($result->yn_turi ?? ''));
-            if ($ynTuri === 'OSKI') {
+            // Quiz type dan training_type_code va name aniqlash
+            $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+            $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+            if (in_array($result->quiz_type, $oskiTypes)) {
                 $trainingTypeCode = 101;
                 $trainingTypeName = 'Oski';
-            } elseif ($ynTuri === 'TEST') {
+            } elseif (in_array($result->quiz_type, $testTypes)) {
                 $trainingTypeCode = 102;
                 $trainingTypeName = 'Yakuniy test';
             } else {
-                $rowInfo['error'] = "YN turi aniqlanmadi: '{$result->yn_turi}' (faqat OSKI yoki Test bo'lishi kerak)";
+                $rowInfo['error'] = "Quiz turi aniqlanmadi: '{$result->quiz_type}' (OSKI yoki YN test bo'lishi kerak)";
                 $errors[] = $rowInfo;
                 continue;
             }

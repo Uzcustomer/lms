@@ -2575,7 +2575,10 @@ class JournalController extends Controller
         $deadline = \Carbon\Carbon::now('Asia/Tashkent')->addDays($days)->endOfDay();
 
         // Guard va foydalanuvchi ma'lumotlari
-        $guard = auth()->guard('teacher')->check() ? 'teacher' : 'web';
+        $webUser = auth()->guard('web')->user();
+        $teacherUser = auth()->guard('teacher')->user();
+        $guard = $teacherUser ? 'teacher' : 'web';
+        $user = $webUser ?? $teacherUser;
 
         $opening = LessonOpening::create([
             'group_hemis_id' => $request->group_hemis_id,

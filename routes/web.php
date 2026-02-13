@@ -278,6 +278,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [QuizResultController::class, 'diagnostikaPage'])->name('index');
             Route::get('/data', [QuizResultController::class, 'diagnostikaData'])->name('data');
             Route::get('/tartibga-sol', [QuizResultController::class, 'tartibgaSol'])->name('tartibga-sol');
+            Route::get('/saqlangan-hisobot', [QuizResultController::class, 'saqlanganHisobot'])->name('saqlangan-hisobot');
         });
 
         // Test markazi: Quiz natijalar API (diagnostika, upload, import, export, destroy)
@@ -490,6 +491,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/', [QuizResultController::class, 'diagnostikaPage'])->name('index');
             Route::get('/data', [QuizResultController::class, 'diagnostikaData'])->name('data');
             Route::get('/tartibga-sol', [QuizResultController::class, 'tartibgaSol'])->name('tartibga-sol');
+            Route::get('/saqlangan-hisobot', [QuizResultController::class, 'saqlanganHisobot'])->name('saqlangan-hisobot');
         });
 
         // Test markazi: Quiz natijalar API (diagnostika, upload, import, export, destroy)

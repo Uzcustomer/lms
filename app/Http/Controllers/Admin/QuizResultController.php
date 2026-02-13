@@ -192,6 +192,88 @@ class QuizResultController extends Controller
         ]);
     }
 
+    /**
+     * Saqlangan ma'lumotlar hisoboti — Moodle formatida.
+     * student_name, faculty, direction, semester — Students jadvalidan tartibga solingan.
+     * Qolgan maydonlar (attempt_id, fan_id, fan_name, quiz_type, attempt_name, shakl, grade, date_start, date_finish)
+     * — hemis_quiz_results jadvalidan to'g'ridan-to'g'ri.
+     */
+    public function saqlanganHisobot(Request $request)
+    {
+        $query = HemisQuizResult::where('is_active', 1);
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('date_finish', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('date_finish', '<=', $request->date_to);
+        }
+
+        $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')->get();
+
+        // Barcha student_id larni yig'ish va bulk query
+        $studentIds = $results->pluck('student_id')->unique()->values()->toArray();
+
+        $students = Student::where(function ($q) use ($studentIds) {
+            $q->whereIn('hemis_id', $studentIds)
+              ->orWhereIn('student_id_number', $studentIds);
+        })->get();
+
+        // Lookup yaratish
+        $studentLookup = [];
+        foreach ($students as $student) {
+            $studentLookup[$student->hemis_id] = $student;
+            if ($student->student_id_number) {
+                $studentLookup[$student->student_id_number] = $student;
+            }
+        }
+
+        $data = [];
+        $rowNum = 0;
+
+        foreach ($results as $result) {
+            $student = $studentLookup[$result->student_id] ?? null;
+
+            // Student nomi — tartibga solingan (Student jadvalidan), yo'q bo'lsa Moodle'dan
+            $studentName = $student ? $student->full_name : $result->student_name;
+            $faculty = $student ? $student->department_name : $result->faculty;
+            $direction = $student ? $student->specialty_name : $result->direction;
+
+            // Semestr — tartibga solingan
+            $semLabel = $result->semester ?: ($student ? $student->semester_name : '');
+            $semNum = null;
+            if ($semLabel && preg_match('/(\d+)/', $semLabel, $m)) {
+                $semNum = (int) $m[1];
+            }
+            $semester = $semNum ? $semNum . '-sem' : ($semLabel ?: '-');
+
+            $rowNum++;
+            $data[] = [
+                'id'           => $result->id,
+                'row_num'      => $rowNum,
+                'attempt_id'   => $result->attempt_id,
+                'student_id'   => $result->student_id,
+                'student_name' => $studentName,
+                'faculty'      => $faculty,
+                'direction'    => $direction,
+                'semester'     => $semester,
+                'fan_id'       => $result->fan_id,
+                'fan_name'     => $result->fan_name,
+                'quiz_type'    => $result->quiz_type,
+                'attempt_name' => $result->attempt_name,
+                'shakl'        => $result->shakl,
+                'grade'        => $result->grade,
+                'date_start'   => $result->date_start ? $result->date_start->format('d.m.Y H:i') : '',
+                'date_finish'  => $result->date_finish ? $result->date_finish->format('d.m.Y H:i') : '',
+            ];
+        }
+
+        return response()->json([
+            'data' => $data,
+            'total' => count($data),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $query = HemisQuizResult::where('is_active', 1);

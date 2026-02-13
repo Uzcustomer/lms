@@ -7,8 +7,8 @@ return new class extends Migration
 {
     /**
      * Oldin training_type_code=103 bilan yuklangan quiz natijalarni
-     * yn_turi ga qarab to'g'ri kodga o'zgartirish:
-     *   OSKI → 101, Test → 102
+     * quiz_type ga qarab to'g'ri kodga o'zgartirish:
+     *   OSKI (eng/rus/uzb) → 101, YN test (eng/rus/uzb) → 102
      */
     public function up(): void
     {
@@ -20,7 +20,7 @@ return new class extends Migration
             ->whereIn('quiz_result_id', function ($query) {
                 $query->select('id')
                     ->from('hemis_quiz_results')
-                    ->whereRaw("UPPER(TRIM(yn_turi)) = 'OSKI'");
+                    ->whereIn('quiz_type', ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)']);
             })
             ->update([
                 'training_type_code' => 101,
@@ -35,7 +35,7 @@ return new class extends Migration
             ->whereIn('quiz_result_id', function ($query) {
                 $query->select('id')
                     ->from('hemis_quiz_results')
-                    ->whereRaw("UPPER(TRIM(yn_turi)) = 'TEST'");
+                    ->whereIn('quiz_type', ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)']);
             })
             ->update([
                 'training_type_code' => 102,

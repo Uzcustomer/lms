@@ -257,8 +257,10 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Talabani topish
-            $student = Student::where('hemis_id', $result->student_id)->first();
+            // Talabani topish (avval hemis_id, keyin student_id_number bo'yicha)
+            $student = Student::where('hemis_id', $result->student_id)
+                ->orWhere('student_id_number', $result->student_id)
+                ->first();
             if (!$student) {
                 $row['error'] = "Talaba topilmadi (student_id: {$result->student_id})";
                 $errors[] = $row;
@@ -346,7 +348,9 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            $student = Student::where('hemis_id', $result->student_id)->first();
+            $student = Student::where('hemis_id', $result->student_id)
+                ->orWhere('student_id_number', $result->student_id)
+                ->first();
             if (!$student) {
                 $rowInfo['error'] = "Talaba topilmadi (student_id: {$result->student_id})";
                 $errors[] = $rowInfo;

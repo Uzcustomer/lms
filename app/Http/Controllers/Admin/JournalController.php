@@ -2621,7 +2621,9 @@ class JournalController extends Controller
         }
 
         // O'qituvchi ekanligini va shu guruhga biriktirilganligini tekshirish
-        $isAdmin = auth()->user()->hasAnyRole(['superadmin', 'admin', 'kichik_admin']);
+        $adminRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
+        $isAdmin = (auth()->guard('web')->user()?->hasAnyRole($adminRoles) ?? false)
+            || (auth()->guard('teacher')->user()?->hasAnyRole($adminRoles) ?? false);
         $isTeacher = is_active_oqituvchi();
 
         if ($isTeacher && !$isAdmin) {

@@ -277,7 +277,6 @@ class JournalController extends Controller
         // Get student hemis IDs for this group
         $studentHemisIds = DB::table('students')
             ->where('group_id', $group->group_hemis_id)
-            ->where('is_graduate', false)
             ->pluck('hemis_id');
 
         // Excluded training type names for Amaliyot (JB)
@@ -624,7 +623,6 @@ class JournalController extends Controller
         // Get students basic info
         $students = DB::table('students')
             ->where('group_id', $group->group_hemis_id)
-            ->where('is_graduate', false)
             ->select('id', 'hemis_id', 'full_name', 'student_id_number')
             ->orderBy('full_name')
             ->get();

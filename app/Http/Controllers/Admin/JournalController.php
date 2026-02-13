@@ -859,7 +859,7 @@ class JournalController extends Controller
         $auditoriumHours = 0;
         if (is_array($subject->subject_details)) {
             foreach ($subject->subject_details as $detail) {
-                $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                $trainingCode = (string) (($detail['trainingType'] ?? [])['code'] ?? '');
                 if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
                     $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
                 }
@@ -871,13 +871,13 @@ class JournalController extends Controller
 
         // Faculty (Fakultet) - department linked to curriculum
         $faculty = Department::where('department_hemis_id', $curriculum?->department_hemis_id)->first();
-        $facultyName = $faculty->name ?? '';
-        $facultyId = $faculty->id ?? '';
+        $facultyName = $faculty?->name ?? '';
+        $facultyId = $faculty?->id ?? '';
 
         // Yo'nalish (Specialty) - from group
         $specialty = Specialty::where('specialty_hemis_id', $group->specialty_hemis_id)->first();
-        $specialtyId = $specialty->specialty_hemis_id ?? '';
-        $specialtyName = $specialty->name ?? '';
+        $specialtyId = $specialty?->specialty_hemis_id ?? '';
+        $specialtyName = $specialty?->name ?? '';
 
         // Kafedra - from curriculum subject
         $kafedraName = $subject->department_name ?? '';

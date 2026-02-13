@@ -29,27 +29,9 @@ class QuizResultController extends Controller
      */
     public function diagnostikaPage(Request $request)
     {
-        $faculties = HemisQuizResult::where('is_active', 1)
-            ->whereNotNull('faculty')->where('faculty', '!=', '')
-            ->distinct()->pluck('faculty')->sort()->values();
-
-        $directions = HemisQuizResult::where('is_active', 1)
-            ->whereNotNull('direction')->where('direction', '!=', '')
-            ->distinct()->pluck('direction')->sort()->values();
-
-        $semesters = HemisQuizResult::where('is_active', 1)
-            ->whereNotNull('semester')->where('semester', '!=', '')
-            ->distinct()->pluck('semester')->sort()->values();
-
-        $quizTypes = HemisQuizResult::where('is_active', 1)
-            ->whereNotNull('quiz_type')->where('quiz_type', '!=', '')
-            ->distinct()->pluck('quiz_type')->sort()->values();
-
         $routePrefix = $this->routePrefix();
 
-        return view('admin.diagnostika.index', compact(
-            'faculties', 'directions', 'semesters', 'quizTypes', 'routePrefix'
-        ));
+        return view('admin.diagnostika.index', compact('routePrefix'));
     }
 
     /**
@@ -124,33 +106,13 @@ class QuizResultController extends Controller
     /**
      * Tartibga solish — natijalarni jurnal shaklida ko'rsatish.
      * FISH, fakultet, yo'nalish, kurs, semestr, guruh students jadvalidan olinadi.
-     * Quiz turi bo'yicha Test va OSKI ustunlariga ajratiladi.
-     * Faqat 1-urinish (attempt_number=1) natijalari ko'rsatiladi.
+     * Quiz turi bo'yicha YN turi ustunida Test yoki OSKI deb ko'rsatiladi.
+     * Barcha urinishlar ko'rsatiladi.
      */
     public function tartibgaSol(Request $request)
     {
-        $query = HemisQuizResult::where('is_active', 1)
-            ->where('attempt_number', 1);
+        $query = HemisQuizResult::where('is_active', 1);
 
-        if ($request->filled('faculty')) {
-            $query->where('faculty', $request->faculty);
-        }
-        if ($request->filled('direction')) {
-            $query->where('direction', $request->direction);
-        }
-        if ($request->filled('semester')) {
-            $query->where('semester', $request->semester);
-        }
-        if ($request->filled('quiz_type')) {
-            $query->where('quiz_type', $request->quiz_type);
-        }
-        if ($request->filled('student_name')) {
-            $search = $request->student_name;
-            $query->where(function ($q) use ($search) {
-                $q->where('student_name', 'LIKE', '%' . $search . '%')
-                  ->orWhere('student_id', 'LIKE', '%' . $search . '%');
-            });
-        }
         if ($request->filled('date_from')) {
             $query->whereDate('date_finish', '>=', $request->date_from);
         }
@@ -158,7 +120,7 @@ class QuizResultController extends Controller
             $query->whereDate('date_finish', '<=', $request->date_to);
         }
 
-        $results = $query->orderBy('student_id')->orderBy('fan_id')->get();
+        $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')->get();
 
         // Barcha student_id larni yig'ish va bulk query
         $studentIds = $results->pluck('student_id')->unique()->values()->toArray();
@@ -177,45 +139,43 @@ class QuizResultController extends Controller
             }
         }
 
-        // student_id + fan_id bo'yicha guruhlash
-        $grouped = [];
         $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+        $data = [];
+        $rowNum = 0;
 
         foreach ($results as $result) {
             $student = $studentLookup[$result->student_id] ?? null;
             if (!$student) continue;
 
-            $key = $result->student_id . '_' . $result->fan_id;
+            $kurs = $student->semester_code ? ceil($student->semester_code / 2) : null;
 
-            if (!isset($grouped[$key])) {
-                $kurs = $student->semester_code ? ceil($student->semester_code / 2) : null;
-                $grouped[$key] = [
-                    'student_id' => $result->student_id,
-                    'full_name' => $student->full_name,
-                    'faculty' => $student->department_name,
-                    'direction' => $student->specialty_name,
-                    'kurs' => $kurs ? $kurs . '-kurs' : '-',
-                    'semester' => $student->semester_name,
-                    'group' => $student->group_name,
-                    'fan_name' => $result->fan_name,
-                    'test' => null,
-                    'oski' => null,
-                    'date' => $result->date_finish ? $result->date_finish->format('d.m.Y') : '',
-                ];
+            // YN turi aniqlash
+            $ynTuri = '-';
+            if (in_array($result->quiz_type, $testTypes)) {
+                $ynTuri = 'Test';
+            } elseif (in_array($result->quiz_type, $oskiTypes)) {
+                $ynTuri = 'OSKI';
             }
 
-            $quizType = $result->quiz_type;
-            if (in_array($quizType, $testTypes)) {
-                $grouped[$key]['test'] = $result->grade;
-            } elseif (in_array($quizType, $oskiTypes)) {
-                $grouped[$key]['oski'] = $result->grade;
-            }
-        }
-
-        $data = array_values($grouped);
-        foreach ($data as $i => &$row) {
-            $row['row_num'] = $i + 1;
+            $rowNum++;
+            $data[] = [
+                'id' => $result->id,
+                'row_num' => $rowNum,
+                'student_id' => $result->student_id,
+                'full_name' => $student->full_name,
+                'faculty' => $student->department_name,
+                'direction' => $student->specialty_name,
+                'kurs' => $kurs ? $kurs . '-kurs' : '-',
+                'semester' => $student->semester_name,
+                'group' => $student->group_name,
+                'fan_name' => $result->fan_name,
+                'yn_turi' => $ynTuri,
+                'shakl' => $result->shakl,
+                'grade' => $result->grade,
+                'date' => $result->date_finish ? $result->date_finish->format('d.m.Y') : '',
+            ];
         }
 
         return response()->json([

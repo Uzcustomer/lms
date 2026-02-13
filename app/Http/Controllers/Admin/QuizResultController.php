@@ -192,6 +192,92 @@ class QuizResultController extends Controller
         ]);
     }
 
+    /**
+     * Sistemaga yuklangan natijalar hisoboti.
+     * student_grades jadvalidan reason='quiz_result' yozuvlar.
+     * student_name, faculty, direction, semester — Students jadvalidan tartibga solingan.
+     * Moodle maydonlari — hemis_quiz_results jadvalidan (quiz_result_id orqali).
+     */
+    public function saqlanganHisobot(Request $request)
+    {
+        $query = StudentGrade::where('reason', 'quiz_result')
+            ->whereNotNull('quiz_result_id');
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('lesson_date', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('lesson_date', '<=', $request->date_to);
+        }
+
+        $grades = $query->orderBy('student_hemis_id')->orderBy('subject_id')->orderBy('lesson_date')->get();
+
+        // Quiz result ID lar orqali Moodle ma'lumotlarini olish
+        $quizResultIds = $grades->pluck('quiz_result_id')->unique()->values()->toArray();
+        $quizResults = HemisQuizResult::whereIn('id', $quizResultIds)->get()->keyBy('id');
+
+        // Student ID lar orqali Student ma'lumotlarini olish
+        $studentHemisIds = $grades->pluck('student_hemis_id')->unique()->values()->toArray();
+        $students = Student::where(function ($q) use ($studentHemisIds) {
+            $q->whereIn('hemis_id', $studentHemisIds)
+              ->orWhereIn('student_id_number', $studentHemisIds);
+        })->get();
+
+        $studentLookup = [];
+        foreach ($students as $student) {
+            $studentLookup[$student->hemis_id] = $student;
+            if ($student->student_id_number) {
+                $studentLookup[$student->student_id_number] = $student;
+            }
+        }
+
+        $data = [];
+        $rowNum = 0;
+
+        foreach ($grades as $grade) {
+            $quiz = $quizResults[$grade->quiz_result_id] ?? null;
+            $student = $studentLookup[$grade->student_hemis_id] ?? null;
+
+            // Tartibga solingan qiymatlar (Student jadvalidan)
+            $studentName = $student ? $student->full_name : ($quiz->student_name ?? '-');
+            $faculty = $student ? $student->department_name : ($quiz->faculty ?? '-');
+            $direction = $student ? $student->specialty_name : ($quiz->direction ?? '-');
+
+            $semLabel = $grade->semester_name ?: ($student ? $student->semester_name : '');
+            $semNum = null;
+            if ($semLabel && preg_match('/(\d+)/', $semLabel, $m)) {
+                $semNum = (int) $m[1];
+            }
+            $semester = $semNum ? $semNum . '-sem' : ($semLabel ?: '-');
+
+            // Moodle formatidagi qiymatlar (hemis_quiz_results jadvalidan)
+            $rowNum++;
+            $data[] = [
+                'id'           => $grade->id,
+                'row_num'      => $rowNum,
+                'attempt_id'   => $quiz->attempt_id ?? '-',
+                'student_id'   => $grade->student_hemis_id,
+                'student_name' => $studentName,
+                'faculty'      => $faculty,
+                'direction'    => $direction,
+                'semester'     => $semester,
+                'fan_id'       => $quiz->fan_id ?? $grade->subject_id,
+                'fan_name'     => $quiz->fan_name ?? $grade->subject_name,
+                'quiz_type'    => $quiz->quiz_type ?? '-',
+                'attempt_name' => $quiz->attempt_name ?? '-',
+                'shakl'        => $quiz->shakl ?? '-',
+                'grade'        => $grade->grade,
+                'date_start'   => $quiz && $quiz->date_start ? $quiz->date_start->format('d.m.Y H:i') : '',
+                'date_finish'  => $quiz && $quiz->date_finish ? $quiz->date_finish->format('d.m.Y H:i') : '',
+            ];
+        }
+
+        return response()->json([
+            'data' => $data,
+            'total' => count($data),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $query = HemisQuizResult::where('is_active', 1);

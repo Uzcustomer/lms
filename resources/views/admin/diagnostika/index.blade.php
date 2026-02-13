@@ -218,6 +218,130 @@
         </div>
     </div>
 
+    <!-- ====== SAQLANGAN MA'LUMOTLAR HISOBOTI ====== -->
+    <div class="py-4">
+        <div class="max-w-full mx-auto sm:px-4 lg:px-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <!-- Header -->
+                <div class="filter-container" style="background: linear-gradient(135deg, #f0f8f4, #e8f5ee);">
+                    <div class="filter-row">
+                        <div class="filter-item" style="max-width:160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#16a34a;"></span> Sanadan</label>
+                            <input type="text" id="sh_date_from" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
+                        </div>
+                        <div class="filter-item" style="max-width:160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#16a34a;"></span> Sanagacha</label>
+                            <input type="text" id="sh_date_to" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
+                        </div>
+                        <div class="filter-item filter-buttons">
+                            <label class="filter-label">&nbsp;</label>
+                            <button type="button" id="btn-sh-load" class="btn-tartibga" style="background: linear-gradient(135deg, #16a34a, #22c55e); box-shadow: 0 2px 6px rgba(22,163,74,0.3);" onclick="loadSaqlanganHisobot()">
+                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M16 3H8v4h8V3z"/></svg>
+                                Sistemaga yuklangan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Bar -->
+                <div class="action-bar">
+                    <div class="action-left">
+                        <span id="sh-total-info" class="total-info" style="display:none;"></span>
+                    </div>
+                    <div class="action-right">
+                        <button type="button" id="btn-sh-excel" class="btn-excel" onclick="downloadSHExcel()" disabled>
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Result Area -->
+                <div id="sh-result-area">
+                    <div id="sh-empty-state" class="empty-state">
+                        <svg style="width:56px;height:56px;margin:0 auto 12px;color:#86efac;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M16 3H8v4h8V3z"/></svg>
+                        <p style="color:#64748b;font-size:15px;font-weight:600;">Sanalarni tanlang va "Sistemaga yuklangan" tugmasini bosing</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Sistemaga yuklangan quiz natijalarini ko'rish</p>
+                    </div>
+                    <div id="sh-loading-state" style="display:none;padding:60px 20px;text-align:center;">
+                        <div class="spinner"></div>
+                        <p style="color:#16a34a;font-size:14px;margin-top:16px;font-weight:600;">Yuklanmoqda...</p>
+                    </div>
+                    <div id="sh-table-area" style="display:none;">
+                        <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
+                            <table class="journal-table" id="sh-results-table">
+                                <thead>
+                                    <tr>
+                                        <th class="th-num">#</th>
+                                        <th>Attempt ID</th>
+                                        <th>Student ID</th>
+                                        <th>FISH</th>
+                                        <th>Fakultet</th>
+                                        <th>Yo'nalish</th>
+                                        <th>Semestr</th>
+                                        <th>Fan ID</th>
+                                        <th>Fan nomi</th>
+                                        <th>Quiz turi</th>
+                                        <th>Urinish nomi</th>
+                                        <th>Shakl</th>
+                                        <th>Baho</th>
+                                        <th>Boshlanish</th>
+                                        <th>Tugash</th>
+                                    </tr>
+                                    <tr class="filter-header-row">
+                                        <th></th>
+                                        <th><input type="text" class="sh-col-filter-input" data-col="attempt_id" placeholder="ID..."></th>
+                                        <th><input type="text" class="sh-col-filter-input" data-col="student_id" placeholder="ID..."></th>
+                                        <th><input type="text" class="sh-col-filter-input" data-col="student_name" placeholder="Ism..."></th>
+                                        <th><select class="sh-col-filter" data-col="faculty"><option value="">Barchasi</option></select></th>
+                                        <th><select class="sh-col-filter" data-col="direction"><option value="">Barchasi</option></select></th>
+                                        <th><select class="sh-col-filter" data-col="semester"><option value="">Barchasi</option></select></th>
+                                        <th><input type="text" class="sh-col-filter-input" data-col="fan_id" placeholder="ID..."></th>
+                                        <th><select class="sh-col-filter" data-col="fan_name"><option value="">Barchasi</option></select></th>
+                                        <th><select class="sh-col-filter" data-col="quiz_type"><option value="">Barchasi</option></select></th>
+                                        <th><select class="sh-col-filter" data-col="attempt_name"><option value="">Barchasi</option></select></th>
+                                        <th><select class="sh-col-filter" data-col="shakl"><option value="">Barchasi</option></select></th>
+                                        <th>
+                                            <div class="adv-filter-wrap">
+                                                <button type="button" class="adv-filter-btn" onclick="toggleAdvFilter('sh_baho')">
+                                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                                                    <span id="sh_baho-filter-label">Baho</span>
+                                                </button>
+                                                <div class="adv-filter-popup" id="sh_baho-popup">
+                                                    <div class="adv-filter-title">Baho filtri</div>
+                                                    <select id="sh_baho-op" class="adv-filter-select" onchange="$('#sh_baho-val2').toggle($('#sh_baho-op').val()==='between')">
+                                                        <option value="">Barchasi</option>
+                                                        <option value="eq">Teng (=)</option>
+                                                        <option value="gt">Dan katta (&gt;)</option>
+                                                        <option value="gte">Dan katta yoki teng (&ge;)</option>
+                                                        <option value="lt">Dan kichik (&lt;)</option>
+                                                        <option value="lte">Dan kichik yoki teng (&le;)</option>
+                                                        <option value="between">Orasida</option>
+                                                    </select>
+                                                    <div class="adv-filter-inputs">
+                                                        <input type="number" id="sh_baho-val1" class="adv-filter-input" placeholder="Qiymat" step="0.1">
+                                                        <input type="number" id="sh_baho-val2" class="adv-filter-input" placeholder="gacha" step="0.1" style="display:none;">
+                                                    </div>
+                                                    <div class="adv-filter-actions">
+                                                        <button type="button" class="adv-btn-clear" onclick="clearAdvFilter('sh_baho')">Tozalash</button>
+                                                        <button type="button" class="adv-btn-apply" onclick="applyAdvFilter('sh_baho')">Qo'llash</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th></th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sh-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="/css/scroll-calendar.css" rel="stylesheet" />
     <script src="/js/scroll-calendar.js"></script>
@@ -226,6 +350,7 @@
         var csrfToken = '{{ csrf_token() }}';
         var dataUrl = '{{ route($routePrefix . ".diagnostika.data") }}';
         var tartibgaSolUrl = '{{ route($routePrefix . ".diagnostika.tartibga-sol") }}';
+        var saqlanganHisobotUrl = '{{ route($routePrefix . ".diagnostika.saqlangan-hisobot") }}';
         var diagnostikaUrl = '{{ route($routePrefix . ".quiz-results.diagnostika") }}';
         var uploadUrl = '{{ route($routePrefix . ".quiz-results.upload") }}';
         var importUrl = '{{ route($routePrefix . ".quiz-results.import") }}';
@@ -338,7 +463,7 @@
         }
 
         // ========== BAHO / SANA ADVANCED FILTRLAR ==========
-        var advFilters = { baho: null, sana: null };
+        var advFilters = { baho: null, sana: null, sh_baho: null };
 
         function toggleAdvFilter(type) {
             var popup = document.getElementById(type + '-popup');
@@ -365,10 +490,11 @@
             var val1 = $('#' + type + '-val1').val();
             var val2 = $('#' + type + '-val2').val();
 
+            var defaultLabels = { baho: 'Baho', sana: 'Sana', sh_baho: 'Baho' };
             if (!op || !val1) {
                 advFilters[type] = null;
-                $('#' + type + '-filter-label').text(type === 'baho' ? 'Baho' : 'Sana').removeClass('adv-active-label');
-                $('.adv-filter-btn').removeClass('adv-active');
+                $('#' + type + '-filter-label').text(defaultLabels[type] || 'Filtr').removeClass('adv-active-label');
+                $('#' + type + '-popup').closest('.adv-filter-wrap').find('.adv-filter-btn').removeClass('adv-active');
             } else {
                 advFilters[type] = { op: op, val1: val1, val2: val2 };
                 // Label yangilash
@@ -380,18 +506,27 @@
             }
 
             document.getElementById(type + '-popup').style.display = 'none';
-            applyColumnFilters();
+            if (type.startsWith('sh_')) {
+                applySHColumnFilters();
+            } else {
+                applyColumnFilters();
+            }
         }
 
         function clearAdvFilter(type) {
+            var defaultLabels = { baho: 'Baho', sana: 'Sana', sh_baho: 'Baho' };
             $('#' + type + '-op').val('');
             $('#' + type + '-val1').val('');
             $('#' + type + '-val2').val('').hide();
             advFilters[type] = null;
-            $('#' + type + '-filter-label').text(type === 'baho' ? 'Baho' : 'Sana').removeClass('adv-active-label');
+            $('#' + type + '-filter-label').text(defaultLabels[type] || 'Filtr').removeClass('adv-active-label');
             $('#' + type + '-popup').closest('.adv-filter-wrap').find('.adv-filter-btn').removeClass('adv-active');
             document.getElementById(type + '-popup').style.display = 'none';
-            applyColumnFilters();
+            if (type.startsWith('sh_')) {
+                applySHColumnFilters();
+            } else {
+                applyColumnFilters();
+            }
         }
 
         function matchAdvFilter(filter, cellValue, isDate) {
@@ -690,7 +825,168 @@
                     complete: function() { btn.prop('disabled', false).html(origHtml); }
                 });
             });
+
+            // ========== SAQLANGAN HISOBOT KALENDAR ==========
+            new ScrollCalendar('sh_date_from');
+            new ScrollCalendar('sh_date_to');
+
+            // SH ustun filtrlar
+            $(document).on('change', 'select.sh-col-filter', function() { applySHColumnFilters(); });
+            var shFilterTimer = null;
+            $(document).on('input', 'input.sh-col-filter-input', function() {
+                clearTimeout(shFilterTimer);
+                shFilterTimer = setTimeout(function() { applySHColumnFilters(); }, 300);
+            });
         });
+
+        // ========== SAQLANGAN MA'LUMOTLAR HISOBOTI ==========
+        var shAllData = [];
+        var shFilteredData = [];
+
+        function loadSaqlanganHisobot() {
+            var params = {
+                date_from: $('#sh_date_from').val() || '',
+                date_to: $('#sh_date_to').val() || '',
+            };
+
+            $('#sh-empty-state').hide(); $('#sh-table-area').hide(); $('#sh-loading-state').show();
+            $('#btn-sh-load').prop('disabled', true).css('opacity', '0.6');
+
+            $.ajax({
+                url: saqlanganHisobotUrl, type: 'GET', data: params, timeout: 120000,
+                success: function(res) {
+                    $('#sh-loading-state').hide();
+                    $('#btn-sh-load').prop('disabled', false).css('opacity', '1');
+                    if (!res.data || res.data.length === 0) {
+                        shAllData = []; shFilteredData = [];
+                        $('#sh-empty-state').show().find('p:first').text("Ma'lumot topilmadi");
+                        $('#sh-table-area').hide();
+                        $('#btn-sh-excel').prop('disabled', true);
+                        $('#sh-total-info').hide();
+                        return;
+                    }
+                    shAllData = res.data;
+                    populateSHColumnFilters();
+                    applySHColumnFilters();
+                    $('#sh-table-area').show();
+                    $('#btn-sh-excel').prop('disabled', false);
+                },
+                error: function() {
+                    $('#sh-loading-state').hide();
+                    $('#btn-sh-load').prop('disabled', false).css('opacity', '1');
+                    $('#sh-empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                }
+            });
+        }
+
+        function populateSHColumnFilters() {
+            var cols = ['faculty','direction','semester','fan_name','quiz_type','attempt_name','shakl'];
+            cols.forEach(function(col) {
+                var unique = [];
+                var seen = {};
+                shAllData.forEach(function(r) {
+                    var v = r[col] || '';
+                    if (v && !seen[v]) { seen[v] = true; unique.push(v); }
+                });
+                unique.sort();
+                var sel = $('select.sh-col-filter[data-col="' + col + '"]');
+                var curVal = sel.val();
+                sel.find('option:not(:first)').remove();
+                unique.forEach(function(v) {
+                    sel.append('<option value="' + esc(v) + '">' + esc(v) + '</option>');
+                });
+                if (curVal) sel.val(curVal);
+            });
+        }
+
+        function applySHColumnFilters() {
+            var filters = {};
+            $('select.sh-col-filter').each(function() {
+                var val = $(this).val();
+                if (val) filters[$(this).data('col')] = val;
+            });
+            $('input.sh-col-filter-input').each(function() {
+                var val = $.trim($(this).val()).toLowerCase();
+                if (val) filters[$(this).data('col')] = val;
+            });
+
+            shFilteredData = shAllData.filter(function(r) {
+                for (var col in filters) {
+                    var fv = filters[col];
+                    var rv = (r[col] || '').toString();
+                    if ($('input.sh-col-filter-input[data-col="' + col + '"]').length) {
+                        if (rv.toLowerCase().indexOf(fv) === -1) return false;
+                    } else {
+                        if (rv !== fv) return false;
+                    }
+                }
+                // Baho advanced filtri
+                if (!matchAdvFilter(advFilters.sh_baho, r.grade, false)) return false;
+                return true;
+            });
+
+            renderSHTable(shFilteredData);
+            $('#sh-total-info').text('Jami: ' + shAllData.length + ' | Ko\'rsatilmoqda: ' + shFilteredData.length).show();
+        }
+
+        function renderSHTable(data) {
+            var html = '';
+            for (var i = 0; i < data.length; i++) {
+                var r = data[i];
+                html += '<tr class="journal-row">';
+                html += '<td class="td-num">' + (i + 1) + '</td>';
+                html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.attempt_id) + '</span></td>';
+                html += '<td><span class="badge badge-indigo">' + esc(r.student_id) + '</span></td>';
+                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.student_name) + '</span></td>';
+                html += '<td><span class="text-cell text-emerald">' + esc(r.faculty) + '</span></td>';
+                html += '<td><span class="text-cell text-cyan">' + esc(r.direction) + '</span></td>';
+                html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
+                html += '<td><span class="badge" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;">' + esc(r.fan_id) + '</span></td>';
+                html += '<td><span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span></td>';
+                html += '<td style="text-align:center;">';
+                if (r.quiz_type && r.quiz_type.indexOf('OSKI') !== -1) {
+                    html += '<span class="badge badge-oski">' + esc(r.quiz_type) + '</span>';
+                } else {
+                    html += '<span class="badge badge-grade">' + esc(r.quiz_type) + '</span>';
+                }
+                html += '</td>';
+                html += '<td><span class="text-cell" style="font-size:11px;">' + esc(r.attempt_name) + '</span></td>';
+                html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
+                html += '<td style="text-align:center;"><span class="badge badge-grade">' + esc(r.grade) + '</span></td>';
+                html += '<td style="font-size:11px;white-space:nowrap;color:#475569;">' + esc(r.date_start) + '</td>';
+                html += '<td style="font-size:11px;white-space:nowrap;color:#475569;">' + esc(r.date_finish) + '</td>';
+                html += '</tr>';
+            }
+            $('#sh-table-body').html(html);
+        }
+
+        function downloadSHExcel() {
+            if (!shFilteredData || shFilteredData.length === 0) return;
+
+            var headers = ['#', 'Attempt ID', 'Student ID', 'FISH', 'Fakultet', 'Yo\'nalish', 'Semestr', 'Fan ID', 'Fan nomi', 'Quiz turi', 'Urinish nomi', 'Shakl', 'Baho', 'Boshlanish', 'Tugash'];
+            var rows = [headers];
+            shFilteredData.forEach(function(r, i) {
+                rows.push([
+                    i + 1, r.attempt_id, r.student_id, r.student_name, r.faculty, r.direction,
+                    r.semester, r.fan_id, r.fan_name, r.quiz_type, r.attempt_name, r.shakl,
+                    r.grade, r.date_start, r.date_finish
+                ]);
+            });
+
+            var csvContent = rows.map(function(row) {
+                return row.map(function(cell) {
+                    var s = (cell === null || cell === undefined) ? '' : String(cell);
+                    return '"' + s.replace(/"/g, '""') + '"';
+                }).join(',');
+            }).join('\n');
+
+            var BOM = '\uFEFF';
+            var blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+            var link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'saqlangan_malumotlar_' + new Date().toISOString().slice(0, 10) + '.csv';
+            link.click();
+        }
     </script>
 
     <style>

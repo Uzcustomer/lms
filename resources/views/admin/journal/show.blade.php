@@ -2923,8 +2923,15 @@
                         grade: g.grade
                     })
                 })
-                .then(r => r.json())
-                .then(data => ({ data, gradeInfo: g }))
+                .then(r => {
+                    if (!r.ok) {
+                        return r.text().then(text => {
+                            try { return { data: JSON.parse(text), gradeInfo: g }; }
+                            catch(e) { return { error: new Error('HTTP ' + r.status), gradeInfo: g }; }
+                        });
+                    }
+                    return r.json().then(data => ({ data, gradeInfo: g }));
+                })
                 .catch(err => ({ error: err, gradeInfo: g }));
             });
 
@@ -2969,8 +2976,11 @@
                     notifDiv.style.background = '#10b981';
                     notifDiv.textContent = `${successCount} ta baho muvaffaqiyatli saqlandi!`;
                 } else {
+                    // Birinchi xato xabarini ko'rsatish
+                    const firstError = results.find(r => r.error || !r.data?.success);
+                    const errMsg = firstError?.data?.message || firstError?.error?.message || 'Noma\'lum xato';
                     notifDiv.style.background = '#ef4444';
-                    notifDiv.textContent = `${successCount} ta saqlandi, ${errorCount} ta xatolik!`;
+                    notifDiv.textContent = `${errorCount} ta xatolik: ${errMsg}`;
                 }
                 document.body.appendChild(notifDiv);
                 setTimeout(() => notifDiv.remove(), 4000);

@@ -137,8 +137,62 @@
                                         <th><select class="col-filter" data-col="fan_name"><option value="">Barchasi</option></select></th>
                                         <th><select class="col-filter" data-col="yn_turi"><option value="">Barchasi</option></select></th>
                                         <th><select class="col-filter" data-col="shakl"><option value="">Barchasi</option></select></th>
-                                        <th></th>
-                                        <th></th>
+                                        <th>
+                                            <div class="adv-filter-wrap">
+                                                <button type="button" class="adv-filter-btn" onclick="toggleAdvFilter('baho')">
+                                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                                                    <span id="baho-filter-label">Baho</span>
+                                                </button>
+                                                <div class="adv-filter-popup" id="baho-popup">
+                                                    <div class="adv-filter-title">Baho filtri</div>
+                                                    <select id="baho-op" class="adv-filter-select" onchange="toggleBahoSecond()">
+                                                        <option value="">Barchasi</option>
+                                                        <option value="eq">Teng (=)</option>
+                                                        <option value="gt">Dan katta (&gt;)</option>
+                                                        <option value="gte">Dan katta yoki teng (&ge;)</option>
+                                                        <option value="lt">Dan kichik (&lt;)</option>
+                                                        <option value="lte">Dan kichik yoki teng (&le;)</option>
+                                                        <option value="between">Orasida</option>
+                                                    </select>
+                                                    <div class="adv-filter-inputs">
+                                                        <input type="number" id="baho-val1" class="adv-filter-input" placeholder="Qiymat" step="0.1">
+                                                        <input type="number" id="baho-val2" class="adv-filter-input" placeholder="gacha" step="0.1" style="display:none;">
+                                                    </div>
+                                                    <div class="adv-filter-actions">
+                                                        <button type="button" class="adv-btn-clear" onclick="clearAdvFilter('baho')">Tozalash</button>
+                                                        <button type="button" class="adv-btn-apply" onclick="applyAdvFilter('baho')">Qo'llash</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th>
+                                            <div class="adv-filter-wrap">
+                                                <button type="button" class="adv-filter-btn" onclick="toggleAdvFilter('sana')">
+                                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                                                    <span id="sana-filter-label">Sana</span>
+                                                </button>
+                                                <div class="adv-filter-popup" id="sana-popup">
+                                                    <div class="adv-filter-title">Sana filtri</div>
+                                                    <select id="sana-op" class="adv-filter-select" onchange="toggleSanaSecond()">
+                                                        <option value="">Barchasi</option>
+                                                        <option value="eq">Teng (=)</option>
+                                                        <option value="gt">Dan keyin (&gt;)</option>
+                                                        <option value="gte">Dan keyin yoki teng (&ge;)</option>
+                                                        <option value="lt">Dan oldin (&lt;)</option>
+                                                        <option value="lte">Dan oldin yoki teng (&le;)</option>
+                                                        <option value="between">Orasida</option>
+                                                    </select>
+                                                    <div class="adv-filter-inputs">
+                                                        <input type="date" id="sana-val1" class="adv-filter-input">
+                                                        <input type="date" id="sana-val2" class="adv-filter-input" style="display:none;">
+                                                    </div>
+                                                    <div class="adv-filter-actions">
+                                                        <button type="button" class="adv-btn-clear" onclick="clearAdvFilter('sana')">Tozalash</button>
+                                                        <button type="button" class="adv-btn-apply" onclick="applyAdvFilter('sana')">Qo'llash</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -258,6 +312,10 @@
                         if (rv !== fv) return false;
                     }
                 }
+                // Baho advanced filtri
+                if (!matchAdvFilter(advFilters.baho, r.grade, false)) return false;
+                // Sana advanced filtri
+                if (!matchAdvFilter(advFilters.sana, r.date, true)) return false;
                 return true;
             });
 
@@ -265,6 +323,112 @@
             $('#total-info').text('Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length).show();
             updateButtons();
         }
+
+        // ========== BAHO / SANA ADVANCED FILTRLAR ==========
+        var advFilters = { baho: null, sana: null };
+
+        function toggleAdvFilter(type) {
+            var popup = document.getElementById(type + '-popup');
+            var isVisible = popup.style.display === 'block';
+            // Barcha popuplarni yop
+            document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
+            if (!isVisible) popup.style.display = 'block';
+        }
+
+        function toggleBahoSecond() {
+            var op = $('#baho-op').val();
+            $('#baho-val2').toggle(op === 'between');
+            if (op !== 'between') $('#baho-val2').val('');
+        }
+
+        function toggleSanaSecond() {
+            var op = $('#sana-op').val();
+            $('#sana-val2').toggle(op === 'between');
+            if (op !== 'between') $('#sana-val2').val('');
+        }
+
+        function applyAdvFilter(type) {
+            var op = $('#' + type + '-op').val();
+            var val1 = $('#' + type + '-val1').val();
+            var val2 = $('#' + type + '-val2').val();
+
+            if (!op || !val1) {
+                advFilters[type] = null;
+                $('#' + type + '-filter-label').text(type === 'baho' ? 'Baho' : 'Sana').removeClass('adv-active-label');
+                $('.adv-filter-btn').removeClass('adv-active');
+            } else {
+                advFilters[type] = { op: op, val1: val1, val2: val2 };
+                // Label yangilash
+                var opLabels = { eq: '=', gt: '>', gte: '≥', lt: '<', lte: '≤', between: '↔' };
+                var labelText = opLabels[op] + ' ' + val1;
+                if (op === 'between' && val2) labelText = val1 + ' — ' + val2;
+                $('#' + type + '-filter-label').text(labelText).addClass('adv-active-label');
+                $('#' + type + '-popup').closest('.adv-filter-wrap').find('.adv-filter-btn').addClass('adv-active');
+            }
+
+            document.getElementById(type + '-popup').style.display = 'none';
+            applyColumnFilters();
+        }
+
+        function clearAdvFilter(type) {
+            $('#' + type + '-op').val('');
+            $('#' + type + '-val1').val('');
+            $('#' + type + '-val2').val('').hide();
+            advFilters[type] = null;
+            $('#' + type + '-filter-label').text(type === 'baho' ? 'Baho' : 'Sana').removeClass('adv-active-label');
+            $('#' + type + '-popup').closest('.adv-filter-wrap').find('.adv-filter-btn').removeClass('adv-active');
+            document.getElementById(type + '-popup').style.display = 'none';
+            applyColumnFilters();
+        }
+
+        function matchAdvFilter(filter, cellValue, isDate) {
+            if (!filter) return true;
+            var op = filter.op;
+            var v1, v2, cv;
+
+            if (isDate) {
+                // Sana filtri: date qiymatlarni solishtirish
+                cv = parseDateValue(cellValue);
+                v1 = filter.val1; // yyyy-mm-dd formatda keladi
+                v2 = filter.val2;
+                if (!cv) return false;
+            } else {
+                // Baho filtri: raqam sifatida solishtirish
+                cv = parseFloat(cellValue);
+                v1 = parseFloat(filter.val1);
+                v2 = parseFloat(filter.val2);
+                if (isNaN(cv) || isNaN(v1)) return false;
+            }
+
+            switch (op) {
+                case 'eq':  return isDate ? cv === v1 : cv === v1;
+                case 'gt':  return cv > v1;
+                case 'gte': return cv >= v1;
+                case 'lt':  return cv < v1;
+                case 'lte': return cv <= v1;
+                case 'between':
+                    if (isDate) return v2 ? (cv >= v1 && cv <= v2) : cv >= v1;
+                    return !isNaN(v2) ? (cv >= v1 && cv <= v2) : cv >= v1;
+            }
+            return true;
+        }
+
+        function parseDateValue(dateStr) {
+            if (!dateStr) return null;
+            // "2025-01-15" yoki "15.01.2025" formatlarini yyyy-mm-dd ga o'tkazish
+            dateStr = dateStr.trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr.substring(0, 10);
+            var parts = dateStr.split('.');
+            if (parts.length === 3) return parts[2] + '-' + parts[1] + '-' + parts[0];
+            return dateStr;
+        }
+
+        // Popupdan tashqari bosilganda yopish
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.adv-filter-wrap')) {
+                document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
+            }
+        });
 
         // ========== JADVAL RENDERI ==========
         function renderTable(data) {
@@ -566,6 +730,26 @@
         .col-filter-input { width: 100%; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; font-weight: 500; color: #334155; background: #fff; outline: none; height: 26px; }
         .col-filter-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .col-filter-input::placeholder { color: #94a3b8; }
+
+        /* === ADVANCED FILTER (Baho, Sana) === */
+        .adv-filter-wrap { position: relative; }
+        .adv-filter-btn { display: inline-flex; align-items: center; gap: 4px; width: 100%; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; font-weight: 500; color: #64748b; background: #fff; cursor: pointer; outline: none; height: 26px; transition: all 0.15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .adv-filter-btn:hover { border-color: #2b5ea7; background: #f0f4ff; }
+        .adv-filter-btn.adv-active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 700; }
+        .adv-active-label { color: #1d4ed8 !important; }
+        .adv-filter-popup { display: none; position: absolute; top: 30px; right: 0; z-index: 100; min-width: 200px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); padding: 10px; }
+        .adv-filter-title { font-size: 11px; font-weight: 700; color: #1e293b; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.04em; }
+        .adv-filter-select { width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; font-weight: 500; color: #334155; background: #f8fafc; cursor: pointer; outline: none; margin-bottom: 6px; }
+        .adv-filter-select:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
+        .adv-filter-inputs { display: flex; gap: 4px; margin-bottom: 8px; }
+        .adv-filter-input { flex: 1; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; font-weight: 500; color: #334155; background: #fff; outline: none; }
+        .adv-filter-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
+        .adv-filter-input::placeholder { color: #94a3b8; }
+        .adv-filter-actions { display: flex; gap: 6px; justify-content: flex-end; }
+        .adv-btn-clear { padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 10px; font-weight: 600; color: #64748b; background: #f8fafc; cursor: pointer; transition: all 0.15s; }
+        .adv-btn-clear:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+        .adv-btn-apply { padding: 4px 10px; border: none; border-radius: 6px; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #2563eb, #3b82f6); cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 4px rgba(37,99,235,0.3); }
+        .adv-btn-apply:hover { background: linear-gradient(135deg, #1d4ed8, #2563eb); transform: translateY(-1px); }
 
         .journal-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
         .journal-table tbody tr:nth-child(even) { background: #f8fafc; }

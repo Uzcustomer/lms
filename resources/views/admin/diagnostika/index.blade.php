@@ -52,13 +52,13 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Talaba</label>
                             <input type="text" id="student_name" placeholder="Ism yoki ID" class="filter-input">
                         </div>
-                        <div class="filter-item" style="max-width:140px;">
+                        <div class="filter-item" style="max-width:150px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Sanadan</label>
-                            <input type="date" id="date_from" class="filter-input">
+                            <input type="text" id="date_from" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
                         </div>
-                        <div class="filter-item" style="max-width:140px;">
+                        <div class="filter-item" style="max-width:150px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Sanagacha</label>
-                            <input type="date" id="date_to" class="filter-input">
+                            <input type="text" id="date_to" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
                         </div>
                         <div class="filter-item filter-buttons">
                             <label class="filter-label">&nbsp;</label>
@@ -179,6 +179,8 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <link href="/css/scroll-calendar.css" rel="stylesheet" />
+    <script src="/js/scroll-calendar.js"></script>
 
     <script>
         var csrfToken = '{{ csrf_token() }}';
@@ -369,6 +371,10 @@
         }
 
         $(document).ready(function() {
+            // Scroll kalendarlarni yaratish
+            new ScrollCalendar('date_from');
+            new ScrollCalendar('date_to');
+
             // Select2
             $('.select2').each(function() {
                 $(this).select2({
@@ -525,6 +531,10 @@
         .filter-input { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.78rem; font-weight: 500; color: #1e293b; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; width: 100%; height: 36px; }
         .filter-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
         .filter-input:focus { outline: none; border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
+        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 30px 0 10px; font-size: 0.78rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; outline: none; }
+        .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
+        .date-input::placeholder { color: #94a3b8; font-weight: 400; }
 
         /* === ACTION BAR === */
         .action-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; gap: 8px; }

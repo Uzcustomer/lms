@@ -2938,27 +2938,26 @@
             Promise.all(promises).then(results => {
                 let successCount = 0;
                 let errorCount = 0;
+                let firstErrMsg = '';
 
                 results.forEach(({ data, error, gradeInfo }) => {
                     const cellDiv = gradeInfo.cellDiv;
                     const key = getGradeKey(cellDiv);
 
                     if (error || !data?.success) {
-                        // Xatolik — sariq qoladi
                         errorCount++;
-                        const msg = data?.message || 'Saqlanmadi';
+                        const msg = data?.message || error?.message || 'Saqlanmadi';
+                        if (!firstErrMsg) firstErrMsg = msg;
                         cellDiv.title = 'Xatolik: ' + msg;
-                        cellDiv.style.background = '#fecaca'; // Qizil fon
+                        cellDiv.style.background = '#fecaca';
+                        console.error('Grade save error:', msg, gradeInfo);
                     } else {
-                        // Muvaffaqiyat
                         successCount++;
                         const gradeVal = Math.round(data.grade);
                         const color = gradeVal < 60 ? 'color:#dc2626' : 'color:#111827';
                         cellDiv.innerHTML = `<span class="font-medium" style="${color}">${gradeVal}</span>`;
-                        cellDiv.style.background = '#ecfdf5'; // Yashil fon
-                        // Pending dan o'chirish
+                        cellDiv.style.background = '#ecfdf5';
                         delete pendingOpenedGrades[key];
-                        // Cell ni non-editable qilish
                         cellDiv.classList.remove('grade-cell-opened');
                         cellDiv.onclick = null;
                     }
@@ -2966,24 +2965,34 @@
 
                 updatePendingPanel();
                 btn.disabled = false;
-                btn.textContent = 'Saqlash';
                 btn.style.opacity = '1';
 
-                // Notification
-                const notifDiv = document.createElement('div');
-                notifDiv.className = 'fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-lg text-white font-semibold';
                 if (errorCount === 0) {
-                    notifDiv.style.background = '#10b981';
+                    btn.textContent = 'Saqlash';
+                    // Muvaffaqiyat — panelni yashirish
+                    const notifDiv = document.createElement('div');
+                    notifDiv.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:99999; background:#10b981; color:#fff; padding:12px 24px; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:14px; font-weight:600;';
                     notifDiv.textContent = `${successCount} ta baho muvaffaqiyatli saqlandi!`;
+                    document.body.appendChild(notifDiv);
+                    setTimeout(() => notifDiv.remove(), 4000);
                 } else {
-                    // Birinchi xato xabarini ko'rsatish
-                    const firstError = results.find(r => r.error || !r.data?.success);
-                    const errMsg = firstError?.data?.message || firstError?.error?.message || 'Noma\'lum xato';
-                    notifDiv.style.background = '#ef4444';
-                    notifDiv.textContent = `${errorCount} ta xatolik: ${errMsg}`;
+                    // Xatolik — panelda ko'rsatish
+                    btn.textContent = 'Qayta saqlash';
+                    const panel = document.getElementById('pending-save-panel');
+                    if (panel) {
+                        panel.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                        const infoEl = panel.querySelector('div > span');
+                        if (infoEl) infoEl.innerHTML = `<b style="font-size:13px;">XATOLIK: ${firstErrMsg}</b>`;
+                    }
+                    // Alert ham ko'rsatish — aniq ko'rinishi uchun
+                    alert('Saqlashda xatolik:\n\n' + firstErrMsg);
                 }
-                document.body.appendChild(notifDiv);
-                setTimeout(() => notifDiv.remove(), 4000);
+            }).catch(err => {
+                console.error('Promise.all error:', err);
+                btn.disabled = false;
+                btn.textContent = 'Saqlash';
+                btn.style.opacity = '1';
+                alert('Saqlashda kutilmagan xatolik: ' + err.message);
             });
         }
 

@@ -918,7 +918,7 @@
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
                                                         <button type="button" onclick="openLessonModal('{{ $dDateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Dars ochish">!</button>
                                                     </div>
-                                                @elseif($dOpeningInfo && $isFirstOfDate)
+                                                @elseif($dOpeningInfo)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
                                                         <button type="button" onclick="showOpeningInfo({!! htmlspecialchars(json_encode([
                                                             'date' => format_date($col['date']),
@@ -1080,7 +1080,7 @@
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"
                                                                  data-student="{{ $student->hemis_id }}" data-date="{{ $col['date'] }}"
                                                                  data-pair="{{ $col['pair'] }}" data-subject="{{ $subjectId }}"
-                                                                 data-semester="{{ $semesterCode }}" data-group="{{ $groupId }}"
+                                                                 data-semester="{{ $semesterCode }}" data-group="{{ $group->group_hemis_id }}"
                                                                  onclick="startEditOpened(this)"
                                                                  title="Dars ochilgan — baho kiriting" style="background: #f0fdf4;">
                                                                 <span class="text-green-400">-</span>

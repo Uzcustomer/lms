@@ -2684,9 +2684,16 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Bu katak uchun baho allaqachon mavjud.'], 409);
         }
 
+        // Talabani topish (student_id uchun)
+        $student = DB::table('students')->where('hemis_id', $request->student_hemis_id)->first();
+        if (!$student) {
+            return response()->json(['success' => false, 'message' => "Talaba topilmadi (hemis_id={$request->student_hemis_id})"], 404);
+        }
+
         // Yangi baho yaratish
         DB::table('student_grades')->insert([
             'hemis_id' => 88888888,
+            'student_id' => $student->id,
             'student_hemis_id' => $request->student_hemis_id,
             'subject_id' => $request->subject_id,
             'subject_name' => $schedule->subject_name,

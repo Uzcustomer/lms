@@ -149,7 +149,15 @@ class QuizResultController extends Controller
             $student = $studentLookup[$result->student_id] ?? null;
             if (!$student) continue;
 
-            $kurs = $student->semester_code ? ceil($student->semester_code / 2) : null;
+            // Semestrni Moodle formatidan aniqlash: "3-SEM" -> 3, "5-sem" -> 5
+            $semNum = null;
+            $semLabel = $result->semester ?: $student->semester_name;
+            if ($semLabel && preg_match('/(\d+)/', $semLabel, $m)) {
+                $semNum = (int) $m[1];
+            }
+
+            // Kursni semestr raqamidan hisoblash: 1,2->1-kurs, 3,4->2-kurs, ...
+            $kurs = $semNum ? (int) ceil($semNum / 2) : null;
 
             // YN turi aniqlash
             $ynTuri = '-';
@@ -168,7 +176,7 @@ class QuizResultController extends Controller
                 'faculty' => $student->department_name,
                 'direction' => $student->specialty_name,
                 'kurs' => $kurs ? $kurs . '-kurs' : '-',
-                'semester' => $student->semester_name,
+                'semester' => $semNum ? $semNum . '-sem' : ($semLabel ?: '-'),
                 'group' => $student->group_name,
                 'fan_name' => $result->fan_name,
                 'yn_turi' => $ynTuri,
@@ -285,6 +293,7 @@ class QuizResultController extends Controller
 
     /**
      * Diagnostika — dry-run: qaysi natijalar o'tadi, qaysilari xato beradi tekshirish.
+     * Faqat 1-urinish natijalar hisobga olinadi.
      * student_grades ga hech narsa yozilmaydi.
      */
     public function diagnostika(Request $request)
@@ -298,6 +307,7 @@ class QuizResultController extends Controller
 
         $ok = [];
         $errors = [];
+        $skipped = 0;
         $duplicateTracker = [];
 
         foreach ($results as $result) {
@@ -310,6 +320,14 @@ class QuizResultController extends Controller
                 'fan_name' => $result->fan_name,
                 'grade' => $result->grade,
             ];
+
+            // Faqat 1-urinish hisobga olinadi
+            if ($result->shakl !== '1-urinish') {
+                $row['error'] = "1-urinish emas ({$result->shakl}) — o'tkazib yuborildi";
+                $errors[] = $row;
+                $skipped++;
+                continue;
+            }
 
             // Baho validatsiyasi
             if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
@@ -372,6 +390,7 @@ class QuizResultController extends Controller
         return response()->json([
             'ok_count' => count($ok),
             'error_count' => count($errors),
+            'skipped_count' => $skipped,
             'ok' => $ok,
             'errors' => $errors,
         ]);
@@ -402,6 +421,13 @@ class QuizResultController extends Controller
                 'fan_name' => $result->fan_name,
                 'grade' => $result->grade,
             ];
+
+            // Faqat 1-urinish yuklanadi
+            if ($result->shakl !== '1-urinish') {
+                $rowInfo['error'] = "Faqat 1-urinish yuklanadi (hozirgi: {$result->shakl})";
+                $errors[] = $rowInfo;
+                continue;
+            }
 
             if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
                 $rowInfo['error'] = "Baho noto'g'ri: {$result->grade}";

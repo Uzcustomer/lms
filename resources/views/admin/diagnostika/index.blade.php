@@ -581,12 +581,13 @@
                         diagnostikaRan = true;
 
                         var cls, text;
+                        var skippedText = data.skipped_count > 0 ? ' (' + data.skipped_count + ' ta 1-urinish emas — o\'tkazib yuborildi)' : '';
                         if (data.error_count === 0) {
-                            cls = 'diag-success'; text = 'Hammasi tayyor! ' + data.ok_count + ' ta natija muammosiz yuklanishi mumkin.';
+                            cls = 'diag-success'; text = 'Hammasi tayyor! ' + data.ok_count + ' ta natija (1-urinish) muammosiz yuklanishi mumkin.' + skippedText;
                         } else if (data.ok_count === 0) {
-                            cls = 'diag-error'; text = 'Hech bir natija yuklanmaydi. ' + data.error_count + ' ta xato topildi.';
+                            cls = 'diag-error'; text = 'Hech bir natija yuklanmaydi. ' + data.error_count + ' ta xato topildi.' + skippedText;
                         } else {
-                            cls = 'diag-warning'; text = data.ok_count + ' ta tayyor, ' + data.error_count + ' ta xato.';
+                            cls = 'diag-warning'; text = data.ok_count + ' ta tayyor (1-urinish), ' + data.error_count + ' ta xato.' + skippedText;
                         }
                         $('#diagnostika-summary').attr('class', 'diag-msg ' + cls).html('<strong>' + text + '</strong>').show();
 

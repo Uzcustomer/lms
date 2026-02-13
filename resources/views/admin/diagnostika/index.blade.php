@@ -663,7 +663,13 @@
                         }
                         $('#upload-result').html(html).show();
                         btn.hide();
-                        $('#diagnostika-panel').hide();
+                        // Diagnostika panelda summary va xatolarni yashirish, lekin tayyor natijalar jadvalini ko'rsatib qoldirish
+                        $('#diagnostika-summary').hide();
+                        $('#diagnostika-errors').hide();
+                        // OK jadvalini "Yuklangan natijalar" deb yangilash
+                        if ($('#diagnostika-ok').is(':visible')) {
+                            $('#diagnostika-ok .diag-msg strong').first().text('Sistemaga yuklangan natijalar:');
+                        }
 
                         if (data.success_count > 0) {
                             $('.row-checkbox:checked').each(function() {

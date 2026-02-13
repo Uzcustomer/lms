@@ -12,18 +12,13 @@ class ScheduleImportService
 {
     public function importBetween(Carbon $from, Carbon $to): void
     {
-
-        $message = "🟢 Jadval importi boshlandi: Boshlanish sanasi: {$from->toDateString()} • Tugash sanasi:   {$to->toDateString()}";
+        $message = "🟢 Jadval importi boshlandi: {$from->toDateString()} — {$to->toDateString()}";
         $this->notifyTelegram($message);
         $token = config('services.hemis.token');
         $limit = 50;
         $page = 1;
-
-//        Schedule::whereBetween('lesson_date', [$from, $to])->delete();
-        Schedule::whereBetween('lesson_date', [
-            $from,
-            $to->copy()->endOfDay()
-        ])->delete();
+        $importedHemisIds = [];
+        $apiFailed = false;
 
         do {
             $response = Http::withoutVerifying()
@@ -32,14 +27,14 @@ class ScheduleImportService
                 ->get('https://student.ttatf.uz/rest/v1/data/schedule-list', [
                     'lesson_date_from' => $from->timestamp,
                     'lesson_date_to' => $to->copy()->endOfDay()->timestamp,
-//                    'lesson_date_to' => $to->timestamp,
                     'limit' => $limit,
                     'page' => $page,
                 ]);
 
             if (!$response->successful()) {
                 Log::channel('import_schedule')->error('HEMIS API request failed', ['page' => $page, 'status' => $response->status()]);
-                $this->notifyTelegram("❌ API request failed on page {$page} (status {$response->status()})");
+                $this->notifyTelegram("❌ API xatolik sahifa {$page} (status {$response->status()}) — mavjud jadvallar saqlab qolindi");
+                $apiFailed = true;
                 break;
             }
 
@@ -52,7 +47,6 @@ class ScheduleImportService
                 $startTime = microtime(true);
             }
 
-
             foreach ($items as $item) {
                 $schedule = Schedule::withTrashed()->firstOrNew(['schedule_hemis_id' => $item['id']]);
                 $schedule->fill($this->map($item));
@@ -60,25 +54,32 @@ class ScheduleImportService
                     $schedule->restore();
                 }
                 $schedule->save();
+                $importedHemisIds[] = $item['id'];
             }
 
             if ($page % 10 === 0 || $page === $pages) {
                 $elapsed = microtime(true) - $startTime;
-                $processed = $page;
-                $remaining = max(0, $pages - $processed);
-                $eta = round(($elapsed / $processed) * $remaining);
-
-                $this->notifyTelegram(
-                    "⌛ {$remaining} sahifa qoldi, taxminan {$eta} soniya qolmoqda"
-                );
+                $remaining = max(0, $pages - $page);
+                $eta = round(($elapsed / $page) * $remaining);
+                $this->notifyTelegram("⌛ {$remaining} sahifa qoldi, ~{$eta} soniya");
             }
-
 
             $page++;
             sleep(1);
         } while ($page <= $pages);
 
-        $this->notifyTelegram("✅ Jadval importi tugadi ({$from->toDateString()} — {$to->toDateString()})");
+        // Faqat barcha sahifalar muvaffaqiyatli import qilingandan keyin — HEMIS'da yo'q yozuvlarni o'chiramiz
+        if (!$apiFailed && count($importedHemisIds) > 0) {
+            $deleted = Schedule::whereBetween('lesson_date', [$from, $to->copy()->endOfDay()])
+                ->whereNotIn('schedule_hemis_id', $importedHemisIds)
+                ->delete();
+            if ($deleted > 0) {
+                $this->notifyTelegram("🗑 {$deleted} ta eski jadval o'chirildi (HEMIS'da topilmadi)");
+            }
+        }
+
+        $count = count($importedHemisIds);
+        $this->notifyTelegram("✅ Jadval importi tugadi ({$from->toDateString()} — {$to->toDateString()}) — {$count} ta yozuv");
     }
 
     /**
@@ -101,12 +102,8 @@ class ScheduleImportService
         $token = config('services.hemis.token');
         $limit = 50;
         $page = 1;
-
-        // Joriy o'quv yili bo'yicha soft-delete
-        $deleted = Schedule::where('education_year_code', $educationYearCode)->delete();
-        $this->notifyTelegram("🗑 {$deleted} ta eski jadval o'chirildi (education_year: {$educationYearCode})");
-
-        $totalImported = 0;
+        $importedHemisIds = [];
+        $apiFailed = false;
 
         do {
             $response = Http::withoutVerifying()
@@ -120,7 +117,8 @@ class ScheduleImportService
 
             if (!$response->successful()) {
                 Log::channel('import_schedule')->error('HEMIS API request failed', ['page' => $page, 'status' => $response->status()]);
-                $this->notifyTelegram("❌ API xatolik sahifa {$page} (status {$response->status()})");
+                $this->notifyTelegram("❌ API xatolik sahifa {$page} (status {$response->status()}) — mavjud jadvallar saqlab qolindi");
+                $apiFailed = true;
                 break;
             }
 
@@ -140,7 +138,7 @@ class ScheduleImportService
                     $schedule->restore();
                 }
                 $schedule->save();
-                $totalImported++;
+                $importedHemisIds[] = $item['id'];
             }
 
             if ($page % 10 === 0 || $page === $pages) {
@@ -154,6 +152,18 @@ class ScheduleImportService
             sleep(1);
         } while ($page <= $pages);
 
+        $totalImported = count($importedHemisIds);
+
+        // Faqat barcha sahifalar muvaffaqiyatli bo'lganda — HEMIS'da yo'q yozuvlarni soft-delete
+        if (!$apiFailed && $totalImported > 0) {
+            $deleted = Schedule::where('education_year_code', $educationYearCode)
+                ->whereNotIn('schedule_hemis_id', $importedHemisIds)
+                ->delete();
+            if ($deleted > 0) {
+                $this->notifyTelegram("🗑 {$deleted} ta eski jadval o'chirildi (HEMIS'da topilmadi)");
+            }
+        }
+
         $this->notifyTelegram("✅ Cron: Jadval importi tugadi ({$educationYearCode}) — {$totalImported} ta yozuv");
     }
 
@@ -165,12 +175,8 @@ class ScheduleImportService
         $token = config('services.hemis.token');
         $limit = 200;
         $page = 1;
-        $totalImported = 0;
-
-        // Faqat shu guruh+fan kombinatsiyasini soft-delete
-        Schedule::where('group_id', $groupId)
-            ->where('subject_id', $subjectId)
-            ->delete();
+        $importedHemisIds = [];
+        $apiFailed = false;
 
         do {
             $response = Http::withoutVerifying()
@@ -190,6 +196,7 @@ class ScheduleImportService
                     'page' => $page,
                     'status' => $response->status(),
                 ]);
+                $apiFailed = true;
                 break;
             }
 
@@ -204,7 +211,7 @@ class ScheduleImportService
                     $schedule->restore();
                 }
                 $schedule->save();
-                $totalImported++;
+                $importedHemisIds[] = $item['id'];
             }
 
             $page++;
@@ -213,7 +220,17 @@ class ScheduleImportService
             }
         } while ($page <= $pages);
 
-        return ['count' => $totalImported];
+        $totalImported = count($importedHemisIds);
+
+        // Faqat muvaffaqiyatli bo'lganda — HEMIS'da yo'q yozuvlarni soft-delete
+        if (!$apiFailed && $totalImported > 0) {
+            Schedule::where('group_id', $groupId)
+                ->where('subject_id', $subjectId)
+                ->whereNotIn('schedule_hemis_id', $importedHemisIds)
+                ->delete();
+        }
+
+        return ['count' => $totalImported, 'failed' => $apiFailed];
     }
 
     protected function map(array $d): array

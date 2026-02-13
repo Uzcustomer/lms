@@ -971,6 +971,13 @@ class JournalController extends Controller
                 "Jurnal orqali jadval sinxronizatsiyasi: {$userName} (guruh: {$data['group_id']}, fan: {$data['subject_id']}) — {$result['count']} ta yozuv"
             );
 
+            if ($result['failed'] ?? false) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "HEMIS API xatolik berdi. Mavjud jadvallar saqlab qolindi. Keyinroq urinib ko'ring.",
+                ], 502);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => "Jadval yangilandi. {$result['count']} ta yozuv sinxronlandi.",

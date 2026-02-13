@@ -225,10 +225,13 @@ class ReportController extends Controller
             ->whereIn('subject_id', $validSubjectIds)
             ->whereIn('semester_code', $validSemesterCodes)
             ->whereNotIn('training_type_code', $excludedCodes)
-            ->whereNotNull('grade')
-            ->where('grade', '>', 0)
+            ->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->whereNotNull('grade')->where('grade', '>', 0);
+                })->orWhereNotNull('retake_grade');
+            })
             ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'grade', 'lesson_date', 'lesson_pair_code');
+            ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'grade', 'lesson_date', 'lesson_pair_code', 'retake_grade', 'status', 'reason');
 
         // Sana oralig'i bo'yicha baholarni filtrlash
         if ($dateFrom) {
@@ -263,9 +266,12 @@ class ReportController extends Controller
             $datePairKey = $dateKey . '_' . $g->lesson_pair_code;
             $columns[$comboKey][$datePairKey] = true;
 
-            // Baholarni kun bo'yicha guruhlash
+            // Baholarni kun bo'yicha guruhlash (retake baholarini hisobga olish)
             $gradeKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $dateKey;
-            $gradesByDay[$gradeKey][] = $g->grade;
+            $effectiveGrade = $this->getEffectiveGradeForJn($g);
+            if ($effectiveGrade !== null) {
+                $gradesByDay[$gradeKey][] = $effectiveGrade;
+            }
 
             // Student-subject ma'lumotlarini saqlash
             $ssKey = $g->student_hemis_id . '|' . $g->subject_id;
@@ -419,6 +425,39 @@ class ReportController extends Controller
             'current_page' => (int) $page,
             'last_page' => ceil($total / $perPage),
         ]);
+    }
+
+    /**
+     * JN hisobot uchun samarali (effective) bahoni aniqlash.
+     * Retake holatida retake_grade, aks holda grade ishlatiladi.
+     * Jurnal bilan bir xil mantiq (JournalController va StudentGradeService ga mos).
+     */
+    private function getEffectiveGradeForJn($row): ?float
+    {
+        if (($row->status ?? null) === 'pending') {
+            return null;
+        }
+
+        if (($row->reason ?? null) === 'absent' && $row->grade === null) {
+            return $row->retake_grade !== null ? (float) $row->retake_grade : null;
+        }
+
+        if (($row->status ?? null) === 'closed' && ($row->reason ?? null) === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+            return null;
+        }
+
+        if (in_array($row->status ?? null, ['recorded', 'closed'], true)) {
+            if ($row->retake_grade !== null) {
+                return (float) $row->retake_grade;
+            }
+            return $row->grade !== null ? (float) $row->grade : null;
+        }
+
+        if (($row->status ?? null) === 'retake') {
+            return $row->retake_grade !== null ? (float) $row->retake_grade : null;
+        }
+
+        return $row->grade !== null && $row->grade > 0 ? (float) $row->grade : null;
     }
 
     /**

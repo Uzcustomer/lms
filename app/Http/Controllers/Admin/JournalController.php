@@ -2605,23 +2605,28 @@ class JournalController extends Controller
             'lesson_date' => 'required|date',
             'lesson_pair_code' => 'required',
             'grade' => 'required|numeric|min:0|max:100',
+            'group_hemis_id' => 'required',
         ]);
 
         // Tekshirish: bu kun uchun faol dars ochilishi bormi
         $groupHemisId = $request->group_hemis_id;
+        $lessonDate = \Carbon\Carbon::parse($request->lesson_date)->format('Y-m-d');
         $opening = LessonOpening::where('group_hemis_id', $groupHemisId)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
-            ->where('lesson_date', $request->lesson_date)
+            ->where('lesson_date', $lessonDate)
             ->where('status', 'active')
             ->first();
 
-        if (!$opening || !$opening->isActive()) {
-            return response()->json(['success' => false, 'message' => 'Bu kun uchun dars ochilmagan yoki muddati tugagan'], 403);
+        if (!$opening) {
+            return response()->json(['success' => false, 'message' => "Dars ochilmagan (group={$groupHemisId}, date={$lessonDate})"], 403);
+        }
+        if (!$opening->isActive()) {
+            return response()->json(['success' => false, 'message' => 'Dars ochilish muddati tugagan'], 403);
         }
 
         // O'qituvchi ekanligini va shu guruhga biriktirilganligini tekshirish
-        $adminRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
+        $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
         $isAdmin = (auth()->guard('web')->user()?->hasAnyRole($adminRoles) ?? false)
             || (auth()->guard('teacher')->user()?->hasAnyRole($adminRoles) ?? false);
         $isTeacher = is_active_oqituvchi();
@@ -2629,7 +2634,7 @@ class JournalController extends Controller
         if ($isTeacher && !$isAdmin) {
             $teacherHemisId = get_teacher_hemis_id();
             if (!$teacherHemisId) {
-                return response()->json(['success' => false, 'message' => 'O\'qituvchi topilmadi'], 403);
+                return response()->json(['success' => false, 'message' => 'O\'qituvchi topilmadi (hemis_id null)'], 403);
             }
 
             // Jadvaldagi o'qituvchini tekshirish
@@ -2642,10 +2647,10 @@ class JournalController extends Controller
                 ->exists();
 
             if (!$isAssigned) {
-                return response()->json(['success' => false, 'message' => 'Siz bu guruh/fanga biriktirilmagansiz'], 403);
+                return response()->json(['success' => false, 'message' => "Biriktirilmagan (teacher={$teacherHemisId}, group={$groupHemisId})"], 403);
             }
-        } elseif (!$isAdmin) {
-            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        } elseif (!$isAdmin && !$isTeacher) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q (admin=' . ($isAdmin?'1':'0') . ', teacher=' . ($isTeacher?'1':'0') . ')'], 403);
         }
 
         // Jadvaldan dars ma'lumotlarini olish
@@ -2653,13 +2658,13 @@ class JournalController extends Controller
             ->where('group_id', $groupHemisId)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
-            ->whereDate('lesson_date', $request->lesson_date)
+            ->whereDate('lesson_date', $lessonDate)
             ->where('lesson_pair_code', $request->lesson_pair_code)
             ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
             ->first();
 
         if (!$schedule) {
-            return response()->json(['success' => false, 'message' => 'Jadvalda bu dars topilmadi'], 404);
+            return response()->json(['success' => false, 'message' => "Jadvalda dars topilmadi (group={$groupHemisId}, date={$lessonDate}, pair={$request->lesson_pair_code})"], 404);
         }
 
         // Mavjud baho bormi tekshirish
@@ -2667,7 +2672,7 @@ class JournalController extends Controller
             ->where('student_hemis_id', $request->student_hemis_id)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
-            ->whereDate('lesson_date', $request->lesson_date)
+            ->whereDate('lesson_date', $lessonDate)
             ->where('lesson_pair_code', $request->lesson_pair_code)
             ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
             ->first();
@@ -2676,7 +2681,7 @@ class JournalController extends Controller
         $now = now();
 
         if ($existing) {
-            return response()->json(['success' => false, 'message' => 'Bu katak uchun baho allaqachon mavjud. Faqat baho yo\'q kataklarga yozish mumkin.'], 409);
+            return response()->json(['success' => false, 'message' => 'Bu katak uchun baho allaqachon mavjud.'], 409);
         }
 
         // Yangi baho yaratish

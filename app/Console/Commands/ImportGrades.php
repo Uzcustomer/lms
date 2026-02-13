@@ -10,19 +10,15 @@ use App\Models\StudentGrade;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Console\Command;
+use App\Services\TelegramService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class ImportGrades extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-
     protected string $baseUrl;
     protected string $token;
+    protected array $report = [];
 
     public function __construct()
     {
@@ -33,17 +29,8 @@ class ImportGrades extends Command
 
     protected $signature = 'student:import-data';
 
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Import student grades and attendance from Hemis API';
 
-    /**
-     * Execute the console command.
-     */
     public function handle()
     {
         $this->info('Starting import of student data from Hemis API...');
@@ -54,19 +41,12 @@ class ImportGrades extends Command
         foreach ($endpoints as $endpoint) {
             $this->importData($endpoint);
         }
-        Log::info('Import completed successfully.' . Carbon::now());
-        $this->info('Import completed successfully.');
+
+        $this->sendTelegramReport();
+
+        Log::info('Import completed.' . Carbon::now());
+        $this->info('Import completed.');
     }
-
-
-    //    private function getDeadline($levelCode)
-//    {
-//        $deadline = Deadline::where('level_code', $levelCode)->first();
-//        if ($deadline) {
-//            return Carbon::now()->addDays($deadline->deadline_days)->endOfDay();
-//        }
-//        return Carbon::now()->addWeek()->endOfDay();
-//    }
 
     private function getDeadline($levelCode, $lessonDate)
     {
@@ -85,8 +65,12 @@ class ImportGrades extends Command
         $startDate = Carbon::createFromTimestamp($startTimestamp)->startOfDay();
         $endDate = Carbon::now()->startOfDay();
 
-
         $period = CarbonPeriod::create($startDate, $endDate);
+
+        $totalDays = 0;
+        $successDays = 0;
+        $failedPages = [];
+        $maxRetries = 3;
 
         foreach ($period as $date) {
             $from = $date->copy()->startOfDay()->timestamp;
@@ -94,6 +78,8 @@ class ImportGrades extends Command
 
             $currentPage = 1;
             $totalPages = 1;
+            $dayHasErrors = false;
+            $totalDays++;
 
             do {
                 $queryParams = [
@@ -103,120 +89,108 @@ class ImportGrades extends Command
                     'lesson_date_to' => $to,
                 ];
 
-                try {
-                    $response = Http::timeout(30)->withoutVerifying()->withToken($this->token)
-                        ->get("{$this->baseUrl}/v1/data/{$endpoint}", $queryParams);
+                $retryCount = 0;
+                $pageSuccess = false;
 
-                    if ($response->successful()) {
-                        $data = $response->json()['data']['items'] ?? [];
-                        foreach ($data as $item) {
-                            if ($endpoint === 'attendance-list') {
-                                $this->processAttendance($item);
-                            } elseif ($endpoint === 'student-grade-list') {
-                                $this->processGrade($item);
+                while ($retryCount < $maxRetries && !$pageSuccess) {
+                    try {
+                        $response = Http::timeout(60)->withoutVerifying()->withToken($this->token)
+                            ->get("{$this->baseUrl}/v1/data/{$endpoint}", $queryParams);
+
+                        if ($response->successful()) {
+                            $data = $response->json()['data']['items'] ?? [];
+                            foreach ($data as $item) {
+                                if ($endpoint === 'attendance-list') {
+                                    $this->processAttendance($item);
+                                } elseif ($endpoint === 'student-grade-list') {
+                                    $this->processGrade($item);
+                                }
                             }
-                        }
 
-                        $pagination = $response->json()['data']['pagination'] ?? null;
-                        if ($pagination) {
-                            $totalPages = $pagination['pageCount'];
+                            $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
                             $this->info("Processed {$endpoint} data for {$date->toDateString()} - page {$currentPage} of {$totalPages}.");
                             $currentPage++;
-                        } else {
-                            break;
-                        }
+                            $pageSuccess = true;
 
-                        usleep(1000);
-                    } else {
-                        Log::error("Failed to fetch {$endpoint} data for page {$currentPage}. Response: " . $response->body());
-                        break;
+                            usleep(1000);
+                        } else {
+                            $retryCount++;
+                            $errorMsg = "Failed {$endpoint} page {$currentPage} for {$date->toDateString()}. Status: {$response->status()}";
+                            Log::error($errorMsg . ". Response: " . $response->body());
+                            $this->error($errorMsg);
+
+                            if ($retryCount < $maxRetries) {
+                                $this->warn("Retrying in 5 seconds... (attempt {$retryCount}/{$maxRetries})");
+                                sleep(5);
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        $retryCount++;
+                        Log::error("Exception for {$endpoint} on {$date->toDateString()} page {$currentPage}: " . $e->getMessage());
+                        $this->error("Error on {$date->toDateString()} page {$currentPage}: " . $e->getMessage());
+
+                        if ($retryCount < $maxRetries) {
+                            $this->warn("Retrying in 5 seconds... (attempt {$retryCount}/{$maxRetries})");
+                            sleep(5);
+                        }
                     }
-                } catch (\Exception $e) {
-                    Log::error("Exception for {$endpoint} on {$date->toDateString()} page {$currentPage}: " . $e->getMessage());
-                    $this->error("Error occurred on {$date->toDateString()}... Retrying in 5 seconds.");
-                    sleep(5);
-                    continue;
+                }
+
+                if (!$pageSuccess) {
+                    $this->error("Skipping {$endpoint} page {$currentPage}/{$totalPages} for {$date->toDateString()} after {$maxRetries} attempts.");
+                    $failedPages[] = "{$date->toDateString()} page {$currentPage}/{$totalPages}";
+                    $dayHasErrors = true;
+                    $currentPage++;
                 }
             } while ($currentPage <= $totalPages);
 
-            // Save the import timestamp as the end of the day
-            $importStatus->last_import_timestamp = $to;
-            $importStatus->save();
-            Log::info("Imported data for: " . $date->toDateString());
+            if ($dayHasErrors) {
+                $this->warn("Import incomplete for {$date->toDateString()} - timestamp NOT saved. Will retry next run.");
+                Log::warning("Import incomplete for {$endpoint} on {$date->toDateString()}");
+            } else {
+                $importStatus->last_import_timestamp = $to;
+                $importStatus->save();
+                $successDays++;
+                $this->info("Completed {$endpoint} for {$date->toDateString()} ({$totalPages} pages).");
+                Log::info("Imported {$endpoint} data for: " . $date->toDateString());
+            }
         }
+
+        $this->report[$endpoint] = [
+            'total_days' => $totalDays,
+            'success_days' => $successDays,
+            'failed_pages' => $failedPages,
+        ];
     }
 
+    private function sendTelegramReport()
+    {
+        $lines = ["Import natijasi (" . Carbon::now()->format('d.m.Y H:i') . "):"];
 
-//    private function importData($endpoint)
-//    {
-//        $importStatus = ImportStatus::firstOrCreate(['endpoint' => $endpoint]);
-//
-//        $startTimestamp = $importStatus->last_import_timestamp ?? 1745808000;
-////        $startDate = Carbon::createFromTimestamp($startTimestamp)->startOfDay();
-//        $startDate = Carbon::now()->subDays(10)->startOfDay();
-//        $endDate = Carbon::now()->subDays(3)->startOfDay();
-//
-//        $period = CarbonPeriod::create($startDate, $endDate);
-//
-//        foreach ($period as $date) {
-//            $from = $date->copy()->startOfDay()->timestamp;
-//            $to = $date->copy()->endOfDay()->timestamp;
-//
-//            $currentPage = 1;
-//            $totalPages = 1;
-//
-//            do {
-//                $queryParams = [
-//                    'limit' => 50,
-//                    'page' => $currentPage,
-//                    'lesson_date_from' => $from,
-//                    'lesson_date_to' => $to,
-//                ];
-//
-//                try {
-//                    $response = Http::timeout(30)->withoutVerifying()->withToken($this->token)
-//                        ->get("{$this->baseUrl}/v1/data/{$endpoint}", $queryParams);
-//
-//                    if ($response->successful()) {
-//                        $data = $response->json()['data']['items'] ?? [];
-//
-//                        if (!empty($data)) {
-//                            if ($endpoint === 'attendance-list') {
-//                                foreach ($data as $item) {
-//                                    $this->processAttendance($item);
-//                                }
-//                            } elseif ($endpoint === 'student-grade-list') {
-//                                $this->processGrade($data);
-//                            }
-//                        }
-//
-//                        $pagination = $response->json()['data']['pagination'] ?? null;
-//                        if ($pagination) {
-//                            $totalPages = $pagination['pageCount'];
-//                            $this->info("Processed {$endpoint} data for {$date->toDateString()} - page {$currentPage} of {$totalPages}.");
-//                            $currentPage++;
-//                        } else {
-//                            break;
-//                        }
-//
-//                        usleep(1000);
-//                    } else {
-//                        Log::error("Failed to fetch {$endpoint} data for page {$currentPage}. Response: " . $response->body());
-//                        break;
-//                    }
-//                } catch (\Exception $e) {
-//                    Log::error("Exception for {$endpoint} on {$date->toDateString()} page {$currentPage}: " . $e->getMessage());
-//                    $this->error("Error occurred on {$date->toDateString()}... Retrying in 5 seconds.");
-//                    sleep(5);
-//                    continue;
-//                }
-//            } while ($currentPage <= $totalPages);
-//
-//            $importStatus->last_import_timestamp = $to;
-//            $importStatus->save();
-//            Log::info("Imported data for: " . $date->toDateString());
-//        }
-//    }
+        $hasErrors = false;
+        foreach ($this->report as $endpoint => $stats) {
+            if ($stats['total_days'] === 0) {
+                $lines[] = "{$endpoint}: yangi ma'lumot yo'q";
+                continue;
+            }
+
+            if (empty($stats['failed_pages'])) {
+                $lines[] = "{$endpoint}: {$stats['success_days']}/{$stats['total_days']} kun muvaffaqiyatli";
+            } else {
+                $hasErrors = true;
+                $lines[] = "{$endpoint}: {$stats['success_days']}/{$stats['total_days']} kun muvaffaqiyatli";
+                foreach ($stats['failed_pages'] as $failed) {
+                    $lines[] = "  xato: {$failed}";
+                }
+            }
+        }
+
+        $emoji = $hasErrors ? 'Baholash importida xatolar bor' : 'Baholash importi muvaffaqiyatli';
+        $message = $emoji . "\n" . implode("\n", $lines);
+
+        $this->info($message);
+        app(TelegramService::class)->notify($message);
+    }
 
     private function processAttendance($item)
     {

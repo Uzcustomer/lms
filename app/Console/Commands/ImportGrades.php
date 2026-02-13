@@ -85,7 +85,6 @@ class ImportGrades extends Command
         $startDate = Carbon::createFromTimestamp($startTimestamp)->startOfDay();
         $endDate = Carbon::now()->startOfDay();
 
-
         $period = CarbonPeriod::create($startDate, $endDate);
 
         foreach ($period as $date) {
@@ -94,6 +93,8 @@ class ImportGrades extends Command
 
             $currentPage = 1;
             $totalPages = 1;
+            $importFailed = false;
+            $maxRetries = 3;
 
             do {
                 $queryParams = [
@@ -103,46 +104,70 @@ class ImportGrades extends Command
                     'lesson_date_to' => $to,
                 ];
 
-                try {
-                    $response = Http::timeout(30)->withoutVerifying()->withToken($this->token)
-                        ->get("{$this->baseUrl}/v1/data/{$endpoint}", $queryParams);
+                $retryCount = 0;
+                $pageSuccess = false;
 
-                    if ($response->successful()) {
-                        $data = $response->json()['data']['items'] ?? [];
-                        foreach ($data as $item) {
-                            if ($endpoint === 'attendance-list') {
-                                $this->processAttendance($item);
-                            } elseif ($endpoint === 'student-grade-list') {
-                                $this->processGrade($item);
+                while ($retryCount < $maxRetries && !$pageSuccess) {
+                    try {
+                        $response = Http::timeout(60)->withoutVerifying()->withToken($this->token)
+                            ->get("{$this->baseUrl}/v1/data/{$endpoint}", $queryParams);
+
+                        if ($response->successful()) {
+                            $data = $response->json()['data']['items'] ?? [];
+                            foreach ($data as $item) {
+                                if ($endpoint === 'attendance-list') {
+                                    $this->processAttendance($item);
+                                } elseif ($endpoint === 'student-grade-list') {
+                                    $this->processGrade($item);
+                                }
                             }
-                        }
 
-                        $pagination = $response->json()['data']['pagination'] ?? null;
-                        if ($pagination) {
-                            $totalPages = $pagination['pageCount'];
+                            $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
                             $this->info("Processed {$endpoint} data for {$date->toDateString()} - page {$currentPage} of {$totalPages}.");
                             $currentPage++;
-                        } else {
-                            break;
-                        }
+                            $pageSuccess = true;
 
-                        usleep(1000);
-                    } else {
-                        Log::error("Failed to fetch {$endpoint} data for page {$currentPage}. Response: " . $response->body());
-                        break;
+                            usleep(1000);
+                        } else {
+                            $retryCount++;
+                            $errorMsg = "Failed to fetch {$endpoint} page {$currentPage} for {$date->toDateString()}. Status: {$response->status()}. Response: " . $response->body();
+                            Log::error($errorMsg);
+                            $this->error($errorMsg);
+
+                            if ($retryCount < $maxRetries) {
+                                $this->warn("Retrying in 5 seconds... (attempt {$retryCount}/{$maxRetries})");
+                                sleep(5);
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        $retryCount++;
+                        Log::error("Exception for {$endpoint} on {$date->toDateString()} page {$currentPage}: " . $e->getMessage());
+                        $this->error("Error on {$date->toDateString()} page {$currentPage}: " . $e->getMessage());
+
+                        if ($retryCount < $maxRetries) {
+                            $this->warn("Retrying in 5 seconds... (attempt {$retryCount}/{$maxRetries})");
+                            sleep(5);
+                        }
                     }
-                } catch (\Exception $e) {
-                    Log::error("Exception for {$endpoint} on {$date->toDateString()} page {$currentPage}: " . $e->getMessage());
-                    $this->error("Error occurred on {$date->toDateString()}... Retrying in 5 seconds.");
-                    sleep(5);
-                    continue;
+                }
+
+                if (!$pageSuccess) {
+                    $this->error("Failed to import {$endpoint} page {$currentPage} for {$date->toDateString()} after {$maxRetries} attempts. Stopping this date.");
+                    $importFailed = true;
+                    break;
                 }
             } while ($currentPage <= $totalPages);
 
-            // Save the import timestamp as the end of the day
+            if ($importFailed) {
+                $this->error("Import incomplete for {$date->toDateString()} - timestamp NOT saved. Will retry this date next run.");
+                Log::error("Import incomplete for {$endpoint} on {$date->toDateString()} - stopped at page {$currentPage} of {$totalPages}");
+                break;
+            }
+
             $importStatus->last_import_timestamp = $to;
             $importStatus->save();
-            Log::info("Imported data for: " . $date->toDateString());
+            $this->info("Completed import for {$date->toDateString()} ({$totalPages} pages).");
+            Log::info("Imported {$endpoint} data for: " . $date->toDateString());
         }
     }
 

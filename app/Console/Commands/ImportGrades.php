@@ -83,7 +83,7 @@ class ImportGrades extends Command
 
             do {
                 $queryParams = [
-                    'limit' => 50,
+                    'limit' => 200,
                     'page' => $currentPage,
                     'lesson_date_from' => $from,
                     'lesson_date_to' => $to,

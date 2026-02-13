@@ -382,6 +382,18 @@ class QuizResultController extends Controller
             }
             $duplicateTracker[$key] = $result->id;
 
+            // YN turi tekshiruvi
+            $ynTuri = strtoupper(trim($result->yn_turi ?? ''));
+            if ($ynTuri === 'OSKI') {
+                $row['jurnal_ustun'] = 'OSKI';
+            } elseif ($ynTuri === 'TEST') {
+                $row['jurnal_ustun'] = 'Test';
+            } else {
+                $row['error'] = "YN turi aniqlanmadi: '{$result->yn_turi}' (faqat OSKI yoki Test bo'lishi kerak)";
+                $errors[] = $row;
+                continue;
+            }
+
             $row['student_db_name'] = $student->full_name ?? $student->fio ?? $result->student_name;
             $row['subject_name'] = $subject->subject_name;
             $ok[] = $row;
@@ -481,6 +493,20 @@ class QuizResultController extends Controller
             }
             $duplicateTracker[$key] = $result->id;
 
+            // YN turiga qarab training_type_code va name aniqlash
+            $ynTuri = strtoupper(trim($result->yn_turi ?? ''));
+            if ($ynTuri === 'OSKI') {
+                $trainingTypeCode = 101;
+                $trainingTypeName = 'Oski';
+            } elseif ($ynTuri === 'TEST') {
+                $trainingTypeCode = 102;
+                $trainingTypeName = 'Yakuniy test';
+            } else {
+                $rowInfo['error'] = "YN turi aniqlanmadi: '{$result->yn_turi}' (faqat OSKI yoki Test bo'lishi kerak)";
+                $errors[] = $rowInfo;
+                continue;
+            }
+
             StudentGrade::create([
                 'student_id' => $student->id,
                 'student_hemis_id' => $student->hemis_id,
@@ -491,8 +517,8 @@ class QuizResultController extends Controller
                 'subject_id' => $subject->subject_id,
                 'subject_name' => $subject->subject_name,
                 'subject_code' => $subject->subject_code ?? '',
-                'training_type_code' => 103,
-                'training_type_name' => 'Quiz test',
+                'training_type_code' => $trainingTypeCode,
+                'training_type_name' => $trainingTypeName,
                 'employee_id' => 0,
                 'employee_name' => auth()->user()->name ?? 'Test markazi',
                 'lesson_pair_name' => '',

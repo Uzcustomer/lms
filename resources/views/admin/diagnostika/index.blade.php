@@ -74,6 +74,19 @@
                         <div class="spinner-sm"></div> Diagnostika tekshirilmoqda...
                     </div>
                     <div id="diagnostika-summary" style="display:none;"></div>
+                    <div id="diagnostika-ok" style="display:none;">
+                        <div class="diag-msg diag-success">
+                            <strong>Tayyor natijalar (yuklanadi):</strong>
+                            <div style="max-height:200px;overflow-y:auto;margin-top:8px;">
+                                <table class="diag-table">
+                                    <thead><tr>
+                                        <th>Student ID</th><th>Talaba</th><th>Fan</th><th>Baho</th><th>Jurnal ustuni</th>
+                                    </tr></thead>
+                                    <tbody id="diagnostika-ok-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                     <div id="diagnostika-errors" style="display:none;">
                         <div class="diag-msg diag-error">
                             <strong>Xato natijalar:</strong>
@@ -567,6 +580,7 @@
                 $('#diagnostika-panel').show();
                 $('#diagnostika-loading').show();
                 $('#diagnostika-summary').hide();
+                $('#diagnostika-ok').hide();
                 $('#diagnostika-errors').hide();
                 $('#btn-upload').hide().prop('disabled', true);
                 $('#upload-result').hide();
@@ -591,17 +605,25 @@
                         }
                         $('#diagnostika-summary').attr('class', 'diag-msg ' + cls).html('<strong>' + text + '</strong>').show();
 
+                        if (data.ok_count > 0) {
+                            var okBody = $('#diagnostika-ok-body').empty();
+                            data.ok.forEach(function(item) {
+                                var ustunBadge = item.jurnal_ustun === 'OSKI'
+                                    ? '<span class="badge badge-oski">' + esc(item.jurnal_ustun) + '</span>'
+                                    : '<span class="badge badge-grade">' + esc(item.jurnal_ustun) + '</span>';
+                                okBody.append('<tr><td>' + esc(item.student_id) + '</td><td>' + esc(item.student_db_name || item.student_name) + '</td><td>' + esc(item.subject_name || item.fan_name) + '</td><td><strong>' + esc(item.grade) + '</strong></td><td>' + ustunBadge + '</td></tr>');
+                            });
+                            $('#diagnostika-ok').show();
+                            $('#btn-upload').show().prop('disabled', false).find('span.upload-count').remove();
+                            $('#btn-upload').append(' <span class="upload-count">(' + data.ok_count + ' ta)</span>');
+                        }
+
                         if (data.error_count > 0) {
                             var tbody = $('#diagnostika-errors-body').empty();
                             data.errors.forEach(function(err) {
                                 tbody.append('<tr><td>' + esc(err.student_id) + '</td><td>' + esc(err.student_name) + '</td><td>' + esc(err.fan_name) + '</td><td>' + esc(err.grade) + '</td><td style="color:#dc2626;font-weight:600;">' + esc(err.error) + '</td></tr>');
                             });
                             $('#diagnostika-errors').show();
-                        }
-
-                        if (data.ok_count > 0) {
-                            $('#btn-upload').show().prop('disabled', false).find('span.upload-count').remove();
-                            $('#btn-upload').append(' <span class="upload-count">(' + data.ok_count + ' ta)</span>');
                         }
                     },
                     error: function(xhr) {
@@ -641,7 +663,13 @@
                         }
                         $('#upload-result').html(html).show();
                         btn.hide();
-                        $('#diagnostika-panel').hide();
+                        // Diagnostika panelda summary va xatolarni yashirish, lekin tayyor natijalar jadvalini ko'rsatib qoldirish
+                        $('#diagnostika-summary').hide();
+                        $('#diagnostika-errors').hide();
+                        // OK jadvalini "Yuklangan natijalar" deb yangilash
+                        if ($('#diagnostika-ok').is(':visible')) {
+                            $('#diagnostika-ok .diag-msg strong').first().text('Sistemaga yuklangan natijalar:');
+                        }
 
                         if (data.success_count > 0) {
                             $('.row-checkbox:checked').each(function() {

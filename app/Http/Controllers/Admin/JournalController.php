@@ -912,33 +912,37 @@ class JournalController extends Controller
         }
 
         // Mavjud dars ochilishlarini olish
-        LessonOpening::expireOverdue();
-        $lessonOpenings = LessonOpening::getAllOpenings($group->group_hemis_id, $subjectId, $semesterCode);
         $lessonOpeningsMap = [];
-        foreach ($lessonOpenings as $lo) {
-            $loDateStr = $lo->lesson_date->format('Y-m-d');
-            // Shu kun uchun qo'yilgan baholar statistikasi
-            $dateGrades = $jbGradesRaw->filter(fn($g) => \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d') === $loDateStr && $g->grade !== null);
-            $gradeCount = $dateGrades->count();
-            $lastGradeAt = $gradeCount > 0 ? $dateGrades->max('created_at') : null;
+        $lessonOpeningDays = 3;
+        $activeOpenedDates = [];
+        if (\Schema::hasTable('lesson_openings')) {
+            LessonOpening::expireOverdue();
+            $lessonOpenings = LessonOpening::getAllOpenings($group->group_hemis_id, $subjectId, $semesterCode);
+            foreach ($lessonOpenings as $lo) {
+                $loDateStr = $lo->lesson_date->format('Y-m-d');
+                // Shu kun uchun qo'yilgan baholar statistikasi
+                $dateGrades = $jbGradesRaw->filter(fn($g) => \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d') === $loDateStr && $g->grade !== null);
+                $gradeCount = $dateGrades->count();
+                $lastGradeAt = $gradeCount > 0 ? $dateGrades->max('created_at') : null;
 
-            $lessonOpeningsMap[$loDateStr] = [
-                'id' => $lo->id,
-                'status' => $lo->isActive() ? 'active' : $lo->status,
-                'deadline' => $lo->deadline->format('Y-m-d H:i'),
-                'opened_at' => $lo->created_at->format('d.m.Y H:i'),
-                'opened_by_name' => $lo->opened_by_name,
-                'file_original_name' => $lo->file_original_name,
-                'grade_count' => $gradeCount,
-                'last_grade_at' => $lastGradeAt ? \Carbon\Carbon::parse($lastGradeAt)->format('d.m.Y H:i') : null,
-            ];
+                $lessonOpeningsMap[$loDateStr] = [
+                    'id' => $lo->id,
+                    'status' => $lo->isActive() ? 'active' : $lo->status,
+                    'deadline' => $lo->deadline->format('Y-m-d H:i'),
+                    'opened_at' => $lo->created_at->format('d.m.Y H:i'),
+                    'opened_by_name' => $lo->opened_by_name,
+                    'file_original_name' => $lo->file_original_name,
+                    'grade_count' => $gradeCount,
+                    'last_grade_at' => $lastGradeAt ? \Carbon\Carbon::parse($lastGradeAt)->format('d.m.Y H:i') : null,
+                ];
+            }
+
+            // Dars ochish sozlamasi
+            $lessonOpeningDays = (int) Setting::get('lesson_opening_days', 3);
+
+            // O'qituvchi uchun: ochilgan va muddati tugamagan darslar
+            $activeOpenedDates = LessonOpening::getActiveOpenings($group->group_hemis_id, $subjectId, $semesterCode);
         }
-
-        // Dars ochish sozlamasi
-        $lessonOpeningDays = (int) Setting::get('lesson_opening_days', 3);
-
-        // O'qituvchi uchun: ochilgan va muddati tugamagan darslar
-        $activeOpenedDates = LessonOpening::getActiveOpenings($group->group_hemis_id, $subjectId, $semesterCode);
 
         return view('admin.journal.show', compact(
             'group',

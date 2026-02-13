@@ -527,6 +527,10 @@
         }
     </style>
 
+    @php
+        $isDekan = is_active_dekan();
+        $isRegistrator = is_active_registrator();
+    @endphp
     <div class="py-2" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Nazad tugma -->
@@ -579,8 +583,6 @@
                         </div>
                     @else
                         @php
-                            $isDekan = is_active_dekan();
-                            $isRegistrator = is_active_registrator();
                             $totalLectureDays = count($lectureLessonDates);
                             $lecturePairsByDate = collect($lectureColumns)
                                 ->groupBy('date')

@@ -61,6 +61,8 @@ class ScheduleImportService
                 $this->notifyTelegram("📄 Jami sahifalar: {$pages}");
             }
 
+            $this->ensureDbConnection();
+
             foreach ($items as $item) {
                 $schedule = Schedule::withTrashed()->firstOrNew(['schedule_hemis_id' => $item['id']]);
                 $schedule->fill($this->map($item));
@@ -105,7 +107,7 @@ class ScheduleImportService
     /**
      * Joriy o'quv yili bo'yicha jadval import (cron uchun)
      */
-    public function importByEducationYear(?\Closure $log = null): void
+    public function importByEducationYear(?\Closure $log = null, int $fromPage = 1): void
     {
         $educationYearCode = DB::table('semesters')
             ->where('current', true)
@@ -117,12 +119,12 @@ class ScheduleImportService
             return;
         }
 
-        $this->notifyTelegram("🟢 Cron: Jadval importi boshlandi (o'quv yili: {$educationYearCode})");
+        $this->notifyTelegram("🟢 Cron: Jadval importi boshlandi (o'quv yili: {$educationYearCode})" . ($fromPage > 1 ? " — sahifa {$fromPage} dan davom" : ""));
         if ($log) $log("O'quv yili: {$educationYearCode}");
 
         $token = config('services.hemis.token');
         $limit = 200;
-        $page = 1;
+        $page = max(1, $fromPage);
         $importedHemisIds = [];
         $failedPages = [];
         $pages = 1;
@@ -167,10 +169,15 @@ class ScheduleImportService
             $count = count($items);
             $total = count($importedHemisIds) + $count;
 
-            if ($page === 1) {
+            if ($page === $fromPage && $fromPage <= 1) {
                 $this->notifyTelegram("📄 Jami sahifalar: {$pages}");
                 if ($log) $log("Jami sahifalar: {$pages}");
+            } elseif ($page === $fromPage && $fromPage > 1) {
+                $this->notifyTelegram("📄 Jami sahifalar: {$pages}, sahifa {$fromPage} dan davom ettirilmoqda");
+                if ($log) $log("Jami sahifalar: {$pages}");
             }
+
+            $this->ensureDbConnection();
 
             foreach ($items as $item) {
                 $schedule = Schedule::withTrashed()->firstOrNew(['schedule_hemis_id' => $item['id']]);
@@ -199,8 +206,8 @@ class ScheduleImportService
         $totalImported = count($importedHemisIds);
         $failedCount = count($failedPages);
 
-        // Faqat BARCHA sahifalar muvaffaqiyatli bo'lganda eski yozuvlarni o'chirish
-        if ($failedCount === 0 && $totalImported > 0) {
+        // Faqat BARCHA sahifalar muvaffaqiyatli bo'lganda va boshidan import qilinganda eski yozuvlarni o'chirish
+        if ($failedCount === 0 && $totalImported > 0 && $fromPage <= 1) {
             $deleted = Schedule::where('education_year_code', $educationYearCode)
                 ->whereNotIn('schedule_hemis_id', $importedHemisIds)
                 ->delete();
@@ -367,6 +374,16 @@ class ScheduleImportService
             'lesson_date' => isset($d['lesson_date']) && $d['lesson_date'] ? Carbon::createFromTimestamp($d['lesson_date']) : null,
             'week_number' => $d['_week'],
         ];
+    }
+
+    protected function ensureDbConnection(): void
+    {
+        try {
+            DB::connection()->getPdo();
+        } catch (\Throwable $e) {
+            Log::channel('import_schedule')->warning('DB connection uzildi, qayta ulanmoqda...');
+            DB::reconnect();
+        }
     }
 
     protected function notifyTelegram(string $message): void

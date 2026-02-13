@@ -111,7 +111,8 @@ class QuizResultController extends Controller
      */
     public function tartibgaSol(Request $request)
     {
-        $query = HemisQuizResult::where('is_active', 1);
+        $query = HemisQuizResult::where('is_active', 1)
+            ->where('shakl', '1-urinish');
 
         if ($request->filled('date_from')) {
             $query->whereDate('date_finish', '>=', $request->date_from);
@@ -410,6 +411,13 @@ class QuizResultController extends Controller
                 'fan_name' => $result->fan_name,
                 'grade' => $result->grade,
             ];
+
+            // Faqat 1-urinish yuklanadi
+            if ($result->shakl !== '1-urinish') {
+                $rowInfo['error'] = "Faqat 1-urinish yuklanadi (hozirgi: {$result->shakl})";
+                $errors[] = $rowInfo;
+                continue;
+            }
 
             if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
                 $rowInfo['error'] = "Baho noto'g'ri: {$result->grade}";

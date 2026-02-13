@@ -21,19 +21,17 @@ class ScheduleImportService
         $apiFailed = false;
 
         do {
-            $response = Http::withoutVerifying()
-                ->timeout(60)
-                ->withToken($token)
-                ->get('https://student.ttatf.uz/rest/v1/data/schedule-list', [
-                    'lesson_date_from' => $from->timestamp,
-                    'lesson_date_to' => $to->copy()->endOfDay()->timestamp,
-                    'limit' => $limit,
-                    'page' => $page,
-                ]);
+            $response = $this->fetchPage($token, [
+                'lesson_date_from' => $from->timestamp,
+                'lesson_date_to' => $to->copy()->endOfDay()->timestamp,
+                'limit' => $limit,
+                'page' => $page,
+            ]);
 
-            if (!$response->successful()) {
-                Log::channel('import_schedule')->error('HEMIS API request failed', ['page' => $page, 'status' => $response->status()]);
-                $this->notifyTelegram("❌ API xatolik sahifa {$page} (status {$response->status()}) — mavjud jadvallar saqlab qolindi");
+            if (!$response || !$response->successful()) {
+                $status = $response ? $response->status() : 'timeout';
+                Log::channel('import_schedule')->error('HEMIS API request failed', ['page' => $page, 'status' => $status]);
+                $this->notifyTelegram("❌ API xatolik sahifa {$page} (status {$status}) — 3 marta urinildi, mavjud jadvallar saqlab qolindi");
                 $apiFailed = true;
                 break;
             }
@@ -106,18 +104,16 @@ class ScheduleImportService
         $apiFailed = false;
 
         do {
-            $response = Http::withoutVerifying()
-                ->timeout(60)
-                ->withToken($token)
-                ->get('https://student.ttatf.uz/rest/v1/data/schedule-list', [
-                    '_education_year' => $educationYearCode,
-                    'limit' => $limit,
-                    'page' => $page,
-                ]);
+            $response = $this->fetchPage($token, [
+                '_education_year' => $educationYearCode,
+                'limit' => $limit,
+                'page' => $page,
+            ]);
 
-            if (!$response->successful()) {
-                Log::channel('import_schedule')->error('HEMIS API request failed', ['page' => $page, 'status' => $response->status()]);
-                $this->notifyTelegram("❌ API xatolik sahifa {$page} (status {$response->status()}) — mavjud jadvallar saqlab qolindi");
+            if (!$response || !$response->successful()) {
+                $status = $response ? $response->status() : 'timeout';
+                Log::channel('import_schedule')->error('HEMIS API request failed', ['page' => $page, 'status' => $status]);
+                $this->notifyTelegram("❌ API xatolik sahifa {$page} (status {$status}) — 3 marta urinildi, mavjud jadvallar saqlab qolindi");
                 $apiFailed = true;
                 break;
             }
@@ -179,22 +175,20 @@ class ScheduleImportService
         $apiFailed = false;
 
         do {
-            $response = Http::withoutVerifying()
-                ->timeout(30)
-                ->withToken($token)
-                ->get('https://student.ttatf.uz/rest/v1/data/schedule-list', [
-                    '_group' => $groupId,
-                    '_subject' => $subjectId,
-                    'limit' => $limit,
-                    'page' => $page,
-                ]);
+            $response = $this->fetchPage($token, [
+                '_group' => $groupId,
+                '_subject' => $subjectId,
+                'limit' => $limit,
+                'page' => $page,
+            ], 30);
 
-            if (!$response->successful()) {
+            if (!$response || !$response->successful()) {
+                $status = $response ? $response->status() : 'timeout';
                 Log::channel('import_schedule')->error('HEMIS API xatolik (guruh+fan sync)', [
                     'group_id' => $groupId,
                     'subject_id' => $subjectId,
                     'page' => $page,
-                    'status' => $response->status(),
+                    'status' => $status,
                 ]);
                 $apiFailed = true;
                 break;
@@ -231,6 +225,48 @@ class ScheduleImportService
         }
 
         return ['count' => $totalImported, 'failed' => $apiFailed];
+    }
+
+    /**
+     * HEMIS API sahifasini olish — 502/503/timeout bo'lsa 3 marta qayta urinadi
+     */
+    protected function fetchPage(string $token, array $params, int $timeout = 60): ?\Illuminate\Http\Client\Response
+    {
+        $maxRetries = 3;
+        $delays = [5, 10, 20]; // soniyalarda
+
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $response = Http::withoutVerifying()
+                    ->timeout($timeout)
+                    ->withToken($token)
+                    ->get('https://student.ttatf.uz/rest/v1/data/schedule-list', $params);
+
+                if ($response->successful() || $response->status() < 500) {
+                    return $response;
+                }
+
+                // 5xx xato — retry
+                if ($attempt < $maxRetries) {
+                    $delay = $delays[$attempt - 1] ?? 20;
+                    Log::channel('import_schedule')->warning("HEMIS API {$response->status()} — sahifa {$params['page']}, {$attempt}/{$maxRetries} urinish, {$delay}s kutish");
+                    sleep($delay);
+                } else {
+                    return $response;
+                }
+            } catch (\Throwable $e) {
+                if ($attempt < $maxRetries) {
+                    $delay = $delays[$attempt - 1] ?? 20;
+                    Log::channel('import_schedule')->warning("HEMIS API timeout — sahifa {$params['page']}, {$attempt}/{$maxRetries} urinish, {$delay}s kutish");
+                    sleep($delay);
+                } else {
+                    Log::channel('import_schedule')->error("HEMIS API {$maxRetries} marta xatolik: " . $e->getMessage());
+                    return null;
+                }
+            }
+        }
+
+        return null;
     }
 
     protected function map(array $d): array

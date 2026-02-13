@@ -35,6 +35,16 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Sistemaga yuklangan natijalar sahifasi.
+     */
+    public function saqlanganHisobotPage(Request $request)
+    {
+        $routePrefix = $this->routePrefix();
+
+        return view('admin.saqlangan-hisobot.index', compact('routePrefix'));
+    }
+
+    /**
      * Diagnostika sahifasi uchun AJAX data endpoint.
      */
     public function diagnostikaData(Request $request)

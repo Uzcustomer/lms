@@ -837,8 +837,11 @@
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @if($hasGrades)
-                                                        @php $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888); @endphp
-                                                        <span class="{{ $isRetake ? 'grade-retake' : ($hasTeacherGradeInDay ? 'text-green-600' : 'text-gray-900') }} font-medium">{{ $dayAvg }}</span>
+                                                        @php
+                                                            $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
+                                                            $dayAvgColorClass = $dayAvg < 60 ? 'text-red-600' : ($hasTeacherGradeInDay ? 'text-green-600' : 'text-gray-900');
+                                                        @endphp
+                                                        <span class="{{ $isRetake ? 'grade-retake' : $dayAvgColorClass }} font-medium">{{ $dayAvg }}</span>
                                                         @if(count($dayGrades) > 1)
                                                             <span class="tooltip-content">{{ $gradesText }}</span>
                                                         @endif
@@ -1050,8 +1053,11 @@
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
                                                         @else
-                                                            @php $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888; @endphp
-                                                            <span class="{{ $isRetake ? 'grade-retake' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900') }} font-medium">{{ round($grade, 0) }}</span>
+                                                            @php
+                                                                $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
+                                                                $gradeColorClass = round($grade, 0) < 60 ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
+                                                            @endphp
+                                                            <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php

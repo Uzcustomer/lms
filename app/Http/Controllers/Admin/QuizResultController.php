@@ -149,7 +149,15 @@ class QuizResultController extends Controller
             $student = $studentLookup[$result->student_id] ?? null;
             if (!$student) continue;
 
-            $kurs = $student->semester_code ? ceil($student->semester_code / 2) : null;
+            // Semestrni Moodle formatidan aniqlash: "3-SEM" -> 3, "5-sem" -> 5
+            $semNum = null;
+            $semLabel = $result->semester ?: $student->semester_name;
+            if ($semLabel && preg_match('/(\d+)/', $semLabel, $m)) {
+                $semNum = (int) $m[1];
+            }
+
+            // Kursni semestr raqamidan hisoblash: 1,2->1-kurs, 3,4->2-kurs, ...
+            $kurs = $semNum ? (int) ceil($semNum / 2) : null;
 
             // YN turi aniqlash
             $ynTuri = '-';
@@ -168,7 +176,7 @@ class QuizResultController extends Controller
                 'faculty' => $student->department_name,
                 'direction' => $student->specialty_name,
                 'kurs' => $kurs ? $kurs . '-kurs' : '-',
-                'semester' => $student->semester_name,
+                'semester' => $semNum ? $semNum . '-sem' : ($semLabel ?: '-'),
                 'group' => $student->group_name,
                 'fan_name' => $result->fan_name,
                 'yn_turi' => $ynTuri,

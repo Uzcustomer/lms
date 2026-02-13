@@ -112,7 +112,7 @@ class ImportGrades extends Command
                             $currentPage++;
                             $pageSuccess = true;
 
-                            usleep(1000);
+                            sleep(2);
                         } else {
                             $retryCount++;
                             $errorMsg = "Failed {$endpoint} page {$currentPage} for {$date->toDateString()}. Status: {$response->status()}";

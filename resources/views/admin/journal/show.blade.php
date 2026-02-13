@@ -837,7 +837,8 @@
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
                                                     @if($hasGrades)
-                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ $dayAvg }}</span>
+                                                        @php $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888); @endphp
+                                                        <span class="{{ $isRetake ? 'grade-retake' : ($hasTeacherGradeInDay ? 'text-green-600' : 'text-gray-900') }} font-medium">{{ $dayAvg }}</span>
                                                         @if(count($dayGrades) > 1)
                                                             <span class="tooltip-content">{{ $gradesText }}</span>
                                                         @endif
@@ -1049,7 +1050,8 @@
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
                                                         @else
-                                                            <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                            @php $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888; @endphp
+                                                            <span class="{{ $isRetake ? 'grade-retake' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900') }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php
@@ -2875,7 +2877,7 @@
                     } else {
                         successCount++;
                         const gradeVal = Math.round(data.grade);
-                        const color = gradeVal < 60 ? 'color:#dc2626' : 'color:#111827';
+                        const color = gradeVal < 60 ? 'color:#dc2626' : 'color:#16a34a';
                         cellDiv.innerHTML = `<span class="font-medium" style="${color}">${gradeVal}</span>`;
                         cellDiv.style.background = '#ecfdf5';
                         delete pendingOpenedGrades[key];

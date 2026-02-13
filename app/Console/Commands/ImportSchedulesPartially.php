@@ -31,7 +31,7 @@ class ImportSchedulesPartially extends Command
     public function handle(): int
     {
         $token = config('services.hemis.token');
-        $limit = 50;
+        $limit = 200;
         $page = 1;
 
         $from = $this->option('date_from') ? Carbon::parse($this->option('date_from')) : Carbon::now()->subWeek();

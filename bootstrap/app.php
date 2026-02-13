@@ -39,7 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:semesters')->weekly();
         $schedule->command('import:specialties-departments')->weekly();
         $schedule->command('students:import')->weekly();
-        $schedule->command('import:schedules')->daily();
+        $schedule->command('import:schedules')->daily()->withoutOverlapping(120);
         $schedule->command('import:curriculum-subject-teachers')->dailyAt('22:00');
 
         $schedule->command('student:import-data')->everyFourHours();

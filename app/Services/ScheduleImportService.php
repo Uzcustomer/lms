@@ -15,7 +15,7 @@ class ScheduleImportService
         $message = "🟢 Jadval importi boshlandi: {$from->toDateString()} — {$to->toDateString()}";
         $this->notifyTelegram($message);
         $token = config('services.hemis.token');
-        $limit = 50;
+        $limit = 200;
         $page = 1;
         $importedHemisIds = [];
         $failedPages = [];
@@ -121,7 +121,7 @@ class ScheduleImportService
         if ($log) $log("O'quv yili: {$educationYearCode}");
 
         $token = config('services.hemis.token');
-        $limit = 50;
+        $limit = 200;
         $page = 1;
         $importedHemisIds = [];
         $failedPages = [];

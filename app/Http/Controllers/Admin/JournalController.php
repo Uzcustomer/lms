@@ -2484,9 +2484,9 @@ class JournalController extends Controller
      */
     public function openLesson(Request $request)
     {
-        // Faqat admin, kichik_admin, superadmin, registrator_ofisi, oqituvchi
+        // Faqat admin, kichik_admin, superadmin, registrator_ofisi
         $user = auth()->user();
-        $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'oqituvchi'];
+        $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
         if (!$user->hasAnyRole($allowedRoles)) {
             return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
         }

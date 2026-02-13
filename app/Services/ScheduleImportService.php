@@ -18,7 +18,9 @@ class ScheduleImportService
         $limit = 50;
         $page = 1;
         $importedHemisIds = [];
-        $apiFailed = false;
+        $failedPages = [];
+        $pages = 1;
+        $startTime = microtime(true);
 
         do {
             $response = $this->fetchPage($token, [
@@ -30,10 +32,25 @@ class ScheduleImportService
 
             if (!$response || !$response->successful()) {
                 $status = $response ? $response->status() : 'timeout';
-                Log::channel('import_schedule')->error('HEMIS API request failed', ['page' => $page, 'status' => $status]);
-                $this->notifyTelegram("❌ API xatolik sahifa {$page} (status {$status}) — 3 marta urinildi, mavjud jadvallar saqlab qolindi");
-                $apiFailed = true;
-                break;
+                Log::channel('import_schedule')->warning("HEMIS API sahifa {$page} o'tkazib yuborildi (status {$status})");
+                $failedPages[] = $page;
+
+                if ($page === 1) {
+                    $this->notifyTelegram("❌ API birinchi sahifada xato (status {$status}) — import to'xtatildi");
+                    break;
+                }
+
+                if (count($failedPages) >= 5) {
+                    $lastFive = array_slice($failedPages, -5);
+                    if ($lastFive[4] - $lastFive[0] === 4) {
+                        $this->notifyTelegram("❌ Ketma-ket 5 ta sahifa xato — import to'xtatildi (sahifa {$page})");
+                        break;
+                    }
+                }
+
+                $page++;
+                sleep(2);
+                continue;
             }
 
             $data = $response->json('data', []);
@@ -42,7 +59,6 @@ class ScheduleImportService
 
             if ($page === 1) {
                 $this->notifyTelegram("📄 Jami sahifalar: {$pages}");
-                $startTime = microtime(true);
             }
 
             foreach ($items as $item) {
@@ -55,19 +71,22 @@ class ScheduleImportService
                 $importedHemisIds[] = $item['id'];
             }
 
-            if ($page % 10 === 0 || $page === $pages) {
+            if ($page % 50 === 0 || $page === $pages) {
                 $elapsed = microtime(true) - $startTime;
                 $remaining = max(0, $pages - $page);
                 $eta = round(($elapsed / $page) * $remaining);
-                $this->notifyTelegram("⌛ {$remaining} sahifa qoldi, ~{$eta} soniya");
+                $failed = count($failedPages);
+                $this->notifyTelegram("⌛ {$remaining} sahifa qoldi, ~{$eta}s" . ($failed > 0 ? " ({$failed} xato)" : ""));
             }
 
             $page++;
             sleep(1);
         } while ($page <= $pages);
 
-        // Faqat barcha sahifalar muvaffaqiyatli import qilingandan keyin — HEMIS'da yo'q yozuvlarni o'chiramiz
-        if (!$apiFailed && count($importedHemisIds) > 0) {
+        $totalImported = count($importedHemisIds);
+        $failedCount = count($failedPages);
+
+        if ($failedCount === 0 && $totalImported > 0) {
             $deleted = Schedule::whereBetween('lesson_date', [$from, $to->copy()->endOfDay()])
                 ->whereNotIn('schedule_hemis_id', $importedHemisIds)
                 ->delete();
@@ -76,8 +95,11 @@ class ScheduleImportService
             }
         }
 
-        $count = count($importedHemisIds);
-        $this->notifyTelegram("✅ Jadval importi tugadi ({$from->toDateString()} — {$to->toDateString()}) — {$count} ta yozuv");
+        $msg = "✅ Jadval importi tugadi ({$from->toDateString()} — {$to->toDateString()}) — {$totalImported} ta yozuv";
+        if ($failedCount > 0) {
+            $msg .= " ({$failedCount} ta sahifa o'tkazib yuborildi)";
+        }
+        $this->notifyTelegram($msg);
     }
 
     /**
@@ -101,7 +123,9 @@ class ScheduleImportService
         $limit = 50;
         $page = 1;
         $importedHemisIds = [];
-        $apiFailed = false;
+        $failedPages = [];
+        $pages = 1;
+        $startTime = microtime(true);
 
         do {
             $response = $this->fetchPage($token, [
@@ -112,10 +136,27 @@ class ScheduleImportService
 
             if (!$response || !$response->successful()) {
                 $status = $response ? $response->status() : 'timeout';
-                Log::channel('import_schedule')->error('HEMIS API request failed', ['page' => $page, 'status' => $status]);
-                $this->notifyTelegram("❌ API xatolik sahifa {$page} (status {$status}) — 3 marta urinildi, mavjud jadvallar saqlab qolindi");
-                $apiFailed = true;
-                break;
+                Log::channel('import_schedule')->warning("HEMIS API sahifa {$page} o'tkazib yuborildi (status {$status})");
+                $failedPages[] = $page;
+
+                // Agar birinchi sahifa ham xato bo'lsa — jami sahifalar noma'lum, to'xtatamiz
+                if ($page === 1) {
+                    $this->notifyTelegram("❌ API birinchi sahifada xato (status {$status}) — import to'xtatildi");
+                    break;
+                }
+
+                // Ketma-ket 5 ta sahifa xato bo'lsa — API butunlay ishlamayapti
+                if (count($failedPages) >= 5) {
+                    $lastFive = array_slice($failedPages, -5);
+                    if ($lastFive[4] - $lastFive[0] === 4) {
+                        $this->notifyTelegram("❌ Ketma-ket 5 ta sahifa xato — import to'xtatildi (sahifa {$page})");
+                        break;
+                    }
+                }
+
+                $page++;
+                sleep(2);
+                continue;
             }
 
             $data = $response->json('data', []);
@@ -124,7 +165,6 @@ class ScheduleImportService
 
             if ($page === 1) {
                 $this->notifyTelegram("📄 Jami sahifalar: {$pages}");
-                $startTime = microtime(true);
             }
 
             foreach ($items as $item) {
@@ -137,11 +177,12 @@ class ScheduleImportService
                 $importedHemisIds[] = $item['id'];
             }
 
-            if ($page % 10 === 0 || $page === $pages) {
+            if ($page % 50 === 0 || $page === $pages) {
                 $elapsed = microtime(true) - $startTime;
                 $remaining = max(0, $pages - $page);
                 $eta = round(($elapsed / $page) * $remaining);
-                $this->notifyTelegram("⌛ {$remaining} sahifa qoldi, ~{$eta} soniya");
+                $failed = count($failedPages);
+                $this->notifyTelegram("⌛ {$remaining} sahifa qoldi, ~{$eta}s" . ($failed > 0 ? " ({$failed} xato)" : ""));
             }
 
             $page++;
@@ -149,9 +190,10 @@ class ScheduleImportService
         } while ($page <= $pages);
 
         $totalImported = count($importedHemisIds);
+        $failedCount = count($failedPages);
 
-        // Faqat barcha sahifalar muvaffaqiyatli bo'lganda — HEMIS'da yo'q yozuvlarni soft-delete
-        if (!$apiFailed && $totalImported > 0) {
+        // Faqat BARCHA sahifalar muvaffaqiyatli bo'lganda eski yozuvlarni o'chirish
+        if ($failedCount === 0 && $totalImported > 0) {
             $deleted = Schedule::where('education_year_code', $educationYearCode)
                 ->whereNotIn('schedule_hemis_id', $importedHemisIds)
                 ->delete();
@@ -160,7 +202,11 @@ class ScheduleImportService
             }
         }
 
-        $this->notifyTelegram("✅ Cron: Jadval importi tugadi ({$educationYearCode}) — {$totalImported} ta yozuv");
+        $msg = "✅ Cron: Jadval importi tugadi ({$educationYearCode}) — {$totalImported} ta yozuv";
+        if ($failedCount > 0) {
+            $msg .= " ({$failedCount} ta sahifa o'tkazib yuborildi)";
+        }
+        $this->notifyTelegram($msg);
     }
 
     /**

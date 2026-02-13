@@ -363,7 +363,7 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'created_at')
+            ->select('id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'created_at')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -497,6 +497,7 @@ class JournalController extends Controller
             if ($effectiveGrade !== null) {
                 $jbGrades[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = array_merge($effectiveGrade, [
                     'id' => $g->id,
+                    'hemis_id' => $g->hemis_id,
                     'status' => $g->status,
                     'retake_grade' => $g->retake_grade,
                     'reason' => $g->reason,

@@ -111,8 +111,7 @@ class QuizResultController extends Controller
      */
     public function tartibgaSol(Request $request)
     {
-        $query = HemisQuizResult::where('is_active', 1)
-            ->where('shakl', '1-urinish');
+        $query = HemisQuizResult::where('is_active', 1);
 
         if ($request->filled('date_from')) {
             $query->whereDate('date_finish', '>=', $request->date_from);
@@ -294,6 +293,7 @@ class QuizResultController extends Controller
 
     /**
      * Diagnostika — dry-run: qaysi natijalar o'tadi, qaysilari xato beradi tekshirish.
+     * Faqat 1-urinish natijalar hisobga olinadi.
      * student_grades ga hech narsa yozilmaydi.
      */
     public function diagnostika(Request $request)
@@ -307,6 +307,7 @@ class QuizResultController extends Controller
 
         $ok = [];
         $errors = [];
+        $skipped = 0;
         $duplicateTracker = [];
 
         foreach ($results as $result) {
@@ -319,6 +320,14 @@ class QuizResultController extends Controller
                 'fan_name' => $result->fan_name,
                 'grade' => $result->grade,
             ];
+
+            // Faqat 1-urinish hisobga olinadi
+            if ($result->shakl !== '1-urinish') {
+                $row['error'] = "1-urinish emas ({$result->shakl}) — o'tkazib yuborildi";
+                $errors[] = $row;
+                $skipped++;
+                continue;
+            }
 
             // Baho validatsiyasi
             if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
@@ -381,6 +390,7 @@ class QuizResultController extends Controller
         return response()->json([
             'ok_count' => count($ok),
             'error_count' => count($errors),
+            'skipped_count' => $skipped,
             'ok' => $ok,
             'errors' => $errors,
         ]);

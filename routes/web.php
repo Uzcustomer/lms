@@ -46,7 +46,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         } else {
             return response()
                 ->view('auth.login')
-                ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
+                ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                ->header('Pragma', 'no-cache')
+                ->header('Expires', '0');
         }
     })->name('login');
 
@@ -374,7 +376,9 @@ Route::prefix('student')->name('student.')->group(function () {
         } else {
             return response()
                 ->view('student.login')
-                ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
+                ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                ->header('Pragma', 'no-cache')
+                ->header('Expires', '0');
         }
     })->name('login');
 

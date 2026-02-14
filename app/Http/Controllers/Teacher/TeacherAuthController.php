@@ -25,7 +25,9 @@ class TeacherAuthController extends Controller
 
         return response()
             ->view('teacher.login')
-            ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
     public function login(Request $request)

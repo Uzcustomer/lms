@@ -3310,9 +3310,27 @@
 
         // YN ga yuborish funksiyasi
         function submitToYn() {
-            if (!confirm('YN ga yuborishni tasdiqlaysizmi?\n\nDiqqat: Yuborilgandan keyin JN va MT baholarini o\'zgartirish mumkin bo\'lmaydi!')) {
-                return;
-            }
+            // 1-bosqich: Ogohlantirish
+            const warn = confirm(
+                'DIQQAT!\n\n' +
+                'YN ga yuborilgandan keyin quyidagi o\'zgarishlar amalga oshiriladi:\n\n' +
+                '1. Barcha talabalarning JN (joriy nazorat) baholari qulflanadi\n' +
+                '2. Barcha talabalarning MT (mustaqil ta\'lim) baholari qulflanadi\n' +
+                '3. Talabalar MT uchun fayl yuklashi taqiqlanadi\n' +
+                '4. Retake (qayta topshirish) baholari qulflanadi\n\n' +
+                'Bu amalni bekor qilib bo\'lmaydi!\n\n' +
+                'Davom etasizmi?'
+            );
+            if (!warn) return;
+
+            // 2-bosqich: Yakuniy tasdiqlash
+            const finalConfirm = confirm(
+                'YAKUNIY TASDIQLASH\n\n' +
+                'Siz YN ga yuborishni tanladingiz.\n' +
+                'Baholarni qayta o\'zgartirish MUMKIN BO\'LMAYDI.\n\n' +
+                'Roziman — qulflansin!'
+            );
+            if (!finalConfirm) return;
 
             const btn = document.getElementById('btn-submit-yn');
             btn.disabled = true;

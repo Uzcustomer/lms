@@ -895,7 +895,10 @@ class JournalController extends Controller
 
         // ===== Dars ochish: o'tkazib yuborilgan kunlarni aniqlash =====
         // Jadvalda dars bor lekin na baho na davomat qo'yilmagan kunlar
-        $jbGradeDates = collect($jbGradesRaw)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
+        // Faqat haqiqiy (effective) bahosi bor yozuvlarni hisobga olish:
+        // pending, absent (grade=null), teacher_victim (grade=0, retake=null) kabi
+        // yozuvlar "qo'yilgan baho" sifatida hisoblanmasligi kerak
+        $jbGradeDates = collect($jbGradesRaw)->filter(fn($g) => $getEffectiveGrade($g) !== null)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
         $jbAttendanceDates = collect($jbAttendanceRaw)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
         $jbRecordedDates = array_unique(array_merge($jbGradeDates, $jbAttendanceDates));
 

@@ -526,18 +526,19 @@
             to { transform: rotate(360deg); }
         }
 
-        /* ===== MOBILE RESPONSIVE STYLES ===== */
+        /* Toggle tugma desktopda yashirin */
         .sidebar-mobile-toggle {
             display: none;
         }
 
+        /* ===== MOBILE RESPONSIVE STYLES ===== */
         @media (max-width: 768px) {
             /* Layout: stack sidebar below content */
             .journal-layout {
                 flex-direction: column;
             }
 
-            /* Sidebar: collapsible on mobile */
+            /* Sidebar: full width, collapsible on mobile */
             .journal-sidebar {
                 width: 100%;
                 position: relative;
@@ -545,13 +546,6 @@
                 border-left: none;
                 border-top: 2px solid #e2e8f0;
                 border-radius: 0 0 8px 8px;
-                overflow: hidden;
-            }
-            .journal-sidebar.collapsed .sidebar-field,
-            .journal-sidebar.collapsed .sidebar-section-label,
-            .journal-sidebar.collapsed #teachers-section,
-            .journal-sidebar.collapsed .mavzular-section {
-                display: none;
             }
             .sidebar-header {
                 border-radius: 0;
@@ -564,13 +558,23 @@
                 background: none;
                 border: none;
                 color: #fff;
-                font-size: 16px;
+                font-size: 14px;
                 cursor: pointer;
                 padding: 0 4px;
-                transition: transform 0.2s;
+                transition: transform 0.3s;
             }
             .journal-sidebar.collapsed .sidebar-mobile-toggle {
                 transform: rotate(180deg);
+            }
+            .journal-sidebar .sidebar-collapsible {
+                overflow: hidden;
+                transition: max-height 0.3s ease, opacity 0.2s ease;
+                max-height: 2000px;
+                opacity: 1;
+            }
+            .journal-sidebar.collapsed .sidebar-collapsible {
+                max-height: 0;
+                opacity: 0;
             }
 
             /* Tabs: smaller on mobile */
@@ -1702,7 +1706,7 @@
                 </div><!-- /.journal-main-content -->
 
                 <!-- Right Sidebar: Filters -->
-                <div class="journal-sidebar collapsed" id="journalSidebar">
+                <div class="journal-sidebar" id="journalSidebar">
                     <div class="sidebar-header" onclick="toggleMobileSidebar()">
                         <div class="sidebar-header-left">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
@@ -1715,6 +1719,7 @@
                         </div>
                     </div>
 
+                    <div class="sidebar-collapsible">
                     <div class="sidebar-field">
                         <select id="filter-faculty" class="sidebar-select" style="font-size: 12px;" onchange="onFacultyChange()">
                             <option value="">Barchasi</option>
@@ -1811,6 +1816,7 @@
                         <div class="sidebar-label">Talabalar soni</div>
                         <div class="sidebar-value" style="font-weight: 700; color: #2563eb; border-color: #bfdbfe;">{{ $students->count() }}</div>
                     </div>
+                    </div><!-- /.sidebar-collapsible -->
                 </div>
 
             </div><!-- /.journal-layout -->
@@ -2424,19 +2430,19 @@
             document.body.appendChild(overlay);
         }
 
-        // Mobile sidebar toggle
+        // Sidebar toggle (faqat mobil)
         function toggleMobileSidebar() {
             if (window.innerWidth > 768) return;
-            const sidebar = document.getElementById('journalSidebar');
-            sidebar.classList.toggle('collapsed');
+            document.getElementById('journalSidebar').classList.toggle('collapsed');
         }
-        // On desktop, ensure sidebar is never collapsed
-        window.addEventListener('resize', function() {
-            const sidebar = document.getElementById('journalSidebar');
-            if (window.innerWidth > 768) {
-                sidebar.classList.remove('collapsed');
-            }
-        });
+        // Mobilda sahifa ochilganda sidebar yig'iq, desktopga o'tsa ochiq
+        (function() {
+            var sb = document.getElementById('journalSidebar');
+            if (window.innerWidth <= 768) sb.classList.add('collapsed');
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 768) sb.classList.remove('collapsed');
+            });
+        })();
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));

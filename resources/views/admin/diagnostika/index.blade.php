@@ -41,15 +41,15 @@
                     <div class="action-right">
                         <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                            Excel
+                            Quiz natijalar
                         </button>
 
-                        <button type="button" id="btn-diagnostika" class="btn-diag" disabled>
+                        <button type="button" id="btn-excel-xulosa" class="btn-excel-xulosa" onclick="downloadXulosaExcel()" disabled>
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            Diagnostika
+                            Xulosali Excel
                         </button>
 
-                        <button type="button" id="btn-upload" class="btn-upload" disabled style="display:none;">
+                        <button type="button" id="btn-upload" class="btn-upload" disabled>
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
                             Sistemaga yuklash
                         </button>
@@ -68,39 +68,6 @@
                     </div>
                 </div>
 
-                <!-- Diagnostika / Upload natijalar paneli -->
-                <div id="diagnostika-panel" style="display:none;">
-                    <div id="diagnostika-loading" class="diag-msg diag-info" style="display:none;">
-                        <div class="spinner-sm"></div> Diagnostika tekshirilmoqda...
-                    </div>
-                    <div id="diagnostika-summary" style="display:none;"></div>
-                    <div id="diagnostika-ok" style="display:none;">
-                        <div class="diag-msg diag-success">
-                            <strong>Tayyor natijalar (yuklanadi):</strong>
-                            <div style="max-height:200px;overflow-y:auto;margin-top:8px;">
-                                <table class="diag-table">
-                                    <thead><tr>
-                                        <th>Student ID</th><th>Talaba</th><th>Fan</th><th>Baho</th><th>Jurnal ustuni</th>
-                                    </tr></thead>
-                                    <tbody id="diagnostika-ok-body"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="diagnostika-errors" style="display:none;">
-                        <div class="diag-msg diag-error">
-                            <strong>Xato natijalar:</strong>
-                            <div style="max-height:200px;overflow-y:auto;margin-top:8px;">
-                                <table class="diag-table">
-                                    <thead><tr>
-                                        <th>Student ID</th><th>Talaba</th><th>Fan</th><th>Baho</th><th>Sababi</th>
-                                    </tr></thead>
-                                    <tbody id="diagnostika-errors-body"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
                 <div id="upload-result" style="display:none;"></div>
                 <div id="import-result" style="display:none;"></div>
 
@@ -136,6 +103,7 @@
                                         <th>Shakl</th>
                                         <th>Baho</th>
                                         <th>Sana</th>
+                                        <th>Xulosa</th>
                                     </tr>
                                     <tr class="filter-header-row">
                                         <th></th>
@@ -206,6 +174,7 @@
                                                 </div>
                                             </div>
                                         </th>
+                                        <th><select class="col-filter" data-col="xulosa_code"><option value="">Barchasi</option></select></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -226,17 +195,49 @@
         var csrfToken = '{{ csrf_token() }}';
         var dataUrl = '{{ route($routePrefix . ".diagnostika.data") }}';
         var tartibgaSolUrl = '{{ route($routePrefix . ".diagnostika.tartibga-sol") }}';
-        var diagnostikaUrl = '{{ route($routePrefix . ".quiz-results.diagnostika") }}';
         var uploadUrl = '{{ route($routePrefix . ".quiz-results.upload") }}';
         var importUrl = '{{ route($routePrefix . ".quiz-results.import") }}';
         var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
-        var diagnostikaRan = false;
 
-        // Barcha yuklangan data va filtrlangan data
         var allData = [];
         var filteredData = [];
 
+        // Xulosa code -> label mapping
+        var xulosaCodes = {
+            'ok': 'Yuklasa bo\'ladi',
+            'uploaded': 'Oldin yuklangan',
+            '2O': '2O',
+            '2T': '2T',
+            'not_in_curriculum': 'Jadvalda yo\'q',
+            'jn_low': 'JN yetarli emas',
+            'mt_low': 'MT yetarli emas',
+            'oski_low': 'OSKI yetarli emas',
+            'no_student': 'Talaba topilmadi',
+            'unknown_type': 'Quiz turi noma\'lum',
+            'bad_grade': 'Baho noto\'g\'ri',
+            'not_first': '1-urinish emas'
+        };
+
         function esc(s) { return $('<span>').text(s || '-').html(); }
+
+        function getXulosaBadge(code, text) {
+            var styles = {
+                'ok':               'background:#dcfce7;color:#166534;border:1px solid #86efac;',
+                'uploaded':         'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;',
+                '2O':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
+                '2T':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
+                'not_in_curriculum':'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
+                'jn_low':           'background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;',
+                'mt_low':           'background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;',
+                'oski_low':         'background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;',
+                'no_student':       'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
+                'unknown_type':     'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
+                'bad_grade':        'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
+                'not_first':        'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;'
+            };
+            var style = styles[code] || 'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;';
+            return '<span class="badge" style="' + style + 'font-size:10px;white-space:nowrap;">' + esc(text) + '</span>';
+        }
 
         // ========== TARTIBGA SOLISH ==========
         function loadTartibgaSol() {
@@ -247,10 +248,7 @@
 
             $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();
             $('#btn-tartibga').prop('disabled', true).css('opacity', '0.6');
-            $('#diagnostika-panel').hide();
             $('#upload-result').hide();
-            diagnostikaRan = false;
-            $('#btn-upload').hide().prop('disabled', true);
 
             $.ajax({
                 url: tartibgaSolUrl, type: 'GET', data: params, timeout: 120000,
@@ -261,7 +259,7 @@
                         allData = []; filteredData = [];
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
-                        $('#btn-excel').prop('disabled', true);
+                        $('#btn-excel, #btn-excel-xulosa').prop('disabled', true);
                         $('#total-info').hide();
                         return;
                     }
@@ -269,7 +267,7 @@
                     populateColumnFilters();
                     applyColumnFilters();
                     $('#table-area').show();
-                    $('#btn-excel').prop('disabled', false);
+                    $('#btn-excel, #btn-excel-xulosa').prop('disabled', false);
                 },
                 error: function() {
                     $('#loading-state').hide();
@@ -281,7 +279,7 @@
 
         // ========== USTUN FILTRLARI ==========
         function populateColumnFilters() {
-            var cols = ['faculty','direction','kurs','semester','group','fan_name','yn_turi','shakl'];
+            var cols = ['faculty','direction','kurs','semester','group','fan_name','yn_turi','shakl','xulosa_code'];
             cols.forEach(function(col) {
                 var unique = [];
                 var seen = {};
@@ -294,7 +292,8 @@
                 var curVal = sel.val();
                 sel.find('option:not(:first)').remove();
                 unique.forEach(function(v) {
-                    sel.append('<option value="' + esc(v) + '">' + esc(v) + '</option>');
+                    var label = col === 'xulosa_code' ? (xulosaCodes[v] || v) : v;
+                    sel.append('<option value="' + esc(v) + '">' + esc(label) + '</option>');
                 });
                 if (curVal) sel.val(curVal);
             });
@@ -302,12 +301,10 @@
 
         function applyColumnFilters() {
             var filters = {};
-            // Dropdown filtrlar
             $('select.col-filter').each(function() {
                 var val = $(this).val();
                 if (val) filters[$(this).data('col')] = val;
             });
-            // Text filtrlar
             $('input.col-filter-input').each(function() {
                 var val = $.trim($(this).val()).toLowerCase();
                 if (val) filters[$(this).data('col')] = val;
@@ -317,23 +314,22 @@
                 for (var col in filters) {
                     var fv = filters[col];
                     var rv = (r[col] || '').toString();
-                    // Text input — qisman mos kelish
                     if ($('input.col-filter-input[data-col="' + col + '"]').length) {
                         if (rv.toLowerCase().indexOf(fv) === -1) return false;
                     } else {
-                        // Dropdown — aniq mos kelish
                         if (rv !== fv) return false;
                     }
                 }
-                // Baho advanced filtri
                 if (!matchAdvFilter(advFilters.baho, r.grade, false)) return false;
-                // Sana advanced filtri
                 if (!matchAdvFilter(advFilters.sana, r.date, true)) return false;
                 return true;
             });
 
             renderTable(filteredData);
-            $('#total-info').text('Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length).show();
+            // Statistika
+            var okCount = 0, errCount = 0;
+            filteredData.forEach(function(r) { if (r.xulosa_code === 'ok') okCount++; else errCount++; });
+            $('#total-info').html('Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length + ' | <span style="color:#16a34a;">Yuklasa bo\'ladi: ' + okCount + '</span>').show();
             updateButtons();
         }
 
@@ -343,7 +339,6 @@
         function toggleAdvFilter(type) {
             var popup = document.getElementById(type + '-popup');
             var isVisible = popup.style.display === 'block';
-            // Barcha popuplarni yop
             document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
             if (!isVisible) popup.style.display = 'block';
         }
@@ -371,7 +366,6 @@
                 $('.adv-filter-btn').removeClass('adv-active');
             } else {
                 advFilters[type] = { op: op, val1: val1, val2: val2 };
-                // Label yangilash
                 var opLabels = { eq: '=', gt: '>', gte: '≥', lt: '<', lte: '≤', between: '↔' };
                 var labelText = opLabels[op] + ' ' + val1;
                 if (op === 'between' && val2) labelText = val1 + ' — ' + val2;
@@ -400,13 +394,11 @@
             var v1, v2, cv;
 
             if (isDate) {
-                // Sana filtri: date qiymatlarni solishtirish
                 cv = parseDateValue(cellValue);
-                v1 = filter.val1; // yyyy-mm-dd formatda keladi
+                v1 = filter.val1;
                 v2 = filter.val2;
                 if (!cv) return false;
             } else {
-                // Baho filtri: raqam sifatida solishtirish
                 cv = parseFloat(cellValue);
                 v1 = parseFloat(filter.val1);
                 v2 = parseFloat(filter.val2);
@@ -428,7 +420,6 @@
 
         function parseDateValue(dateStr) {
             if (!dateStr) return null;
-            // "2025-01-15" yoki "15.01.2025" formatlarini yyyy-mm-dd ga o'tkazish
             dateStr = dateStr.trim();
             if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr.substring(0, 10);
             var parts = dateStr.split('.');
@@ -436,7 +427,6 @@
             return dateStr;
         }
 
-        // Popupdan tashqari bosilganda yopish
         document.addEventListener('click', function(e) {
             if (!e.target.closest('.adv-filter-wrap')) {
                 document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
@@ -454,8 +444,11 @@
                         ? '<span class="badge badge-oski">' + esc(r.yn_turi) + '</span>'
                         : esc(r.yn_turi));
 
-                html += '<tr class="journal-row" id="row-' + r.id + '">';
-                html += '<td style="padding-left:14px;"><input type="checkbox" class="row-checkbox cb-styled" value="' + r.id + '"></td>';
+                var isOk = r.xulosa_code === 'ok';
+                var rowClass = r.xulosa_code === 'uploaded' ? 'journal-row row-uploaded' : 'journal-row';
+
+                html += '<tr class="' + rowClass + '" id="row-' + r.id + '">';
+                html += '<td style="padding-left:14px;"><input type="checkbox" class="row-checkbox cb-styled" value="' + r.id + '"' + (r.xulosa_code === 'uploaded' ? ' disabled' : '') + '></td>';
                 html += '<td class="td-num">' + (i + 1) + '</td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.student_id) + '</span></td>';
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
@@ -469,6 +462,7 @@
                 html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade">' + esc(r.grade) + '</span></td>';
                 html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
+                html += '<td>' + getXulosaBadge(r.xulosa_code, r.xulosa) + '</td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -485,16 +479,10 @@
         function updateButtons() {
             var count = getSelectedIds().length;
             $('#selected-count').text(count);
-            $('#btn-diagnostika').prop('disabled', count === 0);
-            if (diagnostikaRan && count > 0) {
-                diagnostikaRan = false;
-                $('#btn-upload').hide().prop('disabled', true);
-                $('#diagnostika-panel').hide();
-                $('#upload-result').hide();
-            }
+            $('#btn-upload').prop('disabled', count === 0);
         }
 
-        // ========== EXCEL ==========
+        // ========== EXCEL (Quiz natijalar) ==========
         function downloadExcel() {
             var params = {
                 date_from: $('#date_from').val() || '',
@@ -502,6 +490,38 @@
                 export: 'excel',
             };
             window.location.href = dataUrl + '?' + $.param(params);
+        }
+
+        // ========== EXCEL (Xulosali natijalar) ==========
+        function downloadXulosaExcel() {
+            if (!filteredData || filteredData.length === 0) return;
+
+            var headers = ['#', 'Student ID', 'FISH', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'Fan', 'YN turi', 'Shakl', 'Baho', 'Sana', 'Xulosa', 'JN o\'rtacha', 'MT o\'rtacha', 'OSKI baho'];
+            var rows = [headers];
+            filteredData.forEach(function(r, i) {
+                rows.push([
+                    i + 1, r.student_id, r.full_name, r.faculty, r.direction,
+                    r.kurs, r.semester, r.group, r.fan_name, r.yn_turi,
+                    r.shakl, r.grade, r.date, r.xulosa,
+                    r.jn_avg !== null ? r.jn_avg : '',
+                    r.mt_avg !== null ? r.mt_avg : '',
+                    r.oski_avg !== null ? r.oski_avg : ''
+                ]);
+            });
+
+            var csvContent = rows.map(function(row) {
+                return row.map(function(cell) {
+                    var s = (cell === null || cell === undefined) ? '' : String(cell);
+                    return '"' + s.replace(/"/g, '""') + '"';
+                }).join(',');
+            }).join('\n');
+
+            var BOM = '\uFEFF';
+            var blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+            var link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'diagnostika_xulosali_' + new Date().toISOString().slice(0, 10) + '.csv';
+            link.click();
         }
 
         // ========== FAYL IMPORT ==========
@@ -539,107 +559,58 @@
             new ScrollCalendar('date_from');
             new ScrollCalendar('date_to');
 
-            // File tanlanganda
             $('#file-upload').on('change', function() {
                 var name = $(this).val().split('\\').pop();
                 $('#file-label').text(name || 'Fayl tanlash');
                 $('#btn-import').prop('disabled', !name);
             });
 
-            // Select all
             $('#select-all').on('change', function() {
                 var checked = $(this).is(':checked');
-                $('.row-checkbox').prop('checked', checked);
+                $('.row-checkbox:not(:disabled)').prop('checked', checked);
                 updateButtons();
             });
             $(document).on('change', '.row-checkbox', function() {
                 updateButtons();
-                var total = $('.row-checkbox').length;
+                var total = $('.row-checkbox:not(:disabled)').length;
                 var checked = $('.row-checkbox:checked').length;
                 $('#select-all').prop('checked', total > 0 && checked === total);
             });
 
-            // Ustun filtrlari — dropdown o'zgarganda
             $(document).on('change', 'select.col-filter', function() { applyColumnFilters(); });
-            // Ustun filtrlari — text input yozilganda
             var filterTimer = null;
             $(document).on('input', 'input.col-filter-input', function() {
                 clearTimeout(filterTimer);
                 filterTimer = setTimeout(function() { applyColumnFilters(); }, 300);
             });
 
-            // DIAGNOSTIKA
-            $('#btn-diagnostika').on('click', function() {
-                var ids = getSelectedIds();
-                if (ids.length === 0) return;
-
-                var btn = $(this);
-                btn.prop('disabled', true);
-                var origText = btn.html();
-                btn.html('<span class="spinner-sm"></span> Tekshirilmoqda...');
-                $('#diagnostika-panel').show();
-                $('#diagnostika-loading').show();
-                $('#diagnostika-summary').hide();
-                $('#diagnostika-ok').hide();
-                $('#diagnostika-errors').hide();
-                $('#btn-upload').hide().prop('disabled', true);
-                $('#upload-result').hide();
-
-                $.ajax({
-                    url: diagnostikaUrl, type: 'POST',
-                    headers: { 'X-CSRF-TOKEN': csrfToken },
-                    contentType: 'application/json',
-                    data: JSON.stringify({ ids: ids }),
-                    success: function(data) {
-                        $('#diagnostika-loading').hide();
-                        diagnostikaRan = true;
-
-                        var cls, text;
-                        var skippedText = data.skipped_count > 0 ? ' (' + data.skipped_count + ' ta 1-urinish emas — o\'tkazib yuborildi)' : '';
-                        if (data.error_count === 0) {
-                            cls = 'diag-success'; text = 'Hammasi tayyor! ' + data.ok_count + ' ta natija (1-urinish) muammosiz yuklanishi mumkin.' + skippedText;
-                        } else if (data.ok_count === 0) {
-                            cls = 'diag-error'; text = 'Hech bir natija yuklanmaydi. ' + data.error_count + ' ta xato topildi.' + skippedText;
-                        } else {
-                            cls = 'diag-warning'; text = data.ok_count + ' ta tayyor (1-urinish), ' + data.error_count + ' ta xato.' + skippedText;
-                        }
-                        $('#diagnostika-summary').attr('class', 'diag-msg ' + cls).html('<strong>' + text + '</strong>').show();
-
-                        if (data.ok_count > 0) {
-                            var okBody = $('#diagnostika-ok-body').empty();
-                            data.ok.forEach(function(item) {
-                                var ustunBadge = item.jurnal_ustun === 'OSKI'
-                                    ? '<span class="badge badge-oski">' + esc(item.jurnal_ustun) + '</span>'
-                                    : '<span class="badge badge-grade">' + esc(item.jurnal_ustun) + '</span>';
-                                okBody.append('<tr><td>' + esc(item.student_id) + '</td><td>' + esc(item.student_db_name || item.student_name) + '</td><td>' + esc(item.subject_name || item.fan_name) + '</td><td><strong>' + esc(item.grade) + '</strong></td><td>' + ustunBadge + '</td></tr>');
-                            });
-                            $('#diagnostika-ok').show();
-                            $('#btn-upload').show().prop('disabled', false).find('span.upload-count').remove();
-                            $('#btn-upload').append(' <span class="upload-count">(' + data.ok_count + ' ta)</span>');
-                        }
-
-                        if (data.error_count > 0) {
-                            var tbody = $('#diagnostika-errors-body').empty();
-                            data.errors.forEach(function(err) {
-                                tbody.append('<tr><td>' + esc(err.student_id) + '</td><td>' + esc(err.student_name) + '</td><td>' + esc(err.fan_name) + '</td><td>' + esc(err.grade) + '</td><td style="color:#dc2626;font-weight:600;">' + esc(err.error) + '</td></tr>');
-                            });
-                            $('#diagnostika-errors').show();
-                        }
-                    },
-                    error: function(xhr) {
-                        $('#diagnostika-loading').hide();
-                        var msg = xhr.responseJSON?.message || 'Server xatosi';
-                        $('#diagnostika-summary').attr('class', 'diag-msg diag-error').html('<strong>Xato:</strong> ' + msg).show();
-                    },
-                    complete: function() { btn.prop('disabled', false).html(origText); }
-                });
-            });
-
             // SISTEMAGA YUKLASH
             $('#btn-upload').on('click', function() {
                 var ids = getSelectedIds();
                 if (ids.length === 0) return;
-                if (!confirm("Tanlangan " + ids.length + " ta natijani sistemaga yuklashni tasdiqlaysizmi?")) return;
+
+                // Faqat "ok" xulosa bilan tanlanganlarnigina yuklash
+                var okIds = [];
+                var skippedCount = 0;
+                ids.forEach(function(id) {
+                    var row = allData.find(function(r) { return r.id === id; });
+                    if (row && row.xulosa_code === 'ok') {
+                        okIds.push(id);
+                    } else {
+                        skippedCount++;
+                    }
+                });
+
+                if (okIds.length === 0) {
+                    alert('Tanlangan natijalar orasida yuklanishi mumkin bo\'lgani yo\'q. Faqat "Yuklasa bo\'ladi" xulosali natijalar yuklanadi.');
+                    return;
+                }
+
+                var msg = okIds.length + ' ta natijani sistemaga yuklashni tasdiqlaysizmi?';
+                if (skippedCount > 0) {
+                    msg += '\n(' + skippedCount + ' ta xatolik bilan — o\'tkazib yuboriladi)';
+                }
+                if (!confirm(msg)) return;
 
                 var btn = $(this);
                 btn.prop('disabled', true);
@@ -650,7 +621,7 @@
                     url: uploadUrl, type: 'POST',
                     headers: { 'X-CSRF-TOKEN': csrfToken },
                     contentType: 'application/json',
-                    data: JSON.stringify({ ids: ids }),
+                    data: JSON.stringify({ ids: okIds }),
                     success: function(data) {
                         var html = '';
                         if (data.success_count > 0) {
@@ -662,22 +633,19 @@
                             html += '</ul></div>';
                         }
                         $('#upload-result').html(html).show();
-                        btn.hide();
-                        // Diagnostika panelda summary va xatolarni yashirish, lekin tayyor natijalar jadvalini ko'rsatib qoldirish
-                        $('#diagnostika-summary').hide();
-                        $('#diagnostika-errors').hide();
-                        // OK jadvalini "Yuklangan natijalar" deb yangilash
-                        if ($('#diagnostika-ok').is(':visible')) {
-                            $('#diagnostika-ok .diag-msg strong').first().text('Sistemaga yuklangan natijalar:');
-                        }
 
                         if (data.success_count > 0) {
-                            $('.row-checkbox:checked').each(function() {
-                                var rowId = $(this).val();
+                            // Yuklangan qatorlarni yangilash
+                            okIds.forEach(function(id) {
                                 var hasError = false;
-                                if (data.errors) { data.errors.forEach(function(err) { if (err.id == rowId) hasError = true; }); }
+                                if (data.errors) { data.errors.forEach(function(err) { if (err.id == id) hasError = true; }); }
                                 if (!hasError) {
-                                    $('#row-' + rowId).addClass('row-uploaded').find('.row-checkbox').prop('checked', false).prop('disabled', true);
+                                    $('#row-' + id).addClass('row-uploaded').find('.row-checkbox').prop('checked', false).prop('disabled', true);
+                                    // allData da xulosa yangilash
+                                    var row = allData.find(function(r) { return r.id === id; });
+                                    if (row) { row.xulosa_code = 'uploaded'; row.xulosa = 'Oldin yuklangan'; }
+                                    // xulosa badge yangilash
+                                    $('#row-' + id).find('td:last').html(getXulosaBadge('uploaded', 'Oldin yuklangan'));
                                 }
                             });
                             updateButtons();
@@ -722,9 +690,9 @@
         .btn-excel { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(22,163,74,0.3); height: 32px; white-space: nowrap; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); transform: translateY(-1px); }
         .btn-excel:disabled { cursor: not-allowed; opacity: 0.4; }
-        .btn-diag { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: linear-gradient(135deg, #d97706, #f59e0b); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(217,119,6,0.3); height: 32px; white-space: nowrap; }
-        .btn-diag:hover:not(:disabled) { background: linear-gradient(135deg, #b45309, #d97706); transform: translateY(-1px); }
-        .btn-diag:disabled { cursor: not-allowed; opacity: 0.4; }
+        .btn-excel-xulosa { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: linear-gradient(135deg, #d97706, #f59e0b); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(217,119,6,0.3); height: 32px; white-space: nowrap; }
+        .btn-excel-xulosa:hover:not(:disabled) { background: linear-gradient(135deg, #b45309, #d97706); transform: translateY(-1px); }
+        .btn-excel-xulosa:disabled { cursor: not-allowed; opacity: 0.4; }
         .btn-upload { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: linear-gradient(135deg, #7c3aed, #8b5cf6); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(124,58,237,0.3); height: 32px; white-space: nowrap; }
         .btn-upload:hover:not(:disabled) { background: linear-gradient(135deg, #6d28d9, #7c3aed); transform: translateY(-1px); }
         .btn-upload:disabled { cursor: not-allowed; opacity: 0.4; }
@@ -740,9 +708,6 @@
         .diag-success { background: #f0fdf4; color: #166534; border-bottom: 1px solid #bbf7d0; }
         .diag-warning { background: #fffbeb; color: #92400e; border-bottom: 1px solid #fde68a; }
         .diag-error { background: #fef2f2; color: #991b1b; border-bottom: 1px solid #fecaca; }
-        .diag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .diag-table th { padding: 6px 10px; text-align: left; font-weight: 600; font-size: 10px; color: #991b1b; text-transform: uppercase; background: #fee2e2; border-bottom: 1px solid #fecaca; }
-        .diag-table td { padding: 5px 10px; border-bottom: 1px solid #fef2f2; }
 
         /* === TABLE === */
         .empty-state { padding: 60px 20px; text-align: center; }

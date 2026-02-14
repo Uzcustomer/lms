@@ -2218,29 +2218,9 @@ class JournalController extends Controller
             if ($response->successful()) {
                 $data = $response->json();
 
-                Log::info('HEMIS topics raw response', [
-                    'params' => $params,
-                    'subject_id_filter' => $request->get('subject_id'),
-                    'data_type' => gettype($data['data'] ?? null),
-                    'data_keys' => is_array($data['data'] ?? null) ? array_keys($data['data']) : 'not_array',
-                    'raw_data_preview' => json_encode(array_slice($data['data'] ?? [], 0, 2)),
-                ]);
+                $items = $data['data']['items'] ?? [];
 
-                // HEMIS API data ni massiv yoki obyekt sifatida qaytarishi mumkin
-                // data: [{"items": [...]}] yoki data: {"items": [...]}
-                $items = [];
-                if (isset($data['data']['items'])) {
-                    $items = $data['data']['items'];
-                } elseif (isset($data['data'][0]['items'])) {
-                    $items = $data['data'][0]['items'];
-                }
-
-                Log::info('HEMIS topics items extracted', [
-                    'items_count_before_filter' => count($items),
-                    'first_item' => $items[0] ?? 'empty',
-                ]);
-
-                // Fan bo'yicha filtrlash (API da subject filter bo'lmasligi mumkin)
+                // Fan bo'yicha filtrlash (API da subject filter yo'q)
                 if ($request->filled('subject_id')) {
                     $subjectId = (int) $request->subject_id;
                     $items = array_values(
@@ -2248,10 +2228,6 @@ class JournalController extends Controller
                             return isset($item['subject']['id']) && (int) $item['subject']['id'] === $subjectId;
                         })
                     );
-                    Log::info('HEMIS topics after subject filter', [
-                        'subject_id' => $subjectId,
-                        'items_count_after_filter' => count($items),
-                    ]);
                 }
 
                 return response()->json([

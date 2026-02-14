@@ -13,7 +13,7 @@
             ? 'teacher' : 'admin';
     @endphp
 
-    <div class="py-4" x-data="lectureSchedule()" x-init="init()">
+    <div class="py-4" x-data="lectureSchedule()" x-init="init()" @click="closeContextMenu()" @keydown.escape.window="closeAllModals()">
 
         {{-- Flash xabarlar --}}
         @if(session('success'))
@@ -49,7 +49,7 @@
         </div>
         @endif
 
-        {{-- Yuqori panel: Upload + Batch tanlash --}}
+        {{-- Yuqori panel --}}
         <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 mb-4">
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
                 <div class="flex flex-wrap items-end gap-4">
@@ -69,14 +69,12 @@
                         </div>
                     </form>
 
-                    {{-- Namuna shablon --}}
                     <a href="{{ route($routePrefix . '.lecture-schedule.template') }}"
                        class="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         Shablon
                     </a>
 
-                    {{-- Batch tanlash --}}
                     @if(isset($batches) && $batches->count() > 0)
                     <div class="min-w-[220px]">
                         <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Yuklangan jadvallar</label>
@@ -90,15 +88,19 @@
                         </select>
                     </div>
 
-                    {{-- Hemis bilan solishtirish --}}
                     <button @click="compareHemis()" :disabled="comparing"
                             class="px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition flex items-center gap-2">
                         <svg x-show="!comparing" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                         <svg x-show="comparing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                        Hemis bilan solishtirish
+                        Hemis solishtirish
                     </button>
 
-                    {{-- O'chirish --}}
+                    {{-- Export --}}
+                    <a :href="exportUrl" class="px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                        Excel eksport
+                    </a>
+
                     <form method="POST" action="{{ route($routePrefix . '.lecture-schedule.destroy', ['id' => $activeBatch->id ?? 0]) }}" onsubmit="return confirm('Rostdan o\'chirmoqchimisiz?')">
                         @csrf
                         @method('DELETE')
@@ -138,8 +140,6 @@
                         <div class="text-xs text-gray-500 dark:text-gray-400">Topilmadi</div>
                     </div>
                 </div>
-
-                {{-- Nomuvofiqliklar ro'yxati --}}
                 <template x-if="hemisResult?.mismatches?.length > 0">
                     <div class="mt-4">
                         <h4 class="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">Nomuvofiqliklar:</h4>
@@ -181,13 +181,11 @@
         {{-- ASC TIMETABLE GRID --}}
         <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                {{-- Loading --}}
                 <div x-show="loading" class="p-12 text-center">
                     <svg class="w-8 h-8 animate-spin mx-auto text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Yuklanmoqda...</p>
                 </div>
 
-                {{-- Bo'sh holat --}}
                 <div x-show="!loading && Object.keys(gridItems).length === 0" class="p-12 text-center">
                     <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     <p class="text-gray-500 dark:text-gray-400 text-sm">Hali jadval yuklanmagan. Excel faylni yuklang yoki ro'yxatdan tanlang.</p>
@@ -207,7 +205,6 @@
                         <tbody>
                             <template x-for="pair in pairs" :key="pair.code">
                                 <tr>
-                                    {{-- Vaqt ustuni --}}
                                     <td class="asc-time-cell">
                                         <div class="font-semibold text-sm" x-text="pair.name"></div>
                                         <div class="text-xs text-gray-400 mt-0.5">
@@ -216,34 +213,36 @@
                                             <span x-text="pair.end ? pair.end.substring(0,5) : ''"></span>
                                         </div>
                                     </td>
-                                    {{-- Har bir kun uchun yacheyka --}}
                                     <template x-for="(dayName, dayNum) in days" :key="dayNum">
-                                        <td class="asc-cell" :id="'cell-' + dayNum + '-' + pair.code">
+                                        <td class="asc-cell"
+                                            :id="'cell-' + dayNum + '-' + pair.code"
+                                            :data-day="dayNum"
+                                            :data-pair="pair.code"
+                                            @dragover.prevent="onDragOver($event)"
+                                            @dragleave="onDragLeave($event)"
+                                            @drop.prevent="onDrop($event, dayNum, pair.code)"
+                                            @dblclick="openAddModal(dayNum, pair.code)">
                                             <template x-for="card in getCellCards(dayNum, pair.code)" :key="card.id">
                                                 <div class="asc-card"
                                                      :id="'card-' + card.id"
                                                      :class="getCardClass(card)"
-                                                     @mouseenter="hoveredCard = card.id"
-                                                     @mouseleave="hoveredCard = null">
-                                                    {{-- Fan nomi --}}
+                                                     draggable="true"
+                                                     @dragstart="onDragStart($event, card)"
+                                                     @dragend="onDragEnd($event)"
+                                                     @contextmenu.prevent="openContextMenu($event, card)"
+                                                     @dblclick.stop="openEditModal(card)">
                                                     <div class="asc-card-subject" x-text="card.subject_name"></div>
-                                                    {{-- O'qituvchi --}}
                                                     <div class="asc-card-teacher" x-text="card.employee_name || ''"></div>
-                                                    {{-- Auditoriya + Turi --}}
                                                     <div class="asc-card-meta">
                                                         <span x-show="card.auditorium_name" x-text="card.auditorium_name"></span>
                                                         <span x-show="card.auditorium_name && card.training_type_name" class="mx-1">|</span>
                                                         <span x-show="card.training_type_name" class="asc-card-type" x-text="card.training_type_name"></span>
                                                     </div>
-                                                    {{-- Guruh --}}
                                                     <div class="asc-card-group" x-text="card.group_name"></div>
-
-                                                    {{-- Konflikt ikonkasi --}}
                                                     <div x-show="card.has_conflict" class="asc-card-badge asc-badge-conflict" title="Ichki konflikt">!</div>
-
-                                                    {{-- Hemis diff tooltip --}}
                                                     <template x-if="card.hemis_diff && card.hemis_diff.length > 0">
-                                                        <div class="asc-card-tooltip" x-show="hoveredCard === card.id">
+                                                        <div class="asc-card-tooltip" x-show="hoveredCard === card.id"
+                                                             @mouseenter="hoveredCard = card.id" @mouseleave="hoveredCard = null">
                                                             <div class="text-xs font-semibold mb-1">Hemis farqlar:</div>
                                                             <template x-for="d in card.hemis_diff" :key="d.field">
                                                                 <div class="text-xs">
@@ -257,6 +256,11 @@
                                                     </template>
                                                 </div>
                                             </template>
+                                            {{-- Bo'sh yacheykada "+" ko'rsatish --}}
+                                            <div x-show="getCellCards(dayNum, pair.code).length === 0"
+                                                 class="asc-cell-empty" @click.stop="openAddModal(dayNum, pair.code)">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                            </div>
                                         </td>
                                     </template>
                                 </tr>
@@ -266,200 +270,158 @@
                 </div>
 
                 {{-- Legend --}}
-                <div x-show="!loading && Object.keys(gridItems).length > 0" class="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-4 text-xs">
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-4 h-4 rounded bg-green-100 dark:bg-green-900/40 border border-green-300 dark:border-green-700"></span>
-                        <span class="text-gray-600 dark:text-gray-400">Hemis bilan mos</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-4 h-4 rounded bg-yellow-100 dark:bg-yellow-900/40 border border-yellow-300 dark:border-yellow-700"></span>
-                        <span class="text-gray-600 dark:text-gray-400">Qisman mos (auditoriya farq)</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-4 h-4 rounded bg-red-100 dark:bg-red-900/40 border border-red-300 dark:border-red-700"></span>
-                        <span class="text-gray-600 dark:text-gray-400">Mos kelmaydi</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-4 h-4 rounded bg-gray-100 dark:bg-gray-600/50 border border-gray-300 dark:border-gray-500"></span>
-                        <span class="text-gray-600 dark:text-gray-400">Hemis da topilmadi</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-4 h-4 rounded bg-white dark:bg-gray-800 border-2 border-purple-400 dark:border-purple-500"></span>
-                        <span class="text-gray-600 dark:text-gray-400">Ichki konflikt</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-4 h-4 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700"></span>
-                        <span class="text-gray-600 dark:text-gray-400">Tekshirilmagan</span>
-                    </div>
+                <div x-show="!loading && Object.keys(gridItems).length > 0" class="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-4 text-xs">
+                    <span class="text-gray-500 dark:text-gray-400 font-medium mr-1">Izoh:</span>
+                    <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-green-100 dark:bg-green-900/40 border border-green-300"></span><span class="text-gray-500 dark:text-gray-400">Mos</span></div>
+                    <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-yellow-100 dark:bg-yellow-900/40 border border-yellow-300"></span><span class="text-gray-500 dark:text-gray-400">Qisman</span></div>
+                    <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-red-100 dark:bg-red-900/40 border border-red-300"></span><span class="text-gray-500 dark:text-gray-400">Mos emas</span></div>
+                    <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-gray-200 dark:bg-gray-600 border border-gray-300"></span><span class="text-gray-500 dark:text-gray-400">Topilmadi</span></div>
+                    <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded border-2 border-purple-400"></span><span class="text-gray-500 dark:text-gray-400">Konflikt</span></div>
+                    <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-200"></span><span class="text-gray-500 dark:text-gray-400">Tekshirilmagan</span></div>
+                    <span class="text-gray-400 dark:text-gray-500 ml-2">| Drag&Drop = ko'chirish | 2x bosish = tahrirlash | O'ng tugma = menyu</span>
                 </div>
             </div>
         </div>
+
+        {{-- CONTEXT MENU --}}
+        <div x-show="ctxMenu.show" x-cloak
+             class="fixed z-[100] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 py-1 min-w-[180px]"
+             :style="'top:' + ctxMenu.y + 'px;left:' + ctxMenu.x + 'px'"
+             @click.stop>
+            <button @click="openEditModal(ctxMenu.card); closeContextMenu()"
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                Tahrirlash
+            </button>
+            <button @click="duplicateCard(ctxMenu.card); closeContextMenu()"
+                    class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                Nusxa olish
+            </button>
+            <div class="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+            <button @click="deleteCard(ctxMenu.card); closeContextMenu()"
+                    class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                O'chirish
+            </button>
+        </div>
+
+        {{-- EDIT / ADD MODAL --}}
+        <div x-show="modal.show" x-cloak class="fixed inset-0 z-[90] flex items-center justify-center bg-black/40" @click.self="modal.show = false">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" @click.stop>
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200" x-text="modal.isEdit ? 'Darsni tahrirlash' : 'Yangi dars qo\'shish'"></h3>
+                </div>
+                <div class="px-6 py-4 space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Fan nomi *</label>
+                        <input x-model="modal.form.subject_name" type="text" required
+                               class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Guruh *</label>
+                        <input x-model="modal.form.group_name" type="text" required
+                               class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">O'qituvchi</label>
+                            <input x-model="modal.form.employee_name" type="text"
+                                   class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Auditoriya</label>
+                            <input x-model="modal.form.auditorium_name" type="text"
+                                   class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Dars turi</label>
+                        <select x-model="modal.form.training_type_name"
+                                class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Tanlang...</option>
+                            <option value="Ma'ruza">Ma'ruza</option>
+                            <option value="Amaliy">Amaliy</option>
+                            <option value="Seminar">Seminar</option>
+                            <option value="Laboratoriya">Laboratoriya</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                    <button @click="modal.show = false"
+                            class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">Bekor qilish</button>
+                    <button @click="saveModal()" :disabled="modal.saving"
+                            class="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition flex items-center gap-2">
+                        <svg x-show="modal.saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        <span x-text="modal.isEdit ? 'Saqlash' : 'Qo\'shish'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {{-- Toast notification --}}
+        <div x-show="toast.show" x-cloak
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 translate-y-2"
+             class="fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-lg shadow-lg text-sm font-medium"
+             :class="toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'"
+             x-text="toast.message"></div>
     </div>
 
     {{-- CSS --}}
     <style>
         [x-cloak] { display: none !important; }
-
-        .asc-header {
-            background: #f0f4ff;
-            color: #374151;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-align: center;
-            padding: 10px 8px;
-            border: 1px solid #e2e8f0;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-        .dark .asc-header {
-            background: #1e293b;
-            color: #e2e8f0;
-            border-color: #334155;
-        }
-
+        .asc-header { background: #f0f4ff; color: #374151; font-size: 0.8rem; font-weight: 600; text-align: center; padding: 10px 8px; border: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 10; }
+        .dark .asc-header { background: #1e293b; color: #e2e8f0; border-color: #334155; }
         .asc-time-col { width: 100px; min-width: 100px; }
-
-        .asc-time-cell {
-            background: #f8fafc;
-            text-align: center;
-            padding: 8px;
-            border: 1px solid #e2e8f0;
-            vertical-align: middle;
-            color: #475569;
-            width: 100px;
-            min-width: 100px;
-        }
-        .dark .asc-time-cell {
-            background: #1e293b;
-            border-color: #334155;
-            color: #94a3b8;
-        }
-
-        .asc-cell {
-            border: 1px solid #e2e8f0;
-            padding: 4px;
-            vertical-align: top;
-            min-height: 80px;
-            min-width: 130px;
-            position: relative;
-        }
+        .asc-time-cell { background: #f8fafc; text-align: center; padding: 8px; border: 1px solid #e2e8f0; vertical-align: middle; color: #475569; width: 100px; min-width: 100px; }
+        .dark .asc-time-cell { background: #1e293b; border-color: #334155; color: #94a3b8; }
+        .asc-cell { border: 1px solid #e2e8f0; padding: 4px; vertical-align: top; min-height: 80px; min-width: 130px; position: relative; transition: background 0.15s; }
         .dark .asc-cell { border-color: #334155; }
-
-        .asc-card {
-            border-radius: 8px;
-            padding: 6px 8px;
-            margin-bottom: 3px;
-            font-size: 0.72rem;
-            line-height: 1.3;
-            position: relative;
-            border: 2px solid transparent;
-            transition: all 0.15s ease;
-        }
-        .asc-card:hover {
-            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-            transform: scale(1.02);
-            z-index: 5;
-        }
-
-        /* Hemis status ranglar */
-        .asc-card-not-checked {
-            background: #eff6ff;
-            border-color: #bfdbfe;
-            color: #1e40af;
-        }
+        .asc-cell-dragover { background: #dbeafe !important; }
+        .dark .asc-cell-dragover { background: #1e3a5f !important; }
+        .asc-cell-empty { display: flex; align-items: center; justify-content: center; min-height: 60px; color: #cbd5e1; cursor: pointer; border: 2px dashed transparent; border-radius: 8px; transition: all 0.15s; }
+        .asc-cell-empty:hover { color: #3b82f6; border-color: #93c5fd; background: #eff6ff; }
+        .dark .asc-cell-empty:hover { color: #60a5fa; border-color: #2563eb; background: #1e3a5f; }
+        .asc-card { border-radius: 8px; padding: 6px 8px; margin-bottom: 3px; font-size: 0.72rem; line-height: 1.3; position: relative; border: 2px solid transparent; transition: all 0.15s ease; cursor: grab; }
+        .asc-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); transform: scale(1.02); z-index: 5; }
+        .asc-card:active { cursor: grabbing; }
+        .asc-card-dragging { opacity: 0.4; transform: scale(0.95); }
+        .asc-card-not-checked { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
         .dark .asc-card-not-checked { background: #1e3a5f; border-color: #2563eb; color: #93c5fd; }
-
-        .asc-card-match {
-            background: #f0fdf4;
-            border-color: #86efac;
-            color: #166534;
-        }
+        .asc-card-match { background: #f0fdf4; border-color: #86efac; color: #166534; }
         .dark .asc-card-match { background: #14532d33; border-color: #22c55e; color: #86efac; }
-
-        .asc-card-partial {
-            background: #fefce8;
-            border-color: #fde047;
-            color: #854d0e;
-        }
+        .asc-card-partial { background: #fefce8; border-color: #fde047; color: #854d0e; }
         .dark .asc-card-partial { background: #854d0e33; border-color: #eab308; color: #fde047; }
-
-        .asc-card-mismatch {
-            background: #fef2f2;
-            border-color: #fca5a5;
-            color: #991b1b;
-        }
+        .asc-card-mismatch { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
         .dark .asc-card-mismatch { background: #991b1b33; border-color: #ef4444; color: #fca5a5; }
-
-        .asc-card-not-found {
-            background: #f3f4f6;
-            border-color: #d1d5db;
-            color: #6b7280;
-        }
+        .asc-card-not-found { background: #f3f4f6; border-color: #d1d5db; color: #6b7280; }
         .dark .asc-card-not-found { background: #374151; border-color: #6b7280; color: #9ca3af; }
-
         .asc-card-conflict { border-color: #a855f7 !important; box-shadow: 0 0 0 1px #a855f7; }
         .dark .asc-card-conflict { border-color: #c084fc !important; box-shadow: 0 0 0 1px #c084fc; }
-
         .asc-card-highlight { animation: highlightPulse 1.5s ease-in-out 3; }
-        @keyframes highlightPulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
-            50% { box-shadow: 0 0 0 4px rgba(59,130,246,0.4); }
-        }
-
+        @keyframes highlightPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); } 50% { box-shadow: 0 0 0 4px rgba(59,130,246,0.4); } }
         .asc-card-subject { font-weight: 600; font-size: 0.75rem; margin-bottom: 2px; }
         .asc-card-teacher { font-size: 0.68rem; opacity: 0.85; }
         .asc-card-meta { font-size: 0.65rem; opacity: 0.7; margin-top: 2px; }
         .asc-card-type { font-style: italic; }
         .asc-card-group { font-size: 0.65rem; font-weight: 500; margin-top: 2px; opacity: 0.8; }
-
-        .asc-card-badge {
-            position: absolute;
-            top: 3px;
-            right: 3px;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.6rem;
-            font-weight: 700;
-        }
-        .asc-badge-conflict {
-            background: #a855f7;
-            color: #fff;
-        }
-
-        .asc-card-tooltip {
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #1e293b;
-            color: #e2e8f0;
-            padding: 8px 10px;
-            border-radius: 8px;
-            min-width: 200px;
-            z-index: 50;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-            pointer-events: none;
-            margin-bottom: 6px;
-        }
-        .asc-card-tooltip::after {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            border: 5px solid transparent;
-            border-top-color: #1e293b;
-        }
+        .asc-card-badge { position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; }
+        .asc-badge-conflict { background: #a855f7; color: #fff; }
+        .asc-card-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #1e293b; color: #e2e8f0; padding: 8px 10px; border-radius: 8px; min-width: 200px; z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,0.3); pointer-events: none; margin-bottom: 6px; }
+        .asc-card-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #1e293b; }
     </style>
 
     {{-- JavaScript --}}
     <script>
     function lectureSchedule() {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        const routePrefix = '{{ $routePrefix }}';
+
         return {
             activeBatchId: {{ $activeBatch->id ?? 'null' }},
             gridItems: {},
@@ -470,47 +432,55 @@
             hemisResult: null,
             conflicts: [],
             hoveredCard: null,
-            routePrefix: '{{ $routePrefix }}',
+            draggedCard: null,
 
-            init() {
-                if (this.activeBatchId) {
-                    this.loadGrid();
-                }
+            // Context menu
+            ctxMenu: { show: false, x: 0, y: 0, card: null },
+
+            // Modal
+            modal: {
+                show: false,
+                isEdit: false,
+                saving: false,
+                cardId: null,
+                weekDay: null,
+                pairCode: null,
+                form: { subject_name: '', group_name: '', employee_name: '', auditorium_name: '', training_type_name: '' },
             },
 
+            // Toast
+            toast: { show: false, message: '', type: 'success' },
+
+            get exportUrl() {
+                return '{{ route($routePrefix . ".lecture-schedule.export", ["id" => "__ID__"]) }}'.replace('__ID__', this.activeBatchId || 0);
+            },
+
+            init() {
+                if (this.activeBatchId) this.loadGrid();
+            },
+
+            showToast(message, type = 'success') {
+                this.toast = { show: true, message, type };
+                setTimeout(() => this.toast.show = false, 3000);
+            },
+
+            closeAllModals() {
+                this.modal.show = false;
+                this.ctxMenu.show = false;
+            },
+
+            // ===== GRID LOADING =====
             async loadGrid() {
                 if (!this.activeBatchId) return;
                 this.loading = true;
                 this.hemisResult = null;
-
                 try {
-                    const url = '{{ route($routePrefix . ".lecture-schedule.data") }}' + '?batch_id=' + this.activeBatchId;
-                    const res = await fetch(url);
+                    const res = await fetch('{{ route($routePrefix . ".lecture-schedule.data") }}?batch_id=' + this.activeBatchId);
                     const data = await res.json();
                     this.gridItems = data.items || {};
                     this.pairs = data.pairs || [];
                     this.days = data.days || {};
-
-                    // Konfliktlarni yig'ish
-                    this.conflicts = [];
-                    for (const key in this.gridItems) {
-                        for (const card of this.gridItems[key]) {
-                            if (card.has_conflict && card.conflict_details) {
-                                for (const cd of card.conflict_details) {
-                                    const exists = this.conflicts.find(c => c.message === cd.message);
-                                    if (!exists) {
-                                        this.conflicts.push({
-                                            type: cd.type,
-                                            message: cd.message,
-                                            ids: [card.id],
-                                        });
-                                    } else {
-                                        if (!exists.ids.includes(card.id)) exists.ids.push(card.id);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    this.collectConflicts();
                 } catch (e) {
                     console.error('Grid load error:', e);
                 } finally {
@@ -518,34 +488,207 @@
                 }
             },
 
-            async compareHemis() {
-                if (!this.activeBatchId) return;
-                this.comparing = true;
-
-                try {
-                    const url = '{{ route($routePrefix . ".lecture-schedule.compare") }}' + '?batch_id=' + this.activeBatchId;
-                    const res = await fetch(url);
-                    this.hemisResult = await res.json();
-                    // Gridni qayta yuklash (hemis_status yangilangan)
-                    await this.loadGrid();
-                } catch (e) {
-                    console.error('Compare error:', e);
-                } finally {
-                    this.comparing = false;
+            collectConflicts() {
+                this.conflicts = [];
+                for (const key in this.gridItems) {
+                    for (const card of this.gridItems[key]) {
+                        if (card.has_conflict && card.conflict_details) {
+                            for (const cd of card.conflict_details) {
+                                const exists = this.conflicts.find(c => c.message === cd.message);
+                                if (!exists) {
+                                    this.conflicts.push({ type: cd.type, message: cd.message, ids: [card.id] });
+                                } else {
+                                    if (!exists.ids.includes(card.id)) exists.ids.push(card.id);
+                                }
+                            }
+                        }
+                    }
                 }
             },
 
-            getCellCards(dayNum, pairCode) {
-                const key = dayNum + '_' + pairCode;
-                return this.gridItems[key] || [];
+            // ===== HEMIS =====
+            async compareHemis() {
+                if (!this.activeBatchId) return;
+                this.comparing = true;
+                try {
+                    const res = await fetch('{{ route($routePrefix . ".lecture-schedule.compare") }}?batch_id=' + this.activeBatchId);
+                    this.hemisResult = await res.json();
+                    await this.loadGrid();
+                } catch (e) { console.error(e); } finally { this.comparing = false; }
             },
 
+            // ===== DRAG & DROP =====
+            onDragStart(e, card) {
+                this.draggedCard = card;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', card.id);
+                setTimeout(() => e.target.classList.add('asc-card-dragging'), 0);
+            },
+            onDragEnd(e) {
+                e.target.classList.remove('asc-card-dragging');
+                this.draggedCard = null;
+                document.querySelectorAll('.asc-cell-dragover').forEach(el => el.classList.remove('asc-cell-dragover'));
+            },
+            onDragOver(e) {
+                if (!this.draggedCard) return;
+                e.currentTarget.classList.add('asc-cell-dragover');
+            },
+            onDragLeave(e) {
+                e.currentTarget.classList.remove('asc-cell-dragover');
+            },
+            async onDrop(e, dayNum, pairCode) {
+                e.currentTarget.classList.remove('asc-cell-dragover');
+                if (!this.draggedCard) return;
+                const card = this.draggedCard;
+                // O'sha joyga tashlab qo'ygan bo'lsa, hech narsa qilmaymiz
+                if (String(card.week_day) === String(dayNum) && String(card.lesson_pair_code) === String(pairCode)) return;
+
+                try {
+                    const res = await fetch('{{ route($routePrefix . ".lecture-schedule.move") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                        body: JSON.stringify({ id: card.id, week_day: dayNum, lesson_pair_code: pairCode }),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        this.showToast('Dars ko\'chirildi');
+                        await this.loadGrid();
+                    }
+                } catch (e) {
+                    this.showToast('Xatolik yuz berdi', 'error');
+                    console.error(e);
+                }
+            },
+
+            // ===== CONTEXT MENU =====
+            openContextMenu(e, card) {
+                this.ctxMenu = { show: true, x: e.clientX, y: e.clientY, card };
+            },
+            closeContextMenu() {
+                this.ctxMenu.show = false;
+            },
+
+            // ===== MODAL =====
+            openEditModal(card) {
+                this.modal = {
+                    show: true, isEdit: true, saving: false,
+                    cardId: card.id,
+                    weekDay: card.week_day,
+                    pairCode: card.lesson_pair_code,
+                    form: {
+                        subject_name: card.subject_name || '',
+                        group_name: card.group_name || '',
+                        employee_name: card.employee_name || '',
+                        auditorium_name: card.auditorium_name || '',
+                        training_type_name: card.training_type_name || '',
+                    },
+                };
+            },
+            openAddModal(dayNum, pairCode) {
+                if (!this.activeBatchId) return;
+                this.modal = {
+                    show: true, isEdit: false, saving: false,
+                    cardId: null,
+                    weekDay: dayNum,
+                    pairCode: pairCode,
+                    form: { subject_name: '', group_name: '', employee_name: '', auditorium_name: '', training_type_name: '' },
+                };
+            },
+            async saveModal() {
+                if (!this.modal.form.subject_name || !this.modal.form.group_name) {
+                    this.showToast('Fan nomi va guruh majburiy!', 'error');
+                    return;
+                }
+                this.modal.saving = true;
+                try {
+                    let url, method, body;
+                    if (this.modal.isEdit) {
+                        url = '{{ route($routePrefix . ".lecture-schedule.update", ["id" => "__ID__"]) }}'.replace('__ID__', this.modal.cardId);
+                        method = 'PUT';
+                        body = this.modal.form;
+                    } else {
+                        url = '{{ route($routePrefix . ".lecture-schedule.store") }}';
+                        method = 'POST';
+                        body = {
+                            ...this.modal.form,
+                            batch_id: this.activeBatchId,
+                            week_day: this.modal.weekDay,
+                            lesson_pair_code: this.modal.pairCode,
+                        };
+                    }
+                    const res = await fetch(url, {
+                        method, headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                        body: JSON.stringify(body),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        this.showToast(this.modal.isEdit ? 'Saqlandi' : 'Qo\'shildi');
+                        this.modal.show = false;
+                        await this.loadGrid();
+                    }
+                } catch (e) {
+                    this.showToast('Xatolik', 'error');
+                    console.error(e);
+                } finally {
+                    this.modal.saving = false;
+                }
+            },
+
+            // ===== DELETE =====
+            async deleteCard(card) {
+                if (!confirm('Bu darsni o\'chirmoqchimisiz?')) return;
+                try {
+                    const url = '{{ route($routePrefix . ".lecture-schedule.destroy-item", ["id" => "__ID__"]) }}'.replace('__ID__', card.id);
+                    const res = await fetch(url, {
+                        method: 'DELETE',
+                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        this.showToast('O\'chirildi');
+                        await this.loadGrid();
+                    }
+                } catch (e) {
+                    this.showToast('Xatolik', 'error');
+                }
+            },
+
+            // ===== DUPLICATE =====
+            async duplicateCard(card) {
+                try {
+                    const res = await fetch('{{ route($routePrefix . ".lecture-schedule.store") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                        body: JSON.stringify({
+                            batch_id: this.activeBatchId,
+                            week_day: card.week_day,
+                            lesson_pair_code: card.lesson_pair_code,
+                            subject_name: card.subject_name,
+                            group_name: card.group_name,
+                            employee_name: card.employee_name,
+                            auditorium_name: card.auditorium_name,
+                            training_type_name: card.training_type_name,
+                        }),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        this.showToast('Nusxa yaratildi');
+                        await this.loadGrid();
+                    }
+                } catch (e) {
+                    this.showToast('Xatolik', 'error');
+                }
+            },
+
+            // ===== HELPERS =====
+            getCellCards(dayNum, pairCode) {
+                return this.gridItems[dayNum + '_' + pairCode] || [];
+            },
             getCardClass(card) {
                 let cls = 'asc-card-' + (card.hemis_status || 'not_checked');
                 if (card.has_conflict) cls += ' asc-card-conflict';
                 return cls;
             },
-
             highlightCell(id) {
                 const el = document.getElementById('card-' + id);
                 if (el) {
@@ -554,10 +697,8 @@
                     setTimeout(() => el.classList.remove('asc-card-highlight'), 4500);
                 }
             },
-
             highlightCells(ids) {
-                if (!ids || !ids.length) return;
-                ids.forEach(id => this.highlightCell(id));
+                if (ids?.length) ids.forEach(id => this.highlightCell(id));
             },
         };
     }

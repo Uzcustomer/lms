@@ -52,7 +52,8 @@ class StudentGrade extends Model
         'oraliq_nazorat_id',
         "oski_id",
         "test_id",
-        "quiz_result_id"
+        "quiz_result_id",
+        "is_yn_locked",
 
     ];
 

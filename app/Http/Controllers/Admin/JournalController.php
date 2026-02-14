@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use App\Models\MarkingSystemScore;
+use App\Models\YnConsent;
+use App\Models\YnSubmission;
 
 class JournalController extends Controller
 {
@@ -950,6 +952,18 @@ class JournalController extends Controller
             : null;
         $minimumLimit = $markingScore ? $markingScore->minimum_limit : 60;
 
+        // YN rozilik va yuborish ma'lumotlari
+        $ynConsents = YnConsent::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $group->group_hemis_id)
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $group->group_hemis_id)
+            ->first();
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
@@ -1000,7 +1014,9 @@ class JournalController extends Controller
             'lessonOpeningsMap',
             'lessonOpeningDays',
             'activeOpenedDates',
-            'minimumLimit'
+            'minimumLimit',
+            'ynConsents',
+            'ynSubmission'
         ));
     }
 
@@ -1077,6 +1093,22 @@ class JournalController extends Controller
         $semesterCode = $request->semester_code;
         $grade = $request->grade;
         $isRegrade = (bool) $request->input('regrade', false);
+
+        // YN ga yuborilganligini tekshirish — qulflangan bo'lsa tahrirlash mumkin emas
+        $ynLocked = DB::table('student_grades')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('is_yn_locked', true)
+            ->exists();
+
+        if ($ynLocked) {
+            return response()->json([
+                'success' => false,
+                'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                'yn_locked' => true,
+            ], 403);
+        }
 
         // Get student info
         $student = DB::table('students')
@@ -1470,6 +1502,15 @@ class JournalController extends Controller
                 return response()->json(['success' => false, 'message' => 'Baho yozuvi topilmadi: id=' . $gradeId], 404);
             }
 
+            // YN ga yuborilganligini tekshirish
+            if ($studentGrade->is_yn_locked) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
+
             // Check if retake grade already exists
             if ($studentGrade->retake_grade !== null) {
                 return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
@@ -1565,6 +1606,22 @@ class JournalController extends Controller
             $subjectId = $request->subject_id;
             $semesterCode = $request->semester_code;
             $enteredGrade = $request->grade;
+
+            // YN ga yuborilganligini tekshirish
+            $ynLocked = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('is_yn_locked', true)
+                ->exists();
+
+            if ($ynLocked) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
 
             // Get student info
             $student = DB::table('students')
@@ -2674,6 +2731,22 @@ class JournalController extends Controller
             'group_hemis_id' => 'required',
         ]);
 
+        // YN ga yuborilganligini tekshirish
+        $ynLocked = DB::table('student_grades')
+            ->where('student_hemis_id', $request->student_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('is_yn_locked', true)
+            ->exists();
+
+        if ($ynLocked) {
+            return response()->json([
+                'success' => false,
+                'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                'yn_locked' => true,
+            ], 403);
+        }
+
         // Tekshirish: bu kun uchun faol dars ochilishi bormi
         $groupHemisId = $request->group_hemis_id;
         $lessonDate = \Carbon\Carbon::parse($request->lesson_date)->format('Y-m-d');
@@ -2790,6 +2863,108 @@ class JournalController extends Controller
             'success' => true,
             'message' => 'Baho saqlandi',
             'grade' => $gradeValue,
+        ]);
+    }
+
+    /**
+     * O'qituvchi YN ga yuborish — barcha baholarni qulflaydi
+     */
+    public function submitToYn(Request $request)
+    {
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+        ]);
+
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $groupHemisId = $request->group_hemis_id;
+
+        // Allaqachon yuborilganligini tekshirish
+        $existing = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => 'YN ga allaqachon yuborilgan (' . $existing->submitted_at->format('d.m.Y H:i') . ')',
+            ], 409);
+        }
+
+        // Guruh talabalarini olish
+        $studentHemisIds = DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->pluck('hemis_id');
+
+        if ($studentHemisIds->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Guruhda talabalar topilmadi',
+            ], 404);
+        }
+
+        DB::beginTransaction();
+        try {
+            // YN submission yozuvini yaratish
+            YnSubmission::create([
+                'subject_id' => $subjectId,
+                'semester_code' => $semesterCode,
+                'group_hemis_id' => $groupHemisId,
+                'submitted_by' => auth()->id(),
+                'submitted_at' => now(),
+            ]);
+
+            // Barcha tegishli student_grades yozuvlarini qulflash (JN va MT)
+            DB::table('student_grades')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->update(['is_yn_locked' => true]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'YN ga muvaffaqiyatli yuborildi. Baholar qulflandi.',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * YN consent holatlarini olish (journal detail uchun)
+     */
+    public function getYnConsents(Request $request)
+    {
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+        ]);
+
+        $consents = YnConsent::where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('group_hemis_id', $request->group_hemis_id)
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        $ynSubmission = YnSubmission::where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('group_hemis_id', $request->group_hemis_id)
+            ->first();
+
+        return response()->json([
+            'consents' => $consents,
+            'yn_submitted' => $ynSubmission !== null,
+            'yn_submitted_at' => $ynSubmission?->submitted_at?->format('d.m.Y H:i'),
         ]);
     }
 }

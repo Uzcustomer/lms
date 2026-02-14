@@ -178,6 +178,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/download-submission/{submissionId}', [JournalController::class, 'downloadSubmission'])->name('download-submission');
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
+            Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
+            Route::get('/get-yn-consents', [JournalController::class, 'getYnConsents'])->name('get-yn-consents');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');
@@ -387,6 +389,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/independents', [StudentController::class, 'getIndependents'])->name('independents');
         Route::post('/independents/{id}/submit', [StudentController::class, 'submitIndependent'])->name('independents.submit');
         Route::get('/independents/download/{submissionId}', [StudentController::class, 'downloadSubmission'])->name('independents.download');
+        Route::post('/yn-consent', [StudentController::class, 'submitYnConsent'])->name('yn-consent');
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
 
         Route::post('/logout', [StudentAuthController::class, 'logout'])->name('logout');

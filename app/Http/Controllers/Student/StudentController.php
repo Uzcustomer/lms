@@ -23,6 +23,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Services\StudentGradeService;
 use App\Models\MarkingSystemScore;
+use App\Models\YnConsent;
+use App\Models\YnSubmission;
 
 class StudentController extends Controller
 {
@@ -863,7 +865,22 @@ class StudentController extends Controller
             ->orderBy('lesson_date', 'desc')
             ->get();
 
-        return view('student.subject-grades', ['grades' => $grades]);
+        $ynConsent = YnConsent::where('student_hemis_id', $student->hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semester)
+            ->first();
+
+        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semester)
+            ->where('group_hemis_id', $student->group_id)
+            ->first();
+
+        return view('student.subject-grades', [
+            'grades' => $grades,
+            'ynConsent' => $ynConsent,
+            'ynSubmission' => $ynSubmission,
+            'subjectId' => $subjectId,
+        ]);
     }
 
     public function getPendingLessons()
@@ -958,6 +975,17 @@ class StudentController extends Controller
         $independent = Independent::where('id', $id)
             ->where('group_hemis_id', $student->group_id)
             ->firstOrFail();
+
+        // YN ga yuborilganligini tekshirish — qulflangan bo'lsa fayl yuklash mumkin emas
+        $ynLocked = StudentGrade::where('student_hemis_id', $student->hemis_id)
+            ->where('subject_id', $independent->subject_hemis_id)
+            ->where('semester_code', $independent->semester_code)
+            ->where('is_yn_locked', true)
+            ->exists();
+
+        if ($ynLocked) {
+            return back()->with('error', 'YN ga yuborilgan. Fayl yuklash mumkin emas.');
+        }
 
         // Check if grade is locked (>= minimum_limit)
         $existingGrade = StudentGrade::where('student_id', $student->id)
@@ -1075,6 +1103,47 @@ class StudentController extends Controller
         }
 
         return response()->download($filePath, $submission->file_original_name);
+    }
+
+    public function submitYnConsent(Request $request)
+    {
+        $student = Auth::guard('student')->user();
+
+        $request->validate([
+            'subject_id' => 'required|string',
+            'status' => 'required|in:approved,rejected',
+        ]);
+
+        $semester = $student->semester_code;
+
+        // YN ga allaqachon yuborilgan bo'lsa, rozilikni o'zgartirish mumkin emas
+        $ynSubmission = YnSubmission::where('subject_id', $request->subject_id)
+            ->where('semester_code', $semester)
+            ->where('group_hemis_id', $student->group_id)
+            ->first();
+
+        if ($ynSubmission) {
+            return back()->with('error', 'YN ga allaqachon yuborilgan. Rozilikni o\'zgartirish mumkin emas.');
+        }
+
+        YnConsent::updateOrCreate(
+            [
+                'student_hemis_id' => $student->hemis_id,
+                'subject_id' => $request->subject_id,
+                'semester_code' => $semester,
+            ],
+            [
+                'group_hemis_id' => $student->group_id,
+                'status' => $request->status,
+                'submitted_at' => now(),
+            ]
+        );
+
+        $message = $request->status === 'approved'
+            ? 'YN topshirishga rozilik muvaffaqiyatli yuborildi.'
+            : 'YN topshirishdan rad etish muvaffaqiyatli yuborildi.';
+
+        return back()->with('success', $message);
     }
 
     public function profile()

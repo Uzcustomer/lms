@@ -4,6 +4,9 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+        <meta http-equiv="Pragma" content="no-cache">
+        <meta http-equiv="Expires" content="0">
 
         <title>TDTU Termiz filiali mark platformasi</title>
 
@@ -29,5 +32,13 @@
                 {{ $slot }}
             </div>
         </div>
+        {{-- Mobile bfcache fix: reload page when restored from back/forward cache --}}
+        <script>
+            window.addEventListener('pageshow', function(event) {
+                if (event.persisted) {
+                    window.location.reload();
+                }
+            });
+        </script>
     </body>
 </html>

@@ -106,8 +106,7 @@ if (!function_exists('is_active_registrator')) {
 if (!function_exists('is_active_oqituvchi')) {
     /**
      * Joriy foydalanuvchi o'qituvchi sifatida ishlayotganini tekshirish.
-     * Web guard foydalanuvchisi uchun session('active_role') tekshiriladi.
-     * Teacher guard faqat web guard yo'q bo'lganda (sof o'qituvchi kirishi) ishlatiladi.
+     * Web guard va teacher guard uchun session('active_role') tekshiriladi.
      *
      * Muhim: Web guard birinchi tekshiriladi, chunki admin foydalanuvchisi
      * bir vaqtda teacher guard sessiyasiga ham ega bo'lishi mumkin
@@ -129,7 +128,14 @@ if (!function_exists('is_active_oqituvchi')) {
 
         // Teacher guard orqali kirilganmi tekshirish (faqat web guard yo'q bo'lganda)
         if (auth()->guard('teacher')->check()) {
-            return true;
+            $teacher = auth()->guard('teacher')->user();
+            $roles = $teacher->getRoleNames()->toArray();
+            $activeRole = session('active_role', $roles[0] ?? 'oqituvchi');
+            if (!in_array($activeRole, $roles) && count($roles) > 0) {
+                $activeRole = $roles[0];
+            }
+
+            return $activeRole === 'oqituvchi';
         }
 
         return false;

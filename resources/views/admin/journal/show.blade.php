@@ -526,18 +526,48 @@
             to { transform: rotate(360deg); }
         }
 
-        /* ===== MOBILE RESPONSIVE STYLES ===== */
+        /* ===== SIDEBAR TOGGLE (barcha ekranlar) ===== */
         .sidebar-mobile-toggle {
-            display: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 0 4px;
+            transition: transform 0.3s;
+        }
+        .journal-sidebar.collapsed .sidebar-mobile-toggle {
+            transform: rotate(180deg);
+        }
+        .sidebar-header {
+            cursor: pointer;
+        }
+        .journal-sidebar.collapsed .sidebar-header {
+            border-radius: 0 8px 8px 0;
+        }
+        /* Sidebar content yashirish animatsiya bilan */
+        .journal-sidebar .sidebar-collapsible {
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.2s ease;
+            max-height: 2000px;
+            opacity: 1;
+        }
+        .journal-sidebar.collapsed .sidebar-collapsible {
+            max-height: 0;
+            opacity: 0;
         }
 
+        /* ===== MOBILE RESPONSIVE STYLES ===== */
         @media (max-width: 768px) {
             /* Layout: stack sidebar below content */
             .journal-layout {
                 flex-direction: column;
             }
 
-            /* Sidebar: collapsible on mobile */
+            /* Sidebar: full width on mobile */
             .journal-sidebar {
                 width: 100%;
                 position: relative;
@@ -545,32 +575,9 @@
                 border-left: none;
                 border-top: 2px solid #e2e8f0;
                 border-radius: 0 0 8px 8px;
-                overflow: hidden;
-            }
-            .journal-sidebar.collapsed .sidebar-field,
-            .journal-sidebar.collapsed .sidebar-section-label,
-            .journal-sidebar.collapsed #teachers-section,
-            .journal-sidebar.collapsed .mavzular-section {
-                display: none;
             }
             .sidebar-header {
                 border-radius: 0;
-                cursor: pointer;
-            }
-            .sidebar-mobile-toggle {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                background: none;
-                border: none;
-                color: #fff;
-                font-size: 16px;
-                cursor: pointer;
-                padding: 0 4px;
-                transition: transform 0.2s;
-            }
-            .journal-sidebar.collapsed .sidebar-mobile-toggle {
-                transform: rotate(180deg);
             }
 
             /* Tabs: smaller on mobile */
@@ -1715,6 +1722,7 @@
                         </div>
                     </div>
 
+                    <div class="sidebar-collapsible">
                     <div class="sidebar-field">
                         <select id="filter-faculty" class="sidebar-select" style="font-size: 12px;" onchange="onFacultyChange()">
                             <option value="">Barchasi</option>
@@ -1811,6 +1819,7 @@
                         <div class="sidebar-label">Talabalar soni</div>
                         <div class="sidebar-value" style="font-weight: 700; color: #2563eb; border-color: #bfdbfe;">{{ $students->count() }}</div>
                     </div>
+                    </div><!-- /.sidebar-collapsible -->
                 </div>
 
             </div><!-- /.journal-layout -->
@@ -2424,19 +2433,11 @@
             document.body.appendChild(overlay);
         }
 
-        // Mobile sidebar toggle
+        // Sidebar toggle (barcha ekranlar uchun)
         function toggleMobileSidebar() {
-            if (window.innerWidth > 768) return;
             const sidebar = document.getElementById('journalSidebar');
             sidebar.classList.toggle('collapsed');
         }
-        // On desktop, ensure sidebar is never collapsed
-        window.addEventListener('resize', function() {
-            const sidebar = document.getElementById('journalSidebar');
-            if (window.innerWidth > 768) {
-                sidebar.classList.remove('collapsed');
-            }
-        });
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));

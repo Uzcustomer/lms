@@ -11,6 +11,6 @@ Artisan::command('inspire', function () {
 Schedule::command('import:attendance-controls')->dailyAt('02:00');
 Schedule::command('command:independent-auto-create')->dailyAt('06:00');
 
-// Quiz natijalarni Moodle dan sinxronizatsiya (har 6 soatda)
-// MOODLE_CRON_URL .env da sozlangan bo'lishi kerak
-Schedule::command('quiz:trigger-moodle-sync')->everySixHours();
+// Quiz natijalarni Moodle dan SSH orqali sinxronizatsiya
+// Qo'lda: php artisan quiz:trigger-moodle-sync
+// Yoki diagnostika sahifasidagi "Moodle Cron" tugmasi orqali

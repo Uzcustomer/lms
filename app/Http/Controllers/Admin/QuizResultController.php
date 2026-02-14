@@ -888,12 +888,14 @@ class QuizResultController extends Controller
      */
     public function triggerCron()
     {
-        $url = config('services.moodle.cron_url');
+        $host = config('services.moodle.ssh_host');
+        $user = config('services.moodle.ssh_user');
+        $script = config('services.moodle.push_script');
 
-        if (empty($url)) {
+        if (empty($host) || empty($user) || empty($script)) {
             return response()->json([
                 'success' => false,
-                'message' => 'MOODLE_CRON_URL sozlanmagan. Administrator bilan bog\'laning.',
+                'message' => 'Moodle SSH sozlamalari to\'liq emas. Administrator bilan bog\'laning.',
             ], 422);
         }
 
@@ -906,7 +908,7 @@ class QuizResultController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Moodle quiz sync ishga tushirildi (fon rejimida). Natijalar bir necha daqiqada yangilanadi.',
+                'message' => 'Moodle quiz sync SSH orqali ishga tushirildi. Natijalar bir necha daqiqada yangilanadi.',
             ]);
         } catch (\Exception $e) {
             Log::error('quiz:trigger-cron — xatolik', ['error' => $e->getMessage()]);

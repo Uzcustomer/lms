@@ -222,6 +222,16 @@
         </a>
         @endif
 
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'oquv_bolimi']))
+        <a href="{{ $r('admin.lecture-schedule.index', 'teacher.lecture-schedule.index') }}"
+           class="sidebar-link {{ $isActive('admin.lecture-schedule.*', 'teacher.lecture-schedule.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            Ma'ruza jadvali
+        </a>
+        @endif
+
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
         <div class="sidebar-section">Monitoring</div>
 

@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
+use App\Http\Controllers\Admin\LectureScheduleController;
 use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\MoodleImportController;
 
@@ -306,6 +307,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 
+        // Ma'ruza jadvalini joylashtirish
+        Route::get('/lecture-schedule', [LectureScheduleController::class, 'index'])->name('lecture-schedule.index');
+
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
         Route::post('/impersonate/student/{student}', [ImpersonateController::class, 'impersonateStudent'])->name('impersonate.student');
         Route::post('/impersonate/teacher/{teacher}', [ImpersonateController::class, 'impersonateTeacher'])->name('impersonate.teacher');
@@ -527,6 +531,9 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
+
+        // Ma'ruza jadvalini joylashtirish
+        Route::get('/lecture-schedule', [LectureScheduleController::class, 'index'])->name('lecture-schedule.index');
 
         Route::get('/get-groups/semester', [LessonController::class, 'getGroups_semester'])->name('get.groups_semester');
         Route::get('/get-students', [LessonController::class, 'getStudents'])->name('get.students');

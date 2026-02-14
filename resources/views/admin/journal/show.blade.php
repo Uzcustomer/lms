@@ -552,23 +552,20 @@
             max-height: 0;
             opacity: 0;
         }
-
-        /* ===== MOBILE RESPONSIVE STYLES (1024px dan past) ===== */
-        @media (max-width: 1024px) {
-            .journal-layout {
-                flex-direction: column;
-            }
-            .journal-sidebar {
-                width: 100% !important;
-                position: relative;
-                max-height: none;
-                border-left: none;
-                border-top: 2px solid #e2e8f0;
-                border-radius: 0 0 8px 8px;
-            }
-            .sidebar-header {
-                border-radius: 0;
-            }
+        /* Mobile layout - JS tomonidan .mobile-layout class qo'shiladi */
+        .journal-layout.mobile-layout {
+            flex-direction: column;
+        }
+        .journal-layout.mobile-layout .journal-sidebar {
+            width: 100% !important;
+            position: relative;
+            max-height: none;
+            border-left: none;
+            border-top: 2px solid #e2e8f0;
+            border-radius: 0 0 8px 8px;
+        }
+        .journal-layout.mobile-layout .sidebar-header {
+            border-radius: 0;
         }
 
         /* ===== MOBILE RESPONSIVE STYLES (768px dan past) ===== */
@@ -2426,32 +2423,52 @@
             document.body.appendChild(overlay);
         }
 
-        // Sidebar toggle
-        var SIDEBAR_BREAKPOINT = 1024;
+        // Sidebar toggle - ResizeObserver bilan konteyner kengligini kuzatadi
+        var sidebarMobileMode = false;
         function toggleMobileSidebar() {
-            if (window.innerWidth > SIDEBAR_BREAKPOINT) return;
+            if (!sidebarMobileMode) return;
             var sb = document.getElementById('journalSidebar');
             sb.classList.toggle('collapsed');
             if (!sb.classList.contains('collapsed')) sb.dataset.userOpened = '1';
             else delete sb.dataset.userOpened;
         }
-        function handleSidebarResize() {
+        function applySidebarMode(containerWidth) {
+            var layout = document.querySelector('.journal-layout');
             var sb = document.getElementById('journalSidebar');
             var btn = document.getElementById('sidebarToggleBtn');
             var header = document.querySelector('.sidebar-header');
-            if (window.innerWidth <= SIDEBAR_BREAKPOINT) {
+            if (!layout || !sb || !btn || !header) return;
+            var isMobile = containerWidth < 768;
+            if (isMobile && !sidebarMobileMode) {
+                sidebarMobileMode = true;
+                layout.classList.add('mobile-layout');
                 btn.style.display = 'inline-flex';
                 header.style.cursor = 'pointer';
-                if (!sb.dataset.userOpened) sb.classList.add('collapsed');
-            } else {
+                sb.classList.add('collapsed');
+            } else if (!isMobile && sidebarMobileMode) {
+                sidebarMobileMode = false;
+                layout.classList.remove('mobile-layout');
                 btn.style.display = 'none';
                 header.style.cursor = 'default';
                 sb.classList.remove('collapsed');
                 delete sb.dataset.userOpened;
             }
         }
-        handleSidebarResize();
-        window.addEventListener('resize', handleSidebarResize);
+        // ResizeObserver - konteynerning haqiqiy kengligini kuzatadi
+        (function() {
+            var layout = document.querySelector('.journal-layout');
+            if (!layout) return;
+            applySidebarMode(layout.offsetWidth);
+            if (typeof ResizeObserver !== 'undefined') {
+                new ResizeObserver(function(entries) {
+                    applySidebarMode(entries[0].contentRect.width);
+                }).observe(layout);
+            } else {
+                window.addEventListener('resize', function() {
+                    applySidebarMode(layout.offsetWidth);
+                });
+            }
+        })();
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));

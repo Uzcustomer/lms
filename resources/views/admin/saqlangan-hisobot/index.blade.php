@@ -130,6 +130,7 @@
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <link href="/css/scroll-calendar.css" rel="stylesheet" />
     <script src="/js/scroll-calendar.js"></script>
 
@@ -337,19 +338,22 @@
                 ]);
             });
 
-            var csvContent = rows.map(function(row) {
-                return row.map(function(cell) {
-                    var s = (cell === null || cell === undefined) ? '' : String(cell);
-                    return '"' + s.replace(/"/g, '""') + '"';
-                }).join(',');
-            }).join('\n');
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet(rows);
 
-            var BOM = '\uFEFF';
-            var blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-            var link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'sistemaga_yuklangan_' + new Date().toISOString().slice(0, 10) + '.csv';
-            link.click();
+            // Ustun kengliklarini avtomatik belgilash
+            var colWidths = headers.map(function(h, ci) {
+                var max = h.length;
+                rows.forEach(function(row) {
+                    var len = String(row[ci] || '').length;
+                    if (len > max) max = len;
+                });
+                return { wch: Math.min(max + 2, 40) };
+            });
+            ws['!cols'] = colWidths;
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Natijalar');
+            XLSX.writeFile(wb, 'sistemaga_yuklangan_' + new Date().toISOString().slice(0, 10) + '.xlsx');
         }
 
         // ========== DOCUMENT READY ==========

@@ -82,9 +82,9 @@
                                     <input type="number" name="mt_max_resubmissions" id="mt_max_resubmissions"
                                         class="block w-32 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                         value="{{ old('mt_max_resubmissions', $mtMaxResubmissions ?? 3) }}" min="0" max="10">
-                                    <span class="text-sm text-gray-500">marta (baho 60 dan past bo'lsa)</span>
+                                    <span class="text-sm text-gray-500">marta (baho o'tish balidan past bo'lsa)</span>
                                 </div>
-                                <p class="text-xs text-gray-400 mt-1">0 = qayta yuklash mumkin emas. Baho 60 va undan yuqori bo'lsa, baho qulflanadi.</p>
+                                <p class="text-xs text-gray-400 mt-1">0 = qayta yuklash mumkin emas. Baho o'tish bali va undan yuqori bo'lsa, baho qulflanadi.</p>
                             </div>
                         </div>
 
@@ -100,35 +100,6 @@
                                         class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                         value="{{ old('deadlines.' . $deadline->level_code . '.days', $deadline->deadline_days ?? '') }}">
                                     @error('deadlines.' . $deadline->level_code . '.days')
-                                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                                <div>
-                                    <label for="deadlines[{{ $deadline->level_code }}][joriy]"
-                                        class="block text-sm font-medium text-gray-700">
-                                        {{ $deadline->level->level_name }} ({{ $deadline->level_code }}) Joriy nazorat
-                                        o'tish bali
-                                    </label>
-                                    <input type="number" name="deadlines[{{ $deadline->level_code }}][joriy]"
-                                        id="deadlines[{{ $deadline->level_code }}][joriy]"
-                                        class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                        value="{{ old('deadlines.' . $deadline->level_code . '.joriy', $deadline->joriy ?? '') }}">
-                                    @error('deadlines.' . $deadline->level_code . '.joriy')
-                                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                                <div>
-                                    <label for="deadlines[{{ $deadline->level_code }}][mustaqil_talim]"
-                                        class="block text-sm font-medium text-gray-700">
-                                        {{ $deadline->level->level_name }} ({{ $deadline->level_code }}) Mustaqil ta'lim
-                                        o'tish
-                                        bali
-                                    </label>
-                                    <input type="number" name="deadlines[{{ $deadline->level_code }}][mustaqil_talim]"
-                                        id="deadlines[{{ $deadline->level_code }}][mustaqil_talim]"
-                                        class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                        value="{{ old('deadlines.' . $deadline->level_code . '.mustaqil_talim', $deadline->mustaqil_talim ?? '') }}">
-                                    @error('deadlines.' . $deadline->level_code . '.mustaqil_talim')
                                         <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
                                     @enderror
                                 </div>

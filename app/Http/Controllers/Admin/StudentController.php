@@ -259,7 +259,8 @@ class StudentController extends Controller
     public function low_grades($hemis_id, Request $request)
     {
         $student = Student::where('hemis_id', $hemis_id)->first();
-        $threshold = ($student && $student->level_code == 16) ? 3 : 60;
+        $markingScore = MarkingSystemScore::getByStudentHemisId($hemis_id);
+        $threshold = $markingScore->minimum_limit;
 
         $grades = StudentGrade::where('student_hemis_id', $hemis_id)
             ->where('grade', '<', $threshold)
@@ -1073,12 +1074,12 @@ class StudentController extends Controller
                 ->groupBy('students.id')
                 ->get();
 
-            $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
+                $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
                 $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
-                if ($student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
+                if ($student->jn >= $markingScore->effectiveLimit('jn') and $student->mt >= $markingScore->effectiveLimit('mt') and $student->qoldiq <= 25) {
                     $students_shakl[] = [
                         'full_name' => $student->full_name,
                         'hemis_id' => $student->hemis_id,
@@ -1170,12 +1171,12 @@ class StudentController extends Controller
                 ->groupBy('students.id')
                 ->get();
 
-            $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
+                $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
                 $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
-                if ($student->test < 60 and $student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
+                if ($student->test < $markingScore->effectiveLimit('test') and $student->jn >= $markingScore->effectiveLimit('jn') and $student->mt >= $markingScore->effectiveLimit('mt') and $student->qoldiq <= 25) {
                     $students_shakl[] = [
                         'full_name' => $student->full_name,
                         'hemis_id' => $student->hemis_id,
@@ -1290,12 +1291,12 @@ class StudentController extends Controller
                 ->groupBy('students.id')
                 ->get();
 
-            $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
+                $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
                 $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
-                if ($student->test < 60 and $student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
+                if ($student->test < $markingScore->effectiveLimit('test') and $student->jn >= $markingScore->effectiveLimit('jn') and $student->mt >= $markingScore->effectiveLimit('mt') and $student->qoldiq <= 25) {
                     $students_shakl[] = [
                         'full_name' => $student->full_name,
                         'hemis_id' => $student->hemis_id,
@@ -1385,12 +1386,12 @@ class StudentController extends Controller
                 ->groupBy('students.id')
                 ->get();
 
-            $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
+                $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
                 $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
-                if ($student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
+                if ($student->jn >= $markingScore->effectiveLimit('jn') and $student->mt >= $markingScore->effectiveLimit('mt') and $student->qoldiq <= 25) {
                     $students_shakl[] = [
                         'full_name' => $student->full_name,
                         'hemis_id' => $student->hemis_id,
@@ -1482,12 +1483,12 @@ class StudentController extends Controller
                 ->groupBy('students.id')
                 ->get();
 
-            $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
+                $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
                 $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
-                if ($student->oski < 60 and $student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
+                if ($student->oski < $markingScore->effectiveLimit('oski') and $student->jn >= $markingScore->effectiveLimit('jn') and $student->mt >= $markingScore->effectiveLimit('mt') and $student->qoldiq <= 25) {
                     $students_shakl[] = [
                         'full_name' => $student->full_name,
                         'hemis_id' => $student->hemis_id,
@@ -1602,12 +1603,12 @@ class StudentController extends Controller
                 ->groupBy('students.id')
                 ->get();
 
-            $deadline = Deadline::where('level_code', $semester->level_code)->first();
             $students_shakl = [];
             foreach ($students as $student) {
+                $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
                 $qoldirgan = $this->getAbsentOffSum($group->group_hemis_id, $subject->subject_id, $student->hemis_id);
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
-                if ($student->oski < 60 and $student->jn >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and $student->qoldiq <= 25) {
+                if ($student->oski < $markingScore->effectiveLimit('oski') and $student->jn >= $markingScore->effectiveLimit('jn') and $student->mt >= $markingScore->effectiveLimit('mt') and $student->qoldiq <= 25) {
                     $students_shakl[] = [
                         'full_name' => $student->full_name,
                         'hemis_id' => $student->hemis_id,

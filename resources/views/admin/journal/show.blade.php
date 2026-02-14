@@ -851,7 +851,7 @@
                                                     @if($hasGrades)
                                                         @php
                                                             $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
-                                                            $dayAvgColorClass = $dayAvg < 60 ? 'text-red-600' : ($hasTeacherGradeInDay ? 'text-green-600' : 'text-gray-900');
+                                                            $dayAvgColorClass = $dayAvg < ($minimumLimit ?? 60) ? 'text-red-600' : ($hasTeacherGradeInDay ? 'text-green-600' : 'text-gray-900');
                                                         @endphp
                                                         <span class="{{ $isRetake ? 'grade-retake' : $dayAvgColorClass }} font-medium">{{ $dayAvg }}</span>
                                                         @if(count($dayGrades) > 1)
@@ -877,8 +877,8 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
-                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < 60 ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
+                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
+                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
@@ -1035,11 +1035,11 @@
                                                             $showRatingInput = $canRate && !$hasRetake;
                                                             $retakeType = 'absent';
                                                         } elseif ($gradeData && $gradeData['reason'] === 'low_grade' && $gradeData['retake_grade'] !== null) {
-                                                            // Otrabotka qilingan (original_grade < 60)
+                                                            // Otrabotka qilingan (original_grade < minimumLimit)
                                                             $hasRetake = true;
                                                             $retakeType = 'low_grade';
-                                                        } elseif ($gradeData && $gradeData['original_grade'] !== null && round($gradeData['original_grade'], 0) < 60 && ($gradeData['retake_grade'] ?? null) === null) {
-                                                            // 60 dan past, hali otrabotka qilinmagan
+                                                        } elseif ($gradeData && $gradeData['original_grade'] !== null && round($gradeData['original_grade'], 0) < ($minimumLimit ?? 60) && ($gradeData['retake_grade'] ?? null) === null) {
+                                                            // minimumLimit dan past, hali otrabotka qilinmagan
                                                             $gradeRecordId = $gradeData['id'];
                                                             $showRatingInput = $canRate;
                                                         } elseif (!$isAbsent && $grade === null) {
@@ -1049,12 +1049,12 @@
                                                     @endphp
                                                     @if($grade !== null)
                                                         @if($showRatingInput)
-                                                            {{-- 60 dan past baho — otrabotka qilish mumkin --}}
+                                                            {{-- minimumLimit dan past baho — otrabotka qilish mumkin --}}
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
                                                                 <span class="text-red-600 font-medium">{{ round($grade, 0) }}</span>
                                                             </div>
                                                         @elseif($hasRetake && $retakeType === 'low_grade')
-                                                            {{-- 60 dan past + otrabotka qilgan: diagonal split --}}
+                                                            {{-- minimumLimit dan past + otrabotka qilgan: diagonal split --}}
                                                             @php
                                                                 $origVal = round($gradeData['original_grade'], 0);
                                                                 $retakeVal = round($gradeData['retake_grade'], 0);
@@ -1067,7 +1067,7 @@
                                                         @else
                                                             @php
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
-                                                                $gradeColorClass = round($grade, 0) < 60 ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
+                                                                $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
                                                             @endphp
                                                             <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif
@@ -1119,8 +1119,8 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
-                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
-                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < 60 ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
+                                            <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
+                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
@@ -1196,7 +1196,7 @@
                                             $manualGrade = $manualMtGrades[$student->hemis_id] ?? null;
                                             $gradeRow = $manualMtGradesRaw[$student->hemis_id] ?? null;
                                             $hasGrade = $manualGrade !== null;
-                                            $isLockedPermanent = $hasGrade && $manualGrade >= 60;
+                                            $isLockedPermanent = $hasGrade && $manualGrade >= ($minimumLimit ?? 60);
                                             $history = $mtGradeHistory[$student->hemis_id] ?? [];
                                             $currentAttempt = count($history) + ($hasGrade ? 1 : 0);
                                             $submission = $mtSubmissions[$student->hemis_id] ?? null;
@@ -1211,7 +1211,7 @@
                                                     $hasResubmitted = \Carbon\Carbon::parse($submitTime)->gt(\Carbon\Carbon::parse($gradeTime));
                                                 }
                                             }
-                                            $canRegrade = $hasGrade && $manualGrade < 60 && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
+                                            $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
                                             $inputDisabled = $isDekan || $isRegistrator || $hasGrade || !$hasFile;
 
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade
@@ -1280,7 +1280,7 @@
                                             <td class="px-1 py-1 text-center" id="mt-history-{{ $student->hemis_id }}">
                                                 @if(count($history) > 0)
                                                     @foreach($history as $h)
-                                                        <span style="display: inline-flex; align-items: center; padding: 2px 6px; font-size: 11px; border-radius: 4px; {{ $h->grade >= 60 ? 'background: #dcfce7; color: #15803d;' : 'background: #fee2e2; color: #b91c1c;' }} margin-right: 2px;" title="{{ $h->attempt_number }}-urinish: {{ $h->graded_by ?? '' }}">
+                                                        <span style="display: inline-flex; align-items: center; padding: 2px 6px; font-size: 11px; border-radius: 4px; {{ $h->grade >= ($minimumLimit ?? 60) ? 'background: #dcfce7; color: #15803d;' : 'background: #fee2e2; color: #b91c1c;' }} margin-right: 2px;" title="{{ $h->attempt_number }}-urinish: {{ $h->graded_by ?? '' }}">
                                                             {{ $h->attempt_number }}: {{ round($h->grade) }}
                                                             @if($h->file_path)
                                                                 <a href="{{ route('admin.journal.download-history-file', $h->id) }}" style="margin-left: 2px; color: inherit;" title="{{ $h->attempt_number }}-urinish fayli">&#128206;</a>
@@ -1305,12 +1305,12 @@
                                                     </button>
                                                     @endif
                                                 @elseif($isLockedPermanent)
-                                                    {{-- Grade >= 60: permanently locked --}}
+                                                    {{-- Grade >= minimumLimit: permanently locked --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #dcfce7; color: #15803d; border-radius: 6px;">
                                                         &#128274; Qabul qilindi
                                                     </span>
                                                 @elseif($canRegrade)
-                                                    {{-- Grade < 60, student resubmitted: can regrade --}}
+                                                    {{-- Grade < minimumLimit, student resubmitted: can regrade --}}
                                                     @if(!$isDekan)
                                                     <button type="button"
                                                         onclick="startRegrade('{{ $student->hemis_id }}')"
@@ -1318,13 +1318,13 @@
                                                         Qayta baholash
                                                     </button>
                                                     @endif
-                                                @elseif($hasGrade && $manualGrade < 60 && $currentAttempt <= $mtMaxResubmissions)
-                                                    {{-- Grade < 60, waiting for student to resubmit --}}
+                                                @elseif($hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions)
+                                                    {{-- Grade < minimumLimit, waiting for student to resubmit --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #fef9c3; color: #92400e; border-radius: 6px;">
                                                         &#128274; Kutilmoqda
                                                     </span>
                                                 @else
-                                                    {{-- Grade < 60, max attempts reached --}}
+                                                    {{-- Grade < minimumLimit, max attempts reached --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #fee2e2; color: #b91c1c; border-radius: 6px;">
                                                         Limit tugagan
                                                     </span>
@@ -1415,7 +1415,7 @@
                                                         @endif
                                                     </td>
                                                 @endforeach
-                                                <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < 60 ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span><span style="color: #9ca3af; font-size: 11px;"> ({{ $totalMtDays }})</span></td>
+                                                <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span><span style="color: #9ca3af; font-size: 11px;"> ({{ $totalMtDays }})</span></td>
                                             </tr>
                                         @endforeach
                                     </tbody>
@@ -1504,7 +1504,7 @@
                                             @empty
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
-                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < 60 ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span><span style="color: #9ca3af; font-size: 11px;"> ({{ $totalMtDays }})</span></td>
+                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span><span style="color: #9ca3af; font-size: 11px;"> ({{ $totalMtDays }})</span></td>
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -1648,6 +1648,8 @@
     </div>
 
     <script>
+        window.minimumLimit = {{ $minimumLimit ?? 60 }};
+
         // ====== Cascading Sidebar Filters ======
         // Zanjir: Fakultet(erkin) → Yo'nalish → Kurs → Semestr → [Guruh ↔ Fan]
         // Kafedra erkin, fanga ta'sir qiladi.
@@ -2039,7 +2041,7 @@
             if (!cell || !history || history.length === 0) return;
             let html = '';
             history.forEach(h => {
-                const cls = h.grade >= 60 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+                const cls = h.grade >= (window.minimumLimit || 60) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
                 let fileLink = '';
                 if (h.has_file && h.id) {
                     fileLink = ' <a href="' + historyDownloadBase + h.id + '" class="ml-0.5 hover:text-blue-700" title="' + h.attempt + '-urinish fayli">&#128206;</a>';
@@ -2055,14 +2057,14 @@
             if (!cell) return;
 
             const grade = parseFloat(data.grade);
-            if (grade >= 60) {
+            if (grade >= (window.minimumLimit || 60)) {
                 cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#dcfce7;color:#15803d;border-radius:6px;">&#128274; Qabul qilindi</span>';
             } else if (data.can_regrade && !isDekan) {
                 cell.innerHTML = '<button type="button" onclick="startRegrade(\'' + studentHemisId + '\')" ' +
                     'style="padding:6px 16px;font-size:13px;font-weight:600;background:#f97316;color:#fff;border:none;border-radius:6px;cursor:pointer;">' +
                     'Qayta baholash</button>';
             } else if (data.waiting_resubmit) {
-                // Grade < 60, talaba qayta yuklashi kerak
+                // Grade < minimumLimit, talaba qayta yuklashi kerak
                 cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#fef9c3;color:#92400e;border-radius:6px;">&#128274; Kutilmoqda</span>';
             } else {
                 cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#fee2e2;color:#b91c1c;border-radius:6px;">Limit tugagan</span>';
@@ -2196,7 +2198,7 @@
                 var span = cell.querySelector('span.font-bold');
                 if (span) {
                     span.textContent = Math.round(grade);
-                    span.style.color = grade < 60 ? '#dc2626' : '#2563eb';
+                    span.style.color = grade < (window.minimumLimit || 60) ? '#dc2626' : '#2563eb';
                 }
             });
         }
@@ -2796,7 +2798,7 @@
         }
 
         function showPendingInCell(cellDiv, grade) {
-            const color = grade < 60 ? 'color:#dc2626' : 'color:#111827';
+            const color = grade < (window.minimumLimit || 60) ? 'color:#dc2626' : 'color:#111827';
             cellDiv.innerHTML = `<span class="font-medium" style="${color}">${grade}</span>`;
             cellDiv.style.background = '#fef9c3'; // Sariq — pending
         }
@@ -2962,7 +2964,7 @@
                     } else {
                         successCount++;
                         const gradeVal = Math.round(data.grade);
-                        const color = gradeVal < 60 ? 'color:#dc2626' : 'color:#16a34a';
+                        const color = gradeVal < (window.minimumLimit || 60) ? 'color:#dc2626' : 'color:#16a34a';
                         cellDiv.innerHTML = `<span class="font-medium" style="${color}">${gradeVal}</span>`;
                         cellDiv.style.background = '#ecfdf5';
                         delete pendingOpenedGrades[key];

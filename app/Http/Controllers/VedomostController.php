@@ -441,7 +441,7 @@ class VedomostController extends Controller
 
 
                     $deadline = Deadline::where('level_code', $semester->level_code)->first();
-                    $markingScore = $this->getMarkingScore($student->hemis_id);
+                    $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
                     $jnLimit = $markingScore->jn_active ? $markingScore->jn_limit : 0;
                     $mtLimit = $markingScore->mt_active ? $markingScore->mt_limit : 0;
                     $onLimit = $markingScore->on_active ? $markingScore->on_limit : 0;
@@ -855,7 +855,7 @@ class VedomostController extends Controller
 
 
                     $deadline = Deadline::where('level_code', $semester->level_code)->first();
-                    $markingScore = $this->getMarkingScore($student->hemis_id);
+                    $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
                     $jnLimit = $markingScore->jn_active ? $markingScore->jn_limit : 0;
                     $mtLimit = $markingScore->mt_active ? $markingScore->mt_limit : 0;
                     $onLimit = $markingScore->on_active ? $markingScore->on_limit : 0;
@@ -1035,35 +1035,6 @@ class VedomostController extends Controller
             return back()->with('error', 'Xatolik yuz berdi: ' . $e->getMessage() . " " . $e->getLine());
         }
     }
-    private function getMarkingScore($studentHemisId)
-    {
-        static $cache = [];
-        if (isset($cache[$studentHemisId])) {
-            return $cache[$studentHemisId];
-        }
-
-        $student = Student::where('hemis_id', $studentHemisId)->first();
-        $markingSystemCode = optional(optional($student)->curriculum)->marking_system_code;
-
-        $score = $markingSystemCode
-            ? MarkingSystemScore::where('marking_system_code', $markingSystemCode)->first()
-            : null;
-
-        if (!$score) {
-            $score = (object) [
-                'jn_limit' => 60, 'jn_active' => true,
-                'mt_limit' => 60, 'mt_active' => true,
-                'on_limit' => 60, 'on_active' => false,
-                'oski_limit' => 60, 'oski_active' => true,
-                'test_limit' => 60, 'test_active' => true,
-                'total_limit' => 60, 'total_active' => true,
-            ];
-        }
-
-        $cache[$studentHemisId] = $score;
-        return $score;
-    }
-
     function delete(Request $request, $id)
     {
         try {

@@ -73,7 +73,7 @@
                                                     <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
                                                         Qabul qilindi
                                                     </span>
-                                                @elseif($item['submission'] && $item['grade'] !== null && $item['grade'] < 60)
+                                                @elseif($item['submission'] && $item['grade'] !== null && $item['grade'] < ($minimumLimit ?? 60))
                                                     <span class="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
                                                         Qayta topshirish
                                                     </span>
@@ -93,7 +93,7 @@
                                             </td>
                                             <td class="px-4 py-3 text-sm text-gray-500">
                                                 @if($item['grade'] !== null)
-                                                    <span class="font-semibold {{ $item['grade'] >= 60 ? 'text-green-600' : 'text-red-600' }}">
+                                                    <span class="font-semibold {{ $item['grade'] >= ($minimumLimit ?? 60) ? 'text-green-600' : 'text-red-600' }}">
                                                         {{ $item['grade'] }}
                                                     </span>
                                                     @if($item['grade_locked'])
@@ -106,7 +106,7 @@
                                                     <div class="mt-1 border-t border-gray-200 pt-1">
                                                         <span class="text-xs text-gray-400">Oldingi:</span>
                                                         @foreach($item['grade_history'] as $history)
-                                                            <span class="text-xs {{ $history->grade >= 60 ? 'text-green-500' : 'text-red-400' }}">
+                                                            <span class="text-xs {{ $history->grade >= ($minimumLimit ?? 60) ? 'text-green-500' : 'text-red-400' }}">
                                                                 {{ $history->grade }}
                                                             </span>@if(!$loop->last), @endif
                                                         @endforeach
@@ -115,7 +115,7 @@
                                             </td>
                                             <td class="px-4 py-3 text-sm">
                                                 @if($item['grade_locked'])
-                                                    {{-- Grade >= 60: show file info only, no upload --}}
+                                                    {{-- Grade >= minimumLimit: show file info only, no upload --}}
                                                     @if($item['submission'])
                                                         <a href="{{ asset('storage/' . $item['submission']->file_path) }}" target="_blank"
                                                            class="text-blue-500 hover:text-blue-700 text-xs underline">
@@ -146,7 +146,7 @@
                                                                        onchange="this.form.submit()">
                                                             </label>
                                                         </form>
-                                                    @elseif($item['grade'] !== null && $item['grade'] < 60 && $item['remaining_attempts'] <= 0)
+                                                    @elseif($item['grade'] !== null && $item['grade'] < ($minimumLimit ?? 60) && $item['remaining_attempts'] <= 0)
                                                         <p class="text-xs text-red-400 mt-1">MT topshirig'ini qayta yuklash imkoniyati tugagan</p>
                                                     @elseif(!$item['is_overdue'] && $item['grade'] === null)
                                                         <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}"

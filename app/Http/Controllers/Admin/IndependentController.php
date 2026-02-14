@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use App\Models\MarkingSystemScore;
 class IndependentController extends Controller
 {
     public function index(Request $request)
@@ -262,7 +263,16 @@ class IndependentController extends Controller
             ->get()
             ->groupBy('student_id');
 
-        return view('admin.independent.grade', compact('independent', 'students', 'submissions', 'gradeHistory'));
+        // Get minimum limit from group's curriculum marking system
+        $group = Group::find($independent->group_hemis_id);
+        $markingScore = $group && $group->curriculum_hemis_id
+            ? MarkingSystemScore::where('marking_system_code',
+                \App\Models\Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->value('marking_system_code')
+              )->first()
+            : null;
+        $minimumLimit = $markingScore ? $markingScore->minimum_limit : 60;
+
+        return view('admin.independent.grade', compact('independent', 'students', 'submissions', 'gradeHistory', 'minimumLimit'));
 
     }
     function grade_form($id)
@@ -309,7 +319,16 @@ class IndependentController extends Controller
             ->get()
             ->groupBy('student_id');
 
-        return view('admin.independent.grade_form', compact('independent', 'students', 'submissions', 'gradeHistory'));
+        // Get minimum limit from group's curriculum marking system
+        $group = Group::find($independent->group_hemis_id);
+        $markingScore = $group && $group->curriculum_hemis_id
+            ? MarkingSystemScore::where('marking_system_code',
+                \App\Models\Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->value('marking_system_code')
+              )->first()
+            : null;
+        $minimumLimit = $markingScore ? $markingScore->minimum_limit : 60;
+
+        return view('admin.independent.grade_form', compact('independent', 'students', 'submissions', 'gradeHistory', 'minimumLimit'));
 
     }
     function grade_teacher($id, Request $request)
@@ -347,7 +366,16 @@ class IndependentController extends Controller
             ->get()
             ->groupBy('student_id');
 
-        return view('teacher.independent.grade', compact('independent', 'students', 'submissions', 'gradeHistory'));
+        // Get minimum limit from group's curriculum marking system
+        $group = Group::find($independent->group_hemis_id);
+        $markingScore = $group && $group->curriculum_hemis_id
+            ? MarkingSystemScore::where('marking_system_code',
+                \App\Models\Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->value('marking_system_code')
+              )->first()
+            : null;
+        $minimumLimit = $markingScore ? $markingScore->minimum_limit : 60;
+
+        return view('teacher.independent.grade', compact('independent', 'students', 'submissions', 'gradeHistory', 'minimumLimit'));
 
     }
     function grade_save(Request $request)
@@ -361,11 +389,12 @@ class IndependentController extends Controller
             foreach ($request->baho as $key => $baho) {
                 $student = Student::find($key);
 
-                // Skip if student already has grade >= 60 (locked)
+                // Skip if student already has grade >= minimum_limit (locked)
                 $existingGrade = StudentGrade::where('student_id', $student->id)
                     ->where('independent_id', $independent->id)
                     ->first();
-                if ($existingGrade && $existingGrade->grade >= 60) {
+                $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+                if ($existingGrade && $existingGrade->grade >= $studentMinLimit) {
                     continue;
                 }
 

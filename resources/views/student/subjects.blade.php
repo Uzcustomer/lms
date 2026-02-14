@@ -387,11 +387,12 @@
                             $davColor = $dp >= 25 ? '#ef4444' : ($dp >= 15 ? '#f59e0b' : '#6366f1');
                             $davWidth = min($dp * 2, 100);
 
-                            $gradeClass = function($v, $isNull = false) {
+                            $gradeClass = function($v, $isNull = false) use ($minimumLimit) {
+                                $min = $minimumLimit ?? 60;
                                 if ($isNull || $v === null) return 'g-none';
                                 if ($v >= 90) return 'g-excellent';
                                 if ($v >= 70) return 'g-good';
-                                if ($v >= 60) return 'g-ok';
+                                if ($v >= $min) return 'g-ok';
                                 if ($v > 0) return 'g-fail';
                                 return 'g-none';
                             };
@@ -449,22 +450,22 @@
                                         @if($subject['mt'])
                                             @php $mt = $subject['mt']; @endphp
                                             @if($mt['grade_locked'])
-                                                {{-- Baho >= 60: Baholangan --}}
+                                                {{-- Baho >= minimumLimit: Baholangan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-green">
                                                     Baholangan <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['can_resubmit'])
-                                                {{-- Baho < 60, deadline ichida, urinish bor: Qayta yuklash --}}
+                                                {{-- Baho < minimumLimit, deadline ichida, urinish bor: Qayta yuklash --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
                                                     Qayta yuklash
                                                 </button>
-                                            @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60 && $mt['remaining_attempts'] <= 0)
-                                                {{-- Baho < 60, urinish limiti tugagan --}}
+                                            @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < ($minimumLimit ?? 60) && $mt['remaining_attempts'] <= 0)
+                                                {{-- Baho < minimumLimit, urinish limiti tugagan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
                                                     Limit tugagan <b>{{ $mt['grade'] }}</b>
                                                 </button>
-                                            @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < 60)
-                                                {{-- Baho < 60, deadline o'tgan --}}
+                                            @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < ($minimumLimit ?? 60))
+                                                {{-- Baho < minimumLimit, deadline o'tgan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
                                                     Muddat tugagan <b>{{ $mt['grade'] }}</b>
                                                 </button>
@@ -545,13 +546,13 @@
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">JN %</span>
-                                        <span class="info-value" style="color: {{ $subject['jn_average'] >= 90 ? '#059669' : ($subject['jn_average'] >= 70 ? '#2563eb' : ($subject['jn_average'] >= 60 ? '#d97706' : ($subject['jn_average'] > 0 ? '#dc2626' : '#94a3b8'))) }}">
+                                        <span class="info-value" style="color: {{ $subject['jn_average'] >= 90 ? '#059669' : ($subject['jn_average'] >= 70 ? '#2563eb' : ($subject['jn_average'] >= ($minimumLimit ?? 60) ? '#d97706' : ($subject['jn_average'] > 0 ? '#dc2626' : '#94a3b8'))) }}">
                                             {{ $subject['jn_average'] > 0 ? $subject['jn_average'] : '-' }}
                                         </span>
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">MT %</span>
-                                        <span class="info-value" style="color: {{ $subject['mt_average'] >= 90 ? '#059669' : ($subject['mt_average'] >= 70 ? '#2563eb' : ($subject['mt_average'] >= 60 ? '#d97706' : ($subject['mt_average'] > 0 ? '#dc2626' : '#94a3b8'))) }}">
+                                        <span class="info-value" style="color: {{ $subject['mt_average'] >= 90 ? '#059669' : ($subject['mt_average'] >= 70 ? '#2563eb' : ($subject['mt_average'] >= ($minimumLimit ?? 60) ? '#d97706' : ($subject['mt_average'] > 0 ? '#dc2626' : '#94a3b8'))) }}">
                                             {{ $subject['mt_average'] > 0 ? $subject['mt_average'] : '-' }}
                                         </span>
                                     </div>
@@ -615,7 +616,7 @@
                                                     @endforeach
                                                     <td class="px-1 py-1 text-center">
                                                         @php $v = $subject['jn_average']; @endphp
-                                                        <span class="font-bold {{ $v < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $v > 0 ? $v : '-' }}</span>
+                                                        <span class="font-bold {{ $v < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $v > 0 ? $v : '-' }}</span>
                                                     </td>
                                                 </tr>
                                             </tbody>
@@ -696,7 +697,7 @@
                                                     @endforeach
                                                     <td class="px-1 py-1 text-center">
                                                         @php $v = $subject['mt_average']; @endphp
-                                                        <span class="font-bold {{ $v < 60 ? 'grade-fail' : 'text-blue-600' }}">{{ $v > 0 ? $v : '-' }}</span>
+                                                        <span class="font-bold {{ $v < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $v > 0 ? $v : '-' }}</span>
                                                     </td>
                                                 </tr>
                                             </tbody>
@@ -762,10 +763,10 @@
 
                     {{-- Grade info --}}
                     @if($mt['grade'] !== null)
-                        <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: {{ $mt['grade'] >= 60 ? '#ecfdf5' : '#fef2f2' }};">
+                        <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: {{ $mt['grade'] >= ($minimumLimit ?? 60) ? '#ecfdf5' : '#fef2f2' }};">
                             <div style="display: flex; align-items: center; justify-content: space-between;">
                                 <span style="font-size: 11px; color: #64748b; font-weight: 500;">Baho:</span>
-                                <span style="font-size: 14px; font-weight: 700; color: {{ $mt['grade'] >= 60 ? '#059669' : '#dc2626' }};">
+                                <span style="font-size: 14px; font-weight: 700; color: {{ $mt['grade'] >= ($minimumLimit ?? 60) ? '#059669' : '#dc2626' }};">
                                     {{ $mt['grade'] }}
                                     @if($mt['grade_locked'])
                                         <span style="font-size: 10px; font-weight: 400; color: #059669;">(Qabul qilindi)</span>
@@ -783,7 +784,7 @@
                             <span style="font-size: 11px; color: #64748b; font-weight: 500;">Oldingi baholar:</span>
                             <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
                                 @foreach($mt['grade_history'] as $history)
-                                    <span style="display: inline-flex; align-items: center; padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: 12px; background: {{ $history->grade >= 60 ? '#ecfdf5' : '#fef2f2' }}; color: {{ $history->grade >= 60 ? '#059669' : '#dc2626' }};">
+                                    <span style="display: inline-flex; align-items: center; padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: 12px; background: {{ $history->grade >= ($minimumLimit ?? 60) ? '#ecfdf5' : '#fef2f2' }}; color: {{ $history->grade >= ($minimumLimit ?? 60) ? '#059669' : '#dc2626' }};">
                                         {{ $history->grade }}
                                     </span>
                                 @endforeach
@@ -847,7 +848,7 @@
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
                             <span style="font-size: 11px; color: #dc2626; font-weight: 500;">Muddat tugagan — fayl yuklanmagan</span>
                         </div>
-                    @elseif($mt['grade'] !== null && $mt['grade'] < 60 && $mt['remaining_attempts'] <= 0)
+                    @elseif($mt['grade'] !== null && $mt['grade'] < ($minimumLimit ?? 60) && $mt['remaining_attempts'] <= 0)
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
                             <span style="font-size: 11px; color: #dc2626; font-weight: 500;">MT topshirig'ini qayta yuklash imkoniyati tugagan</span>
                         </div>

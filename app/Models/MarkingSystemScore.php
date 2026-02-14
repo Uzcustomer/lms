@@ -46,4 +46,60 @@ class MarkingSystemScore extends Model
     {
         return $this->hasMany(Curriculum::class, 'marking_system_code', 'marking_system_code');
     }
+
+    /**
+     * Get MarkingSystemScore by student's hemis_id.
+     * Caches results to avoid repeated queries within same request.
+     */
+    public static function getByStudentHemisId($studentHemisId): self
+    {
+        static $cache = [];
+
+        if (isset($cache[$studentHemisId])) {
+            return $cache[$studentHemisId];
+        }
+
+        $student = Student::where('hemis_id', $studentHemisId)->first();
+        $markingSystemCode = optional(optional($student)->curriculum)->marking_system_code;
+
+        $score = $markingSystemCode
+            ? static::where('marking_system_code', $markingSystemCode)->first()
+            : null;
+
+        $cache[$studentHemisId] = $score ?? static::getDefault();
+        return $cache[$studentHemisId];
+    }
+
+    /**
+     * Get default marking system score (fallback when no record found).
+     */
+    public static function getDefault(): self
+    {
+        $default = new static;
+        $default->minimum_limit = 60;
+        $default->gpa_limit = 2.0;
+        $default->jn_limit = 60;
+        $default->jn_active = true;
+        $default->mt_limit = 60;
+        $default->mt_active = true;
+        $default->on_limit = 60;
+        $default->on_active = false;
+        $default->oski_limit = 60;
+        $default->oski_active = true;
+        $default->test_limit = 60;
+        $default->test_active = true;
+        $default->total_limit = 60;
+        $default->total_active = true;
+        return $default;
+    }
+
+    /**
+     * Get the effective limit for a given type (returns 0 if inactive).
+     */
+    public function effectiveLimit(string $type): int
+    {
+        $activeKey = $type . '_active';
+        $limitKey = $type . '_limit';
+        return $this->$activeKey ? $this->$limitKey : 0;
+    }
 }

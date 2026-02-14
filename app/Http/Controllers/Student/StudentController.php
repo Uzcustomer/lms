@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Services\StudentGradeService;
+use App\Models\MarkingSystemScore;
 
 class StudentController extends Controller
 {
@@ -763,7 +764,8 @@ class StudentController extends Controller
                     ->where('semester_code', $independent->semester_code)
                     ->count();
                 $remainingAttempts = max(0, $mtMaxResubmissions - $mtHistoryCount);
-                $gradeLocked = $grade && $grade->grade >= 60;
+                $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+                $gradeLocked = $grade && $grade->grade >= $studentMinLimit;
                 $isOverdue = Carbon::now()->gt($deadlineDateTime);
 
                 $daysRemaining = null;
@@ -791,7 +793,7 @@ class StudentController extends Controller
                     'grade_history' => $gradeHistory,
                     'submission_count' => $submissionCount,
                     'remaining_attempts' => $remainingAttempts,
-                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < 60 && $remainingAttempts > 0 && !$isOverdue,
+                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < $studentMinLimit && $remainingAttempts > 0 && !$isOverdue,
                     'file_path' => $independent->file_path,
                     'file_original_name' => $independent->file_original_name,
                 ];
@@ -819,7 +821,9 @@ class StudentController extends Controller
             ];
         });
 
-        return view('student.subjects', ['subjects' => $subjects, 'semester' => $semester_name, 'mtDeadlineTime' => $mtDeadlineTime]);
+        $minimumLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+
+        return view('student.subjects', ['subjects' => $subjects, 'semester' => $semester_name, 'mtDeadlineTime' => $mtDeadlineTime, 'minimumLimit' => $minimumLimit]);
     }
 
     // Fetch grades for a selected subject
@@ -916,7 +920,8 @@ class StudentController extends Controller
                     ->where('semester_code', $independent->semester_code)
                     ->count();
                 $remainingAttempts = max(0, $mtMaxResubmissions - $mtHistoryCount);
-                $gradeLocked = $grade && $grade->grade >= 60;
+                $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+                $gradeLocked = $grade && $grade->grade >= $studentMinLimit;
 
                 return [
                     'id' => $independent->id,
@@ -931,14 +936,16 @@ class StudentController extends Controller
                     'grade_history' => $gradeHistory,
                     'submission_count' => $submissionCount,
                     'remaining_attempts' => $remainingAttempts,
-                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < 60 && $remainingAttempts > 0 && !$isOverdue,
+                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < $studentMinLimit && $remainingAttempts > 0 && !$isOverdue,
                     'status' => $independent->status,
                     'file_path' => $independent->file_path,
                     'file_original_name' => $independent->file_original_name,
                 ];
             });
 
-        return view('student.independents', compact('independents', 'mtDeadlineTime', 'mtMaxResubmissions'));
+        $minimumLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+
+        return view('student.independents', compact('independents', 'mtDeadlineTime', 'mtMaxResubmissions', 'minimumLimit'));
     }
 
     public function submitIndependent(Request $request, $id)
@@ -952,13 +959,14 @@ class StudentController extends Controller
             ->where('group_hemis_id', $student->group_id)
             ->firstOrFail();
 
-        // Check if grade is locked (>= 60)
+        // Check if grade is locked (>= minimum_limit)
         $existingGrade = StudentGrade::where('student_id', $student->id)
             ->where('independent_id', $independent->id)
             ->first();
 
-        if ($existingGrade && $existingGrade->grade >= 60) {
-            return back()->with('error', 'Baho 60 va undan yuqori — qayta yuklash mumkin emas.');
+        $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+        if ($existingGrade && $existingGrade->grade >= $studentMinLimit) {
+            return back()->with('error', 'Baho ' . $studentMinLimit . ' va undan yuqori — qayta yuklash mumkin emas.');
         }
 
         // Check deadline using configured time from settings
@@ -979,7 +987,7 @@ class StudentController extends Controller
 
         $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
 
-        if ($existing && $existingGrade && $existingGrade->grade < 60) {
+        if ($existing && $existingGrade && $existingGrade->grade < $studentMinLimit) {
             // Use mt_grade_history count for accurate resubmission tracking
             $mtHistoryCount = DB::table('mt_grade_history')
                 ->where('student_hemis_id', $student->hemis_id)
@@ -1004,7 +1012,7 @@ class StudentController extends Controller
         $filePath = $file->store('independent-submissions/' . $student->hemis_id, 'public');
 
         // If resubmitting after low grade, archive old grade + old file to mt_grade_history BEFORE overwriting
-        if ($existingGrade && $existingGrade->grade < 60 && $existing) {
+        if ($existingGrade && $existingGrade->grade < $studentMinLimit && $existing) {
             $attemptCount = DB::table('mt_grade_history')
                 ->where('student_hemis_id', $student->hemis_id)
                 ->where('subject_id', $independent->subject_hemis_id)

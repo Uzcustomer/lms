@@ -5,6 +5,7 @@ namespace App\Imports;
 use App\Models\CurriculumSubject;
 use App\Models\Deadline;
 use App\Models\ExamTest;
+use App\Models\MarkingSystemScore;
 use App\Models\Group;
 use App\Models\Schedule;
 use App\Models\Semester;
@@ -108,7 +109,7 @@ class ExamTestImport implements ToCollection, WithHeadingRow, WithValidation
                     $row['error'] = "Talaba topilmadi yoki talaba bu" . $group->name . " guruhga tegishli emas ";
                     $this->error[] = $row;
                 } else {
-                    $deadline = Deadline::where('level_code', $semester->level_code)->first();
+                    $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
                     $token = config('services.hemis.token');
                     $response = Http::withoutVerifying()->withToken($token)
                         ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
@@ -123,10 +124,10 @@ class ExamTestImport implements ToCollection, WithHeadingRow, WithValidation
                     if ($student->qoldiq > 25) {
                         $row['error'] = "Sababsiz dars ko'p dars qoldirgan";
                         $this->error[] = $row;
-                    } elseif ($student->jn < $deadline->joriy) {
+                    } elseif ($student->jn < $markingScore->effectiveLimit('jn')) {
                         $row['error'] = "Joriy bahosi yetarli emas";
                         $this->error[] = $row;
-                    } elseif ($student->mt < $deadline->mustaqil_talim) {
+                    } elseif ($student->mt < $markingScore->effectiveLimit('mt')) {
                         $row['error'] = "Mustaqil ta'lim bahosi yetarli emas";
                         $this->error[] = $row;
                     } else {

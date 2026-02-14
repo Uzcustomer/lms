@@ -86,7 +86,7 @@
                                     <input type="number" name="mt_max_resubmissions" value="{{ old('mt_max_resubmissions', $mtMaxResubmissions ?? 3) }}" min="0" max="10" style="width: 80px; padding: 10px 14px; border: 2px solid #7c3aed; border-radius: 10px; font-size: 24px; font-weight: 800; color: #5b21b6; text-align: center; background: rgba(255,255,255,0.7); outline: none;">
                                     <span style="font-size: 15px; color: #5b21b6; font-weight: 600;">marta</span>
                                 </div>
-                                <div style="font-size: 11px; color: #7c3aed; margin-top: 6px;">baho 60 dan past bo'lsa</div>
+                                <div style="font-size: 11px; color: #7c3aed; margin-top: 6px;">baho o'tish balidan past bo'lsa</div>
                             </div>
 
                             {{-- Dars ochish muddati --}}

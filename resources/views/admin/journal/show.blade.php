@@ -2221,14 +2221,14 @@
                 subjectId: currentSubjectId,
             });
 
-            if (!currentSemesterHemisId || !currentCurriculumHemisId) {
-                console.warn('[Mavzular] Missing semesterHemisId or curriculumHemisId');
+            if (!currentSemesterCode || !currentCurriculumHemisId) {
+                console.warn('[Mavzular] Missing semesterCode or curriculumHemisId');
                 body.innerHTML = '<div class="mavzular-empty">Semestr yoki o\'quv reja ma\'lumotlari topilmadi</div>';
                 return;
             }
 
             const params = new URLSearchParams({
-                semester_id: currentSemesterHemisId,
+                semester_id: currentSemesterCode,
                 curriculum_id: currentCurriculumHemisId,
                 subject_id: currentSubjectId,
                 limit: 200,

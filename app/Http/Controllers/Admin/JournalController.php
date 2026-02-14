@@ -2225,16 +2225,30 @@ class JournalController extends Controller
 
             if ($response->successful()) {
                 $data = $response->json();
+
+                // HEMIS API data ni massiv yoki obyekt sifatida qaytarishi mumkin
+                // data: [{"items": [...]}] yoki data: {"items": [...]}
+                $items = [];
+                if (isset($data['data']['items'])) {
+                    $items = $data['data']['items'];
+                } elseif (isset($data['data'][0]['items'])) {
+                    $items = $data['data'][0]['items'];
+                }
+
                 // Fan bo'yicha filtrlash (API da subject filter bo'lmasligi mumkin)
-                if ($request->filled('subject_id') && isset($data['data']['items'])) {
+                if ($request->filled('subject_id')) {
                     $subjectId = (int) $request->subject_id;
-                    $data['data']['items'] = array_values(
-                        array_filter($data['data']['items'], function ($item) use ($subjectId) {
+                    $items = array_values(
+                        array_filter($items, function ($item) use ($subjectId) {
                             return isset($item['subject']['id']) && (int) $item['subject']['id'] === $subjectId;
                         })
                     );
                 }
-                return response()->json($data);
+
+                return response()->json([
+                    'success' => $data['success'] ?? true,
+                    'data' => ['items' => $items],
+                ]);
             }
 
             return response()->json(['success' => false, 'error' => 'HEMIS API xatolik: ' . $response->status(), 'data' => []]);

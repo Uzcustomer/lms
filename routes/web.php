@@ -318,6 +318,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/data', [LectureScheduleController::class, 'data'])->name('data');
             Route::get('/compare', [LectureScheduleController::class, 'compare'])->name('compare');
             Route::get('/conflicts', [LectureScheduleController::class, 'conflicts'])->name('conflicts');
+            Route::post('/move', [LectureScheduleController::class, 'move'])->name('move');
+            Route::post('/store', [LectureScheduleController::class, 'store'])->name('store');
+            Route::put('/item/{id}', [LectureScheduleController::class, 'update'])->name('update');
+            Route::delete('/item/{id}', [LectureScheduleController::class, 'destroyItem'])->name('destroy-item');
+            Route::get('/export/{id}', [LectureScheduleController::class, 'export'])->name('export');
             Route::delete('/{id}', [LectureScheduleController::class, 'destroy'])->name('destroy');
             Route::get('/template', [LectureScheduleController::class, 'downloadTemplate'])->name('template');
         });
@@ -554,6 +559,11 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/data', [LectureScheduleController::class, 'data'])->name('data');
             Route::get('/compare', [LectureScheduleController::class, 'compare'])->name('compare');
             Route::get('/conflicts', [LectureScheduleController::class, 'conflicts'])->name('conflicts');
+            Route::post('/move', [LectureScheduleController::class, 'move'])->name('move');
+            Route::post('/store', [LectureScheduleController::class, 'store'])->name('store');
+            Route::put('/item/{id}', [LectureScheduleController::class, 'update'])->name('update');
+            Route::delete('/item/{id}', [LectureScheduleController::class, 'destroyItem'])->name('destroy-item');
+            Route::get('/export/{id}', [LectureScheduleController::class, 'export'])->name('export');
             Route::delete('/{id}', [LectureScheduleController::class, 'destroy'])->name('destroy');
             Route::get('/template', [LectureScheduleController::class, 'downloadTemplate'])->name('template');
         });

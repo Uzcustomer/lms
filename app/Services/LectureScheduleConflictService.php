@@ -10,6 +10,20 @@ use Illuminate\Support\Collection;
 class LectureScheduleConflictService
 {
     /**
+     * Barcha konflikt belgilarini tozalab, qaytadan aniqlash
+     */
+    public function resetAndRedetect(LectureScheduleBatch $batch): array
+    {
+        // Avval barcha conflict belgilarini tozalash
+        $batch->items()->update([
+            'has_conflict' => false,
+            'conflict_details' => null,
+        ]);
+
+        return $this->detectInternalConflicts($batch);
+    }
+
+    /**
      * Ichki konfliktlarni aniqlash (yuklangan jadval ichida)
      */
     public function detectInternalConflicts(LectureScheduleBatch $batch): array

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\LectureScheduleExport;
 use App\Exports\LectureScheduleTemplate;
 use App\Http\Controllers\Controller;
 use App\Imports\LectureScheduleImport;
@@ -34,7 +35,6 @@ class LectureScheduleController extends Controller
 
         $file = $request->file('file');
 
-        // Batch yaratish
         $user = auth()->user();
         $guard = auth()->guard('teacher')->check() ? 'teacher' : 'web';
 
@@ -46,7 +46,6 @@ class LectureScheduleController extends Controller
             'education_year' => $request->education_year,
         ]);
 
-        // Import
         $import = new LectureScheduleImport($batch);
 
         try {
@@ -60,7 +59,6 @@ class LectureScheduleController extends Controller
             return back()->with('error', 'Import xatosi: ' . $e->getMessage());
         }
 
-        // Ichki konfliktlarni aniqlash
         $conflictService = new LectureScheduleConflictService();
         $conflictService->detectInternalConflicts($batch);
 
@@ -93,7 +91,6 @@ class LectureScheduleController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        // Unique juftliklar
         $pairs = $items->unique('lesson_pair_code')
             ->sortBy('lesson_pair_code')
             ->map(fn($i) => [
@@ -104,7 +101,6 @@ class LectureScheduleController extends Controller
             ])
             ->values();
 
-        // Grid formatiga o'tkazish
         $grid = [];
         foreach ($items as $item) {
             $key = $item->week_day . '_' . $item->lesson_pair_code;
@@ -113,6 +109,8 @@ class LectureScheduleController extends Controller
             }
             $grid[$key][] = [
                 'id' => $item->id,
+                'week_day' => $item->week_day,
+                'lesson_pair_code' => $item->lesson_pair_code,
                 'group_name' => $item->group_name,
                 'subject_name' => $item->subject_name,
                 'employee_name' => $item->employee_name,
@@ -130,6 +128,105 @@ class LectureScheduleController extends Controller
             'pairs' => $pairs,
             'days' => LectureSchedule::WEEK_DAYS,
         ]);
+    }
+
+    /**
+     * AJAX: Dars kartasini boshqa yacheykaga ko'chirish (drag-and-drop)
+     */
+    public function move(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer',
+            'week_day' => 'required|integer|between:1,6',
+            'lesson_pair_code' => 'required|string',
+        ]);
+
+        $item = LectureSchedule::findOrFail($request->id);
+        $item->update([
+            'week_day' => $request->week_day,
+            'lesson_pair_code' => $request->lesson_pair_code,
+            'hemis_status' => 'not_checked',
+            'hemis_diff' => null,
+        ]);
+
+        // Konfliktlarni qayta tekshirish
+        $service = new LectureScheduleConflictService();
+        $service->resetAndRedetect($item->batch);
+
+        return response()->json(['success' => true, 'item' => $item->fresh()]);
+    }
+
+    /**
+     * AJAX: Dars kartasini yangilash (inline edit)
+     */
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'subject_name' => 'nullable|string|max:255',
+            'employee_name' => 'nullable|string|max:255',
+            'auditorium_name' => 'nullable|string|max:255',
+            'training_type_name' => 'nullable|string|max:255',
+            'group_name' => 'nullable|string|max:255',
+        ]);
+
+        $item = LectureSchedule::findOrFail($id);
+        $item->update(array_merge(
+            $request->only(['subject_name', 'employee_name', 'auditorium_name', 'training_type_name', 'group_name']),
+            ['hemis_status' => 'not_checked', 'hemis_diff' => null]
+        ));
+
+        $service = new LectureScheduleConflictService();
+        $service->resetAndRedetect($item->batch);
+
+        return response()->json(['success' => true, 'item' => $item->fresh()]);
+    }
+
+    /**
+     * AJAX: Yangi dars kartasini qo'shish
+     */
+    public function store(Request $request)
+    {
+        $request->validate([
+            'batch_id' => 'required|integer|exists:lecture_schedule_batches,id',
+            'week_day' => 'required|integer|between:1,6',
+            'lesson_pair_code' => 'required|string',
+            'subject_name' => 'required|string|max:255',
+            'group_name' => 'required|string|max:255',
+            'employee_name' => 'nullable|string|max:255',
+            'auditorium_name' => 'nullable|string|max:255',
+            'training_type_name' => 'nullable|string|max:255',
+        ]);
+
+        $item = LectureSchedule::create($request->only([
+            'batch_id', 'week_day', 'lesson_pair_code',
+            'subject_name', 'group_name', 'employee_name',
+            'auditorium_name', 'training_type_name',
+        ]));
+
+        $batch = LectureScheduleBatch::find($request->batch_id);
+        $batch->increment('total_rows');
+
+        $service = new LectureScheduleConflictService();
+        $service->resetAndRedetect($batch);
+
+        return response()->json(['success' => true, 'item' => $item]);
+    }
+
+    /**
+     * AJAX: Dars kartasini o'chirish
+     */
+    public function destroyItem($id)
+    {
+        $item = LectureSchedule::findOrFail($id);
+        $batch = $item->batch;
+        $item->delete();
+
+        $batch->decrement('total_rows');
+
+        $service = new LectureScheduleConflictService();
+        $service->resetAndRedetect($batch);
+
+        return response()->json(['success' => true]);
     }
 
     /**
@@ -169,7 +266,7 @@ class LectureScheduleController extends Controller
     public function destroy($id)
     {
         $batch = LectureScheduleBatch::findOrFail($id);
-        $batch->delete(); // cascade orqali items ham o'chadi
+        $batch->delete();
 
         return back()->with('success', 'Jadval o\'chirildi.');
     }
@@ -180,5 +277,16 @@ class LectureScheduleController extends Controller
     public function downloadTemplate()
     {
         return Excel::download(new LectureScheduleTemplate(), 'dars_jadvali_shablon.xlsx');
+    }
+
+    /**
+     * Tahrirlangan jadvalni Excel ga eksport
+     */
+    public function export($id)
+    {
+        $batch = LectureScheduleBatch::findOrFail($id);
+        $fileName = 'jadval_' . str_replace([' ', '.'], '_', $batch->file_name) . '_' . date('Y_m_d') . '.xlsx';
+
+        return Excel::download(new LectureScheduleExport($batch), $fileName);
     }
 }

@@ -59,15 +59,11 @@ class StudentController extends Controller
         $query = Student::query();
 
         if ($request->filled('student_id_number')) {
-            $query->where('student_id_number', 'like', '%' . $request->student_id_number . '%');
+            $query->where('student_id_number', $request->student_id_number);
         }
 
         if ($request->filled('full_name')) {
             $query->where('full_name', 'like', '%' . $request->full_name . '%');
-        }
-
-        if ($request->filled('student_id_number')) {
-            $query->where('student_id_number', $request->student_id_number);
         }
 
         if ($request->filled('level_code')) {
@@ -88,8 +84,9 @@ class StudentController extends Controller
         if ($request->filled('group')) {
             $query->where('group_id', $request->group);
         }
-        if ($request->filled('curriculum')) {
-            $query->where('curriculum_id', $request->curriculum);
+
+        if ($request->filled('education_type')) {
+            $query->where('education_type_code', $request->education_type);
         }
 
         $perPage = $request->get('per_page', 50);
@@ -129,24 +126,33 @@ class StudentController extends Controller
             });
 
         $semesters = Student::select('semester_code', 'semester_name')
-        ->distinct()
-        ->orderBy('semester_code')
-        ->get()
-        ->map(function ($item) {
-            return [
-                'id' => $item->semester_code,
-                'name' => $item->semester_name
-            ];
-        });
+            ->distinct()
+            ->orderBy('semester_code')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->semester_code,
+                    'name' => $item->semester_name
+                ];
+            });
 
+        $educationTypes = Student::select('education_type_code', 'education_type_name')
+            ->distinct()
+            ->orderBy('education_type_name')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->education_type_code,
+                    'name' => $item->education_type_name
+                ];
+            });
 
+        return view('admin.students.index', compact('students', 'departments', 'specialties', 'groups', 'semesters', 'educationTypes'));
+    }
 
-        $curriculums = Curriculum::select('curricula_hemis_id', 'name')
-            ->orderBy('name')
-            ->get();
-
-
-        return view('admin.students.index', compact('students', 'departments', 'specialties', 'groups', 'curriculums', 'semesters'));
+    public function show(Student $student)
+    {
+        return view('admin.students.show', compact('student'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)

@@ -12,8 +12,8 @@ use App\Models\Group;
 use App\Models\Semester;
 use App\Imports\QuizResultImport;
 use App\Exports\QuizResultExport;
+use App\Models\Setting;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -888,36 +888,16 @@ class QuizResultController extends Controller
      */
     public function triggerCron()
     {
-        $host = config('services.moodle.ssh_host');
-        $user = config('services.moodle.ssh_user');
-        $script = config('services.moodle.push_script');
+        Setting::set('moodle_sync_requested', now()->toIso8601String());
 
-        if (empty($host) || empty($user) || empty($script)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Moodle SSH sozlamalari to\'liq emas. Administrator bilan bog\'laning.',
-            ], 422);
-        }
+        Log::info('quiz:trigger-cron — sync so\'raldi', [
+            'user' => auth()->user()->name ?? 'unknown',
+        ]);
 
-        try {
-            Artisan::queue('quiz:trigger-moodle-sync');
-
-            Log::info('quiz:trigger-cron — foydalanuvchi tomonidan ishga tushirildi', [
-                'user' => auth()->user()->name ?? 'unknown',
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Moodle quiz sync SSH orqali ishga tushirildi. Natijalar bir necha daqiqada yangilanadi.',
-            ]);
-        } catch (\Exception $e) {
-            Log::error('quiz:trigger-cron — xatolik', ['error' => $e->getMessage()]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Xatolik yuz berdi: ' . $e->getMessage(),
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Sync so\'rov yuborildi. Moodle 5 daqiqa ichida ma\'lumotlarni yuboradi.',
+        ]);
     }
 
     /**

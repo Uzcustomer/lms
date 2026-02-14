@@ -531,6 +531,8 @@ Route::middleware('auth')->group(function () {
 // Moodle → LMSTTATF sync endpoint (server-to-server)
 Route::post('/moodle/import', [MoodleImportController::class, 'import'])
     ->name('moodle.import');
+Route::get('/moodle/should-sync', [MoodleImportController::class, 'shouldSync'])
+    ->name('moodle.should-sync');
 
 // Telegram bot webhook (CSRF excluded in bootstrap/app.php)
 Route::post('/telegram/webhook/{token}', [\App\Http\Controllers\TelegramWebhookController::class, 'handle'])

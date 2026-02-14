@@ -914,6 +914,48 @@ class JournalController extends Controller
             }
         }
 
+        // ===== DEBUG: vaqtinchalik — muammoni aniqlash uchun =====
+        $debugMissedDates = [];
+        $allJbGradeDatesRaw = collect($jbGradesRaw)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->values()->toArray();
+        foreach ($jbLessonDates as $date) {
+            $dateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
+            $gradeCountForDate = collect($jbGradesRaw)->filter(fn($g) => \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d') === $dateStr)->count();
+            $effectiveGradeCountForDate = collect($jbGradesRaw)->filter(fn($g) => \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d') === $dateStr && $getEffectiveGrade($g) !== null)->count();
+            $attendanceCountForDate = collect($jbAttendanceRaw)->filter(fn($a) => \Carbon\Carbon::parse($a->lesson_date)->format('Y-m-d') === $dateStr)->count();
+            $isInGradeDates = in_array($dateStr, $jbGradeDates);
+            $isInAttendanceDates = in_array($dateStr, $jbAttendanceDates);
+            $isInRecordedDates = in_array($dateStr, $jbRecordedDates);
+            $isMissed = in_array($dateStr, $missedDates);
+            $isPast = $dateStr < $today;
+            $debugMissedDates[] = [
+                'date' => $dateStr,
+                'is_past' => $isPast,
+                'grade_records' => $gradeCountForDate,
+                'effective_grades' => $effectiveGradeCountForDate,
+                'attendance_records' => $attendanceCountForDate,
+                'in_jbGradeDates' => $isInGradeDates,
+                'in_jbAttendanceDates' => $isInAttendanceDates,
+                'in_jbRecordedDates' => $isInRecordedDates,
+                'is_missed' => $isMissed,
+            ];
+        }
+        $debugInfo = [
+            'today' => $today,
+            'canOpenLesson_roles' => ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'],
+            'auth_web_user' => auth()->guard('web')->user()?->name ?? 'null',
+            'auth_web_roles' => auth()->guard('web')->user()?->getRoleNames()->toArray() ?? [],
+            'auth_teacher_user' => auth()->guard('teacher')->user()?->name ?? 'null',
+            'auth_teacher_roles' => auth()->guard('teacher')->user()?->getRoleNames()->toArray() ?? [],
+            'jbLessonDates_count' => count($jbLessonDates),
+            'jbGradeDates_filtered' => $jbGradeDates,
+            'jbGradeDates_all_raw' => $allJbGradeDatesRaw,
+            'jbAttendanceDates' => $jbAttendanceDates,
+            'jbRecordedDates' => array_values($jbRecordedDates),
+            'missedDates' => $missedDates,
+            'lessonOpeningsMap_keys' => array_keys($lessonOpeningsMap ?? []),
+            'dates_detail' => $debugMissedDates,
+        ];
+
         // Mavjud dars ochilishlarini olish
         $lessonOpeningsMap = [];
         $lessonOpeningDays = 3;
@@ -1003,7 +1045,8 @@ class JournalController extends Controller
             'lessonOpeningsMap',
             'lessonOpeningDays',
             'activeOpenedDates',
-            'minimumLimit'
+            'minimumLimit',
+            'debugInfo'
         ));
     }
 

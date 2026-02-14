@@ -713,6 +713,76 @@
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+            {{-- ===== DEBUG PANEL (vaqtinchalik) ===== --}}
+            @if(isset($debugInfo))
+            <details class="mb-4" style="background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px;">
+                <summary style="cursor: pointer; font-weight: bold; color: #fbbf24; font-size: 14px;">DEBUG: Missed Dates Diagnostika (bosing)</summary>
+                <div style="margin-top: 10px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                        <div><span style="color: #94a3b8;">Bugun:</span> <span style="color: #34d399;">{{ $debugInfo['today'] }}</span></div>
+                        <div><span style="color: #94a3b8;">Auth (web):</span> <span style="color: #34d399;">{{ $debugInfo['auth_web_user'] }}</span> <span style="color: #fb923c;">[{{ implode(', ', $debugInfo['auth_web_roles']) }}]</span></div>
+                        <div><span style="color: #94a3b8;">Auth (teacher):</span> <span style="color: #34d399;">{{ $debugInfo['auth_teacher_user'] }}</span> <span style="color: #fb923c;">[{{ implode(', ', $debugInfo['auth_teacher_roles']) }}]</span></div>
+                        <div><span style="color: #94a3b8;">canOpenLesson rollar:</span> <span style="color: #fb923c;">{{ implode(', ', $debugInfo['canOpenLesson_roles']) }}</span></div>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">jbGradeDates (filtered - effective):</span>
+                        <span style="color: #60a5fa;">[{{ implode(', ', $debugInfo['jbGradeDates_filtered']) }}]</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">jbGradeDates (all raw - filtersiz):</span>
+                        <span style="color: #f87171;">[{{ implode(', ', $debugInfo['jbGradeDates_all_raw']) }}]</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">jbAttendanceDates:</span>
+                        <span style="color: #a78bfa;">[{{ implode(', ', $debugInfo['jbAttendanceDates']) }}]</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">jbRecordedDates (final):</span>
+                        <span style="color: #2dd4bf;">[{{ implode(', ', $debugInfo['jbRecordedDates']) }}]</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">missedDates:</span>
+                        <span style="color: #f87171; font-weight: bold;">[{{ implode(', ', $debugInfo['missedDates']) }}]</span>
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">lessonOpeningsMap keys:</span>
+                        <span style="color: #fbbf24;">[{{ implode(', ', $debugInfo['lessonOpeningsMap_keys']) }}]</span>
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #475569;">
+                                <th style="padding: 4px 6px; text-align: left; color: #94a3b8;">Sana</th>
+                                <th style="padding: 4px 6px; text-align: center; color: #94a3b8;">O'tgan?</th>
+                                <th style="padding: 4px 6px; text-align: center; color: #94a3b8;">Grade yozuvlar</th>
+                                <th style="padding: 4px 6px; text-align: center; color: #94a3b8;">Effective baholar</th>
+                                <th style="padding: 4px 6px; text-align: center; color: #94a3b8;">Attendance yozuvlar</th>
+                                <th style="padding: 4px 6px; text-align: center; color: #94a3b8;">GradeDates?</th>
+                                <th style="padding: 4px 6px; text-align: center; color: #94a3b8;">AttDates?</th>
+                                <th style="padding: 4px 6px; text-align: center; color: #94a3b8;">Recorded?</th>
+                                <th style="padding: 4px 6px; text-align: center; color: #94a3b8; font-weight: bold;">MISSED?</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($debugInfo['dates_detail'] as $dd)
+                            <tr style="border-bottom: 1px solid #334155; {{ $dd['is_missed'] ? 'background: #7f1d1d;' : '' }}{{ !$dd['is_past'] ? 'opacity: 0.4;' : '' }}">
+                                <td style="padding: 4px 6px; color: #e2e8f0;">{{ $dd['date'] }}</td>
+                                <td style="padding: 4px 6px; text-align: center;">{{ $dd['is_past'] ? '✓' : '—' }}</td>
+                                <td style="padding: 4px 6px; text-align: center; color: {{ $dd['grade_records'] > 0 ? '#fbbf24' : '#64748b' }};">{{ $dd['grade_records'] }}</td>
+                                <td style="padding: 4px 6px; text-align: center; color: {{ $dd['effective_grades'] > 0 ? '#34d399' : '#f87171' }};">{{ $dd['effective_grades'] }}</td>
+                                <td style="padding: 4px 6px; text-align: center; color: {{ $dd['attendance_records'] > 0 ? '#a78bfa' : '#64748b' }};">{{ $dd['attendance_records'] }}</td>
+                                <td style="padding: 4px 6px; text-align: center;">{{ $dd['in_jbGradeDates'] ? '✓' : '✗' }}</td>
+                                <td style="padding: 4px 6px; text-align: center;">{{ $dd['in_jbAttendanceDates'] ? '✓' : '✗' }}</td>
+                                <td style="padding: 4px 6px; text-align: center;">{{ $dd['in_jbRecordedDates'] ? '✓' : '✗' }}</td>
+                                <td style="padding: 4px 6px; text-align: center; font-weight: bold; color: {{ $dd['is_missed'] ? '#f87171' : '#34d399' }};">{{ $dd['is_missed'] ? 'HA' : 'yo\'q' }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            @endif
+            {{-- ===== DEBUG PANEL TUGADI ===== --}}
+
             <!-- Nazad tugma -->
             <div class="mb-2">
                 <a href="javascript:void(0)" onclick="window.history.back()" style="display: inline-flex; align-items: center; gap: 6px; color: #1e40af; font-size: 14px; font-weight: 500; text-decoration: none;">
@@ -939,13 +1009,9 @@
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px; position: relative; {{ $isMissed && !$isOpened ? 'background: #fef2f2;' : '' }}{{ $isActiveOpened ? 'background: #ecfdf5;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($date) }}</div>
-                                                @if($isMissed && !$isOpened)
-                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="O'tkazib yuborilgan kun{{ $canOpenLesson ? ' — Dars ochish' : '' }}">
-                                                        @if($canOpenLesson)
-                                                            <button type="button" onclick="openLessonModal('{{ $dateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
-                                                        @else
-                                                            <span style="background: #ef4444; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; line-height: 18px; padding: 0; display: inline-block; text-align: center;">!</span>
-                                                        @endif
+                                                @if($canOpenLesson && $isMissed && !$isOpened)
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="O'tkazib yuborilgan kun — Dars ochish">
+                                                        <button type="button" onclick="openLessonModal('{{ $dateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
                                                     </div>
                                                 @elseif($isOpened)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
@@ -1114,13 +1180,9 @@
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px; position: relative; {{ $dIsMissed && !$dOpeningInfo ? 'background: #fef2f2;' : '' }}{{ $dIsActiveOpened ? 'background: #ecfdf5;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($col['date']) }}({{ $col['pair'] }})</div>
-                                                @if($dIsMissed && !$dOpeningInfo && $isFirstOfDate)
+                                                @if($canOpenLesson && $dIsMissed && !$dOpeningInfo && $isFirstOfDate)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
-                                                        @if($canOpenLesson)
-                                                            <button type="button" onclick="openLessonModal('{{ $dDateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Dars ochish">!</button>
-                                                        @else
-                                                            <span style="background: #ef4444; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; line-height: 18px; padding: 0; display: inline-block; text-align: center;" title="O'tkazib yuborilgan kun">!</span>
-                                                        @endif
+                                                        <button type="button" onclick="openLessonModal('{{ $dDateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Dars ochish">!</button>
                                                     </div>
                                                 @elseif($dOpeningInfo)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">

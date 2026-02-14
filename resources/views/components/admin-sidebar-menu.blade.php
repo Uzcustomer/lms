@@ -35,7 +35,8 @@
     };
 
     $useTeacherRoutes = $isTeacher && !in_array($activeRole, $adminRoles);
-    $logoutRoute = $useTeacherRoutes ? route('teacher.logout') : route('admin.logout');
+    $isImpersonating = session('impersonating', false);
+    $logoutRoute = $isImpersonating ? route('impersonate.stop') : ($useTeacherRoutes ? route('teacher.logout') : route('admin.logout'));
     $switchRoleRoute = $useTeacherRoutes ? route('teacher.switch-role') : route('admin.switch-role');
     $profileRoute = $useTeacherRoutes ? route('teacher.info-me') : null;
 
@@ -481,9 +482,13 @@
                     @csrf
                     <button type="submit" class="profile-dropdown-link w-full text-left sidebar-logout-btn">
                         <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                            @if($isImpersonating)
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"></path>
+                            @else
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                            @endif
                         </svg>
-                        Chiqish
+                        {{ $isImpersonating ? 'Superadminga qaytish' : 'Chiqish' }}
                     </button>
                 </form>
             </div>

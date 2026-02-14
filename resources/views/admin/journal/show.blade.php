@@ -939,9 +939,13 @@
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px; position: relative; {{ $isMissed && !$isOpened ? 'background: #fef2f2;' : '' }}{{ $isActiveOpened ? 'background: #ecfdf5;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($date) }}</div>
-                                                @if($canOpenLesson && $isMissed && !$isOpened)
-                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="O'tkazib yuborilgan kun — Dars ochish">
-                                                        <button type="button" onclick="openLessonModal('{{ $dateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
+                                                @if($isMissed && !$isOpened)
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="O'tkazib yuborilgan kun{{ $canOpenLesson ? ' — Dars ochish' : '' }}">
+                                                        @if($canOpenLesson)
+                                                            <button type="button" onclick="openLessonModal('{{ $dateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
+                                                        @else
+                                                            <span style="background: #ef4444; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; line-height: 18px; padding: 0; display: inline-block; text-align: center;">!</span>
+                                                        @endif
                                                     </div>
                                                 @elseif($isOpened)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
@@ -1110,9 +1114,13 @@
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px; position: relative; {{ $dIsMissed && !$dOpeningInfo ? 'background: #fef2f2;' : '' }}{{ $dIsActiveOpened ? 'background: #ecfdf5;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($col['date']) }}({{ $col['pair'] }})</div>
-                                                @if($canOpenLesson && $dIsMissed && !$dOpeningInfo && $isFirstOfDate)
+                                                @if($dIsMissed && !$dOpeningInfo && $isFirstOfDate)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
-                                                        <button type="button" onclick="openLessonModal('{{ $dDateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Dars ochish">!</button>
+                                                        @if($canOpenLesson)
+                                                            <button type="button" onclick="openLessonModal('{{ $dDateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Dars ochish">!</button>
+                                                        @else
+                                                            <span style="background: #ef4444; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; line-height: 18px; padding: 0; display: inline-block; text-align: center;" title="O'tkazib yuborilgan kun">!</span>
+                                                        @endif
                                                     </div>
                                                 @elseif($dOpeningInfo)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">

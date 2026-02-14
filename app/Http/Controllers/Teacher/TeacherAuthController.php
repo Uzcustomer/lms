@@ -53,13 +53,6 @@ class TeacherAuthController extends Controller
         if (Auth::guard('teacher')->attempt($credentials)) {
             $teacher = Auth::guard('teacher')->user();
 
-            // Telegram 2FA: agar foydalanuvchi Telegram tasdiqlangan bo'lsa
-            if ($teacher->telegram_chat_id) {
-                // Login qilingan holatda emas — logout qilib, 2FA tekshiruvga yo'naltiramiz
-                Auth::guard('teacher')->logout();
-                return $this->sendLoginCode($teacher, $request);
-            }
-
             $request->session()->regenerate();
             ActivityLogService::logLogin('teacher');
 

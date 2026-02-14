@@ -4,9 +4,9 @@
  * LMS dan "sync kerakmi?" so'raydi. Agar kerak bo'lsa — push skriptni ishga tushiradi.
  *
  * Moodle serverda crontab ga qo'shing:
- * (har 5 daqiqada tekshirish)
+ * (har 3 daqiqada tekshirish)
  *
- *    * /5 * * * * /usr/bin/php /opt/scripts/moodle_check_trigger.php >> /var/log/moodle_check_trigger.log 2>&1
+ *    */3 * * * * /usr/bin/php /opt/scripts/moodle_check_trigger.php >> /var/log/moodle_check_trigger.log 2>&1
  *
  * Sozlash:
  *   LMS_URL     — LMS server URL (Moodle dan kirsa bo'ladigan)

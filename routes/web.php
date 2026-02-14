@@ -67,6 +67,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
         Route::post('/students/{student}/reset-local-password', [AdminStudentController::class, 'resetLocalPassword'])->name('students.reset-local-password');
+        Route::post('/students/bulk-reset-password', [AdminStudentController::class, 'bulkResetLocalPassword'])->name('students.bulk-reset-password');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
             Route::get('', [QaytnomaController::class, 'index'])->name('index');

@@ -156,12 +156,44 @@
                     </div>
                 </form>
 
+                @php
+                    $userRoles = auth()->user()?->getRoleNames()->toArray() ?? [];
+                    $activeRole = session('active_role', $userRoles[0] ?? '');
+                    if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
+                        $activeRole = $userRoles[0];
+                    }
+                    $canBulkReset = in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin']);
+                @endphp
+
+                @if($canBulkReset)
+                <div id="bulkResetBar" style="display:none;" class="bg-yellow-50 border-b border-yellow-200 px-4 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm font-medium text-yellow-800">
+                            <span id="selectedCount">0</span> ta talaba tanlandi
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="clearSelection()" class="px-3 py-1.5 text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                            Bekor qilish
+                        </button>
+                        <button type="button" onclick="openBulkResetModal()" class="px-3 py-1.5 text-xs rounded font-semibold text-white" style="background-color: #f59e0b;">
+                            Tanlanganlarga parol tiklash
+                        </button>
+                    </div>
+                </div>
+                @endif
+
                 <div>
                     <div class="overflow-x-auto">
                         <div class="inline-block min-w-full">
                             <table class="min-w-full divide-y divide-gray-200 text-sm">
                                 <thead class="bg-gray-50">
                                 <tr>
+                                    @if($canBulkReset)
+                                    <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="rounded border-gray-300 text-yellow-500 focus:ring-yellow-400">
+                                    </th>
+                                    @endif
                                     <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                                         Foto
                                     </th>
@@ -203,6 +235,12 @@
                                 <tbody class="bg-white divide-y divide-gray-200">
                                 @foreach($students as $student)
                                     <tr>
+                                        @if($canBulkReset)
+                                        <td class="px-2 py-2 whitespace-nowrap text-center">
+                                            <input type="checkbox" class="student-checkbox rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
+                                                   value="{{ $student->id }}" onchange="updateBulkBar()">
+                                        </td>
+                                        @endif
                                         <td class="px-2 py-2 whitespace-nowrap">
                                             <div class="flex-shrink-0 h-6 w-6">
                                                 @if($student->image)
@@ -351,6 +389,37 @@
         </div>
     </div>
 
+    @if($canBulkReset)
+    <!-- Bulk parolni tiklash modal -->
+    <div id="bulkResetModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:white; border-radius:12px; padding:24px; max-width:440px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <h3 style="font-size:16px; font-weight:600; color:#1f2937; margin-bottom:4px;">Bulk parolni tiklash</h3>
+            <p id="bulkModalInfo" style="font-size:13px; color:#6b7280; margin-bottom:16px;"></p>
+
+            <div style="font-size:13px; color:#374151; margin-bottom:12px; padding:10px 12px; border:2px solid #2563eb; border-radius:8px; background:#eff6ff;">
+                <div style="font-weight:600; color:#1e40af;">Avtomatik (Talaba ID)</div>
+                <div style="font-size:12px; color:#3b82f6; margin-top:2px;">Har bir talabaning ID raqami parol sifatida o'rnatiladi</div>
+            </div>
+
+            <form id="bulkResetForm" method="POST" action="{{ route('admin.students.bulk-reset-password') }}">
+                @csrf
+                <div id="bulkStudentInputs"></div>
+
+                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+                    <button type="button" onclick="closeBulkResetModal()"
+                            style="padding:8px 16px; border:1px solid #d1d5db; border-radius:6px; background:white; color:#374151; font-size:13px; cursor:pointer;">
+                        Bekor qilish
+                    </button>
+                    <button type="submit"
+                            style="padding:8px 16px; border:none; border-radius:6px; background:#f59e0b; color:white; font-size:13px; font-weight:600; cursor:pointer;">
+                        Tasdiqlash
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    @endif
+
     <script>
         function openResetModal(studentId, studentName, studentIdNumber) {
             document.getElementById('modalStudentName').textContent = studentName;
@@ -388,6 +457,73 @@
         document.getElementById('resetModal').addEventListener('click', function(e) {
             if (e.target === this) closeResetModal();
         });
+
+        // Bulk reset functions
+        function getSelectedIds() {
+            return Array.from(document.querySelectorAll('.student-checkbox:checked')).map(cb => cb.value);
+        }
+
+        function updateBulkBar() {
+            var selected = getSelectedIds();
+            var bar = document.getElementById('bulkResetBar');
+            if (bar) {
+                bar.style.display = selected.length > 0 ? 'flex' : 'none';
+                document.getElementById('selectedCount').textContent = selected.length;
+            }
+            var selectAll = document.getElementById('selectAll');
+            if (selectAll) {
+                var allCheckboxes = document.querySelectorAll('.student-checkbox');
+                selectAll.checked = allCheckboxes.length > 0 && selected.length === allCheckboxes.length;
+                selectAll.indeterminate = selected.length > 0 && selected.length < allCheckboxes.length;
+            }
+        }
+
+        function toggleSelectAll() {
+            var checked = document.getElementById('selectAll').checked;
+            document.querySelectorAll('.student-checkbox').forEach(function(cb) {
+                cb.checked = checked;
+            });
+            updateBulkBar();
+        }
+
+        function clearSelection() {
+            document.querySelectorAll('.student-checkbox').forEach(function(cb) {
+                cb.checked = false;
+            });
+            var selectAll = document.getElementById('selectAll');
+            if (selectAll) selectAll.checked = false;
+            updateBulkBar();
+        }
+
+        function openBulkResetModal() {
+            var ids = getSelectedIds();
+            if (ids.length === 0) return;
+
+            document.getElementById('bulkModalInfo').textContent = ids.length + ' ta talaba uchun parol tiklanadi. Davom etasizmi?';
+
+            var container = document.getElementById('bulkStudentInputs');
+            container.innerHTML = '';
+            ids.forEach(function(id) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'student_ids[]';
+                input.value = id;
+                container.appendChild(input);
+            });
+
+            document.getElementById('bulkResetModal').style.display = 'flex';
+        }
+
+        function closeBulkResetModal() {
+            document.getElementById('bulkResetModal').style.display = 'none';
+        }
+
+        var bulkModal = document.getElementById('bulkResetModal');
+        if (bulkModal) {
+            bulkModal.addEventListener('click', function(e) {
+                if (e.target === this) closeBulkResetModal();
+            });
+        }
     </script>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

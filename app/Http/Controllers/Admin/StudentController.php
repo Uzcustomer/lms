@@ -177,6 +177,49 @@ class StudentController extends Controller
         }
     }
 
+    public function bulkResetLocalPassword(Request $request)
+    {
+        $user = Auth::user();
+        $allowed = false;
+
+        if ($user) {
+            $roles = $user->getRoleNames()->toArray();
+            $activeRole = session('active_role', $roles[0] ?? '');
+            if (!in_array($activeRole, $roles) && count($roles) > 0) {
+                $activeRole = $roles[0];
+            }
+            $allowed = in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin']);
+        }
+
+        if (!$allowed) {
+            return back()->with('error', "Sizda bulk parol tiklash huquqi yo'q.");
+        }
+
+        $request->validate([
+            'student_ids' => 'required|array|min:1',
+            'student_ids.*' => 'integer|exists:students,id',
+        ]);
+
+        try {
+            $tempDays = (int) Setting::get('temp_password_days', 3);
+            $students = Student::whereIn('id', $request->student_ids)->get();
+            $resetCount = 0;
+
+            foreach ($students as $student) {
+                $student->local_password = $student->student_id_number;
+                $student->local_password_expires_at = now()->addDays($tempDays);
+                $student->must_change_password = true;
+                $student->save();
+                $resetCount++;
+            }
+
+            return back()->with('success', "{$resetCount} ta talaba uchun parol tiklandi (parol = talaba ID raqami, {$tempDays} kun amal qiladi).");
+        } catch (\Exception $e) {
+            Log::error('Bulk parolni tiklashda xatolik: ' . $e->getMessage());
+            return back()->with('error', "Bulk parolni tiklashda xatolik yuz berdi.");
+        }
+    }
+
 
     public function getCurricula(Request $request)
     {

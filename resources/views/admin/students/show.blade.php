@@ -31,6 +31,14 @@
                             <p class="text-gray-500 text-sm text-center mb-1">{{ $student->student_id_number }}</p>
                             <p class="text-gray-400 text-xs text-center mb-4">HEMIS ID: {{ $student->hemis_id }}</p>
 
+                            <!-- Holat badge -->
+                            @if($student->student_status_name)
+                                <span class="inline-block px-3 py-1 rounded-full text-xs font-medium mb-4
+                                    {{ $student->student_status_code == '10' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                    {{ $student->student_status_name }}
+                                </span>
+                            @endif
+
                             <div class="w-full space-y-2">
                                 <a href="{{ route('admin.student-performances.index', $student->hemis_id) }}"
                                    class="block w-full text-center px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">
@@ -50,88 +58,226 @@
                         <!-- Batafsil ma'lumotlar -->
                         <div class="md:w-3/4 mt-6 md:mt-0">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Shaxsiy ma'lumotlar -->
+
+                                {{-- Shaxsiy ma'lumotlar --}}
                                 <div class="bg-gray-50 p-4 rounded-lg">
-                                    <h4 class="font-semibold text-lg mb-3 text-gray-700">Shaxsiy ma'lumotlar</h4>
-                                    <ul class="space-y-2 text-sm">
-                                        <li><span class="font-medium text-gray-600">To'liq ism:</span> {{ $student->full_name }}</li>
-                                        <li><span class="font-medium text-gray-600">Tug'ilgan sana:</span> {{ $student->birth_date ? $student->birth_date->format('d.m.Y') : '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Jinsi:</span> {{ $student->gender_name ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Telefon:</span> {{ $student->phone ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Telegram:</span> {{ $student->telegram_username ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Fuqaroligi:</span> {{ $student->citizenship_name ?? '-' }}</li>
-                                    </ul>
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">Shaxsiy ma'lumotlar</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">full_name</td><td class="py-1 text-gray-900">{{ $student->full_name ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">short_name</td><td class="py-1 text-gray-900">{{ $student->short_name ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">first_name</td><td class="py-1 text-gray-900">{{ $student->first_name ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">second_name</td><td class="py-1 text-gray-900">{{ $student->second_name ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">third_name</td><td class="py-1 text-gray-900">{{ $student->third_name ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">student_id_number</td><td class="py-1 text-gray-900">{{ $student->student_id_number ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">birth_date</td><td class="py-1 text-gray-900">{{ $student->birth_date ? $student->birth_date->format('d.m.Y') : '-' }}</td></tr>
+                                        <tr>
+                                            <td class="py-1 text-gray-500">gender</td>
+                                            <td class="py-1 text-gray-900">{{ $student->gender_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->gender_code ?? '-' }})</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-1 text-gray-500">citizenship</td>
+                                            <td class="py-1 text-gray-900">{{ $student->citizenship_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->citizenship_code ?? '-' }})</span></td>
+                                        </tr>
+                                    </table>
                                 </div>
 
-                                <!-- Ta'lim ma'lumotlari -->
+                                {{-- Akademik ko'rsatkichlar --}}
                                 <div class="bg-gray-50 p-4 rounded-lg">
-                                    <h4 class="font-semibold text-lg mb-3 text-gray-700">Ta'lim ma'lumotlari</h4>
-                                    <ul class="space-y-2 text-sm">
-                                        <li><span class="font-medium text-gray-600">Fakultet:</span> {{ $student->department_name }}</li>
-                                        <li><span class="font-medium text-gray-600">Yo'nalish:</span> {{ $student->specialty_name }}</li>
-                                        <li><span class="font-medium text-gray-600">Guruh:</span> {{ $student->group_name }}</li>
-                                        <li><span class="font-medium text-gray-600">Kurs:</span> {{ $student->level_name }}</li>
-                                        <li><span class="font-medium text-gray-600">Semestr:</span> {{ $student->semester_name }}</li>
-                                        <li><span class="font-medium text-gray-600">O'quv rejasi:</span> {{ $student->curriculum->name ?? '-' }}</li>
-                                    </ul>
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">Akademik ko'rsatkichlar</h4>
+                                    <table class="w-full text-sm">
+                                        <tr>
+                                            <td class="py-1 text-gray-500 w-2/5">avg_gpa</td>
+                                            <td class="py-1">
+                                                <span class="font-bold {{ ($student->avg_gpa ?? 0) >= 3.5 ? 'text-green-600' : (($student->avg_gpa ?? 0) >= 2.5 ? 'text-yellow-600' : 'text-red-600') }}">
+                                                    {{ $student->avg_gpa ?? '-' }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        <tr><td class="py-1 text-gray-500">avg_grade</td><td class="py-1 text-gray-900">{{ $student->avg_grade ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">total_credit</td><td class="py-1 text-gray-900">{{ $student->total_credit ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">total_acload</td><td class="py-1 text-gray-900">{{ $student->total_acload ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">year_of_enter</td><td class="py-1 text-gray-900">{{ $student->year_of_enter ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">is_graduate</td><td class="py-1 text-gray-900">{{ $student->is_graduate ? 'Ha' : 'Yo\'q' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">roommate_count</td><td class="py-1 text-gray-900">{{ $student->roommate_count ?? '-' }}</td></tr>
+                                    </table>
                                 </div>
 
-                                <!-- Ta'lim turi va shakli -->
+                                {{-- university --}}
                                 <div class="bg-gray-50 p-4 rounded-lg">
-                                    <h4 class="font-semibold text-lg mb-3 text-gray-700">Ta'lim turi va shakli</h4>
-                                    <ul class="space-y-2 text-sm">
-                                        <li><span class="font-medium text-gray-600">Ta'lim turi:</span> {{ $student->education_type_name ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Ta'lim shakli:</span> {{ $student->education_form_name ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">To'lov shakli:</span> {{ $student->payment_form_name ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Talaba turi:</span> {{ $student->student_type_name ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Talaba holati:</span> {{ $student->student_status_name ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Ijtimoiy kategoriya:</span> {{ $student->social_category_name ?? '-' }}</li>
-                                    </ul>
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">university</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">code</td><td class="py-1 text-gray-900">{{ $student->university_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->university_name ?? '-' }}</td></tr>
+                                    </table>
                                 </div>
 
-                                <!-- Akademik ma'lumotlar -->
+                                {{-- department --}}
                                 <div class="bg-gray-50 p-4 rounded-lg">
-                                    <h4 class="font-semibold text-lg mb-3 text-gray-700">Akademik ko'rsatkichlar</h4>
-                                    <ul class="space-y-2 text-sm">
-                                        <li><span class="font-medium text-gray-600">O'rtacha GPA:</span>
-                                            <span class="font-bold {{ $student->avg_gpa >= 3.5 ? 'text-green-600' : ($student->avg_gpa >= 2.5 ? 'text-yellow-600' : 'text-red-600') }}">
-                                                {{ $student->avg_gpa ?? '-' }}
-                                            </span>
-                                        </li>
-                                        <li><span class="font-medium text-gray-600">O'rtacha baho:</span> {{ $student->avg_grade ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Umumiy kredit:</span> {{ $student->total_credit ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">O'quv yili:</span> {{ $student->education_year_name ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Kirgan yili:</span> {{ $student->year_of_enter ?? '-' }}</li>
-                                        <li><span class="font-medium text-gray-600">Ta'lim tili:</span> {{ $student->language_name ?? '-' }}</li>
-                                    </ul>
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">department</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">id</td><td class="py-1 text-gray-900">{{ $student->department_id ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->department_name ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">code</td><td class="py-1 text-gray-900">{{ $student->department_code ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- specialty --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">specialty</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">id</td><td class="py-1 text-gray-900">{{ $student->specialty_id ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->specialty_name ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">code</td><td class="py-1 text-gray-900">{{ $student->specialty_code ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- group --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">group</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">id</td><td class="py-1 text-gray-900">{{ $student->group_id ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->group_name ?? '-' }}</td></tr>
+                                        <tr>
+                                            <td class="py-1 text-gray-500">educationLang</td>
+                                            <td class="py-1 text-gray-900">{{ $student->language_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->language_code ?? '-' }})</span></td>
+                                        </tr>
+                                    </table>
+                                </div>
+
+                                {{-- level --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">level</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">code</td><td class="py-1 text-gray-900">{{ $student->level_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->level_name ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- semester --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">semester</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">id</td><td class="py-1 text-gray-900">{{ $student->semester_id ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">code</td><td class="py-1 text-gray-900">{{ $student->semester_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->semester_name ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- educationYear --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">educationYear</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">code</td><td class="py-1 text-gray-900">{{ $student->education_year_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->education_year_name ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- educationType --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">educationType</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">code</td><td class="py-1 text-gray-900">{{ $student->education_type_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->education_type_name ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- educationForm --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">educationForm</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">code</td><td class="py-1 text-gray-900">{{ $student->education_form_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->education_form_name ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- paymentForm --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">paymentForm</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">code</td><td class="py-1 text-gray-900">{{ $student->payment_form_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->payment_form_name ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- studentType --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">studentType</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">code</td><td class="py-1 text-gray-900">{{ $student->student_type_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->student_type_name ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- studentStatus --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">studentStatus</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">code</td><td class="py-1 text-gray-900">{{ $student->student_status_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->student_status_name ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- socialCategory --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">socialCategory</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">code</td><td class="py-1 text-gray-900">{{ $student->social_category_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->social_category_name ?? '-' }}</td></tr>
+                                    </table>
+                                </div>
+
+                                {{-- accommodation --}}
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">accommodation</h4>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">code</td><td class="py-1 text-gray-900">{{ $student->accommodation_code ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">name</td><td class="py-1 text-gray-900">{{ $student->accommodation_name ?? '-' }}</td></tr>
+                                    </table>
                                 </div>
                             </div>
 
-                            <!-- Manzil -->
+                            {{-- Manzil ma'lumotlari --}}
                             <div class="mt-6 bg-gray-50 p-4 rounded-lg">
-                                <h4 class="font-semibold text-lg mb-3 text-gray-700">Manzil ma'lumotlari</h4>
-                                <ul class="space-y-2 text-sm">
-                                    <li><span class="font-medium text-gray-600">Mamlakat:</span> {{ $student->country_name ?? '-' }}</li>
-                                    <li><span class="font-medium text-gray-600">Viloyat:</span> {{ $student->province_name ?? '-' }}</li>
-                                    <li><span class="font-medium text-gray-600">Tuman:</span> {{ $student->district_name ?? '-' }}</li>
-                                    <li><span class="font-medium text-gray-600">Yashash joyi:</span> {{ $student->accommodation_name ?? '-' }}</li>
-                                </ul>
+                                <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">Manzil (country / province / district / terrain)</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">country</td><td class="py-1 text-gray-900">{{ $student->country_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->country_code ?? '-' }})</span></td></tr>
+                                        <tr><td class="py-1 text-gray-500">province</td><td class="py-1 text-gray-900">{{ $student->province_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->province_code ?? '-' }})</span></td></tr>
+                                    </table>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">district</td><td class="py-1 text-gray-900">{{ $student->district_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->district_code ?? '-' }})</span></td></tr>
+                                        <tr><td class="py-1 text-gray-500">terrain</td><td class="py-1 text-gray-900">{{ $student->terrain_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->terrain_code ?? '-' }})</span></td></tr>
+                                    </table>
+                                </div>
                             </div>
 
-                            <!-- Tizim ma'lumotlari -->
+                            {{-- _curriculum / hash / timestamps --}}
                             <div class="mt-6 bg-gray-50 p-4 rounded-lg">
-                                <h4 class="font-semibold text-lg mb-3 text-gray-700">Tizim ma'lumotlari</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <ul class="space-y-2">
-                                            <li><span class="font-medium text-gray-600">Universitet:</span> {{ $student->university_name ?? '-' }}</li>
-                                            <li><span class="font-medium text-gray-600">HEMIS yaratilgan:</span> {{ $student->hemis_created_at ? $student->hemis_created_at->format('d.m.Y H:i') : '-' }}</li>
-                                            <li><span class="font-medium text-gray-600">HEMIS yangilangan:</span> {{ $student->hemis_updated_at ? $student->hemis_updated_at->format('d.m.Y H:i') : '-' }}</li>
-                                        </ul>
-                                    </div>
-                                    <div>
-                                        <ul class="space-y-2">
-                                            <li><span class="font-medium text-gray-600">Parol tiklangan:</span>
+                                <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">Tizim ma'lumotlari</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">_curriculum</td><td class="py-1 text-gray-900">{{ $student->curriculum_id ?? '-' }} <span class="text-gray-400 text-xs">{{ $student->curriculum->name ?? '' }}</span></td></tr>
+                                        <tr><td class="py-1 text-gray-500">hash</td><td class="py-1 text-gray-900 break-all text-xs">{{ $student->hash ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">other</td><td class="py-1 text-gray-900">{{ $student->other ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">created_at</td><td class="py-1 text-gray-900">{{ $student->hemis_created_at ? $student->hemis_created_at->format('d.m.Y H:i:s') : '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">updated_at</td><td class="py-1 text-gray-900">{{ $student->hemis_updated_at ? $student->hemis_updated_at->format('d.m.Y H:i:s') : '-' }}</td></tr>
+                                    </table>
+                                    <table class="w-full text-sm">
+                                        <tr><td class="py-1 text-gray-500 w-2/5">Telefon</td><td class="py-1 text-gray-900">{{ $student->phone ?? '-' }}</td></tr>
+                                        <tr><td class="py-1 text-gray-500">Telegram</td><td class="py-1 text-gray-900">{{ $student->telegram_username ?? '-' }}</td></tr>
+                                        <tr>
+                                            <td class="py-1 text-gray-500">Telegram tasdiqlangan</td>
+                                            <td class="py-1">
+                                                @if($student->isTelegramVerified())
+                                                    <span class="text-green-600">Ha ({{ $student->telegram_verified_at->format('d.m.Y') }})</span>
+                                                @else
+                                                    <span class="text-red-600">Yo'q</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-1 text-gray-500">Parol holati</td>
+                                            <td class="py-1">
                                                 @if($student->local_password_expires_at)
                                                     {{ $student->local_password_expires_at->format('d.m.Y H:i') }}
                                                     @if($student->local_password_expires_at->isFuture())
@@ -142,23 +288,19 @@
                                                 @else
                                                     -
                                                 @endif
-                                            </li>
-                                            <li><span class="font-medium text-gray-600">Parol o'zgartirish:</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-1 text-gray-500">must_change_password</td>
+                                            <td class="py-1">
                                                 @if($student->must_change_password)
-                                                    <span class="text-yellow-600">Talab qilinadi</span>
+                                                    <span class="text-yellow-600">Ha</span>
                                                 @else
                                                     <span class="text-green-600">Yo'q</span>
                                                 @endif
-                                            </li>
-                                            <li><span class="font-medium text-gray-600">Telegram tasdiqlangan:</span>
-                                                @if($student->isTelegramVerified())
-                                                    <span class="text-green-600">Ha ({{ $student->telegram_verified_at->format('d.m.Y') }})</span>
-                                                @else
-                                                    <span class="text-red-600">Yo'q</span>
-                                                @endif
-                                            </li>
-                                        </ul>
-                                    </div>
+                                            </td>
+                                        </tr>
+                                    </table>
                                 </div>
                             </div>
                         </div>

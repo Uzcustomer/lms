@@ -2215,7 +2215,14 @@
             const body = document.getElementById('mavzular-body');
             if (!body) return;
 
+            console.log('[Mavzular] loadTopics called', {
+                semesterHemisId: currentSemesterHemisId,
+                curriculumHemisId: currentCurriculumHemisId,
+                subjectId: currentSubjectId,
+            });
+
             if (!currentSemesterHemisId || !currentCurriculumHemisId) {
+                console.warn('[Mavzular] Missing semesterHemisId or curriculumHemisId');
                 body.innerHTML = '<div class="mavzular-empty">Semestr yoki o\'quv reja ma\'lumotlari topilmadi</div>';
                 return;
             }
@@ -2232,7 +2239,9 @@
             fetch(`${topicsUrl}?${params}`)
                 .then(r => r.json())
                 .then(data => {
+                    console.log('[Mavzular] Server response:', JSON.stringify(data).substring(0, 500));
                     if (!data.success || !data.data || !data.data.items || data.data.items.length === 0) {
+                        console.warn('[Mavzular] No items found', { success: data.success, hasData: !!data.data, hasItems: !!(data.data && data.data.items), itemsLength: data.data?.items?.length });
                         body.innerHTML = '<div class="mavzular-empty">Mavzular topilmadi</div>';
                         return;
                     }

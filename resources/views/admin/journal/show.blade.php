@@ -526,38 +526,9 @@
             to { transform: rotate(360deg); }
         }
 
-        /* ===== SIDEBAR TOGGLE (barcha ekranlar) ===== */
+        /* Toggle tugma desktopda yashirin */
         .sidebar-mobile-toggle {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: none;
-            border: none;
-            color: #fff;
-            font-size: 14px;
-            cursor: pointer;
-            padding: 0 4px;
-            transition: transform 0.3s;
-        }
-        .journal-sidebar.collapsed .sidebar-mobile-toggle {
-            transform: rotate(180deg);
-        }
-        .sidebar-header {
-            cursor: pointer;
-        }
-        .journal-sidebar.collapsed .sidebar-header {
-            border-radius: 0 8px 8px 0;
-        }
-        /* Sidebar content yashirish animatsiya bilan */
-        .journal-sidebar .sidebar-collapsible {
-            overflow: hidden;
-            transition: max-height 0.3s ease, opacity 0.2s ease;
-            max-height: 2000px;
-            opacity: 1;
-        }
-        .journal-sidebar.collapsed .sidebar-collapsible {
-            max-height: 0;
-            opacity: 0;
+            display: none;
         }
 
         /* ===== MOBILE RESPONSIVE STYLES ===== */
@@ -567,7 +538,7 @@
                 flex-direction: column;
             }
 
-            /* Sidebar: full width on mobile */
+            /* Sidebar: full width, collapsible on mobile */
             .journal-sidebar {
                 width: 100%;
                 position: relative;
@@ -578,6 +549,32 @@
             }
             .sidebar-header {
                 border-radius: 0;
+                cursor: pointer;
+            }
+            .sidebar-mobile-toggle {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                background: none;
+                border: none;
+                color: #fff;
+                font-size: 14px;
+                cursor: pointer;
+                padding: 0 4px;
+                transition: transform 0.3s;
+            }
+            .journal-sidebar.collapsed .sidebar-mobile-toggle {
+                transform: rotate(180deg);
+            }
+            .journal-sidebar .sidebar-collapsible {
+                overflow: hidden;
+                transition: max-height 0.3s ease, opacity 0.2s ease;
+                max-height: 2000px;
+                opacity: 1;
+            }
+            .journal-sidebar.collapsed .sidebar-collapsible {
+                max-height: 0;
+                opacity: 0;
             }
 
             /* Tabs: smaller on mobile */
@@ -1709,7 +1706,7 @@
                 </div><!-- /.journal-main-content -->
 
                 <!-- Right Sidebar: Filters -->
-                <div class="journal-sidebar collapsed" id="journalSidebar">
+                <div class="journal-sidebar" id="journalSidebar">
                     <div class="sidebar-header" onclick="toggleMobileSidebar()">
                         <div class="sidebar-header-left">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
@@ -2433,11 +2430,19 @@
             document.body.appendChild(overlay);
         }
 
-        // Sidebar toggle (barcha ekranlar uchun)
+        // Sidebar toggle (faqat mobil)
         function toggleMobileSidebar() {
-            const sidebar = document.getElementById('journalSidebar');
-            sidebar.classList.toggle('collapsed');
+            if (window.innerWidth > 768) return;
+            document.getElementById('journalSidebar').classList.toggle('collapsed');
         }
+        // Mobilda sahifa ochilganda sidebar yig'iq, desktopga o'tsa ochiq
+        (function() {
+            var sb = document.getElementById('journalSidebar');
+            if (window.innerWidth <= 768) sb.classList.add('collapsed');
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 768) sb.classList.remove('collapsed');
+            });
+        })();
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));

@@ -15,8 +15,8 @@
  */
 
 // ===== SOZLAMALAR =====
-$LMS_URL     = 'https://lmsttatf.uz';  // LMS URL (Moodle dan ulanadigan)
-$SYNC_SECRET = 'YOUR_SECRET_HERE';      // MOODLE_SYNC_SECRET bilan bir xil
+$LMS_URL     = 'https://mark.tashmedunitf.uz';
+$SYNC_SECRET = '159357@Dax';
 $PUSH_SCRIPT = '/opt/scripts/moodle_to_lmsttatf_push.php';
 // =======================
 

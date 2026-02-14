@@ -116,9 +116,32 @@ class SettingsController extends Controller
     public function syncMarkingSystems()
     {
         try {
+            // 1. Curricula jadvalidan mavjud marking system ma'lumotlarini to'ldirish
+            $curricula = \App\Models\Curriculum::whereNotNull('marking_system_code')
+                ->select('marking_system_code', 'marking_system_name', 'marking_system_minimum_limit', 'marking_system_gpa_limit')
+                ->distinct()
+                ->get();
+
+            $fromCurricula = 0;
+            foreach ($curricula as $c) {
+                $existing = MarkingSystemScore::where('marking_system_code', $c->marking_system_code)->first();
+                if (!$existing) {
+                    MarkingSystemScore::create([
+                        'marking_system_code' => $c->marking_system_code,
+                        'marking_system_name' => $c->marking_system_name ?? '',
+                        'minimum_limit' => $c->marking_system_minimum_limit ?? 60,
+                        'gpa_limit' => $c->marking_system_gpa_limit ?? 2.0,
+                    ]);
+                    $fromCurricula++;
+                }
+            }
+
+            // 2. HEMIS API dan yangilash
             $hemisService = app(HemisService::class);
-            $count = $hemisService->importMarkingSystems();
-            return redirect()->route('admin.settings')->with('success', "Baholash tizimlari muvaffaqiyatli yangilandi! Jami: {$count} ta");
+            $fromApi = $hemisService->importMarkingSystems();
+
+            $total = $fromCurricula + $fromApi;
+            return redirect()->route('admin.settings')->with('success', "Baholash tizimlari muvaffaqiyatli yangilandi! Jami: {$total} ta (o'quv rejalardan: {$fromCurricula}, HEMIS API: {$fromApi})");
         } catch (\Exception $e) {
             return redirect()->route('admin.settings')->with('error', "Xatolik yuz berdi: {$e->getMessage()}");
         }

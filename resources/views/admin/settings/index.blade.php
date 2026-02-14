@@ -227,6 +227,7 @@
                                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                                             <span style="font-size: 13px; font-weight: 700; color: {{ $type['color'] }};">{{ $type['label'] }}</span>
                                             <label style="display: flex; align-items: center; cursor: pointer;">
+                                                <input type="hidden" name="scores[{{ $score->id }}][{{ $key }}_active]" value="0">
                                                 <input type="checkbox" name="scores[{{ $score->id }}][{{ $key }}_active]" value="1" {{ $score->$activeKey ? 'checked' : '' }} style="width: 16px; height: 16px; accent-color: {{ $type['color'] }};">
                                             </label>
                                         </div>

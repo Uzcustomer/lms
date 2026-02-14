@@ -96,17 +96,17 @@ class SettingsController extends Controller
         foreach ($validated['scores'] as $id => $scoreData) {
             MarkingSystemScore::where('id', $id)->update([
                 'jn_limit' => $scoreData['jn_limit'],
-                'jn_active' => isset($scoreData['jn_active']),
+                'jn_active' => !empty($scoreData['jn_active']),
                 'mt_limit' => $scoreData['mt_limit'],
-                'mt_active' => isset($scoreData['mt_active']),
+                'mt_active' => !empty($scoreData['mt_active']),
                 'on_limit' => $scoreData['on_limit'],
-                'on_active' => isset($scoreData['on_active']),
+                'on_active' => !empty($scoreData['on_active']),
                 'oski_limit' => $scoreData['oski_limit'],
-                'oski_active' => isset($scoreData['oski_active']),
+                'oski_active' => !empty($scoreData['oski_active']),
                 'test_limit' => $scoreData['test_limit'],
-                'test_active' => isset($scoreData['test_active']),
+                'test_active' => !empty($scoreData['test_active']),
                 'total_limit' => $scoreData['total_limit'],
-                'total_active' => isset($scoreData['total_active']),
+                'total_active' => !empty($scoreData['total_active']),
             ]);
         }
 

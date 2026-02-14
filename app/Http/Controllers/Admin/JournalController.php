@@ -9,6 +9,7 @@ use App\Models\CurriculumSubjectTeacher;
 use App\Models\Department;
 use App\Models\Group;
 use App\Models\LessonOpening;
+use App\Models\LessonTopic;
 use App\Models\Semester;
 use App\Models\Setting;
 use App\Models\Specialty;
@@ -2230,6 +2231,26 @@ class JournalController extends Controller
                     );
                 }
 
+                // Lokal bazadan mavzu-dars bog'lanishlarini olish
+                if ($request->filled('group_hemis_id') && $request->filled('subject_id') && $request->filled('semester_id')) {
+                    $assignments = LessonTopic::where('group_hemis_id', $request->group_hemis_id)
+                        ->where('subject_id', $request->subject_id)
+                        ->where('semester_code', $request->semester_id)
+                        ->get()
+                        ->groupBy('topic_hemis_id');
+
+                    foreach ($items as &$item) {
+                        $topicId = $item['id'] ?? null;
+                        if ($topicId && isset($assignments[$topicId])) {
+                            $assignment = $assignments[$topicId]->first();
+                            $item['taught_date'] = $assignment->lesson_date->format('d.m.Y');
+                        } else {
+                            $item['taught_date'] = null;
+                        }
+                    }
+                    unset($item);
+                }
+
                 return response()->json([
                     'success' => $data['success'] ?? true,
                     'data' => ['items' => $items],
@@ -2982,5 +3003,65 @@ class JournalController extends Controller
             'yn_submitted' => $ynSubmission !== null,
             'yn_submitted_at' => $ynSubmission?->submitted_at?->format('d.m.Y H:i'),
         ]);
+    }
+
+    /**
+     * Darsga mavzu biriktirish
+     */
+    public function assignTopic(Request $request)
+    {
+        $request->validate([
+            'group_hemis_id' => 'required',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'lesson_date' => 'required|date',
+            'topic_hemis_id' => 'required',
+            'topic_name' => 'required|string',
+        ]);
+
+        $webUser = auth()->guard('web')->user();
+        $teacherUser = auth()->guard('teacher')->user();
+        $user = $webUser ?? $teacherUser;
+        $guard = $teacherUser ? 'teacher' : 'web';
+
+        $lessonTopic = LessonTopic::updateOrCreate(
+            [
+                'group_hemis_id' => $request->group_hemis_id,
+                'subject_id' => $request->subject_id,
+                'semester_code' => $request->semester_code,
+                'lesson_date' => $request->lesson_date,
+                'topic_hemis_id' => $request->topic_hemis_id,
+            ],
+            [
+                'topic_name' => $request->topic_name,
+                'assigned_by_id' => $user->id,
+                'assigned_by_guard' => $guard,
+            ]
+        );
+
+        return response()->json(['success' => true, 'data' => $lessonTopic]);
+    }
+
+    /**
+     * Darsdan mavzuni olib tashlash
+     */
+    public function removeTopic(Request $request)
+    {
+        $request->validate([
+            'group_hemis_id' => 'required',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'lesson_date' => 'required|date',
+            'topic_hemis_id' => 'required',
+        ]);
+
+        LessonTopic::where('group_hemis_id', $request->group_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('lesson_date', $request->lesson_date)
+            ->where('topic_hemis_id', $request->topic_hemis_id)
+            ->delete();
+
+        return response()->json(['success' => true]);
     }
 }

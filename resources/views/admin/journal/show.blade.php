@@ -309,6 +309,16 @@
             color: #ef4444;
             font-size: 13px;
         }
+        .topic-taught {
+            background: #f0fdf4;
+        }
+        .topic-not-taught {
+            background: #fff;
+        }
+        .topic-taught .topic-date {
+            color: #16a34a;
+            font-weight: 600;
+        }
         .sidebar-select {
             width: 100%;
             padding: 6px 28px 6px 10px;
@@ -939,6 +949,9 @@
                                                 $isActiveOpened = $openingInfo && $openingInfo['status'] === 'active';
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px; position: relative; {{ $isMissed && !$isOpened ? 'background: #fef2f2;' : '' }}{{ $isActiveOpened ? 'background: #ecfdf5;' : '' }}">
+                                                <div style="position: absolute; top: 2px; left: 50%; transform: translateX(-50%);">
+                                                    <button type="button" onclick="openTopicModal('{{ $dateStr }}')" style="background: #6366f1; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Mavzu tanlash">M</button>
+                                                </div>
                                                 <div class="date-text-wrapper">{{ format_date($date) }}</div>
                                                 @if($canOpenLesson && $isMissed && !$isOpened)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="O'tkazib yuborilgan kun — Dars ochish">
@@ -1124,6 +1137,11 @@
                                                 $dIsActiveOpened = $dOpeningInfo && $dOpeningInfo['status'] === 'active';
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px; position: relative; {{ $dIsMissed && !$dOpeningInfo ? 'background: #fef2f2;' : '' }}{{ $dIsActiveOpened ? 'background: #ecfdf5;' : '' }}">
+                                                @if($isFirstOfDate)
+                                                    <div style="position: absolute; top: 2px; left: 50%; transform: translateX(-50%);">
+                                                        <button type="button" onclick="openTopicModal('{{ $dDateStr }}')" style="background: #6366f1; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Mavzu tanlash">M</button>
+                                                    </div>
+                                                @endif
                                                 <div class="date-text-wrapper">{{ format_date($col['date']) }}({{ $col['pair'] }})</div>
                                                 @if($canOpenLesson && $dIsMissed && !$dOpeningInfo && $isFirstOfDate)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
@@ -1910,8 +1928,12 @@
         const journalShowBaseUrl = '{{ url("/admin/journal/show") }}';
         const sidebarOptionsUrl = '{{ route("admin.journal.get-sidebar-options") }}';
         const topicsUrl = '{{ route("admin.journal.get-topics") }}';
+        const assignTopicUrl = '{{ route("admin.journal.assign-topic") }}';
+        const removeTopicUrl = '{{ route("admin.journal.remove-topic") }}';
         const currentSemesterHemisId = '{{ $semester?->semester_hemis_id ?? '' }}';
         const currentCurriculumHemisId = '{{ $group->curriculum_hemis_id ?? '' }}';
+        const currentGroupHemisId = '{{ $group->group_hemis_id ?? '' }}';
+        let cachedTopics = [];
 
         // ====== Jadval sinxronizatsiya ======
         function syncSchedule() {
@@ -2215,14 +2237,7 @@
             const body = document.getElementById('mavzular-body');
             if (!body) return;
 
-            console.log('[Mavzular] loadTopics called', {
-                semesterHemisId: currentSemesterHemisId,
-                curriculumHemisId: currentCurriculumHemisId,
-                subjectId: currentSubjectId,
-            });
-
             if (!currentSemesterCode || !currentCurriculumHemisId) {
-                console.warn('[Mavzular] Missing semesterCode or curriculumHemisId');
                 body.innerHTML = '<div class="mavzular-empty">Semestr yoki o\'quv reja ma\'lumotlari topilmadi</div>';
                 return;
             }
@@ -2231,6 +2246,7 @@
                 semester_id: currentSemesterCode,
                 curriculum_id: currentCurriculumHemisId,
                 subject_id: currentSubjectId,
+                group_hemis_id: currentGroupHemisId,
                 limit: 200,
             });
 
@@ -2239,29 +2255,30 @@
             fetch(`${topicsUrl}?${params}`)
                 .then(r => r.json())
                 .then(data => {
-                    console.log('[Mavzular] Server response:', JSON.stringify(data).substring(0, 500));
                     if (!data.success || !data.data || !data.data.items || data.data.items.length === 0) {
-                        console.warn('[Mavzular] No items found', { success: data.success, hasData: !!data.data, hasItems: !!(data.data && data.data.items), itemsLength: data.data?.items?.length });
                         body.innerHTML = '<div class="mavzular-empty">Mavzular topilmadi</div>';
                         return;
                     }
 
                     const items = data.data.items.sort((a, b) => (a.position || 0) - (b.position || 0));
+                    cachedTopics = items;
 
                     let html = '<table class="mavzular-table"><thead><tr>' +
                         '<th style="text-align:center;width:36px;">#</th>' +
                         '<th style="text-align:center;width:60px;">Soat</th>' +
                         '<th>Mavzu nomi</th>' +
-                        '<th style="width:90px;">Sana</th>' +
+                        '<th style="width:110px;">O\'tilgan sana</th>' +
                         '</tr></thead><tbody>';
 
                     items.forEach((item, i) => {
-                        const date = item.created_at ? new Date(item.created_at * 1000).toLocaleDateString('uz-UZ', {year:'numeric', month:'2-digit', day:'2-digit'}) : '-';
-                        html += '<tr>' +
+                        const taughtDate = item.taught_date || '';
+                        const statusClass = taughtDate ? 'topic-taught' : 'topic-not-taught';
+                        const statusText = taughtDate || '<span style="color:#9ca3af;font-style:italic;">O\'tilmagan</span>';
+                        html += '<tr class="' + statusClass + '">' +
                             '<td class="topic-num">' + (i + 1) + '</td>' +
                             '<td class="topic-hours"><span class="topic-hours-badge">' + (item.topic_load || 0) + '</span></td>' +
                             '<td class="topic-name">' + (item.name || '-') + '</td>' +
-                            '<td class="topic-date">' + date + '</td>' +
+                            '<td class="topic-date">' + statusText + '</td>' +
                             '</tr>';
                     });
 
@@ -2950,6 +2967,150 @@
             if (e.target === this) this.style.display = 'none';
         });
     </script>
+
+    {{-- ===== MAVZU TANLASH MODAL ===== --}}
+    <div id="topicSelectModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
+        <div style="background:#fff; border-radius:16px; padding:0; max-width:520px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:80vh; display:flex; flex-direction:column;">
+            <div style="padding:20px 24px 12px; border-bottom:1px solid #e5e7eb;">
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+                    <div style="width:40px; height:40px; background:linear-gradient(135deg,#6366f1,#4f46e5); border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                        <svg width="20" height="20" style="color:#fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                    </div>
+                    <div>
+                        <div style="font-size:16px; font-weight:700; color:#1e293b;">Mavzu tanlash</div>
+                        <div style="font-size:13px; color:#64748b;" id="topicSelectDateLabel">Sana: —</div>
+                    </div>
+                    <button onclick="closeTopicModal()" style="margin-left:auto; background:none; border:none; font-size:22px; color:#9ca3af; cursor:pointer; line-height:1;">&times;</button>
+                </div>
+                <input type="text" id="topicSearchInput" placeholder="Mavzu qidirish..." oninput="filterTopicList()" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:8px; font-size:13px; box-sizing:border-box;">
+            </div>
+            <div id="topicSelectList" style="padding:8px; overflow-y:auto; flex:1;"></div>
+        </div>
+    </div>
+
+    <script>
+        let topicModalDate = '';
+        let topicModalAssigned = [];
+
+        function openTopicModal(dateStr) {
+            topicModalDate = dateStr;
+            document.getElementById('topicSelectDateLabel').textContent = 'Sana: ' + dateStr;
+            document.getElementById('topicSearchInput').value = '';
+
+            // Oldindan biriktirilgan mavzularni aniqlash
+            topicModalAssigned = cachedTopics.filter(t => t.taught_date === formatDateForCompare(dateStr)).map(t => t.id);
+
+            renderTopicList(cachedTopics);
+            document.getElementById('topicSelectModal').style.display = 'flex';
+        }
+
+        function closeTopicModal() {
+            document.getElementById('topicSelectModal').style.display = 'none';
+        }
+
+        function formatDateForCompare(dateStr) {
+            // dateStr: "2026-02-14" -> "14.02.2026"
+            const parts = dateStr.split('-');
+            if (parts.length === 3) return parts[2] + '.' + parts[1] + '.' + parts[0];
+            return dateStr;
+        }
+
+        function filterTopicList() {
+            const q = document.getElementById('topicSearchInput').value.toLowerCase();
+            const filtered = cachedTopics.filter(t => (t.name || '').toLowerCase().includes(q));
+            renderTopicList(filtered);
+        }
+
+        function renderTopicList(topics) {
+            const list = document.getElementById('topicSelectList');
+            if (!topics || topics.length === 0) {
+                list.innerHTML = '<div style="padding:20px; text-align:center; color:#9ca3af;">Mavzular topilmadi</div>';
+                return;
+            }
+
+            let html = '';
+            topics.forEach((t, i) => {
+                const isAssigned = topicModalAssigned.includes(t.id);
+                const alreadyTaught = t.taught_date && !isAssigned;
+                html += '<div style="padding:10px 14px; border-radius:8px; margin-bottom:4px; cursor:' + (alreadyTaught ? 'default' : 'pointer') + '; display:flex; align-items:center; gap:10px; ' +
+                    (isAssigned ? 'background:#ecfdf5; border:1px solid #86efac;' : (alreadyTaught ? 'background:#f9fafb; border:1px solid #e5e7eb; opacity:0.6;' : 'background:#fff; border:1px solid #e5e7eb;')) + '" ' +
+                    (alreadyTaught ? '' : 'onclick="toggleTopicAssign(' + t.id + ', \'' + escapeHtml(t.name) + '\', this)"') + '>' +
+                    '<div style="width:24px; height:24px; border-radius:6px; border:2px solid ' + (isAssigned ? '#22c55e' : '#d1d5db') + '; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:' + (isAssigned ? '#22c55e' : '#fff') + ';">' +
+                    (isAssigned ? '<svg width="14" height="14" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : '') +
+                    '</div>' +
+                    '<div style="flex:1; min-width:0;">' +
+                    '<div style="font-size:13px; font-weight:500; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(t.name) + '">' + (i + 1) + '. ' + escapeHtml(t.name || '-') + '</div>' +
+                    '<div style="font-size:11px; color:#6b7280;">' + (t.topic_load || 0) + ' soat' + (alreadyTaught ? ' &mdash; o\'tilgan: ' + t.taught_date : '') + '</div>' +
+                    '</div>' +
+                    '</div>';
+            });
+            list.innerHTML = html;
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function toggleTopicAssign(topicId, topicName, el) {
+            const isAssigned = topicModalAssigned.includes(topicId);
+            const url = isAssigned ? removeTopicUrl : assignTopicUrl;
+            const body = {
+                group_hemis_id: currentGroupHemisId,
+                subject_id: currentSubjectId,
+                semester_code: currentSemesterCode,
+                lesson_date: topicModalDate,
+                topic_hemis_id: topicId,
+            };
+            if (!isAssigned) body.topic_name = topicName;
+
+            el.style.opacity = '0.5';
+            el.style.pointerEvents = 'none';
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(body),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    if (isAssigned) {
+                        topicModalAssigned = topicModalAssigned.filter(id => id !== topicId);
+                        // cachedTopics dan taught_date olib tashlash
+                        const topic = cachedTopics.find(t => t.id === topicId);
+                        if (topic) topic.taught_date = null;
+                    } else {
+                        topicModalAssigned.push(topicId);
+                        const topic = cachedTopics.find(t => t.id === topicId);
+                        if (topic) topic.taught_date = formatDateForCompare(topicModalDate);
+                    }
+                    renderTopicList(cachedTopics.filter(t => {
+                        const q = document.getElementById('topicSearchInput').value.toLowerCase();
+                        return !q || (t.name || '').toLowerCase().includes(q);
+                    }));
+                    loadTopics(); // Mavzular jadvalini yangilash
+                } else {
+                    alert('Xatolik: ' + (data.message || 'Mavzu saqlanmadi'));
+                }
+                el.style.opacity = '1';
+                el.style.pointerEvents = '';
+            })
+            .catch(err => {
+                alert('Xatolik: ' + err.message);
+                el.style.opacity = '1';
+                el.style.pointerEvents = '';
+            });
+        }
+
+        document.getElementById('topicSelectModal').addEventListener('click', function(e) {
+            if (e.target === this) closeTopicModal();
+        });
 
     <script>
         function openLessonModal(dateStr) {

@@ -179,6 +179,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-filters-by-semester', [JournalController::class, 'getFiltersBySemester'])->name('get-filters-by-semester');
             Route::get('/get-sidebar-options', [JournalController::class, 'getSidebarOptions'])->name('get-sidebar-options');
             Route::get('/get-topics', [JournalController::class, 'getTopics'])->name('get-topics');
+            Route::post('/assign-topic', [JournalController::class, 'assignTopic'])->name('assign-topic');
+            Route::post('/remove-topic', [JournalController::class, 'removeTopic'])->name('remove-topic');
             Route::get('/download-submission/{submissionId}', [JournalController::class, 'downloadSubmission'])->name('download-submission');
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');

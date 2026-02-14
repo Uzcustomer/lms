@@ -531,14 +531,11 @@
             display: none;
         }
 
-        /* ===== MOBILE RESPONSIVE STYLES ===== */
-        @media (max-width: 768px) {
-            /* Layout: stack sidebar below content */
+        /* ===== SIDEBAR TOGGLE (1024px dan past - admin sidebar 256px + kontent) ===== */
+        @media (max-width: 1024px) {
             .journal-layout {
                 flex-direction: column;
             }
-
-            /* Sidebar: full width, collapsible on mobile */
             .journal-sidebar {
                 width: 100%;
                 position: relative;
@@ -576,7 +573,10 @@
                 max-height: 0;
                 opacity: 0;
             }
+        }
 
+        /* ===== MOBILE RESPONSIVE STYLES (768px dan past) ===== */
+        @media (max-width: 768px) {
             /* Tabs: smaller on mobile */
             .tab-container {
                 padding: 6px 4px 0 4px;
@@ -2430,17 +2430,18 @@
             document.body.appendChild(overlay);
         }
 
-        // Sidebar toggle (faqat mobil)
+        // Sidebar toggle (1024px dan past)
         function toggleMobileSidebar() {
-            if (window.innerWidth > 768) return;
+            if (window.innerWidth > 1024) return;
             document.getElementById('journalSidebar').classList.toggle('collapsed');
         }
         // Mobilda sahifa ochilganda sidebar yig'iq, desktopga o'tsa ochiq
         (function() {
             var sb = document.getElementById('journalSidebar');
-            if (window.innerWidth <= 768) sb.classList.add('collapsed');
+            if (window.innerWidth <= 1024) sb.classList.add('collapsed');
             window.addEventListener('resize', function() {
-                if (window.innerWidth > 768) sb.classList.remove('collapsed');
+                if (window.innerWidth > 1024) sb.classList.remove('collapsed');
+                else if (!sb.classList.contains('collapsed')) sb.classList.add('collapsed');
             });
         })();
 

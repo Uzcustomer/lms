@@ -44,7 +44,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         if (auth()->check()) {
             return redirect()->route('admin.dashboard');
         } else {
-            return view('auth.login');
+            return response()
+                ->view('auth.login')
+                ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
     })->name('login');
 
@@ -370,7 +372,9 @@ Route::prefix('student')->name('student.')->group(function () {
         if (auth()->guard('student')->check()) {
             return redirect()->route('student.dashboard');
         } else {
-            return view('student.login');
+            return response()
+                ->view('student.login')
+                ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
     })->name('login');
 

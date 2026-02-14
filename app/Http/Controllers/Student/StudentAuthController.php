@@ -56,6 +56,7 @@ class StudentAuthController extends Controller
                 }
 
                 Auth::guard('student')->login($student);
+                $request->session()->regenerate();
                 ActivityLogService::logLogin('student');
 
                 if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
@@ -81,6 +82,7 @@ class StudentAuthController extends Controller
                 }
 
                 Auth::guard('student')->login($student);
+                $request->session()->regenerate();
                 ActivityLogService::logLogin('student');
 
                 if ($student->must_change_password) {
@@ -118,6 +120,7 @@ class StudentAuthController extends Controller
         if (!$sent) {
             // Telegram yuborilmasa, oddiy login qilish
             Auth::guard('student')->login($student);
+            $request->session()->regenerate();
             ActivityLogService::logLogin('student');
 
             if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
@@ -200,6 +203,7 @@ class StudentAuthController extends Controller
         $request->session()->forget('login_verify_student_id');
 
         Auth::guard('student')->login($student);
+        $request->session()->regenerate();
         ActivityLogService::logLogin('student');
 
         if ($student->must_change_password) {

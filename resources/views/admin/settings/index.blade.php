@@ -33,7 +33,7 @@
                             <svg width="22" height="22" style="width: 22px; height: 22px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                         </div>
                         <div style="text-align: left;">
-                            <div style="font-size: 17px; font-weight: 700; color: #1e3a5f;">Muddatlar va ballar</div>
+                            <div style="font-size: 17px; font-weight: 700; color: #1e3a5f;">Muddatlar</div>
                             <div style="font-size: 13px; color: #64748b; margin-top: 2px;">Spravka, MT muddatlari, kurs darajasi sozlamalari</div>
                         </div>
                     </div>
@@ -133,26 +133,16 @@
                                 <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px; color: #64748b;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
                                 Kurs darajalari bo'yicha muddatlar
                             </div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
                                 @foreach ($deadlines as $deadline)
                                     <div style="padding: 14px 16px; background: #fff; border-radius: 10px; border: 1px solid #e5e7eb;">
                                         <div style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9;">
                                             {{ $deadline->level->level_name ?? $deadline->level_code }}
                                             <span style="font-size: 11px; color: #94a3b8; font-weight: 400; margin-left: 4px;">({{ $deadline->level_code }})</span>
                                         </div>
-                                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-                                            <div>
-                                                <label style="font-size: 11px; color: #64748b; font-weight: 500; display: block; margin-bottom: 4px;">Kunlar</label>
-                                                <input type="number" name="deadlines[{{ $deadline->level_code }}][days]" value="{{ old('deadlines.' . $deadline->level_code . '.days', $deadline->deadline_days ?? '') }}" style="width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #111827; outline: none;">
-                                            </div>
-                                            <div>
-                                                <label style="font-size: 11px; color: #64748b; font-weight: 500; display: block; margin-bottom: 4px;">JN bal</label>
-                                                <input type="number" name="deadlines[{{ $deadline->level_code }}][joriy]" value="{{ old('deadlines.' . $deadline->level_code . '.joriy', $deadline->joriy ?? '') }}" style="width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #111827; outline: none;">
-                                            </div>
-                                            <div>
-                                                <label style="font-size: 11px; color: #64748b; font-weight: 500; display: block; margin-bottom: 4px;">MT bal</label>
-                                                <input type="number" name="deadlines[{{ $deadline->level_code }}][mustaqil_talim]" value="{{ old('deadlines.' . $deadline->level_code . '.mustaqil_talim', $deadline->mustaqil_talim ?? '') }}" style="width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #111827; outline: none;">
-                                            </div>
+                                        <div>
+                                            <label style="font-size: 11px; color: #64748b; font-weight: 500; display: block; margin-bottom: 4px;">Muddat (kunlar)</label>
+                                            <input type="number" name="deadlines[{{ $deadline->level_code }}][days]" value="{{ old('deadlines.' . $deadline->level_code . '.days', $deadline->deadline_days ?? '') }}" style="width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #111827; outline: none;">
                                         </div>
                                     </div>
                                 @endforeach
@@ -166,6 +156,96 @@
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            {{-- SECTION: O'TISH BALI CHEGARALARI --}}
+            <div x-data="{ open: true }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #fef3c7, #fde68a); border: none; cursor: pointer; border-bottom: 1px solid #fbbf24;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 44px; height: 44px; min-width: 44px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(245,158,11,0.3);">
+                            <svg width="22" height="22" style="width: 22px; height: 22px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                        </div>
+                        <div style="text-align: left;">
+                            <div style="font-size: 17px; font-weight: 700; color: #78350f;">O'tish bali chegaralari</div>
+                            <div style="font-size: 13px; color: #92400e; margin-top: 2px;">Baholash tizimlariga qarab nazorat turlari chegaralari</div>
+                        </div>
+                    </div>
+                    <svg width="20" height="20" :style="open ? 'transform: rotate(180deg)' : ''" style="width: 20px; height: 20px; min-width: 20px; color: #92400e; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+
+                <div x-show="open" x-transition style="padding: 24px;">
+                    {{-- HEMIS dan yangilash tugmasi --}}
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                        <div style="font-size: 13px; color: #64748b;">
+                            @if($markingSystemScores->count() > 0)
+                                Jami {{ $markingSystemScores->count() }} ta baholash tizimi
+                            @else
+                                Baholash tizimlari topilmadi. HEMIS dan yangilang.
+                            @endif
+                        </div>
+                        <form method="POST" action="{{ route('admin.synchronize.marking-systems') }}">
+                            @csrf
+                            <button type="submit" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 2px 8px rgba(16,185,129,0.3);">
+                                <svg width="16" height="16" style="width: 16px; height: 16px; min-width: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                HEMIS dan yangilash
+                            </button>
+                        </form>
+                    </div>
+
+                    @if($markingSystemScores->count() > 0)
+                    <form method="POST" action="{{ route('admin.settings.update.marking-system-scores') }}">
+                        @csrf
+
+                        @foreach($markingSystemScores as $score)
+                        <div style="background: #f8fafc; border-radius: 14px; padding: 20px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+                                <div>
+                                    <div style="font-size: 15px; font-weight: 700; color: #1e293b;">{{ $score->marking_system_name }}</div>
+                                    <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">Kod: {{ $score->marking_system_code }} | HEMIS minimum: {{ $score->minimum_limit }} | GPA: {{ $score->gpa_limit }}</div>
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;">
+                                @php
+                                    $types = [
+                                        'jn' => ['label' => 'JN', 'full' => 'Joriy nazorat', 'color' => '#2563eb'],
+                                        'mt' => ['label' => 'MT', 'full' => "Mustaqil ta'lim", 'color' => '#7c3aed'],
+                                        'on' => ['label' => 'ON', 'full' => 'Oraliq nazorat', 'color' => '#0891b2'],
+                                        'oski' => ['label' => 'OSKI', 'full' => 'OSKI', 'color' => '#ea580c'],
+                                        'test' => ['label' => 'Test', 'full' => 'Yakuniy test', 'color' => '#e11d48'],
+                                        'total' => ['label' => "O'zl.", 'full' => "O'zlashtirish", 'color' => '#16a34a'],
+                                    ];
+                                @endphp
+
+                                @foreach($types as $key => $type)
+                                    @php
+                                        $activeKey = $key . '_active';
+                                        $limitKey = $key . '_limit';
+                                    @endphp
+                                    <div style="background: #fff; border-radius: 10px; padding: 12px; border: 2px solid {{ $score->$activeKey ? $type['color'] . '40' : '#e5e7eb' }}; {{ !$score->$activeKey ? 'opacity: 0.6;' : '' }}">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                            <span style="font-size: 13px; font-weight: 700; color: {{ $type['color'] }};">{{ $type['label'] }}</span>
+                                            <label style="display: flex; align-items: center; cursor: pointer;">
+                                                <input type="checkbox" name="scores[{{ $score->id }}][{{ $key }}_active]" value="1" {{ $score->$activeKey ? 'checked' : '' }} style="width: 16px; height: 16px; accent-color: {{ $type['color'] }};">
+                                            </label>
+                                        </div>
+                                        <div style="font-size: 10px; color: #94a3b8; margin-bottom: 6px;">{{ $type['full'] }}</div>
+                                        <input type="number" name="scores[{{ $score->id }}][{{ $key }}_limit]" value="{{ old('scores.' . $score->id . '.' . $key . '_limit', $score->$limitKey) }}" min="0" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px; font-weight: 700; color: #1e293b; text-align: center; outline: none;">
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                        @endforeach
+
+                        <div style="display: flex; justify-content: flex-end;">
+                            <button type="submit" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(245,158,11,0.3);">
+                                <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Chegaralarni saqlash
+                            </button>
+                        </div>
+                    </form>
+                    @endif
                 </div>
             </div>
 

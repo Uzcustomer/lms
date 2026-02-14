@@ -17,6 +17,7 @@ use App\Models\Department;
 use App\Models\ExamTest;
 use App\Models\Group;
 use App\Models\Independent;
+use App\Models\MarkingSystemScore;
 use App\Models\Oski;
 use App\Models\Schedule;
 use App\Models\Semester;

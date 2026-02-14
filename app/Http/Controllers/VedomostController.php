@@ -6,6 +6,7 @@ use App\Models\CurriculumSubject;
 use App\Models\Deadline;
 use App\Models\Department;
 use App\Models\Group;
+use App\Models\MarkingSystemScore;
 use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Student;
@@ -440,6 +441,12 @@ class VedomostController extends Controller
 
 
                     $deadline = Deadline::where('level_code', $semester->level_code)->first();
+                    $markingScore = $this->getMarkingScore($student->hemis_id);
+                    $jnLimit = $markingScore->jn_active ? $markingScore->jn_limit : 0;
+                    $mtLimit = $markingScore->mt_active ? $markingScore->mt_limit : 0;
+                    $onLimit = $markingScore->on_active ? $markingScore->on_limit : 0;
+                    $oskiLimit = $markingScore->oski_active ? $markingScore->oski_limit : 0;
+                    $testLimit = $markingScore->test_active ? $markingScore->test_limit : 0;
                     $token = config('services.hemis.token');
                     $response = Http::withoutVerifying()->withToken($token)
                         ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
@@ -452,13 +459,13 @@ class VedomostController extends Controller
                         }
                     }
                     $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
-                    if ($student->qoldiq > 25 or $student->jb < $deadline->joriy or $student->mt < $deadline->mustaqil_talim or ($vedomost->oraliq_percent != 0 and $student->on < 60)) {
+                    if ($student->qoldiq > 25 or $student->jb < $jnLimit or $student->mt < $mtLimit or ($vedomost->oraliq_percent != 0 and $student->on < $onLimit)) {
                         $ozlashtirish = -2;
                     } elseif (
                         ($vedomost->oski_percent != 0 and !isset($student->oski)) or ($vedomost->test_percent != 0 and !isset($student->test))
                     ) {
                         $ozlashtirish = -1;
-                    } elseif ($student->jb >= $deadline->joriy and $student->mt >= $deadline->mustaqil_talim and ($vedomost->oraliq_percent == 0 || $student->on >= 60) and ($vedomost->oski_percent == 0 || $student->oski >= 60) and ($vedomost->test_percent == 0 || $student->test >= 60)) {
+                    } elseif ($student->jb >= $jnLimit and $student->mt >= $mtLimit and ($vedomost->oraliq_percent == 0 || $student->on >= $onLimit) and ($vedomost->oski_percent == 0 || $student->oski >= $oskiLimit) and ($vedomost->test_percent == 0 || $student->test >= $testLimit)) {
                         $ozlashtirish = $all + floatval($test ?? 0) * $vedomost->test_percent / 100 + floatval($oski ?? 0) * $vedomost->oski_percent / 100;
                     }
                     $ozlashtirish = round($ozlashtirish);
@@ -848,6 +855,12 @@ class VedomostController extends Controller
 
 
                     $deadline = Deadline::where('level_code', $semester->level_code)->first();
+                    $markingScore = $this->getMarkingScore($student->hemis_id);
+                    $jnLimit = $markingScore->jn_active ? $markingScore->jn_limit : 0;
+                    $mtLimit = $markingScore->mt_active ? $markingScore->mt_limit : 0;
+                    $onLimit = $markingScore->on_active ? $markingScore->on_limit : 0;
+                    $oskiLimit = $markingScore->oski_active ? $markingScore->oski_limit : 0;
+                    $testLimit = $markingScore->test_active ? $markingScore->test_limit : 0;
                     $token = config('services.hemis.token');
                     $response = Http::withoutVerifying()->withToken($token)
                         ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
@@ -860,13 +873,13 @@ class VedomostController extends Controller
                         }
                     }
                     $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
-                    if ($student->qoldiq > 25 || $student->jb < $deadline->joriy || $student->mt < $deadline->mustaqil_talim || ($vedomost->oraliq_percent != 0 && $student->on < 60) || $student->jb_secend < $deadline->joriy || $student->mt_secend < $deadline->mustaqil_talim) {
+                    if ($student->qoldiq > 25 || $student->jb < $jnLimit || $student->mt < $mtLimit || ($vedomost->oraliq_percent != 0 && $student->on < $onLimit) || $student->jb_secend < $jnLimit || $student->mt_secend < $mtLimit) {
                         $ozlashtirish = -2;
                     } elseif (
                         ($vedomost->oski_percent != 0 && !isset($student->oski)) || ($vedomost->test_percent != 0 && !isset($student->test))
                     ) {
                         $ozlashtirish = -1;
-                    } elseif ($student->jb >= $deadline->joriy && $student->mt >= $deadline->mustaqil_talim && ($vedomost->oraliq_percent == 0 || $student->on >= 60) && ($vedomost->oski_percent == 0 || $student->oski >= 60) and ($vedomost->test_percent == 0 || $student->test >= 60)) {
+                    } elseif ($student->jb >= $jnLimit && $student->mt >= $mtLimit && ($vedomost->oraliq_percent == 0 || $student->on >= $onLimit) && ($vedomost->oski_percent == 0 || $student->oski >= $oskiLimit) and ($vedomost->test_percent == 0 || $student->test >= $testLimit)) {
                         $ozlashtirish = $all + floatval($test ?? 0) * $vedomost->test_percent / 100 + floatval($oski ?? 0) * $vedomost->oski_percent / 100;
                     }
                     $ozlashtirish = round($ozlashtirish);
@@ -1022,6 +1035,35 @@ class VedomostController extends Controller
             return back()->with('error', 'Xatolik yuz berdi: ' . $e->getMessage() . " " . $e->getLine());
         }
     }
+    private function getMarkingScore($studentHemisId)
+    {
+        static $cache = [];
+        if (isset($cache[$studentHemisId])) {
+            return $cache[$studentHemisId];
+        }
+
+        $student = Student::where('hemis_id', $studentHemisId)->first();
+        $markingSystemCode = optional(optional($student)->curriculum)->marking_system_code;
+
+        $score = $markingSystemCode
+            ? MarkingSystemScore::where('marking_system_code', $markingSystemCode)->first()
+            : null;
+
+        if (!$score) {
+            $score = (object) [
+                'jn_limit' => 60, 'jn_active' => true,
+                'mt_limit' => 60, 'mt_active' => true,
+                'on_limit' => 60, 'on_active' => false,
+                'oski_limit' => 60, 'oski_active' => true,
+                'test_limit' => 60, 'test_active' => true,
+                'total_limit' => 60, 'total_active' => true,
+            ];
+        }
+
+        $cache[$studentHemisId] = $score;
+        return $score;
+    }
+
     function delete(Request $request, $id)
     {
         try {

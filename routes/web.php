@@ -293,6 +293,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/import', [QuizResultController::class, 'import'])->name('import');
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
+            Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 
@@ -511,6 +512,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/import', [QuizResultController::class, 'import'])->name('import');
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
+            Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 

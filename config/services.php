@@ -45,4 +45,9 @@ return [
         'chat_id' => env('TELEGRAM_CHAT_ID'),
     ],
 
+    'moodle' => [
+        'cron_url' => env('MOODLE_CRON_URL'),
+        'sync_secret' => env('MOODLE_SYNC_SECRET'),
+    ],
+
 ];

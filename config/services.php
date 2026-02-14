@@ -46,7 +46,10 @@ return [
     ],
 
     'moodle' => [
-        'cron_url' => env('MOODLE_CRON_URL'),
+        'ssh_host' => env('MOODLE_SSH_HOST'),
+        'ssh_user' => env('MOODLE_SSH_USER'),
+        'ssh_port' => env('MOODLE_SSH_PORT', 22),
+        'push_script' => env('MOODLE_PUSH_SCRIPT', '/opt/scripts/moodle_to_lmsttatf_push.php'),
         'sync_secret' => env('MOODLE_SYNC_SECRET'),
     ],
 

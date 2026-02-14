@@ -92,62 +92,117 @@ class StudentController extends Controller
         $perPage = $request->get('per_page', 50);
         $students = $query->paginate($perPage)->appends($request->query());
 
-        $departments = Student::select('department_id', 'department_name', 'department_code')
-            ->distinct()
-            ->orderBy('department_name')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->department_id,
-                    'name' => $item->department_name . ' (' . $item->department_code . ')'
-                ];
-            });
-
-        $specialties = Student::select('specialty_id', 'specialty_name', 'specialty_code')
-            ->distinct()
-            ->orderBy('specialty_name')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->specialty_id,
-                    'name' => $item->specialty_name . ' (' . $item->specialty_code . ')'
-                ];
-            });
-
-        $groups = Student::select('group_id', 'group_name')
-            ->distinct()
-            ->orderBy('group_name')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->group_id,
-                    'name' => $item->group_name
-                ];
-            });
-
-        $semesters = Student::select('semester_code', 'semester_name')
-            ->distinct()
-            ->orderBy('semester_code')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->semester_code,
-                    'name' => $item->semester_name
-                ];
-            });
-
         $educationTypes = Student::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
             ->distinct()
             ->orderBy('education_type_name')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->education_type_code,
-                    'name' => $item->education_type_name
-                ];
-            });
+            ->get();
 
-        return view('admin.students.index', compact('students', 'departments', 'specialties', 'groups', 'semesters', 'educationTypes'));
+        return view('admin.students.index', compact('students', 'educationTypes'));
+    }
+
+    public function getFilterDepartments(Request $request)
+    {
+        $query = Student::query();
+        if ($request->filled('education_type')) {
+            $query->where('education_type_code', $request->education_type);
+        }
+        return response()->json(
+            $query->select('department_id', 'department_name')
+                ->whereNotNull('department_id')
+                ->distinct()
+                ->orderBy('department_name')
+                ->get()
+                ->mapWithKeys(fn ($item) => [$item->department_id => $item->department_name])
+        );
+    }
+
+    public function getFilterSpecialties(Request $request)
+    {
+        $query = Student::query();
+        if ($request->filled('education_type')) {
+            $query->where('education_type_code', $request->education_type);
+        }
+        if ($request->filled('department')) {
+            $query->where('department_id', $request->department);
+        }
+        return response()->json(
+            $query->select('specialty_id', 'specialty_name')
+                ->whereNotNull('specialty_id')
+                ->distinct()
+                ->orderBy('specialty_name')
+                ->get()
+                ->mapWithKeys(fn ($item) => [$item->specialty_id => $item->specialty_name])
+        );
+    }
+
+    public function getFilterGroups(Request $request)
+    {
+        $query = Student::query();
+        if ($request->filled('education_type')) {
+            $query->where('education_type_code', $request->education_type);
+        }
+        if ($request->filled('department')) {
+            $query->where('department_id', $request->department);
+        }
+        if ($request->filled('specialty')) {
+            $query->where('specialty_id', $request->specialty);
+        }
+        if ($request->filled('level_code')) {
+            $query->where('level_code', $request->level_code);
+        }
+        if ($request->filled('semester_code')) {
+            $query->where('semester_code', $request->semester_code);
+        }
+        return response()->json(
+            $query->select('group_id', 'group_name')
+                ->whereNotNull('group_id')
+                ->distinct()
+                ->orderBy('group_name')
+                ->get()
+                ->mapWithKeys(fn ($item) => [$item->group_id => $item->group_name])
+        );
+    }
+
+    public function getFilterLevels(Request $request)
+    {
+        $query = Student::query();
+        if ($request->filled('education_type')) {
+            $query->where('education_type_code', $request->education_type);
+        }
+        if ($request->filled('department')) {
+            $query->where('department_id', $request->department);
+        }
+        if ($request->filled('specialty')) {
+            $query->where('specialty_id', $request->specialty);
+        }
+        return response()->json(
+            $query->select('level_code', 'level_name')
+                ->whereNotNull('level_code')
+                ->distinct()
+                ->orderBy('level_code')
+                ->get()
+                ->mapWithKeys(fn ($item) => [$item->level_code => $item->level_name])
+        );
+    }
+
+    public function getFilterSemesters(Request $request)
+    {
+        $query = Student::query();
+        if ($request->filled('education_type')) {
+            $query->where('education_type_code', $request->education_type);
+        }
+        if ($request->filled('level_code')) {
+            $query->where('level_code', $request->level_code);
+        }
+        return response()->json(
+            $query->select('semester_code', 'semester_name')
+                ->whereNotNull('semester_code')
+                ->distinct()
+                ->orderBy('semester_code')
+                ->get()
+                ->mapWithKeys(fn ($item) => [$item->semester_code => $item->semester_name])
+        );
     }
 
     public function show(Student $student)

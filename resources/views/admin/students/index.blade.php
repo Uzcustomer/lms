@@ -30,110 +30,87 @@
         </div>
     @endif
 
-    <div class="py-12">
-        <div class="max-w-full mx-auto sm:px-6 lg:px-8">
-            <div class="overflow-hidden bg-white shadow-sm sm:rounded-lg">
-                <div class="p-6 bg-white border-b border-gray-200">
-                    <form id="search-form" method="GET" action="{{ route('admin.students.index') }}" class="mb-4">
-                        <div class="form-row" style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
-                            <div style="flex:1; min-width:200px;">
-                                <label for="full_name" class="block text-sm font-medium text-gray-700 mb-1">F.I.Sh</label>
-                                <input type="text" name="full_name" id="full_name" value="{{ request('full_name') }}"
-                                       placeholder="Obidov Zohid"
-                                       class="form-control w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" style="height:38px;">
-                            </div>
-                            <div style="flex:1; min-width:160px;">
-                                <label for="student_id_number" class="block text-sm font-medium text-gray-700 mb-1">Talaba ID</label>
-                                <input type="text" name="student_id_number" id="student_id_number" value="{{ request('student_id_number') }}"
-                                       placeholder="1234"
-                                       class="form-control w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" style="height:38px;">
-                            </div>
-                            <div style="flex:1; min-width:200px;">
-                                <label for="department" class="block text-sm font-medium text-gray-700 mb-1">Fakultet</label>
-                                <select name="department" id="department" class="select2 form-control w-full">
-                                    <option value="">Fakultetni tanlang</option>
-                                    @foreach($departments as $department)
-                                        <option value="{{ $department['id'] }}" {{ request('department') == $department['id'] ? 'selected' : '' }}>
-                                            {{ $department['name'] }}
+    <div class="py-4">
+        <div class="max-w-full mx-auto sm:px-4 lg:px-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+
+                <!-- Filters -->
+                <form id="search-form" method="GET" action="{{ route('admin.students.index') }}">
+                    <div class="filter-container">
+                        <!-- Row 1 -->
+                        <div class="filter-row">
+                            <div class="filter-item" style="min-width: 160px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
+                                <select id="education_type" name="education_type" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($educationTypes as $type)
+                                        <option value="{{ $type->education_type_code }}" {{ request('education_type') == $type->education_type_code ? 'selected' : '' }}>
+                                            {{ $type->education_type_name }}
                                         </option>
                                     @endforeach
                                 </select>
                             </div>
-                            <div style="flex:1; min-width:200px;">
-                                <label for="specialty" class="block text-sm font-medium text-gray-700 mb-1">Yo'nalish</label>
-                                <select name="specialty" id="specialty" class="select2 form-control w-full">
-                                    <option value="">Yo'nalishni tanlang</option>
-                                    @foreach($specialties as $specialty)
-                                        <option value="{{ $specialty['id'] }}" {{ request('specialty') == $specialty['id'] ? 'selected' : '' }}>
-                                            {{ $specialty['name'] }}
-                                        </option>
+                            <div class="filter-item" style="flex: 1; min-width: 200px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
+                                <select id="department" name="department" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                </select>
+                            </div>
+                            <div class="filter-item" style="flex: 1; min-width: 240px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
+                                <select id="specialty" name="specialty" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                </select>
+                            </div>
+                            <div class="filter-item" style="min-width: 90px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
+                                <select id="per_page" name="per_page" class="select2" style="width: 100%;">
+                                    @foreach([10, 25, 50, 100] as $ps)
+                                        <option value="{{ $ps }}" {{ request('per_page', 50) == $ps ? 'selected' : '' }}>{{ $ps }}</option>
                                     @endforeach
                                 </select>
                             </div>
                         </div>
-                        <div class="form-row" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
-                            <div style="flex:1; min-width:150px;">
-                                <label for="level_code" class="block text-sm font-medium text-gray-700 mb-1">Kurs</label>
-                                <select name="level_code" id="level_code" class="select2 form-control w-full">
-                                    <option value="">Kursni tanlang</option>
-                                    @foreach(['11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs', '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs'] as $value => $label)
-                                        <option value="{{ $value }}" {{ request('level_code') == $value ? 'selected' : '' }}>
-                                            {{ $label }}
-                                        </option>
-                                    @endforeach
+                        <!-- Row 2 -->
+                        <div class="filter-row">
+                            <div class="filter-item" style="min-width: 140px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                                <select id="level_code" name="level_code" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
                                 </select>
                             </div>
-                            <div style="flex:1; min-width:150px;">
-                                <label for="semester_code" class="block text-sm font-medium text-gray-700 mb-1">Semestr</label>
-                                <select name="semester_code" id="semester_code" class="select2 form-control w-full">
-                                    <option value="">Semesterni tanlang</option>
-                                    @foreach($semesters as $semester)
-                                        <option value="{{ $semester['id'] }}" {{ request('semester_code') == $semester['id'] ? 'selected' : '' }}>
-                                            {{ $semester['name'] }}
-                                        </option>
-                                    @endforeach
+                            <div class="filter-item" style="min-width: 150px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
+                                <select id="semester_code" name="semester_code" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
                                 </select>
                             </div>
-                            <div style="flex:1; min-width:150px;">
-                                <label for="group" class="block text-sm font-medium text-gray-700 mb-1">Guruh</label>
-                                <select name="group" id="group" class="select2 form-control w-full">
-                                    <option value="">Guruhni tanlang</option>
-                                    @foreach($groups as $group)
-                                        <option value="{{ $group['id'] }}" {{ request('group') == $group['id'] ? 'selected' : '' }}>
-                                            {{ $group['name'] }}
-                                        </option>
-                                    @endforeach
+                            <div class="filter-item" style="min-width: 170px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
+                                <select id="group" name="group" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
                                 </select>
                             </div>
-                            <div style="flex:1; min-width:150px;">
-                                <label for="education_type" class="block text-sm font-medium text-gray-700 mb-1">Ta'lim turi</label>
-                                <select name="education_type" id="education_type" class="select2 form-control w-full">
-                                    <option value="">Ta'lim turini tanlang</option>
-                                    @foreach($educationTypes as $educationType)
-                                        <option value="{{ $educationType['id'] }}" {{ request('education_type') == $educationType['id'] ? 'selected' : '' }}>
-                                            {{ $educationType['name'] }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                            <div class="filter-item" style="flex: 1; min-width: 200px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.Sh</label>
+                                <input type="text" name="full_name" id="full_name" value="{{ request('full_name') }}"
+                                       placeholder="Obidov Zohid" class="filter-input">
                             </div>
-                            <div style="flex:0 0 auto; min-width:100px;">
-                                <label for="per_page" class="block text-sm font-medium text-gray-700 mb-1">Sahifada</label>
-                                <select id="per_page" name="per_page" class="form-control w-full rounded-md border-gray-300 shadow-sm" style="height:38px;">
-                                    @foreach([10, 25, 50, 100] as $pageSize)
-                                        <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>
-                                            {{ $pageSize }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                            <div class="filter-item" style="min-width: 140px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Talaba ID</label>
+                                <input type="text" name="student_id_number" id="student_id_number" value="{{ request('student_id_number') }}"
+                                       placeholder="1234" class="filter-input">
                             </div>
-                            <div style="flex:0 0 auto;">
-                                <button type="submit" class="btn btn-primary px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium" style="height:38px;">
+                            <div class="filter-item" style="min-width: 120px;">
+                                <label class="filter-label">&nbsp;</label>
+                                <button type="submit" class="btn-calc">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                                     Qidirish
                                 </button>
                             </div>
                         </div>
-                    </form>
-                </div>
+                    </div>
+                </form>
 
                 @php
                     $userRoles = auth()->user()?->getRoleNames()->toArray() ?? [];
@@ -162,67 +139,68 @@
                 </div>
                 @endif
 
+                <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:12px;">
+                    <span class="badge" style="background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">Jami: {{ $students->total() }} ta talaba</span>
+                </div>
+
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 text-sm">
-                        <thead class="bg-gray-50">
+                    <table class="student-table">
+                        <thead>
                         <tr>
                             @if($canBulkReset)
-                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th style="width:40px;text-align:center;">
                                 <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="rounded border-gray-300 text-yellow-500 focus:ring-yellow-400">
                             </th>
                             @endif
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">F.I.Sh</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">HEMIS ID</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Talaba ID</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ta'lim turi</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fakultet</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Yo'nalish</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kurs</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Semestr</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guruh</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amallar</th>
+                            <th>F.I.Sh</th>
+                            <th>HEMIS ID</th>
+                            <th>Talaba ID</th>
+                            <th>Ta'lim turi</th>
+                            <th>Fakultet</th>
+                            <th>Yo'nalish</th>
+                            <th>Kurs</th>
+                            <th>Semestr</th>
+                            <th>Guruh</th>
+                            <th style="text-align:center;">Amallar</th>
                         </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
+                        <tbody>
                         @foreach($students as $student)
-                            <tr class="hover:bg-gray-50">
+                            <tr>
                                 @if($canBulkReset)
-                                <td class="px-3 py-2 whitespace-nowrap text-center">
+                                <td style="text-align:center;">
                                     <input type="checkbox" class="student-checkbox rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
                                            value="{{ $student->id }}" onchange="updateBulkBar()">
                                 </td>
                                 @endif
-                                <td class="px-3 py-2 whitespace-nowrap">
-                                    <a href="{{ route('admin.students.show', $student->id) }}" class="text-blue-600 hover:text-blue-900 font-medium">
+                                <td>
+                                    <a href="{{ route('admin.students.show', $student->id) }}" class="student-name-link">
                                         {{ $student->full_name }}
                                     </a>
                                 </td>
-                                <td class="px-3 py-2 whitespace-nowrap text-gray-500">{{ $student->hemis_id }}</td>
-                                <td class="px-3 py-2 whitespace-nowrap text-gray-500">{{ $student->student_id_number }}</td>
-                                <td class="px-3 py-2 whitespace-nowrap">
-                                    <div class="text-gray-900">{{ $student->education_type_name }}</div>
-                                    <div class="text-xs text-gray-400">{{ $student->education_form_name }}</div>
+                                <td style="color:#64748b;">{{ $student->hemis_id }}</td>
+                                <td style="color:#64748b;">{{ $student->student_id_number }}</td>
+                                <td>
+                                    <span class="text-cell">{{ $student->education_type_name }}</span>
+                                    <span style="font-size:11px;color:#94a3b8;">{{ $student->education_form_name }}</span>
                                 </td>
-                                <td class="px-3 py-2 whitespace-nowrap text-gray-500">{{ $student->department_name }}</td>
-                                <td class="px-3 py-2 whitespace-nowrap">
-                                    <div class="text-gray-900" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 25) }}</div>
-                                </td>
-                                <td class="px-3 py-2 whitespace-nowrap text-gray-500">{{ $student->level_name }}</td>
-                                <td class="px-3 py-2 whitespace-nowrap text-gray-500">{{ $student->semester_name }}</td>
-                                <td class="px-3 py-2 whitespace-nowrap text-gray-500">{{ $student->group_name }}</td>
-                                <td class="px-3 py-2 whitespace-nowrap">
-                                    <div class="flex items-center gap-1">
+                                <td><span class="text-cell text-emerald">{{ $student->department_name }}</span></td>
+                                <td><span class="text-cell text-cyan" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 30) }}</span></td>
+                                <td><span class="badge badge-violet">{{ $student->level_name }}</span></td>
+                                <td><span class="badge badge-teal">{{ $student->semester_name }}</span></td>
+                                <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
+                                <td style="text-align:center;">
+                                    <div style="display:flex;align-items:center;gap:4px;justify-content:center;">
                                         <button type="button"
-                                                class="px-2 py-1 text-xs rounded"
-                                                style="background-color: #f59e0b; color: white;"
+                                                class="btn-action btn-action-yellow"
                                                 onclick="openResetModal('{{ $student->id }}', '{{ addslashes($student->full_name) }}', '{{ $student->student_id_number }}')">
-                                            Parolni tiklash
+                                            Parol
                                         </button>
                                         @if(auth()->user()?->hasRole('superadmin'))
                                             <form action="{{ route('admin.impersonate.student', $student->id) }}" method="POST" onsubmit="return confirm('{{ addslashes($student->full_name) }} sifatida tizimga kirasizmi?')">
                                                 @csrf
-                                                <button type="submit" class="px-2 py-1 text-xs rounded" style="background-color: #3b82f6; color: white;">
-                                                    Login as
+                                                <button type="submit" class="btn-action btn-action-blue">
+                                                    Login
                                                 </button>
                                             </form>
                                         @endif
@@ -234,7 +212,7 @@
                     </table>
                 </div>
 
-                <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                <div style="padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:between;">
                     <div class="flex-1 flex justify-between sm:hidden">
                         {{ $students->appends(request()->query())->links('pagination::simple-tailwind') }}
                     </div>
@@ -336,7 +314,12 @@
     </div>
     @endif
 
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
     <script>
+        // Modal functions
         function openResetModal(studentId, studentName, studentIdNumber) {
             document.getElementById('modalStudentName').textContent = studentName;
             document.getElementById('autoPasswordDisplay').textContent = 'Parol: ' + studentIdNumber;
@@ -442,52 +425,160 @@
         }
     </script>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
     <script>
-        $(document).ready(function() {
-            $('#department, #specialty, #level_code, #semester_code, #group, #education_type').select2({
-                width: '100%',
-                allowClear: true,
-                placeholder: function() {
-                    return $(this).find('option:first').text();
+        // Cascading filter logic
+        var initDone = false;
+        var sv = {
+            education_type: @json(request('education_type', '')),
+            department: @json(request('department', '')),
+            specialty: @json(request('specialty', '')),
+            level_code: @json(request('level_code', '')),
+            semester_code: @json(request('semester_code', '')),
+            group: @json(request('group', ''))
+        };
+
+        function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
+        function fuzzyMatcher(params, data) {
+            if ($.trim(params.term) === '') return data;
+            if (typeof data.text === 'undefined') return null;
+            if (stripSpecialChars(data.text).indexOf(stripSpecialChars(params.term)) > -1) return $.extend({}, data, true);
+            if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) return $.extend({}, data, true);
+            return null;
+        }
+
+        function fp() {
+            return {
+                education_type: $('#education_type').val() || '',
+                department: $('#department').val() || '',
+                specialty: $('#specialty').val() || '',
+                level_code: $('#level_code').val() || '',
+                semester_code: $('#semester_code').val() || ''
+            };
+        }
+
+        function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }
+
+        function pd(url, params, el, selVal, cb) {
+            $.get(url, params, function(d) {
+                $.each(d, function(k, v) {
+                    $(el).append('<option value="' + k + '">' + v + '</option>');
+                });
+                if (selVal) {
+                    $(el).val(selVal);
                 }
+                $(el).trigger('change');
+                if (cb) cb();
+            });
+        }
+
+        // Cascade refresh functions
+        function rDept() { rd('#department'); pd('{{ route("admin.students.filter.departments") }}', fp(), '#department'); }
+        function rSpec() { rd('#specialty'); pd('{{ route("admin.students.filter.specialties") }}', fp(), '#specialty'); }
+        function rLvl() { rd('#level_code'); pd('{{ route("admin.students.filter.levels") }}', fp(), '#level_code'); }
+        function rSem() { rd('#semester_code'); pd('{{ route("admin.students.filter.semesters") }}', fp(), '#semester_code'); }
+        function rGrp() { rd('#group'); pd('{{ route("admin.students.filter.groups") }}', fp(), '#group'); }
+
+        $(document).ready(function() {
+            // Select2 init
+            $('.select2').each(function() {
+                $(this).select2({
+                    theme: 'classic',
+                    width: '100%',
+                    allowClear: true,
+                    placeholder: $(this).find('option:first').text(),
+                    matcher: fuzzyMatcher
+                }).on('select2:open', function() {
+                    setTimeout(function() {
+                        var s = document.querySelector('.select2-container--open .select2-search__field');
+                        if (s) s.focus();
+                    }, 10);
+                });
             });
 
-            $('select.select2').on('change', function() {
-                $('#search-form').submit();
-            });
+            // Cascade handlers (only fire after init is done)
+            $('#education_type').on('change', function() { if (!initDone) return; rDept(); rSpec(); rLvl(); rSem(); rGrp(); });
+            $('#department').on('change', function() { if (!initDone) return; rSpec(); rGrp(); });
+            $('#specialty').on('change', function() { if (!initDone) return; rGrp(); });
+            $('#level_code').on('change', function() { if (!initDone) return; rSem(); rGrp(); });
+            $('#semester_code').on('change', function() { if (!initDone) return; rGrp(); });
 
-            $('#per_page').on('change', function() {
-                $('#search-form').submit();
-            });
+            // Initial load with saved values
+            var initLoadCount = 0;
+            function checkInit() { initLoadCount++; if (initLoadCount >= 5) initDone = true; }
 
-            var searchTimeout;
-            $('input[type="text"]').on('input', function() {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(function() {
-                    $('#search-form').submit();
-                }, 2000);
-            });
+            pd('{{ route("admin.students.filter.departments") }}',
+                {education_type: sv.education_type},
+                '#department', sv.department, checkInit);
+
+            pd('{{ route("admin.students.filter.specialties") }}',
+                {education_type: sv.education_type, department: sv.department},
+                '#specialty', sv.specialty, checkInit);
+
+            pd('{{ route("admin.students.filter.levels") }}',
+                {education_type: sv.education_type, department: sv.department, specialty: sv.specialty},
+                '#level_code', sv.level_code, checkInit);
+
+            pd('{{ route("admin.students.filter.semesters") }}',
+                {education_type: sv.education_type, level_code: sv.level_code},
+                '#semester_code', sv.semester_code, checkInit);
+
+            pd('{{ route("admin.students.filter.groups") }}',
+                {education_type: sv.education_type, department: sv.department, specialty: sv.specialty, level_code: sv.level_code, semester_code: sv.semester_code},
+                '#group', sv.group, checkInit);
         });
     </script>
 
     <style>
-        .select2-container { min-width: 100% !important; }
-        .select2-container .select2-selection--single {
-            height: 38px !important;
-            border: 1px solid #D1D5DB !important;
-            border-radius: 0.375rem !important;
-        }
-        .select2-container .select2-selection--single .select2-selection__rendered {
-            line-height: 36px !important;
-            padding-left: 12px !important;
-            color: #374151 !important;
-        }
-        .select2-container .select2-selection--single .select2-selection__arrow {
-            height: 36px !important;
-        }
+        .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; }
+        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; }
+        .filter-row:last-child { margin-bottom: 0; }
+        .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
+        .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+        .filter-input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 0.8rem; font-weight: 500; color: #1e293b; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; box-sizing: border-box; }
+        .filter-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .filter-input:focus { outline: none; border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.2); }
+        .filter-input::placeholder { color: #94a3b8; }
+
+        .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; white-space: nowrap; }
+        .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
+
+        .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; padding-right: 52px; color: #1e293b; font-size: 0.8rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 22px; background: transparent; border-left: none; right: 0; }
+        .select2-container--classic .select2-selection--single .select2-selection__clear { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-size: 16px; font-weight: bold; color: #94a3b8; cursor: pointer; padding: 2px 6px; z-index: 2; background: #fff; border-radius: 50%; line-height: 1; transition: all 0.15s; }
+        .select2-container--classic .select2-selection--single .select2-selection__clear:hover { color: #fff; background: #ef4444; }
+        .select2-dropdown { font-size: 0.8rem; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+        .select2-container--classic .select2-results__option--highlighted { background-color: #2b5ea7; }
+
+        .student-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+        .student-table thead { position: sticky; top: 0; z-index: 10; }
+        .student-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
+        .student-table th { padding: 12px 10px; text-align: left; font-weight: 600; font-size: 11px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
+        .student-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
+        .student-table tbody tr:nth-child(even) { background: #f8fafc; }
+        .student-table tbody tr:nth-child(odd) { background: #fff; }
+        .student-table tbody tr:hover { background: #eff6ff !important; box-shadow: inset 4px 0 0 #2b5ea7; }
+        .student-table td { padding: 10px 10px; vertical-align: middle; line-height: 1.4; }
+
+        .student-name-link { color: #1e40af; font-weight: 700; text-decoration: none; transition: all 0.15s; }
+        .student-name-link:hover { color: #2b5ea7; text-decoration: underline; }
+
+        .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
+        .text-emerald { color: #047857; }
+        .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
+
+        .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
+        .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
+        .badge-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #99f6e4; white-space: nowrap; }
+        .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
+
+        .btn-action { padding: 4px 10px; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+        .btn-action:hover { transform: translateY(-1px); }
+        .btn-action-yellow { background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #fff; }
+        .btn-action-yellow:hover { box-shadow: 0 2px 8px rgba(245,158,11,0.4); }
+        .btn-action-blue { background: linear-gradient(135deg, #2b5ea7, #3b82f6); color: #fff; }
+        .btn-action-blue:hover { box-shadow: 0 2px 8px rgba(59,130,246,0.4); }
     </style>
 </x-app-layout>

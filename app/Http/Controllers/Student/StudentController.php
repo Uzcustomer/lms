@@ -1000,12 +1000,24 @@ class StudentController extends Controller
             }
         }
 
+        $allowedExtensions = ['zip', 'doc', 'docx', 'ppt', 'pptx', 'pdf'];
+
         $request->validate([
-            'file' => 'required|file|max:2048|mimes:zip,doc,docx,ppt,pptx,pdf',
+            'file' => [
+                'required',
+                'file',
+                'max:2048',
+                function ($attribute, $value, $fail) use ($allowedExtensions) {
+                    $clientExt = strtolower($value->getClientOriginalExtension());
+                    $guessedExt = $value->guessExtension();
+                    if (!in_array($clientExt, $allowedExtensions) && !in_array($guessedExt, $allowedExtensions)) {
+                        $fail('Faqat zip, doc, docx, ppt, pptx, pdf formatdagi fayllar qabul qilinadi');
+                    }
+                },
+            ],
         ], [
             'file.required' => 'Fayl yuklash majburiy',
             'file.max' => 'Fayl hajmi 2MB dan oshmasligi kerak',
-            'file.mimes' => 'Faqat zip, doc, docx, ppt, pptx, pdf formatdagi fayllar qabul qilinadi',
         ]);
 
         $file = $request->file('file');

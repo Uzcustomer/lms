@@ -264,11 +264,11 @@ class ReportController extends Controller
             $datePairKey = $dateKey . '_' . $g->lesson_pair_code;
             $columns[$comboKey][$datePairKey] = true;
 
-            // Baholarni kun bo'yicha guruhlash (retake baholarini hisobga olish)
+            // Baholarni kun bo'yicha guruhlash (pair_code bo'yicha — jurnal kabi deduplikatsiya)
             $gradeKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $dateKey;
             $effectiveGrade = $this->getEffectiveGradeForJn($g);
             if ($effectiveGrade !== null) {
-                $gradesByDay[$gradeKey][] = $effectiveGrade;
+                $gradesByDay[$gradeKey][$g->lesson_pair_code] = $effectiveGrade;
             }
 
             // Student-subject ma'lumotlarini saqlash

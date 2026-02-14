@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Models\MarkingSystemScore;
 use App\Models\YnConsent;
@@ -2226,6 +2227,14 @@ class JournalController extends Controller
             if ($response->successful()) {
                 $data = $response->json();
 
+                Log::info('HEMIS topics raw response', [
+                    'params' => $params,
+                    'subject_id_filter' => $request->get('subject_id'),
+                    'data_type' => gettype($data['data'] ?? null),
+                    'data_keys' => is_array($data['data'] ?? null) ? array_keys($data['data']) : 'not_array',
+                    'raw_data_preview' => json_encode(array_slice($data['data'] ?? [], 0, 2)),
+                ]);
+
                 // HEMIS API data ni massiv yoki obyekt sifatida qaytarishi mumkin
                 // data: [{"items": [...]}] yoki data: {"items": [...]}
                 $items = [];
@@ -2235,6 +2244,11 @@ class JournalController extends Controller
                     $items = $data['data'][0]['items'];
                 }
 
+                Log::info('HEMIS topics items extracted', [
+                    'items_count_before_filter' => count($items),
+                    'first_item' => $items[0] ?? 'empty',
+                ]);
+
                 // Fan bo'yicha filtrlash (API da subject filter bo'lmasligi mumkin)
                 if ($request->filled('subject_id')) {
                     $subjectId = (int) $request->subject_id;
@@ -2243,6 +2257,10 @@ class JournalController extends Controller
                             return isset($item['subject']['id']) && (int) $item['subject']['id'] === $subjectId;
                         })
                     );
+                    Log::info('HEMIS topics after subject filter', [
+                        'subject_id' => $subjectId,
+                        'items_count_after_filter' => count($items),
+                    ]);
                 }
 
                 return response()->json([
@@ -2250,6 +2268,8 @@ class JournalController extends Controller
                     'data' => ['items' => $items],
                 ]);
             }
+
+            Log::warning('HEMIS topics API failed', ['status' => $response->status(), 'body' => substr($response->body(), 0, 500)]);
 
             return response()->json(['success' => false, 'error' => 'HEMIS API xatolik: ' . $response->status(), 'data' => []]);
         } catch (\Exception $e) {

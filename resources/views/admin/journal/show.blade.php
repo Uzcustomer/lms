@@ -526,18 +526,40 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Toggle tugma desktopda yashirin */
+        /* Toggle tugma - JS orqali boshqariladi */
         .sidebar-mobile-toggle {
             display: none;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 0 4px;
+            transition: transform 0.3s;
+        }
+        .journal-sidebar.collapsed .sidebar-mobile-toggle {
+            transform: rotate(180deg);
+        }
+        .journal-sidebar .sidebar-collapsible {
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.2s ease;
+            max-height: 2000px;
+            opacity: 1;
+        }
+        .journal-sidebar.collapsed .sidebar-collapsible {
+            max-height: 0;
+            opacity: 0;
         }
 
-        /* ===== SIDEBAR TOGGLE (1024px dan past - admin sidebar 256px + kontent) ===== */
+        /* ===== MOBILE RESPONSIVE STYLES (1024px dan past) ===== */
         @media (max-width: 1024px) {
             .journal-layout {
                 flex-direction: column;
             }
             .journal-sidebar {
-                width: 100%;
+                width: 100% !important;
                 position: relative;
                 max-height: none;
                 border-left: none;
@@ -546,32 +568,6 @@
             }
             .sidebar-header {
                 border-radius: 0;
-                cursor: pointer;
-            }
-            .sidebar-mobile-toggle {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                background: none;
-                border: none;
-                color: #fff;
-                font-size: 14px;
-                cursor: pointer;
-                padding: 0 4px;
-                transition: transform 0.3s;
-            }
-            .journal-sidebar.collapsed .sidebar-mobile-toggle {
-                transform: rotate(180deg);
-            }
-            .journal-sidebar .sidebar-collapsible {
-                overflow: hidden;
-                transition: max-height 0.3s ease, opacity 0.2s ease;
-                max-height: 2000px;
-                opacity: 1;
-            }
-            .journal-sidebar.collapsed .sidebar-collapsible {
-                max-height: 0;
-                opacity: 0;
             }
         }
 
@@ -2430,20 +2426,32 @@
             document.body.appendChild(overlay);
         }
 
-        // Sidebar toggle (1024px dan past)
+        // Sidebar toggle
+        var SIDEBAR_BREAKPOINT = 1024;
         function toggleMobileSidebar() {
-            if (window.innerWidth > 1024) return;
-            document.getElementById('journalSidebar').classList.toggle('collapsed');
-        }
-        // Mobilda sahifa ochilganda sidebar yig'iq, desktopga o'tsa ochiq
-        (function() {
+            if (window.innerWidth > SIDEBAR_BREAKPOINT) return;
             var sb = document.getElementById('journalSidebar');
-            if (window.innerWidth <= 1024) sb.classList.add('collapsed');
-            window.addEventListener('resize', function() {
-                if (window.innerWidth > 1024) sb.classList.remove('collapsed');
-                else if (!sb.classList.contains('collapsed')) sb.classList.add('collapsed');
-            });
-        })();
+            sb.classList.toggle('collapsed');
+            if (!sb.classList.contains('collapsed')) sb.dataset.userOpened = '1';
+            else delete sb.dataset.userOpened;
+        }
+        function handleSidebarResize() {
+            var sb = document.getElementById('journalSidebar');
+            var btn = document.getElementById('sidebarToggleBtn');
+            var header = document.querySelector('.sidebar-header');
+            if (window.innerWidth <= SIDEBAR_BREAKPOINT) {
+                btn.style.display = 'inline-flex';
+                header.style.cursor = 'pointer';
+                if (!sb.dataset.userOpened) sb.classList.add('collapsed');
+            } else {
+                btn.style.display = 'none';
+                header.style.cursor = 'default';
+                sb.classList.remove('collapsed');
+                delete sb.dataset.userOpened;
+            }
+        }
+        handleSidebarResize();
+        window.addEventListener('resize', handleSidebarResize);
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));

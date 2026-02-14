@@ -120,42 +120,36 @@ class ImpersonateController extends Controller
      */
     public function stopImpersonation(): RedirectResponse
     {
+        // Kerakli ma'lumotlarni sessiyadan OLDIN olib qo'yish
         $impersonatorId = session('impersonator_id');
-        $impersonatorGuard = session('impersonator_guard', 'web');
+        $previousActiveRole = session('impersonator_active_role');
 
         if (!$impersonatorId) {
             return redirect()->route('admin.login');
         }
 
-        // Joriy guard'dan chiqish
-        foreach (['student', 'teacher'] as $guard) {
-            if (Auth::guard($guard)->check()) {
-                Auth::guard($guard)->logout();
-            }
+        $admin = \App\Models\User::find($impersonatorId);
+        if (!$admin) {
+            return redirect()->route('admin.login');
         }
 
-        // Asl adminning active_role ni tiklash
-        $previousActiveRole = session('impersonator_active_role');
+        // Sessiyani butunlay tozalash (barcha guard va impersonatsiya ma'lumotlari)
+        session()->flush();
 
-        // Sessiyadan impersonatsiya ma'lumotlarini tozalash
-        session()->forget(['impersonating', 'impersonator_id', 'impersonator_guard', 'impersonated_name', 'impersonator_active_role', 'active_role']);
+        // Asl adminni web guard orqali login qilish
+        Auth::guard('web')->login($admin);
 
+        // Active rolni tiklash
         if ($previousActiveRole) {
             session(['active_role' => $previousActiveRole]);
         }
 
-        // Asl adminni qayta tiklash
-        $admin = \App\Models\User::find($impersonatorId);
-        if ($admin) {
-            Auth::guard($impersonatorGuard)->login($admin);
+        ActivityLogService::log(
+            'stop_impersonate',
+            'auth',
+            'Impersonatsiyadan qaytdi'
+        );
 
-            ActivityLogService::log(
-                'stop_impersonate',
-                'auth',
-                'Impersonatsiyadan qaytdi'
-            );
-        }
-
-        return redirect()->route('admin.students.index');
+        return redirect()->route('admin.dashboard');
     }
 }

@@ -22,10 +22,16 @@
                         </div>
                         <div class="filter-item filter-buttons">
                             <label class="filter-label">&nbsp;</label>
-                            <button type="button" id="btn-tartibga" class="btn-tartibga" onclick="loadTartibgaSol()">
-                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
-                                Tartibga solish
-                            </button>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <button type="button" id="btn-trigger-cron" class="btn-cron" onclick="triggerMoodleCron()">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    <span id="cron-label">Moodle Cron</span>
+                                </button>
+                                <button type="button" id="btn-tartibga" class="btn-tartibga" onclick="loadTartibgaSol()">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
+                                    Tartibga solish
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -198,6 +204,7 @@
         var tartibgaSolUrl = '{{ route($routePrefix . ".diagnostika.tartibga-sol") }}';
         var uploadUrl = '{{ route($routePrefix . ".quiz-results.upload") }}';
         var importUrl = '{{ route($routePrefix . ".quiz-results.import") }}';
+        var triggerCronUrl = '{{ route($routePrefix . ".quiz-results.trigger-cron") }}';
         var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
         var journalBaseUrl = '{{ url("/admin/journal/show") }}';
 
@@ -588,6 +595,33 @@
             });
         }
 
+        // ========== MOODLE CRON TRIGGER ==========
+        function triggerMoodleCron() {
+            if (!confirm('Moodle quiz natijalar sinxronizatsiyasini ishga tushirishni tasdiqlaysizmi?')) return;
+
+            var btn = $('#btn-trigger-cron');
+            btn.prop('disabled', true);
+            var origHtml = btn.html();
+            btn.html('<span class="spinner-sm"></span> Ishga tushirilmoqda...');
+
+            $.ajax({
+                url: triggerCronUrl, type: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                contentType: 'application/json',
+                success: function(data) {
+                    var cls = data.success ? 'diag-success' : 'diag-error';
+                    $('#upload-result').html('<div class="diag-msg ' + cls + '">' + esc(data.message) + '</div>').show();
+                },
+                error: function(xhr) {
+                    var msg = xhr.responseJSON?.message || 'Server xatosi';
+                    $('#upload-result').html('<div class="diag-msg diag-error">' + esc(msg) + '</div>').show();
+                },
+                complete: function() {
+                    btn.prop('disabled', false).html(origHtml);
+                }
+            });
+        }
+
         // ========== DOCUMENT READY ==========
         $(document).ready(function() {
             new ScrollCalendar('date_from');
@@ -735,6 +769,9 @@
         .btn-import { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(37,99,235,0.3); height: 32px; white-space: nowrap; }
         .btn-import:hover:not(:disabled) { background: linear-gradient(135deg, #1d4ed8, #2563eb); transform: translateY(-1px); }
         .btn-import:disabled { cursor: not-allowed; opacity: 0.4; }
+        .btn-cron { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(22,163,74,0.3); height: 36px; white-space: nowrap; }
+        .btn-cron:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); transform: translateY(-1px); }
+        .btn-cron:disabled { cursor: not-allowed; opacity: 0.4; }
 
         /* === DIAGNOSTIKA PANELS === */
         .diag-msg { padding: 10px 16px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px; }

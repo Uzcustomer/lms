@@ -13,6 +13,8 @@ use App\Models\Semester;
 use App\Imports\QuizResultImport;
 use App\Exports\QuizResultExport;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 
 class QuizResultController extends Controller
@@ -879,6 +881,41 @@ class QuizResultController extends Controller
             'error_count' => count($errors),
             'errors' => $errors,
         ]);
+    }
+
+    /**
+     * Moodle quiz results cron ni qo'lda ishga tushirish.
+     */
+    public function triggerCron()
+    {
+        $url = config('services.moodle.cron_url');
+
+        if (empty($url)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'MOODLE_CRON_URL sozlanmagan. Administrator bilan bog\'laning.',
+            ], 422);
+        }
+
+        try {
+            Artisan::queue('quiz:trigger-moodle-sync');
+
+            Log::info('quiz:trigger-cron — foydalanuvchi tomonidan ishga tushirildi', [
+                'user' => auth()->user()->name ?? 'unknown',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Moodle quiz sync ishga tushirildi (fon rejimida). Natijalar bir necha daqiqada yangilanadi.',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('quiz:trigger-cron — xatolik', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Xatolik yuz berdi: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

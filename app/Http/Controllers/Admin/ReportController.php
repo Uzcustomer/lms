@@ -226,9 +226,7 @@ class ReportController extends Controller
             ->whereIn('semester_code', $validSemesterCodes)
             ->whereNotIn('training_type_code', $excludedCodes)
             ->where(function ($q) {
-                $q->where(function ($q2) {
-                    $q2->whereNotNull('grade')->where('grade', '>', 0);
-                })->orWhereNotNull('retake_grade');
+                $q->whereNotNull('grade')->orWhereNotNull('retake_grade');
             })
             ->whereNotNull('lesson_date')
             ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'grade', 'lesson_date', 'lesson_pair_code', 'retake_grade', 'status', 'reason');
@@ -446,18 +444,21 @@ class ReportController extends Controller
             return null;
         }
 
-        if (in_array($row->status ?? null, ['recorded', 'closed'], true)) {
-            if ($row->retake_grade !== null) {
-                return (float) $row->retake_grade;
-            }
+        // recorded/closed → faqat grade ishlatiladi (jurnal mantiqiga mos)
+        if (($row->status ?? null) === 'recorded') {
             return $row->grade !== null ? (float) $row->grade : null;
         }
 
-        if (($row->status ?? null) === 'retake') {
-            return $row->retake_grade !== null ? (float) $row->retake_grade : null;
+        if (($row->status ?? null) === 'closed') {
+            return $row->grade !== null ? (float) $row->grade : null;
         }
 
-        return $row->grade !== null && $row->grade > 0 ? (float) $row->grade : null;
+        // Boshqa statuslar (retake va h.k.) → retake_grade ishlatiladi
+        if ($row->retake_grade !== null) {
+            return (float) $row->retake_grade;
+        }
+
+        return null;
     }
 
     /**

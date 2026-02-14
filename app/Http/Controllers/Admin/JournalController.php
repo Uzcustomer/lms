@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use App\Models\MarkingSystemScore;
 
 class JournalController extends Controller
 {
@@ -761,8 +762,8 @@ class JournalController extends Controller
                 if ($gradeVal === null) {
                     // No grade yet - needs grading
                     $needsBadge = true;
-                } elseif ($gradeVal < 60 && $gradeRowForBadge && $sub->submitted_at) {
-                    // Grade < 60: check if student resubmitted after grade
+                } elseif ($gradeVal < MarkingSystemScore::getByStudentHemisId($hemisId)->minimum_limit && $gradeRowForBadge && $sub->submitted_at) {
+                    // Grade < minimum_limit: check if student resubmitted after grade
                     $grTime = $gradeRowForBadge->updated_at ?? $gradeRowForBadge->created_at;
                     if ($grTime && \Carbon\Carbon::parse($sub->submitted_at)->gt(\Carbon\Carbon::parse($grTime))) {
                         $needsBadge = true;
@@ -798,7 +799,7 @@ class JournalController extends Controller
         try {
             foreach ($mtSubmissions as $hemisId => $sub) {
                 $gradeRow = $manualMtGradesRaw[$hemisId] ?? null;
-                if (!$gradeRow || $gradeRow->grade >= 60) continue; // only for low grades
+                if (!$gradeRow || $gradeRow->grade >= MarkingSystemScore::getByStudentHemisId($hemisId)->minimum_limit) continue; // only for low grades
 
                 $gradeTime = $gradeRow->updated_at ?? $gradeRow->created_at;
                 if (!$gradeTime || !$sub->submitted_at) continue;
@@ -943,6 +944,12 @@ class JournalController extends Controller
             $activeOpenedDates = LessonOpening::getActiveOpenings($group->group_hemis_id, $subjectId, $semesterCode);
         }
 
+        // Marking system minimum limit for this group's curriculum
+        $markingScore = $curriculum && $curriculum->marking_system_code
+            ? MarkingSystemScore::where('marking_system_code', $curriculum->marking_system_code)->first()
+            : null;
+        $minimumLimit = $markingScore ? $markingScore->minimum_limit : 60;
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
@@ -992,7 +999,8 @@ class JournalController extends Controller
             'missedDates',
             'lessonOpeningsMap',
             'lessonOpeningDays',
-            'activeOpenedDates'
+            'activeOpenedDates',
+            'minimumLimit'
         ));
     }
 
@@ -1139,13 +1147,14 @@ class JournalController extends Controller
             ->whereNull('lesson_date')
             ->first();
 
-        // If existing grade >= 60, it's permanently locked
-        if ($existingGrade && $existingGrade->grade >= 60) {
+        // If existing grade >= minimum_limit, it's permanently locked
+        $minimumLimit = MarkingSystemScore::getByStudentHemisId($studentHemisId)->minimum_limit;
+        if ($existingGrade && $existingGrade->grade >= $minimumLimit) {
             return response()->json([
                 'success' => false,
                 'locked' => true,
                 'can_regrade' => false,
-                'message' => 'Baho qulflangan (>= 60). O\'zgartirib bo\'lmaydi.',
+                'message' => 'Baho qulflangan (>= ' . $minimumLimit . '). O\'zgartirib bo\'lmaydi.',
                 'grade' => $existingGrade->grade,
             ], 403);
         }
@@ -1163,7 +1172,7 @@ class JournalController extends Controller
 
             // Check if student has resubmitted after the grade
             $hasResubmitted = false;
-            if ($studentSubmission && $existingGrade->grade < 60) {
+            if ($studentSubmission && $existingGrade->grade < $minimumLimit) {
                 $gradeTime = $existingGrade->updated_at ?? $existingGrade->created_at;
                 if ($gradeTime && $studentSubmission->submitted_at) {
                     $hasResubmitted = \Carbon\Carbon::parse($studentSubmission->submitted_at)
@@ -1174,7 +1183,7 @@ class JournalController extends Controller
             return response()->json([
                 'success' => false,
                 'locked' => true,
-                'can_regrade' => $hasResubmitted && $existingGrade->grade < 60 && $currentAttempt <= $maxResubmissions,
+                'can_regrade' => $hasResubmitted && $existingGrade->grade < $minimumLimit && $currentAttempt <= $maxResubmissions,
                 'message' => 'Baho allaqachon qo\'yilgan.',
                 'grade' => $existingGrade->grade,
                 'attempt' => $currentAttempt,
@@ -1329,7 +1338,7 @@ class JournalController extends Controller
             'message' => 'Baho saqlandi',
             'locked' => true,
             'can_regrade' => false, // Talaba qayta yuklamaguncha qayta baholab bo'lmaydi
-            'waiting_resubmit' => $grade < 60 && ($newAttempt ?? 1) <= $maxResubmissions,
+            'waiting_resubmit' => $grade < $minimumLimit && ($newAttempt ?? 1) <= $maxResubmissions,
             'grade' => $grade,
             'attempt' => $newAttempt ?? 1,
             'max_attempts' => $maxResubmissions,

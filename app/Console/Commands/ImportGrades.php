@@ -13,6 +13,7 @@ use Illuminate\Console\Command;
 use App\Services\TelegramService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\MarkingSystemScore;
 
 class ImportGrades extends Command
 {
@@ -288,8 +289,9 @@ class ImportGrades extends Command
             $gradeValue = $item['grade'];
             $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
 
+            $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
             $isLowGrade = ($student->level_code == 16 && $gradeValue < 3) ||
-                ($student->level_code != 16 && $gradeValue < 60);
+                ($student->level_code != 16 && $gradeValue < $studentMinLimit);
 
             $status = $isLowGrade ? 'pending' : 'recorded';
             $reason = $isLowGrade ? 'low_grade' : null;
@@ -345,8 +347,9 @@ class ImportGrades extends Command
 
             $gradeValue = $item['grade'];
             $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
+            $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
             $isLowGrade = ($student->level_code == 16 && $gradeValue < 3) ||
-                ($student->level_code != 16 && $gradeValue < 60);
+                ($student->level_code != 16 && $gradeValue < $studentMinLimit);
 
             $status = $isLowGrade ? 'pending' : 'recorded';
             $reason = $isLowGrade ? 'low_grade' : null;

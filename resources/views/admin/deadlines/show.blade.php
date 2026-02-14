@@ -46,7 +46,7 @@
                             <div>
                                 <span class="text-sm font-medium text-gray-700">MT topshirig'ini qayta yuklash imkoniyati:</span>
                                 <span class="ml-2 text-sm font-bold text-blue-700">{{ $mtMaxResubmissions ?? 3 }} marta</span>
-                                <span class="text-xs text-gray-500">(baho 60 dan past bo'lsa)</span>
+                                <span class="text-xs text-gray-500">(baho o'tish balidan past bo'lsa)</span>
                             </div>
                         </div>
                     </div>
@@ -61,12 +61,6 @@
                                     <th
                                         class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
                                         Muddat (kunlar)</th>
-                                    <th
-                                        class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
-                                        Joriy nazorat o'tish bali</th>
-                                    <th
-                                        class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
-                                        Mustaqil ta'lim o'tish bali</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -83,17 +77,6 @@
                                             <div class="text-sm text-gray-900">
                                                 {{ $deadline->deadline_days ?? 'Belgilanmagan' }}
                                             </div>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-sm text-gray-900">
-                                                {{ $deadline->joriy ?? 'Belgilanmagan' }}
-                                            </div>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-sm text-gray-900">
-                                                {{ $deadline->mustaqil_talim ?? 'Belgilanmagan' }}
-                                            </div>
-
                                         </td>
                                     </tr>
                                 @endforeach

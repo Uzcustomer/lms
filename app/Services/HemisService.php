@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Curriculum;
 use App\Models\Department;
 use App\Models\Group;
+use App\Models\MarkingSystemScore;
 use App\Models\Semester;
 use App\Models\Student;
 use Illuminate\Support\Facades\Http;
@@ -443,5 +444,72 @@ class HemisService
         } else {
             Log::warning('Missing related data for curriculum', $data);
         }
+    }
+
+    public function importMarkingSystems(): int
+    {
+        $page = 1;
+        $hasMore = true;
+        $totalImported = 0;
+
+        while ($hasMore) {
+            $response = $this->fetchMarkingSystems($page);
+
+            if ($response['success']) {
+                foreach ($response['data']['items'] as $item) {
+                    $this->updateOrCreateMarkingSystem($item);
+                    $totalImported++;
+                }
+
+                $pagination = $response['data']['pagination'];
+                $hasMore = $pagination['page'] < $pagination['pageCount'];
+                $page++;
+            } else {
+                Log::error('Failed to fetch marking systems from HEMIS', $response);
+                break;
+            }
+        }
+
+        return $totalImported;
+    }
+
+    protected function fetchMarkingSystems($page)
+    {
+        try {
+            $response = Http::withoutVerifying()->withToken($this->token)
+                ->get($this->baseUrl . 'data/marking-system-list', [
+                    'page' => $page,
+                    'limit' => 200,
+                ]);
+
+            if (!$response->successful()) {
+                Log::error('HEMIS marking-system-list request failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return ['success' => false, 'error' => 'API request failed'];
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('Exception fetching marking systems', [
+                'message' => $e->getMessage(),
+            ]);
+            return ['success' => false, 'error' => 'Exception occurred'];
+        }
+    }
+
+    protected function updateOrCreateMarkingSystem($data)
+    {
+        $minimumLimit = $data['minimum_limit'] ?? 60;
+
+        MarkingSystemScore::updateOrCreate(
+            ['marking_system_code' => $data['code']],
+            [
+                'marking_system_name' => $data['name'],
+                'minimum_limit' => $minimumLimit,
+                'gpa_limit' => $data['gpa_limit'] ?? 2.0,
+            ]
+        );
     }
 }

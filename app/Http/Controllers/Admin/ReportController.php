@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Curriculum;
 use App\Models\Deadline;
+use App\Models\MarkingSystemScore;
 use App\Models\Setting;
 use App\Models\CurriculumSubject;
 use Carbon\Carbon;
@@ -384,6 +385,7 @@ class ReportController extends Controller
                 'group_id' => $mappedGroupId,
                 'subject_id' => $r['subject_id'],
                 'semester_code' => $r['semester_code'],
+                'minimum_limit' => MarkingSystemScore::getByStudentHemisId($r['student_hemis_id'])->minimum_limit,
             ];
         }
 
@@ -2468,10 +2470,9 @@ class ReportController extends Controller
                 $comboKey = $data['group_id'] . '|' . $data['subject_id'] . '|' . $data['semester_code'];
                 $totalAuditoryHours = $auditoryHours[$comboKey] ?? 0;
 
-                $levelCode = $studentLevelMap[$data['student_hemis_id']] ?? null;
-                $deadline = $deadlines[$levelCode] ?? null;
-                $joriyMin = $deadline->joriy ?? 60;
-                $mtMin = $deadline->mustaqil_talim ?? 60;
+                $markingScore = MarkingSystemScore::getByStudentHemisId($data['student_hemis_id']);
+                $joriyMin = $markingScore->effectiveLimit('jn');
+                $mtMin = $markingScore->effectiveLimit('mt');
 
                 $groupName = $groupNameMap[$data['group_id']] ?? '';
                 $vKey = $groupName . '|' . $data['subject_name'] . '|' . $data['semester_code'];
@@ -2511,20 +2512,23 @@ class ReportController extends Controller
                 // Yiqilish sabablarini aniqlash
                 $reasons = [];
 
-                if ($jnAvg < 60) {
-                    $reasons[] = 'JN% < 60 (' . $jnAvg . ')';
+                if ($jnAvg < $joriyMin) {
+                    $reasons[] = 'JN% < ' . $joriyMin . ' (' . $jnAvg . ')';
                 }
                 if (round($mtAvg) < $mtMin) {
                     $reasons[] = 'MT < ' . $mtMin . ' (' . round($mtAvg) . ')';
                 }
-                if ($hasOn && round($onAvg) < 60) {
-                    $reasons[] = 'ON < 60 (' . round($onAvg) . ')';
+                $onMin = $markingScore->effectiveLimit('on');
+                if ($hasOn && round($onAvg) < $onMin) {
+                    $reasons[] = 'ON < ' . $onMin . ' (' . round($onAvg) . ')';
                 }
-                if ($hasOski && round($oskiAvg) < 60) {
-                    $reasons[] = 'OSKI < 60 (' . round($oskiAvg) . ')';
+                $oskiMin = $markingScore->effectiveLimit('oski');
+                if ($hasOski && round($oskiAvg) < $oskiMin) {
+                    $reasons[] = 'OSKI < ' . $oskiMin . ' (' . round($oskiAvg) . ')';
                 }
-                if ($hasTest && round($testAvg) < 60) {
-                    $reasons[] = 'Test < 60 (' . round($testAvg) . ')';
+                $testMin = $markingScore->effectiveLimit('test');
+                if ($hasTest && round($testAvg) < $testMin) {
+                    $reasons[] = 'Test < ' . $testMin . ' (' . round($testAvg) . ')';
                 }
                 if ($absencePercent > 25) {
                     $reasons[] = 'Davomat > 25% (' . $absencePercent . '%)';
@@ -2550,6 +2554,7 @@ class ReportController extends Controller
                     'auditory_hours' => $totalAuditoryHours,
                     'unexcused_hours' => $data['unexcused_absent_hours'],
                     'reasons' => $reasons,
+                    'minimum_limit' => $markingScore->minimum_limit,
                 ];
             }
 
@@ -2784,11 +2789,12 @@ class ReportController extends Controller
                 $redFill = [
                     'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFF0F0']],
                 ];
-                if ($debt['jn_percent'] < 60) $sheet->getStyle("M{$rowNum}")->applyFromArray($redFill);
-                if ($debt['mt'] < 60) $sheet->getStyle("K{$rowNum}")->applyFromArray($redFill);
-                if ($debt['on'] !== null && $debt['on'] < 60) $sheet->getStyle("L{$rowNum}")->applyFromArray($redFill);
-                if ($debt['oski'] !== null && $debt['oski'] < 60) $sheet->getStyle("N{$rowNum}")->applyFromArray($redFill);
-                if ($debt['test'] !== null && $debt['test'] < 60) $sheet->getStyle("O{$rowNum}")->applyFromArray($redFill);
+                $minLimit = $debt['minimum_limit'] ?? 60;
+                if ($debt['jn_percent'] < $minLimit) $sheet->getStyle("M{$rowNum}")->applyFromArray($redFill);
+                if ($debt['mt'] < $minLimit) $sheet->getStyle("K{$rowNum}")->applyFromArray($redFill);
+                if ($debt['on'] !== null && $debt['on'] < $minLimit) $sheet->getStyle("L{$rowNum}")->applyFromArray($redFill);
+                if ($debt['oski'] !== null && $debt['oski'] < $minLimit) $sheet->getStyle("N{$rowNum}")->applyFromArray($redFill);
+                if ($debt['test'] !== null && $debt['test'] < $minLimit) $sheet->getStyle("O{$rowNum}")->applyFromArray($redFill);
                 if ($debt['absence_percent'] > 25) $sheet->getStyle("P{$rowNum}")->applyFromArray($redFill);
 
                 $rowNum++;

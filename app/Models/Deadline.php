@@ -9,7 +9,7 @@ class Deadline extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['level_code', 'deadline_days', 'joriy', 'mustaqil_talim'];
+    protected $fillable = ['level_code', 'deadline_days'];
     public function level()
     {
         return $this->belongsTo(Student::class, 'level_code', 'level_code');

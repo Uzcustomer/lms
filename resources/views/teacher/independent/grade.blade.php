@@ -38,8 +38,8 @@
                                     @foreach ($students as $student)
                                         @php
                                             $gradeValue = is_numeric($student->grade) ? (float) $student->grade : null;
-                                            $isLocked = $gradeValue !== null && $gradeValue >= 60;
-                                            $needsGrading = $gradeValue === null || $gradeValue < 60;
+                                            $isLocked = $gradeValue !== null && $gradeValue >= ($minimumLimit ?? 60);
+                                            $needsGrading = $gradeValue === null || $gradeValue < ($minimumLimit ?? 60);
                                         @endphp
                                         <div class="px-2 py-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0">
                                             <dt class="mt-1 text-sm font-medium text-gray-900">
@@ -63,7 +63,7 @@
                                             @if ($isLocked)
                                                 <dt class="mt-1 text-sm font-medium text-green-700">
                                                     {{ $student->grade }}
-                                                    <span class="text-xs text-green-500 ml-1" title="Baho qulflangan (60+)">&#128274;</span>
+                                                    <span class="text-xs text-green-500 ml-1" title="Baho qulflangan ({{ $minimumLimit ?? 60 }}+)">&#128274;</span>
                                                     @if(isset($gradeHistory[$student->id]) && $gradeHistory[$student->id]->count() > 0)
                                                         <div class="text-xs text-gray-400 font-normal mt-1">
                                                             Oldingi: @foreach($gradeHistory[$student->id] as $h){{ $h->grade }}@if(!$loop->last), @endif @endforeach
@@ -93,7 +93,7 @@
                                 @php
                                     $hasStudentsNeedingGrading = $students->contains(function ($s) {
                                         $g = is_numeric($s->grade) ? (float) $s->grade : null;
-                                        return $g === null || $g < 60;
+                                        return $g === null || $g < ($minimumLimit ?? 60);
                                     });
                                 @endphp
                                 @if ($hasStudentsNeedingGrading)

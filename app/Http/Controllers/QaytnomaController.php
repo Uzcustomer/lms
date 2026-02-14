@@ -8,6 +8,7 @@ use App\Models\Attendance;
 use App\Models\CurriculumSubject;
 use App\Models\Deadline;
 use App\Models\Department;
+use App\Models\MarkingSystemScore;
 use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Group;
@@ -176,21 +177,21 @@ class QaytnomaController extends Controller
                 ->orderBy('students.hemis_id')
                 ->get();
             $jadval_students = [];
-            $deadline = Deadline::where('level_code', $semester->level_code)->first();
             foreach ($students as $student) {
+                $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
                 $qoldirgan = (int) Attendance::where('group_id', $group->group_hemis_id)
                     ->where('subject_id', $subject->subject_id)
                     ->where('student_hemis_id', $student->hemis_id)
                     ->sum('absent_off');
                 $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
                 $holat = "Ruxsat";
-                if ($student->jn < $deadline->joriy) {
+                if ($student->jn < $markingScore->effectiveLimit('jn')) {
                     $holat = '<w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t>' . htmlspecialchars("X") . '</w:t></w:r>';
 
 
                     $student->jn = '<w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t>' . htmlspecialchars($student->jn) . '</w:t></w:r>';
                 }
-                if ($student->mt < $deadline->mustaqil_talim) {
+                if ($student->mt < $markingScore->effectiveLimit('mt')) {
                     $student->mt = '<w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t>' . htmlspecialchars($student->mt) . '</w:t></w:r>';
                     $holat = '<w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t>' . htmlspecialchars("X") . '</w:t></w:r>';
 

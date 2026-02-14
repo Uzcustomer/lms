@@ -207,6 +207,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Unified settings page
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
         Route::post('/settings/deadlines', [SettingsController::class, 'updateDeadlines'])->name('settings.update.deadlines');
+        Route::post('/settings/marking-system-scores', [SettingsController::class, 'updateMarkingSystemScores'])->name('settings.update.marking-system-scores');
         Route::post('/settings/password', [SettingsController::class, 'updatePassword'])->name('settings.update.password');
         Route::post('/settings/telegram', [SettingsController::class, 'updateTelegram'])->name('settings.update.telegram');
 
@@ -322,6 +323,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/synchronize/teachers', [DashboardController::class, 'importTeachers'])->name('synchronize.teachers');
         Route::post('/synchronize/attendance-controls', [DashboardController::class, 'importAttendanceControls'])->name('synchronize.attendance-controls');
         Route::post('/synchronize/curriculum-subject-teachers', [DashboardController::class, 'importCurriculumSubjectTeachers'])->name('synchronize.curriculum-subject-teachers');
+        Route::post('/synchronize/marking-systems', [SettingsController::class, 'syncMarkingSystems'])->name('synchronize.marking-systems');
     });
 });
 

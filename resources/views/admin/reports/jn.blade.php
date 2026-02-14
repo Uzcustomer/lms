@@ -239,8 +239,9 @@
             });
         }
 
-        function gradeClass(val) {
-            if (val < 60) return 'badge-grade-red';
+        function gradeClass(val, minLimit) {
+            minLimit = minLimit || 60;
+            if (val < minLimit) return 'badge-grade-red';
             if (val < 75) return 'badge-grade-yellow';
             return 'badge-grade-green';
         }
@@ -262,7 +263,7 @@
                 html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
-                html += '<td><span class="badge ' + gradeClass(r.avg_grade) + '">' + r.avg_grade + '</span></td>';
+                html += '<td><span class="badge ' + gradeClass(r.avg_grade, r.minimum_limit) + '">' + r.avg_grade + '</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.grades_count + '</td>';
                 html += '<td style="text-align:center;"><a href="' + journalUrl + '" target="_blank" class="journal-link">Ko\'rish</a></td>';
                 html += '</tr>';

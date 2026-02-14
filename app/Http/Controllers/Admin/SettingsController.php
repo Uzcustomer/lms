@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Deadline;
+use App\Models\MarkingSystemScore;
 use App\Models\Setting;
+use App\Services\HemisService;
 use Illuminate\Http\Request;
 
 class SettingsController extends Controller
@@ -21,6 +23,9 @@ class SettingsController extends Controller
         $data['mtMaxResubmissions'] = Setting::get('mt_max_resubmissions', 3);
         $data['lessonOpeningDays'] = Setting::get('lesson_opening_days', 3);
 
+        // Marking system scores
+        $data['markingSystemScores'] = MarkingSystemScore::orderBy('marking_system_code')->get();
+
         // Password data
         $data['tempPasswordDays'] = Setting::get('temp_password_days', 3);
         $data['changedPasswordDays'] = Setting::get('changed_password_days', 30);
@@ -36,8 +41,6 @@ class SettingsController extends Controller
         $validated = $request->validate([
             'deadlines' => 'required|array',
             'deadlines.*.days' => 'required|integer|min:1',
-            'deadlines.*.joriy' => 'required|integer|min:1',
-            'deadlines.*.mustaqil_talim' => 'required|integer|min:1',
         ]);
 
         if ($request->filled('spravka_deadline_days')) {
@@ -65,13 +68,60 @@ class SettingsController extends Controller
                 ['level_code' => $levelCode],
                 [
                     'deadline_days' => $deadlineData['days'],
-                    'joriy' => $deadlineData['joriy'],
-                    'mustaqil_talim' => $deadlineData['mustaqil_talim'],
                 ]
             );
         }
 
         return redirect()->route('admin.settings')->with('success', 'Muddatlar muvaffaqiyatli yangilandi!');
+    }
+
+    public function updateMarkingSystemScores(Request $request)
+    {
+        $validated = $request->validate([
+            'scores' => 'required|array',
+            'scores.*.jn_limit' => 'required|integer|min:0',
+            'scores.*.jn_active' => 'nullable',
+            'scores.*.mt_limit' => 'required|integer|min:0',
+            'scores.*.mt_active' => 'nullable',
+            'scores.*.on_limit' => 'required|integer|min:0',
+            'scores.*.on_active' => 'nullable',
+            'scores.*.oski_limit' => 'required|integer|min:0',
+            'scores.*.oski_active' => 'nullable',
+            'scores.*.test_limit' => 'required|integer|min:0',
+            'scores.*.test_active' => 'nullable',
+            'scores.*.total_limit' => 'required|integer|min:0',
+            'scores.*.total_active' => 'nullable',
+        ]);
+
+        foreach ($validated['scores'] as $id => $scoreData) {
+            MarkingSystemScore::where('id', $id)->update([
+                'jn_limit' => $scoreData['jn_limit'],
+                'jn_active' => isset($scoreData['jn_active']),
+                'mt_limit' => $scoreData['mt_limit'],
+                'mt_active' => isset($scoreData['mt_active']),
+                'on_limit' => $scoreData['on_limit'],
+                'on_active' => isset($scoreData['on_active']),
+                'oski_limit' => $scoreData['oski_limit'],
+                'oski_active' => isset($scoreData['oski_active']),
+                'test_limit' => $scoreData['test_limit'],
+                'test_active' => isset($scoreData['test_active']),
+                'total_limit' => $scoreData['total_limit'],
+                'total_active' => isset($scoreData['total_active']),
+            ]);
+        }
+
+        return redirect()->route('admin.settings')->with('success', "O'tish bali chegaralari muvaffaqiyatli yangilandi!");
+    }
+
+    public function syncMarkingSystems()
+    {
+        try {
+            $hemisService = app(HemisService::class);
+            $count = $hemisService->importMarkingSystems();
+            return redirect()->route('admin.settings')->with('success', "Baholash tizimlari muvaffaqiyatli yangilandi! Jami: {$count} ta");
+        } catch (\Exception $e) {
+            return redirect()->route('admin.settings')->with('error', "Xatolik yuz berdi: {$e->getMessage()}");
+        }
     }
 
     public function updatePassword(Request $request)

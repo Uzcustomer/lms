@@ -52,7 +52,7 @@
                        style="width: 80px; padding: 8px 12px; border: 2px solid #7c3aed; border-radius: 8px; font-size: 20px; font-weight: 700; color: #5b21b6; text-align: center; background: rgba(255,255,255,0.7);">
                 <span style="font-size: 14px; color: #5b21b6; font-weight: 500;">marta</span>
             </div>
-            <div style="font-size: 11px; color: #6d28d9; margin-top: 6px;">baho 60 dan past bo'lsa</div>
+            <div style="font-size: 11px; color: #6d28d9; margin-top: 6px;">baho {{ $minimumLimit ?? 60 }} dan past bo'lsa</div>
         </div>
     </div>
 
@@ -96,25 +96,11 @@
                     {{ $deadline->level->level_name ?? $deadline->level_code }}
                     <span style="font-size: 12px; color: #9ca3af; font-weight: 400; margin-left: 4px;">({{ $deadline->level_code }})</span>
                 </div>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
-                    <div>
-                        <label style="font-size: 12px; color: #6b7280; font-weight: 500; display: block; margin-bottom: 6px;">Muddat (kunlar)</label>
-                        <input type="number" name="deadlines[{{ $deadline->level_code }}][days]"
-                               value="{{ old('deadlines.' . $deadline->level_code . '.days', $deadline->deadline_days ?? '') }}"
-                               style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #111827;">
-                    </div>
-                    <div>
-                        <label style="font-size: 12px; color: #6b7280; font-weight: 500; display: block; margin-bottom: 6px;">Joriy nazorat bali</label>
-                        <input type="number" name="deadlines[{{ $deadline->level_code }}][joriy]"
-                               value="{{ old('deadlines.' . $deadline->level_code . '.joriy', $deadline->joriy ?? '') }}"
-                               style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #111827;">
-                    </div>
-                    <div>
-                        <label style="font-size: 12px; color: #6b7280; font-weight: 500; display: block; margin-bottom: 6px;">MT o'tish bali</label>
-                        <input type="number" name="deadlines[{{ $deadline->level_code }}][mustaqil_talim]"
-                               value="{{ old('deadlines.' . $deadline->level_code . '.mustaqil_talim', $deadline->mustaqil_talim ?? '') }}"
-                               style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #111827;">
-                    </div>
+                <div>
+                    <label style="font-size: 12px; color: #6b7280; font-weight: 500; display: block; margin-bottom: 6px;">Muddat (kunlar)</label>
+                    <input type="number" name="deadlines[{{ $deadline->level_code }}][days]"
+                           value="{{ old('deadlines.' . $deadline->level_code . '.days', $deadline->deadline_days ?? '') }}"
+                           style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #111827;">
                 </div>
             </div>
         @endforeach

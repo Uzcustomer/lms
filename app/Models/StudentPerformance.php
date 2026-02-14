@@ -31,6 +31,7 @@ class StudentPerformance extends Model
         return $this->belongsTo(Student::class);
     }
 
+    // TODO: Consider making threshold dynamic per marking system
     public function scopeLowGradeOrAbsence($query)
     {
         return $query->where('reason', 'absence')->orWhere('grade', '<', 60);
@@ -41,6 +42,7 @@ class StudentPerformance extends Model
         $this->attributes['deadline'] = now()->addWeek();
     }
 
+    // TODO: Consider making threshold dynamic per marking system
     public function isRetakeAllowed()
     {
         return $this->grade < 60;

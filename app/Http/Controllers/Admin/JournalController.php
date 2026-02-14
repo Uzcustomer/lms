@@ -2243,6 +2243,61 @@ class JournalController extends Controller
                     );
                 }
 
+                // Avtomatik moslash: topic position → schedule sanasi (training_type bo'yicha)
+                if ($request->filled('group_hemis_id') && $request->filled('subject_id') && $request->filled('semester_id')) {
+                    $scheduleDates = DB::table('schedules')
+                        ->where('group_id', $request->group_hemis_id)
+                        ->where('subject_id', $request->subject_id)
+                        ->where('semester_code', $request->semester_id)
+                        ->whereNull('deleted_at')
+                        ->whereNotNull('lesson_date')
+                        ->select('lesson_date', 'training_type_code')
+                        ->orderBy('lesson_date')
+                        ->get();
+
+                    // Training type bo'yicha guruhlash va unique sanalar
+                    $datesByType = [];
+                    foreach ($scheduleDates as $row) {
+                        $typeCode = (string) $row->training_type_code;
+                        $dateStr = \Carbon\Carbon::parse($row->lesson_date)->format('Y-m-d');
+                        if (!isset($datesByType[$typeCode])) {
+                            $datesByType[$typeCode] = [];
+                        }
+                        // Bir xil sana uchun faqat birinchisini olish
+                        if (!in_array($dateStr, $datesByType[$typeCode])) {
+                            $datesByType[$typeCode][] = $dateStr;
+                        }
+                    }
+
+                    // Topiclarni training_type bo'yicha guruhlash va position bo'yicha tartiblash
+                    $topicsByType = [];
+                    foreach ($items as $idx => $item) {
+                        $typeCode = (string) ($item['_training_type'] ?? '');
+                        if (!isset($topicsByType[$typeCode])) {
+                            $topicsByType[$typeCode] = [];
+                        }
+                        $topicsByType[$typeCode][] = $idx;
+                    }
+
+                    // Har bir training_type uchun moslash
+                    $today = now()->format('Y-m-d');
+                    foreach ($topicsByType as $typeCode => $topicIndexes) {
+                        $dates = $datesByType[$typeCode] ?? [];
+                        // Topic position bo'yicha tartiblash
+                        usort($topicIndexes, function ($a, $b) use ($items) {
+                            return ($items[$a]['position'] ?? 0) - ($items[$b]['position'] ?? 0);
+                        });
+
+                        foreach ($topicIndexes as $i => $topicIdx) {
+                            if (isset($dates[$i]) && $dates[$i] <= $today) {
+                                $items[$topicIdx]['taught_date'] = \Carbon\Carbon::parse($dates[$i])->format('d.m.Y');
+                            } else {
+                                $items[$topicIdx]['taught_date'] = null;
+                            }
+                        }
+                    }
+                }
+
                 return response()->json([
                     'success' => $data['success'] ?? true,
                     'data' => ['items' => $items],
@@ -3021,4 +3076,5 @@ class JournalController extends Controller
             'yn_submitted_at' => $ynSubmission?->submitted_at?->format('d.m.Y H:i'),
         ]);
     }
+
 }

@@ -218,8 +218,8 @@
         .mavzular-header {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 12px 16px;
+            gap: 16px;
+            padding: 8px 16px;
             background: #f8fafc;
             border-bottom: 1px solid #e2e8f0;
         }
@@ -264,18 +264,19 @@
             vertical-align: top;
         }
         .mavzular-table .topic-num {
-            color: #94a3b8;
+            color: #4f46e5;
             font-weight: 600;
-            text-align: center;
-            width: 36px;
+            text-align: left;
+            width: 90px;
+            white-space: nowrap;
         }
         .mavzular-table .topic-hours {
             text-align: center;
-            width: 60px;
+            width: 110px;
         }
         .topic-hours-badge {
             display: inline-block;
-            padding: 2px 8px;
+            padding: 2px 10px;
             border-radius: 10px;
             font-size: 11px;
             font-weight: 600;
@@ -290,7 +291,7 @@
             color: #94a3b8;
             font-size: 11px;
             white-space: nowrap;
-            width: 90px;
+            width: 110px;
         }
         .mavzular-loading {
             padding: 24px;
@@ -308,6 +309,41 @@
             text-align: center;
             color: #ef4444;
             font-size: 13px;
+        }
+        .topic-taught {
+            background: #f0fdf4;
+        }
+        .topic-not-taught {
+            background: #fff;
+        }
+        .topic-taught .topic-date {
+            color: #16a34a;
+            font-weight: 600;
+        }
+        .mavzular-tabs {
+            display: flex;
+            gap: 0;
+        }
+        .mavzular-tab {
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #64748b;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .mavzular-tab:hover {
+            color: #334155;
+            background: #f1f5f9;
+        }
+        .mavzular-tab.active {
+            color: #4f46e5;
+            border-bottom-color: #4f46e5;
+            background: #eef2ff;
         }
         .sidebar-select {
             width: 100%;
@@ -1884,6 +1920,11 @@
             <div class="mavzular-section" id="mavzular-section">
                 <div class="mavzular-header">
                     <div class="mavzular-title">Mavzular</div>
+                    <div class="mavzular-tabs" id="mavzular-tabs">
+                        <button type="button" class="mavzular-tab active" data-tab="lecture" onclick="switchTopicTab('lecture')">Ma'ruza</button>
+                        <button type="button" class="mavzular-tab" data-tab="practice" onclick="switchTopicTab('practice')">Amaliy</button>
+                        <button type="button" class="mavzular-tab" data-tab="independent" onclick="switchTopicTab('independent')">Mustaqil ta'lim</button>
+                    </div>
                 </div>
                 <div class="mavzular-body" id="mavzular-body">
                     <div class="mavzular-loading" id="mavzular-loading">
@@ -2213,18 +2254,67 @@
         }
 
         // ===== Mavzular =====
+        const excludedCodes = [11, 99, 100, 101, 102];
+        let allTopics = [];
+        let currentTopicTab = 'lecture';
+
+        function switchTopicTab(tab) {
+            currentTopicTab = tab;
+            document.querySelectorAll('.mavzular-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tab);
+            });
+            renderTopicsForTab();
+        }
+
+        function getTabTopics(tab) {
+            return allTopics.filter(t => {
+                const type = parseInt(t._training_type) || 0;
+                if (tab === 'lecture') return type === 11;
+                if (tab === 'independent') return type === 99;
+                // practice = excludedCodes da bo'lmagan hammasi
+                return !excludedCodes.includes(type);
+            }).sort((a, b) => (a.position || 0) - (b.position || 0));
+        }
+
+        function renderTopicsForTab() {
+            const body = document.getElementById('mavzular-body');
+            if (!body) return;
+
+            const items = getTabTopics(currentTopicTab);
+
+            if (items.length === 0) {
+                body.innerHTML = '<div class="mavzular-empty">Bu turdagi mavzular topilmadi</div>';
+                return;
+            }
+
+            let html = '<table class="mavzular-table"><thead><tr>' +
+                '<th style="text-align:left;width:90px;">T/R</th>' +
+                '<th>Mavzu nomi</th>' +
+                '<th style="text-align:center;width:110px;">Akad. yuklama</th>' +
+                '<th style="width:110px;">O\'tilgan sana</th>' +
+                '</tr></thead><tbody>';
+
+            items.forEach((item, i) => {
+                const taughtDate = item.taught_date || '';
+                const statusClass = taughtDate ? 'topic-taught' : 'topic-not-taught';
+                const statusText = taughtDate || '<span style="color:#9ca3af;font-style:italic;">O\'tilmagan</span>';
+                html += '<tr class="' + statusClass + '">' +
+                    '<td class="topic-num">' + (i + 1) + '-mavzu</td>' +
+                    '<td class="topic-name">' + (item.name || '-') + '</td>' +
+                    '<td class="topic-hours"><span class="topic-hours-badge">' + (item.topic_load || 0) + ' soat</span></td>' +
+                    '<td class="topic-date">' + statusText + '</td>' +
+                    '</tr>';
+            });
+
+            html += '</tbody></table>';
+            body.innerHTML = html;
+        }
+
         function loadTopics() {
             const body = document.getElementById('mavzular-body');
             if (!body) return;
 
-            console.log('[Mavzular] loadTopics called', {
-                semesterHemisId: currentSemesterHemisId,
-                curriculumHemisId: currentCurriculumHemisId,
-                subjectId: currentSubjectId,
-            });
-
             if (!currentSemesterCode || !currentCurriculumHemisId) {
-                console.warn('[Mavzular] Missing semesterCode or curriculumHemisId');
                 body.innerHTML = '<div class="mavzular-empty">Semestr yoki o\'quv reja ma\'lumotlari topilmadi</div>';
                 return;
             }
@@ -2233,6 +2323,7 @@
                 semester_id: currentSemesterCode,
                 curriculum_id: currentCurriculumHemisId,
                 subject_id: currentSubjectId,
+                group_hemis_id: currentGroupHemisId,
                 limit: 200,
             });
 
@@ -2241,34 +2332,14 @@
             fetch(`${topicsUrl}?${params}`)
                 .then(r => r.json())
                 .then(data => {
-                    console.log('[Mavzular] Server response:', JSON.stringify(data).substring(0, 500));
                     if (!data.success || !data.data || !data.data.items || data.data.items.length === 0) {
-                        console.warn('[Mavzular] No items found', { success: data.success, hasData: !!data.data, hasItems: !!(data.data && data.data.items), itemsLength: data.data?.items?.length });
+                        allTopics = [];
                         body.innerHTML = '<div class="mavzular-empty">Mavzular topilmadi</div>';
                         return;
                     }
 
-                    const items = data.data.items.sort((a, b) => (a.position || 0) - (b.position || 0));
-
-                    let html = '<table class="mavzular-table"><thead><tr>' +
-                        '<th style="text-align:center;width:36px;">#</th>' +
-                        '<th style="text-align:center;width:60px;">Soat</th>' +
-                        '<th>Mavzu nomi</th>' +
-                        '<th style="width:90px;">Sana</th>' +
-                        '</tr></thead><tbody>';
-
-                    items.forEach((item, i) => {
-                        const date = item.created_at ? new Date(item.created_at * 1000).toLocaleDateString('uz-UZ', {year:'numeric', month:'2-digit', day:'2-digit'}) : '-';
-                        html += '<tr>' +
-                            '<td class="topic-num">' + (i + 1) + '</td>' +
-                            '<td class="topic-hours"><span class="topic-hours-badge">' + (item.topic_load || 0) + '</span></td>' +
-                            '<td class="topic-name">' + (item.name || '-') + '</td>' +
-                            '<td class="topic-date">' + date + '</td>' +
-                            '</tr>';
-                    });
-
-                    html += '</tbody></table>';
-                    body.innerHTML = html;
+                    allTopics = data.data.items;
+                    renderTopicsForTab();
                 })
                 .catch(err => {
                     body.innerHTML = '<div class="mavzular-error">Xatolik: ' + err.message + '</div>';

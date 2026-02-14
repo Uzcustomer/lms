@@ -964,6 +964,18 @@ class JournalController extends Controller
             ->where('group_hemis_id', $group->group_hemis_id)
             ->first();
 
+        // YN ga yuborish huquqi: faqat shu fanga biriktirilgan o'qituvchi
+        $canSubmitYn = false;
+        $isOqituvchi = is_active_oqituvchi();
+        if ($isOqituvchi) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+                $canSubmitYn = in_array($subjectId, $assignments['subject_ids'])
+                    && in_array($group->group_hemis_id, $assignments['group_ids']);
+            }
+        }
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
@@ -1016,7 +1028,8 @@ class JournalController extends Controller
             'activeOpenedDates',
             'minimumLimit',
             'ynConsents',
-            'ynSubmission'
+            'ynSubmission',
+            'canSubmitYn'
         ));
     }
 
@@ -2876,6 +2889,31 @@ class JournalController extends Controller
             'semester_code' => 'required',
             'group_hemis_id' => 'required',
         ]);
+
+        // Faqat biriktirilgan o'qituvchi YN ga yuborishi mumkin
+        if (is_active_oqituvchi()) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if (!$teacherHemisId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'O\'qituvchi topilmadi.',
+                ], 403);
+            }
+            $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+            $isAssigned = in_array($request->subject_id, $assignments['subject_ids'])
+                && in_array($request->group_hemis_id, $assignments['group_ids']);
+            if (!$isAssigned) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Siz bu fan va guruhga biriktirilmagansiz. YN ga yuborish huquqi yo\'q.',
+                ], 403);
+            }
+        } elseif (!auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'YN ga yuborish huquqi faqat biriktirilgan o\'qituvchida.',
+            ], 403);
+        }
 
         $subjectId = $request->subject_id;
         $semesterCode = $request->semester_code;

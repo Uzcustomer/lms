@@ -1341,7 +1341,8 @@
                     @endif
                 </div>
 
-                {{-- YN ga yuborish paneli --}}
+                {{-- YN ga yuborish paneli — faqat biriktirilgan o'qituvchiga ko'rinadi --}}
+                @if(($canSubmitYn ?? false) || (isset($ynSubmission) && $ynSubmission))
                 <div class="mt-4 p-4 bg-gray-50 border rounded-lg">
                     <div class="flex items-center justify-between">
                         <div>
@@ -1366,7 +1367,7 @@
                                 <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
                                     YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
                                 </div>
-                            @else
+                            @elseif($canSubmitYn ?? false)
                                 <button type="button" id="btn-submit-yn"
                                     class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
                                     onclick="submitToYn()">
@@ -1376,6 +1377,7 @@
                         </div>
                     </div>
                 </div>
+                @endif
             </div>
 
             <!-- Mustaqil ta'lim Tab Content -->

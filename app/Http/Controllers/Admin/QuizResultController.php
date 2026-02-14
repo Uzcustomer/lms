@@ -240,7 +240,7 @@ class QuizResultController extends Controller
                 ->get(['curricula_hemis_id', 'subject_id', 'semester_code']);
 
             foreach ($csRows as $cs) {
-                $curriculumSubjects[$cs->curricula_hemis_id . '|' . $cs->subject_id] = true;
+                $curriculumSubjects[$cs->curricula_hemis_id . '|' . $cs->subject_id] = $cs->semester_code;
             }
         }
 
@@ -281,6 +281,18 @@ class QuizResultController extends Controller
                 $testTypes, $oskiTypes
             );
 
+            // Journal uchun group_db_id va semester_code aniqlash
+            $groupDbId = null;
+            $semesterCode = null;
+            if ($student) {
+                $groupModel = $groups[$student->group_id] ?? null;
+                if ($groupModel) {
+                    $groupDbId = $groupModel->id;
+                    $csKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
+                    $semesterCode = $curriculumSubjects[$csKey] ?? null;
+                }
+            }
+
             $rowNum++;
             $data[] = [
                 'id' => $result->id,
@@ -302,6 +314,9 @@ class QuizResultController extends Controller
                 'jn_avg' => $xulosa['jn_avg'],
                 'mt_avg' => $xulosa['mt_avg'],
                 'oski_avg' => $xulosa['oski_avg'],
+                'group_db_id' => $groupDbId,
+                'fan_id' => $result->fan_id,
+                'semester_code' => $semesterCode,
             ];
         }
 

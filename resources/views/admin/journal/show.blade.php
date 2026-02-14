@@ -2215,6 +2215,11 @@
             const body = document.getElementById('mavzular-body');
             if (!body) return;
 
+            if (!currentSemesterHemisId || !currentCurriculumHemisId) {
+                body.innerHTML = '<div class="mavzular-empty">Semestr yoki o\'quv reja ma\'lumotlari topilmadi</div>';
+                return;
+            }
+
             const params = new URLSearchParams({
                 semester_id: currentSemesterHemisId,
                 curriculum_id: currentCurriculumHemisId,

@@ -9,7 +9,6 @@ use App\Models\CurriculumSubjectTeacher;
 use App\Models\Department;
 use App\Models\Group;
 use App\Models\LessonOpening;
-use App\Models\LessonTopic;
 use App\Models\Semester;
 use App\Models\Setting;
 use App\Models\Specialty;
@@ -2231,24 +2230,59 @@ class JournalController extends Controller
                     );
                 }
 
-                // Lokal bazadan mavzu-dars bog'lanishlarini olish
+                // Avtomatik moslash: topic position → schedule sanasi (training_type bo'yicha)
                 if ($request->filled('group_hemis_id') && $request->filled('subject_id') && $request->filled('semester_id')) {
-                    $assignments = LessonTopic::where('group_hemis_id', $request->group_hemis_id)
+                    $scheduleDates = DB::table('schedules')
+                        ->where('group_id', $request->group_hemis_id)
                         ->where('subject_id', $request->subject_id)
                         ->where('semester_code', $request->semester_id)
-                        ->get()
-                        ->groupBy('topic_hemis_id');
+                        ->whereNull('deleted_at')
+                        ->whereNotNull('lesson_date')
+                        ->select('lesson_date', 'training_type_code')
+                        ->orderBy('lesson_date')
+                        ->get();
 
-                    foreach ($items as &$item) {
-                        $topicId = $item['id'] ?? null;
-                        if ($topicId && isset($assignments[$topicId])) {
-                            $assignment = $assignments[$topicId]->first();
-                            $item['taught_date'] = $assignment->lesson_date->format('d.m.Y');
-                        } else {
-                            $item['taught_date'] = null;
+                    // Training type bo'yicha guruhlash va unique sanalar
+                    $datesByType = [];
+                    foreach ($scheduleDates as $row) {
+                        $typeCode = (string) $row->training_type_code;
+                        $dateStr = \Carbon\Carbon::parse($row->lesson_date)->format('Y-m-d');
+                        if (!isset($datesByType[$typeCode])) {
+                            $datesByType[$typeCode] = [];
+                        }
+                        // Bir xil sana uchun faqat birinchisini olish
+                        if (!in_array($dateStr, $datesByType[$typeCode])) {
+                            $datesByType[$typeCode][] = $dateStr;
                         }
                     }
-                    unset($item);
+
+                    // Topiclarni training_type bo'yicha guruhlash va position bo'yicha tartiblash
+                    $topicsByType = [];
+                    foreach ($items as $idx => $item) {
+                        $typeCode = (string) ($item['_training_type'] ?? '');
+                        if (!isset($topicsByType[$typeCode])) {
+                            $topicsByType[$typeCode] = [];
+                        }
+                        $topicsByType[$typeCode][] = $idx;
+                    }
+
+                    // Har bir training_type uchun moslash
+                    $today = now()->format('Y-m-d');
+                    foreach ($topicsByType as $typeCode => $topicIndexes) {
+                        $dates = $datesByType[$typeCode] ?? [];
+                        // Topic position bo'yicha tartiblash
+                        usort($topicIndexes, function ($a, $b) use ($items) {
+                            return ($items[$a]['position'] ?? 0) - ($items[$b]['position'] ?? 0);
+                        });
+
+                        foreach ($topicIndexes as $i => $topicIdx) {
+                            if (isset($dates[$i]) && $dates[$i] <= $today) {
+                                $items[$topicIdx]['taught_date'] = \Carbon\Carbon::parse($dates[$i])->format('d.m.Y');
+                            } else {
+                                $items[$topicIdx]['taught_date'] = null;
+                            }
+                        }
+                    }
                 }
 
                 return response()->json([
@@ -3005,63 +3039,4 @@ class JournalController extends Controller
         ]);
     }
 
-    /**
-     * Darsga mavzu biriktirish
-     */
-    public function assignTopic(Request $request)
-    {
-        $request->validate([
-            'group_hemis_id' => 'required',
-            'subject_id' => 'required',
-            'semester_code' => 'required',
-            'lesson_date' => 'required|date',
-            'topic_hemis_id' => 'required',
-            'topic_name' => 'required|string',
-        ]);
-
-        $webUser = auth()->guard('web')->user();
-        $teacherUser = auth()->guard('teacher')->user();
-        $user = $webUser ?? $teacherUser;
-        $guard = $teacherUser ? 'teacher' : 'web';
-
-        $lessonTopic = LessonTopic::updateOrCreate(
-            [
-                'group_hemis_id' => $request->group_hemis_id,
-                'subject_id' => $request->subject_id,
-                'semester_code' => $request->semester_code,
-                'lesson_date' => $request->lesson_date,
-                'topic_hemis_id' => $request->topic_hemis_id,
-            ],
-            [
-                'topic_name' => $request->topic_name,
-                'assigned_by_id' => $user->id,
-                'assigned_by_guard' => $guard,
-            ]
-        );
-
-        return response()->json(['success' => true, 'data' => $lessonTopic]);
-    }
-
-    /**
-     * Darsdan mavzuni olib tashlash
-     */
-    public function removeTopic(Request $request)
-    {
-        $request->validate([
-            'group_hemis_id' => 'required',
-            'subject_id' => 'required',
-            'semester_code' => 'required',
-            'lesson_date' => 'required|date',
-            'topic_hemis_id' => 'required',
-        ]);
-
-        LessonTopic::where('group_hemis_id', $request->group_hemis_id)
-            ->where('subject_id', $request->subject_id)
-            ->where('semester_code', $request->semester_code)
-            ->where('lesson_date', $request->lesson_date)
-            ->where('topic_hemis_id', $request->topic_hemis_id)
-            ->delete();
-
-        return response()->json(['success' => true]);
-    }
 }

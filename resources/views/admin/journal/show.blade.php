@@ -525,13 +525,196 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
+
+        /* ===== MOBILE RESPONSIVE STYLES ===== */
+        .sidebar-mobile-toggle {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            /* Layout: stack sidebar below content */
+            .journal-layout {
+                flex-direction: column;
+            }
+
+            /* Sidebar: collapsible on mobile */
+            .journal-sidebar {
+                width: 100%;
+                position: relative;
+                max-height: none;
+                border-left: none;
+                border-top: 2px solid #e2e8f0;
+                border-radius: 0 0 8px 8px;
+                overflow: hidden;
+            }
+            .journal-sidebar.collapsed .sidebar-field,
+            .journal-sidebar.collapsed .sidebar-section-label,
+            .journal-sidebar.collapsed #teachers-section,
+            .journal-sidebar.collapsed .mavzular-section {
+                display: none;
+            }
+            .sidebar-header {
+                border-radius: 0;
+                cursor: pointer;
+            }
+            .sidebar-mobile-toggle {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                background: none;
+                border: none;
+                color: #fff;
+                font-size: 16px;
+                cursor: pointer;
+                padding: 0 4px;
+                transition: transform 0.2s;
+            }
+            .journal-sidebar.collapsed .sidebar-mobile-toggle {
+                transform: rotate(180deg);
+            }
+
+            /* Tabs: smaller on mobile */
+            .tab-container {
+                padding: 6px 4px 0 4px;
+                gap: 2px;
+                flex-wrap: wrap;
+            }
+            .tab-btn {
+                padding: 7px 10px;
+                font-size: 11px;
+            }
+            #syncScheduleBtn {
+                padding: 4px 8px !important;
+                font-size: 11px !important;
+            }
+
+            /* Table: tighter cells */
+            .journal-table th,
+            .journal-table td {
+                padding: 2px 1px !important;
+                font-size: 10px;
+            }
+            .journal-table .date-header-cell {
+                min-width: 32px !important;
+                width: 32px !important;
+                height: 80px !important;
+            }
+            .journal-table .date-header-cell .date-text-wrapper {
+                height: 70px;
+                font-size: 9px;
+            }
+            /* Detailed view date columns also smaller */
+            .journal-table .date-header-cell[style*="min-width: 55px"] {
+                min-width: 34px !important;
+                width: 34px !important;
+                height: 85px !important;
+            }
+            .journal-table .joriy-header {
+                height: 32px;
+                font-size: 11px;
+            }
+
+            /* Student name column: narrower on mobile */
+            .journal-table th[style*="min-width: 180px"],
+            .journal-table td.student-name-cell {
+                min-width: 110px !important;
+                max-width: 130px;
+                white-space: normal !important;
+                word-break: break-word;
+                font-size: 10px;
+                line-height: 1.2;
+            }
+
+            /* Summary columns narrower */
+            .journal-table th[style*="width: 55px"],
+            .journal-table th[style*="width: 50px"],
+            .journal-table th[style*="width: 40px"] {
+                min-width: 30px !important;
+                width: 30px !important;
+            }
+
+            /* Split cell smaller */
+            .split-cell {
+                height: 32px;
+            }
+            .split-cell .split-top {
+                font-size: 9px;
+            }
+            .split-cell .split-bottom {
+                font-size: 9px;
+            }
+
+            /* Editable cell smaller */
+            .editable-cell {
+                min-height: 20px;
+            }
+
+            /* Main content padding */
+            .max-w-full {
+                padding-left: 4px !important;
+                padding-right: 4px !important;
+            }
+
+            /* MT grade input smaller */
+            .mt-grade-input {
+                width: 48px !important;
+                font-size: 11px !important;
+                padding: 2px 3px !important;
+            }
+
+            /* MT action buttons smaller */
+            #content-mustaqil button[onclick*="saveMtGrade"],
+            #content-mustaqil button[onclick*="startRegrade"] {
+                padding: 4px 10px !important;
+                font-size: 11px !important;
+            }
+
+            /* Mavzular section fits mobile */
+            .mavzular-table thead th,
+            .mavzular-table tbody td {
+                padding: 4px 6px;
+                font-size: 10px;
+            }
+
+            /* Reduce top padding on mobile */
+            .journal-page-wrapper {
+                padding-top: 10px !important;
+            }
+
+            /* Back button and sync smaller */
+            .mb-2 a {
+                font-size: 12px !important;
+            }
+        }
+
+        /* Extra-small phones */
+        @media (max-width: 400px) {
+            .tab-btn {
+                padding: 6px 6px;
+                font-size: 10px;
+            }
+            .journal-table .date-header-cell {
+                min-width: 28px !important;
+                width: 28px !important;
+            }
+            .journal-table .date-header-cell .date-text-wrapper {
+                height: 60px;
+                font-size: 8px;
+            }
+            .journal-table th[style*="min-width: 180px"],
+            .journal-table td.student-name-cell {
+                min-width: 90px !important;
+                max-width: 110px;
+                font-size: 9px;
+            }
+        }
     </style>
 
     @php
         $isDekan = is_active_dekan();
         $isRegistrator = is_active_registrator();
     @endphp
-    <div class="py-2" style="padding-top: 15vh;">
+    <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Nazad tugma -->
             <div class="mb-2">
@@ -610,7 +793,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
                                             @forelse($lectureLessonDates as $idx => $date)
                                                 @php
                                                     $scheduledPairs = $lecturePairsByDate[$date] ?? [];
@@ -665,7 +848,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
                                             @forelse($lectureColumns as $idx => $col)
                                                 @php
                                                     $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null;
@@ -833,7 +1016,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
                                             @forelse($jbLessonDates as $idx => $date)
                                                 @php
                                                     $dayGrades = $studentJbGrades[$date] ?? [];
@@ -999,7 +1182,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($jbColumns as $colIndex => $col)
                                                 @php
@@ -1243,7 +1426,7 @@
                                         @endphp
                                         <tr id="mt-row-{{ $student->hemis_id }}" {!! $rowBg ? 'style="background:' . $rowBg . '"' : '' !!}>
                                             <td class="px-2 py-1 text-center" style="color: #111827;">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase" style="font-size: 12px; color: #111827;">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase student-name-cell" style="font-size: 12px; color: #111827;">{{ $student->full_name }}</td>
                                             <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
                                                 @if($hasFile)
                                                     <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
@@ -1388,7 +1571,7 @@
                                             @endphp
                                             <tr>
                                                 <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                                <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                                <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
                                                 @foreach($mtLessonDates as $idx => $date)
                                                     @php
                                                         $dayGrades = $studentMtGrades[$date] ?? [];
@@ -1475,7 +1658,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($mtColumns as $colIndex => $col)
                                                 @php
@@ -1519,11 +1702,12 @@
                 </div><!-- /.journal-main-content -->
 
                 <!-- Right Sidebar: Filters -->
-                <div class="journal-sidebar">
-                    <div class="sidebar-header">
+                <div class="journal-sidebar collapsed" id="journalSidebar">
+                    <div class="sidebar-header" onclick="toggleMobileSidebar()">
                         <div class="sidebar-header-left">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
                             Filtrlar
+                            <button class="sidebar-mobile-toggle" id="sidebarToggleBtn" aria-label="Filtrlarni ochish/yopish">&#9660;</button>
                         </div>
                         <div class="sidebar-view-toggle">
                             <button id="view-compact" onclick="switchView('compact')" class="sidebar-view-btn active">Ixcham</button>
@@ -2239,6 +2423,20 @@
             `;
             document.body.appendChild(overlay);
         }
+
+        // Mobile sidebar toggle
+        function toggleMobileSidebar() {
+            if (window.innerWidth > 768) return;
+            const sidebar = document.getElementById('journalSidebar');
+            sidebar.classList.toggle('collapsed');
+        }
+        // On desktop, ensure sidebar is never collapsed
+        window.addEventListener('resize', function() {
+            const sidebar = document.getElementById('journalSidebar');
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('collapsed');
+            }
+        });
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));

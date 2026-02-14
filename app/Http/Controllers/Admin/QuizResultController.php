@@ -266,7 +266,7 @@ class QuizResultController extends Controller
                 'id'           => $grade->id,
                 'row_num'      => $rowNum,
                 'attempt_id'   => $quiz->attempt_id ?? '-',
-                'student_id'   => $grade->student_hemis_id,
+                'student_id'   => $student ? $student->id : '-',
                 'student_name' => $studentName,
                 'faculty'      => $faculty,
                 'direction'    => $direction,

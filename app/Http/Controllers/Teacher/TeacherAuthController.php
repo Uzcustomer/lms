@@ -23,7 +23,9 @@ class TeacherAuthController extends Controller
             return redirect()->intended(route('teacher.dashboard'));
         }
 
-        return view('teacher.login');
+        return response()
+            ->view('teacher.login')
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
 
     public function login(Request $request)

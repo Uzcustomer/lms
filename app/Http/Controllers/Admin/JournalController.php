@@ -2187,7 +2187,11 @@ class JournalController extends Controller
      */
     public function getTopics(Request $request)
     {
-        $baseUrl = rtrim(config('services.hemis.base_url', 'https://student.ttatf.uz/rest/v1/'), '/');
+        $baseUrl = rtrim(config('services.hemis.base_url', 'https://student.ttatf.uz/rest'), '/');
+        // Ensure /v1 is in the path (env may have /rest without /v1)
+        if (!str_contains($baseUrl, '/v1')) {
+            $baseUrl .= '/v1';
+        }
         $token = config('services.hemis.token');
 
         $params = [

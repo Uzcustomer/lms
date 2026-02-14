@@ -12,7 +12,10 @@ class TestHemisTopics extends Command
 
     public function handle()
     {
-        $baseUrl = rtrim(config('services.hemis.base_url', 'https://student.ttatf.uz/rest/v1/'), '/');
+        $baseUrl = rtrim(config('services.hemis.base_url', 'https://student.ttatf.uz/rest'), '/');
+        if (!str_contains($baseUrl, '/v1')) {
+            $baseUrl .= '/v1';
+        }
         $token = config('services.hemis.token');
 
         $this->info("Base URL: {$baseUrl}");

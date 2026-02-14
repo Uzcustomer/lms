@@ -199,6 +199,7 @@
         var uploadUrl = '{{ route($routePrefix . ".quiz-results.upload") }}';
         var importUrl = '{{ route($routePrefix . ".quiz-results.import") }}';
         var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
+        var journalBaseUrl = '{{ url("/admin/journal/show") }}';
 
         var allData = [];
         var filteredData = [];
@@ -435,6 +436,13 @@
         });
 
         // ========== JADVAL RENDERI ==========
+        function getJournalUrl(r) {
+            if (r.group_db_id && r.fan_id && r.semester_code) {
+                return journalBaseUrl + '/' + r.group_db_id + '/' + r.fan_id + '/' + r.semester_code;
+            }
+            return null;
+        }
+
         function renderTable(data) {
             var html = '';
             for (var i = 0; i < data.length; i++) {
@@ -447,18 +455,27 @@
 
                 var isOk = r.xulosa_code === 'ok';
                 var rowClass = r.xulosa_code === 'uploaded' ? 'journal-row row-uploaded' : 'journal-row';
+                var jUrl = getJournalUrl(r);
+
+                var nameCell = jUrl
+                    ? '<a href="' + jUrl + '" target="_blank" class="journal-link">' + esc(r.full_name) + '</a>'
+                    : '<span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
+
+                var fanCell = jUrl
+                    ? '<a href="' + jUrl + '" target="_blank" class="journal-link">' + esc(r.fan_name) + '</a>'
+                    : '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';
 
                 html += '<tr class="' + rowClass + '" id="row-' + r.id + '">';
                 html += '<td style="padding-left:14px;"><input type="checkbox" class="row-checkbox cb-styled" value="' + r.id + '"' + (r.xulosa_code === 'uploaded' ? ' disabled' : '') + '></td>';
                 html += '<td class="td-num">' + (i + 1) + '</td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.student_id) + '</span></td>';
-                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
+                html += '<td>' + nameCell + '</td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.faculty) + '</span></td>';
                 html += '<td><span class="text-cell text-cyan">' + esc(r.direction) + '</span></td>';
                 html += '<td><span class="badge" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;">' + esc(r.kurs) + '</span></td>';
                 html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
                 html += '<td><span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">' + esc(r.group) + '</span></td>';
-                html += '<td><span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span></td>';
+                html += '<td>' + fanCell + '</td>';
                 html += '<td style="text-align:center;">' + ynBadge + '</td>';
                 html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade">' + esc(r.grade) + '</span></td>';
@@ -781,6 +798,10 @@
         .text-cell { font-size: 12px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 200px; white-space: normal; word-break: break-word; }
+
+        /* === JOURNAL LINK === */
+        .journal-link { font-size: 12px; font-weight: 700; color: #1d4ed8; text-decoration: none; display: block; line-height: 1.35; cursor: pointer; }
+        .journal-link:hover { color: #1e40af; text-decoration: underline; }
 
         /* === CHECKBOX === */
         .cb-styled { width: 16px; height: 16px; accent-color: #2b5ea7; cursor: pointer; }

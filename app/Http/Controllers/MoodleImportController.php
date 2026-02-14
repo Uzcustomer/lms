@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -148,5 +149,37 @@ class MoodleImportController extends Controller
         }
 
         return response()->json(['ok' => false, 'error' => 'Unknown mode'], 422);
+    }
+
+    /**
+     * Moodle tomonidan chaqiriladigan endpoint — sync kerakmi tekshirish.
+     * Agar flag mavjud bo'lsa, uni o'chirib "trigger: true" qaytaradi.
+     */
+    public function shouldSync(Request $request): JsonResponse
+    {
+        $secret = (string) env('MOODLE_SYNC_SECRET', '');
+        $got = (string) $request->header('X-SYNC-SECRET', '');
+
+        if ($secret === '' || !hash_equals($secret, $got)) {
+            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 403);
+        }
+
+        $requested = Setting::get('moodle_sync_requested');
+
+        if ($requested) {
+            // Flag ni tozalash — faqat bir marta ishga tushadi
+            Setting::set('moodle_sync_requested', null);
+
+            return response()->json([
+                'ok' => true,
+                'trigger' => true,
+                'requested_at' => $requested,
+            ]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'trigger' => false,
+        ]);
     }
 }

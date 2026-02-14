@@ -894,13 +894,12 @@ class JournalController extends Controller
         $teacherName = $lectureTeacher['name'] ?? ($practiceTeachers[0]['name'] ?? '');
 
         // ===== Dars ochish: o'tkazib yuborilgan kunlarni aniqlash =====
-        // Jadvalda dars bor lekin na baho na davomat qo'yilmagan kunlar
-        // Faqat haqiqiy (effective) bahosi bor yozuvlarni hisobga olish:
-        // pending, absent (grade=null), teacher_victim (grade=0, retake=null) kabi
-        // yozuvlar "qo'yilgan baho" sifatida hisoblanmasligi kerak
+        // Jadvalda dars bor lekin haqiqiy baho qo'yilmagan kunlar.
+        // Faqat effective (haqiqiy) bahosi bor yozuvlar hisobga olinadi.
+        // Davomat yozuvlari (attendance) buni bloklamaydi — chunki davomat
+        // belgilangan bo'lsa ham, baho qo'yilmagan bo'lishi mumkin.
         $jbGradeDates = collect($jbGradesRaw)->filter(fn($g) => $getEffectiveGrade($g) !== null)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
         $jbAttendanceDates = collect($jbAttendanceRaw)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
-        $jbRecordedDates = array_unique(array_merge($jbGradeDates, $jbAttendanceDates));
 
         $missedDates = [];
         $today = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
@@ -908,8 +907,8 @@ class JournalController extends Controller
             $dateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
             // Faqat o'tgan kunlarni tekshirish (bugundan oldingi)
             if ($dateStr >= $today) continue;
-            // Baho ham davomat ham yo'q bo'lsa — missed
-            if (!in_array($dateStr, $jbRecordedDates)) {
+            // Haqiqiy baho yo'q bo'lsa — missed (davomat buni bloklamaydi)
+            if (!in_array($dateStr, $jbGradeDates)) {
                 $missedDates[] = $dateStr;
             }
         }
@@ -924,7 +923,7 @@ class JournalController extends Controller
             $attendanceCountForDate = collect($jbAttendanceRaw)->filter(fn($a) => \Carbon\Carbon::parse($a->lesson_date)->format('Y-m-d') === $dateStr)->count();
             $isInGradeDates = in_array($dateStr, $jbGradeDates);
             $isInAttendanceDates = in_array($dateStr, $jbAttendanceDates);
-            $isInRecordedDates = in_array($dateStr, $jbRecordedDates);
+            $isInRecordedDates = in_array($dateStr, $jbGradeDates);
             $isMissed = in_array($dateStr, $missedDates);
             $isPast = $dateStr < $today;
             $debugMissedDates[] = [
@@ -950,7 +949,7 @@ class JournalController extends Controller
             'jbGradeDates_filtered' => $jbGradeDates,
             'jbGradeDates_all_raw' => $allJbGradeDatesRaw,
             'jbAttendanceDates' => $jbAttendanceDates,
-            'jbRecordedDates' => array_values($jbRecordedDates),
+            'jbRecordedDates' => array_values($jbGradeDates),
             'missedDates' => $missedDates,
             'lessonOpeningsMap_keys' => array_keys($lessonOpeningsMap ?? []),
             'dates_detail' => $debugMissedDates,

@@ -308,7 +308,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         // Ma'ruza jadvalini joylashtirish
-        Route::get('/lecture-schedule', [LectureScheduleController::class, 'index'])->name('lecture-schedule.index');
+        Route::prefix('lecture-schedule')->name('lecture-schedule.')->group(function () {
+            Route::get('/', [LectureScheduleController::class, 'index'])->name('index');
+            Route::post('/import', [LectureScheduleController::class, 'import'])->name('import');
+            Route::get('/data', [LectureScheduleController::class, 'data'])->name('data');
+            Route::get('/compare', [LectureScheduleController::class, 'compare'])->name('compare');
+            Route::get('/conflicts', [LectureScheduleController::class, 'conflicts'])->name('conflicts');
+            Route::delete('/{id}', [LectureScheduleController::class, 'destroy'])->name('destroy');
+            Route::get('/template', [LectureScheduleController::class, 'downloadTemplate'])->name('template');
+        });
 
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
         Route::post('/impersonate/student/{student}', [ImpersonateController::class, 'impersonateStudent'])->name('impersonate.student');
@@ -533,7 +541,15 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         });
 
         // Ma'ruza jadvalini joylashtirish
-        Route::get('/lecture-schedule', [LectureScheduleController::class, 'index'])->name('lecture-schedule.index');
+        Route::prefix('lecture-schedule')->name('lecture-schedule.')->group(function () {
+            Route::get('/', [LectureScheduleController::class, 'index'])->name('index');
+            Route::post('/import', [LectureScheduleController::class, 'import'])->name('import');
+            Route::get('/data', [LectureScheduleController::class, 'data'])->name('data');
+            Route::get('/compare', [LectureScheduleController::class, 'compare'])->name('compare');
+            Route::get('/conflicts', [LectureScheduleController::class, 'conflicts'])->name('conflicts');
+            Route::delete('/{id}', [LectureScheduleController::class, 'destroy'])->name('destroy');
+            Route::get('/template', [LectureScheduleController::class, 'downloadTemplate'])->name('template');
+        });
 
         Route::get('/get-groups/semester', [LessonController::class, 'getGroups_semester'])->name('get.groups_semester');
         Route::get('/get-students', [LessonController::class, 'getStudents'])->name('get.students');

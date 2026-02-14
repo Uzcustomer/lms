@@ -75,7 +75,7 @@
             Dashboard
         </a>
 
-        @if($isTeacher || $hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oqituvchi', 'kafedra_mudiri', 'fan_masuli']))
+        @if(($isTeacher || $hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oqituvchi', 'kafedra_mudiri', 'fan_masuli'])) && !$hasActiveRole('oquv_bolimi'))
         <a href="{{ route('admin.journal.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.journal.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +85,7 @@
         </a>
         @endif
 
-        @if(!$hasActiveRole('test_markazi'))
+        @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi']))
         <a href="{{ $r('admin.students.index', $hasActiveRole('registrator_ofisi') ? null : 'teacher.students') }}"
            class="sidebar-link {{ $isActive('admin.students.*', 'teacher.students') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,7 +140,7 @@
             </svg>
             Yuklangan natijalar
         </a>
-        @else
+        @elseif(!$hasActiveRole('oquv_bolimi'))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         <div class="sidebar-section">Qo'shimcha</div>
 
@@ -245,7 +245,7 @@
         </a>
         @endif
 
-        @if(!$hasActiveRole('test_markazi'))
+        @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi']))
         <a href="{{ $r('admin.qaytnoma.index', 'teacher.qaytnoma.index') }}"
            class="sidebar-link {{ $isActive('admin.qaytnoma.*', 'teacher.qaytnoma.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,9 +255,10 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oquv_bolimi']))
         <div class="sidebar-section">Hisobotlar</div>
 
+        @if(!$hasActiveRole('oquv_bolimi'))
         <a href="{{ route('admin.reports.jn') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.jn') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -265,6 +266,7 @@
             </svg>
             JN o'zlashtirish
         </a>
+        @endif
 
         <a href="{{ route('admin.reports.lesson-assignment') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.lesson-assignment*') ? 'sidebar-active' : '' }}">
@@ -274,7 +276,7 @@
             Dars belgilash
         </a>
 
-        @if(!$hasActiveRole(['dekan']))
+        @if(!$hasActiveRole(['dekan', 'oquv_bolimi']))
         <a href="{{ route('admin.reports.schedule-report') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.schedule-report*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,6 +286,7 @@
         </a>
         @endif
 
+        @if(!$hasActiveRole('oquv_bolimi'))
         <a href="{{ route('admin.absence_report.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.absence_report.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -326,6 +329,7 @@
             </svg>
             Sababli check
         </a>
+        @endif
         @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya', 'registrator_ofisi']))

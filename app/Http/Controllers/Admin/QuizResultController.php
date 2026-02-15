@@ -63,70 +63,83 @@ class QuizResultController extends Controller
      */
     public function yuklanmaganNatijalar(Request $request)
     {
-        $query = HemisQuizResult::where('is_active', 1)
-            ->whereNotIn('id', function ($q) {
-                $q->select('quiz_result_id')
-                  ->from('student_grades')
-                  ->where('reason', 'quiz_result')
-                  ->whereNotNull('quiz_result_id');
+        try {
+            // LEFT JOIN orqali yuklanmaganlarni topish (NOT IN dan samaraliroq)
+            $query = HemisQuizResult::where('hemis_quiz_results.is_active', 1)
+                ->leftJoin('student_grades', function ($join) {
+                    $join->on('hemis_quiz_results.id', '=', 'student_grades.quiz_result_id')
+                         ->where('student_grades.reason', '=', 'quiz_result');
+                })
+                ->whereNull('student_grades.id')
+                ->select('hemis_quiz_results.*');
+
+            // Joriy semestr filtri
+            if ($request->get('current_semester', '0') == '1') {
+                $currentSemesterCodes = Semester::where('current', true)
+                    ->pluck('code')
+                    ->unique()
+                    ->toArray();
+
+                if (!empty($currentSemesterCodes)) {
+                    $studentIds = Student::whereIn('semester_code', $currentSemesterCodes)
+                        ->pluck('hemis_id')
+                        ->toArray();
+
+                    $studentIdNumbers = Student::whereIn('semester_code', $currentSemesterCodes)
+                        ->whereNotNull('student_id_number')
+                        ->pluck('student_id_number')
+                        ->toArray();
+
+                    $allIds = array_unique(array_merge($studentIds, $studentIdNumbers));
+
+                    $query->whereIn('hemis_quiz_results.student_id', $allIds);
+                }
+            }
+
+            // Sana filtrlari
+            if ($request->filled('date_from')) {
+                $query->whereDate('hemis_quiz_results.date_finish', '>=', $request->date_from);
+            }
+            if ($request->filled('date_to')) {
+                $query->whereDate('hemis_quiz_results.date_finish', '<=', $request->date_to);
+            }
+
+            $results = $query->orderByDesc('hemis_quiz_results.date_finish')->get();
+
+            $data = $results->map(function ($item, $i) {
+                return [
+                    'id'           => $item->id,
+                    'row_num'      => $i + 1,
+                    'attempt_id'   => $item->attempt_id,
+                    'student_id'   => $item->student_id,
+                    'student_name' => $item->student_name,
+                    'faculty'      => $item->faculty,
+                    'direction'    => $item->direction,
+                    'semester'     => $item->semester,
+                    'fan_id'       => $item->fan_id,
+                    'fan_name'     => $item->fan_name,
+                    'quiz_type'    => $item->quiz_type,
+                    'attempt_name' => $item->attempt_name,
+                    'shakl'        => $item->shakl,
+                    'grade'        => $item->grade,
+                    'date_start'   => $item->date_start ? $item->date_start->format('d.m.Y H:i') : '',
+                    'date_finish'  => $item->date_finish ? $item->date_finish->format('d.m.Y H:i') : '',
+                ];
             });
 
-        // Joriy semestr filtri
-        if ($request->get('current_semester', '0') == '1') {
-            $currentSemesterCodes = Semester::where('current', true)
-                ->pluck('code')
-                ->unique()
-                ->toArray();
+            return response()->json([
+                'data' => $data->values(),
+                'total' => $data->count(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('yuklanmaganNatijalar xatolik: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
 
-            $query->where(function ($q) use ($currentSemesterCodes) {
-                $q->whereIn('student_id', function ($sub) use ($currentSemesterCodes) {
-                    $sub->select('hemis_id')
-                        ->from('students')
-                        ->whereIn('semester_code', $currentSemesterCodes);
-                })->orWhereIn('student_id', function ($sub) use ($currentSemesterCodes) {
-                    $sub->select('student_id_number')
-                        ->from('students')
-                        ->whereIn('semester_code', $currentSemesterCodes)
-                        ->whereNotNull('student_id_number');
-                });
-            });
+            return response()->json([
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-        // Sana filtrlari
-        if ($request->filled('date_from')) {
-            $query->whereDate('date_finish', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->whereDate('date_finish', '<=', $request->date_to);
-        }
-
-        $results = $query->orderByDesc('date_finish')->get();
-
-        $data = $results->map(function ($item, $i) {
-            return [
-                'id'           => $item->id,
-                'row_num'      => $i + 1,
-                'attempt_id'   => $item->attempt_id,
-                'student_id'   => $item->student_id,
-                'student_name' => $item->student_name,
-                'faculty'      => $item->faculty,
-                'direction'    => $item->direction,
-                'semester'     => $item->semester,
-                'fan_id'       => $item->fan_id,
-                'fan_name'     => $item->fan_name,
-                'quiz_type'    => $item->quiz_type,
-                'attempt_name' => $item->attempt_name,
-                'shakl'        => $item->shakl,
-                'grade'        => $item->grade,
-                'date_start'   => $item->date_start ? $item->date_start->format('d.m.Y H:i') : '',
-                'date_finish'  => $item->date_finish ? $item->date_finish->format('d.m.Y H:i') : '',
-            ];
-        });
-
-        return response()->json([
-            'data' => $data->values(),
-            'total' => $data->count(),
-        ]);
     }
 
     /**

@@ -412,27 +412,12 @@
         {{-- ===== TAB 3: XONALAR KESIMIDA ===== --}}
         <div x-show="activeTab === 'xonalar'" x-cloak class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                {{-- Kun tanlash --}}
-                <div class="p-4 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center gap-3">
-                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Kun:</span>
-                        <div class="flex flex-wrap gap-2">
-                            <template x-for="(dayName, dayNum) in days" :key="'rd-' + dayNum">
-                                <button @click="roomViewDay = dayNum"
-                                        class="room-pill"
-                                        :class="String(roomViewDay) === String(dayNum) ? 'room-pill-active' : 'room-pill-inactive'"
-                                        x-text="dayName"></button>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Xonalar jadvali: ustunlar = xonalar, qatorlar = juftliklar --}}
-                <div x-show="allRooms.length > 0 && roomViewDay" class="overflow-x-auto">
-                    <table class="w-full border-collapse" :style="'min-width:' + (120 + allRooms.length * 160) + 'px'">
-                        <thead>
+                {{-- Xonalar jadvali: ustunlar = xonalar, qatorlar = kunlar + juftliklar --}}
+                <div x-show="allRooms.length > 0" class="overflow-x-auto">
+                    <table class="w-full border-collapse" :style="'min-width:' + (160 + allRooms.length * 160) + 'px'">
+                        <thead class="sticky top-0 z-10">
                             <tr>
-                                <th class="asc-header asc-time-col">Juftlik</th>
+                                <th class="asc-header" style="width:160px;min-width:160px">Kun / Juftlik</th>
                                 <template x-for="room in allRooms" :key="'rh-' + room">
                                     <th class="asc-header" style="min-width:150px">
                                         <div class="flex items-center justify-center gap-1">
@@ -444,30 +429,32 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template x-for="pair in pairs" :key="'rv-' + pair.code">
-                                <tr>
-                                    <td class="asc-time-cell">
-                                        <div class="font-semibold text-sm" x-text="pair.name"></div>
-                                        <div class="text-xs text-gray-400 mt-0.5">
-                                            <span x-text="pair.start ? pair.start.substring(0,5) : ''"></span>
-                                            <span x-show="pair.start && pair.end"> - </span>
-                                            <span x-text="pair.end ? pair.end.substring(0,5) : ''"></span>
-                                        </div>
-                                    </td>
-                                    <template x-for="room in allRooms" :key="'rv-' + room + '-' + pair.code">
-                                        <td class="asc-cell">
-                                            <template x-for="card in getRoomDayCards(room, roomViewDay, pair.code)" :key="'rvc-' + card.id">
-                                                <div class="asc-card asc-card-not-checked" @click.stop="openEditModal(card)" style="cursor:pointer">
-                                                    <div class="asc-card-subject" x-text="card.subject_name"></div>
-                                                    <div class="asc-card-teacher" x-text="card.employee_name || ''"></div>
-                                                    <div class="asc-card-group" x-text="card.group_source || card.group_name"></div>
-                                                    <div x-show="card.week_parity" class="text-[0.6rem] mt-0.5 opacity-60 italic" x-text="card.week_parity"></div>
-                                                </div>
-                                            </template>
-                                            <div x-show="getRoomDayCards(room, roomViewDay, pair.code).length === 0" class="min-h-[40px]"></div>
+                            <template x-for="(dayName, dayNum) in days" :key="'rvd-' + dayNum">
+                                <template x-for="(pair, pi) in pairs" :key="'rvp-' + dayNum + '-' + pair.code">
+                                    <tr>
+                                        {{-- Kun nomi + juftlik --}}
+                                        <td class="asc-time-cell" style="width:160px;min-width:160px">
+                                            <div x-show="pi === 0" class="font-bold text-sm text-blue-700 dark:text-blue-400 mb-0.5" x-text="dayName"></div>
+                                            <div class="font-semibold text-xs" :class="pi === 0 ? '' : 'mt-0'" x-text="pair.name"></div>
+                                            <div class="text-[0.65rem] text-gray-400 mt-0.5">
+                                                <span x-text="pair.start ? pair.start.substring(0,5) : ''"></span><span x-show="pair.start && pair.end"> - </span><span x-text="pair.end ? pair.end.substring(0,5) : ''"></span>
+                                            </div>
                                         </td>
-                                    </template>
-                                </tr>
+                                        {{-- Har bir xona uchun katak --}}
+                                        <template x-for="room in allRooms" :key="'rvc-' + dayNum + '-' + pair.code + '-' + room">
+                                            <td class="asc-cell" :class="pi === 0 && 'border-t-2 border-t-blue-200 dark:border-t-blue-800'">
+                                                <template x-for="card in getRoomDayCards(room, dayNum, pair.code)" :key="'rvcc-' + card.id">
+                                                    <div class="asc-card asc-card-not-checked" @click.stop="openEditModal(card)" style="cursor:pointer">
+                                                        <div class="asc-card-subject" x-text="card.subject_name"></div>
+                                                        <div class="asc-card-teacher" x-text="card.employee_name || ''"></div>
+                                                        <div class="asc-card-group" x-text="card.group_source || card.group_name"></div>
+                                                        <div x-show="card.week_parity" class="text-[0.6rem] mt-0.5 opacity-60 italic" x-text="card.week_parity"></div>
+                                                    </div>
+                                                </template>
+                                            </td>
+                                        </template>
+                                    </tr>
+                                </template>
                             </template>
                         </tbody>
                     </table>
@@ -882,7 +869,6 @@
             activeBatchId: {{ $activeBatch->id ?? 'null' }},
             currentWeek: 0, // 0 = barchasi, 1-15 = aniq hafta
             activeTab: 'jadval', // 'jadval' | 'xatolar' | 'xonalar'
-            roomViewDay: '1', // xonalar kesimida tanlangan kun
             gridItems: {},
             pairs: [],
             days: {},

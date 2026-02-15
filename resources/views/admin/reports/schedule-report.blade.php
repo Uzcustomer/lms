@@ -96,6 +96,15 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                        <div class="filter-item" style="flex: 1; min-width: 240px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Ma'ruza xonalari</label>
+                            <div style="display:flex;gap:4px;align-items:center;">
+                                <select id="auditorium" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                                <button type="button" id="btn-sync-auditoriums" class="btn-sync" onclick="syncAuditoriums()" title="HEMIS dan sinxronlash">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                </button>
+                            </div>
+                        </div>
                         <div class="filter-item" style="min-width: 290px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
@@ -191,6 +200,7 @@
                 group: $('#group').val() || '',
                 department: $('#department').val() || '',
                 subject: $('#subject').val() || '',
+                auditorium: $('#auditorium').val() || '',
                 date_from: $('#date_from').val() || '',
                 date_to: $('#date_to').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
@@ -201,6 +211,45 @@
             var tt = $('#training_types').val();
             if (tt && tt.length > 0) params.training_types = tt;
             return params;
+        }
+
+        function syncAuditoriums() {
+            var btn = document.getElementById('btn-sync-auditoriums');
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.innerHTML = '<svg style="width:14px;height:14px;animation:spin 0.8s linear infinite;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
+
+            $.ajax({
+                url: '{{ route("admin.reports.schedule-report.sync-auditoriums") }}',
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                timeout: 60000,
+                success: function(res) {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.innerHTML = '<svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
+                    loadAuditoriums();
+                    alert(res.message || 'Sinxronlashtirildi');
+                },
+                error: function(xhr) {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.innerHTML = '<svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
+                    var errMsg = 'Xatolik yuz berdi';
+                    try { errMsg = JSON.parse(xhr.responseText).error || errMsg; } catch(e) {}
+                    alert(errMsg);
+                }
+            });
+        }
+
+        function loadAuditoriums() {
+            var el = '#auditorium';
+            $(el).empty().append('<option value="">Barchasi</option>');
+            $.get('{{ route("admin.reports.schedule-report.get-auditoriums") }}', {}, function(d) {
+                $.each(d, function(k, v) {
+                    $(el).append('<option value="' + k + '">' + v + '</option>');
+                });
+            });
         }
 
         function loadReport(page) {
@@ -401,6 +450,7 @@
             pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code');
             pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject');
             pd('{{ route("admin.journal.get-groups") }}', fp(), '#group');
+            loadAuditoriums();
         });
     </script>
 
@@ -422,6 +472,10 @@
         .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
         .btn-excel:disabled { cursor: not-allowed; opacity: 0.5; }
+
+        .btn-sync { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: linear-gradient(135deg, #6366f1, #818cf8); color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(99,102,241,0.3); flex-shrink: 0; }
+        .btn-sync:hover:not(:disabled) { background: linear-gradient(135deg, #4f46e5, #6366f1); box-shadow: 0 4px 10px rgba(99,102,241,0.4); transform: translateY(-1px); }
+        .btn-sync:disabled { cursor: not-allowed; opacity: 0.5; }
 
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }

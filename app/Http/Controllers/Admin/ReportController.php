@@ -989,6 +989,9 @@ class ReportController extends Controller
         if ($request->filled('date_to')) {
             $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
         }
+        if ($request->filled('auditorium')) {
+            $scheduleQuery->where('sch.auditorium_code', $request->auditorium);
+        }
 
         $scheduleRows = $scheduleQuery
             ->select(
@@ -1170,6 +1173,82 @@ class ReportController extends Controller
         return response()->download($temp, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * AJAX: Auditoriyalar ro'yxatini dropdown uchun qaytarish
+     */
+    public function getAuditoriums(Request $request)
+    {
+        $query = \App\Models\Auditorium::where('active', true)
+            ->orderBy('name');
+
+        if ($request->filled('building_id')) {
+            $query->where('building_id', $request->building_id);
+        }
+
+        if ($request->filled('auditorium_type_code')) {
+            $query->where('auditorium_type_code', $request->auditorium_type_code);
+        }
+
+        return $query->select('code', 'name')
+            ->get()
+            ->pluck('name', 'code');
+    }
+
+    /**
+     * AJAX: HEMIS API dan auditoriyalarni sinxronlashtirish
+     */
+    public function syncAuditoriums()
+    {
+        try {
+            $token = config('services.hemis.token');
+            $page = 1;
+            $pageSize = 40;
+            $totalImported = 0;
+
+            do {
+                $response = Http::withoutVerifying()
+                    ->withToken($token)
+                    ->timeout(30)
+                    ->get("https://student.ttatf.uz/rest/v1/data/auditorium-list?limit=$pageSize&page=$page");
+
+                if (!$response->successful()) {
+                    return response()->json(['error' => 'HEMIS API dan ma\'lumot olishda xatolik'], 500);
+                }
+
+                $data = $response->json()['data'];
+                $items = $data['items'];
+                $totalPages = $data['pagination']['pageCount'];
+
+                foreach ($items as $item) {
+                    \App\Models\Auditorium::updateOrCreate(
+                        ['code' => $item['code']],
+                        [
+                            'name' => $item['name'],
+                            'volume' => $item['volume'] ?? 0,
+                            'active' => $item['active'] ?? true,
+                            'building_id' => $item['building']['id'] ?? null,
+                            'building_name' => $item['building']['name'] ?? null,
+                            'auditorium_type_code' => $item['auditoriumType']['code'] ?? null,
+                            'auditorium_type_name' => $item['auditoriumType']['name'] ?? null,
+                        ]
+                    );
+                    $totalImported++;
+                }
+
+                $page++;
+            } while ($page <= $totalPages);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Jami {$totalImported} ta auditoriya sinxronlashtirildi",
+                'total' => $totalImported,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Auditorium sync error: ' . $e->getMessage());
+            return response()->json(['error' => 'Sinxronlashtirishda xatolik: ' . $e->getMessage()], 500);
+        }
     }
 
     /**

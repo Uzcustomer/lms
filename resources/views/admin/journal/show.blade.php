@@ -2254,7 +2254,6 @@
         }
 
         // ===== Mavzular =====
-        const excludedCodes = [11, 99, 100, 101, 102];
         let allTopics = [];
         let currentTopicTab = 'lecture';
 
@@ -2270,9 +2269,9 @@
             return allTopics.filter(t => {
                 const type = parseInt(t._training_type) || 0;
                 if (tab === 'lecture') return type === 11;
-                if (tab === 'independent') return type === 99;
-                // practice = excludedCodes da bo'lmagan hammasi
-                return !excludedCodes.includes(type);
+                if (tab === 'independent') return type === 17;
+                // practice = Ma'ruza (11) va Mustaqil ta'lim (17) dan tashqari hammasi
+                return type !== 11 && type !== 17;
             }).sort((a, b) => (a.position || 0) - (b.position || 0));
         }
 

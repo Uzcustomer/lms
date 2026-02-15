@@ -61,12 +61,15 @@ class LectureScheduleConflictService
                 }
             }
 
-            // 2. Auditoriya konflikti: bitta xonaga bir vaqtda 2 guruh
+            // 2. Auditoriya konflikti: bitta xonaga bir vaqtda 2 ta TURLI dars
+            // Bir xil group_source ga ega guruhlar bitta auditoriyada — bu konflikt emas (birgalikda ma'ruza)
             $byRoom = $group->filter(fn($i) => $i->auditorium_name)
                 ->groupBy('auditorium_name');
 
             foreach ($byRoom as $roomName => $roomLessons) {
                 $overlapping = $this->filterOverlappingParity($roomLessons);
+                // Bir xil group_source bo'lsa — bitta ma'ruza, konflikt emas
+                $overlapping = $this->filterOutSameGroupSource($overlapping);
                 if ($overlapping->count() > 1) {
                     $ids = $overlapping->pluck('id')->toArray();
                     $groups = $overlapping->pluck('group_name')->implode(', ');
@@ -326,6 +329,35 @@ class LectureScheduleConflictService
         }
 
         return $extra;
+    }
+
+    /**
+     * Bir xil group_source ga ega elementlarni olib tashlash.
+     * Agar hammasi bitta group_source da bo'lsa — bu bitta ma'ruza, konflikt emas.
+     * Turli group_source yoki group_source bo'lmagan elementlar — potentsial konflikt.
+     */
+    private function filterOutSameGroupSource(Collection $items): Collection
+    {
+        if ($items->count() < 2) {
+            return $items;
+        }
+
+        // Hammasi bitta (bo'sh bo'lmagan) group_source ga ega bo'lsa — konflikt yo'q
+        $sources = $items->pluck('group_source')->filter()->unique();
+        if ($sources->count() === 1 && $items->every(fn($i) => !empty($i->group_source))) {
+            return collect();
+        }
+
+        // Agar turli group_source lar bo'lsa yoki ba'zilarida yo'q bo'lsa —
+        // bir xil group_source ichidagilarni birlashtirish, faqat turli group_source larni konflikt deb belgilash
+        $grouped = $items->groupBy(fn($i) => $i->group_source ?: 'no_source_' . $i->id);
+
+        // Agar faqat 1 ta guruh qolsa — konflikt yo'q
+        if ($grouped->count() < 2) {
+            return collect();
+        }
+
+        return $items;
     }
 
     /**

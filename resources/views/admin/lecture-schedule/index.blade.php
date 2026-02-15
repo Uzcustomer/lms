@@ -235,23 +235,11 @@
                                                     <div class="asc-card-subject" x-text="card.subject_name"></div>
                                                     <div class="asc-card-teacher" x-text="card.employee_name || ''"></div>
                                                     <div class="asc-card-meta">
-                                                        <span x-show="card.building_name" x-text="card.building_name"></span>
-                                                        <span x-show="card.building_name && card.floor">, </span>
-                                                        <span x-show="card.floor" x-text="card.floor + '-qavat'"></span>
-                                                        <span x-show="(card.building_name || card.floor) && card.auditorium_name"> | </span>
-                                                        <span x-show="card.auditorium_name" x-text="card.auditorium_name + '-xona'"></span>
+                                                        <span x-show="card.building_name || card.auditorium_name" x-text="[card.building_name, card.auditorium_name].filter(Boolean).join(', ')"></span>
                                                         <span x-show="card.training_type_name" class="mx-1">|</span>
                                                         <span x-show="card.training_type_name" class="asc-card-type" x-text="card.training_type_name"></span>
                                                     </div>
-                                                    <div class="asc-card-group">
-                                                        <span x-text="card.group_name"></span>
-                                                        <span x-show="card.group_source" class="text-gray-400 ml-1" x-text="'(' + card.group_source + ')'"></span>
-                                                    </div>
-                                                    <div x-show="card.weeks || card.week_parity" style="font-size:0.6rem;opacity:0.65;margin-top:1px;">
-                                                        <span x-show="card.weeks" x-text="card.weeks + '-haftalar'"></span>
-                                                        <span x-show="card.weeks && card.week_parity"> | </span>
-                                                        <span x-show="card.week_parity" x-text="card.week_parity"></span>
-                                                    </div>
+                                                    <div class="asc-card-group" x-text="card.group_source || card.group_name"></div>
                                                     <div class="asc-card-edit-icon">
                                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                                                     </div>
@@ -356,16 +344,12 @@
                             <input x-model="modal.form.employee_name" type="text" placeholder="F.I.O" class="ls-form-input">
                         </div>
                         <div class="ls-form-group">
-                            <label class="ls-form-label">Xona</label>
-                            <input x-model="modal.form.auditorium_name" type="text" placeholder="Xona raqami" class="ls-form-input">
-                        </div>
-                        <div class="ls-form-group">
-                            <label class="ls-form-label">Qavat</label>
-                            <input x-model="modal.form.floor" type="text" placeholder="3" class="ls-form-input">
-                        </div>
-                        <div class="ls-form-group">
                             <label class="ls-form-label">Bino</label>
                             <input x-model="modal.form.building_name" type="text" placeholder="Bosh bino" class="ls-form-input">
+                        </div>
+                        <div class="ls-form-group">
+                            <label class="ls-form-label">Auditoriya</label>
+                            <input x-model="modal.form.auditorium_name" type="text" placeholder="301" class="ls-form-input">
                         </div>
                         <div class="ls-form-group">
                             <label class="ls-form-label">Dars turi</label>
@@ -375,18 +359,6 @@
                                 <option value="Amaliy">Amaliy</option>
                                 <option value="Seminar">Seminar</option>
                                 <option value="Laboratoriya">Laboratoriya</option>
-                            </select>
-                        </div>
-                        <div class="ls-form-group">
-                            <label class="ls-form-label">Haftalar</label>
-                            <input x-model="modal.form.weeks" type="text" placeholder="1-16" class="ls-form-input">
-                        </div>
-                        <div class="ls-form-group">
-                            <label class="ls-form-label">Juft-toq</label>
-                            <select x-model="modal.form.week_parity" class="ls-form-input">
-                                <option value="">Har hafta</option>
-                                <option value="juft">Juft</option>
-                                <option value="toq">Toq</option>
                             </select>
                         </div>
                     </div>

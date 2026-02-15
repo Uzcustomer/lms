@@ -86,10 +86,25 @@ class LectureScheduleController extends Controller
             return response()->json(['items' => [], 'pairs' => []]);
         }
 
-        $items = LectureSchedule::where('batch_id', $batchId)
+        $query = LectureSchedule::where('batch_id', $batchId)
             ->orderBy('week_day')
-            ->orderBy('lesson_pair_code')
-            ->get();
+            ->orderBy('lesson_pair_code');
+
+        $items = $query->get();
+
+        // Hafta filtri: faqat tanlangan haftaga tegishli darslarni ko'rsatish
+        $week = $request->input('week');
+        if ($week) {
+            $week = (int) $week;
+            $items = $items->filter(function ($item) use ($week) {
+                // weeks bo'sh bo'lsa — barcha haftalarda ko'rinadi
+                if (empty($item->weeks)) {
+                    return true;
+                }
+
+                return $this->weekInRange($week, $item->weeks);
+            })->values();
+        }
 
         $pairs = $items->unique('lesson_pair_code')
             ->sortBy('lesson_pair_code')
@@ -308,5 +323,33 @@ class LectureScheduleController extends Controller
         $fileName = 'jadval_' . str_replace([' ', '.'], '_', $batch->file_name) . '_' . date('Y_m_d') . '.xlsx';
 
         return Excel::download(new LectureScheduleExport($batch), $fileName);
+    }
+
+    /**
+     * Hafta raqami berilgan oraliqqa kirishini tekshirish.
+     * Formatlar: "1-8", "9-15", "1-15", "3", yoki "1,3,5,7"
+     */
+    private function weekInRange(int $week, string $weeksStr): bool
+    {
+        $weeksStr = trim($weeksStr);
+
+        // "1-8" formatida oraliq
+        if (preg_match('/^(\d+)\s*-\s*(\d+)$/', $weeksStr, $m)) {
+            return $week >= (int) $m[1] && $week <= (int) $m[2];
+        }
+
+        // "1,3,5,7" formatida ro'yxat
+        if (str_contains($weeksStr, ',')) {
+            $weekList = array_map('intval', array_map('trim', explode(',', $weeksStr)));
+            return in_array($week, $weekList);
+        }
+
+        // Bitta raqam "3"
+        if (is_numeric($weeksStr)) {
+            return $week === (int) $weeksStr;
+        }
+
+        // Boshqa format — ko'rsatamiz (xavfsiz tarafdan)
+        return true;
     }
 }

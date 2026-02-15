@@ -39,13 +39,20 @@ class LectureScheduleConflictService
                 continue;
             }
 
-            // 1. O'qituvchi konflikti: bitta o'qituvchiga bir vaqtda 2 dars
+            // 1. O'qituvchi konflikti: bitta o'qituvchi bir vaqtda 2+ TURLI auditoriyada
+            // Bitta xonada ko'p guruhga ma'ruza o'qish — konflikt emas
             $byTeacher = $group->filter(fn($i) => $i->employee_name)
                 ->groupBy('employee_name');
 
             foreach ($byTeacher as $teacherName => $teacherLessons) {
                 $overlapping = $this->filterOverlappingParity($teacherLessons);
                 if ($overlapping->count() > 1) {
+                    // Hammasi BITTA auditoriyada bo'lsa — bitta ma'ruza, konflikt emas
+                    $uniqueRooms = $overlapping->pluck('auditorium_name')->filter()->unique();
+                    if ($uniqueRooms->count() <= 1 && $overlapping->every(fn($i) => !empty($i->auditorium_name))) {
+                        continue;
+                    }
+
                     $ids = $overlapping->pluck('id')->toArray();
                     $groups = $overlapping->pluck('group_name')->implode(', ');
                     $conflicts[] = [
@@ -61,16 +68,20 @@ class LectureScheduleConflictService
                 }
             }
 
-            // 2. Auditoriya konflikti: bitta xonaga bir vaqtda 2 ta TURLI dars
-            // Bir xil group_source ga ega guruhlar bitta auditoriyada — bu konflikt emas (birgalikda ma'ruza)
+            // 2. Auditoriya konflikti: bitta xonada bir vaqtda 2+ TURLI o'qituvchi
+            // Bitta o'qituvchi ko'p guruhga bitta xonada ma'ruza o'qishi — konflikt emas
             $byRoom = $group->filter(fn($i) => $i->auditorium_name)
                 ->groupBy('auditorium_name');
 
             foreach ($byRoom as $roomName => $roomLessons) {
                 $overlapping = $this->filterOverlappingParity($roomLessons);
-                // Bir xil group_source bo'lsa — bitta ma'ruza, konflikt emas
-                $overlapping = $this->filterOutSameGroupSource($overlapping);
                 if ($overlapping->count() > 1) {
+                    // Hammasi BITTA o'qituvchida bo'lsa — bitta ma'ruza, konflikt emas
+                    $uniqueTeachers = $overlapping->pluck('employee_name')->filter()->unique();
+                    if ($uniqueTeachers->count() <= 1) {
+                        continue;
+                    }
+
                     $ids = $overlapping->pluck('id')->toArray();
                     $groups = $overlapping->pluck('group_name')->implode(', ');
                     $conflicts[] = [
@@ -329,35 +340,6 @@ class LectureScheduleConflictService
         }
 
         return $extra;
-    }
-
-    /**
-     * Bir xil group_source ga ega elementlarni olib tashlash.
-     * Agar hammasi bitta group_source da bo'lsa — bu bitta ma'ruza, konflikt emas.
-     * Turli group_source yoki group_source bo'lmagan elementlar — potentsial konflikt.
-     */
-    private function filterOutSameGroupSource(Collection $items): Collection
-    {
-        if ($items->count() < 2) {
-            return $items;
-        }
-
-        // Hammasi bitta (bo'sh bo'lmagan) group_source ga ega bo'lsa — konflikt yo'q
-        $sources = $items->pluck('group_source')->filter()->unique();
-        if ($sources->count() === 1 && $items->every(fn($i) => !empty($i->group_source))) {
-            return collect();
-        }
-
-        // Agar turli group_source lar bo'lsa yoki ba'zilarida yo'q bo'lsa —
-        // bir xil group_source ichidagilarni birlashtirish, faqat turli group_source larni konflikt deb belgilash
-        $grouped = $items->groupBy(fn($i) => $i->group_source ?: 'no_source_' . $i->id);
-
-        // Agar faqat 1 ta guruh qolsa — konflikt yo'q
-        if ($grouped->count() < 2) {
-            return collect();
-        }
-
-        return $items;
     }
 
     /**

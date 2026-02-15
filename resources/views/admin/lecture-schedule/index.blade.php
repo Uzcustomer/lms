@@ -88,6 +88,22 @@
                         </select>
                     </div>
 
+                    {{-- Hafta navigatsiyasi --}}
+                    <div class="flex items-center gap-1">
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0 mr-1">Hafta:</label>
+                        <button @click="prevWeek()" :disabled="currentWeek <= 0"
+                                class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                        </button>
+                        <span class="px-3 py-1.5 text-sm font-semibold rounded-lg min-w-[80px] text-center"
+                              :class="currentWeek === 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' : 'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'"
+                              x-text="currentWeek === 0 ? 'Barchasi' : currentWeek + '-hafta'"></span>
+                        <button @click="nextWeek()" :disabled="currentWeek >= 15"
+                                class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </button>
+                    </div>
+
                     <button @click="compareHemis()" :disabled="comparing"
                             class="btn-action btn-compare group">
                         <svg x-show="!comparing" class="w-4 h-4 transition-transform duration-300 group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
@@ -667,6 +683,7 @@
 
         return {
             activeBatchId: {{ $activeBatch->id ?? 'null' }},
+            currentWeek: 0, // 0 = barchasi, 1-15 = aniq hafta
             gridItems: {},
             pairs: [],
             days: {},
@@ -712,13 +729,31 @@
                 this.ctxMenu.show = false;
             },
 
+            // ===== HAFTA NAVIGATSIYA =====
+            prevWeek() {
+                if (this.currentWeek > 0) {
+                    this.currentWeek--;
+                    this.loadGrid();
+                }
+            },
+            nextWeek() {
+                if (this.currentWeek < 15) {
+                    this.currentWeek++;
+                    this.loadGrid();
+                }
+            },
+
             // ===== GRID LOADING =====
             async loadGrid() {
                 if (!this.activeBatchId) return;
                 this.loading = true;
                 this.hemisResult = null;
                 try {
-                    const res = await fetch('{{ route($routePrefix . ".lecture-schedule.data") }}?batch_id=' + this.activeBatchId);
+                    let url = '{{ route($routePrefix . ".lecture-schedule.data") }}?batch_id=' + this.activeBatchId;
+                    if (this.currentWeek > 0) {
+                        url += '&week=' + this.currentWeek;
+                    }
+                    const res = await fetch(url);
                     const data = await res.json();
                     this.gridItems = data.items || {};
                     this.pairs = data.pairs || [];

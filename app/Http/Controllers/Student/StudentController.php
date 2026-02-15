@@ -1034,7 +1034,7 @@ class StudentController extends Controller
             'file' => [
                 'required',
                 'file',
-                'max:2048',
+                'max:10240',
                 function ($attribute, $value, $fail) use ($allowedExtensions) {
                     $clientExt = strtolower($value->getClientOriginalExtension());
                     $guessedExt = $value->guessExtension();
@@ -1045,7 +1045,7 @@ class StudentController extends Controller
             ],
         ], [
             'file.required' => 'Fayl yuklash majburiy',
-            'file.max' => 'Fayl hajmi 2MB dan oshmasligi kerak',
+            'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
         ]);
 
         $file = $request->file('file');

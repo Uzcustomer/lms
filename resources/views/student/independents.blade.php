@@ -32,6 +32,20 @@
                         </div>
                     @endif
 
+                    {{-- Compression overlay --}}
+                    <div id="compress-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; display:none; align-items:center; justify-content:center;">
+                        <div style="background:white; border-radius:12px; padding:24px 32px; text-align:center; max-width:360px;">
+                            <div style="margin-bottom:12px;">
+                                <svg class="animate-spin inline h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                            </div>
+                            <p id="compress-status" style="font-size:14px; color:#1e40af; font-weight:600;">Fayl siqilmoqda...</p>
+                            <p id="compress-detail" style="font-size:12px; color:#6b7280; margin-top:4px;"></p>
+                        </div>
+                    </div>
+
                     @if($independents->count() > 0)
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
@@ -137,42 +151,40 @@
                                                     </div>
                                                     @if($item['can_resubmit'])
                                                         <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}"
-                                                              enctype="multipart/form-data" class="mt-2">
+                                                              enctype="multipart/form-data" class="mt-2 mt-upload-form">
                                                             @csrf
                                                             <label class="cursor-pointer text-xs text-orange-500 hover:text-orange-700 underline">
                                                                 Qayta yuklash ({{ $item['remaining_attempts'] }} marta qoldi)
-                                                                <input type="file" name="file" class="hidden"
-                                                                       accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
-                                                                       onchange="this.form.submit()">
+                                                                <input type="file" name="file" class="hidden mt-file-input"
+                                                                       accept=".zip,.doc,.docx,.ppt,.pptx,.pdf">
                                                             </label>
                                                         </form>
                                                     @elseif($item['grade'] !== null && $item['grade'] < ($minimumLimit ?? 60) && $item['remaining_attempts'] <= 0)
                                                         <p class="text-xs text-red-400 mt-1">MT topshirig'ini qayta yuklash imkoniyati tugagan</p>
                                                     @elseif(!$item['is_overdue'] && $item['grade'] === null)
                                                         <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}"
-                                                              enctype="multipart/form-data" class="inline mt-2">
+                                                              enctype="multipart/form-data" class="inline mt-2 mt-upload-form">
                                                             @csrf
                                                             <label class="cursor-pointer text-xs text-orange-500 hover:text-orange-700 underline">
                                                                 Qayta yuklash
-                                                                <input type="file" name="file" class="hidden"
-                                                                       accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
-                                                                       onchange="this.form.submit()">
+                                                                <input type="file" name="file" class="hidden mt-file-input"
+                                                                       accept=".zip,.doc,.docx,.ppt,.pptx,.pdf">
                                                             </label>
                                                         </form>
                                                     @endif
                                                 @elseif(!$item['is_overdue'])
                                                     <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}"
-                                                          enctype="multipart/form-data" class="flex items-center space-x-2">
+                                                          enctype="multipart/form-data" class="flex items-center space-x-2 mt-upload-form">
                                                         @csrf
                                                         <input type="file" name="file" required
                                                                accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
-                                                               class="text-xs w-40 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                                               class="text-xs w-40 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mt-file-input">
                                                         <button type="submit"
                                                                 class="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600">
                                                             Yuklash
                                                         </button>
                                                     </form>
-                                                    <p class="text-xs text-gray-400 mt-1">Max 2MB (zip, doc, ppt, pdf)</p>
+                                                    <p class="text-xs text-gray-400 mt-1">Max 10MB (zip, doc, ppt, pdf) — katta fayllar avtomatik siqiladi</p>
                                                 @else
                                                     <span class="text-xs text-red-400">Muddat tugagan</span>
                                                 @endif
@@ -189,4 +201,106 @@
             </div>
         </div>
     </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var COMPRESS_THRESHOLD = 2 * 1024 * 1024; // 2MB dan katta fayllarni siqish
+        var MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB maksimal hajm
+
+        document.querySelectorAll('.mt-upload-form').forEach(function(form) {
+            var fileInput = form.querySelector('.mt-file-input');
+            if (!fileInput) return;
+
+            fileInput.addEventListener('change', function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+
+                // Fayl hajmi limitdan kichik bo'lsa, siqmasdan yuklash
+                if (file.size <= COMPRESS_THRESHOLD) {
+                    // Hidden input formda bo'lsa submit, button bo'lsa ham submit
+                    if (fileInput.classList.contains('hidden')) {
+                        form.submit();
+                    }
+                    return;
+                }
+
+                // ZIP faylni qayta siqish shart emas
+                var ext = file.name.split('.').pop().toLowerCase();
+                if (ext === 'zip') {
+                    if (file.size > MAX_FILE_SIZE) {
+                        alert('Fayl hajmi ' + (file.size / 1024 / 1024).toFixed(1) + 'MB. Maksimal hajm 10MB.');
+                        fileInput.value = '';
+                        return;
+                    }
+                    if (fileInput.classList.contains('hidden')) {
+                        form.submit();
+                    }
+                    return;
+                }
+
+                // JSZip mavjudligini tekshirish
+                if (typeof JSZip === 'undefined') {
+                    alert('Siqish kutubxonasi yuklanmadi. Sahifani yangilang yoki faylni ZIP formatida yuklang.');
+                    fileInput.value = '';
+                    return;
+                }
+
+                // Overlay ko'rsatish
+                var overlay = document.getElementById('compress-overlay');
+                var statusEl = document.getElementById('compress-status');
+                var detailEl = document.getElementById('compress-detail');
+                overlay.style.display = 'flex';
+                statusEl.textContent = 'Fayl siqilmoqda...';
+                var originalSizeMB = (file.size / 1024 / 1024).toFixed(1);
+                detailEl.textContent = 'Asl hajm: ' + originalSizeMB + 'MB';
+
+                var zip = new JSZip();
+                zip.file(file.name, file);
+
+                zip.generateAsync({
+                    type: 'blob',
+                    compression: 'DEFLATE',
+                    compressionOptions: { level: 6 }
+                }, function(metadata) {
+                    detailEl.textContent = 'Siqilmoqda... ' + metadata.percent.toFixed(0) + '%';
+                }).then(function(blob) {
+                    var compressedSizeMB = (blob.size / 1024 / 1024).toFixed(1);
+
+                    if (blob.size > MAX_FILE_SIZE) {
+                        overlay.style.display = 'none';
+                        alert('Siqilgandan keyin ham fayl hajmi ' + compressedSizeMB + 'MB (' + originalSizeMB + 'MB dan). Maksimal hajm 10MB. Iltimos, faylni kichikroq qiling.');
+                        fileInput.value = '';
+                        return;
+                    }
+
+                    statusEl.textContent = 'Yuklanmoqda...';
+                    var savedPercent = ((1 - blob.size / file.size) * 100).toFixed(0);
+                    detailEl.textContent = originalSizeMB + 'MB → ' + compressedSizeMB + 'MB (' + savedPercent + '% siqildi)';
+
+                    // Yangi ZIP faylni formga qo'shish
+                    var zipFileName = file.name.replace(/\.[^.]+$/, '') + '.zip';
+                    var zipFile = new File([blob], zipFileName, { type: 'application/zip' });
+
+                    var dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(zipFile);
+                    fileInput.files = dataTransfer.files;
+
+                    form.submit();
+                }).catch(function(err) {
+                    overlay.style.display = 'none';
+                    alert('Faylni siqishda xatolik: ' + err.message);
+                    fileInput.value = '';
+                });
+            });
+
+            // Form submit bo'lganda overlay yashirishni oldini olish
+            form.addEventListener('submit', function() {
+                var overlay = document.getElementById('compress-overlay');
+                if (overlay.style.display === 'flex') {
+                    var statusEl = document.getElementById('compress-status');
+                    statusEl.textContent = 'Yuklanmoqda...';
+                }
+            });
+        });
+    });
+    </script>
 </x-student-app-layout>

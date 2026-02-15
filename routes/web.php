@@ -253,6 +253,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/schedule-report/get-auditoriums', [ReportController::class, 'getAuditoriums'])->name('reports.schedule-report.get-auditoriums');
         Route::post('/reports/schedule-report/sync-auditoriums', [ReportController::class, 'syncAuditoriums'])->name('reports.schedule-report.sync-auditoriums');
 
+        Route::get('/reports/auditorium-list', [ReportController::class, 'auditoriumList'])->name('reports.auditorium-list');
+        Route::get('/reports/auditorium-list/data', [ReportController::class, 'auditoriumListData'])->name('reports.auditorium-list.data');
+        Route::get('/reports/auditorium-list/buildings', [ReportController::class, 'getAuditoriumBuildings'])->name('reports.auditorium-list.buildings');
+        Route::get('/reports/auditorium-list/types', [ReportController::class, 'getAuditoriumTypes'])->name('reports.auditorium-list.types');
+        Route::post('/reports/auditorium-list/sync', [ReportController::class, 'syncAuditoriums'])->name('reports.auditorium-list.sync');
+
         Route::get('/reports/absence', [ReportController::class, 'absenceReport'])->name('reports.absence');
         Route::get('/reports/absence/data', [ReportController::class, 'absenceReportData'])->name('reports.absence.data');
 

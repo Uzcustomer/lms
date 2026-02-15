@@ -1252,6 +1252,169 @@ class ReportController extends Controller
     }
 
     /**
+     * Auditoriyalar ro'yxati sahifasi
+     */
+    public function auditoriumList()
+    {
+        return view('admin.reports.auditorium-list');
+    }
+
+    /**
+     * AJAX: Auditoriyalar ro'yxati ma'lumotlarini qaytarish
+     */
+    public function auditoriumListData(Request $request)
+    {
+        try {
+            $query = \App\Models\Auditorium::query();
+
+            if ($request->filled('building_id')) {
+                $query->where('building_id', $request->building_id);
+            }
+            if ($request->filled('auditorium_type_code')) {
+                $query->where('auditorium_type_code', $request->auditorium_type_code);
+            }
+            if ($request->filled('status')) {
+                $query->where('active', $request->status == '1');
+            }
+
+            // Saralash
+            $sortColumn = $request->get('sort', 'name');
+            $allowedSorts = ['code', 'name', 'volume', 'building_name', 'auditorium_type_name', 'active'];
+            if (!in_array($sortColumn, $allowedSorts)) {
+                $sortColumn = 'name';
+            }
+            $sortDirection = $request->get('direction', 'asc') === 'desc' ? 'desc' : 'asc';
+            $query->orderBy($sortColumn, $sortDirection);
+
+            $total = $query->count();
+
+            // Excel export
+            if ($request->get('export') === 'excel') {
+                $data = $query->get();
+                return $this->exportAuditoriumListExcel($data);
+            }
+
+            // Pagination
+            $page = (int) $request->get('page', 1);
+            $perPage = (int) $request->get('per_page', 50);
+            $offset = ($page - 1) * $perPage;
+
+            $items = $query->skip($offset)->take($perPage)->get();
+
+            $pageData = [];
+            foreach ($items as $i => $item) {
+                $pageData[] = [
+                    'row_num' => $offset + $i + 1,
+                    'code' => $item->code,
+                    'name' => $item->name,
+                    'volume' => $item->volume,
+                    'active' => $item->active,
+                    'building_id' => $item->building_id,
+                    'building_name' => $item->building_name,
+                    'auditorium_type_code' => $item->auditorium_type_code,
+                    'auditorium_type_name' => $item->auditorium_type_name,
+                ];
+            }
+
+            return response()->json([
+                'data' => $pageData,
+                'total' => $total,
+                'per_page' => $perPage,
+                'current_page' => $page,
+                'last_page' => (int) ceil($total / $perPage),
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Auditorium list error: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * AJAX: Binolar ro'yxatini dropdown uchun qaytarish
+     */
+    public function getAuditoriumBuildings()
+    {
+        return \App\Models\Auditorium::whereNotNull('building_id')
+            ->whereNotNull('building_name')
+            ->select('building_id', 'building_name')
+            ->distinct()
+            ->orderBy('building_name')
+            ->get()
+            ->pluck('building_name', 'building_id');
+    }
+
+    /**
+     * AJAX: Auditoriya turlarini dropdown uchun qaytarish
+     */
+    public function getAuditoriumTypes()
+    {
+        return \App\Models\Auditorium::whereNotNull('auditorium_type_code')
+            ->whereNotNull('auditorium_type_name')
+            ->select('auditorium_type_code', 'auditorium_type_name')
+            ->distinct()
+            ->orderBy('auditorium_type_name')
+            ->get()
+            ->pluck('auditorium_type_name', 'auditorium_type_code');
+    }
+
+    /**
+     * Auditoriyalar ro'yxati Excel export
+     */
+    private function exportAuditoriumListExcel($data)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Auditoriyalar');
+
+        $headers = ['#', 'Kod', 'Nomi', "Sig'imi", 'Bino', 'Turi', 'Holat'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
+
+        foreach ($data as $i => $r) {
+            $row = $i + 2;
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $r->code);
+            $sheet->setCellValue([3, $row], $r->name);
+            $sheet->setCellValue([4, $row], $r->volume);
+            $sheet->setCellValue([5, $row], $r->building_name);
+            $sheet->setCellValue([6, $row], $r->auditorium_type_name);
+            $sheet->setCellValue([7, $row], $r->active ? 'Faol' : 'Nofaol');
+        }
+
+        $widths = [5, 15, 30, 10, 25, 25, 10];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
+
+        $lastRow = count($data) + 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:G{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            ]);
+        }
+
+        $fileName = 'Auditoriyalar_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'aud_');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
      * 25% sababsiz davomat hisoboti - filtrlar sahifasi
      */
     public function absenceReport(Request $request)

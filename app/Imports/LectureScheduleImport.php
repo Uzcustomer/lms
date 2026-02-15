@@ -38,14 +38,14 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
         foreach ($rows as $index => $row) {
             $rowNum = $index + 2; // +2 chunki heading row + 0-index
 
-            // Kun -> raqamga o'tkazish
-            $dayRaw = mb_strtolower(trim($row['kun'] ?? ''));
+            // Kun -> raqamga o'tkazish (yangi ustun nomi: kuni)
+            $dayRaw = mb_strtolower(trim($row['kuni'] ?? $row['kun'] ?? ''));
             $weekDay = self::DAY_MAP[$dayRaw] ?? null;
 
             if (!$weekDay) {
                 $this->errors[] = [
                     'row' => $rowNum,
-                    'error' => "Noto'g'ri kun nomi: '{$row['kun']}'. Kutilmoqda: Dushanba, Seshanba, ...",
+                    'error' => "Noto'g'ri kun nomi: '{$dayRaw}'. Kutilmoqda: Dushanba, Seshanba, ...",
                 ];
                 continue;
             }
@@ -62,6 +62,9 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
             $groupName = trim($row['guruh'] ?? '');
             $group = $groupName ? Group::where('name', $groupName)->first() : null;
 
+            // Guruh_source (birlashtirilgan ma'ruza guruhi)
+            $groupSource = trim($row['guruh_source'] ?? '');
+
             // O'qituvchi nomiga qarab hemis_id topish
             $employeeName = trim($row['oqituvchi'] ?? '');
             $employee = null;
@@ -70,6 +73,20 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
                     ->orWhere('short_name', $employeeName)
                     ->first();
             }
+
+            // Xona (eski formatda auditoriya)
+            $roomName = trim($row['xona'] ?? $row['auditoriya'] ?? '');
+
+            // Qavat va Bino
+            $floor = trim($row['qavat'] ?? '');
+            $buildingName = trim($row['bino'] ?? '');
+
+            // Dars turi (ixtiyoriy)
+            $trainingType = trim($row['turi'] ?? '');
+
+            // Haftalar davomiyligi va Juft-toq
+            $weeks = trim($row['haftalar_davomiyligi'] ?? '');
+            $weekParity = mb_strtolower(trim($row['juft-toq'] ?? $row['jufttoq'] ?? ''));
 
             LectureSchedule::create([
                 'batch_id' => $this->batch->id,
@@ -80,11 +97,16 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
                 'lesson_pair_end_time' => $endTime,
                 'group_name' => $groupName,
                 'group_id' => $group?->group_hemis_id,
+                'group_source' => $groupSource ?: null,
                 'subject_name' => trim($row['fan'] ?? ''),
-                'employee_name' => $employeeName,
+                'employee_name' => $employeeName ?: null,
                 'employee_id' => $employee?->hemis_id,
-                'auditorium_name' => trim($row['auditoriya'] ?? ''),
-                'training_type_name' => trim($row['turi'] ?? ''),
+                'auditorium_name' => $roomName ?: null,
+                'floor' => $floor ?: null,
+                'building_name' => $buildingName ?: null,
+                'training_type_name' => $trainingType ?: null,
+                'weeks' => $weeks ?: null,
+                'week_parity' => $weekParity ?: null,
             ]);
 
             $this->importedCount++;
@@ -99,7 +121,7 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
     public function rules(): array
     {
         return [
-            'kun' => 'required',
+            'kuni' => 'required',
             'juftlik' => 'required',
             'guruh' => 'required',
             'fan' => 'required',
@@ -109,7 +131,7 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
     public function customValidationMessages(): array
     {
         return [
-            'kun.required' => ':attribute ustuni bo\'sh bo\'lmasligi kerak (qator :row)',
+            'kuni.required' => ':attribute ustuni bo\'sh bo\'lmasligi kerak (qator :row)',
             'juftlik.required' => ':attribute ustuni bo\'sh bo\'lmasligi kerak (qator :row)',
             'guruh.required' => ':attribute ustuni bo\'sh bo\'lmasligi kerak (qator :row)',
             'fan.required' => ':attribute ustuni bo\'sh bo\'lmasligi kerak (qator :row)',

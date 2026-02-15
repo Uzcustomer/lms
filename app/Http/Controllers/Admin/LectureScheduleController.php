@@ -112,10 +112,15 @@ class LectureScheduleController extends Controller
                 'week_day' => $item->week_day,
                 'lesson_pair_code' => $item->lesson_pair_code,
                 'group_name' => $item->group_name,
+                'group_source' => $item->group_source,
                 'subject_name' => $item->subject_name,
                 'employee_name' => $item->employee_name,
                 'auditorium_name' => $item->auditorium_name,
+                'floor' => $item->floor,
+                'building_name' => $item->building_name,
                 'training_type_name' => $item->training_type_name,
+                'weeks' => $item->weeks,
+                'week_parity' => $item->week_parity,
                 'hemis_status' => $item->hemis_status,
                 'hemis_diff' => $item->hemis_diff,
                 'has_conflict' => $item->has_conflict,
@@ -167,11 +172,20 @@ class LectureScheduleController extends Controller
             'auditorium_name' => 'nullable|string|max:255',
             'training_type_name' => 'nullable|string|max:255',
             'group_name' => 'nullable|string|max:255',
+            'group_source' => 'nullable|string|max:255',
+            'floor' => 'nullable|string|max:50',
+            'building_name' => 'nullable|string|max:255',
+            'weeks' => 'nullable|string|max:100',
+            'week_parity' => 'nullable|string|max:20',
         ]);
 
         $item = LectureSchedule::findOrFail($id);
         $item->update(array_merge(
-            $request->only(['subject_name', 'employee_name', 'auditorium_name', 'training_type_name', 'group_name']),
+            $request->only([
+                'subject_name', 'employee_name', 'auditorium_name',
+                'training_type_name', 'group_name',
+                'group_source', 'floor', 'building_name', 'weeks', 'week_parity',
+            ]),
             ['hemis_status' => 'not_checked', 'hemis_diff' => null]
         ));
 
@@ -195,12 +209,18 @@ class LectureScheduleController extends Controller
             'employee_name' => 'nullable|string|max:255',
             'auditorium_name' => 'nullable|string|max:255',
             'training_type_name' => 'nullable|string|max:255',
+            'group_source' => 'nullable|string|max:255',
+            'floor' => 'nullable|string|max:50',
+            'building_name' => 'nullable|string|max:255',
+            'weeks' => 'nullable|string|max:100',
+            'week_parity' => 'nullable|string|max:20',
         ]);
 
         $item = LectureSchedule::create($request->only([
             'batch_id', 'week_day', 'lesson_pair_code',
             'subject_name', 'group_name', 'employee_name',
             'auditorium_name', 'training_type_name',
+            'group_source', 'floor', 'building_name', 'weeks', 'week_parity',
         ]));
 
         $batch = LectureScheduleBatch::find($request->batch_id);

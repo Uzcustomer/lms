@@ -21,15 +21,20 @@ class LectureScheduleExport implements FromArray, WithHeadings, WithStyles
     public function headings(): array
     {
         return [
-            'Kun',
+            'Kuni',
             'Juftlik',
             'Boshlanish',
             'Tugash',
+            'Qavat',
+            'Bino',
+            'Xona',
+            'Guruh_source',
             'Guruh',
             'Fan',
             'O\'qituvchi',
-            'Auditoriya',
             'Turi',
+            'Haftalar davomiyligi',
+            'Juft-toq',
             'Hemis holati',
         ];
     }
@@ -54,27 +59,37 @@ class LectureScheduleExport implements FromArray, WithHeadings, WithStyles
             $item->lesson_pair_name ?? $item->lesson_pair_code,
             $item->lesson_pair_start_time ? substr($item->lesson_pair_start_time, 0, 5) : '',
             $item->lesson_pair_end_time ? substr($item->lesson_pair_end_time, 0, 5) : '',
+            $item->floor ?? '',
+            $item->building_name ?? '',
+            $item->auditorium_name ?? '',
+            $item->group_source ?? '',
             $item->group_name,
             $item->subject_name,
             $item->employee_name ?? '',
-            $item->auditorium_name ?? '',
             $item->training_type_name ?? '',
+            $item->weeks ?? '',
+            $item->week_parity ?? '',
             $statusLabels[$item->hemis_status] ?? $item->hemis_status,
         ])->toArray();
     }
 
     public function styles(Worksheet $sheet): array
     {
-        $sheet->getColumnDimension('A')->setWidth(14);
-        $sheet->getColumnDimension('B')->setWidth(14);
-        $sheet->getColumnDimension('C')->setWidth(12);
-        $sheet->getColumnDimension('D')->setWidth(12);
-        $sheet->getColumnDimension('E')->setWidth(18);
-        $sheet->getColumnDimension('F')->setWidth(25);
-        $sheet->getColumnDimension('G')->setWidth(22);
-        $sheet->getColumnDimension('H')->setWidth(14);
-        $sheet->getColumnDimension('I')->setWidth(14);
-        $sheet->getColumnDimension('J')->setWidth(16);
+        $sheet->getColumnDimension('A')->setWidth(14);  // Kuni
+        $sheet->getColumnDimension('B')->setWidth(14);  // Juftlik
+        $sheet->getColumnDimension('C')->setWidth(12);  // Boshlanish
+        $sheet->getColumnDimension('D')->setWidth(12);  // Tugash
+        $sheet->getColumnDimension('E')->setWidth(8);   // Qavat
+        $sheet->getColumnDimension('F')->setWidth(14);  // Bino
+        $sheet->getColumnDimension('G')->setWidth(10);  // Xona
+        $sheet->getColumnDimension('H')->setWidth(26);  // Guruh_source
+        $sheet->getColumnDimension('I')->setWidth(18);  // Guruh
+        $sheet->getColumnDimension('J')->setWidth(25);  // Fan
+        $sheet->getColumnDimension('K')->setWidth(22);  // O'qituvchi
+        $sheet->getColumnDimension('L')->setWidth(14);  // Turi
+        $sheet->getColumnDimension('M')->setWidth(20);  // Haftalar davomiyligi
+        $sheet->getColumnDimension('N')->setWidth(12);  // Juft-toq
+        $sheet->getColumnDimension('O')->setWidth(16);  // Hemis holati
 
         return [
             1 => [

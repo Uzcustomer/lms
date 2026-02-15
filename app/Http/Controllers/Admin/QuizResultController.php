@@ -60,10 +60,12 @@ class QuizResultController extends Controller
     /**
      * Sistemaga yuklanmagan natijalar uchun AJAX data endpoint.
      * hemis_quiz_results dan student_grades ga yuklanmaganlarni qaytaradi.
+     * Ustunlar va xulosa logikasi diagnostika (tartibgaSol) bilan bir xil.
      */
     public function yuklanmaganNatijalar(Request $request)
     {
         try {
+            // Faqat yuklanmagan natijalarni olish
             $query = HemisQuizResult::where('is_active', 1)
                 ->whereNotExists(function ($q) {
                     $q->select(\DB::raw(1))
@@ -103,51 +105,176 @@ class QuizResultController extends Controller
                 $query->whereDate('date_finish', '<=', $request->date_to);
             }
 
-            $results = $query->orderByDesc('date_finish')
+            $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')
                 ->limit(10000)
                 ->get();
 
-            $data = $results->map(function ($item, $i) {
-                $dateStart = '';
-                $dateFinish = '';
-                try {
-                    if ($item->date_start) {
-                        $dateStart = $item->date_start->format('d.m.Y H:i');
-                    }
-                } catch (\Exception $e) {
-                    $dateStart = (string) $item->getRawOriginal('date_start');
+            // ====== TARTIBGA SOL LOGIKASI (diagnostika bilan bir xil) ======
+
+            // Barcha student_id larni yig'ish va bulk query
+            $studentIds = $results->pluck('student_id')->unique()->values()->toArray();
+
+            $students = Student::where(function ($q) use ($studentIds) {
+                $q->whereIn('hemis_id', $studentIds)
+                  ->orWhereIn('student_id_number', $studentIds);
+            })->get();
+
+            // Lookup yaratish
+            $studentLookup = [];
+            foreach ($students as $student) {
+                $studentLookup[$student->hemis_id] = $student;
+                if ($student->student_id_number) {
+                    $studentLookup[$student->student_id_number] = $student;
                 }
-                try {
-                    if ($item->date_finish) {
-                        $dateFinish = $item->date_finish->format('d.m.Y H:i');
-                    }
-                } catch (\Exception $e) {
-                    $dateFinish = (string) $item->getRawOriginal('date_finish');
+            }
+
+            $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+            $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+            // ====== XULOSA UCHUN MA'LUMOTLAR ======
+
+            // 1) Yuklangan natijalar (bu yerda bo'sh bo'lishi kerak, lekin boshqa tekshiruvlar uchun)
+            $allResultIds = $results->pluck('id')->toArray();
+            $uploadedResultIds = [];
+            if (!empty($allResultIds)) {
+                $uploadedResultIds = StudentGrade::where('reason', 'quiz_result')
+                    ->whereIn('quiz_result_id', $allResultIds)
+                    ->pluck('quiz_result_id')
+                    ->toArray();
+            }
+            $uploadedResultIds = array_flip($uploadedResultIds);
+
+            // 2) Dublikatlar
+            $duplicateMap = [];
+            foreach ($results as $result) {
+                $ynTuri = '-';
+                if (in_array($result->quiz_type, $testTypes)) $ynTuri = 'T';
+                elseif (in_array($result->quiz_type, $oskiTypes)) $ynTuri = 'O';
+                if ($ynTuri === '-') continue;
+
+                $key = $result->student_id . '|' . $result->fan_id . '|' . $ynTuri . '|' . $result->shakl;
+                $duplicateMap[$key][] = $result->id;
+            }
+
+            // 3) JN/MT/OSKI baholar
+            $studentHemisIds = $students->pluck('hemis_id')->toArray();
+            $fanIds = $results->pluck('fan_id')->unique()->values()->toArray();
+
+            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+            $jnGrades = [];
+            if (!empty($studentHemisIds) && !empty($fanIds)) {
+                $jnRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+                    ->whereIn('subject_id', $fanIds)
+                    ->whereNotIn('training_type_code', $excludedCodes)
+                    ->whereNotNull('grade')
+                    ->get(['student_hemis_id', 'subject_id', 'grade', 'lesson_date']);
+                foreach ($jnRows as $row) {
+                    $k = $row->student_hemis_id . '|' . $row->subject_id;
+                    $jnGrades[$k][] = ['grade' => $row->grade, 'date' => $row->lesson_date];
+                }
+            }
+
+            $mtGrades = [];
+            if (!empty($studentHemisIds) && !empty($fanIds)) {
+                $mtRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+                    ->whereIn('subject_id', $fanIds)
+                    ->where('training_type_code', 99)
+                    ->whereNotNull('grade')
+                    ->get(['student_hemis_id', 'subject_id', 'grade']);
+                foreach ($mtRows as $row) {
+                    $k = $row->student_hemis_id . '|' . $row->subject_id;
+                    $mtGrades[$k][] = $row->grade;
+                }
+            }
+
+            $oskiGrades = [];
+            if (!empty($studentHemisIds) && !empty($fanIds)) {
+                $oskiRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+                    ->whereIn('subject_id', $fanIds)
+                    ->where('training_type_code', 101)
+                    ->whereNotNull('grade')
+                    ->get(['student_hemis_id', 'subject_id', 'grade']);
+                foreach ($oskiRows as $row) {
+                    $k = $row->student_hemis_id . '|' . $row->subject_id;
+                    $oskiGrades[$k][] = $row->grade;
+                }
+            }
+
+            // 4) CurriculumSubject
+            $groupIds = $students->pluck('group_id')->unique()->toArray();
+            $groups = Group::whereIn('group_hemis_id', $groupIds)->get()->keyBy('group_hemis_id');
+            $curriculumHemisIds = $groups->pluck('curriculum_hemis_id')->unique()->toArray();
+
+            $curriculumSubjects = [];
+            if (!empty($curriculumHemisIds) && !empty($fanIds)) {
+                $csRows = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumHemisIds)
+                    ->whereIn('subject_id', $fanIds)
+                    ->get(['curricula_hemis_id', 'subject_id', 'semester_code']);
+                foreach ($csRows as $cs) {
+                    $curriculumSubjects[$cs->curricula_hemis_id . '|' . $cs->subject_id] = $cs->semester_code;
+                }
+            }
+
+            // 5) Deadline
+            $deadlines = Deadline::all()->keyBy('level_code');
+
+            // ====== DATA TAYYORLASH ======
+            $data = [];
+            $rowNum = 0;
+
+            foreach ($results as $result) {
+                $student = $studentLookup[$result->student_id] ?? null;
+
+                $semNum = null;
+                $semLabel = $result->semester ?: ($student ? $student->semester_name : '');
+                if ($semLabel && preg_match('/(\d+)/', $semLabel, $m)) {
+                    $semNum = (int) $m[1];
+                }
+                $kurs = $semNum ? (int) ceil($semNum / 2) : null;
+
+                $ynTuri = '-';
+                if (in_array($result->quiz_type, $testTypes)) {
+                    $ynTuri = 'Test';
+                } elseif (in_array($result->quiz_type, $oskiTypes)) {
+                    $ynTuri = 'OSKI';
                 }
 
-                return [
-                    'id'           => $item->id,
-                    'row_num'      => $i + 1,
-                    'attempt_id'   => $item->attempt_id,
-                    'student_id'   => $item->student_id,
-                    'student_name' => $item->student_name,
-                    'faculty'      => $item->faculty,
-                    'direction'    => $item->direction,
-                    'semester'     => $item->semester,
-                    'fan_id'       => $item->fan_id,
-                    'fan_name'     => $item->fan_name,
-                    'quiz_type'    => $item->quiz_type,
-                    'attempt_name' => $item->attempt_name,
-                    'shakl'        => $item->shakl,
-                    'grade'        => $item->grade,
-                    'date_start'   => $dateStart,
-                    'date_finish'  => $dateFinish,
+                // Xulosa hisoblash
+                $xulosa = $this->calculateXulosa(
+                    $result, $student, $ynTuri,
+                    $uploadedResultIds, $duplicateMap,
+                    $jnGrades, $mtGrades, $oskiGrades,
+                    $curriculumSubjects, $groups, $deadlines,
+                    $testTypes, $oskiTypes
+                );
+
+                $rowNum++;
+                $data[] = [
+                    'id' => $result->id,
+                    'row_num' => $rowNum,
+                    'student_id' => $result->student_id,
+                    'full_name' => $student ? $student->full_name : $result->student_name,
+                    'faculty' => $student ? $student->department_name : '-',
+                    'direction' => $student ? $student->specialty_name : '-',
+                    'kurs' => $kurs ? $kurs . '-kurs' : '-',
+                    'semester' => $semNum ? $semNum . '-sem' : ($semLabel ?: '-'),
+                    'group' => $student ? $student->group_name : '-',
+                    'fan_name' => $result->fan_name,
+                    'yn_turi' => $ynTuri,
+                    'shakl' => $result->shakl,
+                    'grade' => $result->grade,
+                    'date' => $result->date_finish ? $result->date_finish->format('d.m.Y') : '',
+                    'xulosa' => $xulosa['text'],
+                    'xulosa_code' => $xulosa['code'],
+                    'jn_avg' => $xulosa['jn_avg'],
+                    'mt_avg' => $xulosa['mt_avg'],
+                    'oski_avg' => $xulosa['oski_avg'],
                 ];
-            });
+            }
 
             return response()->json([
-                'data' => $data->values(),
-                'total' => $data->count(),
+                'data' => $data,
+                'total' => count($data),
             ]);
         } catch (\Throwable $e) {
             Log::error('yuklanmaganNatijalar xatolik: ' . $e->getMessage(), [

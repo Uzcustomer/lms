@@ -43,9 +43,13 @@
                         <span id="total-info" class="total-info" style="display:none;"></span>
                     </div>
                     <div class="action-right">
-                        <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
+                        <button type="button" id="btn-excel-original" class="btn-excel" onclick="downloadOriginalExcel()" disabled>
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                            Excel
+                            Original Excel
+                        </button>
+                        <button type="button" id="btn-excel-xulosa" class="btn-excel-xulosa" onclick="downloadXulosaExcel()" disabled>
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            Xulosali Excel
                         </button>
                     </div>
                 </div>
@@ -67,33 +71,31 @@
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
-                                        <th>Attempt ID</th>
                                         <th>Student ID</th>
                                         <th>FISH</th>
                                         <th>Fakultet</th>
                                         <th>Yo'nalish</th>
+                                        <th>Kurs</th>
                                         <th>Semestr</th>
-                                        <th>Fan ID</th>
-                                        <th>Fan nomi</th>
-                                        <th>Quiz turi</th>
-                                        <th>Urinish nomi</th>
+                                        <th>Guruh</th>
+                                        <th>Fan</th>
+                                        <th>YN turi</th>
                                         <th>Shakl</th>
                                         <th>Baho</th>
-                                        <th>Boshlanish</th>
-                                        <th>Tugash</th>
+                                        <th>Sana</th>
+                                        <th>Xulosa</th>
                                     </tr>
                                     <tr class="filter-header-row">
                                         <th></th>
-                                        <th><input type="text" class="col-filter-input" data-col="attempt_id" placeholder="ID..."></th>
                                         <th><input type="text" class="col-filter-input" data-col="student_id" placeholder="ID..."></th>
-                                        <th><input type="text" class="col-filter-input" data-col="student_name" placeholder="Ism..."></th>
+                                        <th><input type="text" class="col-filter-input" data-col="full_name" placeholder="Ism..."></th>
                                         <th><select class="col-filter" data-col="faculty"><option value="">Barchasi</option></select></th>
                                         <th><select class="col-filter" data-col="direction"><option value="">Barchasi</option></select></th>
+                                        <th><select class="col-filter" data-col="kurs"><option value="">Barchasi</option></select></th>
                                         <th><select class="col-filter" data-col="semester"><option value="">Barchasi</option></select></th>
-                                        <th><input type="text" class="col-filter-input" data-col="fan_id" placeholder="ID..."></th>
+                                        <th><select class="col-filter" data-col="group"><option value="">Barchasi</option></select></th>
                                         <th><select class="col-filter" data-col="fan_name"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="quiz_type"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="attempt_name"><option value="">Barchasi</option></select></th>
+                                        <th><select class="col-filter" data-col="yn_turi"><option value="">Barchasi</option></select></th>
                                         <th><select class="col-filter" data-col="shakl"><option value="">Barchasi</option></select></th>
                                         <th>
                                             <div class="adv-filter-wrap">
@@ -103,7 +105,7 @@
                                                 </button>
                                                 <div class="adv-filter-popup" id="baho-popup">
                                                     <div class="adv-filter-title">Baho filtri</div>
-                                                    <select id="baho-op" class="adv-filter-select" onchange="$('#baho-val2').toggle($('#baho-op').val()==='between')">
+                                                    <select id="baho-op" class="adv-filter-select" onchange="toggleBahoSecond()">
                                                         <option value="">Barchasi</option>
                                                         <option value="eq">Teng (=)</option>
                                                         <option value="gt">Dan katta (&gt;)</option>
@@ -123,8 +125,35 @@
                                                 </div>
                                             </div>
                                         </th>
-                                        <th></th>
-                                        <th></th>
+                                        <th>
+                                            <div class="adv-filter-wrap">
+                                                <button type="button" class="adv-filter-btn" onclick="toggleAdvFilter('sana')">
+                                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                                                    <span id="sana-filter-label">Sana</span>
+                                                </button>
+                                                <div class="adv-filter-popup" id="sana-popup">
+                                                    <div class="adv-filter-title">Sana filtri</div>
+                                                    <select id="sana-op" class="adv-filter-select" onchange="toggleSanaSecond()">
+                                                        <option value="">Barchasi</option>
+                                                        <option value="eq">Teng (=)</option>
+                                                        <option value="gt">Dan keyin (&gt;)</option>
+                                                        <option value="gte">Dan keyin yoki teng (&ge;)</option>
+                                                        <option value="lt">Dan oldin (&lt;)</option>
+                                                        <option value="lte">Dan oldin yoki teng (&le;)</option>
+                                                        <option value="between">Orasida</option>
+                                                    </select>
+                                                    <div class="adv-filter-inputs">
+                                                        <input type="date" id="sana-val1" class="adv-filter-input">
+                                                        <input type="date" id="sana-val2" class="adv-filter-input" style="display:none;">
+                                                    </div>
+                                                    <div class="adv-filter-actions">
+                                                        <button type="button" class="adv-btn-clear" onclick="clearAdvFilter('sana')">Tozalash</button>
+                                                        <button type="button" class="adv-btn-apply" onclick="applyAdvFilter('sana')">Qo'llash</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </th>
+                                        <th><select class="col-filter" data-col="xulosa_code"><option value="">Barchasi</option></select></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -146,9 +175,44 @@
 
         var allData = [];
         var filteredData = [];
-        var advFilters = { baho: null };
+        var advFilters = { baho: null, sana: null };
+
+        // Xulosa code -> label mapping
+        var xulosaCodes = {
+            'ok': 'Yuklasa bo\'ladi',
+            'uploaded': 'Oldin yuklangan',
+            '2O': '2O',
+            '2T': '2T',
+            'not_in_curriculum': 'Jadvalda yo\'q',
+            'jn_low': 'JN yetarli emas',
+            'mt_low': 'MT yetarli emas',
+            'oski_low': 'OSKI yetarli emas',
+            'no_student': 'Talaba topilmadi',
+            'unknown_type': 'Quiz turi noma\'lum',
+            'bad_grade': 'Baho noto\'g\'ri',
+            'not_first': '1-urinish emas'
+        };
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
+
+        function getXulosaBadge(code, text) {
+            var styles = {
+                'ok':               'background:#dcfce7;color:#166534;border:1px solid #86efac;',
+                'uploaded':         'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;',
+                '2O':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
+                '2T':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
+                'not_in_curriculum':'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
+                'jn_low':           'background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;',
+                'mt_low':           'background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;',
+                'oski_low':         'background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;',
+                'no_student':       'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
+                'unknown_type':     'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
+                'bad_grade':        'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
+                'not_first':        'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;'
+            };
+            var style = styles[code] || 'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;';
+            return '<span class="badge" style="' + style + 'font-size:10px;white-space:nowrap;">' + esc(text) + '</span>';
+        }
 
         // ========== DATA YUKLASH ==========
         function loadData() {
@@ -170,7 +234,7 @@
                         allData = []; filteredData = [];
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
-                        $('#btn-excel').prop('disabled', true);
+                        $('#btn-excel-original, #btn-excel-xulosa').prop('disabled', true);
                         $('#total-info').hide();
                         return;
                     }
@@ -178,7 +242,7 @@
                     populateColumnFilters();
                     applyColumnFilters();
                     $('#table-area').show();
-                    $('#btn-excel').prop('disabled', false);
+                    $('#btn-excel-original, #btn-excel-xulosa').prop('disabled', false);
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
@@ -194,7 +258,7 @@
 
         // ========== USTUN FILTRLARI ==========
         function populateColumnFilters() {
-            var cols = ['faculty','direction','semester','fan_name','quiz_type','attempt_name','shakl'];
+            var cols = ['faculty','direction','kurs','semester','group','fan_name','yn_turi','shakl','xulosa_code'];
             cols.forEach(function(col) {
                 var unique = [], seen = {};
                 allData.forEach(function(r) {
@@ -206,7 +270,8 @@
                 var curVal = sel.val();
                 sel.find('option:not(:first)').remove();
                 unique.forEach(function(v) {
-                    sel.append('<option value="' + esc(v) + '">' + esc(v) + '</option>');
+                    var label = col === 'xulosa_code' ? (xulosaCodes[v] || v) : v;
+                    sel.append('<option value="' + esc(v) + '">' + esc(label) + '</option>');
                 });
                 if (curVal) sel.val(curVal);
             });
@@ -234,19 +299,34 @@
                     }
                 }
                 if (!matchAdvFilter(advFilters.baho, r.grade, false)) return false;
+                if (!matchAdvFilter(advFilters.sana, r.date, true)) return false;
                 return true;
             });
 
             renderTable(filteredData);
-            $('#total-info').text('Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length).show();
+            var okCount = 0;
+            filteredData.forEach(function(r) { if (r.xulosa_code === 'ok') okCount++; });
+            $('#total-info').html('Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length + ' | <span style="color:#16a34a;">Yuklasa bo\'ladi: ' + okCount + '</span>').show();
         }
 
-        // ========== BAHO ADVANCED FILTR ==========
+        // ========== BAHO / SANA ADVANCED FILTRLAR ==========
         function toggleAdvFilter(type) {
             var popup = document.getElementById(type + '-popup');
             var isVisible = popup.style.display === 'block';
             document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
             if (!isVisible) popup.style.display = 'block';
+        }
+
+        function toggleBahoSecond() {
+            var op = $('#baho-op').val();
+            $('#baho-val2').toggle(op === 'between');
+            if (op !== 'between') $('#baho-val2').val('');
+        }
+
+        function toggleSanaSecond() {
+            var op = $('#sana-op').val();
+            $('#sana-val2').toggle(op === 'between');
+            if (op !== 'between') $('#sana-val2').val('');
         }
 
         function applyAdvFilter(type) {
@@ -256,7 +336,7 @@
 
             if (!op || !val1) {
                 advFilters[type] = null;
-                $('#' + type + '-filter-label').text('Baho').removeClass('adv-active-label');
+                $('#' + type + '-filter-label').text(type === 'baho' ? 'Baho' : 'Sana').removeClass('adv-active-label');
                 $('.adv-filter-btn').removeClass('adv-active');
             } else {
                 advFilters[type] = { op: op, val1: val1, val2: val2 };
@@ -266,6 +346,7 @@
                 $('#' + type + '-filter-label').text(labelText).addClass('adv-active-label');
                 $('#' + type + '-popup').closest('.adv-filter-wrap').find('.adv-filter-btn').addClass('adv-active');
             }
+
             document.getElementById(type + '-popup').style.display = 'none';
             applyColumnFilters();
         }
@@ -275,7 +356,7 @@
             $('#' + type + '-val1').val('');
             $('#' + type + '-val2').val('').hide();
             advFilters[type] = null;
-            $('#' + type + '-filter-label').text('Baho').removeClass('adv-active-label');
+            $('#' + type + '-filter-label').text(type === 'baho' ? 'Baho' : 'Sana').removeClass('adv-active-label');
             $('#' + type + '-popup').closest('.adv-filter-wrap').find('.adv-filter-btn').removeClass('adv-active');
             document.getElementById(type + '-popup').style.display = 'none';
             applyColumnFilters();
@@ -283,19 +364,41 @@
 
         function matchAdvFilter(filter, cellValue, isDate) {
             if (!filter) return true;
-            var cv = parseFloat(cellValue);
-            var v1 = parseFloat(filter.val1);
-            var v2 = parseFloat(filter.val2);
-            if (isNaN(cv) || isNaN(v1)) return false;
-            switch (filter.op) {
-                case 'eq':  return cv === v1;
+            var op = filter.op;
+            var v1, v2, cv;
+
+            if (isDate) {
+                cv = parseDateValue(cellValue);
+                v1 = filter.val1;
+                v2 = filter.val2;
+                if (!cv) return false;
+            } else {
+                cv = parseFloat(cellValue);
+                v1 = parseFloat(filter.val1);
+                v2 = parseFloat(filter.val2);
+                if (isNaN(cv) || isNaN(v1)) return false;
+            }
+
+            switch (op) {
+                case 'eq':  return isDate ? cv === v1 : cv === v1;
                 case 'gt':  return cv > v1;
                 case 'gte': return cv >= v1;
                 case 'lt':  return cv < v1;
                 case 'lte': return cv <= v1;
-                case 'between': return !isNaN(v2) ? (cv >= v1 && cv <= v2) : cv >= v1;
+                case 'between':
+                    if (isDate) return v2 ? (cv >= v1 && cv <= v2) : cv >= v1;
+                    return !isNaN(v2) ? (cv >= v1 && cv <= v2) : cv >= v1;
             }
             return true;
+        }
+
+        function parseDateValue(dateStr) {
+            if (!dateStr) return null;
+            dateStr = dateStr.trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr.substring(0, 10);
+            var parts = dateStr.split('.');
+            if (parts.length === 3) return parts[2] + '-' + parts[1] + '-' + parts[0];
+            return dateStr;
         }
 
         document.addEventListener('click', function(e) {
@@ -309,51 +412,49 @@
             var html = '';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
+                var ynBadge = r.yn_turi === 'Test'
+                    ? '<span class="badge badge-grade">' + esc(r.yn_turi) + '</span>'
+                    : (r.yn_turi === 'OSKI'
+                        ? '<span class="badge badge-oski">' + esc(r.yn_turi) + '</span>'
+                        : esc(r.yn_turi));
+
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + (i + 1) + '</td>';
-                html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.attempt_id) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.student_id) + '</span></td>';
-                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.student_name) + '</span></td>';
+                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.faculty) + '</span></td>';
                 html += '<td><span class="text-cell text-cyan">' + esc(r.direction) + '</span></td>';
+                html += '<td><span class="badge" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;">' + esc(r.kurs) + '</span></td>';
                 html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
-                html += '<td><span class="badge" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;">' + esc(r.fan_id) + '</span></td>';
+                html += '<td><span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">' + esc(r.group) + '</span></td>';
                 html += '<td><span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span></td>';
-                html += '<td style="text-align:center;">';
-                if (r.quiz_type && r.quiz_type.indexOf('OSKI') !== -1) {
-                    html += '<span class="badge badge-oski">' + esc(r.quiz_type) + '</span>';
-                } else {
-                    html += '<span class="badge badge-grade">' + esc(r.quiz_type) + '</span>';
-                }
-                html += '</td>';
-                html += '<td><span class="text-cell" style="font-size:11px;">' + esc(r.attempt_name) + '</span></td>';
+                html += '<td style="text-align:center;">' + ynBadge + '</td>';
                 html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade">' + esc(r.grade) + '</span></td>';
-                html += '<td style="font-size:11px;white-space:nowrap;color:#475569;">' + esc(r.date_start) + '</td>';
-                html += '<td style="font-size:11px;white-space:nowrap;color:#475569;">' + esc(r.date_finish) + '</td>';
+                html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
+                html += '<td>' + getXulosaBadge(r.xulosa_code, r.xulosa) + '</td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
         }
 
-        // ========== EXCEL ==========
-        function downloadExcel() {
+        // ========== EXCEL (Original — barcha ustunlar) ==========
+        function downloadOriginalExcel() {
             if (!filteredData || filteredData.length === 0) return;
 
-            var headers = ['#', 'Attempt ID', 'Student ID', 'FISH', 'Fakultet', 'Yo\'nalish', 'Semestr', 'Fan ID', 'Fan nomi', 'Quiz turi', 'Urinish nomi', 'Shakl', 'Baho', 'Boshlanish', 'Tugash'];
+            var headers = ['#', 'Student ID', 'FISH', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'Fan', 'YN turi', 'Shakl', 'Baho', 'Sana'];
             var rows = [headers];
             filteredData.forEach(function(r, i) {
                 rows.push([
-                    i + 1, r.attempt_id, r.student_id, r.student_name, r.faculty, r.direction,
-                    r.semester, r.fan_id, r.fan_name, r.quiz_type, r.attempt_name, r.shakl,
-                    r.grade, r.date_start, r.date_finish
+                    i + 1, r.student_id, r.full_name, r.faculty, r.direction,
+                    r.kurs, r.semester, r.group, r.fan_name, r.yn_turi,
+                    r.shakl, r.grade, r.date
                 ]);
             });
 
             var wb = XLSX.utils.book_new();
             var ws = XLSX.utils.aoa_to_sheet(rows);
 
-            // Ustun kengliklarini avtomatik belgilash
             var colWidths = headers.map(function(h, ci) {
                 var max = h.length;
                 rows.forEach(function(row) {
@@ -366,6 +467,53 @@
 
             XLSX.utils.book_append_sheet(wb, ws, 'Natijalar');
             XLSX.writeFile(wb, 'yuklanmagan_natijalar_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+        }
+
+        // ========== EXCEL (Xulosali — xulosa, JN, MT, OSKI) ==========
+        function downloadXulosaExcel() {
+            if (!filteredData || filteredData.length === 0) return;
+
+            var headers = ['#', 'Student ID', 'FISH', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'Fan', 'YN turi', 'Shakl', 'Baho', 'Sana', 'Xulosa', 'JN o\'rtacha', 'MT o\'rtacha', 'OSKI baho'];
+            var rows = [headers];
+            filteredData.forEach(function(r, i) {
+                rows.push([
+                    i + 1, r.student_id, r.full_name, r.faculty, r.direction,
+                    r.kurs, r.semester, r.group, r.fan_name, r.yn_turi,
+                    r.shakl, r.grade, r.date, r.xulosa,
+                    r.jn_avg !== null ? r.jn_avg : '',
+                    r.mt_avg !== null ? r.mt_avg : '',
+                    r.oski_avg !== null ? r.oski_avg : ''
+                ]);
+            });
+
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet(rows);
+
+            var colWidths = headers.map(function(h, ci) {
+                var max = h.length;
+                rows.forEach(function(row) {
+                    var len = String(row[ci] || '').length;
+                    if (len > max) max = len;
+                });
+                return { wch: Math.min(max + 2, 40) };
+            });
+            ws['!cols'] = colWidths;
+
+            // Xulosa ustuniga rang berish
+            for (var ri = 1; ri < rows.length; ri++) {
+                var xulosaCode = filteredData[ri - 1].xulosa_code;
+                var cellRef = XLSX.utils.encode_cell({ r: ri, c: 13 });
+                if (!ws[cellRef]) continue;
+                var fillColor = 'FFFFFF';
+                if (xulosaCode === 'ok') fillColor = 'DCFCE7';
+                else if (xulosaCode === 'uploaded') fillColor = 'F1F5F9';
+                else if (xulosaCode === '2O' || xulosaCode === '2T') fillColor = 'FEF3C7';
+                else fillColor = 'FEF2F2';
+                ws[cellRef].s = { fill: { fgColor: { rgb: fillColor } } };
+            }
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Xulosali');
+            XLSX.writeFile(wb, 'yuklanmagan_xulosali_' + new Date().toISOString().slice(0, 10) + '.xlsx');
         }
 
         // ========== DOCUMENT READY ==========
@@ -416,6 +564,9 @@
         .btn-excel { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(22,163,74,0.3); height: 32px; white-space: nowrap; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); transform: translateY(-1px); }
         .btn-excel:disabled { cursor: not-allowed; opacity: 0.4; }
+        .btn-excel-xulosa { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: linear-gradient(135deg, #d97706, #f59e0b); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(217,119,6,0.3); height: 32px; white-space: nowrap; }
+        .btn-excel-xulosa:hover:not(:disabled) { background: linear-gradient(135deg, #b45309, #d97706); transform: translateY(-1px); }
+        .btn-excel-xulosa:disabled { cursor: not-allowed; opacity: 0.4; }
 
         /* === TABLE === */
         .empty-state { padding: 60px 20px; text-align: center; }

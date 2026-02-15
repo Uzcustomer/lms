@@ -27,6 +27,7 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\LectureScheduleController;
+use App\Http\Controllers\Admin\TimetableViewController;
 use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\MoodleImportController;
 
@@ -327,6 +328,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/template', [LectureScheduleController::class, 'downloadTemplate'])->name('template');
         });
 
+        // Dars jadvali ko'rish (filtrlash bilan)
+        Route::prefix('timetable-view')->name('timetable-view.')->group(function () {
+            Route::get('/', [TimetableViewController::class, 'index'])->name('index');
+            Route::get('/data', [TimetableViewController::class, 'data'])->name('data');
+            Route::get('/filter-options', [TimetableViewController::class, 'filterOptions'])->name('filter-options');
+        });
+
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
         Route::post('/impersonate/student/{student}', [ImpersonateController::class, 'impersonateStudent'])->name('impersonate.student');
         Route::post('/impersonate/teacher/{teacher}', [ImpersonateController::class, 'impersonateTeacher'])->name('impersonate.teacher');
@@ -566,6 +574,13 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/export/{id}', [LectureScheduleController::class, 'export'])->name('export');
             Route::delete('/{id}', [LectureScheduleController::class, 'destroy'])->name('destroy');
             Route::get('/template', [LectureScheduleController::class, 'downloadTemplate'])->name('template');
+        });
+
+        // Dars jadvali ko'rish (filtrlash bilan)
+        Route::prefix('timetable-view')->name('timetable-view.')->group(function () {
+            Route::get('/', [TimetableViewController::class, 'index'])->name('index');
+            Route::get('/data', [TimetableViewController::class, 'data'])->name('data');
+            Route::get('/filter-options', [TimetableViewController::class, 'filterOptions'])->name('filter-options');
         });
 
         Route::get('/get-groups/semester', [LessonController::class, 'getGroups_semester'])->name('get.groups_semester');

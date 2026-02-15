@@ -6,6 +6,9 @@ use App\Exports\LectureScheduleExport;
 use App\Exports\LectureScheduleTemplate;
 use App\Http\Controllers\Controller;
 use App\Imports\LectureScheduleImport;
+use App\Models\Auditorium;
+use App\Models\CurriculumSubjectTeacher;
+use App\Models\Group;
 use App\Models\LectureSchedule;
 use App\Models\LectureScheduleBatch;
 use App\Services\LectureScheduleConflictService;
@@ -112,8 +115,11 @@ class LectureScheduleController extends Controller
                 'week_day' => $item->week_day,
                 'lesson_pair_code' => $item->lesson_pair_code,
                 'group_name' => $item->group_name,
+                'group_id' => $item->group_id,
                 'subject_name' => $item->subject_name,
+                'subject_id' => $item->subject_id,
                 'employee_name' => $item->employee_name,
+                'employee_id' => $item->employee_id,
                 'auditorium_name' => $item->auditorium_name,
                 'training_type_name' => $item->training_type_name,
                 'hemis_status' => $item->hemis_status,
@@ -167,11 +173,14 @@ class LectureScheduleController extends Controller
             'auditorium_name' => 'nullable|string|max:255',
             'training_type_name' => 'nullable|string|max:255',
             'group_name' => 'nullable|string|max:255',
+            'group_id' => 'nullable|integer',
+            'subject_id' => 'nullable|integer',
+            'employee_id' => 'nullable|integer',
         ]);
 
         $item = LectureSchedule::findOrFail($id);
         $item->update(array_merge(
-            $request->only(['subject_name', 'employee_name', 'auditorium_name', 'training_type_name', 'group_name']),
+            $request->only(['subject_name', 'employee_name', 'auditorium_name', 'training_type_name', 'group_name', 'group_id', 'subject_id', 'employee_id']),
             ['hemis_status' => 'not_checked', 'hemis_diff' => null]
         ));
 
@@ -195,12 +204,16 @@ class LectureScheduleController extends Controller
             'employee_name' => 'nullable|string|max:255',
             'auditorium_name' => 'nullable|string|max:255',
             'training_type_name' => 'nullable|string|max:255',
+            'group_id' => 'nullable|integer',
+            'subject_id' => 'nullable|integer',
+            'employee_id' => 'nullable|integer',
         ]);
 
         $item = LectureSchedule::create($request->only([
             'batch_id', 'week_day', 'lesson_pair_code',
             'subject_name', 'group_name', 'employee_name',
             'auditorium_name', 'training_type_name',
+            'group_id', 'subject_id', 'employee_id',
         ]));
 
         $batch = LectureScheduleBatch::find($request->batch_id);
@@ -227,6 +240,115 @@ class LectureScheduleController extends Controller
         $service->resetAndRedetect($batch);
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * AJAX: Barcha active guruhlar ro'yxati
+     */
+    public function groups()
+    {
+        $groups = Group::where('active', true)
+            ->orderBy('name')
+            ->select('group_hemis_id', 'name')
+            ->get()
+            ->map(fn($g) => [
+                'id' => $g->group_hemis_id,
+                'name' => $g->name,
+            ]);
+
+        return response()->json(['groups' => $groups]);
+    }
+
+    /**
+     * AJAX: Guruhga biriktirilgan fanlar
+     */
+    public function subjects(Request $request)
+    {
+        $request->validate(['group_id' => 'required|integer']);
+
+        $subjects = CurriculumSubjectTeacher::where('group_id', $request->group_id)
+            ->where('active', true)
+            ->select('subject_id', 'subject_name')
+            ->distinct()
+            ->orderBy('subject_name')
+            ->get()
+            ->map(fn($s) => [
+                'id' => $s->subject_id,
+                'name' => $s->subject_name,
+            ]);
+
+        return response()->json(['subjects' => $subjects]);
+    }
+
+    /**
+     * AJAX: Fan o'qituvchilari (guruh + fan + dars turi bo'yicha)
+     */
+    public function teachers(Request $request)
+    {
+        $request->validate([
+            'group_id' => 'required|integer',
+            'subject_id' => 'required|integer',
+            'training_type_name' => 'nullable|string',
+        ]);
+
+        $query = CurriculumSubjectTeacher::where('group_id', $request->group_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('active', true);
+
+        if ($request->filled('training_type_name')) {
+            $query->where('training_type_name', $request->training_type_name);
+        }
+
+        $teachers = $query->select('employee_id', 'employee_name')
+            ->distinct()
+            ->orderBy('employee_name')
+            ->get()
+            ->map(fn($t) => [
+                'id' => $t->employee_id,
+                'name' => $t->employee_name,
+            ]);
+
+        return response()->json(['teachers' => $teachers]);
+    }
+
+    /**
+     * AJAX: Dars turiga mos auditoriyalar
+     */
+    public function auditoriums(Request $request)
+    {
+        $request->validate(['training_type_name' => 'nullable|string']);
+
+        $query = Auditorium::where('active', true);
+
+        if ($request->filled('training_type_name')) {
+            $typeMap = [
+                "Ma'ruza"      => ['Лекцион', 'Lektsion', "Ma'ruza", 'Maruza'],
+                'Amaliy'       => ['Амалий', 'Amaliy'],
+                'Seminar'      => ['Семинар', 'Seminar'],
+                'Laboratoriya' => ['Лаборатория', 'Laboratoriya'],
+            ];
+
+            $trainingType = $request->training_type_name;
+            if (isset($typeMap[$trainingType])) {
+                $query->where(function ($q) use ($typeMap, $trainingType) {
+                    foreach ($typeMap[$trainingType] as $pattern) {
+                        $q->orWhere('auditorium_type_name', 'LIKE', "%{$pattern}%");
+                    }
+                });
+            }
+        }
+
+        $auditoriums = $query->orderBy('name')
+            ->select('id', 'name', 'auditorium_type_name', 'volume')
+            ->get()
+            ->map(fn($a) => [
+                'id' => $a->id,
+                'name' => $a->name,
+                'type' => $a->auditorium_type_name,
+                'volume' => $a->volume,
+            ]);
+
+        return response()->json(['auditoriums' => $auditoriums]);
     }
 
     /**

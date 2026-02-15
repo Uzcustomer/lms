@@ -333,6 +333,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/data', [LectureScheduleController::class, 'data'])->name('data');
             Route::get('/compare', [LectureScheduleController::class, 'compare'])->name('compare');
             Route::get('/conflicts', [LectureScheduleController::class, 'conflicts'])->name('conflicts');
+            Route::get('/groups', [LectureScheduleController::class, 'groups'])->name('groups');
+            Route::get('/subjects', [LectureScheduleController::class, 'subjects'])->name('subjects');
+            Route::get('/teachers', [LectureScheduleController::class, 'teachers'])->name('teachers');
+            Route::get('/auditoriums', [LectureScheduleController::class, 'auditoriums'])->name('auditoriums');
             Route::post('/move', [LectureScheduleController::class, 'move'])->name('move');
             Route::post('/store', [LectureScheduleController::class, 'store'])->name('store');
             Route::put('/item/{id}', [LectureScheduleController::class, 'update'])->name('update');
@@ -588,6 +592,10 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/data', [LectureScheduleController::class, 'data'])->name('data');
             Route::get('/compare', [LectureScheduleController::class, 'compare'])->name('compare');
             Route::get('/conflicts', [LectureScheduleController::class, 'conflicts'])->name('conflicts');
+            Route::get('/groups', [LectureScheduleController::class, 'groups'])->name('groups');
+            Route::get('/subjects', [LectureScheduleController::class, 'subjects'])->name('subjects');
+            Route::get('/teachers', [LectureScheduleController::class, 'teachers'])->name('teachers');
+            Route::get('/auditoriums', [LectureScheduleController::class, 'auditoriums'])->name('auditoriums');
             Route::post('/move', [LectureScheduleController::class, 'move'])->name('move');
             Route::post('/store', [LectureScheduleController::class, 'store'])->name('store');
             Route::put('/item/{id}', [LectureScheduleController::class, 'update'])->name('update');

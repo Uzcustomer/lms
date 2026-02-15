@@ -327,31 +327,64 @@
                 {{-- Form --}}
                 <div style="padding:14px 20px;">
                     <div class="ls-form-grid">
+                        {{-- 1. GURUH --}}
+                        <div class="ls-form-group ls-form-full">
+                            <label class="ls-form-label">Guruh <span style="color:#ef4444">*</span></label>
+                            <select x-model="modal.form.group_id" @change="onGroupChange($event.target.value)" class="ls-form-input" :disabled="loadingGroups">
+                                <option value="">Tanlang...</option>
+                                <template x-for="g in dropdownGroups" :key="g.id">
+                                    <option :value="g.id" x-text="g.name"></option>
+                                </template>
+                            </select>
+                            <span x-show="loadingGroups" class="ls-loading-hint">Yuklanmoqda...</span>
+                        </div>
+
+                        {{-- 2. FAN NOMI --}}
                         <div class="ls-form-group ls-form-full">
                             <label class="ls-form-label">Fan nomi <span style="color:#ef4444">*</span></label>
-                            <input x-model="modal.form.subject_name" type="text" placeholder="Masalan: Matematika" class="ls-form-input">
+                            <select x-model="modal.form.subject_id" @change="onSubjectChange($event.target.value)" class="ls-form-input" :disabled="!modal.form.group_id || loadingSubjects">
+                                <option value="" x-text="!modal.form.group_id ? 'Avval guruhni tanlang' : 'Tanlang...'"></option>
+                                <template x-for="s in dropdownSubjects" :key="s.id">
+                                    <option :value="s.id" x-text="s.name"></option>
+                                </template>
+                            </select>
+                            <span x-show="loadingSubjects" class="ls-loading-hint">Yuklanmoqda...</span>
                         </div>
-                        <div class="ls-form-group">
-                            <label class="ls-form-label">Guruh <span style="color:#ef4444">*</span></label>
-                            <input x-model="modal.form.group_name" type="text" placeholder="21-01 AT" class="ls-form-input">
-                        </div>
-                        <div class="ls-form-group">
-                            <label class="ls-form-label">O'qituvchi</label>
-                            <input x-model="modal.form.employee_name" type="text" placeholder="F.I.O" class="ls-form-input">
-                        </div>
-                        <div class="ls-form-group">
-                            <label class="ls-form-label">Auditoriya</label>
-                            <input x-model="modal.form.auditorium_name" type="text" placeholder="Xona" class="ls-form-input">
-                        </div>
+
+                        {{-- 3. DARS TURI --}}
                         <div class="ls-form-group">
                             <label class="ls-form-label">Dars turi</label>
-                            <select x-model="modal.form.training_type_name" class="ls-form-input">
+                            <select x-model="modal.form.training_type_name" @change="onTrainingTypeChange($event.target.value)" class="ls-form-input">
                                 <option value="">Tanlang...</option>
                                 <option value="Ma'ruza">Ma'ruza</option>
                                 <option value="Amaliy">Amaliy</option>
                                 <option value="Seminar">Seminar</option>
                                 <option value="Laboratoriya">Laboratoriya</option>
                             </select>
+                        </div>
+
+                        {{-- 4. O'QITUVCHI --}}
+                        <div class="ls-form-group">
+                            <label class="ls-form-label">O'qituvchi</label>
+                            <select x-model="modal.form.employee_id" @change="onEmployeeChange($event.target.value)" class="ls-form-input" :disabled="!modal.form.subject_id || loadingTeachers">
+                                <option value="" x-text="!modal.form.subject_id ? 'Avval fanni tanlang' : 'Tanlang...'"></option>
+                                <template x-for="t in dropdownTeachers" :key="t.id">
+                                    <option :value="t.id" x-text="t.name"></option>
+                                </template>
+                            </select>
+                            <span x-show="loadingTeachers" class="ls-loading-hint">Yuklanmoqda...</span>
+                        </div>
+
+                        {{-- 5. AUDITORIYA --}}
+                        <div class="ls-form-group ls-form-full">
+                            <label class="ls-form-label">Auditoriya</label>
+                            <select x-model="modal.form.auditorium_name" class="ls-form-input" :disabled="loadingAuditoriums">
+                                <option value="">Tanlang...</option>
+                                <template x-for="a in dropdownAuditoriums" :key="a.id">
+                                    <option :value="a.name" x-text="a.name + (a.type ? ' (' + a.type + ')' : '') + (a.volume ? ' [' + a.volume + ' o`rin]' : '')"></option>
+                                </template>
+                            </select>
+                            <span x-show="loadingAuditoriums" class="ls-loading-hint">Yuklanmoqda...</span>
                         </div>
                     </div>
                 </div>
@@ -648,6 +681,10 @@
         }
         .ls-btn-save:hover { opacity: 0.9; }
         .ls-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+        .ls-loading-hint { font-size: 11px; color: #6b7280; margin-top: 2px; display: block; }
+        .dark .ls-loading-hint { color: #9ca3b8; }
+        .ls-form-input:disabled { opacity: 0.6; cursor: not-allowed; background: #f1f5f9; }
+        .dark .ls-form-input:disabled { background: #1e293b; opacity: 0.5; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 
@@ -672,6 +709,16 @@
             // Context menu
             ctxMenu: { show: false, x: 0, y: 0, card: null },
 
+            // Dropdown options
+            dropdownGroups: [],
+            dropdownSubjects: [],
+            dropdownTeachers: [],
+            dropdownAuditoriums: [],
+            loadingGroups: false,
+            loadingSubjects: false,
+            loadingTeachers: false,
+            loadingAuditoriums: false,
+
             // Modal
             modal: {
                 show: false,
@@ -680,7 +727,13 @@
                 cardId: null,
                 weekDay: null,
                 pairCode: null,
-                form: { subject_name: '', group_name: '', employee_name: '', auditorium_name: '', training_type_name: '' },
+                form: {
+                    group_id: '', group_name: '',
+                    subject_id: '', subject_name: '',
+                    employee_id: '', employee_name: '',
+                    auditorium_name: '',
+                    training_type_name: '',
+                },
             },
 
             // Toast
@@ -803,35 +856,161 @@
                 this.ctxMenu.show = false;
             },
 
+            // ===== DROPDOWN FETCH METHODS =====
+            async fetchGroups() {
+                this.loadingGroups = true;
+                try {
+                    const res = await fetch('{{ route($routePrefix . ".lecture-schedule.groups") }}');
+                    const data = await res.json();
+                    this.dropdownGroups = data.groups || [];
+                } catch (e) { console.error('Failed to load groups:', e); }
+                finally { this.loadingGroups = false; }
+            },
+            async fetchSubjects(groupId) {
+                if (!groupId) { this.dropdownSubjects = []; return; }
+                this.loadingSubjects = true;
+                try {
+                    const res = await fetch('{{ route($routePrefix . ".lecture-schedule.subjects") }}?group_id=' + groupId);
+                    const data = await res.json();
+                    this.dropdownSubjects = data.subjects || [];
+                } catch (e) { console.error('Failed to load subjects:', e); }
+                finally { this.loadingSubjects = false; }
+            },
+            async fetchTeachers(groupId, subjectId, trainingTypeName) {
+                if (!groupId || !subjectId) { this.dropdownTeachers = []; return; }
+                this.loadingTeachers = true;
+                try {
+                    let url = '{{ route($routePrefix . ".lecture-schedule.teachers") }}?group_id=' + groupId + '&subject_id=' + subjectId;
+                    if (trainingTypeName) url += '&training_type_name=' + encodeURIComponent(trainingTypeName);
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    this.dropdownTeachers = data.teachers || [];
+                } catch (e) { console.error('Failed to load teachers:', e); }
+                finally { this.loadingTeachers = false; }
+            },
+            async fetchAuditoriums(trainingTypeName) {
+                this.loadingAuditoriums = true;
+                try {
+                    let url = '{{ route($routePrefix . ".lecture-schedule.auditoriums") }}';
+                    if (trainingTypeName) url += '?training_type_name=' + encodeURIComponent(trainingTypeName);
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    this.dropdownAuditoriums = data.auditoriums || [];
+                } catch (e) { console.error('Failed to load auditoriums:', e); }
+                finally { this.loadingAuditoriums = false; }
+            },
+
+            // ===== CASCADE CHANGE HANDLERS =====
+            onGroupChange(groupId) {
+                const group = this.dropdownGroups.find(g => String(g.id) === String(groupId));
+                this.modal.form.group_name = group ? group.name : '';
+                this.modal.form.subject_id = '';
+                this.modal.form.subject_name = '';
+                this.modal.form.employee_id = '';
+                this.modal.form.employee_name = '';
+                this.dropdownSubjects = [];
+                this.dropdownTeachers = [];
+                if (groupId) this.fetchSubjects(groupId);
+            },
+            onSubjectChange(subjectId) {
+                const subject = this.dropdownSubjects.find(s => String(s.id) === String(subjectId));
+                this.modal.form.subject_name = subject ? subject.name : '';
+                this.modal.form.employee_id = '';
+                this.modal.form.employee_name = '';
+                this.dropdownTeachers = [];
+                if (subjectId && this.modal.form.group_id) {
+                    this.fetchTeachers(this.modal.form.group_id, subjectId, this.modal.form.training_type_name);
+                }
+            },
+            onTrainingTypeChange(trainingTypeName) {
+                if (this.modal.form.group_id && this.modal.form.subject_id) {
+                    this.modal.form.employee_id = '';
+                    this.modal.form.employee_name = '';
+                    this.fetchTeachers(this.modal.form.group_id, this.modal.form.subject_id, trainingTypeName);
+                }
+                this.modal.form.auditorium_name = '';
+                this.fetchAuditoriums(trainingTypeName);
+            },
+            onEmployeeChange(employeeId) {
+                const teacher = this.dropdownTeachers.find(t => String(t.id) === String(employeeId));
+                this.modal.form.employee_name = teacher ? teacher.name : '';
+            },
+
             // ===== MODAL =====
-            openEditModal(card) {
+            async openEditModal(card) {
                 this.modal = {
                     show: true, isEdit: true, saving: false,
                     cardId: card.id,
                     weekDay: card.week_day,
                     pairCode: card.lesson_pair_code,
                     form: {
-                        subject_name: card.subject_name || '',
+                        group_id: card.group_id || '',
                         group_name: card.group_name || '',
+                        subject_id: card.subject_id || '',
+                        subject_name: card.subject_name || '',
+                        employee_id: card.employee_id || '',
                         employee_name: card.employee_name || '',
                         auditorium_name: card.auditorium_name || '',
                         training_type_name: card.training_type_name || '',
                     },
                 };
+                this.dropdownSubjects = [];
+                this.dropdownTeachers = [];
+                this.dropdownAuditoriums = [];
+
+                await this.fetchGroups();
+
+                // Agar group_id yo'q lekin group_name bor bo'lsa, nom bo'yicha topishga harakat
+                if (!card.group_id && card.group_name) {
+                    const match = this.dropdownGroups.find(g => g.name.trim().toLowerCase() === card.group_name.trim().toLowerCase());
+                    if (match) this.modal.form.group_id = match.id;
+                }
+
+                if (this.modal.form.group_id) {
+                    await this.fetchSubjects(this.modal.form.group_id);
+                    // Agar subject_id yo'q lekin subject_name bor bo'lsa
+                    if (!card.subject_id && card.subject_name) {
+                        const match = this.dropdownSubjects.find(s => s.name.trim().toLowerCase() === card.subject_name.trim().toLowerCase());
+                        if (match) this.modal.form.subject_id = match.id;
+                    }
+                }
+
+                if (this.modal.form.group_id && this.modal.form.subject_id) {
+                    await this.fetchTeachers(this.modal.form.group_id, this.modal.form.subject_id, card.training_type_name);
+                    // Agar employee_id yo'q lekin employee_name bor bo'lsa
+                    if (!card.employee_id && card.employee_name) {
+                        const match = this.dropdownTeachers.find(t => t.name.trim().toLowerCase() === card.employee_name.trim().toLowerCase());
+                        if (match) this.modal.form.employee_id = match.id;
+                    }
+                }
+
+                if (card.training_type_name) {
+                    await this.fetchAuditoriums(card.training_type_name);
+                }
             },
-            openAddModal(dayNum, pairCode) {
+            async openAddModal(dayNum, pairCode) {
                 if (!this.activeBatchId) return;
                 this.modal = {
                     show: true, isEdit: false, saving: false,
                     cardId: null,
                     weekDay: dayNum,
                     pairCode: pairCode,
-                    form: { subject_name: '', group_name: '', employee_name: '', auditorium_name: '', training_type_name: '' },
+                    form: {
+                        group_id: '', group_name: '',
+                        subject_id: '', subject_name: '',
+                        employee_id: '', employee_name: '',
+                        auditorium_name: '',
+                        training_type_name: '',
+                    },
                 };
+                this.dropdownSubjects = [];
+                this.dropdownTeachers = [];
+                this.dropdownAuditoriums = [];
+                await this.fetchGroups();
             },
             async saveModal() {
-                if (!this.modal.form.subject_name || !this.modal.form.group_name) {
-                    this.showToast('Fan nomi va guruh majburiy!', 'error');
+                if (!this.modal.form.group_id || !this.modal.form.subject_id) {
+                    this.showToast('Guruh va fan tanlash majburiy!', 'error');
                     return;
                 }
                 this.modal.saving = true;
@@ -899,8 +1078,11 @@
                             week_day: card.week_day,
                             lesson_pair_code: card.lesson_pair_code,
                             subject_name: card.subject_name,
+                            subject_id: card.subject_id,
                             group_name: card.group_name,
+                            group_id: card.group_id,
                             employee_name: card.employee_name,
+                            employee_id: card.employee_id,
                             auditorium_name: card.auditorium_name,
                             training_type_name: card.training_type_name,
                         }),

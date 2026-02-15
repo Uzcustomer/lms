@@ -59,19 +59,19 @@
                         <div class="min-w-[200px]">
                             <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Excel fayl</label>
                             <input type="file" name="file" accept=".xlsx,.xls,.csv" required
-                                   class="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:text-gray-300 dark:file:bg-blue-900 dark:file:text-blue-200">
+                                   class="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer file:transition-all file:duration-200 hover:file:shadow-md hover:file:scale-105 dark:text-gray-300 dark:file:bg-blue-900 dark:file:text-blue-200">
                         </div>
                         <div>
-                            <button type="submit" class="px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                            <button type="submit" class="btn-action btn-upload group">
+                                <svg class="w-4 h-4 transition-transform duration-300 group-hover:-translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                                 Yuklash
                             </button>
                         </div>
                     </form>
 
                     <a href="{{ route($routePrefix . '.lecture-schedule.template') }}"
-                       class="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                       class="btn-action btn-template group">
+                        <svg class="w-4 h-4 transition-transform duration-300 group-hover:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         Shablon
                     </a>
 
@@ -79,7 +79,7 @@
                     <div class="min-w-[220px]">
                         <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Yuklangan jadvallar</label>
                         <select x-model="activeBatchId" @change="loadGrid()"
-                                class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-shadow duration-200 hover:shadow-md">
                             @foreach($batches as $b)
                             <option value="{{ $b->id }}" {{ isset($activeBatch) && $activeBatch->id === $b->id ? 'selected' : '' }}>
                                 {{ $b->file_name }} ({{ $b->created_at->format('d.m.Y H:i') }})
@@ -89,23 +89,23 @@
                     </div>
 
                     <button @click="compareHemis()" :disabled="comparing"
-                            class="px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition flex items-center gap-2">
-                        <svg x-show="!comparing" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                            class="btn-action btn-compare group">
+                        <svg x-show="!comparing" class="w-4 h-4 transition-transform duration-300 group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                         <svg x-show="comparing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                         Hemis solishtirish
                     </button>
 
                     {{-- Export --}}
-                    <a :href="exportUrl" class="px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <a :href="exportUrl" class="btn-action btn-export group">
+                        <svg class="w-4 h-4 transition-transform duration-300 group-hover:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                         Excel eksport
                     </a>
 
                     <form method="POST" action="{{ route($routePrefix . '.lecture-schedule.destroy', ['id' => $activeBatch->id ?? 0]) }}" onsubmit="return confirm('Rostdan o\'chirmoqchimisiz?')">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="px-4 py-2.5 bg-red-50 text-red-600 text-sm font-medium rounded-lg hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 transition flex items-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        <button type="submit" class="btn-action btn-delete group">
+                            <svg class="w-4 h-4 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                             O'chirish
                         </button>
                     </form>
@@ -375,6 +375,109 @@
     {{-- CSS --}}
     <style>
         [x-cloak] { display: none !important; }
+
+        /* ===== INTERACTIVE BUTTONS ===== */
+        .btn-action {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1.25rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            border-radius: 0.75rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            overflow: hidden;
+            border: none;
+            text-decoration: none;
+            outline: none;
+        }
+        .btn-action::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            border-radius: inherit;
+        }
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        .btn-action:active {
+            transform: translateY(0) scale(0.97);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        }
+        .btn-action:focus-visible {
+            outline: 2px solid currentColor;
+            outline-offset: 2px;
+        }
+
+        /* Yuklash - Blue gradient */
+        .btn-upload {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+        }
+        .btn-upload::before { background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); }
+        .btn-upload:hover { box-shadow: 0 6px 20px rgba(59, 130, 246, 0.45); }
+        .btn-upload:hover::before { opacity: 1; }
+
+        /* Shablon - Teal/Cyan gradient */
+        .btn-template {
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.35);
+        }
+        .btn-template::before { background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%); }
+        .btn-template:hover { box-shadow: 0 6px 20px rgba(6, 182, 212, 0.45); }
+        .btn-template:hover::before { opacity: 1; }
+
+        /* Hemis solishtirish - Indigo/Purple gradient */
+        .btn-compare {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.35);
+        }
+        .btn-compare::before { background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%); }
+        .btn-compare:hover { box-shadow: 0 6px 20px rgba(139, 92, 246, 0.45); }
+        .btn-compare:hover::before { opacity: 1; }
+        .btn-compare:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2) !important; }
+
+        /* Excel eksport - Emerald/Green gradient */
+        .btn-export {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+        }
+        .btn-export::before { background: linear-gradient(135deg, #34d399 0%, #10b981 100%); }
+        .btn-export:hover { box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45); }
+        .btn-export:hover::before { opacity: 1; }
+
+        /* O'chirish - Red/Rose gradient */
+        .btn-delete {
+            background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(244, 63, 94, 0.3);
+        }
+        .btn-delete::before { background: linear-gradient(135deg, #fb7185 0%, #f43f5e 100%); }
+        .btn-delete:hover { box-shadow: 0 6px 20px rgba(244, 63, 94, 0.45); }
+        .btn-delete:hover::before { opacity: 1; }
+
+        /* Dark mode adjustments for buttons */
+        .dark .btn-upload { box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25); }
+        .dark .btn-upload:hover { box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35); }
+        .dark .btn-template { box-shadow: 0 2px 8px rgba(6, 182, 212, 0.25); }
+        .dark .btn-template:hover { box-shadow: 0 6px 20px rgba(6, 182, 212, 0.35); }
+        .dark .btn-compare { box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25); }
+        .dark .btn-compare:hover { box-shadow: 0 6px 20px rgba(139, 92, 246, 0.35); }
+        .dark .btn-export { box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25); }
+        .dark .btn-export:hover { box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35); }
+        .dark .btn-delete { box-shadow: 0 2px 8px rgba(244, 63, 94, 0.2); }
+        .dark .btn-delete:hover { box-shadow: 0 6px 20px rgba(244, 63, 94, 0.35); }
+
+        /* ===== TABLE STYLES ===== */
         .asc-header { background: #f0f4ff; color: #374151; font-size: 0.8rem; font-weight: 600; text-align: center; padding: 10px 8px; border: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 10; }
         .dark .asc-header { background: #1e293b; color: #e2e8f0; border-color: #334155; }
         .asc-time-col { width: 100px; min-width: 100px; }

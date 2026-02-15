@@ -301,6 +301,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/data', [QuizResultController::class, 'saqlanganHisobot'])->name('data');
         });
 
+        // Sistemaga yuklanmagan natijalar sahifasi
+        Route::prefix('yuklanmagan-natijalar')->name('yuklanmagan-natijalar.')->group(function () {
+            Route::get('/', [QuizResultController::class, 'yuklanmaganNatijalarPage'])->name('index');
+            Route::get('/data', [QuizResultController::class, 'yuklanmaganNatijalar'])->name('data');
+        });
+
         // Test markazi: Quiz natijalar API (diagnostika, upload, import, export, destroy)
         Route::prefix('quiz-results')->name('quiz-results.')->group(function () {
             Route::get('/export', [QuizResultController::class, 'exportExcel'])->name('export');
@@ -540,6 +546,12 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::prefix('saqlangan-hisobot')->name('saqlangan-hisobot.')->group(function () {
             Route::get('/', [QuizResultController::class, 'saqlanganHisobotPage'])->name('index');
             Route::get('/data', [QuizResultController::class, 'saqlanganHisobot'])->name('data');
+        });
+
+        // Sistemaga yuklanmagan natijalar sahifasi
+        Route::prefix('yuklanmagan-natijalar')->name('yuklanmagan-natijalar.')->group(function () {
+            Route::get('/', [QuizResultController::class, 'yuklanmaganNatijalarPage'])->name('index');
+            Route::get('/data', [QuizResultController::class, 'yuklanmaganNatijalar'])->name('data');
         });
 
         // Test markazi: Quiz natijalar API (diagnostika, upload, import, export, destroy)

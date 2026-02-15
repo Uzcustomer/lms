@@ -230,7 +230,8 @@
                                                      @dragstart="onDragStart($event, card)"
                                                      @dragend="onDragEnd($event)"
                                                      @contextmenu.prevent="openContextMenu($event, card)"
-                                                     @dblclick.stop="openEditModal(card)">
+                                                     @click.stop="openEditModal(card)"
+                                                     title="Bosing - tahrirlash">
                                                     <div class="asc-card-subject" x-text="card.subject_name"></div>
                                                     <div class="asc-card-teacher" x-text="card.employee_name || ''"></div>
                                                     <div class="asc-card-meta">
@@ -239,6 +240,9 @@
                                                         <span x-show="card.training_type_name" class="asc-card-type" x-text="card.training_type_name"></span>
                                                     </div>
                                                     <div class="asc-card-group" x-text="card.group_name"></div>
+                                                    <div class="asc-card-edit-icon">
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                                    </div>
                                                     <div x-show="card.has_conflict" class="asc-card-badge asc-badge-conflict" title="Ichki konflikt">!</div>
                                                     <template x-if="card.hemis_diff && card.hemis_diff.length > 0">
                                                         <div class="asc-card-tooltip" x-show="hoveredCard === card.id"
@@ -278,7 +282,7 @@
                     <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-gray-200 dark:bg-gray-600 border border-gray-300"></span><span class="text-gray-500 dark:text-gray-400">Topilmadi</span></div>
                     <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded border-2 border-purple-400"></span><span class="text-gray-500 dark:text-gray-400">Konflikt</span></div>
                     <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-200"></span><span class="text-gray-500 dark:text-gray-400">Tekshirilmagan</span></div>
-                    <span class="text-gray-400 dark:text-gray-500 ml-2">| Drag&Drop = ko'chirish | 2x bosish = tahrirlash | O'ng tugma = menyu</span>
+                    <span class="text-gray-400 dark:text-gray-500 ml-2">| Drag&Drop = ko'chirish | Bosish = tahrirlash | O'ng tugma = menyu</span>
                 </div>
             </div>
         </div>
@@ -307,52 +311,136 @@
         </div>
 
         {{-- EDIT / ADD MODAL --}}
-        <div x-show="modal.show" x-cloak class="fixed inset-0 z-[90] flex items-center justify-center bg-black/40" @click.self="modal.show = false">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" @click.stop>
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200" x-text="modal.isEdit ? 'Darsni tahrirlash' : 'Yangi dars qo\'shish'"></h3>
+        <div x-show="modal.show" x-cloak
+             class="fixed inset-0 z-[90] flex items-center justify-center"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0">
+            {{-- Backdrop --}}
+            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="modal.show = false"></div>
+
+            {{-- Modal content --}}
+            <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
+                 x-show="modal.show"
+                 x-transition:enter="transition ease-out duration-300 delay-75"
+                 x-transition:enter-start="opacity-0 scale-95 translate-y-4"
+                 x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95 translate-y-4"
+                 @click.stop>
+
+                {{-- Header --}}
+                <div class="relative px-6 py-5 overflow-hidden"
+                     :class="modal.isEdit ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-gradient-to-r from-emerald-500 to-teal-600'">
+                    <div class="absolute inset-0 opacity-10">
+                        <svg class="w-full h-full" viewBox="0 0 400 80" preserveAspectRatio="none"><path d="M0,40 Q100,0 200,40 T400,40 V80 H0 Z" fill="white"/></svg>
+                    </div>
+                    <div class="relative flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                                <svg x-show="modal.isEdit" class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                <svg x-show="!modal.isEdit" class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white" x-text="modal.isEdit ? 'Darsni tahrirlash' : 'Yangi dars qo\'shish'"></h3>
+                                <p class="text-sm text-white/80 mt-0.5">
+                                    <span x-text="getModalDayName()"></span> &mdash;
+                                    <span x-text="getModalPairName()"></span>
+                                </p>
+                            </div>
+                        </div>
+                        <button @click="modal.show = false" class="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition text-white">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
                 </div>
-                <div class="px-6 py-4 space-y-3">
+
+                {{-- Form --}}
+                <div class="px-6 py-5 space-y-4">
+                    {{-- Fan nomi --}}
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Fan nomi *</label>
-                        <input x-model="modal.form.subject_name" type="text" required
-                               class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        <label class="modal-label">
+                            <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                            Fan nomi <span class="text-red-500">*</span>
+                        </label>
+                        <input x-model="modal.form.subject_name" type="text" placeholder="Masalan: Matematika" required class="modal-input">
                     </div>
+
+                    {{-- Guruh --}}
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Guruh *</label>
-                        <input x-model="modal.form.group_name" type="text" required
-                               class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        <label class="modal-label">
+                            <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            Guruh <span class="text-red-500">*</span>
+                        </label>
+                        <input x-model="modal.form.group_name" type="text" placeholder="Masalan: 21-01 AT" required class="modal-input">
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
+
+                    {{-- O'qituvchi va Auditoriya --}}
+                    <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">O'qituvchi</label>
-                            <input x-model="modal.form.employee_name" type="text"
-                                   class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <label class="modal-label">
+                                <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                O'qituvchi
+                            </label>
+                            <input x-model="modal.form.employee_name" type="text" placeholder="F.I.O" class="modal-input">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Auditoriya</label>
-                            <input x-model="modal.form.auditorium_name" type="text"
-                                   class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <label class="modal-label">
+                                <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                                Auditoriya
+                            </label>
+                            <input x-model="modal.form.auditorium_name" type="text" placeholder="Xona raqami" class="modal-input">
                         </div>
                     </div>
+
+                    {{-- Dars turi --}}
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Dars turi</label>
-                        <select x-model="modal.form.training_type_name"
-                                class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">Tanlang...</option>
-                            <option value="Ma'ruza">Ma'ruza</option>
-                            <option value="Amaliy">Amaliy</option>
-                            <option value="Seminar">Seminar</option>
-                            <option value="Laboratoriya">Laboratoriya</option>
-                        </select>
+                        <label class="modal-label">
+                            <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                            Dars turi
+                        </label>
+                        <div class="grid grid-cols-4 gap-2 mt-1">
+                            <button type="button" @click="modal.form.training_type_name = 'Ma\'ruza'"
+                                    class="modal-type-btn"
+                                    :class="modal.form.training_type_name === 'Ma\'ruza' ? 'modal-type-active-blue' : 'modal-type-inactive'">
+                                Ma'ruza
+                            </button>
+                            <button type="button" @click="modal.form.training_type_name = 'Amaliy'"
+                                    class="modal-type-btn"
+                                    :class="modal.form.training_type_name === 'Amaliy' ? 'modal-type-active-green' : 'modal-type-inactive'">
+                                Amaliy
+                            </button>
+                            <button type="button" @click="modal.form.training_type_name = 'Seminar'"
+                                    class="modal-type-btn"
+                                    :class="modal.form.training_type_name === 'Seminar' ? 'modal-type-active-purple' : 'modal-type-inactive'">
+                                Seminar
+                            </button>
+                            <button type="button" @click="modal.form.training_type_name = 'Laboratoriya'"
+                                    class="modal-type-btn"
+                                    :class="modal.form.training_type_name === 'Laboratoriya' ? 'modal-type-active-amber' : 'modal-type-inactive'">
+                                Lab
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+
+                {{-- Footer --}}
+                <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800/80 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
                     <button @click="modal.show = false"
-                            class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">Bekor qilish</button>
+                            class="px-5 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-200 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        Bekor qilish
+                    </button>
                     <button @click="saveModal()" :disabled="modal.saving"
-                            class="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition flex items-center gap-2">
+                            class="px-6 py-2.5 text-sm font-semibold text-white rounded-xl disabled:opacity-50 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                            :class="modal.isEdit ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-blue-500/30' : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-emerald-500/30'">
                         <svg x-show="modal.saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        <svg x-show="!modal.saving && modal.isEdit" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <svg x-show="!modal.saving && !modal.isEdit" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                         <span x-text="modal.isEdit ? 'Saqlash' : 'Qo\'shish'"></span>
                     </button>
                 </div>
@@ -491,8 +579,12 @@
         .asc-cell-empty:hover { color: #3b82f6; border-color: #93c5fd; background: #eff6ff; }
         .dark .asc-cell-empty:hover { color: #60a5fa; border-color: #2563eb; background: #1e3a5f; }
         .asc-card { border-radius: 8px; padding: 6px 8px; margin-bottom: 3px; font-size: 0.72rem; line-height: 1.3; position: relative; border: 2px solid transparent; transition: all 0.15s ease; cursor: grab; }
-        .asc-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); transform: scale(1.02); z-index: 5; }
+        .asc-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); transform: scale(1.02); z-index: 5; cursor: pointer; }
         .asc-card:active { cursor: grabbing; }
+        .asc-card-edit-icon { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 4px; background: rgba(59,130,246,0.15); color: #3b82f6; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s ease; }
+        .asc-card:hover .asc-card-edit-icon { opacity: 1; }
+        .asc-card.asc-card-conflict .asc-card-edit-icon { right: 22px; }
+        .dark .asc-card-edit-icon { background: rgba(96,165,250,0.2); color: #60a5fa; }
         .asc-card-dragging { opacity: 0.4; transform: scale(0.95); }
         .asc-card-not-checked { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
         .dark .asc-card-not-checked { background: #1e3a5f; border-color: #2563eb; color: #93c5fd; }
@@ -517,6 +609,71 @@
         .asc-badge-conflict { background: #a855f7; color: #fff; }
         .asc-card-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #1e293b; color: #e2e8f0; padding: 8px 10px; border-radius: 8px; min-width: 200px; z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,0.3); pointer-events: none; margin-bottom: 6px; }
         .asc-card-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #1e293b; }
+
+        /* ===== MODAL STYLES ===== */
+        .modal-label {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #4b5563;
+            margin-bottom: 0.375rem;
+        }
+        .dark .modal-label { color: #9ca3af; }
+        .modal-input {
+            width: 100%;
+            font-size: 0.875rem;
+            padding: 0.625rem 0.875rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background: #f9fafb;
+            color: #1f2937;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+        .modal-input:focus {
+            border-color: #3b82f6;
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+        .modal-input::placeholder { color: #9ca3af; }
+        .dark .modal-input {
+            background: #374151;
+            border-color: #4b5563;
+            color: #e5e7eb;
+        }
+        .dark .modal-input:focus {
+            border-color: #60a5fa;
+            background: #1f2937;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
+        }
+        .modal-type-btn {
+            padding: 0.5rem 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 0.625rem;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            text-align: center;
+        }
+        .modal-type-inactive {
+            background: #f3f4f6;
+            color: #6b7280;
+            border-color: #e5e7eb;
+        }
+        .modal-type-inactive:hover { background: #e5e7eb; border-color: #d1d5db; }
+        .dark .modal-type-inactive { background: #374151; color: #9ca3af; border-color: #4b5563; }
+        .dark .modal-type-inactive:hover { background: #4b5563; }
+        .modal-type-active-blue { background: #dbeafe; color: #1d4ed8; border-color: #3b82f6; }
+        .dark .modal-type-active-blue { background: #1e3a5f; color: #93c5fd; border-color: #3b82f6; }
+        .modal-type-active-green { background: #dcfce7; color: #15803d; border-color: #22c55e; }
+        .dark .modal-type-active-green { background: #14532d55; color: #86efac; border-color: #22c55e; }
+        .modal-type-active-purple { background: #ede9fe; color: #6d28d9; border-color: #8b5cf6; }
+        .dark .modal-type-active-purple { background: #4c1d9555; color: #c4b5fd; border-color: #8b5cf6; }
+        .modal-type-active-amber { background: #fef3c7; color: #b45309; border-color: #f59e0b; }
+        .dark .modal-type-active-amber { background: #78350f55; color: #fcd34d; border-color: #f59e0b; }
     </style>
 
     {{-- JavaScript --}}
@@ -784,6 +941,20 @@
             },
 
             // ===== HELPERS =====
+            getModalDayName() {
+                if (!this.modal.weekDay || !this.days) return '';
+                return this.days[this.modal.weekDay] || this.modal.weekDay + '-kun';
+            },
+            getModalPairName() {
+                if (!this.modal.pairCode || !this.pairs) return '';
+                const pair = this.pairs.find(p => String(p.code) === String(this.modal.pairCode));
+                if (pair) {
+                    let label = pair.name || (pair.code + '-juftlik');
+                    if (pair.start) label += ' (' + pair.start.substring(0, 5) + (pair.end ? ' - ' + pair.end.substring(0, 5) : '') + ')';
+                    return label;
+                }
+                return this.modal.pairCode + '-juftlik';
+            },
             getCellCards(dayNum, pairCode) {
                 return this.gridItems[dayNum + '_' + pairCode] || [];
             },

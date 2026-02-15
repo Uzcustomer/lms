@@ -15,12 +15,17 @@ class LectureSchedule extends Model
         'lesson_pair_end_time',
         'group_name',
         'group_id',
+        'group_source',
         'subject_name',
         'subject_id',
         'employee_name',
         'employee_id',
         'auditorium_name',
+        'floor',
+        'building_name',
         'training_type_name',
+        'weeks',
+        'week_parity',
         'hemis_status',
         'hemis_diff',
         'has_conflict',
@@ -40,6 +45,16 @@ class LectureSchedule extends Model
         4 => 'Payshanba',
         5 => 'Juma',
         6 => 'Shanba',
+    ];
+
+    public const PAIR_TIMES = [
+        1 => ['start' => '08:00', 'end' => '09:20'],
+        2 => ['start' => '09:30', 'end' => '10:50'],
+        3 => ['start' => '11:00', 'end' => '12:20'],
+        4 => ['start' => '13:00', 'end' => '14:20'],
+        5 => ['start' => '14:30', 'end' => '15:50'],
+        6 => ['start' => '16:00', 'end' => '17:20'],
+        7 => ['start' => '17:30', 'end' => '18:50'],
     ];
 
     public function batch()

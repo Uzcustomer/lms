@@ -44,18 +44,18 @@ class LectureScheduleConflictService
                 ->groupBy('employee_name');
 
             foreach ($byTeacher as $teacherName => $teacherLessons) {
-                if ($teacherLessons->count() > 1) {
-                    $ids = $teacherLessons->pluck('id')->toArray();
-                    $groups = $teacherLessons->pluck('group_name')->implode(', ');
+                $overlapping = $this->filterOverlappingParity($teacherLessons);
+                if ($overlapping->count() > 1) {
+                    $ids = $overlapping->pluck('id')->toArray();
+                    $groups = $overlapping->pluck('group_name')->implode(', ');
                     $conflicts[] = [
                         'type' => 'teacher',
-                        'message' => "{$teacherName} — bir vaqtda {$teacherLessons->count()} dars: {$groups}",
+                        'message' => "{$teacherName} — bir vaqtda {$overlapping->count()} dars: {$groups}",
                         'ids' => $ids,
                         'week_day' => $group->first()->week_day,
                         'pair' => $group->first()->lesson_pair_name,
                     ];
-                    // Har bir ziddiyatli qatorga belgi qo'yish
-                    foreach ($teacherLessons as $item) {
+                    foreach ($overlapping as $item) {
                         $this->markConflict($item, 'teacher', "O'qituvchi {$teacherName} bir vaqtda boshqa guruhda ham: {$groups}");
                     }
                 }
@@ -66,17 +66,18 @@ class LectureScheduleConflictService
                 ->groupBy('auditorium_name');
 
             foreach ($byRoom as $roomName => $roomLessons) {
-                if ($roomLessons->count() > 1) {
-                    $ids = $roomLessons->pluck('id')->toArray();
-                    $groups = $roomLessons->pluck('group_name')->implode(', ');
+                $overlapping = $this->filterOverlappingParity($roomLessons);
+                if ($overlapping->count() > 1) {
+                    $ids = $overlapping->pluck('id')->toArray();
+                    $groups = $overlapping->pluck('group_name')->implode(', ');
                     $conflicts[] = [
                         'type' => 'auditorium',
-                        'message' => "{$roomName}-xona — bir vaqtda {$roomLessons->count()} guruh: {$groups}",
+                        'message' => "{$roomName}-xona — bir vaqtda {$overlapping->count()} guruh: {$groups}",
                         'ids' => $ids,
                         'week_day' => $group->first()->week_day,
                         'pair' => $group->first()->lesson_pair_name,
                     ];
-                    foreach ($roomLessons as $item) {
+                    foreach ($overlapping as $item) {
                         $this->markConflict($item, 'auditorium', "{$roomName}-xonada bir vaqtda boshqa guruh ham: {$groups}");
                     }
                 }
@@ -86,17 +87,18 @@ class LectureScheduleConflictService
             $byGroup = $group->groupBy('group_name');
 
             foreach ($byGroup as $groupName => $groupLessons) {
-                if ($groupLessons->count() > 1) {
-                    $ids = $groupLessons->pluck('id')->toArray();
-                    $subjects = $groupLessons->pluck('subject_name')->implode(', ');
+                $overlapping = $this->filterOverlappingParity($groupLessons);
+                if ($overlapping->count() > 1) {
+                    $ids = $overlapping->pluck('id')->toArray();
+                    $subjects = $overlapping->pluck('subject_name')->implode(', ');
                     $conflicts[] = [
                         'type' => 'group',
-                        'message' => "{$groupName} — bir vaqtda {$groupLessons->count()} fan: {$subjects}",
+                        'message' => "{$groupName} — bir vaqtda {$overlapping->count()} fan: {$subjects}",
                         'ids' => $ids,
                         'week_day' => $group->first()->week_day,
                         'pair' => $group->first()->lesson_pair_name,
                     ];
-                    foreach ($groupLessons as $item) {
+                    foreach ($overlapping as $item) {
                         $this->markConflict($item, 'group', "{$groupName} guruhga bir vaqtda boshqa fan ham: {$subjects}");
                     }
                 }
@@ -324,6 +326,53 @@ class LectureScheduleConflictService
         }
 
         return $extra;
+    }
+
+    /**
+     * Juft-toq (week_parity) bo'yicha haqiqiy ziddiyatli elementlarni filtrlash.
+     * "juft" va "toq" darslar bir-biriga zid emas.
+     * null (har hafta) esa "juft" va "toq" ikkalasi bilan ham zid.
+     */
+    private function filterOverlappingParity(Collection $items): Collection
+    {
+        if ($items->count() < 2) {
+            return $items;
+        }
+
+        // Agar hech kimda week_parity yo'q bo'lsa — hammasi ziddiyatli
+        $hasAnyParity = $items->contains(fn($i) => !empty($i->week_parity));
+        if (!$hasAnyParity) {
+            return $items;
+        }
+
+        // Ziddiyat faqat parity overlap bo'lganda: null<->*, juft<->juft, toq<->toq
+        $conflicting = collect();
+        $arr = $items->values();
+
+        for ($i = 0; $i < $arr->count(); $i++) {
+            for ($j = $i + 1; $j < $arr->count(); $j++) {
+                if ($this->parityOverlaps($arr[$i]->week_parity, $arr[$j]->week_parity)) {
+                    $conflicting->push($arr[$i]);
+                    $conflicting->push($arr[$j]);
+                }
+            }
+        }
+
+        return $conflicting->unique('id');
+    }
+
+    /**
+     * Ikki week_parity qiymati bir-biriga zid ekanligini tekshirish
+     */
+    private function parityOverlaps(?string $a, ?string $b): bool
+    {
+        // null = har hafta — har qanday bilan zid
+        if (empty($a) || empty($b)) {
+            return true;
+        }
+
+        // Bir xil parity — zid
+        return $a === $b;
     }
 
     private function markConflict(LectureSchedule $item, string $type, string $message): void

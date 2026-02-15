@@ -346,6 +346,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('timetable-view')->name('timetable-view.')->group(function () {
             Route::get('/', [TimetableViewController::class, 'index'])->name('index');
             Route::get('/data', [TimetableViewController::class, 'data'])->name('data');
+            Route::get('/weeks', [TimetableViewController::class, 'weeks'])->name('weeks');
             Route::get('/filter-options', [TimetableViewController::class, 'filterOptions'])->name('filter-options');
         });
 
@@ -600,6 +601,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::prefix('timetable-view')->name('timetable-view.')->group(function () {
             Route::get('/', [TimetableViewController::class, 'index'])->name('index');
             Route::get('/data', [TimetableViewController::class, 'data'])->name('data');
+            Route::get('/weeks', [TimetableViewController::class, 'weeks'])->name('weeks');
             Route::get('/filter-options', [TimetableViewController::class, 'filterOptions'])->name('filter-options');
         });
 

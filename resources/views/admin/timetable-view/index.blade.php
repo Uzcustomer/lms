@@ -47,17 +47,50 @@
                     </button>
                 </div>
 
-                {{-- Filtr parametrlari --}}
+                {{-- Semestr va Hafta tanlash --}}
                 <div class="flex flex-wrap items-end gap-4">
-                    {{-- Hafta tanlash --}}
-                    <div class="min-w-[240px]">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Hafta</label>
-                        <select x-model="weekNumber" @change="onWeekChange()"
+
+                    {{-- Joriy semestr toggle --}}
+                    <div class="flex items-center">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" x-model="currentSemesterOnly" @change="onCurrentSemesterToggle()" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-500 peer-checked:bg-blue-600"></div>
+                            <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">Joriy semestr</span>
+                        </label>
+                    </div>
+
+                    {{-- Semestr tanlash --}}
+                    <div class="min-w-[220px]" x-show="!currentSemesterOnly" x-cloak>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Semestr</label>
+                        <select x-model="selectedSemesterId" @change="onSemesterChange()"
                                 class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
                             <option value="">Tanlang...</option>
-                            @foreach($weeks as $week)
-                            <option value="{{ $week['week_number'] }}">{{ $week['label'] }}</option>
-                            @endforeach
+                            <template x-for="sem in allSemesters" :key="sem.semester_hemis_id">
+                                <option :value="sem.semester_hemis_id"
+                                        :selected="sem.semester_hemis_id == selectedSemesterId"
+                                        x-text="sem.name + ' (' + sem.education_year + ')' + (sem.current ? ' - Joriy' : '')"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    {{-- Joriy semestr nomi (toggle on bo'lganda) --}}
+                    <div x-show="currentSemesterOnly && currentSemesterName" x-cloak
+                         class="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span class="text-sm font-medium text-blue-700 dark:text-blue-300" x-text="currentSemesterName"></span>
+                    </div>
+
+                    {{-- Hafta tanlash --}}
+                    <div class="min-w-[320px]">
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">O'quv hafta</label>
+                        <select x-model="selectedWeekId" @change="onWeekChange()"
+                                class="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Tanlang...</option>
+                            <template x-for="week in weeks" :key="week.id">
+                                <option :value="week.id"
+                                        :selected="week.id == selectedWeekId"
+                                        x-text="week.label"></option>
+                            </template>
                         </select>
                     </div>
 
@@ -101,7 +134,7 @@
                 </div>
 
                 {{-- Tanlangan filtr ko'rsatish --}}
-                <div x-show="filterValue && !loading" x-cloak class="mt-3 flex items-center gap-2">
+                <div x-show="filterValue && !loading" x-cloak class="mt-3 flex items-center gap-2 flex-wrap">
                     <span class="text-xs text-gray-500 dark:text-gray-400">Filtr:</span>
                     <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium"
                           :class="{
@@ -112,6 +145,9 @@
                           }">
                         <span x-text="filterLabels[filterType] + ': '"></span>
                         <span class="font-semibold" x-text="filterValue"></span>
+                    </span>
+                    <span x-show="selectedWeekLabel" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                        <span x-text="selectedWeekLabel"></span>
                     </span>
                     <span x-show="totalCount > 0" class="text-xs text-gray-400 dark:text-gray-500">
                         (<span x-text="totalCount"></span> ta dars)
@@ -287,14 +323,29 @@
     function timetableView() {
         const routePrefix = '{{ $routePrefix }}';
 
+        // Server dan kelgan boshlang'ich ma'lumotlar
+        const initialSemesters = @json($allSemesters);
+        const initialCurrentSemester = @json($currentSemester);
+        const initialWeeks = @json($currentWeeks);
+        const initialCurrentWeekId = @json($currentWeekId);
+
         return {
+            // Filtr
             filterType: 'teacher',
             filterValue: '',
-            weekNumber: '',
             loading: false,
             loaded: false,
             showDropdown: false,
 
+            // Semestr / Hafta
+            currentSemesterOnly: true,
+            allSemesters: initialSemesters,
+            selectedSemesterId: initialCurrentSemester?.semester_hemis_id || '',
+            currentSemesterName: initialCurrentSemester ? (initialCurrentSemester.name + ' (' + initialCurrentSemester.education_year + ')') : '',
+            weeks: initialWeeks,
+            selectedWeekId: initialCurrentWeekId || '',
+
+            // Grid
             gridItems: {},
             pairs: [],
             days: {},
@@ -316,11 +367,57 @@
                 'group': 'Guruh',
             },
 
+            get selectedWeekLabel() {
+                if (!this.selectedWeekId) return '';
+                const w = this.weeks.find(w => w.id == this.selectedWeekId);
+                return w ? w.label : '';
+            },
+
             init() {
-                // Boshlang'ich opsiyalarni yuklash
                 this.loadFilterOptions();
             },
 
+            // ===== Semestr / Hafta =====
+            onCurrentSemesterToggle() {
+                if (this.currentSemesterOnly) {
+                    // Joriy semestrga qaytish
+                    if (initialCurrentSemester) {
+                        this.selectedSemesterId = initialCurrentSemester.semester_hemis_id;
+                        this.weeks = initialWeeks;
+                        this.selectedWeekId = initialCurrentWeekId || '';
+                    }
+                } else {
+                    // Barcha semestrlar ko'rsatish
+                }
+                this.loadFilterOptions();
+            },
+
+            async onSemesterChange() {
+                if (!this.selectedSemesterId) {
+                    this.weeks = [];
+                    this.selectedWeekId = '';
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`{{ route($routePrefix . '.timetable-view.weeks') }}?semester_hemis_id=${this.selectedSemesterId}`);
+                    const data = await res.json();
+                    this.weeks = data.weeks || [];
+                    this.selectedWeekId = data.current_week_id || (this.weeks.length > 0 ? this.weeks[0].id : '');
+                    this.loadFilterOptions();
+                } catch (e) {
+                    console.error('Weeks load error:', e);
+                }
+            },
+
+            onWeekChange() {
+                this.loadFilterOptions();
+                if (this.filterValue) {
+                    this.loadGrid();
+                }
+            },
+
+            // ===== Filtr =====
             setFilterType(type) {
                 if (this.filterType === type) return;
                 this.filterType = type;
@@ -330,11 +427,9 @@
 
             async loadFilterOptions() {
                 try {
-                    const params = new URLSearchParams({
-                        filter_type: this.filterType,
-                    });
-                    if (this.weekNumber) {
-                        params.set('week_number', this.weekNumber);
+                    const params = new URLSearchParams({ filter_type: this.filterType });
+                    if (this.selectedWeekId) {
+                        params.set('week_id', this.selectedWeekId);
                     }
                     const res = await fetch(`{{ route($routePrefix . '.timetable-view.filter-options') }}?${params}`);
                     const data = await res.json();
@@ -368,13 +463,7 @@
                 this.totalCount = 0;
             },
 
-            onWeekChange() {
-                this.loadFilterOptions();
-                if (this.filterValue) {
-                    this.loadGrid();
-                }
-            },
-
+            // ===== Grid =====
             async loadGrid() {
                 if (!this.filterValue) return;
                 this.loading = true;
@@ -385,8 +474,8 @@
                         filter_type: this.filterType,
                         filter_value: this.filterValue,
                     });
-                    if (this.weekNumber) {
-                        params.set('week_number', this.weekNumber);
+                    if (this.selectedWeekId) {
+                        params.set('week_id', this.selectedWeekId);
                     }
 
                     const res = await fetch(`{{ route($routePrefix . '.timetable-view.data') }}?${params}`);
@@ -395,7 +484,6 @@
                     this.pairs = data.pairs || [];
                     this.days = data.days || {};
 
-                    // Statistika hisoblash
                     this.calculateStats();
                     this.loaded = true;
                 } catch (e) {

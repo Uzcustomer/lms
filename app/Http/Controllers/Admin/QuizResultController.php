@@ -64,14 +64,13 @@ class QuizResultController extends Controller
     public function yuklanmaganNatijalar(Request $request)
     {
         try {
-            // LEFT JOIN orqali yuklanmaganlarni topish (NOT IN dan samaraliroq)
-            $query = HemisQuizResult::where('hemis_quiz_results.is_active', 1)
-                ->leftJoin('student_grades', function ($join) {
-                    $join->on('hemis_quiz_results.id', '=', 'student_grades.quiz_result_id')
-                         ->where('student_grades.reason', '=', 'quiz_result');
-                })
-                ->whereNull('student_grades.id')
-                ->select('hemis_quiz_results.*');
+            $query = HemisQuizResult::where('is_active', 1)
+                ->whereNotExists(function ($q) {
+                    $q->select(\DB::raw(1))
+                      ->from('student_grades')
+                      ->whereColumn('student_grades.quiz_result_id', 'hemis_quiz_results.id')
+                      ->where('student_grades.reason', 'quiz_result');
+                });
 
             // Joriy semestr filtri
             if ($request->get('current_semester', '0') == '1') {
@@ -81,32 +80,51 @@ class QuizResultController extends Controller
                     ->toArray();
 
                 if (!empty($currentSemesterCodes)) {
-                    $studentIds = Student::whereIn('semester_code', $currentSemesterCodes)
-                        ->pluck('hemis_id')
-                        ->toArray();
-
-                    $studentIdNumbers = Student::whereIn('semester_code', $currentSemesterCodes)
-                        ->whereNotNull('student_id_number')
-                        ->pluck('student_id_number')
-                        ->toArray();
-
-                    $allIds = array_unique(array_merge($studentIds, $studentIdNumbers));
-
-                    $query->whereIn('hemis_quiz_results.student_id', $allIds);
+                    $query->where(function ($q) use ($currentSemesterCodes) {
+                        $q->whereIn('student_id', function ($sub) use ($currentSemesterCodes) {
+                            $sub->select('hemis_id')
+                                ->from('students')
+                                ->whereIn('semester_code', $currentSemesterCodes);
+                        })->orWhereIn('student_id', function ($sub) use ($currentSemesterCodes) {
+                            $sub->select('student_id_number')
+                                ->from('students')
+                                ->whereIn('semester_code', $currentSemesterCodes)
+                                ->whereNotNull('student_id_number');
+                        });
+                    });
                 }
             }
 
             // Sana filtrlari
             if ($request->filled('date_from')) {
-                $query->whereDate('hemis_quiz_results.date_finish', '>=', $request->date_from);
+                $query->whereDate('date_finish', '>=', $request->date_from);
             }
             if ($request->filled('date_to')) {
-                $query->whereDate('hemis_quiz_results.date_finish', '<=', $request->date_to);
+                $query->whereDate('date_finish', '<=', $request->date_to);
             }
 
-            $results = $query->orderByDesc('hemis_quiz_results.date_finish')->get();
+            $results = $query->orderByDesc('date_finish')
+                ->limit(10000)
+                ->get();
 
             $data = $results->map(function ($item, $i) {
+                $dateStart = '';
+                $dateFinish = '';
+                try {
+                    if ($item->date_start) {
+                        $dateStart = $item->date_start->format('d.m.Y H:i');
+                    }
+                } catch (\Exception $e) {
+                    $dateStart = (string) $item->getRawOriginal('date_start');
+                }
+                try {
+                    if ($item->date_finish) {
+                        $dateFinish = $item->date_finish->format('d.m.Y H:i');
+                    }
+                } catch (\Exception $e) {
+                    $dateFinish = (string) $item->getRawOriginal('date_finish');
+                }
+
                 return [
                     'id'           => $item->id,
                     'row_num'      => $i + 1,
@@ -122,8 +140,8 @@ class QuizResultController extends Controller
                     'attempt_name' => $item->attempt_name,
                     'shakl'        => $item->shakl,
                     'grade'        => $item->grade,
-                    'date_start'   => $item->date_start ? $item->date_start->format('d.m.Y H:i') : '',
-                    'date_finish'  => $item->date_finish ? $item->date_finish->format('d.m.Y H:i') : '',
+                    'date_start'   => $dateStart,
+                    'date_finish'  => $dateFinish,
                 ];
             });
 
@@ -131,8 +149,10 @@ class QuizResultController extends Controller
                 'data' => $data->values(),
                 'total' => $data->count(),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('yuklanmaganNatijalar xatolik: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString(),
             ]);
 

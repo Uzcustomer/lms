@@ -8,6 +8,7 @@ use App\Models\Teacher;
 use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class ImpersonateController extends Controller
 {
@@ -120,29 +121,57 @@ class ImpersonateController extends Controller
      */
     public function stopImpersonation(): RedirectResponse
     {
-        // Kerakli ma'lumotlarni sessiyadan OLDIN olib qo'yish
+        Log::info('stopImpersonation: boshlanmoqda', [
+            'impersonator_id' => session('impersonator_id'),
+            'impersonating' => session('impersonating'),
+            'all_session_keys' => array_keys(session()->all()),
+        ]);
+
         $impersonatorId = session('impersonator_id');
         $previousActiveRole = session('impersonator_active_role');
 
         if (!$impersonatorId) {
+            Log::warning('stopImpersonation: impersonator_id topilmadi, login sahifasiga yuborilmoqda');
             return redirect()->route('admin.login');
         }
 
         $admin = \App\Models\User::find($impersonatorId);
         if (!$admin) {
+            Log::warning('stopImpersonation: User topilmadi', ['impersonator_id' => $impersonatorId]);
             return redirect()->route('admin.login');
         }
 
-        // Sessiyani butunlay tozalash (barcha guard va impersonatsiya ma'lumotlari)
-        session()->flush();
+        Log::info('stopImpersonation: admin topildi', [
+            'admin_id' => $admin->id,
+            'admin_name' => $admin->name,
+        ]);
+
+        // Impersonatsiya va guard session kalitlarini qo'lda tozalash
+        // (flush/logout chaqirmasdan, chunki ular session holatini buzishi mumkin)
+        $keysToForget = [
+            'impersonating',
+            'impersonator_id',
+            'impersonator_guard',
+            'impersonated_name',
+            'impersonator_active_role',
+            'active_role',
+            Auth::guard('teacher')->getName(),
+            Auth::guard('student')->getName(),
+        ];
+        session()->forget($keysToForget);
 
         // Asl adminni web guard orqali login qilish
         Auth::guard('web')->login($admin);
 
         // Active rolni tiklash
-        if ($previousActiveRole) {
-            session(['active_role' => $previousActiveRole]);
-        }
+        session(['active_role' => $previousActiveRole ?? 'superadmin']);
+
+        Log::info('stopImpersonation: admin tiklandi', [
+            'web_check' => Auth::guard('web')->check(),
+            'web_user_id' => Auth::guard('web')->id(),
+            'teacher_check' => Auth::guard('teacher')->check(),
+            'session_keys' => array_keys(session()->all()),
+        ]);
 
         ActivityLogService::log(
             'stop_impersonate',

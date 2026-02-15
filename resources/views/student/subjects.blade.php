@@ -714,6 +714,21 @@
         </div>
     </div>
 
+    {{-- Compression overlay --}}
+    <div id="compress-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:99999; align-items:center; justify-content:center;">
+        <div style="background:white; border-radius:12px; padding:24px 32px; text-align:center; max-width:360px;">
+            <div style="margin-bottom:12px;">
+                <svg style="display:inline; animation: spin 1s linear infinite; height:32px; width:32px; color:#3b82f6;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle style="opacity:0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path style="opacity:0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+            </div>
+            <p id="compress-status" style="font-size:14px; color:#1e40af; font-weight:600;">Fayl siqilmoqda...</p>
+            <p id="compress-detail" style="font-size:12px; color:#6b7280; margin-top:4px;"></p>
+        </div>
+    </div>
+    <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
+
     {{-- MT Popovers (outside Alpine scope, fixed position) --}}
     @foreach($subjects as $index => $subject)
         @if($subject['mt'])
@@ -800,28 +815,28 @@
                             <div style="font-size: 11px; color: #9a3412; font-weight: 600; margin-bottom: 8px;">
                                 Qayta yuklash ({{ $mt['remaining_attempts'] }} marta qoldi)
                             </div>
-                            <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data">
+                            <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                                 @csrf
                                 <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
-                                       style="width: 100%; font-size: 11px; margin-bottom: 8px;">
+                                       style="width: 100%; font-size: 11px; margin-bottom: 8px;" class="mt-file-input">
                                 <button type="submit" style="width: 100%; padding: 6px 12px; background: #ea580c; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
                                     Qayta yuklash
                                 </button>
                             </form>
-                            <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 2MB (zip, doc, ppt, pdf)</p>
+                            <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 10MB (zip, doc, ppt, pdf) — katta fayllar avtomatik siqiladi</p>
                         </div>
                     @elseif($mt['submission'] && $mt['grade'] === null && !$mt['is_overdue'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #eff6ff; border: 1px solid #93c5fd;">
                             <div style="font-size: 11px; color: #1e40af; font-weight: 600; margin-bottom: 8px;">Faylni yangilash</div>
-                            <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data">
+                            <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                                 @csrf
                                 <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
-                                       style="width: 100%; font-size: 11px; margin-bottom: 8px;">
+                                       style="width: 100%; font-size: 11px; margin-bottom: 8px;" class="mt-file-input">
                                 <button type="submit" style="width: 100%; padding: 6px 12px; background: #2563eb; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
                                     Yangilash
                                 </button>
                             </form>
-                            <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 2MB (zip, doc, ppt, pdf)</p>
+                            <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 10MB (zip, doc, ppt, pdf) — katta fayllar avtomatik siqiladi</p>
                         </div>
                     @elseif(!$mt['submission'] && !$mt['is_overdue'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #fffbeb; border: 1px solid #fcd34d;">
@@ -834,15 +849,15 @@
                                     </a>
                                 </div>
                             @endif
-                            <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data">
+                            <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                                 @csrf
                                 <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
-                                       style="width: 100%; font-size: 11px; margin-bottom: 8px;">
+                                       style="width: 100%; font-size: 11px; margin-bottom: 8px;" class="mt-file-input">
                                 <button type="submit" style="width: 100%; padding: 6px 12px; background: #d97706; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
                                     Yuklash
                                 </button>
                             </form>
-                            <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 2MB (zip, doc, ppt, pdf)</p>
+                            <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 10MB (zip, doc, ppt, pdf) — katta fayllar avtomatik siqiladi</p>
                         </div>
                     @elseif($mt['is_overdue'] && !$mt['submission'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
@@ -956,5 +971,83 @@
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') closeAllMtPopovers();
         });
+
+        // MT file upload auto-compression
+        (function() {
+            var COMPRESS_THRESHOLD = 2 * 1024 * 1024; // 2MB dan katta fayllarni siqish
+            var MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB maksimal hajm
+
+            document.querySelectorAll('.mt-upload-form').forEach(function(form) {
+                var fileInput = form.querySelector('.mt-file-input');
+                if (!fileInput) return;
+
+                form.addEventListener('submit', function(e) {
+                    var file = fileInput.files[0];
+                    if (!file || file.size <= COMPRESS_THRESHOLD) return;
+
+                    var ext = file.name.split('.').pop().toLowerCase();
+                    if (ext === 'zip') {
+                        if (file.size > MAX_FILE_SIZE) {
+                            e.preventDefault();
+                            alert('Fayl hajmi ' + (file.size / 1024 / 1024).toFixed(1) + 'MB. Maksimal hajm 10MB.');
+                            fileInput.value = '';
+                        }
+                        return;
+                    }
+
+                    if (typeof JSZip === 'undefined') {
+                        // JSZip yuklanmagan — oddiy yuklash
+                        return;
+                    }
+
+                    e.preventDefault();
+
+                    var overlay = document.getElementById('compress-overlay');
+                    var statusEl = document.getElementById('compress-status');
+                    var detailEl = document.getElementById('compress-detail');
+                    overlay.style.display = 'flex';
+                    statusEl.textContent = 'Fayl siqilmoqda...';
+                    var originalSizeMB = (file.size / 1024 / 1024).toFixed(1);
+                    detailEl.textContent = 'Asl hajm: ' + originalSizeMB + 'MB';
+
+                    var zip = new JSZip();
+                    zip.file(file.name, file);
+
+                    zip.generateAsync({
+                        type: 'blob',
+                        compression: 'DEFLATE',
+                        compressionOptions: { level: 6 }
+                    }, function(metadata) {
+                        detailEl.textContent = 'Siqilmoqda... ' + metadata.percent.toFixed(0) + '%';
+                    }).then(function(blob) {
+                        var compressedSizeMB = (blob.size / 1024 / 1024).toFixed(1);
+
+                        if (blob.size > MAX_FILE_SIZE) {
+                            overlay.style.display = 'none';
+                            alert('Siqilgandan keyin ham fayl hajmi ' + compressedSizeMB + 'MB (' + originalSizeMB + 'MB dan). Maksimal hajm 10MB. Iltimos, faylni kichikroq qiling.');
+                            fileInput.value = '';
+                            return;
+                        }
+
+                        statusEl.textContent = 'Yuklanmoqda...';
+                        var savedPercent = ((1 - blob.size / file.size) * 100).toFixed(0);
+                        detailEl.textContent = originalSizeMB + 'MB → ' + compressedSizeMB + 'MB (' + savedPercent + '% siqildi)';
+
+                        var zipFileName = file.name.replace(/\.[^.]+$/, '') + '.zip';
+                        var zipFile = new File([blob], zipFileName, { type: 'application/zip' });
+
+                        var dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(zipFile);
+                        fileInput.files = dataTransfer.files;
+
+                        form.submit();
+                    }).catch(function(err) {
+                        overlay.style.display = 'none';
+                        alert('Faylni siqishda xatolik: ' + err.message);
+                        fileInput.value = '';
+                    });
+                });
+            });
+        })();
     </script>
 </x-student-app-layout>

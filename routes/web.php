@@ -297,6 +297,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{activityLog}', [ActivityLogController::class, 'show'])->name('show');
         });
 
+        // YN oldi qaydnoma hisoboti (YNga yuborilgan guruhlar)
+        Route::get('/yn-submission-report', [\App\Http\Controllers\YnSubmissionReportController::class, 'index'])->name('yn-submission-report.index');
+        Route::get('/yn-submission-report/data', [\App\Http\Controllers\YnSubmissionReportController::class, 'data'])->name('yn-submission-report.data');
+
         // Diagnostika sahifasi (yangi dizayn)
         Route::prefix('diagnostika')->name('diagnostika.')->group(function () {
             Route::get('/', [QuizResultController::class, 'diagnostikaPage'])->name('index');

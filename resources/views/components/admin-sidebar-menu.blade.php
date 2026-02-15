@@ -193,6 +193,14 @@
         </a>
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+        <a href="{{ route('admin.yn-submission-report.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.yn-submission-report.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+            </svg>
+            YN oldi qaydnoma hisoboti
+        </a>
+
         <a href="{{ $r('admin.diagnostika.index', 'teacher.diagnostika.index') }}"
            class="sidebar-link {{ $isActive('admin.diagnostika.*', 'teacher.diagnostika.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

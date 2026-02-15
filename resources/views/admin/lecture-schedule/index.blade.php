@@ -89,18 +89,17 @@
                     </div>
 
                     {{-- Hafta navigatsiyasi --}}
-                    <div class="flex items-center gap-1">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0 mr-1">Hafta:</label>
+                    <div class="flex items-center gap-2">
                         <button @click="prevWeek()" :disabled="currentWeek <= 0"
-                                class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                                class="w-10 h-10 flex items-center justify-center rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-blue-50 hover:border-blue-400 dark:hover:bg-blue-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
                         </button>
-                        <span class="px-3 py-1.5 text-sm font-semibold rounded-lg min-w-[80px] text-center"
-                              :class="currentWeek === 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' : 'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'"
+                        <span class="px-5 py-2.5 text-base font-bold rounded-xl min-w-[120px] text-center select-none shadow-sm"
+                              :class="currentWeek === 0 ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-700'"
                               x-text="currentWeek === 0 ? 'Barchasi' : currentWeek + '-hafta'"></span>
                         <button @click="nextWeek()" :disabled="currentWeek >= 15"
-                                class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                class="w-10 h-10 flex items-center justify-center rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-blue-50 hover:border-blue-400 dark:hover:bg-blue-900/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                         </button>
                     </div>
 
@@ -170,32 +169,30 @@
             </div>
         </div>
 
-        {{-- Konfliktlar paneli --}}
-        <div x-show="conflicts.length > 0" x-cloak class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 mb-4">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-purple-200 dark:border-purple-700 p-5">
-                <h3 class="text-sm font-semibold text-purple-700 dark:text-purple-300 mb-3 flex items-center gap-2">
+        {{-- ===== TAB NAVIGATSIYA ===== --}}
+        <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 mb-4">
+            <div class="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-1.5">
+                <button @click="activeTab = 'jadval'"
+                        class="tab-btn" :class="activeTab === 'jadval' ? 'tab-btn-active' : 'tab-btn-inactive'">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                    Jadval
+                </button>
+                <button @click="activeTab = 'xatolar'"
+                        class="tab-btn" :class="activeTab === 'xatolar' ? 'tab-btn-active tab-btn-active-red' : 'tab-btn-inactive'">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                    Ichki konfliktlar (<span x-text="conflicts.length"></span>)
-                </h3>
-                <div class="space-y-1 max-h-48 overflow-y-auto">
-                    <template x-for="(c, ci) in conflicts" :key="ci">
-                        <div class="flex items-start gap-2 text-xs px-3 py-2 rounded-lg cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/30"
-                             :class="{
-                                 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300': c.type === 'teacher',
-                                 'bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-300': c.type === 'auditorium',
-                                 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300': c.type === 'group',
-                             }"
-                             @click="highlightCells(c.ids)">
-                            <span class="font-medium whitespace-nowrap" x-text="c.type === 'teacher' ? 'O`qituvchi:' : c.type === 'auditorium' ? 'Auditoriya:' : 'Guruh:'"></span>
-                            <span x-text="c.message"></span>
-                        </div>
-                    </template>
-                </div>
+                    Xatolar
+                    <span x-show="conflicts.length > 0" x-cloak class="ml-1 px-1.5 py-0.5 text-xs font-bold rounded-full bg-red-500 text-white" x-text="conflicts.length"></span>
+                </button>
+                <button @click="activeTab = 'xonalar'"
+                        class="tab-btn" :class="activeTab === 'xonalar' ? 'tab-btn-active tab-btn-active-teal' : 'tab-btn-inactive'">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                    Xonalar kesimida
+                </button>
             </div>
         </div>
 
-        {{-- ASC TIMETABLE GRID --}}
-        <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        {{-- ===== TAB 1: JADVAL ===== --}}
+        <div x-show="activeTab === 'jadval'" class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div x-show="loading" class="p-12 text-center">
                     <svg class="w-8 h-8 animate-spin mx-auto text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
@@ -299,6 +296,174 @@
                     <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded border-2 border-purple-400"></span><span class="text-gray-500 dark:text-gray-400">Konflikt</span></div>
                     <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-blue-50 dark:bg-blue-900/30 border border-blue-200"></span><span class="text-gray-500 dark:text-gray-400">Tekshirilmagan</span></div>
                     <span class="text-gray-400 dark:text-gray-500 ml-2">| Drag&Drop = ko'chirish | Bosish = tahrirlash | O'ng tugma = menyu</span>
+                </div>
+            </div>
+        </div>
+
+        {{-- ===== TAB 2: XATOLAR ===== --}}
+        <div x-show="activeTab === 'xatolar'" x-cloak class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                {{-- Xatolar bosh qismi --}}
+                <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <h3 class="text-base font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        Ichki konfliktlar
+                    </h3>
+                    <span class="px-3 py-1 text-sm font-bold rounded-full"
+                          :class="conflicts.length > 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'"
+                          x-text="conflicts.length > 0 ? conflicts.length + ' ta xato' : 'Xato yo\'q'"></span>
+                </div>
+
+                {{-- Bo'sh holat --}}
+                <div x-show="conflicts.length === 0" class="p-12 text-center">
+                    <svg class="w-16 h-16 mx-auto text-green-300 dark:text-green-700 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">Konflikt topilmadi. Jadval to'g'ri tuzilgan.</p>
+                </div>
+
+                {{-- Konfliktlar ro'yxati --}}
+                <div x-show="conflicts.length > 0" class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="(c, ci) in conflicts" :key="ci">
+                        <div class="conflict-row">
+                            {{-- Asosiy qator --}}
+                            <div class="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                 @click="c.expanded = !c.expanded">
+                                {{-- Raqam --}}
+                                <span class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                                      :class="c.type === 'teacher' ? 'bg-orange-500' : c.type === 'auditorium' ? 'bg-pink-500' : 'bg-purple-500'"
+                                      x-text="ci + 1"></span>
+
+                                {{-- Turi badge --}}
+                                <span class="flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded"
+                                      :class="{
+                                          'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300': c.type === 'teacher',
+                                          'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300': c.type === 'auditorium',
+                                          'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300': c.type === 'group',
+                                      }"
+                                      x-text="c.type === 'teacher' ? 'O\'qituvchi' : c.type === 'auditorium' ? 'Auditoriya' : 'Guruh'"></span>
+
+                                {{-- Kun va juftlik --}}
+                                <span class="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                      x-text="c.dayName + ', ' + c.pairName"></span>
+
+                                {{-- Xabar --}}
+                                <span class="flex-1 text-sm text-gray-700 dark:text-gray-300 truncate" x-text="c.message"></span>
+
+                                {{-- Strelka --}}
+                                <svg class="w-5 h-5 flex-shrink-0 text-gray-400 transition-transform duration-200" :class="c.expanded && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </div>
+
+                            {{-- Batafsil panel --}}
+                            <div x-show="c.expanded" x-cloak
+                                 x-transition:enter="transition ease-out duration-200"
+                                 x-transition:enter-start="opacity-0 -translate-y-1"
+                                 x-transition:enter-end="opacity-100 translate-y-0"
+                                 class="px-5 pb-4 pt-1 bg-gray-50 dark:bg-gray-900/30">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                    <div class="text-sm">
+                                        <span class="font-semibold text-gray-500 dark:text-gray-400">Kun:</span>
+                                        <span class="ml-1 text-gray-800 dark:text-gray-200" x-text="c.dayName"></span>
+                                    </div>
+                                    <div class="text-sm">
+                                        <span class="font-semibold text-gray-500 dark:text-gray-400">Juftlik:</span>
+                                        <span class="ml-1 text-gray-800 dark:text-gray-200" x-text="c.pairName + (c.pairTime ? ' (' + c.pairTime + ')' : '')"></span>
+                                    </div>
+                                </div>
+
+                                {{-- Tegishli darslar jadvali --}}
+                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Tegishli darslar:</div>
+                                <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <table class="w-full text-xs">
+                                        <thead>
+                                            <tr class="bg-gray-100 dark:bg-gray-800">
+                                                <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Guruh</th>
+                                                <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Fan</th>
+                                                <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">O'qituvchi</th>
+                                                <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Xona</th>
+                                                <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Juft/Toq</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                            <template x-for="card in c.cards" :key="card.id">
+                                                <tr class="hover:bg-white dark:hover:bg-gray-800 cursor-pointer" @click="activeTab = 'jadval'; $nextTick(() => highlightCell(card.id))">
+                                                    <td class="px-3 py-2 text-gray-800 dark:text-gray-200 font-medium" x-text="card.group_name"></td>
+                                                    <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="card.subject_name"></td>
+                                                    <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="card.employee_name || '—'"></td>
+                                                    <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="[card.building_name, card.auditorium_name].filter(Boolean).join(', ') || '—'"></td>
+                                                    <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="card.week_parity || '—'"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {{-- Jadvalda ko'rsatish tugmasi --}}
+                                <button @click="activeTab = 'jadval'; $nextTick(() => highlightCells(c.ids))"
+                                        class="mt-3 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                    Jadvalda ko'rsatish
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        {{-- ===== TAB 3: XONALAR KESIMIDA ===== --}}
+        <div x-show="activeTab === 'xonalar'" x-cloak class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                {{-- Xonalar jadvali: ustunlar = xonalar, qatorlar = kunlar + juftliklar --}}
+                <div x-show="allRooms.length > 0" class="overflow-x-auto">
+                    <table class="w-full border-collapse" :style="'min-width:' + (160 + allRooms.length * 160) + 'px'">
+                        <thead class="sticky top-0 z-10">
+                            <tr>
+                                <th class="asc-header" style="width:160px;min-width:160px">Kun / Juftlik</th>
+                                <template x-for="room in allRooms" :key="'rh-' + room">
+                                    <th class="asc-header" style="min-width:150px">
+                                        <div class="flex items-center justify-center gap-1">
+                                            <svg class="w-3.5 h-3.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"/></svg>
+                                            <span x-text="room"></span>
+                                        </div>
+                                    </th>
+                                </template>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(dayName, dayNum) in days" :key="'rvd-' + dayNum">
+                                <template x-for="(pair, pi) in pairs" :key="'rvp-' + dayNum + '-' + pair.code">
+                                    <tr>
+                                        {{-- Kun nomi + juftlik --}}
+                                        <td class="asc-time-cell" style="width:160px;min-width:160px">
+                                            <div x-show="pi === 0" class="font-bold text-sm text-blue-700 dark:text-blue-400 mb-0.5" x-text="dayName"></div>
+                                            <div class="font-semibold text-xs" :class="pi === 0 ? '' : 'mt-0'" x-text="pair.name"></div>
+                                            <div class="text-[0.65rem] text-gray-400 mt-0.5">
+                                                <span x-text="pair.start ? pair.start.substring(0,5) : ''"></span><span x-show="pair.start && pair.end"> - </span><span x-text="pair.end ? pair.end.substring(0,5) : ''"></span>
+                                            </div>
+                                        </td>
+                                        {{-- Har bir xona uchun katak --}}
+                                        <template x-for="room in allRooms" :key="'rvc-' + dayNum + '-' + pair.code + '-' + room">
+                                            <td class="asc-cell" :class="pi === 0 && 'border-t-2 border-t-blue-200 dark:border-t-blue-800'">
+                                                <template x-for="card in getRoomDayCards(room, dayNum, pair.code)" :key="'rvcc-' + card.id">
+                                                    <div class="asc-card asc-card-not-checked" @click.stop="openEditModal(card)" style="cursor:pointer">
+                                                        <div class="asc-card-subject" x-text="card.subject_name"></div>
+                                                        <div class="asc-card-teacher" x-text="card.employee_name || ''"></div>
+                                                        <div class="asc-card-group" x-text="card.group_source || card.group_name"></div>
+                                                        <div x-show="card.week_parity" class="text-[0.6rem] mt-0.5 opacity-60 italic" x-text="card.week_parity"></div>
+                                                    </div>
+                                                </template>
+                                            </td>
+                                        </template>
+                                    </tr>
+                                </template>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                {{-- Bo'sh holat --}}
+                <div x-show="allRooms.length === 0" class="p-12 text-center">
+                    <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">Xonalar topilmadi. Jadvalda auditoriya ma'lumotlarini kiriting.</p>
                 </div>
             </div>
         </div>
@@ -673,6 +838,25 @@
         .ls-btn-save:hover { opacity: 0.9; }
         .ls-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ===== TABS ===== */
+        .tab-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.875rem; font-weight: 600; border-radius: 0.5rem; transition: all 0.15s; cursor: pointer; border: none; outline: none; }
+        .tab-btn-active { background: #3b82f6; color: #fff; box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
+        .tab-btn-active-red { background: #ef4444; box-shadow: 0 2px 8px rgba(239,68,68,0.3); }
+        .tab-btn-active-teal { background: #0d9488; box-shadow: 0 2px 8px rgba(13,148,136,0.3); }
+        .tab-btn-inactive { background: transparent; color: #64748b; }
+        .tab-btn-inactive:hover { background: #f1f5f9; color: #374151; }
+        .dark .tab-btn-inactive { color: #94a3b8; }
+        .dark .tab-btn-inactive:hover { background: #334155; color: #e2e8f0; }
+
+        /* ===== ROOM PILLS ===== */
+        .room-pill { padding: 6px 14px; font-size: 0.8rem; font-weight: 600; border-radius: 9999px; border: 2px solid transparent; transition: all 0.15s; cursor: pointer; outline: none; }
+        .room-pill-active { background: #0d9488; color: #fff; border-color: #0d9488; box-shadow: 0 2px 8px rgba(13,148,136,0.3); }
+        .room-pill-inactive { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+        .room-pill-inactive:hover { background: #e0f2fe; border-color: #7dd3fc; color: #0369a1; }
+        .dark .room-pill-inactive { background: #334155; color: #94a3b8; border-color: #475569; }
+        .dark .room-pill-inactive:hover { background: #1e3a5f; border-color: #38bdf8; color: #7dd3fc; }
+
     </style>
 
     {{-- JavaScript --}}
@@ -684,6 +868,7 @@
         return {
             activeBatchId: {{ $activeBatch->id ?? 'null' }},
             currentWeek: 0, // 0 = barchasi, 1-15 = aniq hafta
+            activeTab: 'jadval', // 'jadval' | 'xatolar' | 'xonalar'
             gridItems: {},
             pairs: [],
             days: {},
@@ -771,17 +956,46 @@
                 for (const key in this.gridItems) {
                     for (const card of this.gridItems[key]) {
                         if (card.has_conflict && card.conflict_details) {
+                            const pair = this.pairs.find(p => String(p.code) === String(card.lesson_pair_code));
                             for (const cd of card.conflict_details) {
                                 const exists = this.conflicts.find(c => c.message === cd.message);
                                 if (!exists) {
-                                    this.conflicts.push({ type: cd.type, message: cd.message, ids: [card.id] });
+                                    this.conflicts.push({
+                                        type: cd.type,
+                                        message: cd.message,
+                                        ids: [card.id],
+                                        cards: [card],
+                                        dayName: this.days[card.week_day] || card.week_day + '-kun',
+                                        weekDay: card.week_day,
+                                        pairName: pair ? pair.name : card.lesson_pair_code + '-juftlik',
+                                        pairTime: pair ? ((pair.start || '').substring(0,5) + ' - ' + (pair.end || '').substring(0,5)) : '',
+                                        expanded: false,
+                                    });
                                 } else {
-                                    if (!exists.ids.includes(card.id)) exists.ids.push(card.id);
+                                    if (!exists.ids.includes(card.id)) {
+                                        exists.ids.push(card.id);
+                                        exists.cards.push(card);
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            },
+
+            // ===== XONALAR KESIMIDA =====
+            get allRooms() {
+                const rooms = new Set();
+                for (const key in this.gridItems) {
+                    for (const card of this.gridItems[key]) {
+                        if (card.auditorium_name) rooms.add(card.auditorium_name);
+                    }
+                }
+                return [...rooms].sort();
+            },
+            getRoomDayCards(room, dayNum, pairCode) {
+                const cards = this.getCellCards(dayNum, pairCode);
+                return cards.filter(c => c.auditorium_name === room);
             },
 
             // ===== HEMIS =====

@@ -1075,9 +1075,20 @@ class JournalController extends Controller
                 ], 502);
             }
 
+            // Attendance (sababli/sababsiz) sinxronizatsiyasi
+            $attendanceResult = $this->syncAttendanceForGroupSubject((int) $data['group_id'], (int) $data['subject_id']);
+
+            $message = "Jadval yangilandi. {$result['count']} ta yozuv sinxronlandi.";
+            if ($attendanceResult['synced'] > 0) {
+                $message .= " Davomat: {$attendanceResult['synced']} ta yangilandi.";
+            }
+            if ($attendanceResult['retake_recalculated'] > 0) {
+                $message .= " {$attendanceResult['retake_recalculated']} ta otrabotka bahosi qayta hisoblandi.";
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => "Jadval yangilandi. {$result['count']} ta yozuv sinxronlandi.",
+                'message' => $message,
             ]);
         } catch (\Throwable $e) {
             return response()->json([
@@ -1085,6 +1096,182 @@ class JournalController extends Controller
                 'message' => 'Sinxronizatsiyada xatolik: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Guruh + fan bo'yicha HEMIS'dan davomat (sababli/sababsiz) sinxronlash
+     * va o'zgargan retake baholarini qayta hisoblash
+     */
+    private function syncAttendanceForGroupSubject(int $groupId, int $subjectId): array
+    {
+        $token = config('services.hemis.token');
+        $synced = 0;
+        $retakeRecalculated = 0;
+
+        try {
+            $page = 1;
+            $pages = 1;
+
+            do {
+                $response = Http::withoutVerifying()
+                    ->timeout(30)
+                    ->withToken($token)
+                    ->get('https://student.ttatf.uz/rest/v1/data/attendance-list', [
+                        '_group' => $groupId,
+                        '_subject' => $subjectId,
+                        'limit' => 200,
+                        'page' => $page,
+                    ]);
+
+                if (!$response || !$response->successful()) {
+                    Log::warning('Attendance sync: HEMIS API xatolik', [
+                        'group_id' => $groupId,
+                        'subject_id' => $subjectId,
+                        'page' => $page,
+                        'status' => $response ? $response->status() : 'timeout',
+                    ]);
+                    break;
+                }
+
+                $data = $response->json('data', []);
+                $items = $data['items'] ?? [];
+                $pages = $data['pagination']['pageCount'] ?? 1;
+
+                foreach ($items as $item) {
+                    if (($item['absent_off'] ?? 0) <= 0 && ($item['absent_on'] ?? 0) <= 0) {
+                        continue;
+                    }
+
+                    $lessonDate = isset($item['lesson_date']) ? \Carbon\Carbon::createFromTimestamp($item['lesson_date']) : null;
+                    if (!$lessonDate) {
+                        continue;
+                    }
+
+                    // Attendance recordni yangilash yoki yaratish
+                    $attendance = DB::table('attendances')
+                        ->where('hemis_id', $item['id'])
+                        ->first();
+
+                    $oldAbsentOn = $attendance ? (int) $attendance->absent_on : null;
+                    $newAbsentOn = (int) ($item['absent_on'] ?? 0);
+                    $newAbsentOff = (int) ($item['absent_off'] ?? 0);
+
+                    DB::table('attendances')->updateOrInsert(
+                        ['hemis_id' => $item['id']],
+                        [
+                            'subject_schedule_id' => $item['_subject_schedule'] ?? null,
+                            'student_hemis_id' => $item['student']['id'],
+                            'student_name' => $item['student']['name'],
+                            'employee_id' => $item['employee']['id'],
+                            'employee_name' => $item['employee']['name'],
+                            'subject_id' => $item['subject']['id'],
+                            'subject_name' => $item['subject']['name'],
+                            'subject_code' => $item['subject']['code'],
+                            'education_year_code' => $item['educationYear']['code'] ?? null,
+                            'education_year_name' => $item['educationYear']['name'] ?? null,
+                            'education_year_current' => $item['educationYear']['current'] ?? null,
+                            'semester_code' => $item['semester']['code'],
+                            'semester_name' => $item['semester']['name'],
+                            'group_id' => $item['group']['id'],
+                            'group_name' => $item['group']['name'],
+                            'education_lang_code' => $item['group']['educationLang']['code'] ?? null,
+                            'education_lang_name' => $item['group']['educationLang']['name'] ?? null,
+                            'training_type_code' => $item['trainingType']['code'],
+                            'training_type_name' => $item['trainingType']['name'],
+                            'lesson_pair_code' => $item['lessonPair']['code'],
+                            'lesson_pair_name' => $item['lessonPair']['name'],
+                            'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                            'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                            'absent_on' => $newAbsentOn,
+                            'absent_off' => $newAbsentOff,
+                            'lesson_date' => $lessonDate,
+                            'status' => 'absent',
+                            'updated_at' => now(),
+                        ]
+                    );
+
+                    $synced++;
+
+                    // Agar sababli holat o'zgargan bo'lsa — retake bahosini qayta hisoblash
+                    if ($oldAbsentOn !== null && $oldAbsentOn !== $newAbsentOn) {
+                        $recalculated = $this->recalculateRetakeGrade(
+                            $item['student']['id'],
+                            $subjectId,
+                            $lessonDate->format('Y-m-d'),
+                            $item['lessonPair']['code'],
+                            $newAbsentOn > 0
+                        );
+                        if ($recalculated) {
+                            $retakeRecalculated++;
+                        }
+                    }
+                }
+
+                $page++;
+                if ($page <= $pages) {
+                    usleep(500000); // 0.5s
+                }
+            } while ($page <= $pages);
+
+        } catch (\Throwable $e) {
+            Log::error('Attendance sync xatolik: ' . $e->getMessage(), [
+                'group_id' => $groupId,
+                'subject_id' => $subjectId,
+            ]);
+        }
+
+        return ['synced' => $synced, 'retake_recalculated' => $retakeRecalculated];
+    }
+
+    /**
+     * Sababli holat o'zgarganda retake bahosini qayta hisoblash
+     */
+    private function recalculateRetakeGrade(
+        string $studentHemisId,
+        int $subjectId,
+        string $lessonDate,
+        string $lessonPairCode,
+        bool $isExcused
+    ): bool {
+        $grade = DB::table('student_grades')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('subject_id', $subjectId)
+            ->whereDate('lesson_date', $lessonDate)
+            ->where('lesson_pair_code', $lessonPairCode)
+            ->where('reason', 'absent')
+            ->where('status', 'retake')
+            ->whereNotNull('retake_grade')
+            ->first();
+
+        if (!$grade) {
+            return false;
+        }
+
+        // Hozirgi foiz va yangi foizni aniqlash
+        $oldPercentage = $isExcused ? 0.8 : 1.0; // o'zgarishdan oldingi (teskari)
+        $newPercentage = $isExcused ? 1.0 : 0.8;
+
+        // Asl kiritilgan bahoni qayta hisoblash
+        if ($oldPercentage > 0) {
+            $originalEnteredGrade = round($grade->retake_grade / $oldPercentage, 2);
+        } else {
+            return false;
+        }
+
+        $newRetakeGrade = round($originalEnteredGrade * $newPercentage, 2);
+
+        // Agar baho o'zgargan bo'lsa — yangilash
+        if (abs($newRetakeGrade - $grade->retake_grade) > 0.01) {
+            DB::table('student_grades')
+                ->where('id', $grade->id)
+                ->update([
+                    'retake_grade' => $newRetakeGrade,
+                    'updated_at' => now(),
+                ]);
+            return true;
+        }
+
+        return false;
     }
 
     /**

@@ -197,7 +197,7 @@ class ImportGrades extends Command
     {
         $student = Student::where('hemis_id', $item['student']['id'])->first();
 
-        if ($student && $item['absent_off'] > 0) {
+        if ($student && ($item['absent_off'] > 0 || $item['absent_on'] > 0)) {
             $attendance = Attendance::updateOrCreate(
                 [
                     'hemis_id' => $item['id'],

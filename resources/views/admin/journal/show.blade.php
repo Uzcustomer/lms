@@ -1064,8 +1064,31 @@
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                     $isRetake = $hasRetakeInDay[$date] ?? false;
                                                 @endphp
+                                                @php
+                                                    $allAbsentWithRetake = $hasGrades && count($dayAbsences) > 0
+                                                        && collect($dayGrades)->every(fn($g) => ($g['reason'] ?? null) === 'absent' && $g['is_retake']);
+                                                @endphp
                                                 <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
-                                                    @if($hasGrades)
+                                                    @if($hasGrades && $allAbsentWithRetake)
+                                                        {{-- Barcha paralar NB + otrabotka: diagonal split --}}
+                                                        @php
+                                                            $dayAttData = $jbAttendance[$student->hemis_id][$date] ?? [];
+                                                            $daySababli = false;
+                                                            foreach ($dayAbsences as $pairCode => $absData) {
+                                                                $attForPair = $dayAttData[$pairCode] ?? null;
+                                                                if ($attForPair && ((int) ($attForPair['absent_on'] ?? 0)) > 0) {
+                                                                    $daySababli = true;
+                                                                    break;
+                                                                }
+                                                            }
+                                                            $nbColorClass = $daySababli ? 'text-green-600' : 'text-red-600';
+                                                        @endphp
+                                                        <div class="split-cell" title="NB ({{ $daySababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $dayAvg }}">
+                                                            <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                                                            <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
+                                                            <span class="split-bottom">{{ $dayAvg }}</span>
+                                                        </div>
+                                                    @elseif($hasGrades)
                                                         @php
                                                             $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
                                                             $dayAvgColorClass = $dayAvg < ($minimumLimit ?? 60) ? 'text-red-600' : ($hasTeacherGradeInDay ? 'text-green-600' : 'text-gray-900');
@@ -1293,6 +1316,19 @@
                                                             <div class="split-cell" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
+                                                                <span class="split-bottom">{{ $retakeVal }}</span>
+                                                            </div>
+                                                        @elseif($hasRetake && $retakeType === 'absent')
+                                                            {{-- NB + otrabotka qilgan: diagonal split --}}
+                                                            @php
+                                                                $retakeVal = round($jbAbsences[$student->hemis_id][$col['date']][$col['pair']]['retake_grade'], 0);
+                                                                $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
+                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
+                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                            @endphp
+                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}">
+                                                                <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                                                                <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
                                                         @else
@@ -1684,8 +1720,31 @@
                                                         $isInconsistent = count($uniqueGrades) > 1;
                                                         $isRetake = $hasRetakeInDay[$date] ?? false;
                                                     @endphp
+                                                    @php
+                                                        $allAbsentWithRetake = $hasGrades && count($dayAbsences) > 0
+                                                            && collect($dayGrades)->every(fn($g) => ($g['reason'] ?? null) === 'absent' && $g['is_retake']);
+                                                    @endphp
                                                     <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
-                                                        @if($hasGrades)
+                                                        @if($hasGrades && $allAbsentWithRetake)
+                                                            {{-- Barcha paralar NB + otrabotka: diagonal split --}}
+                                                            @php
+                                                                $mtAttData = $mtAttendance[$student->hemis_id][$date] ?? ($jbAttendance[$student->hemis_id][$date] ?? []);
+                                                                $daySababli = false;
+                                                                foreach ($dayAbsences as $pairCode => $absData) {
+                                                                    $attForPair = $mtAttData[$pairCode] ?? null;
+                                                                    if ($attForPair && ((int) ($attForPair['absent_on'] ?? 0)) > 0) {
+                                                                        $daySababli = true;
+                                                                        break;
+                                                                    }
+                                                                }
+                                                                $nbColorClass = $daySababli ? 'text-green-600' : 'text-red-600';
+                                                            @endphp
+                                                            <div class="split-cell" title="NB ({{ $daySababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $dayAvg }}">
+                                                                <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                                                                <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
+                                                                <span class="split-bottom">{{ $dayAvg }}</span>
+                                                            </div>
+                                                        @elseif($hasGrades)
                                                             <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ $dayAvg }}</span>
                                                             @if(count($dayGrades) > 1)
                                                                 <span class="tooltip-content">{{ $gradesText }}</span>
@@ -1775,7 +1834,21 @@
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }}">
-                                                    @if($grade !== null)
+                                                    @if($grade !== null && $isAbsent && $isRetake)
+                                                        {{-- NB + otrabotka qilgan: diagonal split --}}
+                                                        @php
+                                                            $retakeVal = round($mtAbsences[$student->hemis_id][$col['date']][$col['pair']]['retake_grade'], 0);
+                                                            $mtAttDataCell = ($mtAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null)
+                                                                ?? ($jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null);
+                                                            $isSababli = $mtAttDataCell && ((int) ($mtAttDataCell['absent_on'] ?? 0)) > 0;
+                                                            $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                        @endphp
+                                                        <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}">
+                                                            <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                                                            <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
+                                                            <span class="split-bottom">{{ $retakeVal }}</span>
+                                                        </div>
+                                                    @elseif($grade !== null)
                                                         <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
                                                     @elseif($isAbsent)
                                                         <span class="text-red-600 font-medium">NB</span>

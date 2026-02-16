@@ -8,6 +8,7 @@
         "php": "^8.2",
         "box/spout": "^3.3",
         "laravel/framework": "^11.9",
+        "laravel/sanctum": "*",
         "laravel/tinker": "^2.9",
         "livewire/livewire": "^3.5",
         "maatwebsite/excel": "^3.1",

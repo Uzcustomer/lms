@@ -472,7 +472,12 @@
                                         <td class="asc-cell" :class="row.isFirstPair && 'border-t-2 border-t-blue-200 dark:border-t-blue-800'">
                                             <template x-for="card in getRoomDayCardsGrouped(room, row.dayNum, row.pair.code)" :key="'rvcc-' + card._groupKey">
                                                 <div class="asc-card asc-card-not-checked" @click.stop="openEditModal(card)" style="cursor:pointer">
-                                                    <div class="asc-card-subject" x-text="card.subject_name"></div>
+                                                    <div class="asc-card-subject">
+                                                        <span x-text="card.subject_name"></span>
+                                                        <span x-show="currentWeek === 0 && (card.week_parity || card.weeks)"
+                                                              class="asc-card-week-label"
+                                                              x-text="getWeekLabel(card)"></span>
+                                                    </div>
                                                     <div class="asc-card-teacher" x-text="card.employee_name || ''"></div>
                                                     <div class="asc-card-group" x-text="card.group_source || card.group_name"></div>
                                                 </div>
@@ -1058,9 +1063,13 @@
                 const cards = this.getCellCards(dayNum, pairCode);
                 const roomCards = cards.filter(c => c.auditorium_name === room);
                 // Bir xil group_source yoki subject+teacher = bitta dars, 1 marta ko'rsatish
+                // "Barchasi" rejimida juft/toq alohida ko'rsatilishi kerak
                 const grouped = {};
                 for (const card of roomCards) {
-                    const key = card.group_source || (card.subject_name + '||' + (card.employee_name || ''));
+                    let key = card.group_source || (card.subject_name + '||' + (card.employee_name || ''));
+                    if (this.currentWeek === 0 && card.week_parity) {
+                        key += '||' + card.week_parity;
+                    }
                     if (!grouped[key]) {
                         grouped[key] = { ...card, _groupKey: key + '_' + dayNum + '_' + pairCode };
                     }

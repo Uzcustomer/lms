@@ -20,6 +20,11 @@ class StudentAuthController extends Controller
 {
     public function login(Request $request)
     {
+        // Agar oldingi sessiya hali faol bo'lsa — avval logout qilamiz
+        if (Auth::guard('student')->check()) {
+            Auth::guard('student')->logout();
+        }
+
         $request->validate([
             'login' => ['required', 'string'],
             'password' => ['required', 'string'],

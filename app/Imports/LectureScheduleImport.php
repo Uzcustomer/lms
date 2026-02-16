@@ -35,15 +35,6 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
 
     public function collection(Collection $rows)
     {
-        // Debug: birinchi qatorning kalit nomlarini log'ga yozish
-        if ($rows->isNotEmpty()) {
-            $firstRow = $rows->first();
-            \Log::info('LectureScheduleImport: Excel heading keys', [
-                'keys' => array_keys($firstRow->toArray()),
-                'sample_values' => $firstRow->toArray(),
-            ]);
-        }
-
         foreach ($rows as $index => $row) {
             $rowNum = $index + 2; // +2 chunki heading row + 0-index
 
@@ -105,19 +96,12 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
                 if (!$weeks && str_contains($colKeyLower, 'hafta')) {
                     $weeks = trim((string) $colVal);
                 }
-                if (!$weekParity && str_contains($colKeyLower, 'juft')) {
+                // "toq" so'zi faqat "juft_toq" ustunida bor, "juftlik" da yo'q
+                if (!$weekParity && str_contains($colKeyLower, 'toq')) {
                     $weekParity = mb_strtolower(trim((string) $colVal));
                 }
             }
 
-            // Debug: birinchi 3 ta qatorda weeks/week_parity qiymatlarini log'ga yozish
-            if ($index < 3) {
-                \Log::info("LectureScheduleImport row {$rowNum}", [
-                    'weeks' => $weeks,
-                    'week_parity' => $weekParity,
-                    'group_source' => $groupSource,
-                ]);
-            }
 
             LectureSchedule::create([
                 'batch_id' => $this->batch->id,

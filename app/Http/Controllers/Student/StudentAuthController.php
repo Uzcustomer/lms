@@ -44,7 +44,7 @@ class StudentAuthController extends Controller
             ]);
 
             // HEMIS ishlamayotgan bo'lsa — lokal parol bilan urinish
-            return $this->tryLocalPassword($request);
+            return $this->tryLocalPassword($request, hemsFailed: true);
         }
 
         if ($response->successful() && $response->json('success')) {
@@ -106,47 +106,63 @@ class StudentAuthController extends Controller
                 'hemis_status' => $response->status(),
             ]);
 
-            return $this->tryLocalPassword($request);
+            return $this->tryLocalPassword($request, hemsFailed: false);
         }
     }
 
     /**
      * HEMIS ishlamasa — lokal parol bilan kirish
      */
-    private function tryLocalPassword(Request $request)
+    private function tryLocalPassword(Request $request, bool $hemsFailed = false)
     {
         $student = Student::where('student_id_number', $request->login)->first();
 
-        if (
-            $student &&
-            $student->local_password &&
-            (!$student->local_password_expires_at || $student->local_password_expires_at->isFuture()) &&
-            Hash::check($request->password, $student->local_password)
-        ) {
-            // Telegram 2FA: vaqtincha o'chirilgan
-            // if ($student->telegram_chat_id) {
-            //     return $this->sendLoginCode($student, $request);
-            // }
-
-            // Boshqa guardlarni tozalash (admin/teacher session qoldiqlarini yo'q qilish)
-            $this->clearOtherGuards($request);
-
-            Auth::guard('student')->login($student);
-            $request->session()->regenerate();
-            ActivityLogService::logLogin('student');
-
-            if ($student->must_change_password) {
-                return redirect()->route('student.password.edit');
-            }
-
-            if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
-                return redirect()->route('student.complete-profile');
-            }
-
-            return redirect()->intended(route('student.dashboard'));
+        if (!$student) {
+            return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
         }
 
-        return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
+        // Lokal parol mavjud emas
+        if (!$student->local_password) {
+            if ($hemsFailed) {
+                return back()->withErrors(['login' => "HEMIS tizimi vaqtincha ishlamayapti. Iltimos, keyinroq urinib ko'ring."])->onlyInput('login', '_profile');
+            }
+            return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
+        }
+
+        // Lokal parol muddati tugagan
+        if ($student->local_password_expires_at && $student->local_password_expires_at->isPast()) {
+            return back()->withErrors(['login' => "Vaqtinchalik parol muddati tugagan. Admin bilan bog'laning."])->onlyInput('login', '_profile');
+        }
+
+        // Parol tekshiruvi
+        if (!Hash::check($request->password, $student->local_password)) {
+            if ($hemsFailed) {
+                return back()->withErrors(['login' => "HEMIS tizimi vaqtincha ishlamayapti va lokal parol noto'g'ri."])->onlyInput('login', '_profile');
+            }
+            return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
+        }
+
+        // Telegram 2FA: vaqtincha o'chirilgan
+        // if ($student->telegram_chat_id) {
+        //     return $this->sendLoginCode($student, $request);
+        // }
+
+        // Boshqa guardlarni tozalash (admin/teacher session qoldiqlarini yo'q qilish)
+        $this->clearOtherGuards($request);
+
+        Auth::guard('student')->login($student);
+        $request->session()->regenerate();
+        ActivityLogService::logLogin('student');
+
+        if ($student->must_change_password) {
+            return redirect()->route('student.password.edit');
+        }
+
+        if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
+            return redirect()->route('student.complete-profile');
+        }
+
+        return redirect()->intended(route('student.dashboard'));
     }
 
     /**

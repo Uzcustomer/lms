@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -43,14 +44,27 @@ class ImpersonateController extends Controller
             'student_id' => Auth::guard('student')->id(),
             'session.impersonating' => session('impersonating'),
             'session.impersonator_id' => session('impersonator_id'),
+            'session.impersonator_guard' => session('impersonator_guard'),
             'session.impersonated_name' => session('impersonated_name'),
             'session.active_role' => session('active_role'),
             'session_id' => session()->getId(),
-            'session_has_teacher_key' => session()->has('login_teacher_59ba36addc2b2f9401580f014c7f58ea4e30989d'),
-            'session_has_student_key' => session()->has('login_student_59ba36addc2b2f9401580f014c7f58ea4e30989d'),
-            'session_has_web_key' => session()->has('login_web_59ba36addc2b2f9401580f014c7f58ea4e30989d'),
             'all_session_keys' => array_keys(session()->all()),
         ]);
+    }
+
+    /**
+     * Hozir qaysi guard aktiv ekanligini aniqlash.
+     * Admin (web) birinchi tekshiriladi, keyin teacher.
+     */
+    private function detectCurrentGuard(): string
+    {
+        if (Auth::guard('web')->check()) {
+            return 'web';
+        }
+        if (Auth::guard('teacher')->check()) {
+            return 'teacher';
+        }
+        return 'web'; // default fallback
     }
 
     /**
@@ -58,27 +72,16 @@ class ImpersonateController extends Controller
      */
     private function purgeNonWebGuards(): void
     {
-        // 1. Auth guard objectlarini logout qilish (ichki cached user'ni tozalaydi)
         foreach (['teacher', 'student'] as $guard) {
             if (Auth::guard($guard)->check()) {
                 Log::channel('daily')->info("🧹 PURGE: {$guard} guard logout qilinmoqda, id=" . Auth::guard($guard)->id());
                 Auth::guard($guard)->logout();
             }
         }
-
-        // 2. Session dan guard kalitlarini QOËLDA o'chirish
-        //    (Auth::logout() ba'zan to'liq tozalamaydi, ayniqsa session migrate bo'lganda)
         foreach (self::GUARD_SESSION_KEYS as $key) {
             session()->forget($key);
         }
-
-        // 3. Impersonation session kalitlarini tozalash
         session()->forget(self::IMPERSONATION_SESSION_KEYS);
-
-        Log::channel('daily')->info("🧹 PURGE: Tozalash tugadi", [
-            'session_has_teacher_key' => session()->has('login_teacher_59ba36addc2b2f9401580f014c7f58ea4e30989d'),
-            'session_has_student_key' => session()->has('login_student_59ba36addc2b2f9401580f014c7f58ea4e30989d'),
-        ]);
     }
 
     /**
@@ -86,15 +89,17 @@ class ImpersonateController extends Controller
      */
     public function impersonateStudent(Student $student): RedirectResponse
     {
-        $admin = Auth::user();
+        $currentGuard = $this->detectCurrentGuard();
+        $admin = Auth::guard($currentGuard)->user();
 
-        if (!$admin->hasRole('superadmin')) {
+        if (!$admin || !$admin->hasRole('superadmin')) {
             abort(403);
         }
 
         Log::channel('daily')->info("🟢 IMPERSONATE STUDENT: Boshlanmoqda", [
             'admin_id' => $admin->id,
-            'admin_name' => $admin->name,
+            'admin_guard' => $currentGuard,
+            'admin_class' => get_class($admin),
             'student_id' => $student->id,
             'student_name' => $student->full_name,
         ]);
@@ -110,13 +115,13 @@ class ImpersonateController extends Controller
         session([
             'impersonating' => true,
             'impersonator_id' => $admin->id,
-            'impersonator_guard' => 'web',
+            'impersonator_guard' => $currentGuard, // 'web' yoki 'teacher' — haqiqiy guard
             'impersonated_name' => $student->full_name,
             'impersonator_active_role' => session('active_role'),
         ]);
         session()->forget('active_role');
 
-        Auth::guard('web')->logout();
+        Auth::guard($currentGuard)->logout();
         Auth::guard('student')->login($student);
 
         $this->debugState('impersonateStudent:AFTER');
@@ -129,15 +134,17 @@ class ImpersonateController extends Controller
      */
     public function impersonateTeacher(Teacher $teacher): RedirectResponse
     {
-        $admin = Auth::user();
+        $currentGuard = $this->detectCurrentGuard();
+        $admin = Auth::guard($currentGuard)->user();
 
-        if (!$admin->hasRole('superadmin')) {
+        if (!$admin || !$admin->hasRole('superadmin')) {
             abort(403);
         }
 
         Log::channel('daily')->info("🟢 IMPERSONATE TEACHER: Boshlanmoqda", [
             'admin_id' => $admin->id,
-            'admin_name' => $admin->name,
+            'admin_guard' => $currentGuard,
+            'admin_class' => get_class($admin),
             'teacher_id' => $teacher->id,
             'teacher_name' => $teacher->full_name,
         ]);
@@ -153,13 +160,13 @@ class ImpersonateController extends Controller
         session([
             'impersonating' => true,
             'impersonator_id' => $admin->id,
-            'impersonator_guard' => 'web',
+            'impersonator_guard' => $currentGuard, // 'web' yoki 'teacher' — haqiqiy guard
             'impersonated_name' => $teacher->full_name,
             'impersonator_active_role' => session('active_role'),
         ]);
         session()->forget('active_role');
 
-        Auth::guard('web')->logout();
+        Auth::guard($currentGuard)->logout();
         Auth::guard('teacher')->login($teacher);
 
         $this->debugState('impersonateTeacher:AFTER');
@@ -184,15 +191,13 @@ class ImpersonateController extends Controller
         }
 
         $impersonatorId = session('impersonator_id');
+        $impersonatorGuard = session('impersonator_guard', 'web');
 
-        // Joriy guard'dan chiqish (teacher)
         foreach (['student', 'teacher'] as $guard) {
             if (Auth::guard($guard)->check()) {
-                Log::channel('daily')->info("🔄 SWITCH TO STUDENT: {$guard} guard logout qilinmoqda");
                 Auth::guard($guard)->logout();
             }
         }
-        // Guard session kalitlarini ham qo'lda o'chirish
         foreach (self::GUARD_SESSION_KEYS as $key) {
             session()->forget($key);
         }
@@ -207,7 +212,7 @@ class ImpersonateController extends Controller
         session([
             'impersonating' => true,
             'impersonator_id' => $impersonatorId,
-            'impersonator_guard' => 'web',
+            'impersonator_guard' => $impersonatorGuard,
             'impersonated_name' => $student->full_name,
             'impersonator_active_role' => session('impersonator_active_role'),
         ]);
@@ -220,7 +225,7 @@ class ImpersonateController extends Controller
     }
 
     /**
-     * Impersonatsiyani to'xtatish — asl superadmin hisobiga qaytish.
+     * Impersonatsiyani to'xtatish — asl admin/teacher hisobiga qaytish.
      */
     public function stopImpersonation(): RedirectResponse
     {
@@ -228,10 +233,12 @@ class ImpersonateController extends Controller
         $this->debugState('stopImpersonation:ENTRY');
 
         $impersonatorId = session('impersonator_id');
+        $impersonatorGuard = session('impersonator_guard', 'web');
         $previousActiveRole = session('impersonator_active_role');
 
         Log::channel('daily')->info("🔴 STOP IMPERSONATION: Session dan olingan qiymatlar", [
             'impersonator_id' => $impersonatorId,
+            'impersonator_guard' => $impersonatorGuard,
             'previousActiveRole' => $previousActiveRole,
         ]);
 
@@ -243,57 +250,76 @@ class ImpersonateController extends Controller
             return redirect()->route('admin.login');
         }
 
-        $admin = \App\Models\User::find($impersonatorId);
-        if (!$admin) {
-            Log::channel('daily')->warning("🔴 STOP IMPERSONATION: ❌ User topilmadi DB dan!", ['impersonator_id' => $impersonatorId]);
+        // ============================================================
+        // Impersonator'ni uning HAQIQIY guard'iga qarab topish:
+        // 'web' guard → User modeldan (users jadvali)
+        // 'teacher' guard → Teacher modeldan (teachers jadvali)
+        // ============================================================
+        $originalUser = null;
+        if ($impersonatorGuard === 'teacher') {
+            $originalUser = Teacher::find($impersonatorId);
+            Log::channel('daily')->info("🔴 STOP IMPERSONATION: Teacher::find({$impersonatorId})", [
+                'found' => !is_null($originalUser),
+                'name' => $originalUser?->full_name,
+            ]);
+        } else {
+            $originalUser = User::find($impersonatorId);
+            Log::channel('daily')->info("🔴 STOP IMPERSONATION: User::find({$impersonatorId})", [
+                'found' => !is_null($originalUser),
+                'name' => $originalUser?->name,
+            ]);
+        }
+
+        if (!$originalUser) {
+            Log::channel('daily')->warning("🔴 STOP IMPERSONATION: ❌ Original user topilmadi!", [
+                'impersonator_id' => $impersonatorId,
+                'impersonator_guard' => $impersonatorGuard,
+            ]);
             $this->purgeNonWebGuards();
             session()->forget('active_role');
             session()->save();
             return redirect()->route('admin.login');
         }
 
-        Log::channel('daily')->info("🔴 STOP IMPERSONATION: ✅ Admin topildi", [
-            'admin_id' => $admin->id,
-            'admin_name' => $admin->name,
+        Log::channel('daily')->info("🔴 STOP IMPERSONATION: ✅ Original user topildi", [
+            'id' => $originalUser->id,
+            'guard' => $impersonatorGuard,
+            'class' => get_class($originalUser),
         ]);
 
-        // ============================================================
-        // MUHIM: Avval BARCHA eski guard va session ma'lumotlarini
-        // to'liq tozalash, KEYIN web guard'ni login qilish.
-        // ============================================================
+        // 1. BARCHA guardlarni logout + session tozalash
+        foreach (['teacher', 'student', 'web'] as $guard) {
+            if (Auth::guard($guard)->check()) {
+                Log::channel('daily')->info("🔴 STOP IMPERSONATION: {$guard} guard logout, id=" . Auth::guard($guard)->id());
+                Auth::guard($guard)->logout();
+            }
+        }
 
-        // 1. Teacher/student guard + impersonation session'ni to'liq tozalash
-        $this->purgeNonWebGuards();
+        // 2. Session'ni to'liq invalidate qilish (yangi toza session)
+        session()->invalidate();
+        session()->regenerateToken();
 
-        // 2. active_role'ni ham o'chirish (keyinroq qayta o'rnatamiz)
-        session()->forget('active_role');
+        Log::channel('daily')->info("🔴 STOP IMPERSONATION: Session invalidated, yangi session yaratildi");
 
-        $this->debugState('stopImpersonation:AFTER_PURGE');
-
-        // 3. Admin'ni web guard orqali login qilish
-        Log::channel('daily')->info("🔴 STOP IMPERSONATION: Admin login qilinmoqda, admin_id={$admin->id}");
-        Auth::guard('web')->login($admin);
+        // 3. Original user'ni uning guard'iga login qilish
+        Auth::guard($impersonatorGuard)->login($originalUser);
 
         // 4. Active rolni tiklash
         $roleToSet = $previousActiveRole ?? 'superadmin';
         session(['active_role' => $roleToSet]);
-        Log::channel('daily')->info("🔴 STOP IMPERSONATION: active_role={$roleToSet}");
 
-        // 5. Session'ni DARHOL saqlash (redirect oldidan)
+        Log::channel('daily')->info("🔴 STOP IMPERSONATION: Login qilindi", [
+            'guard' => $impersonatorGuard,
+            'user_id' => $originalUser->id,
+            'active_role' => $roleToSet,
+            'web_check' => Auth::guard('web')->check(),
+            'teacher_check' => Auth::guard('teacher')->check(),
+        ]);
+
+        // 5. Session'ni saqlash
         session()->save();
 
         $this->debugState('stopImpersonation:FINAL_STATE');
-
-        // 6. Tekshirish: teacher/student guard haqiqatan o'chirilganmi?
-        Log::channel('daily')->info("🔴 STOP IMPERSONATION: VERIFY", [
-            'impersonating_is_null' => is_null(session('impersonating')),
-            'web_check_final' => Auth::guard('web')->check(),
-            'web_id_final' => Auth::guard('web')->id(),
-            'teacher_check_final' => Auth::guard('teacher')->check(),
-            'student_check_final' => Auth::guard('student')->check(),
-            'teacher_session_key_exists' => session()->has('login_teacher_59ba36addc2b2f9401580f014c7f58ea4e30989d'),
-            'student_session_key_exists' => session()->has('login_student_59ba36addc2b2f9401580f014c7f58ea4e30989d'),
-        ]);
 
         ActivityLogService::log(
             'stop_impersonate',

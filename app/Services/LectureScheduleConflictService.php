@@ -753,4 +753,262 @@ class LectureScheduleConflictService
 
         return $extra;
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  O'QUV REJA BILAN SOLISHTIRISH
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Jadvaldagi ma'ruzalarni o'quv reja (CurriculumSubjectTeacher) bilan solishtirish.
+     *
+     * Natija:
+     * - matched: jadvaldagi dars o'quv rejada ham bor (fan+turi mos)
+     * - hours_mismatch: fan bor, lekin soatlar farqli
+     * - not_in_schedule: o'quv rejada bor, jadvaldda yo'q
+     * - not_in_curriculum: jadvalda bor, o'quv rejada yo'q
+     */
+    public function compareWithCurriculum(LectureScheduleBatch $batch): array
+    {
+        $items = $batch->items()->get();
+
+        // 1. O'quv rejadan barcha yozuvlarni olish (faqat aktiv)
+        $curriculumItems = CurriculumSubjectTeacher::where('active', true)->get();
+
+        // 2. Jadval ma'lumotlarini guruh+fan+turi bo'yicha guruhlash
+        $scheduleMap = [];
+        foreach ($items as $item) {
+            $key = $this->normKey($item->group_name) . '||' . $this->normKey($item->subject_name) . '||' . $this->normKey($item->training_type_name ?? '');
+            if (!isset($scheduleMap[$key])) {
+                $scheduleMap[$key] = [
+                    'items' => collect(),
+                    'group_name' => $item->group_name,
+                    'subject_name' => $item->subject_name,
+                    'training_type_name' => $item->training_type_name ?? '',
+                    'employee_name' => $item->employee_name,
+                ];
+            }
+            $scheduleMap[$key]['items']->push($item);
+        }
+
+        // 3. O'quv reja yozuvlarini guruh+fan+turi bo'yicha guruhlash
+        // group_id orqali guruh nomini olish
+        $groupNames = $this->resolveGroupNames($curriculumItems->pluck('group_id')->filter()->unique()->toArray());
+
+        $curriculumMap = [];
+        foreach ($curriculumItems as $cur) {
+            $groupName = $groupNames[$cur->group_id] ?? null;
+            if (!$groupName) {
+                continue; // Guruh nomi aniqlanmasa o'tkazib yuboramiz
+            }
+
+            $key = $this->normKey($groupName) . '||' . $this->normKey($cur->subject_name) . '||' . $this->normKey($cur->training_type_name ?? '');
+            if (!isset($curriculumMap[$key])) {
+                $curriculumMap[$key] = [
+                    'group_name' => $groupName,
+                    'group_id' => $cur->group_id,
+                    'subject_name' => $cur->subject_name,
+                    'training_type_name' => $cur->training_type_name ?? '',
+                    'employee_name' => $cur->employee_name,
+                    'academic_load' => (int) $cur->academic_load,
+                ];
+            } else {
+                // Bir xil key bo'lsa, soatlarni jamlash emas, birinchisini saqlaymiz
+                // (lekin agar academic_load kattaroq bo'lsa, uni olamiz)
+                if ((int) $cur->academic_load > $curriculumMap[$key]['academic_load']) {
+                    $curriculumMap[$key]['academic_load'] = (int) $cur->academic_load;
+                }
+            }
+        }
+
+        // 4. Solishtirish
+        $matched = [];
+        $hoursMismatch = [];
+        $notInSchedule = [];
+        $notInCurriculum = [];
+
+        $matchedCurrKeys = [];
+
+        foreach ($curriculumMap as $key => $cur) {
+            if (isset($scheduleMap[$key])) {
+                // Mos topildi — soatlarni tekshirish
+                $matchedCurrKeys[] = $key;
+                $scheduleItems = $scheduleMap[$key]['items'];
+
+                // Jadvaldagi soatlarni hisoblash
+                $uniqueSlots = $scheduleItems->unique(fn($i) => $i->week_day . '_' . $i->lesson_pair_code);
+                $totalScheduleHours = 0;
+                foreach ($uniqueSlots as $slot) {
+                    $lessonCount = $this->parseLessonCount($slot->weeks);
+                    $totalScheduleHours += $lessonCount * 2;
+                }
+
+                $entry = [
+                    'group_name' => $cur['group_name'],
+                    'subject_name' => $cur['subject_name'],
+                    'training_type' => $cur['training_type_name'],
+                    'employee_name' => $cur['employee_name'],
+                    'curriculum_hours' => $cur['academic_load'],
+                    'schedule_hours' => $totalScheduleHours,
+                    'ids' => $scheduleItems->pluck('id')->toArray(),
+                ];
+
+                if ($totalScheduleHours !== $cur['academic_load'] && $cur['academic_load'] > 0) {
+                    $entry['diff'] = $totalScheduleHours - $cur['academic_load'];
+                    $hoursMismatch[] = $entry;
+                } else {
+                    $matched[] = $entry;
+                }
+            } else {
+                // Jadvalda yo'q — o'quv rejada bor, lekin jadvaldda yo'q
+                // Faqat fan nomi bo'yicha qidirib ko'ramiz (turi va guruhni alohida)
+                $found = $this->fuzzyFindInSchedule($cur, $scheduleMap);
+                if ($found) {
+                    $matchedCurrKeys[] = $key;
+                    $scheduleItems = $found['items'];
+
+                    $uniqueSlots = $scheduleItems->unique(fn($i) => $i->week_day . '_' . $i->lesson_pair_code);
+                    $totalScheduleHours = 0;
+                    foreach ($uniqueSlots as $slot) {
+                        $lessonCount = $this->parseLessonCount($slot->weeks);
+                        $totalScheduleHours += $lessonCount * 2;
+                    }
+
+                    $entry = [
+                        'group_name' => $cur['group_name'],
+                        'subject_name' => $cur['subject_name'],
+                        'training_type' => $cur['training_type_name'],
+                        'employee_name' => $cur['employee_name'],
+                        'curriculum_hours' => $cur['academic_load'],
+                        'schedule_hours' => $totalScheduleHours,
+                        'ids' => $scheduleItems->pluck('id')->toArray(),
+                        'note' => 'fuzzy_match',
+                    ];
+
+                    if ($totalScheduleHours !== $cur['academic_load'] && $cur['academic_load'] > 0) {
+                        $entry['diff'] = $totalScheduleHours - $cur['academic_load'];
+                        $hoursMismatch[] = $entry;
+                    } else {
+                        $matched[] = $entry;
+                    }
+                } else {
+                    $notInSchedule[] = [
+                        'group_name' => $cur['group_name'],
+                        'subject_name' => $cur['subject_name'],
+                        'training_type' => $cur['training_type_name'],
+                        'employee_name' => $cur['employee_name'],
+                        'curriculum_hours' => $cur['academic_load'],
+                    ];
+                }
+            }
+        }
+
+        // 5. Jadvalda bor, lekin o'quv rejada yo'q
+        foreach ($scheduleMap as $key => $sch) {
+            if (!in_array($key, $matchedCurrKeys)) {
+                // Fuzzy teskari qidirish
+                $foundInCurr = $this->fuzzyFindInCurriculum($sch, $curriculumMap, $matchedCurrKeys);
+                if (!$foundInCurr) {
+                    $notInCurriculum[] = [
+                        'group_name' => $sch['group_name'],
+                        'subject_name' => $sch['subject_name'],
+                        'training_type' => $sch['training_type_name'],
+                        'employee_name' => $sch['employee_name'],
+                        'schedule_count' => $sch['items']->count(),
+                        'ids' => $sch['items']->pluck('id')->toArray(),
+                    ];
+                }
+            }
+        }
+
+        return [
+            'total_curriculum' => count($curriculumMap),
+            'total_schedule' => count($scheduleMap),
+            'matched' => count($matched),
+            'hours_mismatch' => count($hoursMismatch),
+            'not_in_schedule' => count($notInSchedule),
+            'not_in_curriculum' => count($notInCurriculum),
+            'matched_items' => $matched,
+            'hours_mismatch_items' => $hoursMismatch,
+            'not_in_schedule_items' => $notInSchedule,
+            'not_in_curriculum_items' => $notInCurriculum,
+        ];
+    }
+
+    /**
+     * Group ID'lardan guruh nomlarini olish
+     */
+    private function resolveGroupNames(array $groupIds): array
+    {
+        if (empty($groupIds)) {
+            return [];
+        }
+
+        return \App\Models\Group::whereIn('group_hemis_id', $groupIds)
+            ->pluck('name', 'group_hemis_id')
+            ->toArray();
+    }
+
+    /**
+     * Normalizatsiya — solishtirish uchun
+     */
+    private function normKey(?string $value): string
+    {
+        if (!$value) return '';
+        return mb_strtolower(trim($value));
+    }
+
+    /**
+     * Jadvalda fuzzy qidirish (fan nomi bo'yicha qisman mos kelishi mumkin)
+     */
+    private function fuzzyFindInSchedule(array $cur, array $scheduleMap): ?array
+    {
+        $curSubject = $this->normKey($cur['subject_name']);
+        $curGroup = $this->normKey($cur['group_name']);
+
+        foreach ($scheduleMap as $key => $sch) {
+            $schGroup = $this->normKey($sch['group_name']);
+            $schSubject = $this->normKey($sch['subject_name']);
+
+            // Guruh nomi mos va fan nomi qisman mos
+            if ($schGroup === $curGroup) {
+                if ($schSubject === $curSubject) {
+                    return $sch;
+                }
+                if (str_contains($schSubject, $curSubject) || str_contains($curSubject, $schSubject)) {
+                    return $sch;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * O'quv rejada fuzzy qidirish (teskari yo'nalish)
+     */
+    private function fuzzyFindInCurriculum(array $sch, array $curriculumMap, array $matchedKeys): bool
+    {
+        $schSubject = $this->normKey($sch['subject_name']);
+        $schGroup = $this->normKey($sch['group_name']);
+
+        foreach ($curriculumMap as $key => $cur) {
+            if (in_array($key, $matchedKeys)) {
+                continue;
+            }
+
+            $curGroup = $this->normKey($cur['group_name']);
+            $curSubject = $this->normKey($cur['subject_name']);
+
+            if ($schGroup === $curGroup) {
+                if ($schSubject === $curSubject) {
+                    return true;
+                }
+                if (str_contains($schSubject, $curSubject) || str_contains($curSubject, $schSubject)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 }

@@ -28,6 +28,16 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
         'shanba' => 6, 'sha' => 6, 'sh' => 6, '6' => 6,
     ];
 
+    // Har bir maydon uchun mumkin bo'lgan ustun nomlari (slug formatda)
+    // Excel heading slug formatga o'tadi: "Darslar soni" -> "darslar_soni"
+    private const COLUMN_ALIASES = [
+        'group_source' => ['potok', 'guruh_source'],
+        'lesson_count' => ['darslar_soni', 'haftalar_davomiyligi', 'darslar'],
+        'week_parity'  => ['hafta', 'juft_toq', 'hafta_turi'],
+        'start_time'   => ['boshlanishi', 'boshlanish', 'vaqt'],
+        'end_time'     => ['tugashi', 'tugash', 'stolbec1'],
+    ];
+
     public function __construct(LectureScheduleBatch $batch)
     {
         $this->batch = $batch;
@@ -35,10 +45,25 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
 
     public function collection(Collection $rows)
     {
+        // Debug: heading key'larni log'ga yozish
+        if ($rows->isNotEmpty()) {
+            $firstRow = $rows->first()->toArray();
+            $keys = array_keys($firstRow);
+            \Log::info('=== LectureScheduleImport DEBUG ===');
+            \Log::info('Excel heading keys: ' . implode(', ', $keys));
+            \Log::info('Birinchi qator qiymatlari:', $firstRow);
+
+            // Har bir alias uchun qaysi ustun topilganini ko'rsatish
+            foreach (self::COLUMN_ALIASES as $field => $aliases) {
+                $found = $this->findMatchingKey($keys, $aliases);
+                \Log::info("  {$field}: qidirdi [" . implode(', ', $aliases) . "] => topildi: " . ($found ?? 'TOPILMADI'));
+            }
+        }
+
         foreach ($rows as $index => $row) {
             $rowNum = $index + 2; // +2 chunki heading row + 0-index
 
-            // Kun -> raqamga o'tkazish (yangi ustun nomi: kuni)
+            // Kun -> raqamga o'tkazish
             $dayRaw = mb_strtolower(trim($row['kuni'] ?? $row['kun'] ?? ''));
             $weekDay = self::DAY_MAP[$dayRaw] ?? null;
 
@@ -50,22 +75,27 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
                 continue;
             }
 
+            $rowArray = $row->toArray();
+            $keys = array_keys($rowArray);
+
             // Juftlik kodi
             $pairRaw = trim($row['juftlik'] ?? '');
             $pairCode = preg_replace('/[^0-9]/', '', $pairRaw) ?: $pairRaw;
 
-            // Vaqtlarni parse qilish
-            $startTime = $this->parseTime($row['boshlanish'] ?? null);
-            $endTime = $this->parseTime($row['tugash'] ?? null);
+            // Vaqtlarni parse qilish (alias orqali)
+            $startTimeRaw = $this->findColumnValue($rowArray, $keys, self::COLUMN_ALIASES['start_time']);
+            $endTimeRaw = $this->findColumnValue($rowArray, $keys, self::COLUMN_ALIASES['end_time']);
+            $startTime = $this->parseTime($startTimeRaw);
+            $endTime = $this->parseTime($endTimeRaw);
 
-            // Guruh nomiga qarab hemis_id topish
+            // Guruh
             $groupName = trim($row['guruh'] ?? '');
             $group = $groupName ? Group::where('name', $groupName)->first() : null;
 
-            // Guruh_source (birlashtirilgan ma'ruza guruhi)
-            $groupSource = trim($row['guruh_source'] ?? '');
+            // Potok / Guruh_source (alias orqali)
+            $groupSource = trim((string) $this->findColumnValue($rowArray, $keys, self::COLUMN_ALIASES['group_source']));
 
-            // O'qituvchi nomiga qarab hemis_id topish
+            // O'qituvchi
             $employeeName = trim($row['oqituvchi'] ?? '');
             $employee = null;
             if ($employeeName) {
@@ -74,34 +104,28 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
                     ->first();
             }
 
-            // Xona (eski formatda auditoriya)
+            // Xona
             $roomName = trim($row['xona'] ?? $row['auditoriya'] ?? '');
 
             // Qavat va Bino
             $floor = trim($row['qavat'] ?? '');
             $buildingName = trim($row['bino'] ?? '');
 
-            // Dars turi (ixtiyoriy)
+            // Dars turi
             $trainingType = trim($row['turi'] ?? '');
 
-            // Haftalar davomiyligi — dinamik qidirish (turli Excel heading format uchun)
-            $weeks = '';
-            $weekParity = '';
-            $rowArray = $row->toArray();
-            foreach ($rowArray as $colKey => $colVal) {
-                if ($colVal === null || !is_string($colKey)) {
-                    continue;
-                }
-                $colKeyLower = mb_strtolower($colKey);
-                if (!$weeks && str_contains($colKeyLower, 'hafta')) {
-                    $weeks = trim((string) $colVal);
-                }
-                // "toq" so'zi faqat "juft_toq" ustunida bor, "juftlik" da yo'q
-                if (!$weekParity && str_contains($colKeyLower, 'toq')) {
-                    $weekParity = mb_strtolower(trim((string) $colVal));
-                }
-            }
+            // Darslar soni (alias orqali)
+            $lessonCountRaw = $this->findColumnValue($rowArray, $keys, self::COLUMN_ALIASES['lesson_count']);
+            $lessonCount = is_numeric($lessonCountRaw) ? (int) $lessonCountRaw : null;
 
+            // Hafta turi / Juft-toq (alias orqali)
+            $weekParityRaw = trim((string) $this->findColumnValue($rowArray, $keys, self::COLUMN_ALIASES['week_parity']));
+            $weekParity = $this->parseWeekParity($weekParityRaw);
+
+            // Debug: birinchi 5 qator
+            if ($index < 5) {
+                \Log::info("Row {$rowNum}: group_source={$groupSource}, lesson_count={$lessonCount}, week_parity_raw={$weekParityRaw}, week_parity={$weekParity}, group={$groupName}, fan=" . trim($row['fan'] ?? ''));
+            }
 
             LectureSchedule::create([
                 'batch_id' => $this->batch->id,
@@ -120,17 +144,60 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
                 'floor' => $floor ?: null,
                 'building_name' => $buildingName ?: null,
                 'training_type_name' => $trainingType ?: null,
-                'weeks' => $weeks ?: null,
+                'weeks' => $lessonCount ? (string) $lessonCount : null,
                 'week_parity' => $weekParity ?: null,
             ]);
 
             $this->importedCount++;
         }
 
+        \Log::info("=== Import yakunlandi: {$this->importedCount} qator, " . count($this->errors) . " xatolik ===");
+
         $this->batch->update([
             'total_rows' => $this->importedCount,
             'status' => count($this->errors) > 0 && $this->importedCount === 0 ? 'error' : 'completed',
         ]);
+    }
+
+    /**
+     * Alias ro'yxatidan mos keluvchi ustun kalitini topish.
+     */
+    private function findMatchingKey(array $keys, array $aliases): ?string
+    {
+        foreach ($aliases as $alias) {
+            if (in_array($alias, $keys, true)) {
+                return $alias;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Alias ro'yxatidan mos keluvchi ustun qiymatini olish.
+     */
+    private function findColumnValue(array $rowArray, array $keys, array $aliases)
+    {
+        $key = $this->findMatchingKey($keys, $aliases);
+        return $key !== null ? $rowArray[$key] : null;
+    }
+
+    /**
+     * Hafta pariteti qiymatini parse qilish.
+     * "Juft hafta" -> "juft", "Toq hafta" -> "toq", "Juft" -> "juft", "Toq" -> "toq"
+     */
+    private function parseWeekParity(string $raw): ?string
+    {
+        $lower = mb_strtolower(trim($raw));
+        if ($lower === '') {
+            return null;
+        }
+        if (str_contains($lower, 'juft')) {
+            return 'juft';
+        }
+        if (str_contains($lower, 'toq')) {
+            return 'toq';
+        }
+        return $lower;
     }
 
     public function rules(): array

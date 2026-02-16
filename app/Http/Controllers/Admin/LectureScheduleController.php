@@ -379,9 +379,9 @@ class LectureScheduleController extends Controller
             return in_array($week, $weekList);
         }
 
-        // Bitta raqam "3"
+        // Bitta raqam "8" = davomiylik, ya'ni 1-8 hafta oralig'i
         if (is_numeric($weeksStr)) {
-            return $week === (int) $weeksStr;
+            return $week >= 1 && $week <= (int) $weeksStr;
         }
 
         // Boshqa format — ko'rsatamiz (xavfsiz tarafdan)

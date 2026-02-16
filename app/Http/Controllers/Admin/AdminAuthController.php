@@ -132,10 +132,9 @@ class AdminAuthController extends Controller
 
         ActivityLogService::logLogout($isTeacher ? 'teacher' : 'web');
 
-        // Barcha guardlardan logout qilish
-        if ($isTeacher) {
-            Auth::guard('teacher')->logout();
-        }
+        // Barcha guardlardan logout qilish (barchasi tozalanadi)
+        Auth::guard('student')->logout();
+        Auth::guard('teacher')->logout();
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

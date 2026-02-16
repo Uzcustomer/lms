@@ -76,6 +76,9 @@ class StudentAuthController extends Controller
                     return $this->sendLoginCode($student, $request);
                 }
 
+                // Boshqa guardlarni tozalash (admin/teacher session qoldiqlarini yo'q qilish)
+                $this->clearOtherGuards($request);
+
                 Auth::guard('student')->login($student);
                 $request->session()->regenerate();
                 ActivityLogService::logLogin('student');
@@ -120,6 +123,9 @@ class StudentAuthController extends Controller
                 return $this->sendLoginCode($student, $request);
             }
 
+            // Boshqa guardlarni tozalash (admin/teacher session qoldiqlarini yo'q qilish)
+            $this->clearOtherGuards($request);
+
             Auth::guard('student')->login($student);
             $request->session()->regenerate();
             ActivityLogService::logLogin('student');
@@ -157,6 +163,7 @@ class StudentAuthController extends Controller
 
         if (!$sent) {
             // Telegram yuborilmasa, oddiy login qilish
+            $this->clearOtherGuards($request);
             Auth::guard('student')->login($student);
             $request->session()->regenerate();
             ActivityLogService::logLogin('student');
@@ -239,6 +246,9 @@ class StudentAuthController extends Controller
         $student->save();
 
         $request->session()->forget('login_verify_student_id');
+
+        // Boshqa guardlarni tozalash (admin/teacher session qoldiqlarini yo'q qilish)
+        $this->clearOtherGuards($request);
 
         Auth::guard('student')->login($student);
         $request->session()->regenerate();
@@ -420,11 +430,36 @@ class StudentAuthController extends Controller
             $student->save();
         }
 
+        // Barcha guardlardan logout qilish (session qoldiqlarini to'liq tozalash)
+        Auth::guard('web')->logout();
+        Auth::guard('teacher')->logout();
         Auth::guard('student')->logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    /**
+     * Boshqa guardlarni tozalash — student login qilishdan oldin
+     * admin yoki teacher session qoldiqlari bo'lsa, ularni yo'q qilish.
+     */
+    private function clearOtherGuards(Request $request): void
+    {
+        foreach (['web', 'teacher'] as $guard) {
+            if (Auth::guard($guard)->check()) {
+                Auth::guard($guard)->logout();
+            }
+        }
+
+        $request->session()->forget([
+            'impersonating',
+            'impersonator_id',
+            'impersonator_guard',
+            'impersonated_name',
+            'impersonator_active_role',
+            'active_role',
+        ]);
     }
 }

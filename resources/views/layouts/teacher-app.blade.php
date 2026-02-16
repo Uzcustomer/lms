@@ -114,4 +114,24 @@
     @livewireScripts
 </body>
 <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
+
+    {{-- DEBUG: Console log - account switching debug --}}
+    <script>
+        console.group('%c🔍 LMS DEBUG: Teacher Layout', 'color: #2ecc71; font-weight: bold; font-size: 14px;');
+        console.log('%cLayout:', 'font-weight:bold', 'teacher-app.blade.php (Teacher)');
+        console.log('%cURL:', 'font-weight:bold', window.location.href);
+        console.log('%cGuard (server):', 'font-weight:bold', '{{ auth()->guard("web")->check() ? "web ✅ (id=" . auth()->guard("web")->id() . ")" : "web ❌" }}');
+        console.log('%cTeacher guard:', 'font-weight:bold', '{{ auth()->guard("teacher")->check() ? "teacher ✅ (id=" . auth()->guard("teacher")->id() . " " . (auth()->guard("teacher")->user()->full_name ?? "?") . ")" : "teacher ❌" }}');
+        console.log('%cStudent guard:', 'font-weight:bold', '{{ auth()->guard("student")->check() ? "student ✅ (id=" . auth()->guard("student")->id() . ")" : "student ❌" }}');
+        console.log('%cauth()->user():', 'font-weight:bold', '{{ auth()->user() ? "id=" . auth()->user()->id : "NULL" }}');
+        console.log('%csession.impersonating:', 'font-weight:bold', {{ session('impersonating') ? 'true' : 'false' }});
+        console.log('%csession.impersonated_name:', 'font-weight:bold', '{{ session("impersonated_name", "NULL") }}');
+        console.log('%csession.impersonator_id:', 'font-weight:bold', '{{ session("impersonator_id", "NULL") }}');
+        console.log('%csession.active_role:', 'font-weight:bold', '{{ session("active_role", "NULL") }}');
+        console.log('%csession_id:', 'font-weight:bold', '{{ session()->getId() }}');
+        @if(session('impersonating'))
+            console.log('%c📍 Impersonation mode AKTIV — banner ko\'rinmoqda', 'color: orange; font-weight: bold;');
+        @endif
+        console.groupEnd();
+    </script>
 </html>

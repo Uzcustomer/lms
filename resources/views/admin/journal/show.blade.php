@@ -1984,11 +1984,11 @@
             .then(({ ok, status, data }) => {
                 icon.style.animation = '';
                 if (ok && data.success) {
-                    text.textContent = 'Yangilandi!';
+                    text.textContent = data.message || 'Yangilandi!';
                     btn.style.background = '#d1fae5';
                     btn.style.color = '#065f46';
                     btn.style.borderColor = '#6ee7b7';
-                    setTimeout(() => { location.reload(); }, 2000);
+                    setTimeout(() => { location.reload(); }, 3000);
                 } else if (status === 429) {
                     text.textContent = data.message || '5 daqiqa kuting';
                     btn.style.background = '#fef3c7';

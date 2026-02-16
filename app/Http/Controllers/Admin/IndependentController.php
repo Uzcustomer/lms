@@ -383,9 +383,7 @@ class IndependentController extends Controller
         try {
             DB::beginTransaction();
             $independent = Independent::find(intval($request->independent));
-            $independent->status = 1;
-            $independent->grade_teacher = $request->user()->short_name ?? $request->user()->name;
-            $independent->save();
+            $gradedCount = 0;
             foreach ($request->baho as $key => $baho) {
                 // Skip if no grade was entered (empty field)
                 if ($baho === null || $baho === '' || !is_numeric($baho)) {
@@ -430,7 +428,16 @@ class IndependentController extends Controller
                     'grade' => $baho,
                     'deadline' => now(),
                 ]);
+                $gradedCount++;
             }
+
+            // Only mark independent as graded if at least one grade was saved
+            if ($gradedCount > 0) {
+                $independent->status = 1;
+                $independent->grade_teacher = $request->user()->short_name ?? $request->user()->name;
+                $independent->save();
+            }
+
             DB::commit();
             if (auth()->user()->hasRole('admin')) {
                 return redirect()->route('admin.independent.grade', $independent->id)->with('success', 'Mustaqil ta\'lim baholandi');

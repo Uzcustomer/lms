@@ -2,12 +2,10 @@
     <!-- Tabs -->
     <div style="display: flex; margin-bottom: 1.2rem; border-bottom: 2px solid #e5e7eb;">
         <a href="{{ route('student.login') }}"
-           onclick="localStorage.setItem('lastLoginTab', 'student')"
            style="flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 600; text-decoration: none; border-bottom: 3px solid #1d4ed8; color: #ffffff; background-color: #1e40af; border-radius: 8px 8px 0 0; margin-bottom: -2px;">
             Talaba
         </a>
         <a href="{{ route('teacher.login') }}"
-           onclick="localStorage.setItem('lastLoginTab', 'teacher')"
            style="flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent; color: #1e40af; background-color: #dbeafe; border-radius: 8px 8px 0 0; margin-bottom: -2px;">
             Xodim
         </a>
@@ -83,14 +81,4 @@
         }
     </script>
 
-    @if (!$errors->any())
-    <script>
-        (function() {
-            var lastTab = localStorage.getItem('lastLoginTab');
-            if (lastTab === 'teacher') {
-                window.location.replace('{{ route("teacher.login") }}');
-            }
-        })();
-    </script>
-    @endif
 </x-guest-layout>

@@ -333,8 +333,24 @@
                         Ichki konfliktlar
                     </h3>
                     <span class="px-3 py-1 text-sm font-bold rounded-full"
-                          :class="conflicts.length > 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'"
-                          x-text="conflicts.length > 0 ? conflicts.length + ' ta xato' : 'Xato yo\'q'"></span>
+                          :class="filteredConflicts.length > 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'"
+                          x-text="filteredConflicts.length > 0 ? filteredConflicts.length + ' / ' + conflicts.length + ' ta xato' : 'Xato yo\'q'"></span>
+                </div>
+
+                {{-- Filtr bo'yicha --}}
+                <div x-show="conflicts.length > 0" class="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">Filtr:</span>
+                    <button @click="conflictFilter = ''"
+                            class="conflict-filter-pill"
+                            :class="conflictFilter === '' ? 'conflict-filter-active' : 'conflict-filter-inactive'">
+                        Barchasi <span class="ml-1 opacity-60" x-text="'(' + conflicts.length + ')'"></span>
+                    </button>
+                    <template x-for="ft in conflictTypes" :key="ft.type">
+                        <button @click="conflictFilter = ft.type"
+                                class="conflict-filter-pill"
+                                :class="conflictFilter === ft.type ? 'conflict-filter-active' : 'conflict-filter-inactive'"
+                                x-text="ft.label + ' (' + ft.count + ')'"></button>
+                    </template>
                 </div>
 
                 {{-- Bo'sh holat --}}
@@ -344,12 +360,11 @@
                 </div>
 
                 {{-- Konfliktlar ro'yxati --}}
-                <div x-show="conflicts.length > 0" class="divide-y divide-gray-100 dark:divide-gray-700">
-                    <template x-for="(c, ci) in conflicts" :key="ci">
+                <div x-show="filteredConflicts.length > 0" class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="(c, ci) in filteredConflicts" :key="c._uid">
                         <div class="conflict-row">
-                            {{-- Asosiy qator --}}
                             <div class="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                                 @click="c.expanded = !c.expanded">
+                                 @click="openConflictDetail(c)">
                                 {{-- Raqam --}}
                                 <span class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
                                       :class="getConflictBadgeColor(c.type)"
@@ -357,16 +372,7 @@
 
                                 {{-- Turi badge --}}
                                 <span class="flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded"
-                                      :class="{
-                                          'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300': c.type === 'teacher',
-                                          'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300': c.type === 'auditorium',
-                                          'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300': c.type === 'group',
-                                          'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300': c.type === 'room_potok',
-                                          'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300': c.type === 'hours',
-                                          'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300': c.type === 'duplicate',
-                                          'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300': c.type === 'missing_teacher' || c.type === 'missing_room',
-                                          'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300': c.type === 'potok_inconsistent',
-                                      }"
+                                      :class="getConflictBadgeClass(c.type)"
                                       x-text="getConflictTypeName(c.type)"></span>
 
                                 {{-- Kun va juftlik --}}
@@ -377,63 +383,89 @@
                                 {{-- Xabar --}}
                                 <span class="flex-1 text-sm text-gray-700 dark:text-gray-300 truncate" x-text="c.message"></span>
 
-                                {{-- Strelka --}}
-                                <svg class="w-5 h-5 flex-shrink-0 text-gray-400 transition-transform duration-200" :class="c.expanded && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                            </div>
-
-                            {{-- Batafsil panel --}}
-                            <div x-show="c.expanded" x-cloak
-                                 x-transition:enter="transition ease-out duration-200"
-                                 x-transition:enter-start="opacity-0 -translate-y-1"
-                                 x-transition:enter-end="opacity-100 translate-y-0"
-                                 class="px-5 pb-4 pt-1 bg-gray-50 dark:bg-gray-900/30">
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                                    <div class="text-sm">
-                                        <span class="font-semibold text-gray-500 dark:text-gray-400">Kun:</span>
-                                        <span class="ml-1 text-gray-800 dark:text-gray-200" x-text="c.dayName"></span>
-                                    </div>
-                                    <div class="text-sm">
-                                        <span class="font-semibold text-gray-500 dark:text-gray-400">Juftlik:</span>
-                                        <span class="ml-1 text-gray-800 dark:text-gray-200" x-text="c.pairName + (c.pairTime ? ' (' + c.pairTime + ')' : '')"></span>
-                                    </div>
-                                </div>
-
-                                {{-- Tegishli darslar jadvali --}}
-                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Tegishli darslar:</div>
-                                <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                                    <table class="w-full text-xs">
-                                        <thead>
-                                            <tr class="bg-gray-100 dark:bg-gray-800">
-                                                <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Guruh</th>
-                                                <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Fan</th>
-                                                <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">O'qituvchi</th>
-                                                <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Xona</th>
-                                                <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Juft/Toq</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                                            <template x-for="card in c.cards" :key="card.id">
-                                                <tr class="hover:bg-white dark:hover:bg-gray-800 cursor-pointer" @click="activeTab = 'jadval'; $nextTick(() => highlightCell(card.id))">
-                                                    <td class="px-3 py-2 text-gray-800 dark:text-gray-200 font-medium" x-text="card.group_name"></td>
-                                                    <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="card.subject_name"></td>
-                                                    <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="card.employee_name || '—'"></td>
-                                                    <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="[card.building_name, card.auditorium_name].filter(Boolean).join(', ') || '—'"></td>
-                                                    <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="card.week_parity || '—'"></td>
-                                                </tr>
-                                            </template>
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                {{-- Jadvalda ko'rsatish tugmasi --}}
-                                <button @click="activeTab = 'jadval'; $nextTick(() => highlightCells(c.ids))"
-                                        class="mt-3 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                    Jadvalda ko'rsatish
-                                </button>
+                                {{-- Batafsil icon --}}
+                                <svg class="w-5 h-5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             </div>
                         </div>
                     </template>
+                </div>
+            </div>
+        </div>
+
+        {{-- ===== KONFLIKT BATAFSIL MODAL ===== --}}
+        <div x-show="conflictDetail.show" x-cloak class="ls-modal-overlay" @click.self="conflictDetail.show = false" style="z-index:1001">
+            <div class="ls-modal-box" style="max-width:640px" @click.stop>
+                {{-- Header --}}
+                <div class="ls-modal-header" :style="'background:' + getConflictHeaderGradient(conflictDetail.data?.type)">
+                    <div>
+                        <h3 style="font-size:15px;font-weight:700;color:#fff;margin:0;" x-text="getConflictTypeName(conflictDetail.data?.type || '') + ' konflikti'"></h3>
+                        <p style="font-size:12px;color:rgba(255,255,255,0.8);margin:3px 0 0;" x-text="conflictDetail.data?.dayName ? (conflictDetail.data.dayName + ', ' + conflictDetail.data.pairName) : 'Umumiy tekshiruv'"></p>
+                    </div>
+                    <button @click="conflictDetail.show = false" class="ls-modal-close">&times;</button>
+                </div>
+
+                {{-- Body --}}
+                <div style="padding:16px 20px;max-height:70vh;overflow-y:auto;">
+                    {{-- Xabar --}}
+                    <div class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                        <div class="text-sm font-semibold text-red-700 dark:text-red-300" x-text="conflictDetail.data?.message"></div>
+                    </div>
+
+                    {{-- Batafsil tushuntirish --}}
+                    <div class="mb-4">
+                        <h4 class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Muammo nima?</h4>
+                        <div class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed space-y-2" x-html="getConflictExplanation(conflictDetail.data)"></div>
+                    </div>
+
+                    {{-- Tegishli darslar --}}
+                    <template x-if="conflictDetail.data?.cards?.length > 0">
+                        <div class="mb-4">
+                            <h4 class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Tegishli darslar</h4>
+                            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="bg-gray-100 dark:bg-gray-800">
+                                            <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Potok/Guruh</th>
+                                            <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Fan</th>
+                                            <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">O'qituvchi</th>
+                                            <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Xona</th>
+                                            <th class="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Hafta</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                        <template x-for="card in conflictDetail.data.cards" :key="card.id">
+                                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+                                                @click="conflictDetail.show = false; activeTab = 'jadval'; $nextTick(() => highlightCell(card.id))">
+                                                <td class="px-3 py-2 font-medium text-gray-800 dark:text-gray-200">
+                                                    <span x-text="card.group_source || card.group_name"></span>
+                                                </td>
+                                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="card.subject_name"></td>
+                                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="card.employee_name || '—'"></td>
+                                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="[card.building_name, card.auditorium_name].filter(Boolean).join(', ') || '—'"></td>
+                                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300" x-text="card.week_parity || 'barcha'"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+
+                    {{-- Yechim tavsiyasi --}}
+                    <div class="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                        <h4 class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">Yechim</h4>
+                        <div class="text-sm text-blue-700 dark:text-blue-300" x-html="getConflictSolution(conflictDetail.data)"></div>
+                    </div>
+                </div>
+
+                {{-- Footer --}}
+                <div class="ls-modal-footer">
+                    <button @click="conflictDetail.show = false" class="ls-btn-cancel">Yopish</button>
+                    <button x-show="conflictDetail.data?.ids?.length > 0"
+                            @click="conflictDetail.show = false; activeTab = 'jadval'; $nextTick(() => highlightCells(conflictDetail.data.ids))"
+                            class="ls-btn-save" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8)">
+                        Jadvalda ko'rsatish
+                    </button>
                 </div>
             </div>
         </div>
@@ -889,6 +921,14 @@
         .dark .room-pill-inactive { background: #334155; color: #94a3b8; border-color: #475569; }
         .dark .room-pill-inactive:hover { background: #1e3a5f; border-color: #38bdf8; color: #7dd3fc; }
 
+        /* ===== CONFLICT FILTER PILLS ===== */
+        .conflict-filter-pill { padding: 4px 12px; font-size: 0.75rem; font-weight: 600; border-radius: 9999px; border: 1.5px solid transparent; transition: all 0.15s; cursor: pointer; outline: none; white-space: nowrap; }
+        .conflict-filter-active { background: #ef4444; color: #fff; border-color: #ef4444; box-shadow: 0 2px 6px rgba(239,68,68,0.3); }
+        .conflict-filter-inactive { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+        .conflict-filter-inactive:hover { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+        .dark .conflict-filter-inactive { background: #334155; color: #94a3b8; border-color: #475569; }
+        .dark .conflict-filter-inactive:hover { background: #451a1a; border-color: #ef4444; color: #fca5a5; }
+
     </style>
 
     {{-- JavaScript --}}
@@ -909,6 +949,8 @@
             comparing: false,
             hemisResult: null,
             conflicts: [],
+            conflictFilter: '', // '' = barchasi, yoki 'teacher', 'hours', etc.
+            conflictDetail: { show: false, data: null },
             hoveredCard: null,
             draggedCard: null,
 
@@ -1010,6 +1052,7 @@
 
             collectConflicts() {
                 this.conflicts = [];
+                let uid = 0;
                 for (const key in this.gridItems) {
                     for (const card of this.gridItems[key]) {
                         if (card.has_conflict && card.conflict_details) {
@@ -1018,6 +1061,7 @@
                                 const exists = this.conflicts.find(c => c.message === cd.message);
                                 if (!exists) {
                                     this.conflicts.push({
+                                        _uid: ++uid,
                                         type: cd.type,
                                         message: cd.message,
                                         ids: [card.id],
@@ -1026,7 +1070,6 @@
                                         weekDay: card.week_day,
                                         pairName: pair ? pair.name : card.lesson_pair_code + '-juftlik',
                                         pairTime: pair ? ((pair.start || '').substring(0,5) + ' - ' + (pair.end || '').substring(0,5)) : '',
-                                        expanded: false,
                                     });
                                 } else {
                                     if (!exists.ids.includes(card.id)) {
@@ -1038,6 +1081,26 @@
                         }
                     }
                 }
+                this.conflictFilter = '';
+            },
+
+            // ===== KONFLIKT FILTR VA DETAIL =====
+            get filteredConflicts() {
+                if (!this.conflictFilter) return this.conflicts;
+                return this.conflicts.filter(c => c.type === this.conflictFilter);
+            },
+            get conflictTypes() {
+                const map = {};
+                for (const c of this.conflicts) {
+                    if (!map[c.type]) {
+                        map[c.type] = { type: c.type, label: this.getConflictTypeName(c.type), count: 0 };
+                    }
+                    map[c.type].count++;
+                }
+                return Object.values(map);
+            },
+            openConflictDetail(c) {
+                this.conflictDetail = { show: true, data: c };
             },
 
             // ===== XONALAR KESIMIDA =====
@@ -1324,6 +1387,133 @@
                     'potok_inconsistent': 'bg-indigo-500',
                 };
                 return map[type] || 'bg-gray-500';
+            },
+            getConflictBadgeClass(type) {
+                const map = {
+                    'teacher': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+                    'auditorium': 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
+                    'group': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+                    'room_potok': 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
+                    'hours': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+                    'duplicate': 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300',
+                    'missing_teacher': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+                    'missing_room': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+                    'potok_inconsistent': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+                };
+                return map[type] || 'bg-gray-200 text-gray-700';
+            },
+            getConflictHeaderGradient(type) {
+                const map = {
+                    'teacher': 'linear-gradient(135deg,#ea580c,#c2410c)',
+                    'auditorium': 'linear-gradient(135deg,#db2777,#be185d)',
+                    'group': 'linear-gradient(135deg,#9333ea,#7e22ce)',
+                    'room_potok': 'linear-gradient(135deg,#0891b2,#0e7490)',
+                    'hours': 'linear-gradient(135deg,#d97706,#b45309)',
+                    'duplicate': 'linear-gradient(135deg,#6b7280,#4b5563)',
+                    'missing_teacher': 'linear-gradient(135deg,#ca8a04,#a16207)',
+                    'missing_room': 'linear-gradient(135deg,#ca8a04,#a16207)',
+                    'potok_inconsistent': 'linear-gradient(135deg,#4f46e5,#4338ca)',
+                };
+                return map[type] || 'linear-gradient(135deg,#6b7280,#4b5563)';
+            },
+
+            // ===== KONFLIKT TUSHUNTIRISH =====
+            getConflictExplanation(c) {
+                if (!c) return '';
+                const cards = c.cards || [];
+                switch (c.type) {
+                    case 'teacher': {
+                        const teacher = cards[0]?.employee_name || 'Noma\'lum';
+                        const rooms = [...new Set(cards.map(x => x.auditorium_name).filter(Boolean))];
+                        const groups = [...new Set(cards.map(x => x.group_source || x.group_name))];
+                        return `<p><b>${teacher}</b> o'qituvchi <b>${c.dayName}</b> kuni <b>${c.pairName}</b> juftlikda bir vaqtning o'zida <b>${groups.length}</b> ta guruhga dars o'tishi kerak bo'lib qolgan:</p>`
+                            + `<p>Guruhlar: <b>${groups.join(', ')}</b></p>`
+                            + `<p>Auditoriyalar: <b>${rooms.join(', ')}</b></p>`
+                            + `<p>Bitta o'qituvchi bir vaqtda faqat bitta auditoriyada bo'la oladi. Shu sababli bu konflikt hisoblanadi.</p>`;
+                    }
+                    case 'auditorium': {
+                        const room = cards[0]?.auditorium_name || '';
+                        const teachers = [...new Set(cards.map(x => x.employee_name).filter(Boolean))];
+                        const groups = [...new Set(cards.map(x => x.group_source || x.group_name))];
+                        return `<p><b>${room}</b> auditoriyasi <b>${c.dayName}</b> kuni <b>${c.pairName}</b> juftlikda bir vaqtda <b>${teachers.length}</b> ta turli o'qituvchiga ajratilgan:</p>`
+                            + `<p>O'qituvchilar: <b>${teachers.join(', ')}</b></p>`
+                            + `<p>Guruhlar: <b>${groups.join(', ')}</b></p>`
+                            + `<p>Bitta xonada bir vaqtda faqat bitta dars o'tishi mumkin (turli o'qituvchi = turli dars).</p>`;
+                    }
+                    case 'group': {
+                        const group = cards[0]?.group_name || '';
+                        const subjects = [...new Set(cards.map(x => x.subject_name))];
+                        return `<p><b>${group}</b> guruh <b>${c.dayName}</b> kuni <b>${c.pairName}</b> juftlikda bir vaqtda <b>${subjects.length}</b> ta turli fandan dars olishi kerak:</p>`
+                            + `<p>Fanlar: <b>${subjects.join(', ')}</b></p>`
+                            + `<p>Talabalar bir vaqtda faqat bitta fandan dars olishi mumkin.</p>`;
+                    }
+                    case 'room_potok': {
+                        const room = cards[0]?.auditorium_name || '';
+                        const potoks = [...new Set(cards.map(x => x.group_source).filter(Boolean))];
+                        const parities = {};
+                        cards.forEach(x => { if (x.group_source) parities[x.group_source] = x.week_parity || 'barcha'; });
+                        let detail = '';
+                        potoks.forEach(p => {
+                            const pCards = cards.filter(x => x.group_source === p);
+                            detail += `<p>• <b>${p}</b> — ${pCards[0]?.subject_name || ''}, hafta: <b>${parities[p]}</b></p>`;
+                        });
+                        return `<p><b>${room}</b> auditoriyasi <b>${c.dayName}</b> kuni <b>${c.pairName}</b> juftlikda bir vaqtda <b>${potoks.length}</b> ta potokka ajratilgan:</p>`
+                            + detail
+                            + `<p>Bitta ma'ruza xonasida bir vaqtda faqat bitta potok bo'lishi mumkin. Bu potoklar bir xil hafta turida (juft/toq) bo'lgani uchun konflikt.</p>`;
+                    }
+                    case 'hours': {
+                        return `<p>${c.message}</p>`
+                            + `<p>O'quv rejadagi ajratilgan soatlar bilan jadvalda rejalashtirilgan soatlar bir-biriga mos kelmayapti.</p>`
+                            + `<p>Darslar soni (hafta) × 2 soat = jadvaldagi umumiy soat. Bu raqam o'quv rejadagi academic_load bilan teng bo'lishi kerak.</p>`;
+                    }
+                    case 'duplicate': {
+                        const first = cards[0];
+                        return `<p>Bir xil yozuv <b>${cards.length}</b> marta takrorlangan:</p>`
+                            + `<p>Guruh: <b>${first?.group_name || ''}</b>, Fan: <b>${first?.subject_name || ''}</b></p>`
+                            + `<p>Bir xil kun, juftlik, guruh, fan va hafta turi (juft/toq) kombinatsiyasi jadvalda faqat bir marta bo'lishi kerak.</p>`;
+                    }
+                    case 'missing_teacher':
+                        return `<p>Quyidagi darslar uchun o'qituvchi tayinlanmagan. Jadval to'liq bo'lishi uchun barcha darslarga o'qituvchi ko'rsatilishi kerak.</p>`;
+                    case 'missing_room':
+                        return `<p>Quyidagi darslar uchun auditoriya ko'rsatilmagan. Talabalar va o'qituvchilar qaysi xonaga borishi kerakligini bilishi zarur.</p>`;
+                    case 'potok_inconsistent': {
+                        const potok = cards[0]?.group_source || '';
+                        const subjects = [...new Set(cards.map(x => x.subject_name))];
+                        const rooms = [...new Set(cards.map(x => x.auditorium_name).filter(Boolean))];
+                        let msg = `<p><b>${potok}</b> potok ichidagi guruhlar o'rtasida nomuvofiqlik aniqlandi:</p>`;
+                        if (subjects.length > 1) msg += `<p>Turli fanlar: <b>${subjects.join(', ')}</b></p>`;
+                        if (rooms.length > 1) msg += `<p>Turli auditoriyalar: <b>${rooms.join(', ')}</b></p>`;
+                        msg += `<p>Bitta potok ichidagi barcha guruhlar bir xil fandan, bir xil xonada dars olishi kerak (chunki ular bitta ma'ruzada birgalikda o'tiradi).</p>`;
+                        return msg;
+                    }
+                    default:
+                        return `<p>${c.message}</p>`;
+                }
+            },
+            getConflictSolution(c) {
+                if (!c) return '';
+                switch (c.type) {
+                    case 'teacher':
+                        return 'Guruhlardan birini boshqa juftlikka yoki boshqa o\'qituvchiga o\'tkazing.';
+                    case 'auditorium':
+                        return 'Guruhlardan birini boshqa auditoriyaga ko\'chiring yoki boshqa juftlikka o\'tkazing.';
+                    case 'group':
+                        return 'Fanlardan birini boshqa juftlikka ko\'chiring.';
+                    case 'room_potok':
+                        return 'Potokalardan birini boshqa auditoriyaga ko\'chiring yoki hafta turini (juft/toq) o\'zgartiring.';
+                    case 'hours':
+                        return 'Darslar sonini (hafta) o\'quv rejadagi soatlarga mos ravishda tuzating. Yoki o\'quv rejadagi soat noto\'g\'ri kiritilganligini tekshiring.';
+                    case 'duplicate':
+                        return 'Takroriy yozuvlardan birini o\'chirib tashlang (o\'ng tugma → O\'chirish).';
+                    case 'missing_teacher':
+                        return 'Dars kartasini bosib o\'qituvchi ismini kiriting.';
+                    case 'missing_room':
+                        return 'Dars kartasini bosib auditoriya nomini kiriting.';
+                    case 'potok_inconsistent':
+                        return 'Potok ichidagi barcha guruhlar uchun fan nomi va auditoriyani bir xil qiling.';
+                    default:
+                        return 'Jadvalda tegishli darslarni tekshirib, kerakli o\'zgartirishlarni kiriting.';
+                }
             },
 
             // ===== WEEK LABEL (Barchasi rejimida) =====

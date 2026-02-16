@@ -176,26 +176,63 @@ class LectureScheduleConflictService
         $byRoom = $withRoomAndPotok->groupBy('auditorium_name');
 
         foreach ($byRoom as $roomName => $roomLessons) {
-            $overlapping = $this->filterOverlappingParity($roomLessons);
-            if ($overlapping->count() < 2) {
-                continue;
-            }
-
-            $uniquePotoks = $overlapping->pluck('group_source')->unique();
-            if ($uniquePotoks->count() <= 1) {
+            // Potok bo'yicha guruhlash
+            $byPotok = $roomLessons->groupBy('group_source');
+            if ($byPotok->count() < 2) {
                 continue; // Bitta potok — muammo yo'q
             }
 
-            $ids = $overlapping->pluck('id')->toArray();
-            $potoks = $uniquePotoks->implode(', ');
+            // Har bir potok juftligini tekshirish: faqat haqiqiy overlap bo'lsa konflikt
+            $potokNames = $byPotok->keys()->values();
+            $conflictingItems = collect();
+            $conflictPotoks = collect();
+
+            for ($i = 0; $i < $potokNames->count(); $i++) {
+                for ($j = $i + 1; $j < $potokNames->count(); $j++) {
+                    $potokA = $byPotok[$potokNames[$i]];
+                    $potokB = $byPotok[$potokNames[$j]];
+
+                    // Ikkala potok orasida paritet overlap bormi?
+                    $hasOverlap = false;
+                    foreach ($potokA as $a) {
+                        foreach ($potokB as $b) {
+                            if ($this->parityOverlaps($a->week_parity, $b->week_parity)) {
+                                $hasOverlap = true;
+                                break 2;
+                            }
+                        }
+                    }
+
+                    if ($hasOverlap) {
+                        $conflictingItems = $conflictingItems->merge($potokA)->merge($potokB);
+                        $conflictPotoks->push($potokNames[$i]);
+                        $conflictPotoks->push($potokNames[$j]);
+                    }
+                }
+            }
+
+            $conflictingItems = $conflictingItems->unique('id');
+            $conflictPotoks = $conflictPotoks->unique()->values();
+
+            if ($conflictPotoks->count() < 2) {
+                continue;
+            }
+
+            $ids = $conflictingItems->pluck('id')->toArray();
+            $potoks = $conflictPotoks->implode(', ');
+
+            // Tushuntirish: qaysi potoklar qaysi paritetda overlap qiladi
+            $parityA = $conflictingItems->where('group_source', $conflictPotoks[0])->pluck('week_parity')->filter()->unique()->first() ?? 'umumiy';
+            $parityB = $conflictingItems->where('group_source', $conflictPotoks[1])->pluck('week_parity')->filter()->unique()->first() ?? 'umumiy';
+
             $conflicts[] = [
                 'type' => 'room_potok',
-                'message' => "{$roomName} — bir vaqtda {$uniquePotoks->count()} potok: {$potoks}",
+                'message' => "{$roomName} — bir vaqtda {$conflictPotoks->count()} potok: {$potoks} (ikkisi ham {$parityA} haftalarda)",
                 'ids' => $ids,
                 'week_day' => $group->first()->week_day,
                 'pair' => $group->first()->lesson_pair_name,
             ];
-            foreach ($overlapping as $item) {
+            foreach ($conflictingItems as $item) {
                 $this->markConflict($item, 'room_potok', "{$roomName}-xonada bir vaqtda boshqa potok ham: {$potoks}");
             }
         }
@@ -558,9 +595,15 @@ class LectureScheduleConflictService
 
     private function parityOverlaps(?string $a, ?string $b): bool
     {
-        if (empty($a) || empty($b)) {
+        $a = $a ? mb_strtolower(trim($a)) : null;
+        $b = $b ? mb_strtolower(trim($b)) : null;
+
+        // Ikkisi ham bo'sh yoki umumiy — overlap
+        if (empty($a) || empty($b) || $a === 'umumiy' || $b === 'umumiy') {
             return true;
         }
+
+        // juft vs toq — overlap yo'q
         return $a === $b;
     }
 

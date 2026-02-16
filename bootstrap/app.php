@@ -50,6 +50,11 @@ return Application::configure(basePath: dirname(__DIR__))
 //        $schedule->command('app:test-cron')->everyFifteenSeconds();
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // CSRF token muddati tugaganda — formga qaytarib xabar chiqarish
+        $exceptions->renderable(function (\Illuminate\Session\TokenMismatchException $e, $request) {
+            return redirect()->back()->withInput($request->except('_token', 'password'))->with('status', 'Sessiya yangilandi. Iltimos, qaytadan urinib ko\'ring.');
+        });
+
         $exceptions->renderable(function (\Spatie\Permission\Exceptions\UnauthorizedException $e, $request) {
             $guard = \Illuminate\Support\Facades\Auth::getDefaultDriver();
             $user = auth()->user();

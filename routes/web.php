@@ -41,6 +41,10 @@ Route::get('/', function () {
         ->header('Expires', '0');
 })->name('welcome');
 
+// CSRF tokenni yangilash (login sahifa uchun)
+Route::get('/refresh-csrf', function () {
+    return response()->json(['token' => csrf_token()]);
+});
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {

@@ -1328,40 +1328,58 @@
 
             // ===== WEEK LABEL (Barchasi rejimida) =====
             getWeekLabel(card) {
+                const MAX_WEEK = 15; // Semestr maksimal hafta soni
                 const parity = (card.week_parity || '').toLowerCase();
                 const weeks = card.weeks;
 
                 if (!parity && !weeks) return '';
 
-                let lessonCount = 15;
-                if (weeks && !isNaN(weeks)) {
-                    lessonCount = parseInt(weeks);
-                } else if (weeks && weeks.includes('-')) {
-                    const parts = weeks.split('-').map(Number);
-                    // range format: show as-is
-                    if (parity === 'juft') return '(J: ' + weeks + ')';
-                    if (parity === 'toq') return '(T: ' + weeks + ')';
-                    return '(' + weeks + ')';
-                } else if (weeks && weeks.includes(',')) {
+                // "1-8" oraliq formati
+                if (weeks && String(weeks).includes('-')) {
                     if (parity === 'juft') return '(J: ' + weeks + ')';
                     if (parity === 'toq') return '(T: ' + weeks + ')';
                     return '(' + weeks + ')';
                 }
 
-                // Compute week list from lesson count + parity
+                // "1,3,5,7" ro'yxat formati
+                if (weeks && String(weeks).includes(',')) {
+                    if (parity === 'juft') return '(J: ' + weeks + ')';
+                    if (parity === 'toq') return '(T: ' + weeks + ')';
+                    return '(' + weeks + ')';
+                }
+
+                // Darslar soni (bitta raqam) yoki bo'sh
+                let lessonCount = MAX_WEEK;
+                if (weeks && !isNaN(weeks)) {
+                    lessonCount = parseInt(weeks);
+                }
+
+                // Paritetga qarab maxWeek hisoblash, lekin semestrdan oshmasin
+                let maxWeek;
+                if (parity === 'juft') {
+                    maxWeek = Math.min(lessonCount * 2, MAX_WEEK);
+                } else if (parity === 'toq') {
+                    maxWeek = Math.min(lessonCount * 2 - 1, MAX_WEEK);
+                } else {
+                    maxWeek = Math.min(lessonCount, MAX_WEEK);
+                }
+
+                // Haqiqiy hafta raqamlarini generatsiya qilish
                 let weekNums = [];
                 if (parity === 'juft') {
-                    for (let i = 1; i <= lessonCount; i++) weekNums.push(i * 2);
+                    for (let w = 2; w <= maxWeek; w += 2) weekNums.push(w);
                 } else if (parity === 'toq') {
-                    for (let i = 1; i <= lessonCount; i++) weekNums.push(i * 2 - 1);
+                    for (let w = 1; w <= maxWeek; w += 2) weekNums.push(w);
                 } else if (weeks) {
-                    return '(1-' + lessonCount + ')';
+                    return '(1-' + maxWeek + ')';
                 } else {
                     return '';
                 }
 
+                if (weekNums.length === 0) return '';
+
                 const prefix = parity === 'juft' ? 'J' : 'T';
-                // Compact: agar ketma-ket bo'lsa, oraliq ko'rsatish
+                // Ixcham ko'rinish
                 if (weekNums.length > 4) {
                     return '(' + prefix + ': ' + weekNums[0] + ',' + weekNums[1] + '..' + weekNums[weekNums.length - 1] + ')';
                 }

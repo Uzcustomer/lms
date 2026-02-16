@@ -110,11 +110,29 @@
                         Hemis solishtirish
                     </button>
 
-                    {{-- Export --}}
-                    <a :href="exportUrl" class="btn-action btn-export group">
-                        <svg class="w-4 h-4 transition-transform duration-300 group-hover:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-                        Excel eksport
-                    </a>
+                    {{-- Export dropdown --}}
+                    <div class="relative" x-data="{ exportOpen: false }" @click.outside="exportOpen = false">
+                        <button @click="exportOpen = !exportOpen" class="btn-action btn-export group">
+                            <svg class="w-4 h-4 transition-transform duration-300 group-hover:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                            Eksport
+                            <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+                        <div x-show="exportOpen" x-cloak x-transition
+                             class="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 py-1 z-50">
+                            <a :href="exportUrl" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                Excel (ustunlar)
+                            </a>
+                            <a :href="exportGridUrl" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                                Excel (jadval ko'rinishida)
+                            </a>
+                            <a :href="exportPdfUrl" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                PDF (jadval ko'rinishida)
+                            </a>
+                        </div>
+                    </div>
 
                     <form method="POST" action="{{ route($routePrefix . '.lecture-schedule.destroy', ['id' => $activeBatch->id ?? 0]) }}" onsubmit="return confirm('Rostdan o\'chirmoqchimisiz?')">
                         @csrf
@@ -245,7 +263,12 @@
                                                      @contextmenu.prevent="openContextMenu($event, card)"
                                                      @click.stop="openEditModal(card)"
                                                      title="Bosing - tahrirlash">
-                                                    <div class="asc-card-subject" x-text="card.subject_name"></div>
+                                                    <div class="asc-card-subject">
+                                                        <span x-text="card.subject_name"></span>
+                                                        <span x-show="currentWeek === 0 && (card.week_parity || card.weeks)"
+                                                              class="asc-card-week-label"
+                                                              x-text="getWeekLabel(card)"></span>
+                                                    </div>
                                                     <div class="asc-card-teacher" x-text="card.employee_name || ''"></div>
                                                     <div class="asc-card-meta">
                                                         <span x-show="card.building_name || card.auditorium_name" x-text="[card.building_name, card.auditorium_name].filter(Boolean).join(', ')"></span>
@@ -329,7 +352,7 @@
                                  @click="c.expanded = !c.expanded">
                                 {{-- Raqam --}}
                                 <span class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                                      :class="c.type === 'teacher' ? 'bg-orange-500' : c.type === 'auditorium' ? 'bg-pink-500' : 'bg-purple-500'"
+                                      :class="getConflictBadgeColor(c.type)"
                                       x-text="ci + 1"></span>
 
                                 {{-- Turi badge --}}
@@ -338,12 +361,18 @@
                                           'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300': c.type === 'teacher',
                                           'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300': c.type === 'auditorium',
                                           'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300': c.type === 'group',
+                                          'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300': c.type === 'room_potok',
+                                          'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300': c.type === 'hours',
+                                          'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300': c.type === 'duplicate',
+                                          'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300': c.type === 'missing_teacher' || c.type === 'missing_room',
+                                          'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300': c.type === 'potok_inconsistent',
                                       }"
-                                      x-text="c.type === 'teacher' ? 'O\'qituvchi' : c.type === 'auditorium' ? 'Auditoriya' : 'Guruh'"></span>
+                                      x-text="getConflictTypeName(c.type)"></span>
 
                                 {{-- Kun va juftlik --}}
-                                <span class="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                <span x-show="c.weekDay" class="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
                                       x-text="c.dayName + ', ' + c.pairName"></span>
+                                <span x-show="!c.weekDay" class="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">Umumiy</span>
 
                                 {{-- Xabar --}}
                                 <span class="flex-1 text-sm text-gray-700 dark:text-gray-300 truncate" x-text="c.message"></span>
@@ -710,6 +739,8 @@
         .asc-card-meta { font-size: 0.65rem; opacity: 0.7; margin-top: 2px; }
         .asc-card-type { font-style: italic; }
         .asc-card-group { font-size: 0.65rem; font-weight: 500; margin-top: 2px; opacity: 0.8; }
+        .asc-card-week-label { display: inline-block; font-size: 0.58rem; font-weight: 600; padding: 0px 4px; margin-left: 3px; border-radius: 4px; background: rgba(99,102,241,0.15); color: #4f46e5; vertical-align: middle; line-height: 1.4; }
+        .dark .asc-card-week-label { background: rgba(129,140,248,0.2); color: #a5b4fc; }
         .asc-card-badge { position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; }
         .asc-badge-conflict { background: #a855f7; color: #fff; }
         .asc-card-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #1e293b; color: #e2e8f0; padding: 8px 10px; border-radius: 8px; min-width: 200px; z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,0.3); pointer-events: none; margin-bottom: 6px; }
@@ -895,6 +926,16 @@
 
             get exportUrl() {
                 return '{{ route($routePrefix . ".lecture-schedule.export", ["id" => "__ID__"]) }}'.replace('__ID__', this.activeBatchId || 0);
+            },
+            get exportGridUrl() {
+                let url = '{{ route($routePrefix . ".lecture-schedule.export-grid", ["id" => "__ID__"]) }}'.replace('__ID__', this.activeBatchId || 0);
+                if (this.currentWeek > 0) url += '?week=' + this.currentWeek;
+                return url;
+            },
+            get exportPdfUrl() {
+                let url = '{{ route($routePrefix . ".lecture-schedule.export-pdf", ["id" => "__ID__"]) }}'.replace('__ID__', this.activeBatchId || 0);
+                if (this.currentWeek > 0) url += '?week=' + this.currentWeek;
+                return url;
             },
 
             init() {
@@ -1244,6 +1285,78 @@
             },
             highlightCells(ids) {
                 if (ids?.length) ids.forEach(id => this.highlightCell(id));
+            },
+
+            // ===== CONFLICT HELPERS =====
+            getConflictTypeName(type) {
+                const map = {
+                    'teacher': "O'qituvchi",
+                    'auditorium': 'Auditoriya',
+                    'group': 'Guruh',
+                    'room_potok': 'Xona/Potok',
+                    'hours': 'Soat farqi',
+                    'duplicate': 'Dublikat',
+                    'missing_teacher': "O'qituvchisiz",
+                    'missing_room': 'Xonasiz',
+                    'potok_inconsistent': 'Potok noizchil',
+                };
+                return map[type] || type;
+            },
+            getConflictBadgeColor(type) {
+                const map = {
+                    'teacher': 'bg-orange-500',
+                    'auditorium': 'bg-pink-500',
+                    'group': 'bg-purple-500',
+                    'room_potok': 'bg-cyan-600',
+                    'hours': 'bg-amber-500',
+                    'duplicate': 'bg-gray-500',
+                    'missing_teacher': 'bg-yellow-500',
+                    'missing_room': 'bg-yellow-500',
+                    'potok_inconsistent': 'bg-indigo-500',
+                };
+                return map[type] || 'bg-gray-500';
+            },
+
+            // ===== WEEK LABEL (Barchasi rejimida) =====
+            getWeekLabel(card) {
+                const parity = (card.week_parity || '').toLowerCase();
+                const weeks = card.weeks;
+
+                if (!parity && !weeks) return '';
+
+                let lessonCount = 15;
+                if (weeks && !isNaN(weeks)) {
+                    lessonCount = parseInt(weeks);
+                } else if (weeks && weeks.includes('-')) {
+                    const parts = weeks.split('-').map(Number);
+                    // range format: show as-is
+                    if (parity === 'juft') return '(J: ' + weeks + ')';
+                    if (parity === 'toq') return '(T: ' + weeks + ')';
+                    return '(' + weeks + ')';
+                } else if (weeks && weeks.includes(',')) {
+                    if (parity === 'juft') return '(J: ' + weeks + ')';
+                    if (parity === 'toq') return '(T: ' + weeks + ')';
+                    return '(' + weeks + ')';
+                }
+
+                // Compute week list from lesson count + parity
+                let weekNums = [];
+                if (parity === 'juft') {
+                    for (let i = 1; i <= lessonCount; i++) weekNums.push(i * 2);
+                } else if (parity === 'toq') {
+                    for (let i = 1; i <= lessonCount; i++) weekNums.push(i * 2 - 1);
+                } else if (weeks) {
+                    return '(1-' + lessonCount + ')';
+                } else {
+                    return '';
+                }
+
+                const prefix = parity === 'juft' ? 'J' : 'T';
+                // Compact: agar ketma-ket bo'lsa, oraliq ko'rsatish
+                if (weekNums.length > 4) {
+                    return '(' + prefix + ': ' + weekNums[0] + ',' + weekNums[1] + '..' + weekNums[weekNums.length - 1] + ')';
+                }
+                return '(' + prefix + ': ' + weekNums.join(',') + ')';
             },
         };
     }

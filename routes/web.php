@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\JournalController;
 use App\Http\Controllers\Admin\OraliqNazoratController;
 use App\Http\Controllers\Admin\OskiController;
 use App\Http\Controllers\Admin\QuizResultController;
+use App\Http\Controllers\Admin\YnQaytnomaController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\ExamTestController;
 use App\Http\Controllers\ProfileController;
@@ -326,6 +327,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 
+        // YN Qaytnomasi (Test markazi)
+        Route::prefix('yn-qaytnoma')->name('yn-qaytnoma.')->group(function () {
+            Route::get('/', [YnQaytnomaController::class, 'index'])->name('index');
+            Route::get('/data', [YnQaytnomaController::class, 'getData'])->name('data');
+            Route::get('/get-specialties', [YnQaytnomaController::class, 'getSpecialties'])->name('get-specialties');
+            Route::get('/get-level-codes', [YnQaytnomaController::class, 'getLevelCodes'])->name('get-level-codes');
+            Route::get('/get-semesters', [YnQaytnomaController::class, 'getSemesters'])->name('get-semesters');
+            Route::get('/get-groups', [YnQaytnomaController::class, 'getFilterGroups'])->name('get-groups');
+            Route::post('/generate-ruxsatnoma', [YnQaytnomaController::class, 'generateRuxsatnoma'])->name('generate-ruxsatnoma');
+        });
+
         // Ma'ruza jadvalini joylashtirish
         Route::prefix('lecture-schedule')->name('lecture-schedule.')->group(function () {
             Route::get('/', [LectureScheduleController::class, 'index'])->name('index');
@@ -579,6 +591,17 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
+        });
+
+        // YN Qaytnomasi (Test markazi)
+        Route::prefix('yn-qaytnoma')->name('yn-qaytnoma.')->group(function () {
+            Route::get('/', [YnQaytnomaController::class, 'index'])->name('index');
+            Route::get('/data', [YnQaytnomaController::class, 'getData'])->name('data');
+            Route::get('/get-specialties', [YnQaytnomaController::class, 'getSpecialties'])->name('get-specialties');
+            Route::get('/get-level-codes', [YnQaytnomaController::class, 'getLevelCodes'])->name('get-level-codes');
+            Route::get('/get-semesters', [YnQaytnomaController::class, 'getSemesters'])->name('get-semesters');
+            Route::get('/get-groups', [YnQaytnomaController::class, 'getFilterGroups'])->name('get-groups');
+            Route::post('/generate-ruxsatnoma', [YnQaytnomaController::class, 'generateRuxsatnoma'])->name('generate-ruxsatnoma');
         });
 
         // Ma'ruza jadvalini joylashtirish

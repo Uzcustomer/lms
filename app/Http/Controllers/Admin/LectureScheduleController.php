@@ -153,8 +153,12 @@ class LectureScheduleController extends Controller
             }
 
             // Bir xil group_source + auditoriya bo'lsa, faqat birinchisini ko'rsatamiz
+            // "Barchasi" rejimida (week filtrsiz) juft/toq alohida ko'rsatilishi kerak
             if ($item->group_source) {
                 $gsKey = $key . '|' . $item->group_source . '|' . ($item->auditorium_name ?? '');
+                if (!$week && $item->week_parity) {
+                    $gsKey .= '|' . $item->week_parity;
+                }
                 if (isset($groupSourceSeen[$gsKey])) {
                     $dedupSkipped++;
                     continue;

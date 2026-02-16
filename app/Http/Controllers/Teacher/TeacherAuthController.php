@@ -53,6 +53,14 @@ class TeacherAuthController extends Controller
         if (Auth::guard('teacher')->attempt($credentials)) {
             $teacher = Auth::guard('teacher')->user();
 
+            // Boshqa guardlarni tozalash (admin/student session qoldiqlarini yo'q qilish)
+            Auth::guard('web')->logout();
+            Auth::guard('student')->logout();
+            $request->session()->forget([
+                'impersonating', 'impersonator_id', 'impersonator_guard',
+                'impersonated_name', 'impersonator_active_role', 'active_role',
+            ]);
+
             $request->session()->regenerate();
             ActivityLogService::logLogin('teacher');
 
@@ -222,6 +230,10 @@ class TeacherAuthController extends Controller
     public function logout(Request $request)
     {
         ActivityLogService::logLogout('teacher');
+
+        // Barcha guardlardan logout qilish (session qoldiqlarini to'liq tozalash)
+        Auth::guard('web')->logout();
+        Auth::guard('student')->logout();
         Auth::guard('teacher')->logout();
 
         $request->session()->invalidate();

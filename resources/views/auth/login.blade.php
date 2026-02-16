@@ -45,4 +45,39 @@
             </x-primary-button>
         </div>
     </form>
+
+    <script>
+        // CSRF tokenni avtomatik yangilash
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                fetch('/refresh-csrf')
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        var tokenInput = document.querySelector('input[name="_token"]');
+                        if (tokenInput && data.token) tokenInput.value = data.token;
+                    })
+                    .catch(function() {});
+            }
+        });
+
+        (function() {
+            var form = document.querySelector('form');
+            var submitting = false;
+            form.addEventListener('submit', function(e) {
+                if (submitting) return;
+                e.preventDefault();
+                submitting = true;
+                fetch('/refresh-csrf')
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        var tokenInput = form.querySelector('input[name="_token"]');
+                        if (tokenInput && data.token) tokenInput.value = data.token;
+                    })
+                    .catch(function() {})
+                    .finally(function() {
+                        form.submit();
+                    });
+            });
+        })();
+    </script>
 </x-guest-layout>

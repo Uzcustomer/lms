@@ -19,6 +19,24 @@ class AdminMultiGuardAuth
         // Web guard (admin) birinchi — admin login bo'lsa, teacher guard'ni e'tiborsiz qoldirish
         if (Auth::guard('web')->check()) {
             Auth::shouldUse('web');
+
+            // Agar admin login bo'lsa, lekin eski impersonatsiya session ma'lumotlari qolgan bo'lsa — tozalash
+            if (session('impersonating')) {
+                // Teacher/student guardlarni tozalash (agar hali aktiv bo'lsa)
+                foreach (['teacher', 'student'] as $guard) {
+                    if (Auth::guard($guard)->check()) {
+                        Auth::guard($guard)->logout();
+                    }
+                }
+                session()->forget([
+                    'impersonating',
+                    'impersonator_id',
+                    'impersonator_guard',
+                    'impersonated_name',
+                    'impersonator_active_role',
+                ]);
+            }
+
             return $next($request);
         }
 

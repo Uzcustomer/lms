@@ -97,6 +97,15 @@ class LectureScheduleController extends Controller
         if ($week) {
             $week = (int) $week;
             $items = $items->filter(function ($item) use ($week) {
+                // Juft/toq hafta tekshiruvi
+                $parity = mb_strtolower(trim($item->week_parity ?? ''));
+                if ($parity === 'juft' && $week % 2 !== 0) {
+                    return false;
+                }
+                if ($parity === 'toq' && $week % 2 !== 1) {
+                    return false;
+                }
+
                 // weeks bo'sh bo'lsa — barcha haftalarda ko'rinadi
                 if (empty($item->weeks)) {
                     return true;
@@ -106,14 +115,30 @@ class LectureScheduleController extends Controller
             })->values();
         }
 
+        $pairTimes = LectureSchedule::PAIR_TIMES;
+
         $pairs = $items->unique('lesson_pair_code')
             ->sortBy('lesson_pair_code')
-            ->map(fn($i) => [
-                'code' => $i->lesson_pair_code,
-                'name' => $i->lesson_pair_name,
-                'start' => $i->lesson_pair_start_time,
-                'end' => $i->lesson_pair_end_time,
-            ])
+            ->map(function ($i) use ($pairTimes) {
+                $code = (int) $i->lesson_pair_code;
+                $fallback = $pairTimes[$code] ?? null;
+                $start = $i->lesson_pair_start_time;
+                $end = $i->lesson_pair_end_time;
+
+                if (empty($start) && $fallback) {
+                    $start = $fallback['start'] . ':00';
+                }
+                if (empty($end) && $fallback) {
+                    $end = $fallback['end'] . ':00';
+                }
+
+                return [
+                    'code' => $i->lesson_pair_code,
+                    'name' => $i->lesson_pair_name,
+                    'start' => $start,
+                    'end' => $end,
+                ];
+            })
             ->values();
 
         $grid = [];
@@ -143,10 +168,20 @@ class LectureScheduleController extends Controller
             ];
         }
 
+        // Xonalar kesimida tabi uchun: barcha batch dagi xonalarni qaytarish (haftaga bog'liq emas)
+        $allRooms = LectureSchedule::where('batch_id', $batchId)
+            ->whereNotNull('auditorium_name')
+            ->where('auditorium_name', '!=', '')
+            ->distinct()
+            ->orderBy('auditorium_name')
+            ->pluck('auditorium_name')
+            ->values();
+
         return response()->json([
             'items' => $grid,
             'pairs' => $pairs,
             'days' => LectureSchedule::WEEK_DAYS,
+            'all_rooms' => $allRooms,
         ]);
     }
 

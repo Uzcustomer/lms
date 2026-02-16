@@ -869,6 +869,7 @@
             gridItems: {},
             pairs: [],
             days: {},
+            batchAllRooms: [],
             loading: false,
             comparing: false,
             hemisResult: null,
@@ -940,6 +941,9 @@
                     this.gridItems = data.items || {};
                     this.pairs = data.pairs || [];
                     this.days = data.days || {};
+                    if (data.all_rooms) {
+                        this.batchAllRooms = data.all_rooms;
+                    }
                     this.collectConflicts();
                 } catch (e) {
                     console.error('Grid load error:', e);
@@ -982,13 +986,7 @@
 
             // ===== XONALAR KESIMIDA =====
             get allRooms() {
-                const rooms = new Set();
-                for (const key in this.gridItems) {
-                    for (const card of this.gridItems[key]) {
-                        if (card.auditorium_name) rooms.add(card.auditorium_name);
-                    }
-                }
-                return [...rooms].sort();
+                return this.batchAllRooms;
             },
             get roomViewRows() {
                 const rows = [];

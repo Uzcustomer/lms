@@ -71,10 +71,10 @@ class StudentAuthController extends Controller
                     ]
                 );
 
-                // Telegram 2FA: agar foydalanuvchi Telegram tasdiqlangan bo'lsa
-                if ($student->telegram_chat_id) {
-                    return $this->sendLoginCode($student, $request);
-                }
+                // Telegram 2FA: vaqtincha o'chirilgan
+                // if ($student->telegram_chat_id) {
+                //     return $this->sendLoginCode($student, $request);
+                // }
 
                 // Boshqa guardlarni tozalash (admin/teacher session qoldiqlarini yo'q qilish)
                 $this->clearOtherGuards($request);
@@ -118,10 +118,10 @@ class StudentAuthController extends Controller
             (!$student->local_password_expires_at || $student->local_password_expires_at->isFuture()) &&
             Hash::check($request->password, $student->local_password)
         ) {
-            // Telegram 2FA: agar foydalanuvchi Telegram tasdiqlangan bo'lsa
-            if ($student->telegram_chat_id) {
-                return $this->sendLoginCode($student, $request);
-            }
+            // Telegram 2FA: vaqtincha o'chirilgan
+            // if ($student->telegram_chat_id) {
+            //     return $this->sendLoginCode($student, $request);
+            // }
 
             // Boshqa guardlarni tozalash (admin/teacher session qoldiqlarini yo'q qilish)
             $this->clearOtherGuards($request);

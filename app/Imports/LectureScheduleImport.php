@@ -84,9 +84,22 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
             // Dars turi (ixtiyoriy)
             $trainingType = trim($row['turi'] ?? '');
 
-            // Haftalar davomiyligi va Juft-toq
-            $weeks = trim($row['haftalar_davomiyligi'] ?? '');
-            $weekParity = mb_strtolower(trim($row['juft_toq'] ?? $row['juft-toq'] ?? $row['jufttoq'] ?? ''));
+            // Haftalar davomiyligi — dinamik qidirish (turli Excel heading format uchun)
+            $weeks = '';
+            $weekParity = '';
+            $rowArray = $row->toArray();
+            foreach ($rowArray as $colKey => $colVal) {
+                if ($colVal === null || !is_string($colKey)) {
+                    continue;
+                }
+                $colKeyLower = mb_strtolower($colKey);
+                if (!$weeks && str_contains($colKeyLower, 'hafta')) {
+                    $weeks = trim((string) $colVal);
+                }
+                if (!$weekParity && str_contains($colKeyLower, 'juft')) {
+                    $weekParity = mb_strtolower(trim((string) $colVal));
+                }
+            }
 
             LectureSchedule::create([
                 'batch_id' => $this->batch->id,

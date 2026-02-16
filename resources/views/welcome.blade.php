@@ -200,8 +200,12 @@
                 </template>
             </div>
 
-            {{-- Xatoliklar --}}
-            <x-auth-session-status class="mb-3" :status="session('status')" />
+            {{-- Sessiya xabarlari --}}
+            @if(session('status'))
+                <div class="mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <p class="text-[12px] text-amber-700 font-medium">{{ session('status') }}</p>
+                </div>
+            @endif
 
 
             @if($errors->any())

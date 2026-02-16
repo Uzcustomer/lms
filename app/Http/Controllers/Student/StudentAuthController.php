@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class StudentAuthController extends Controller
@@ -24,19 +25,39 @@ class StudentAuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $response = Http::withoutVerifying()->post('https://student.ttatf.uz/rest/v1/auth/login', [
-            'login' => $request->login,
-            'password' => $request->password,
-        ]);
+        try {
+            $response = Http::withoutVerifying()
+                ->timeout(10)
+                ->post('https://student.ttatf.uz/rest/v1/auth/login', [
+                    'login' => $request->login,
+                    'password' => $request->password,
+                ]);
+        } catch (\Exception $e) {
+            Log::warning('HEMIS API login xatolik', [
+                'login' => $request->login,
+                'error' => $e->getMessage(),
+            ]);
+
+            // HEMIS ishlamayotgan bo'lsa — lokal parol bilan urinish
+            return $this->tryLocalPassword($request);
+        }
 
         if ($response->successful() && $response->json('success')) {
             $token = $response->json('data.token');
 
-            $refreshToken = Cookie::get('refresh-token');
-
-            $studentDataResponse = Http::withoutVerifying()->withHeaders([
-                'Authorization' => 'Bearer ' . $token,
-            ])->get('https://student.ttatf.uz/rest/v1/account/me');
+            try {
+                $studentDataResponse = Http::withoutVerifying()
+                    ->timeout(10)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . $token,
+                    ])->get('https://student.ttatf.uz/rest/v1/account/me');
+            } catch (\Exception $e) {
+                Log::warning('HEMIS API account/me xatolik', [
+                    'login' => $request->login,
+                    'error' => $e->getMessage(),
+                ]);
+                return back()->withErrors(['login' => 'HEMIS serveriga ulanishda xatolik. Qaytadan urinib ko\'ring.'])->onlyInput('login', '_profile');
+            }
 
             if ($studentDataResponse->successful()) {
                 $studentData = $studentDataResponse->json('data');
@@ -65,39 +86,56 @@ class StudentAuthController extends Controller
 
                 return redirect()->intended(route('student.dashboard'))->with('studentData', $studentData);
             } else {
+                Log::warning('HEMIS API account/me muvaffaqiyatsiz', [
+                    'login' => $request->login,
+                    'status' => $studentDataResponse->status(),
+                ]);
                 return back()->withErrors(['login' => 'Talabaning ma\'lumotlarini olishda xatolik.'])->onlyInput('login', '_profile');
             }
         } else {
-            $student = Student::where('student_id_number', $request->login)->first();
+            Log::info('HEMIS login muvaffaqiyatsiz, lokal parol tekshirilmoqda', [
+                'login' => $request->login,
+                'hemis_status' => $response->status(),
+            ]);
 
-            if (
-                $student &&
-                $student->local_password &&
-                (!$student->local_password_expires_at || $student->local_password_expires_at->isFuture()) &&
-                Hash::check($request->password, $student->local_password)
-            ) {
-                // Telegram 2FA: agar foydalanuvchi Telegram tasdiqlangan bo'lsa
-                if ($student->telegram_chat_id) {
-                    return $this->sendLoginCode($student, $request);
-                }
+            return $this->tryLocalPassword($request);
+        }
+    }
 
-                Auth::guard('student')->login($student);
-                $request->session()->regenerate();
-                ActivityLogService::logLogin('student');
+    /**
+     * HEMIS ishlamasa — lokal parol bilan kirish
+     */
+    private function tryLocalPassword(Request $request)
+    {
+        $student = Student::where('student_id_number', $request->login)->first();
 
-                if ($student->must_change_password) {
-                    return redirect()->route('student.password.edit');
-                }
-
-                if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
-                    return redirect()->route('student.complete-profile');
-                }
-
-                return redirect()->intended(route('student.dashboard'));
+        if (
+            $student &&
+            $student->local_password &&
+            (!$student->local_password_expires_at || $student->local_password_expires_at->isFuture()) &&
+            Hash::check($request->password, $student->local_password)
+        ) {
+            // Telegram 2FA: agar foydalanuvchi Telegram tasdiqlangan bo'lsa
+            if ($student->telegram_chat_id) {
+                return $this->sendLoginCode($student, $request);
             }
 
-            return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
+            Auth::guard('student')->login($student);
+            $request->session()->regenerate();
+            ActivityLogService::logLogin('student');
+
+            if ($student->must_change_password) {
+                return redirect()->route('student.password.edit');
+            }
+
+            if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
+                return redirect()->route('student.complete-profile');
+            }
+
+            return redirect()->intended(route('student.dashboard'));
         }
+
+        return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
     }
 
     /**

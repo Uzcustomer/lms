@@ -65,6 +65,17 @@
                             </select>
                         </div>
 
+                        <div class="filter-item" style="flex: 1; min-width: 240px;">
+                            <label class="filter-label">
+                                <span class="fl-dot" style="background:#f59e0b;"></span> Fan
+                            </label>
+                            <select id="subject" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="filter-row">
                         <div class="filter-item" style="min-width: 170px;">
                             <label class="filter-label">
                                 <span class="fl-dot" style="background:#1a3268;"></span> Guruh
@@ -204,11 +215,12 @@
             initializeFilters();
 
             // Cascading filter events
-            $('#education_type').change(function () { refreshSpecialties(); refreshLevelCodes(); refreshSemesters(); refreshGroups(); });
-            $('#faculty').change(function () { refreshSpecialties(); refreshLevelCodes(); refreshSemesters(); refreshGroups(); });
-            $('#specialty').change(function () { refreshLevelCodes(); refreshSemesters(); refreshGroups(); });
-            $('#level_code').change(function () { refreshSemesters(); refreshGroups(); });
-            $('#semester_code').change(function () { refreshGroups(); });
+            $('#education_type').change(function () { refreshSpecialties(); refreshLevelCodes(); refreshSemesters(); refreshSubjects(); refreshGroups(); });
+            $('#faculty').change(function () { refreshSpecialties(); refreshLevelCodes(); refreshSemesters(); refreshSubjects(); refreshGroups(); });
+            $('#specialty').change(function () { refreshLevelCodes(); refreshSemesters(); refreshSubjects(); refreshGroups(); });
+            $('#level_code').change(function () { refreshSemesters(); refreshSubjects(); refreshGroups(); });
+            $('#semester_code').change(function () { refreshSubjects(); refreshGroups(); });
+            $('#subject').change(function () { refreshGroups(); });
 
             // Load data by default
             loadData();
@@ -232,6 +244,7 @@
                 specialty_id: $('#specialty').val() || '',
                 level_code: $('#level_code').val() || '',
                 semester_code: $('#semester_code').val() || '',
+                subject_id: $('#subject').val() || '',
                 group_id: $('#group').val() || '',
             };
         }
@@ -248,6 +261,10 @@
             resetDropdown('#semester_code', 'Barchasi');
             populateDropdown('{{ route($routePrefix . ".yn-qaytnoma.get-semesters") }}', getFilterParams(), '#semester_code');
         }
+        function refreshSubjects() {
+            resetDropdown('#subject', 'Barchasi');
+            populateDropdown('{{ route($routePrefix . ".yn-qaytnoma.get-subjects") }}', getFilterParams(), '#subject');
+        }
         function refreshGroups() {
             resetDropdown('#group', 'Barchasi');
             populateDropdown('{{ route($routePrefix . ".yn-qaytnoma.get-groups") }}', getFilterParams(), '#group');
@@ -258,6 +275,7 @@
             populateDropdown('{{ route($routePrefix . ".yn-qaytnoma.get-specialties") }}', p, '#specialty');
             populateDropdown('{{ route($routePrefix . ".yn-qaytnoma.get-level-codes") }}', p, '#level_code');
             populateDropdown('{{ route($routePrefix . ".yn-qaytnoma.get-semesters") }}', p, '#semester_code');
+            populateDropdown('{{ route($routePrefix . ".yn-qaytnoma.get-subjects") }}', p, '#subject');
             populateDropdown('{{ route($routePrefix . ".yn-qaytnoma.get-groups") }}', p, '#group');
         }
 

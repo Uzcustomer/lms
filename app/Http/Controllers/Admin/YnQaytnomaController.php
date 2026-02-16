@@ -30,6 +30,11 @@ class YnQaytnomaController extends Controller
                 $join->on('s.curriculum_hemis_id', '=', 'g.curriculum_hemis_id')
                     ->on('s.code', '=', 'ys.semester_code');
             })
+            ->leftJoin('curriculum_subjects as cs', function ($join) {
+                $join->on('cs.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
+                    ->on('cs.subject_id', '=', 'ys.subject_id')
+                    ->on('cs.semester_code', '=', 'ys.semester_code');
+            })
             ->leftJoin('departments as d', function ($join) {
                 $join->on('d.department_hemis_id', '=', 'g.department_hemis_id')
                     ->where('d.structure_type_code', '=', 11);
@@ -55,6 +60,9 @@ class YnQaytnomaController extends Controller
         }
         if ($request->semester_code) {
             $query->where('ys.semester_code', $request->semester_code);
+        }
+        if ($request->subject_id) {
+            $query->where('ys.subject_id', $request->subject_id);
         }
         if ($request->group_id) {
             $query->where('g.group_hemis_id', $request->group_id);
@@ -150,6 +158,18 @@ class YnQaytnomaController extends Controller
         $query = $this->applyFilters($query, $request);
 
         return response()->json($query->distinct()->orderBy('s.code')->pluck('name', 'code'));
+    }
+
+    public function getSubjects(Request $request)
+    {
+        $query = $this->baseQuery()
+            ->select('ys.subject_id as id', 'cs.subject_name as name')
+            ->whereNotNull('ys.subject_id')
+            ->whereNotNull('cs.subject_name');
+
+        $query = $this->applyFilters($query, $request);
+
+        return response()->json($query->distinct()->orderBy('cs.subject_name')->pluck('name', 'id'));
     }
 
     public function getFilterGroups(Request $request)

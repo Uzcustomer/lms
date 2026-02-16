@@ -111,7 +111,7 @@ class LectureScheduleController extends Controller
                     return true;
                 }
 
-                return $this->weekInRange($week, $item->weeks);
+                return $this->weekInRange($week, $item->weeks, $parity);
             })->values();
         }
 
@@ -373,9 +373,16 @@ class LectureScheduleController extends Controller
 
     /**
      * Hafta raqami berilgan oraliqqa kirishini tekshirish.
-     * Formatlar: "1-8", "9-15", "1-15", "3", yoki "1,3,5,7"
+     *
+     * weeks maydoni = darslar soni (semestr davomida necha marta dars bo'ladi).
+     * Agar paritet berilgan bo'lsa, darslar faqat juft yoki toq haftalarda bo'ladi:
+     *   - darslar_soni=3, juft  → 2, 4, 6 haftalar (max_week = 3*2 = 6)
+     *   - darslar_soni=3, toq   → 1, 3, 5 haftalar (max_week = 3*2 - 1 = 5)
+     *   - darslar_soni=6, bo'sh → 1..6 haftalar     (max_week = 6)
+     *
+     * Formatlar: "1-8", "1,3,5,7", yoki bitta raqam "6" (darslar soni)
      */
-    private function weekInRange(int $week, string $weeksStr): bool
+    private function weekInRange(int $week, string $weeksStr, string $parity = ''): bool
     {
         $weeksStr = trim($weeksStr);
 
@@ -390,9 +397,21 @@ class LectureScheduleController extends Controller
             return in_array($week, $weekList);
         }
 
-        // Bitta raqam "8" = davomiylik, ya'ni 1-8 hafta oralig'i
+        // Bitta raqam = darslar soni
+        // Paritetga qarab haqiqiy oxirgi haftani hisoblash
         if (is_numeric($weeksStr)) {
-            return $week >= 1 && $week <= (int) $weeksStr;
+            $lessonCount = (int) $weeksStr;
+            if ($parity === 'juft') {
+                // N ta juft hafta: 2, 4, 6, ... → oxirgi hafta = N * 2
+                $maxWeek = $lessonCount * 2;
+            } elseif ($parity === 'toq') {
+                // N ta toq hafta: 1, 3, 5, ... → oxirgi hafta = N * 2 - 1
+                $maxWeek = $lessonCount * 2 - 1;
+            } else {
+                // Har hafta: 1, 2, 3, ... → oxirgi hafta = N
+                $maxWeek = $lessonCount;
+            }
+            return $week >= 1 && $week <= $maxWeek;
         }
 
         // Boshqa format — ko'rsatamiz (xavfsiz tarafdan)

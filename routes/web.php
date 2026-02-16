@@ -334,6 +334,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-specialties', [YnQaytnomaController::class, 'getSpecialties'])->name('get-specialties');
             Route::get('/get-level-codes', [YnQaytnomaController::class, 'getLevelCodes'])->name('get-level-codes');
             Route::get('/get-semesters', [YnQaytnomaController::class, 'getSemesters'])->name('get-semesters');
+            Route::get('/get-subjects', [YnQaytnomaController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/get-groups', [YnQaytnomaController::class, 'getFilterGroups'])->name('get-groups');
             Route::post('/generate-ruxsatnoma', [YnQaytnomaController::class, 'generateRuxsatnoma'])->name('generate-ruxsatnoma');
         });
@@ -600,6 +601,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/get-specialties', [YnQaytnomaController::class, 'getSpecialties'])->name('get-specialties');
             Route::get('/get-level-codes', [YnQaytnomaController::class, 'getLevelCodes'])->name('get-level-codes');
             Route::get('/get-semesters', [YnQaytnomaController::class, 'getSemesters'])->name('get-semesters');
+            Route::get('/get-subjects', [YnQaytnomaController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/get-groups', [YnQaytnomaController::class, 'getFilterGroups'])->name('get-groups');
             Route::post('/generate-ruxsatnoma', [YnQaytnomaController::class, 'generateRuxsatnoma'])->name('generate-ruxsatnoma');
         });

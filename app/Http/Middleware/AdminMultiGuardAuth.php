@@ -83,17 +83,14 @@ class AdminMultiGuardAuth
         }
 
         // Teacher guard orqali kirilgan bo'lsa (registrator_ofisi va boshqa rollar)
-        // LEKIN: agar impersonation rejimida bo'lsa, teacher'ni admin sahifaga kiritmaslik
+        // Impersonation paytida ham teacher admin sahifalarni ko'ra oladi
+        // (masalan: impersonated teacher kichik_admin roliga almashtirib admin sahifaga kirsa)
         $teacher = Auth::guard('teacher')->user();
         if ($teacher) {
-            // Agar impersonation rejimida bo'lsa — bu teacher admin sahifaga kirolmaydi
-            if (session('impersonating')) {
-                Log::channel('daily')->warning("🛡️ MIDDLEWARE [{$url}]: ⚠️ Teacher guard + impersonation! Admin sahifaga kiritilmaydi, login'ga redirect");
-                return redirect()->route('admin.login');
-            }
-
             Auth::shouldUse('teacher');
-            Log::channel('daily')->info("🛡️ MIDDLEWARE [{$url}]: → TEACHER guard ishlatilmoqda, teacher_id={$teacher->id}, name={$teacher->full_name}");
+            Log::channel('daily')->info("🛡️ MIDDLEWARE [{$url}]: → TEACHER guard ishlatilmoqda, teacher_id={$teacher->id}, name={$teacher->full_name}", [
+                'impersonating' => session('impersonating') ? 'ha' : 'yo\'q',
+            ]);
             return $next($request);
         }
 

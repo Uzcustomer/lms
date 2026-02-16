@@ -387,6 +387,11 @@ class IndependentController extends Controller
             $independent->grade_teacher = $request->user()->short_name ?? $request->user()->name;
             $independent->save();
             foreach ($request->baho as $key => $baho) {
+                // Skip if no grade was entered (empty field)
+                if ($baho === null || $baho === '' || !is_numeric($baho)) {
+                    continue;
+                }
+
                 $student = Student::find($key);
 
                 // Skip if student already has grade >= minimum_limit (locked)

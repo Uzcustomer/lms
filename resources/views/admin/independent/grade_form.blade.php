@@ -73,7 +73,7 @@
                                         @elseif ($needsGrading)
                                         <dd class="mt-1 text-sm font-medium text-gray-900">
                                             <input type="number" name="baho[{{ $student->id }}]" placeholder="0-100"
-                                                min="0" max="100" required onkeydown="focusNext(event)"
+                                                min="0" max="100" onkeydown="focusNext(event)"
                                                 value="{{$student->grade}}"
                                                 class="border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                                                 style="width:100px">

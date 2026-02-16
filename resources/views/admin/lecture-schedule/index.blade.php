@@ -943,6 +943,17 @@
                     if (data.all_rooms) {
                         this.batchAllRooms = data.all_rooms;
                     }
+                    // DEBUG: server debug info
+                    if (data._debug) {
+                        console.log('=== SERVER DEBUG ===', data._debug);
+                    }
+                    // DEBUG: Dushanba 1-juftlik cell card'larini ko'rsatish
+                    if (this.gridItems['1_1']) {
+                        console.log('Cell 1_1 (Dushanba 1-juftlik):', this.gridItems['1_1'].length, 'ta card');
+                        this.gridItems['1_1'].forEach(c => {
+                            console.log('  ', c.id, c.subject_name, 'potok=' + c.group_source, 'guruh=' + c.group_name, 'xona=' + c.auditorium_name, 'parity=' + c.week_parity);
+                        });
+                    }
                     this.collectConflicts();
                 } catch (e) {
                     console.error('Grid load error:', e);

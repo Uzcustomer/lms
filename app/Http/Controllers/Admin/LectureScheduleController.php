@@ -92,6 +92,9 @@ class LectureScheduleController extends Controller
 
         $items = $query->get();
 
+        // DEBUG: filter oldin va keyin nechta element borligini log'ga yozish
+        $totalBefore = $items->count();
+
         // Hafta filtri: faqat tanlangan haftaga tegishli darslarni ko'rsatish
         $week = $request->input('week');
         if ($week) {
@@ -143,16 +146,19 @@ class LectureScheduleController extends Controller
 
         $grid = [];
         $groupSourceSeen = []; // Bir xil group_source dublikatlarni oldini olish
+        $dedupSkipped = 0;
+        $dedupDetails = []; // Debug: qaysi yozuvlar skip bo'lganini ko'rsatish
         foreach ($items as $item) {
             $key = $item->week_day . '_' . $item->lesson_pair_code;
             if (!isset($grid[$key])) {
                 $grid[$key] = [];
             }
 
-            // Bir xil group_source bo'lsa, faqat birinchisini ko'rsatamiz
+            // Bir xil group_source + auditoriya bo'lsa, faqat birinchisini ko'rsatamiz
             if ($item->group_source) {
-                $gsKey = $key . '|' . $item->group_source;
+                $gsKey = $key . '|' . $item->group_source . '|' . ($item->auditorium_name ?? '');
                 if (isset($groupSourceSeen[$gsKey])) {
+                    $dedupSkipped++;
                     continue;
                 }
                 $groupSourceSeen[$gsKey] = true;
@@ -188,11 +194,34 @@ class LectureScheduleController extends Controller
             ->pluck('auditorium_name')
             ->values();
 
+        // DEBUG: grid ichidagi card'larni sanash va log'ga yozish
+        $totalCards = 0;
+        foreach ($grid as $cellKey => $cards) {
+            $totalCards += count($cards);
+        }
+        \Log::info("=== DATA DEBUG: batch={$batchId}, week={$week}, DB_items={$totalBefore}, after_filter={$items->count()}, grid_cards={$totalCards}, dedup_skipped={$dedupSkipped} ===");
+
+        // DEBUG: har bir cell dagi card'larni ko'rsatish (faqat 1_1 Dushanba 1-juftlik)
+        if (isset($grid['1_1'])) {
+            \Log::info("Cell 1_1 (Dushanba, 1-juftlik): " . count($grid['1_1']) . " ta card");
+            foreach ($grid['1_1'] as $card) {
+                \Log::info("  - id={$card['id']} fan={$card['subject_name']} potok={$card['group_source']} guruh={$card['group_name']} xona={$card['auditorium_name']} parity={$card['week_parity']}");
+            }
+        }
+
         return response()->json([
             'items' => $grid,
             'pairs' => $pairs,
             'days' => LectureSchedule::WEEK_DAYS,
             'all_rooms' => $allRooms,
+            // DEBUG: frontend'da tekshirish uchun
+            '_debug' => [
+                'total_db' => $totalBefore,
+                'after_filter' => $items->count(),
+                'grid_cards' => $totalCards,
+                'dedup_skipped' => $dedupSkipped,
+                'week' => $week,
+            ],
         ]);
     }
 

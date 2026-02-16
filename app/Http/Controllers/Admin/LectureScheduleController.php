@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Exports\LectureScheduleExport;
+use App\Exports\LectureScheduleGridExport;
 use App\Exports\LectureScheduleTemplate;
 use App\Http\Controllers\Controller;
 use App\Imports\LectureScheduleImport;
@@ -393,6 +394,77 @@ class LectureScheduleController extends Controller
         $fileName = 'jadval_' . str_replace([' ', '.'], '_', $batch->file_name) . '_' . date('Y_m_d') . '.xlsx';
 
         return Excel::download(new LectureScheduleExport($batch), $fileName);
+    }
+
+    /**
+     * Jadval ko'rinishida Excel ga eksport
+     */
+    public function exportGrid(Request $request, $id)
+    {
+        $batch = LectureScheduleBatch::findOrFail($id);
+        $week = $request->input('week') ? (int) $request->input('week') : null;
+        $weekStr = $week ? "hafta_{$week}" : 'barchasi';
+        $fileName = 'jadval_grid_' . str_replace([' ', '.'], '_', $batch->file_name) . "_{$weekStr}_" . date('Y_m_d') . '.xlsx';
+
+        return Excel::download(new LectureScheduleGridExport($batch, $week), $fileName);
+    }
+
+    /**
+     * Chop etish uchun HTML ko'rinishda jadval (PDF o'rniga)
+     */
+    public function exportPdf(Request $request, $id)
+    {
+        $batch = LectureScheduleBatch::findOrFail($id);
+        $week = $request->input('week') ? (int) $request->input('week') : null;
+
+        $items = $batch->items()
+            ->orderBy('week_day')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
+        if ($week) {
+            $items = $items->filter(function ($item) use ($week) {
+                $parity = mb_strtolower(trim($item->week_parity ?? ''));
+                if ($parity === 'juft' && $week % 2 !== 0) return false;
+                if ($parity === 'toq' && $week % 2 !== 1) return false;
+                if (empty($item->weeks)) return true;
+                return $this->weekInRange($week, $item->weeks, $parity);
+            });
+        }
+
+        $days = LectureSchedule::WEEK_DAYS;
+        $pairTimes = LectureSchedule::PAIR_TIMES;
+        $pairCodes = $items->pluck('lesson_pair_code')->unique()->sort()->values()->toArray();
+
+        // Grid tuzish
+        $grid = [];
+        $groupSourceSeen = [];
+        foreach ($items as $item) {
+            $key = $item->week_day . '_' . $item->lesson_pair_code;
+            if ($item->group_source) {
+                $gsKey = $key . '|' . $item->group_source . '|' . ($item->auditorium_name ?? '');
+                if (isset($groupSourceSeen[$gsKey])) continue;
+                $groupSourceSeen[$gsKey] = true;
+            }
+            $grid[$key][] = $item;
+        }
+
+        $weekLabel = $week ? "{$week}-hafta" : 'Barcha haftalar';
+
+        // Hafta label closure
+        $weekLabelFn = function ($card) {
+            $parity = mb_strtolower($card->week_parity ?? '');
+            $weeks = $card->weeks;
+            if (!$parity && !$weeks) return '';
+            if ($parity === 'juft') return 'J';
+            if ($parity === 'toq') return 'T';
+            if ($weeks) return "1-{$weeks}";
+            return '';
+        };
+
+        return view('admin.lecture-schedule.print', compact(
+            'batch', 'days', 'pairTimes', 'pairCodes', 'grid', 'weekLabel', 'weekLabelFn'
+        ));
     }
 
     /**

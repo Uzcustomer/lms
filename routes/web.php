@@ -351,6 +351,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::put('/item/{id}', [LectureScheduleController::class, 'update'])->name('update');
             Route::delete('/item/{id}', [LectureScheduleController::class, 'destroyItem'])->name('destroy-item');
             Route::get('/export/{id}', [LectureScheduleController::class, 'export'])->name('export');
+            Route::get('/export-grid/{id}', [LectureScheduleController::class, 'exportGrid'])->name('export-grid');
+            Route::get('/export-pdf/{id}', [LectureScheduleController::class, 'exportPdf'])->name('export-pdf');
             Route::delete('/{id}', [LectureScheduleController::class, 'destroy'])->name('destroy');
             Route::get('/template', [LectureScheduleController::class, 'downloadTemplate'])->name('template');
         });
@@ -618,6 +620,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::put('/item/{id}', [LectureScheduleController::class, 'update'])->name('update');
             Route::delete('/item/{id}', [LectureScheduleController::class, 'destroyItem'])->name('destroy-item');
             Route::get('/export/{id}', [LectureScheduleController::class, 'export'])->name('export');
+            Route::get('/export-grid/{id}', [LectureScheduleController::class, 'exportGrid'])->name('export-grid');
+            Route::get('/export-pdf/{id}', [LectureScheduleController::class, 'exportPdf'])->name('export-pdf');
             Route::delete('/{id}', [LectureScheduleController::class, 'destroy'])->name('destroy');
             Route::get('/template', [LectureScheduleController::class, 'downloadTemplate'])->name('template');
         });

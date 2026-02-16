@@ -91,8 +91,6 @@ class LectureScheduleController extends Controller
             ->orderBy('lesson_pair_code');
 
         $items = $query->get();
-
-        // DEBUG: filter oldin va keyin nechta element borligini log'ga yozish
         $totalBefore = $items->count();
 
         // Hafta filtri: faqat tanlangan haftaga tegishli darslarni ko'rsatish
@@ -145,9 +143,8 @@ class LectureScheduleController extends Controller
             ->values();
 
         $grid = [];
-        $groupSourceSeen = []; // Bir xil group_source dublikatlarni oldini olish
+        $groupSourceSeen = [];
         $dedupSkipped = 0;
-        $dedupDetails = []; // Debug: qaysi yozuvlar skip bo'lganini ko'rsatish
         foreach ($items as $item) {
             $key = $item->week_day . '_' . $item->lesson_pair_code;
             if (!isset($grid[$key])) {
@@ -201,7 +198,6 @@ class LectureScheduleController extends Controller
         }
         \Log::info("=== DATA DEBUG: batch={$batchId}, week={$week}, DB_items={$totalBefore}, after_filter={$items->count()}, grid_cards={$totalCards}, dedup_skipped={$dedupSkipped} ===");
 
-        // DEBUG: har bir cell dagi card'larni ko'rsatish (faqat 1_1 Dushanba 1-juftlik)
         if (isset($grid['1_1'])) {
             \Log::info("Cell 1_1 (Dushanba, 1-juftlik): " . count($grid['1_1']) . " ta card");
             foreach ($grid['1_1'] as $card) {
@@ -214,7 +210,6 @@ class LectureScheduleController extends Controller
             'pairs' => $pairs,
             'days' => LectureSchedule::WEEK_DAYS,
             'all_rooms' => $allRooms,
-            // DEBUG: frontend'da tekshirish uchun
             '_debug' => [
                 'total_db' => $totalBefore,
                 'after_filter' => $items->count(),

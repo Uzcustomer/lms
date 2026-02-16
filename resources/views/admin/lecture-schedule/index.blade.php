@@ -446,7 +446,6 @@
                                                     <div class="asc-card-subject" x-text="card.subject_name"></div>
                                                     <div class="asc-card-teacher" x-text="card.employee_name || ''"></div>
                                                     <div class="asc-card-group" x-text="card.group_source || card.group_name"></div>
-                                                    <div x-show="card.week_parity" class="text-[0.6rem] mt-0.5 opacity-60 italic" x-text="card.week_parity"></div>
                                                 </div>
                                             </template>
                                         </td>

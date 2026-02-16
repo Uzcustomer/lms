@@ -353,6 +353,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/import', [LectureScheduleController::class, 'import'])->name('import');
             Route::get('/data', [LectureScheduleController::class, 'data'])->name('data');
             Route::get('/compare', [LectureScheduleController::class, 'compare'])->name('compare');
+            Route::get('/compare-curriculum', [LectureScheduleController::class, 'compareCurriculum'])->name('compare-curriculum');
             Route::get('/conflicts', [LectureScheduleController::class, 'conflicts'])->name('conflicts');
             Route::post('/move', [LectureScheduleController::class, 'move'])->name('move');
             Route::post('/store', [LectureScheduleController::class, 'store'])->name('store');
@@ -621,6 +622,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/import', [LectureScheduleController::class, 'import'])->name('import');
             Route::get('/data', [LectureScheduleController::class, 'data'])->name('data');
             Route::get('/compare', [LectureScheduleController::class, 'compare'])->name('compare');
+            Route::get('/compare-curriculum', [LectureScheduleController::class, 'compareCurriculum'])->name('compare-curriculum');
             Route::get('/conflicts', [LectureScheduleController::class, 'conflicts'])->name('conflicts');
             Route::post('/move', [LectureScheduleController::class, 'move'])->name('move');
             Route::post('/store', [LectureScheduleController::class, 'store'])->name('store');

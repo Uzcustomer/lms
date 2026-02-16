@@ -201,6 +201,14 @@
                     Xatolar
                     <span x-show="conflicts.length > 0" x-cloak class="ml-1 px-1.5 py-0.5 text-xs font-bold rounded-full bg-red-500 text-white" x-text="conflicts.length"></span>
                 </button>
+                <button @click="activeTab = 'curriculum'; if (!curriculumResult) loadCurriculum()"
+                        class="tab-btn" :class="activeTab === 'curriculum' ? 'tab-btn-active tab-btn-active-emerald' : 'tab-btn-inactive'">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                    O'quv reja
+                    <span x-show="curriculumResult && (curriculumResult.not_in_schedule + curriculumResult.hours_mismatch) > 0" x-cloak
+                          class="ml-1 px-1.5 py-0.5 text-xs font-bold rounded-full bg-amber-500 text-white"
+                          x-text="curriculumResult.not_in_schedule + curriculumResult.hours_mismatch"></span>
+                </button>
                 <button @click="activeTab = 'xonalar'"
                         class="tab-btn" :class="activeTab === 'xonalar' ? 'tab-btn-active tab-btn-active-teal' : 'tab-btn-inactive'">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
@@ -470,7 +478,261 @@
             </div>
         </div>
 
-        {{-- ===== TAB 3: XONALAR KESIMIDA ===== --}}
+        {{-- ===== TAB 3: O'QUV REJA BILAN SOLISHTIRISH ===== --}}
+        <div x-show="activeTab === 'curriculum'" x-cloak class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+
+                {{-- Bosh qism + Yangilash tugmasi --}}
+                <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <h3 class="text-base font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                        O'quv reja bilan solishtirish
+                    </h3>
+                    <button @click="loadCurriculum()" :disabled="curriculumLoading"
+                            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all"
+                            :class="curriculumLoading ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50'">
+                        <svg x-show="!curriculumLoading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <svg x-show="curriculumLoading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        <span x-text="curriculumLoading ? 'Tekshirilmoqda...' : 'Qayta tekshirish'"></span>
+                    </button>
+                </div>
+
+                {{-- Yuklanmoqda --}}
+                <div x-show="curriculumLoading && !curriculumResult" class="p-12 text-center">
+                    <svg class="w-8 h-8 animate-spin mx-auto text-emerald-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">O'quv reja bilan solishtirilmoqda...</p>
+                </div>
+
+                {{-- Natijalar --}}
+                <template x-if="curriculumResult">
+                    <div>
+                        {{-- Statistika kartalar --}}
+                        <div class="p-5 border-b border-gray-200 dark:border-gray-700">
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                <div class="text-center p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                                    <div class="text-2xl font-bold text-gray-800 dark:text-gray-200" x-text="curriculumResult.total_curriculum"></div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">O'quv rejada</div>
+                                </div>
+                                <div class="text-center p-3 rounded-lg bg-green-50 dark:bg-green-900/30 cursor-pointer hover:ring-2 ring-green-300" @click="curriculumTab = 'matched'">
+                                    <div class="text-2xl font-bold text-green-600 dark:text-green-400" x-text="curriculumResult.matched"></div>
+                                    <div class="text-xs text-green-600 dark:text-green-400">Mos</div>
+                                </div>
+                                <div class="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 cursor-pointer hover:ring-2 ring-amber-300" @click="curriculumTab = 'hours_mismatch'">
+                                    <div class="text-2xl font-bold text-amber-600 dark:text-amber-400" x-text="curriculumResult.hours_mismatch"></div>
+                                    <div class="text-xs text-amber-600 dark:text-amber-400">Soat farqi</div>
+                                </div>
+                                <div class="text-center p-3 rounded-lg bg-red-50 dark:bg-red-900/30 cursor-pointer hover:ring-2 ring-red-300" @click="curriculumTab = 'not_in_schedule'">
+                                    <div class="text-2xl font-bold text-red-600 dark:text-red-400" x-text="curriculumResult.not_in_schedule"></div>
+                                    <div class="text-xs text-red-600 dark:text-red-400">Jadvalda yo'q</div>
+                                </div>
+                                <div class="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-900/30 cursor-pointer hover:ring-2 ring-blue-300" @click="curriculumTab = 'not_in_curriculum'">
+                                    <div class="text-2xl font-bold text-blue-600 dark:text-blue-400" x-text="curriculumResult.not_in_curriculum"></div>
+                                    <div class="text-xs text-blue-600 dark:text-blue-400">Rejada yo'q</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Sub-tab filtr --}}
+                        <div class="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">Ko'rsatish:</span>
+                            <button @click="curriculumTab = 'all'"
+                                    class="conflict-filter-pill"
+                                    :class="curriculumTab === 'all' ? 'curriculum-filter-active' : 'conflict-filter-inactive'">
+                                Barchasi
+                            </button>
+                            <button @click="curriculumTab = 'matched'"
+                                    class="conflict-filter-pill"
+                                    :class="curriculumTab === 'matched' ? 'curriculum-filter-active' : 'conflict-filter-inactive'"
+                                    x-text="'Mos (' + curriculumResult.matched + ')'"></button>
+                            <button @click="curriculumTab = 'hours_mismatch'"
+                                    class="conflict-filter-pill"
+                                    :class="curriculumTab === 'hours_mismatch' ? 'curriculum-filter-active-amber' : 'conflict-filter-inactive'"
+                                    x-text="'Soat farqi (' + curriculumResult.hours_mismatch + ')'"></button>
+                            <button @click="curriculumTab = 'not_in_schedule'"
+                                    class="conflict-filter-pill"
+                                    :class="curriculumTab === 'not_in_schedule' ? 'curriculum-filter-active-red' : 'conflict-filter-inactive'"
+                                    x-text="'Jadvalda yo\'q (' + curriculumResult.not_in_schedule + ')'"></button>
+                            <button @click="curriculumTab = 'not_in_curriculum'"
+                                    class="conflict-filter-pill"
+                                    :class="curriculumTab === 'not_in_curriculum' ? 'curriculum-filter-active-blue' : 'conflict-filter-inactive'"
+                                    x-text="'Rejada yo\'q (' + curriculumResult.not_in_curriculum + ')'"></button>
+                        </div>
+
+                        {{-- Mos kelgan ro'yxat --}}
+                        <div x-show="curriculumTab === 'all' || curriculumTab === 'matched'" class="divide-y divide-gray-100 dark:divide-gray-700">
+                            <template x-if="curriculumResult.matched_items.length > 0 && (curriculumTab === 'all' || curriculumTab === 'matched')">
+                                <div>
+                                    <div x-show="curriculumTab === 'all'" class="px-5 py-2 bg-green-50 dark:bg-green-900/20 text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-wide">
+                                        Mos kelgan fanlar
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs">
+                                            <thead><tr class="bg-gray-50 dark:bg-gray-800">
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Guruh</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Fan</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Turi</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">O'qituvchi</th>
+                                                <th class="px-4 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Reja soat</th>
+                                                <th class="px-4 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Jadval soat</th>
+                                                <th class="px-4 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Holat</th>
+                                            </tr></thead>
+                                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                                <template x-for="item in curriculumResult.matched_items" :key="item.group_name + item.subject_name + item.training_type">
+                                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                                        <td class="px-4 py-2 font-medium text-gray-800 dark:text-gray-200" x-text="item.group_name"></td>
+                                                        <td class="px-4 py-2 text-gray-700 dark:text-gray-300" x-text="item.subject_name"></td>
+                                                        <td class="px-4 py-2 text-gray-500 dark:text-gray-400" x-text="item.training_type || '—'"></td>
+                                                        <td class="px-4 py-2 text-gray-500 dark:text-gray-400" x-text="item.employee_name || '—'"></td>
+                                                        <td class="px-4 py-2 text-center" x-text="item.curriculum_hours || '—'"></td>
+                                                        <td class="px-4 py-2 text-center" x-text="item.schedule_hours || '—'"></td>
+                                                        <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">Mos</span></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        {{-- Soat farqi --}}
+                        <div x-show="curriculumTab === 'all' || curriculumTab === 'hours_mismatch'" class="divide-y divide-gray-100 dark:divide-gray-700">
+                            <template x-if="curriculumResult.hours_mismatch_items.length > 0 && (curriculumTab === 'all' || curriculumTab === 'hours_mismatch')">
+                                <div>
+                                    <div x-show="curriculumTab === 'all'" class="px-5 py-2 bg-amber-50 dark:bg-amber-900/20 text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide">
+                                        Soat farqi bor fanlar
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs">
+                                            <thead><tr class="bg-gray-50 dark:bg-gray-800">
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Guruh</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Fan</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Turi</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">O'qituvchi</th>
+                                                <th class="px-4 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Reja soat</th>
+                                                <th class="px-4 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Jadval soat</th>
+                                                <th class="px-4 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Farq</th>
+                                            </tr></thead>
+                                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                                <template x-for="item in curriculumResult.hours_mismatch_items" :key="item.group_name + item.subject_name + item.training_type">
+                                                    <tr class="hover:bg-amber-50/50 dark:hover:bg-amber-900/10 cursor-pointer"
+                                                        @click="if (item.ids?.length) { activeTab = 'jadval'; $nextTick(() => highlightCells(item.ids)); }">
+                                                        <td class="px-4 py-2 font-medium text-gray-800 dark:text-gray-200" x-text="item.group_name"></td>
+                                                        <td class="px-4 py-2 text-gray-700 dark:text-gray-300" x-text="item.subject_name"></td>
+                                                        <td class="px-4 py-2 text-gray-500 dark:text-gray-400" x-text="item.training_type || '—'"></td>
+                                                        <td class="px-4 py-2 text-gray-500 dark:text-gray-400" x-text="item.employee_name || '—'"></td>
+                                                        <td class="px-4 py-2 text-center font-semibold" x-text="item.curriculum_hours"></td>
+                                                        <td class="px-4 py-2 text-center font-semibold" x-text="item.schedule_hours"></td>
+                                                        <td class="px-4 py-2 text-center">
+                                                            <span class="px-2 py-0.5 rounded-full text-xs font-bold"
+                                                                  :class="item.diff > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300'"
+                                                                  x-text="(item.diff > 0 ? '+' : '') + item.diff + ' soat'"></span>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        {{-- Jadvalda yo'q (o'quv rejada bor) --}}
+                        <div x-show="curriculumTab === 'all' || curriculumTab === 'not_in_schedule'" class="divide-y divide-gray-100 dark:divide-gray-700">
+                            <template x-if="curriculumResult.not_in_schedule_items.length > 0 && (curriculumTab === 'all' || curriculumTab === 'not_in_schedule')">
+                                <div>
+                                    <div x-show="curriculumTab === 'all'" class="px-5 py-2 bg-red-50 dark:bg-red-900/20 text-xs font-bold text-red-700 dark:text-red-400 uppercase tracking-wide">
+                                        Jadvalda yo'q (o'quv rejada bor)
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs">
+                                            <thead><tr class="bg-gray-50 dark:bg-gray-800">
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Guruh</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Fan</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Turi</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">O'qituvchi</th>
+                                                <th class="px-4 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Reja soat</th>
+                                                <th class="px-4 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Holat</th>
+                                            </tr></thead>
+                                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                                <template x-for="item in curriculumResult.not_in_schedule_items" :key="item.group_name + item.subject_name + item.training_type">
+                                                    <tr class="hover:bg-red-50/50 dark:hover:bg-red-900/10">
+                                                        <td class="px-4 py-2 font-medium text-gray-800 dark:text-gray-200" x-text="item.group_name"></td>
+                                                        <td class="px-4 py-2 text-gray-700 dark:text-gray-300" x-text="item.subject_name"></td>
+                                                        <td class="px-4 py-2 text-gray-500 dark:text-gray-400" x-text="item.training_type || '—'"></td>
+                                                        <td class="px-4 py-2 text-gray-500 dark:text-gray-400" x-text="item.employee_name || '—'"></td>
+                                                        <td class="px-4 py-2 text-center" x-text="item.curriculum_hours || '—'"></td>
+                                                        <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">Jadvalda yo'q</span></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="curriculumTab === 'not_in_schedule' && curriculumResult.not_in_schedule_items.length === 0" class="p-8 text-center">
+                                <svg class="w-12 h-12 mx-auto text-green-300 dark:text-green-700 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">O'quv rejadagi barcha fanlar jadvalda mavjud.</p>
+                            </div>
+                        </div>
+
+                        {{-- Rejada yo'q (jadvalda bor) --}}
+                        <div x-show="curriculumTab === 'all' || curriculumTab === 'not_in_curriculum'" class="divide-y divide-gray-100 dark:divide-gray-700">
+                            <template x-if="curriculumResult.not_in_curriculum_items.length > 0 && (curriculumTab === 'all' || curriculumTab === 'not_in_curriculum')">
+                                <div>
+                                    <div x-show="curriculumTab === 'all'" class="px-5 py-2 bg-blue-50 dark:bg-blue-900/20 text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wide">
+                                        O'quv rejada yo'q (jadvalda bor)
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs">
+                                            <thead><tr class="bg-gray-50 dark:bg-gray-800">
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Guruh</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Fan</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Turi</th>
+                                                <th class="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">O'qituvchi</th>
+                                                <th class="px-4 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Darslar soni</th>
+                                                <th class="px-4 py-2 text-center font-semibold text-gray-600 dark:text-gray-400">Holat</th>
+                                            </tr></thead>
+                                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                                <template x-for="item in curriculumResult.not_in_curriculum_items" :key="item.group_name + item.subject_name + item.training_type">
+                                                    <tr class="hover:bg-blue-50/50 dark:hover:bg-blue-900/10 cursor-pointer"
+                                                        @click="if (item.ids?.length) { activeTab = 'jadval'; $nextTick(() => highlightCells(item.ids)); }">
+                                                        <td class="px-4 py-2 font-medium text-gray-800 dark:text-gray-200" x-text="item.group_name"></td>
+                                                        <td class="px-4 py-2 text-gray-700 dark:text-gray-300" x-text="item.subject_name"></td>
+                                                        <td class="px-4 py-2 text-gray-500 dark:text-gray-400" x-text="item.training_type || '—'"></td>
+                                                        <td class="px-4 py-2 text-gray-500 dark:text-gray-400" x-text="item.employee_name || '—'"></td>
+                                                        <td class="px-4 py-2 text-center" x-text="item.schedule_count"></td>
+                                                        <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">Rejada yo'q</span></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="curriculumTab === 'not_in_curriculum' && curriculumResult.not_in_curriculum_items.length === 0" class="p-8 text-center">
+                                <svg class="w-12 h-12 mx-auto text-green-300 dark:text-green-700 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Jadvaldagi barcha fanlar o'quv rejada mavjud.</p>
+                            </div>
+                        </div>
+
+                        {{-- Hammasi mos bo'lsa --}}
+                        <div x-show="curriculumResult.hours_mismatch === 0 && curriculumResult.not_in_schedule === 0 && curriculumResult.not_in_curriculum === 0 && curriculumTab === 'all'" class="p-8 text-center">
+                            <svg class="w-16 h-16 mx-auto text-green-400 dark:text-green-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <p class="text-green-600 dark:text-green-400 text-sm font-semibold">Jadval o'quv rejaga to'liq mos keladi!</p>
+                        </div>
+                    </div>
+                </template>
+
+                {{-- O'quv reja bo'sh --}}
+                <div x-show="!curriculumLoading && !curriculumResult" class="p-12 text-center">
+                    <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">O'quv reja bilan solishtirish uchun yuqoridagi tabni bosing.</p>
+                </div>
+            </div>
+        </div>
+
+        {{-- ===== TAB 4: XONALAR KESIMIDA ===== --}}
         <div x-show="activeTab === 'xonalar'" x-cloak class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 {{-- Xonalar jadvali: ustunlar = xonalar, qatorlar = kunlar + juftliklar --}}
@@ -908,6 +1170,7 @@
         .tab-btn-active { background: #3b82f6; color: #fff; box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
         .tab-btn-active-red { background: #ef4444; box-shadow: 0 2px 8px rgba(239,68,68,0.3); }
         .tab-btn-active-teal { background: #0d9488; box-shadow: 0 2px 8px rgba(13,148,136,0.3); }
+        .tab-btn-active-emerald { background: #059669; box-shadow: 0 2px 8px rgba(5,150,105,0.3); }
         .tab-btn-inactive { background: transparent; color: #64748b; }
         .tab-btn-inactive:hover { background: #f1f5f9; color: #374151; }
         .dark .tab-btn-inactive { color: #94a3b8; }
@@ -929,6 +1192,12 @@
         .dark .conflict-filter-inactive { background: #334155; color: #94a3b8; border-color: #475569; }
         .dark .conflict-filter-inactive:hover { background: #451a1a; border-color: #ef4444; color: #fca5a5; }
 
+        /* Curriculum filter pills */
+        .curriculum-filter-active { background: #059669; color: #fff; border-color: #059669; box-shadow: 0 2px 6px rgba(5,150,105,0.3); }
+        .curriculum-filter-active-amber { background: #d97706; color: #fff; border-color: #d97706; box-shadow: 0 2px 6px rgba(217,119,6,0.3); }
+        .curriculum-filter-active-red { background: #dc2626; color: #fff; border-color: #dc2626; box-shadow: 0 2px 6px rgba(220,38,38,0.3); }
+        .curriculum-filter-active-blue { background: #2563eb; color: #fff; border-color: #2563eb; box-shadow: 0 2px 6px rgba(37,99,235,0.3); }
+
     </style>
 
     {{-- JavaScript --}}
@@ -940,7 +1209,7 @@
         return {
             activeBatchId: {{ $activeBatch->id ?? 'null' }},
             currentWeek: 0, // 0 = barchasi, 1-15 = aniq hafta
-            activeTab: 'jadval', // 'jadval' | 'xatolar' | 'xonalar'
+            activeTab: 'jadval', // 'jadval' | 'xatolar' | 'curriculum' | 'xonalar'
             gridItems: {},
             pairs: [],
             days: {},
@@ -950,6 +1219,9 @@
             hemisResult: null,
             conflicts: [],
             conflictFilter: '', // '' = barchasi, yoki 'teacher', 'hours', etc.
+            curriculumResult: null,
+            curriculumLoading: false,
+            curriculumTab: 'all', // 'all' | 'matched' | 'hours_mismatch' | 'not_in_schedule' | 'not_in_curriculum'
             conflictDetail: { show: false, data: null },
             hoveredCard: null,
             draggedCard: null,
@@ -1018,6 +1290,7 @@
                 if (!this.activeBatchId) return;
                 this.loading = true;
                 this.hemisResult = null;
+                this.curriculumResult = null;
                 try {
                     let url = '{{ route($routePrefix . ".lecture-schedule.data") }}?batch_id=' + this.activeBatchId;
                     if (this.currentWeek > 0) {
@@ -1149,6 +1422,22 @@
                     this.hemisResult = await res.json();
                     await this.loadGrid();
                 } catch (e) { console.error(e); } finally { this.comparing = false; }
+            },
+
+            // ===== O'QUV REJA SOLISHTIRISH =====
+            async loadCurriculum() {
+                if (!this.activeBatchId) return;
+                this.curriculumLoading = true;
+                this.curriculumTab = 'all';
+                try {
+                    const res = await fetch('{{ route($routePrefix . ".lecture-schedule.compare-curriculum") }}?batch_id=' + this.activeBatchId);
+                    this.curriculumResult = await res.json();
+                } catch (e) {
+                    console.error('Curriculum compare error:', e);
+                    this.showToast('O\'quv reja solishtirish xatosi', 'error');
+                } finally {
+                    this.curriculumLoading = false;
+                }
             },
 
             // ===== DRAG & DROP =====

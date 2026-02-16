@@ -354,6 +354,20 @@ class LectureScheduleController extends Controller
     }
 
     /**
+     * AJAX: O'quv reja bilan solishtirish
+     */
+    public function compareCurriculum(Request $request)
+    {
+        $batchId = $request->input('batch_id');
+        $batch = LectureScheduleBatch::findOrFail($batchId);
+
+        $service = new LectureScheduleConflictService();
+        $result = $service->compareWithCurriculum($batch);
+
+        return response()->json($result);
+    }
+
+    /**
      * AJAX: ichki konfliktlar
      */
     public function conflicts(Request $request)

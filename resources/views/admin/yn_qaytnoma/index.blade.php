@@ -44,9 +44,7 @@
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
-                    </div>
 
-                    <div class="filter-row">
                         <div class="filter-item" style="min-width: 140px;">
                             <label class="filter-label">
                                 <span class="fl-dot" style="background:#8b5cf6;"></span> Kurs
@@ -55,12 +53,23 @@
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
+                    </div>
 
+                    <div class="filter-row">
                         <div class="filter-item" style="min-width: 150px;">
                             <label class="filter-label">
                                 <span class="fl-dot" style="background:#14b8a6;"></span> Semestr
                             </label>
                             <select id="semester_code" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-item" style="min-width: 170px;">
+                            <label class="filter-label">
+                                <span class="fl-dot" style="background:#1a3268;"></span> Guruh
+                            </label>
+                            <select id="group" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
@@ -73,17 +82,6 @@
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
-                    </div>
-
-                    <div class="filter-row">
-                        <div class="filter-item" style="min-width: 170px;">
-                            <label class="filter-label">
-                                <span class="fl-dot" style="background:#1a3268;"></span> Guruh
-                            </label>
-                            <select id="group" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                            </select>
-                        </div>
 
                         <div class="filter-item" style="display: flex; align-items: flex-end;">
                             <label class="filter-label">&nbsp;</label>
@@ -91,7 +89,7 @@
                                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                                 </svg>
-                                Ko'rsatish
+                                Qidirish
                             </button>
                         </div>
                     </div>

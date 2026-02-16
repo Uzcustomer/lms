@@ -316,11 +316,29 @@
     </div>
 </div>
 
-{{-- Brauzer back/forward cache (bfcache) dan himoya --}}
+{{-- Brauzer back/forward cache va CSRF token yangilash --}}
 <script>
+    // bfcache dan qaytganda sahifani qayta yuklash
     window.addEventListener('pageshow', function(event) {
         if (event.persisted) {
             window.location.reload();
+        }
+    });
+
+    // Sahifa qayta ko'rinsa (tab almashtirish, boshqa oynadan qaytish) CSRF tokenni yangilash
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+            fetch('{{ url("/refresh-csrf") }}', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.token) {
+                        document.querySelector('meta[name="csrf-token"]').content = data.token;
+                        document.querySelectorAll('input[name="_token"]').forEach(function(input) {
+                            input.value = data.token;
+                        });
+                    }
+                })
+                .catch(function() {});
         }
     });
 </script>

@@ -132,6 +132,21 @@ class ImpersonateController extends Controller
 
         if (!$impersonatorId) {
             Log::warning('stopImpersonation: impersonator_id topilmadi, login sahifasiga yuborilmoqda');
+
+            // Impersonator topilmasa ham, teacher/student guardlarni tozalash kerak
+            foreach (['teacher', 'student'] as $guard) {
+                if (Auth::guard($guard)->check()) {
+                    Auth::guard($guard)->logout();
+                }
+            }
+            session()->forget([
+                'impersonating',
+                'impersonator_id',
+                'impersonator_guard',
+                'impersonated_name',
+                'impersonator_active_role',
+            ]);
+
             return redirect()->route('admin.login');
         }
 
@@ -146,19 +161,23 @@ class ImpersonateController extends Controller
             'admin_name' => $admin->name,
         ]);
 
-        // Impersonatsiya va guard session kalitlarini qo'lda tozalash
-        // (flush/logout chaqirmasdan, chunki ular session holatini buzishi mumkin)
-        $keysToForget = [
+        // Teacher va student guardlarni to'liq logout qilish
+        // (bu guard objectdagi cached user'ni ham tozalaydi)
+        foreach (['teacher', 'student'] as $guard) {
+            if (Auth::guard($guard)->check()) {
+                Auth::guard($guard)->logout();
+            }
+        }
+
+        // Impersonatsiya session kalitlarini tozalash
+        session()->forget([
             'impersonating',
             'impersonator_id',
             'impersonator_guard',
             'impersonated_name',
             'impersonator_active_role',
             'active_role',
-            Auth::guard('teacher')->getName(),
-            Auth::guard('student')->getName(),
-        ];
-        session()->forget($keysToForget);
+        ]);
 
         // Asl adminni web guard orqali login qilish
         Auth::guard('web')->login($admin);

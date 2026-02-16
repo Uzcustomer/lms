@@ -18,6 +18,21 @@ class AdminAuthController extends Controller
             'password' => ['required'],
         ]);
 
+        // Eski impersonatsiya yoki teacher/student guardlarini tozalash
+        // (oldingi impersonatsiya tugallanmagan bo'lsa)
+        foreach (['teacher', 'student'] as $guard) {
+            if (Auth::guard($guard)->check()) {
+                Auth::guard($guard)->logout();
+            }
+        }
+        $request->session()->forget([
+            'impersonating',
+            'impersonator_id',
+            'impersonator_guard',
+            'impersonated_name',
+            'impersonator_active_role',
+        ]);
+
         if (Auth::attempt($credentials)) {
             $user = Auth::user();
             $staffRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());

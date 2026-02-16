@@ -86,7 +86,7 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
 
             // Haftalar davomiyligi va Juft-toq
             $weeks = trim($row['haftalar_davomiyligi'] ?? '');
-            $weekParity = mb_strtolower(trim($row['juft-toq'] ?? $row['jufttoq'] ?? ''));
+            $weekParity = mb_strtolower(trim($row['juft_toq'] ?? $row['juft-toq'] ?? $row['jufttoq'] ?? ''));
 
             LectureSchedule::create([
                 'batch_id' => $this->batch->id,

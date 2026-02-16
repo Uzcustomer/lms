@@ -35,6 +35,15 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
 
     public function collection(Collection $rows)
     {
+        // Debug: birinchi qatorning kalit nomlarini log'ga yozish
+        if ($rows->isNotEmpty()) {
+            $firstRow = $rows->first();
+            \Log::info('LectureScheduleImport: Excel heading keys', [
+                'keys' => array_keys($firstRow->toArray()),
+                'sample_values' => $firstRow->toArray(),
+            ]);
+        }
+
         foreach ($rows as $index => $row) {
             $rowNum = $index + 2; // +2 chunki heading row + 0-index
 
@@ -84,9 +93,31 @@ class LectureScheduleImport implements ToCollection, WithHeadingRow, WithValidat
             // Dars turi (ixtiyoriy)
             $trainingType = trim($row['turi'] ?? '');
 
-            // Haftalar davomiyligi va Juft-toq
-            $weeks = trim($row['haftalar_davomiyligi'] ?? '');
-            $weekParity = mb_strtolower(trim($row['juft_toq'] ?? $row['juft-toq'] ?? $row['jufttoq'] ?? ''));
+            // Haftalar davomiyligi — dinamik qidirish (turli Excel heading format uchun)
+            $weeks = '';
+            $weekParity = '';
+            $rowArray = $row->toArray();
+            foreach ($rowArray as $colKey => $colVal) {
+                if ($colVal === null || !is_string($colKey)) {
+                    continue;
+                }
+                $colKeyLower = mb_strtolower($colKey);
+                if (!$weeks && str_contains($colKeyLower, 'hafta')) {
+                    $weeks = trim((string) $colVal);
+                }
+                if (!$weekParity && str_contains($colKeyLower, 'juft')) {
+                    $weekParity = mb_strtolower(trim((string) $colVal));
+                }
+            }
+
+            // Debug: birinchi 3 ta qatorda weeks/week_parity qiymatlarini log'ga yozish
+            if ($index < 3) {
+                \Log::info("LectureScheduleImport row {$rowNum}", [
+                    'weeks' => $weeks,
+                    'week_parity' => $weekParity,
+                    'group_source' => $groupSource,
+                ]);
+            }
 
             LectureSchedule::create([
                 'batch_id' => $this->batch->id,

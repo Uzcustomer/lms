@@ -142,11 +142,22 @@ class LectureScheduleController extends Controller
             ->values();
 
         $grid = [];
+        $groupSourceSeen = []; // Bir xil group_source dublikatlarni oldini olish
         foreach ($items as $item) {
             $key = $item->week_day . '_' . $item->lesson_pair_code;
             if (!isset($grid[$key])) {
                 $grid[$key] = [];
             }
+
+            // Bir xil group_source bo'lsa, faqat birinchisini ko'rsatamiz
+            if ($item->group_source) {
+                $gsKey = $key . '|' . $item->group_source;
+                if (isset($groupSourceSeen[$gsKey])) {
+                    continue;
+                }
+                $groupSourceSeen[$gsKey] = true;
+            }
+
             $grid[$key][] = [
                 'id' => $item->id,
                 'week_day' => $item->week_day,

@@ -12,6 +12,22 @@ use Illuminate\Support\Facades\Log;
 
 class AdminAuthController extends Controller
 {
+    /**
+     * Guard session kalitlari — eski guard ma'lumotlarini qo'lda tozalash uchun.
+     */
+    private const GUARD_SESSION_KEYS = [
+        'login_teacher_59ba36addc2b2f9401580f014c7f58ea4e30989d',
+        'login_student_59ba36addc2b2f9401580f014c7f58ea4e30989d',
+    ];
+
+    private const IMPERSONATION_SESSION_KEYS = [
+        'impersonating',
+        'impersonator_id',
+        'impersonator_guard',
+        'impersonated_name',
+        'impersonator_active_role',
+    ];
+
     public function login(Request $request): RedirectResponse
     {
         $credentials = $request->validate([
@@ -37,11 +53,18 @@ class AdminAuthController extends Controller
             'session.impersonator_id' => session('impersonator_id'),
             'session.active_role' => session('active_role'),
             'session_id' => session()->getId(),
+            'session_has_teacher_key' => session()->has(self::GUARD_SESSION_KEYS[0]),
+            'session_has_student_key' => session()->has(self::GUARD_SESSION_KEYS[1]),
             'all_session_keys' => array_keys(session()->all()),
         ]);
 
-        // Eski impersonatsiya yoki teacher/student guardlarini tozalash
-        // (oldingi impersonatsiya tugallanmagan bo'lsa)
+        // ============================================================
+        // AGRESSIV TOZALASH: Eski impersonatsiya yoki teacher/student
+        // guardlarini to'liq tozalash — Auth::logout() + qo'lda session
+        // kalitlarini o'chirish.
+        // ============================================================
+
+        // 1. Auth guard objectlarini logout qilish
         foreach (['teacher', 'student'] as $guard) {
             if (Auth::guard($guard)->check()) {
                 Log::channel('daily')->warning("🔑 ADMIN LOGIN: ⚠️ {$guard} guard hali aktiv! Logout qilinmoqda, id=" . Auth::guard($guard)->id());
@@ -49,23 +72,24 @@ class AdminAuthController extends Controller
             }
         }
 
-        $impersonationKeys = [
-            'impersonating',
-            'impersonator_id',
-            'impersonator_guard',
-            'impersonated_name',
-            'impersonator_active_role',
-        ];
+        // 2. Guard session kalitlarini QO'LDA o'chirish
+        //    (Auth::logout() ba'zan session key'ni to'liq tozalamaydi)
+        foreach (self::GUARD_SESSION_KEYS as $key) {
+            $request->session()->forget($key);
+        }
+
+        // 3. Impersonation session kalitlarini tozalash
         $hadImpersonationData = session('impersonating');
-        $request->session()->forget($impersonationKeys);
+        $request->session()->forget(self::IMPERSONATION_SESSION_KEYS);
 
         if ($hadImpersonationData) {
             Log::channel('daily')->warning("🔑 ADMIN LOGIN: ⚠️ Eski impersonation session data tozalandi");
         }
 
         Log::channel('daily')->info("🔑 ADMIN LOGIN: Tozalash tugadi, Auth::attempt qilinmoqda", [
-            'web_check_after_cleanup' => Auth::guard('web')->check(),
-            'teacher_check_after_cleanup' => Auth::guard('teacher')->check(),
+            'web_check_after' => Auth::guard('web')->check(),
+            'teacher_check_after' => Auth::guard('teacher')->check(),
+            'session_has_teacher_key_after' => session()->has(self::GUARD_SESSION_KEYS[0]),
             'session.impersonating_after' => session('impersonating'),
         ]);
 
@@ -82,7 +106,16 @@ class AdminAuthController extends Controller
             if ($user->hasRole($staffRoleValues)) {
                 $request->session()->regenerate();
 
-                Log::channel('daily')->info("🔑 ADMIN LOGIN: ✅ Session regenerate tugadi, YAKUNIY holat", [
+                // Session regenerate dan keyin yana bir marta tekshirish:
+                // teacher/student kalitlari qayta tiklanmaganligiga ishonch hosil qilish
+                foreach (self::GUARD_SESSION_KEYS as $key) {
+                    if ($request->session()->has($key)) {
+                        Log::channel('daily')->warning("🔑 ADMIN LOGIN: ⚠️ Session regenerate dan keyin {$key} hali bor! O'chirilmoqda");
+                        $request->session()->forget($key);
+                    }
+                }
+
+                Log::channel('daily')->info("🔑 ADMIN LOGIN: ✅ YAKUNIY holat", [
                     'web_check' => Auth::guard('web')->check(),
                     'web_id' => Auth::guard('web')->id(),
                     'teacher_check' => Auth::guard('teacher')->check(),
@@ -90,12 +123,16 @@ class AdminAuthController extends Controller
                     'session.impersonating' => session('impersonating'),
                     'session.active_role' => session('active_role'),
                     'new_session_id' => session()->getId(),
+                    'session_has_teacher_key' => session()->has(self::GUARD_SESSION_KEYS[0]),
                     'all_session_keys' => array_keys(session()->all()),
                 ]);
 
                 ActivityLogService::logLogin('web');
                 Log::channel('daily')->info("🔑 ADMIN LOGIN: ========== TUGADI, admin.dashboard ga redirect ==========");
-                return redirect()->intended(route('admin.dashboard'));
+
+                // redirect()->intended() O'RNIGA to'g'ridan-to'g'ri redirect
+                // (intended ba'zan eski teacher URL'ni qaytarishi mumkin)
+                return redirect()->route('admin.dashboard');
             } else {
                 Log::channel('daily')->warning("🔑 ADMIN LOGIN: ❌ Staff roli yo'q, logout qilinmoqda", [
                     'user_roles' => $user->getRoleNames()->toArray(),

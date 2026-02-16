@@ -415,10 +415,9 @@ Route::middleware('auth')->group(function () {
 
 Route::prefix('student')->name('student.')->group(function () {
 
-    Route::middleware('guest:student')->group(function () {
-        Route::post('/login', [StudentAuthController::class, 'login'])->name('login.post');
-        //        Route::post('/refresh-token', [StudentAuthController::class, 'refreshToken'])->name('refresh-token');
-    });
+    // Login POST — guest:student olib tashlandi, chunki talaba brauzer yopib
+    // logout qilmasa, eski sessiya yangi loginni bloklaydi
+    Route::post('/login', [StudentAuthController::class, 'login'])->name('login.post');
 
     // Telegram 2FA login tasdiqlash (auth kerak emas)
     Route::get('/verify-login', [StudentAuthController::class, 'showVerifyLogin'])->name('verify-login');

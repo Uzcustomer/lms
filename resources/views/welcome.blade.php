@@ -140,6 +140,22 @@
 </head>
 <body class="bg-slate-50 antialiased">
 
+{{-- Telegram in-app brauzer uchun ogohlantirish --}}
+<div id="telegram-warning" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999; background:#fef3c7; border-bottom:2px solid #f59e0b; padding:12px 16px; text-align:center;">
+    <p style="margin:0; font-size:13px; color:#92400e; font-weight:600;">
+        Telegram brauzerida muammo bo'lishi mumkin.
+    </p>
+    <p style="margin:4px 0 8px; font-size:12px; color:#a16207;">
+        Iltimos, havolani brauzerda oching: <strong>"..." &rarr; "Open in Browser"</strong>
+    </p>
+    <button onclick="document.getElementById('telegram-warning').style.display='none'" style="background:#f59e0b; color:white; border:none; padding:5px 16px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600;">Tushundim</button>
+</div>
+<script>
+    if (/Telegram/i.test(navigator.userAgent || '')) {
+        document.getElementById('telegram-warning').style.display = 'block';
+    }
+</script>
+
 <div class="min-h-screen flex items-center justify-center p-4" x-data="{
     tab: '{{ old('_profile') }}' || localStorage.getItem('lastLoginTab') || 'student',
     c: 0, adm: false,

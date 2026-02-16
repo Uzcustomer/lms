@@ -34,7 +34,11 @@ use App\Http\Controllers\MoodleImportController;
 
 
 Route::get('/', function () {
-    return view('welcome');
+    return response()
+        ->view('welcome')
+        ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        ->header('Pragma', 'no-cache')
+        ->header('Expires', '0');
 })->name('welcome');
 
 

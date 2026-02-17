@@ -544,14 +544,17 @@ class ReportController extends Controller
         // 1. Barcha schedulelar (shu sanadagi)
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
-            ->join('semesters as sem', function ($join) {
+            ->leftJoin('semesters as sem', function ($join) {
                 $join->on('sem.code', '=', 'sch.semester_code')
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
-            ->where('sem.current', true)
+            ->where(function ($q) {
+                $q->where('sem.current', true)
+                  ->orWhereNull('sem.id');
+            })
             ->whereRaw('DATE(sch.lesson_date) = ?', [$date])
             ->select(
                 'sch.schedule_hemis_id',
@@ -685,7 +688,7 @@ class ReportController extends Controller
         // 1-QADAM: Jadvallardan ma'lumot olish
         $scheduleQuery = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
-            ->join('semesters as sem', function ($join) {
+            ->leftJoin('semesters as sem', function ($join) {
                 $join->on('sem.code', '=', 'sch.semester_code')
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
@@ -693,9 +696,12 @@ class ReportController extends Controller
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');
 
-        // Joriy semestr filtri
+        // Joriy semestr filtri (LEFT JOIN bo'lgani uchun semester topilmagan yozuvlarni ham qo'shamiz)
         if ($request->get('current_semester', '1') == '1') {
-            $scheduleQuery->where('sem.current', true);
+            $scheduleQuery->where(function ($q) {
+                $q->where('sem.current', true)
+                  ->orWhereNull('sem.id');
+            });
         }
 
         // Filtrlar

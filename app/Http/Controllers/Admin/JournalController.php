@@ -367,7 +367,7 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'created_at')
+            ->select('id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'created_at')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -387,7 +387,7 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -505,7 +505,8 @@ class JournalController extends Controller
                     'status' => $g->status,
                     'retake_grade' => $g->retake_grade,
                     'reason' => $g->reason,
-                    'original_grade' => $g->grade
+                    'original_grade' => $g->grade,
+                    'is_final' => $g->is_final,
                 ]);
             }
         }
@@ -519,7 +520,8 @@ class JournalController extends Controller
                     'status' => $g->status,
                     'retake_grade' => $g->retake_grade,
                     'reason' => $g->reason,
-                    'original_grade' => $g->grade
+                    'original_grade' => $g->grade,
+                    'is_final' => $g->is_final,
                 ]);
             }
         }
@@ -1360,6 +1362,11 @@ class JournalController extends Controller
                         || ($student->level_code != 16 && $gradeValue < $markingScore->minimum_limit);
 
                     if ($existingGrade) {
+                        // is_final=true baholarni o'tkazib yuborish (yakunlangan, o'zgarmaydi)
+                        if ($existingGrade->is_final) {
+                            continue;
+                        }
+
                         // Mavjud grade ni yangilash — retake_grade va lokal ma'lumotlarga tegmaslik
                         $updateData = [
                             'grade' => $gradeValue,

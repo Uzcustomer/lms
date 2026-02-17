@@ -3353,4 +3353,12 @@ class ReportController extends Controller
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
     }
+
+    /**
+     * 5 ga da'vogar talabalar sahifasi
+     */
+    public function topStudents()
+    {
+        return view('admin.reports.top-students');
+    }
 }

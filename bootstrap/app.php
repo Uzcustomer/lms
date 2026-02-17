@@ -43,10 +43,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:schedules')->daily()->withoutOverlapping(120);
         $schedule->command('import:curriculum-subject-teachers')->dailyAt('22:00');
 
-        $schedule->command('student:import-data')->everyFourHours();
+        // Live import — har 30 daqiqada bugungi baholarni yangilaydi
+        $schedule->command('student:import-data --mode=live')->everyThirtyMinutes()->withoutOverlapping(60);
+        // Final import — har kuni 00:30 da kechagi kunni yakunlaydi
+        $schedule->command('student:import-data --mode=final')->dailyAt('00:30')->withoutOverlapping(60);
         $schedule->command('import:teachers')->cron('0 0 */2 * *'); // Every 2 days at midnight
 //        $schedule->command('grades:close-expired')->everyMinute();
-        $schedule->command('grades:close-expired')->dailyAt('23:59');
+        $schedule->command('grades:close-expired')->everyThirtyMinutes()->withoutOverlapping(30);
 //        $schedule->command('app:test-cron')->everyFifteenSeconds();
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Console\Command;
 use App\Services\TelegramService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Models\MarkingSystemScore;
@@ -28,177 +29,308 @@ class ImportGrades extends Command
         $this->token = config('services.hemis.token');
     }
 
-    protected $signature = 'student:import-data';
+    protected $signature = 'student:import-data {--mode=live : Import mode: live (every 30 min) or final (daily at 00:30)}';
 
     protected $description = 'Import student grades and attendance from Hemis API';
 
     public function handle()
     {
-        $this->info('Starting import of student data from Hemis API...');
-        Log::info('Starting import of student data from Hemis API...' . Carbon::now());
+        $mode = $this->option('mode');
 
-        $endpoints = ['attendance-list', 'student-grade-list'];
-
-        foreach ($endpoints as $endpoint) {
-            $this->importData($endpoint);
+        if ($mode === 'final') {
+            return $this->handleFinalImport();
         }
+
+        return $this->handleLiveImport();
+    }
+
+    // =========================================================================
+    // LIVE IMPORT — har 30 daqiqada, bugungi baholarni yangilaydi
+    // =========================================================================
+    private function handleLiveImport()
+    {
+        $this->info('Starting LIVE import...');
+        Log::info('[LiveImport] Starting live import at ' . Carbon::now());
+
+        $today = Carbon::today();
+        $from = $today->copy()->startOfDay()->timestamp;
+        $to = Carbon::now()->timestamp;
+
+        // 1-qadam: Baholarni API dan tortib olish (xotiraga)
+        $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
+
+        if ($gradeItems === false) {
+            $this->error('Grade API failed — eski baholar saqlanib qoldi.');
+            Log::error('[LiveImport] Grade API failed, skipping soft delete.');
+            $this->report['student-grade-list'] = [
+                'total_days' => 1,
+                'success_days' => 0,
+                'failed_pages' => ['API xato — baholar yangilanmadi'],
+            ];
+        } else {
+            // 2-qadam: Muvaffaqiyatli — soft delete + yangi yozish
+            $this->applyGrades($gradeItems, $today, false);
+            $this->report['student-grade-list'] = [
+                'total_days' => 1,
+                'success_days' => 1,
+                'failed_pages' => [],
+            ];
+        }
+
+        // Davomatni alohida import qilish (eski logika — attendance uchun soft delete kerak emas)
+        $this->importAttendance($from, $to, $today);
 
         $this->sendTelegramReport();
-
-        Log::info('Import completed.' . Carbon::now());
-        $this->info('Import completed.');
+        Log::info('[LiveImport] Completed at ' . Carbon::now());
     }
 
-    private function getDeadline($levelCode, $lessonDate)
+    // =========================================================================
+    // FINAL IMPORT — har kuni 00:30 da, kechagi kunni yakunlaydi
+    // =========================================================================
+    private function handleFinalImport()
     {
-        $deadline = Deadline::where('level_code', $levelCode)->first();
-        if ($deadline) {
-            return $lessonDate->copy()->addDays($deadline->deadline_days)->endOfDay();
+        $yesterday = Carbon::yesterday();
+
+        // Kechagi kunda is_final baholar bormi?
+        $alreadyFinalized = StudentGrade::where('lesson_date', '>=', $yesterday->copy()->startOfDay())
+            ->where('lesson_date', '<=', $yesterday->copy()->endOfDay())
+            ->where('is_final', true)
+            ->exists();
+
+        if ($alreadyFinalized) {
+            $this->info("Final import: {$yesterday->toDateString()} allaqachon yakunlangan, o'tkazib yuborildi.");
+            Log::info("[FinalImport] {$yesterday->toDateString()} already finalized, skipping.");
+            return;
         }
-        return $lessonDate->copy()->addWeek()->endOfDay();
+
+        $this->info("Starting FINAL import for {$yesterday->toDateString()}...");
+        Log::info("[FinalImport] Starting for {$yesterday->toDateString()} at " . Carbon::now());
+
+        $from = $yesterday->copy()->startOfDay()->timestamp;
+        $to = $yesterday->copy()->endOfDay()->timestamp;
+
+        // 1-qadam: Kechagi kunni to'liq API dan tortish
+        $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
+
+        if ($gradeItems === false) {
+            $this->error("Final import FAILED for {$yesterday->toDateString()} — API xato.");
+            Log::error("[FinalImport] API failed for {$yesterday->toDateString()}");
+            $this->report['final-import'] = [
+                'total_days' => 1,
+                'success_days' => 0,
+                'failed_pages' => ["API xato — {$yesterday->toDateString()} yakunlanmadi"],
+            ];
+            $this->sendTelegramReport();
+            return;
+        }
+
+        // 2-qadam: Soft delete + is_final=true qilib yozish
+        $this->applyGrades($gradeItems, $yesterday, true);
+
+        // Attendance ham final import qilish
+        $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
+        if ($attendanceItems !== false) {
+            foreach ($attendanceItems as $item) {
+                $this->processAttendance($item);
+            }
+        }
+
+        $this->report['final-import'] = [
+            'total_days' => 1,
+            'success_days' => 1,
+            'failed_pages' => [],
+        ];
+
+        $this->sendTelegramReport();
+        Log::info("[FinalImport] Completed for {$yesterday->toDateString()} at " . Carbon::now());
     }
 
-    private function importData($endpoint)
+    // =========================================================================
+    // API dan barcha sahifalarni xotiraga yig'ish
+    // Muvaffaqiyatli bo'lsa array, xato bo'lsa false qaytaradi
+    // =========================================================================
+    private function fetchAllPages(string $endpoint, int $from, int $to): array|false
     {
-        $importStatus = ImportStatus::firstOrCreate(['endpoint' => $endpoint]);
-
-        $startTimestamp = $importStatus->last_import_timestamp ?? 1745808000;
-        $startDate = Carbon::createFromTimestamp($startTimestamp)->startOfDay();
-        $endDate = Carbon::now()->startOfDay();
-
-        $period = CarbonPeriod::create($startDate, $endDate);
-
-        $totalDays = 0;
-        $successDays = 0;
-        $failedPages = [];
+        $allItems = [];
+        $currentPage = 1;
+        $totalPages = 1;
         $maxRetries = 3;
 
-        foreach ($period as $date) {
-            $from = $date->copy()->startOfDay()->timestamp;
-            $to = $date->copy()->endOfDay()->timestamp;
+        do {
+            $queryParams = [
+                'limit' => 200,
+                'page' => $currentPage,
+                'lesson_date_from' => $from,
+                'lesson_date_to' => $to,
+            ];
 
-            $currentPage = 1;
-            $totalPages = 1;
-            $dayHasErrors = false;
-            $totalDays++;
+            $retryCount = 0;
+            $pageSuccess = false;
 
-            do {
-                $queryParams = [
-                    'limit' => 200,
-                    'page' => $currentPage,
-                    'lesson_date_from' => $from,
-                    'lesson_date_to' => $to,
-                ];
+            while ($retryCount < $maxRetries && !$pageSuccess) {
+                try {
+                    $response = Http::timeout(60)->withoutVerifying()->withToken($this->token)
+                        ->get("{$this->baseUrl}/v1/data/{$endpoint}", $queryParams);
 
-                $retryCount = 0;
-                $pageSuccess = false;
-
-                while ($retryCount < $maxRetries && !$pageSuccess) {
-                    try {
-                        $response = Http::timeout(60)->withoutVerifying()->withToken($this->token)
-                            ->get("{$this->baseUrl}/v1/data/{$endpoint}", $queryParams);
-
-                        if ($response->successful()) {
-                            $data = $response->json()['data']['items'] ?? [];
-                            foreach ($data as $item) {
-                                if ($endpoint === 'attendance-list') {
-                                    $this->processAttendance($item);
-                                } elseif ($endpoint === 'student-grade-list') {
-                                    $this->processGrade($item);
-                                }
-                            }
-
-                            $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
-                            $this->info("Processed {$endpoint} data for {$date->toDateString()} - page {$currentPage} of {$totalPages}.");
-                            $currentPage++;
-                            $pageSuccess = true;
-
-                            sleep(2);
-                        } else {
-                            $retryCount++;
-                            $errorMsg = "Failed {$endpoint} page {$currentPage} for {$date->toDateString()}. Status: {$response->status()}";
-                            Log::error($errorMsg . ". Response: " . $response->body());
-                            $this->error($errorMsg);
-
-                            if ($retryCount < $maxRetries) {
-                                $this->warn("Retrying in 5 seconds... (attempt {$retryCount}/{$maxRetries})");
-                                sleep(5);
-                            }
-                        }
-                    } catch (\Exception $e) {
+                    if ($response->successful()) {
+                        $data = $response->json()['data']['items'] ?? [];
+                        $allItems = array_merge($allItems, $data);
+                        $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
+                        $this->info("Fetched {$endpoint} page {$currentPage}/{$totalPages}");
+                        $pageSuccess = true;
+                        sleep(2);
+                    } else {
                         $retryCount++;
-                        Log::error("Exception for {$endpoint} on {$date->toDateString()} page {$currentPage}: " . $e->getMessage());
-                        $this->error("Error on {$date->toDateString()} page {$currentPage}: " . $e->getMessage());
-
+                        Log::error("[Fetch] {$endpoint} page {$currentPage} failed. Status: {$response->status()}");
                         if ($retryCount < $maxRetries) {
-                            $this->warn("Retrying in 5 seconds... (attempt {$retryCount}/{$maxRetries})");
                             sleep(5);
                         }
                     }
+                } catch (\Exception $e) {
+                    $retryCount++;
+                    Log::error("[Fetch] {$endpoint} page {$currentPage} exception: " . $e->getMessage());
+                    if ($retryCount < $maxRetries) {
+                        sleep(5);
+                    }
                 }
-
-                if (!$pageSuccess) {
-                    $this->error("Skipping {$endpoint} page {$currentPage}/{$totalPages} for {$date->toDateString()} after {$maxRetries} attempts.");
-                    $failedPages[] = "{$date->toDateString()} page {$currentPage}/{$totalPages}";
-                    $dayHasErrors = true;
-                    $currentPage++;
-                }
-            } while ($currentPage <= $totalPages);
-
-            if ($dayHasErrors) {
-                $this->warn("Import incomplete for {$date->toDateString()} - timestamp NOT saved. Will retry next run.");
-                Log::warning("Import incomplete for {$endpoint} on {$date->toDateString()}");
-            } else {
-                $importStatus->last_import_timestamp = $to;
-                $importStatus->save();
-                $successDays++;
-                $this->info("Completed {$endpoint} for {$date->toDateString()} ({$totalPages} pages).");
-                Log::info("Imported {$endpoint} data for: " . $date->toDateString());
             }
+
+            if (!$pageSuccess) {
+                $this->error("Failed {$endpoint} page {$currentPage} after {$maxRetries} retries — ABORTING.");
+                Log::error("[Fetch] Aborting {$endpoint} — page {$currentPage} failed after all retries.");
+                return false;
+            }
+
+            $currentPage++;
+        } while ($currentPage <= $totalPages);
+
+        $this->info("Total {$endpoint} items fetched: " . count($allItems));
+        return $allItems;
+    }
+
+    // =========================================================================
+    // Baholarni bazaga yozish: soft delete + insert
+    // =========================================================================
+    private function applyGrades(array $gradeItems, Carbon $date, bool $isFinal): void
+    {
+        $dateStart = $date->copy()->startOfDay();
+        $dateEnd = $date->copy()->endOfDay();
+
+        $gradeCount = 0;
+        $softDeletedCount = 0;
+
+        DB::transaction(function () use ($gradeItems, $dateStart, $dateEnd, $isFinal, &$gradeCount, &$softDeletedCount) {
+            // Bugungi is_final=false baholarni soft delete
+            $softDeletedCount = StudentGrade::where('lesson_date', '>=', $dateStart)
+                ->where('lesson_date', '<=', $dateEnd)
+                ->where('is_final', false)
+                ->delete(); // SoftDeletes trait tufayli bu soft delete
+
+            $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
+            Log::info("[ApplyGrades] Soft deleted {$softDeletedCount} grades for {$dateStart->toDateString()}");
+
+            // Yangi baholarni yozish
+            foreach ($gradeItems as $item) {
+                $this->processGrade($item, $isFinal);
+                $gradeCount++;
+            }
+        });
+
+        $this->info("Written {$gradeCount} grades (is_final=" . ($isFinal ? 'true' : 'false') . ")");
+        Log::info("[ApplyGrades] Written {$gradeCount} grades for {$dateStart->toDateString()}, is_final=" . ($isFinal ? 'true' : 'false'));
+    }
+
+    // =========================================================================
+    // Attendance import (eski logika, faqat live import uchun)
+    // =========================================================================
+    private function importAttendance(int $from, int $to, Carbon $date): void
+    {
+        $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
+
+        if ($attendanceItems === false) {
+            $this->error('Attendance API failed.');
+            $this->report['attendance-list'] = [
+                'total_days' => 1,
+                'success_days' => 0,
+                'failed_pages' => ['API xato'],
+            ];
+            return;
         }
 
-        $this->report[$endpoint] = [
-            'total_days' => $totalDays,
-            'success_days' => $successDays,
-            'failed_pages' => $failedPages,
+        foreach ($attendanceItems as $item) {
+            $this->processAttendance($item);
+        }
+
+        $this->report['attendance-list'] = [
+            'total_days' => 1,
+            'success_days' => 1,
+            'failed_pages' => [],
         ];
     }
 
-    private function sendTelegramReport()
+    // =========================================================================
+    // Bitta baho yozish
+    // =========================================================================
+    private function processGrade(array $item, bool $isFinal = false): void
     {
-        $lines = ["Import natijasi (" . Carbon::now()->format('d.m.Y H:i') . "):"];
+        $student = Student::where('hemis_id', $item['_student'])->first();
 
-        $hasErrors = false;
-        foreach ($this->report as $endpoint => $stats) {
-            if ($stats['total_days'] === 0) {
-                $lines[] = "{$endpoint}: yangi ma'lumot yo'q";
-                continue;
-            }
-
-            if (empty($stats['failed_pages'])) {
-                $lines[] = "{$endpoint}: {$stats['success_days']}/{$stats['total_days']} kun muvaffaqiyatli";
-            } else {
-                $hasErrors = true;
-                $lines[] = "{$endpoint}: {$stats['success_days']}/{$stats['total_days']} kun muvaffaqiyatli";
-                foreach ($stats['failed_pages'] as $failed) {
-                    $lines[] = "  xato: {$failed}";
-                }
-            }
+        if (!$student) {
+            return;
         }
 
-        $emoji = $hasErrors ? 'Baholash importida xatolar bor' : 'Baholash importi muvaffaqiyatli';
-        $message = $emoji . "\n" . implode("\n", $lines);
+        $gradeValue = $item['grade'];
+        $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
 
-        $this->info($message);
-        app(TelegramService::class)->notify($message);
+        $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+        $studentMinLimit = $markingScore ? $markingScore->minimum_limit : 0;
+
+        $isLowGrade = ($student->level_code == 16 && $gradeValue < 3) ||
+            ($student->level_code != 16 && $gradeValue < $studentMinLimit);
+
+        $status = $isLowGrade ? 'pending' : 'recorded';
+        $reason = $isLowGrade ? 'low_grade' : null;
+        $deadline = $isLowGrade ? $this->getDeadline($student->level_code, $lessonDate) : null;
+
+        StudentGrade::create([
+            'hemis_id' => $item['id'],
+            'student_id' => $student->id,
+            'student_hemis_id' => $item['_student'],
+            'semester_code' => $item['semester']['code'],
+            'semester_name' => $item['semester']['name'],
+            'education_year_code' => $item['educationYear']['code'] ?? null,
+            'education_year_name' => $item['educationYear']['name'] ?? null,
+            'subject_schedule_id' => $item['_subject_schedule'],
+            'subject_id' => $item['subject']['id'],
+            'subject_name' => $item['subject']['name'],
+            'subject_code' => $item['subject']['code'],
+            'training_type_code' => $item['trainingType']['code'],
+            'training_type_name' => $item['trainingType']['name'],
+            'employee_id' => $item['employee']['id'],
+            'employee_name' => $item['employee']['name'],
+            'lesson_pair_code' => $item['lessonPair']['code'],
+            'lesson_pair_name' => $item['lessonPair']['name'],
+            'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+            'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+            'grade' => $gradeValue,
+            'lesson_date' => $lessonDate,
+            'created_at_api' => Carbon::createFromTimestamp($item['created_at']),
+            'reason' => $reason,
+            'deadline' => $deadline,
+            'status' => $status,
+            'is_final' => $isFinal,
+        ]);
     }
 
+    // =========================================================================
+    // Davomatni qayta ishlash (eski logika saqlanadi)
+    // =========================================================================
     private function processAttendance($item)
     {
         $student = Student::where('hemis_id', $item['student']['id'])->first();
 
         if ($student && ($item['absent_off'] > 0 || $item['absent_on'] > 0)) {
-            $attendance = Attendance::updateOrCreate(
+            Attendance::updateOrCreate(
                 [
                     'hemis_id' => $item['id'],
                 ],
@@ -234,17 +366,18 @@ class ImportGrades extends Command
                 ]
             );
 
-            // Optionally, process grade for absence
             $this->processGradeForAbsence($item, $student);
         }
     }
 
     private function processGradeForAbsence($item, $student)
     {
+        $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
+
         $existingGrade = StudentGrade::where([
             'student_id' => $student->id,
             'subject_name' => $item['subject']['name'],
-            'lesson_date' => Carbon::createFromTimestamp($item['lesson_date']),
+            'lesson_date' => $lessonDate,
             'lesson_pair_code' => $item['lessonPair']['code'],
             'lesson_pair_start_time' => $item['lessonPair']['start_time'],
         ])->first();
@@ -271,123 +404,54 @@ class ImportGrades extends Command
                 'lesson_pair_start_time' => $item['lessonPair']['start_time'],
                 'lesson_pair_end_time' => $item['lessonPair']['end_time'],
                 'grade' => null,
-                'lesson_date' => Carbon::createFromTimestamp($item['lesson_date']),
+                'lesson_date' => $lessonDate,
                 'created_at_api' => Carbon::now(),
                 'reason' => 'absent',
-                'deadline' => $this->getDeadline($student->level_code, Carbon::createFromTimestamp($item['lesson_date'])),
+                'deadline' => $this->getDeadline($student->level_code, $lessonDate),
                 'status' => 'pending',
             ]);
         }
     }
 
-
-    private function processGrade($item)
+    // =========================================================================
+    // Yordamchi metodlar
+    // =========================================================================
+    private function getDeadline($levelCode, $lessonDate)
     {
-        $student = Student::where('hemis_id', $item['_student'])->first();
-
-        if ($student) {
-            $gradeValue = $item['grade'];
-            $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
-
-            $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
-            $isLowGrade = ($student->level_code == 16 && $gradeValue < 3) ||
-                ($student->level_code != 16 && $gradeValue < $studentMinLimit);
-
-            $status = $isLowGrade ? 'pending' : 'recorded';
-            $reason = $isLowGrade ? 'low_grade' : null;
-            $deadline = $isLowGrade ? $this->getDeadline($student->level_code, $lessonDate) : null;
-
-            StudentGrade::updateOrCreate(
-                [
-                    'hemis_id' => $item['id'],
-                ],
-                [
-                    'student_id' => $student->id,
-                    'student_hemis_id' => $item['_student'],
-                    'semester_code' => $item['semester']['code'],
-                    'semester_name' => $item['semester']['name'],
-                    'education_year_code' => $item['educationYear']['code'] ?? null,
-                    'education_year_name' => $item['educationYear']['name'] ?? null,
-                    'subject_schedule_id' => $item['_subject_schedule'],
-                    'subject_id' => $item['subject']['id'],
-                    'subject_name' => $item['subject']['name'],
-                    'subject_code' => $item['subject']['code'],
-                    'training_type_code' => $item['trainingType']['code'],
-                    'training_type_name' => $item['trainingType']['name'],
-                    'employee_id' => $item['employee']['id'],
-                    'employee_name' => $item['employee']['name'],
-                    'lesson_pair_code' => $item['lessonPair']['code'],
-                    'lesson_pair_name' => $item['lessonPair']['name'],
-                    'lesson_pair_start_time' => $item['lessonPair']['start_time'],
-                    'lesson_pair_end_time' => $item['lessonPair']['end_time'],
-                    'grade' => $gradeValue,
-                    'lesson_date' => $lessonDate,
-                    'created_at_api' => Carbon::createFromTimestamp($item['created_at']),
-                    'reason' => $reason,
-                    'deadline' => $deadline,
-                    'status' => $status,
-                ]
-            );
+        $deadline = Deadline::where('level_code', $levelCode)->first();
+        if ($deadline) {
+            return $lessonDate->copy()->addDays($deadline->deadline_days)->endOfDay();
         }
+        return $lessonDate->copy()->addWeek()->endOfDay();
     }
 
-    private function processGradeBatch(array $items) //yaxshi emas, hemis_id ga unique qo'ysa ishlaydi bo'lmasa dublikat natija beradi
+    private function sendTelegramReport()
     {
-        $hemisIds = collect($items)->pluck('_student')->unique()->values();
-        $students = Student::whereIn('hemis_id', $hemisIds)->get()->keyBy('hemis_id');
+        $mode = $this->option('mode');
+        $lines = ["{$mode} import natijasi (" . Carbon::now()->format('d.m.Y H:i') . "):"];
 
-        $now = now();
-        $rows = [];
-
-        foreach ($items as $item) {
-            $student = $students[$item['_student']] ?? null;
-            if (!$student) {
+        $hasErrors = false;
+        foreach ($this->report as $endpoint => $stats) {
+            if ($stats['total_days'] === 0) {
+                $lines[] = "{$endpoint}: yangi ma'lumot yo'q";
                 continue;
             }
 
-            $gradeValue = $item['grade'];
-            $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
-            $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
-            $isLowGrade = ($student->level_code == 16 && $gradeValue < 3) ||
-                ($student->level_code != 16 && $gradeValue < $studentMinLimit);
-
-            $status = $isLowGrade ? 'pending' : 'recorded';
-            $reason = $isLowGrade ? 'low_grade' : null;
-            $deadline = $isLowGrade ? $this->getDeadline($student->level_code, $lessonDate) : null;
-
-            $rows[] = [
-                'hemis_id' => $item['id'],
-                'student_id' => $student->id,
-                'student_hemis_id' => $item['_student'],
-                'semester_code' => $item['semester']['code'],
-                'semester_name' => $item['semester']['name'],
-                'education_year_code' => $item['educationYear']['code'] ?? null,
-                'education_year_name' => $item['educationYear']['name'] ?? null,
-                'subject_schedule_id' => $item['_subject_schedule'],
-                'subject_id' => $item['subject']['id'],
-                'subject_name' => $item['subject']['name'],
-                'subject_code' => $item['subject']['code'],
-                'training_type_code' => $item['trainingType']['code'],
-                'training_type_name' => $item['trainingType']['name'],
-                'employee_id' => $item['employee']['id'],
-                'employee_name' => $item['employee']['name'],
-                'lesson_pair_code' => $item['lessonPair']['code'],
-                'lesson_pair_name' => $item['lessonPair']['name'],
-                'lesson_pair_start_time' => $item['lessonPair']['start_time'],
-                'lesson_pair_end_time' => $item['lessonPair']['end_time'],
-                'grade' => $gradeValue,
-                'lesson_date' => $lessonDate,
-                'created_at_api' => Carbon::createFromTimestamp($item['created_at']),
-                'reason' => $reason,
-                'deadline' => $deadline,
-                'status' => $status,
-                'updated_at' => $now,
-            ];
+            if (empty($stats['failed_pages'])) {
+                $lines[] = "{$endpoint}: {$stats['success_days']}/{$stats['total_days']} kun muvaffaqiyatli";
+            } else {
+                $hasErrors = true;
+                $lines[] = "{$endpoint}: {$stats['success_days']}/{$stats['total_days']} kun muvaffaqiyatli";
+                foreach ($stats['failed_pages'] as $failed) {
+                    $lines[] = "  xato: {$failed}";
+                }
+            }
         }
 
-        if (!empty($rows)) {
-            StudentGrade::upsert($rows, ['hemis_id'], array_keys($rows[0]));
-        }
+        $emoji = $hasErrors ? 'Import xatolar bor' : 'Import muvaffaqiyatli';
+        $message = $emoji . "\n" . implode("\n", $lines);
+
+        $this->info($message);
+        app(TelegramService::class)->notify($message);
     }
-
 }

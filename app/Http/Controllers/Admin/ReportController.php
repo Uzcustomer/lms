@@ -610,6 +610,14 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
         }
 
+        // Faqat HEMIS darslar monitoringida mavjud bo'lgan jadvallarni ko'rsatish
+        // (attendance_controls jadvalida yozuvi bor bo'lgan darslar)
+        $scheduleQuery->whereExists(function ($query) {
+            $query->select(DB::raw(1))
+                ->from('attendance_controls')
+                ->whereColumn('attendance_controls.subject_schedule_id', 'sch.schedule_hemis_id');
+        });
+
         // Dars jadvalini olish (guruh bo'yicha aggregatsiya)
         $schedules = $scheduleQuery->select(
             'sch.schedule_hemis_id',

@@ -33,7 +33,8 @@ class JournalController extends Controller
         $dekanFacultyIds = get_dekan_faculty_ids();
 
         // O'qituvchi uchun fanga biriktirilgan cheklovi
-        $isOqituvchi = is_active_oqituvchi();
+        // Teacher guard orqali kirgan foydalanuvchi har doim filtrlash kerak (active_role ga qaramay)
+        $isOqituvchi = is_active_oqituvchi() || auth()->guard('teacher')->check();
         $teacherSubjectIds = [];
         $teacherGroupIds = [];
         if ($isOqituvchi) {
@@ -2171,7 +2172,8 @@ class JournalController extends Controller
             ->where('g.active', true);
 
         // O'qituvchi uchun faqat o'zi o'tadigan fanlar
-        $isOqituvchi = is_active_oqituvchi();
+        // Teacher guard orqali kirgan foydalanuvchi har doim filtrlash kerak
+        $isOqituvchi = is_active_oqituvchi() || auth()->guard('teacher')->check();
         $teacherSubjectIds = [];
         if ($isOqituvchi) {
             $teacherHemisId = get_teacher_hemis_id();
@@ -2224,7 +2226,8 @@ class JournalController extends Controller
         $query = Group::where('department_active', true)->where('active', true);
 
         // O'qituvchi uchun faqat o'zi o'tadigan guruhlar
-        $isOqituvchi = is_active_oqituvchi();
+        // Teacher guard orqali kirgan foydalanuvchi har doim filtrlash kerak
+        $isOqituvchi = is_active_oqituvchi() || auth()->guard('teacher')->check();
         $teacherGroupIds = [];
         if ($isOqituvchi) {
             $teacherHemisId = get_teacher_hemis_id();
@@ -2754,7 +2757,8 @@ class JournalController extends Controller
         $dekanFacultyIds = get_dekan_faculty_ids();
 
         // O'qituvchi uchun fanga biriktirilgan cheklovi
-        $isOqituvchi = is_active_oqituvchi();
+        // Teacher guard orqali kirgan foydalanuvchi har doim filtrlash kerak
+        $isOqituvchi = is_active_oqituvchi() || auth()->guard('teacher')->check();
         $teacherAssignments = ['subject_ids' => [], 'group_ids' => []];
         if ($isOqituvchi) {
             $teacherHemisId = get_teacher_hemis_id();

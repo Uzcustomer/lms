@@ -21,11 +21,15 @@ class SendTeacherReminders extends Command
     {
         $today = Carbon::today()->format('Y-m-d');
 
+        // Baho qo'yilmaydigan training type kodlari (config/app.php dan)
+        // 11=Ma'ruza, 99=Mustaqil ta'lim, 100=Oraliq nazorat, 101=Oski, 102=Yakuniy test
+        // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi
+        $excludedTrainingTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+
         $this->info("Bugungi sana: {$today}");
         $this->info("O'qituvchilarga eslatma yuborilmoqda...");
 
         // Bugungi darslarni DARS JADVALIDAN (schedules) olish
-        // Har bir yozuvda aynan qaysi o'qituvchi qaysi turning darsiga biriktirilgani ko'rsatilgan
         $todaySchedules = Schedule::whereDate('lesson_date', $today)->get();
 
         if ($todaySchedules->isEmpty()) {
@@ -33,7 +37,7 @@ class SendTeacherReminders extends Command
             return 0;
         }
 
-        // O'qituvchilar bo'yicha guruhlash (har bir o'qituvchi faqat o'ziga biriktirilgan darslarni ko'radi)
+        // O'qituvchilar bo'yicha guruhlash
         $schedulesByTeacher = $todaySchedules->groupBy('employee_id');
 
         $sentCount = 0;
@@ -51,9 +55,9 @@ class SendTeacherReminders extends Command
             $missingGrades = [];
 
             foreach ($schedules as $schedule) {
-                // Davomat tekshirish:
-                // Aynan shu o'qituvchi (employee_id) + shu jadval yozuvi (schedule_hemis_id) uchun
-                // attendance yozuvi bormi?
+                $trainingTypeCode = (int) $schedule->training_type_code;
+
+                // DAVOMAT tekshirish: barcha dars turlari uchun
                 $hasAttendance = Attendance::where('employee_id', $schedule->employee_id)
                     ->where('subject_schedule_id', $schedule->schedule_hemis_id)
                     ->whereDate('lesson_date', $today)
@@ -64,17 +68,20 @@ class SendTeacherReminders extends Command
                     $missingAttendance[] = $schedule;
                 }
 
-                // Baho tekshirish:
-                // Aynan shu o'qituvchi + shu jadval yozuvi uchun baho qo'yilganmi?
-                $hasGrades = StudentGrade::where('employee_id', $schedule->employee_id)
-                    ->where('subject_schedule_id', $schedule->schedule_hemis_id)
-                    ->whereDate('lesson_date', $today)
-                    ->where('lesson_pair_code', $schedule->lesson_pair_code)
-                    ->whereNotNull('grade')
-                    ->exists();
+                // BAHO tekshirish: faqat amaliyot turlari uchun
+                // Ma'ruza (11), Mustaqil ta'lim (99), Oraliq nazorat (100), Oski (101), Yakuniy test (102)
+                // — bu turlarga baho qo'yilmaydi, shuning uchun tekshirilmaydi
+                if (!in_array($trainingTypeCode, $excludedTrainingTypes)) {
+                    $hasGrades = StudentGrade::where('employee_id', $schedule->employee_id)
+                        ->where('subject_schedule_id', $schedule->schedule_hemis_id)
+                        ->whereDate('lesson_date', $today)
+                        ->where('lesson_pair_code', $schedule->lesson_pair_code)
+                        ->whereNotNull('grade')
+                        ->exists();
 
-                if (!$hasGrades) {
-                    $missingGrades[] = $schedule;
+                    if (!$hasGrades) {
+                        $missingGrades[] = $schedule;
+                    }
                 }
             }
 
@@ -129,7 +136,16 @@ class SendTeacherReminders extends Command
             $lines[] = "";
         }
 
-        $lines[] = "Iltimos, tizimga kirib davomat va baholarni kiriting.";
+        $hasBoth = !empty($missingAttendance) && !empty($missingGrades);
+        $onlyAttendance = !empty($missingAttendance) && empty($missingGrades);
+
+        if ($hasBoth) {
+            $lines[] = "Iltimos, tizimga kirib davomat va baholarni kiriting.";
+        } elseif ($onlyAttendance) {
+            $lines[] = "Iltimos, tizimga kirib davomatni kiriting.";
+        } else {
+            $lines[] = "Iltimos, tizimga kirib baholarni kiriting.";
+        }
 
         return implode("\n", $lines);
     }

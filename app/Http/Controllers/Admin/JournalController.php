@@ -1350,7 +1350,7 @@ class JournalController extends Controller
 
                     $hemisId = $item['id'];
 
-                    // Mavjud grade tekshirish
+                    // Mavjud grade tekshirish (soft-deleted larni ham qo'shib)
                     $existingGrade = DB::table('student_grades')
                         ->where('hemis_id', $hemisId)
                         ->first();
@@ -1365,6 +1365,7 @@ class JournalController extends Controller
                             'grade' => $gradeValue,
                             'employee_id' => $item['employee']['id'],
                             'employee_name' => $item['employee']['name'],
+                            'deleted_at' => null, // Soft-deleted bo'lsa tiklash
                             'updated_at' => now(),
                         ];
 
@@ -1425,6 +1426,7 @@ class JournalController extends Controller
                             'reason' => $reason,
                             'deadline' => $deadline,
                             'status' => $status,
+                            'is_final' => false,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);

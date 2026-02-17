@@ -5,11 +5,12 @@ namespace App\Models;
 use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
 class StudentGrade extends Model
 {
-    use HasFactory, LogsActivity;
+    use HasFactory, LogsActivity, SoftDeletes;
 
     protected static string $activityModule = 'student_grade';
     protected static array $logOnly = [
@@ -54,7 +55,7 @@ class StudentGrade extends Model
         "test_id",
         "quiz_result_id",
         "is_yn_locked",
-
+        "is_final",
     ];
 
     public function student()

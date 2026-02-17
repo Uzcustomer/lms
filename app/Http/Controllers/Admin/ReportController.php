@@ -878,19 +878,30 @@ class ReportController extends Controller
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
                     'has_attendance' => false,
                     'has_grades' => false,
+                    'schedule_count' => 0,
+                    'attendance_count' => 0,
+                    'grade_count' => 0,
                     'schedule_ids' => [],
                 ];
             }
 
             $grouped[$key]['schedule_ids'][] = $sch->schedule_hemis_id;
+            $grouped[$key]['schedule_count']++;
 
             if (isset($attendanceSet[$sch->schedule_hemis_id])) {
-                $grouped[$key]['has_attendance'] = true;
+                $grouped[$key]['attendance_count']++;
             }
             if (isset($gradeSet[$sch->schedule_hemis_id])) {
-                $grouped[$key]['has_grades'] = true;
+                $grouped[$key]['grade_count']++;
             }
         }
+
+        // has_attendance/has_grades = true faqat BARCHA juftliklar bajarilgan bo'lsa
+        foreach ($grouped as &$g) {
+            $g['has_attendance'] = $g['schedule_count'] > 0 && $g['attendance_count'] >= $g['schedule_count'];
+            $g['has_grades'] = $g['schedule_count'] > 0 && $g['grade_count'] >= $g['schedule_count'];
+        }
+        unset($g);
 
         $results = array_values($grouped);
 
@@ -933,7 +944,7 @@ class ReportController extends Controller
 
         foreach ($pageData as $i => &$item) {
             $item['row_num'] = $offset + $i + 1;
-            unset($item['schedule_ids']);
+            unset($item['schedule_ids'], $item['schedule_count'], $item['attendance_count'], $item['grade_count']);
         }
         unset($item);
 

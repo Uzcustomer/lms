@@ -29,7 +29,7 @@ class ImportGrades extends Command
         $this->token = config('services.hemis.token');
     }
 
-    protected $signature = 'student:import-data {--mode=live : Import mode: live (every 30 min) or final (daily at 00:30)}';
+    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)}';
 
     protected $description = 'Import student grades and attendance from Hemis API';
 
@@ -39,6 +39,10 @@ class ImportGrades extends Command
 
         if ($mode === 'final') {
             return $this->handleFinalImport();
+        }
+
+        if ($mode === 'backfill') {
+            return $this->handleBackfillImport();
         }
 
         return $this->handleLiveImport();
@@ -143,6 +147,79 @@ class ImportGrades extends Command
 
         $this->sendTelegramReport();
         Log::info("[FinalImport] Completed for {$yesterday->toDateString()} at " . Carbon::now());
+    }
+
+    // =========================================================================
+    // BACKFILL IMPORT — bir martalik, berilgan sanadan kechagigacha is_final=true
+    // php artisan student:import-data --mode=backfill --from=2026-01-26
+    // =========================================================================
+    private function handleBackfillImport()
+    {
+        $fromDate = $this->option('from');
+        if (!$fromDate) {
+            $this->error('--from parametri kerak. Masalan: --from=2026-01-26');
+            return;
+        }
+
+        $startDate = Carbon::parse($fromDate)->startOfDay();
+        $endDate = Carbon::yesterday()->startOfDay();
+
+        if ($startDate->greaterThan($endDate)) {
+            $this->error("Boshlanish sanasi ({$startDate->toDateString()}) kechagi kundan ({$endDate->toDateString()}) katta bo'lishi mumkin emas.");
+            return;
+        }
+
+        $period = CarbonPeriod::create($startDate, $endDate);
+        $totalDays = $startDate->diffInDays($endDate) + 1;
+
+        $this->info("BACKFILL: {$startDate->toDateString()} → {$endDate->toDateString()} ({$totalDays} kun)");
+        Log::info("[Backfill] Starting from {$startDate->toDateString()} to {$endDate->toDateString()}");
+
+        $successDays = 0;
+        $failedDays = [];
+
+        foreach ($period as $date) {
+            $dayFrom = $date->copy()->startOfDay()->timestamp;
+            $dayTo = $date->copy()->endOfDay()->timestamp;
+
+            $this->info("--- {$date->toDateString()} ---");
+
+            // Baholar
+            $gradeItems = $this->fetchAllPages('student-grade-list', $dayFrom, $dayTo);
+
+            if ($gradeItems === false) {
+                $this->error("XATO: {$date->toDateString()} — baholar import qilinmadi, keyingi kunga o'tiladi.");
+                $failedDays[] = $date->toDateString();
+                continue;
+            }
+
+            $this->applyGrades($gradeItems, $date, true);
+
+            // Attendance
+            $attendanceItems = $this->fetchAllPages('attendance-list', $dayFrom, $dayTo);
+            if ($attendanceItems !== false) {
+                foreach ($attendanceItems as $item) {
+                    $this->processAttendance($item);
+                }
+            }
+
+            $successDays++;
+            $this->info("Tayyor: {$date->toDateString()} — {$successDays}/{$totalDays}");
+        }
+
+        $this->report['backfill'] = [
+            'total_days' => $totalDays,
+            'success_days' => $successDays,
+            'failed_pages' => $failedDays,
+        ];
+
+        $this->sendTelegramReport();
+
+        $this->info("BACKFILL tugadi: {$successDays}/{$totalDays} kun muvaffaqiyatli.");
+        if (!empty($failedDays)) {
+            $this->warn("Xato bo'lgan kunlar: " . implode(', ', $failedDays));
+        }
+        Log::info("[Backfill] Completed: {$successDays}/{$totalDays} days.");
     }
 
     // =========================================================================

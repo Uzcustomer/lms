@@ -820,35 +820,34 @@ class ReportController extends Controller
             return response()->json(['data' => [], 'total' => 0]);
         }
 
-        // 2-QADAM: schedule_hemis_id lar bo'yicha davomat va baho mavjudligini tekshirish
-        $allScheduleIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
+        // 2-QADAM: Davomat va baho mavjudligini ATRIBUT bo'yicha tekshirish
+        // (subject_schedule_id o'rniga — jurnal logikasiga mos)
+        $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
+        $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
+        $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
+        $minDate = $schedules->min('lesson_date_str');
+        $maxDate = $schedules->max('lesson_date_str');
 
-        // Chunk bo'yicha davomat mavjudligini tekshirish (attendance_controls da load bo'lsa = davomat olingan)
-        $attendanceExists = collect();
-        foreach (array_chunk($allScheduleIds, 5000) as $chunk) {
-            $result = DB::table('attendance_controls')
-                ->whereIn('subject_schedule_id', $chunk)
-                ->where('load', '>', 0)
-                ->select('subject_schedule_id')
-                ->distinct()
-                ->pluck('subject_schedule_id');
-            $attendanceExists = $attendanceExists->merge($result);
-        }
-        $attendanceSet = $attendanceExists->flip();
+        // Davomat: employee + group + subject + date + training_type + lesson_pair
+        $attendanceSet = DB::table('attendance_controls')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('group_id', $groupHemisIds)
+            ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->where('load', '>', 0)
+            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as ck"))
+            ->pluck('ck')
+            ->flip();
 
-        // Chunk bo'yicha baho mavjudligini tekshirish
-        $gradeExists = collect();
-        foreach (array_chunk($allScheduleIds, 5000) as $chunk) {
-            $result = DB::table('student_grades')
-                ->whereIn('subject_schedule_id', $chunk)
-                ->whereNotNull('grade')
-                ->where('grade', '>', 0)
-                ->select('subject_schedule_id')
-                ->distinct()
-                ->pluck('subject_schedule_id');
-            $gradeExists = $gradeExists->merge($result);
-        }
-        $gradeSet = $gradeExists->flip();
+        // Baho: employee + subject + date + training_type + lesson_pair
+        $gradeSet = DB::table('student_grades')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('subject_id', $subjectIds)
+            ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->whereNotNull('grade')
+            ->where('grade', '>', 0)
+            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as gk"))
+            ->pluck('gk')
+            ->flip();
 
         // 3-QADAM: Talaba sonini guruh bo'yicha hisoblash
         $groupIds = $schedules->pluck('group_id')->unique()->values()->toArray();
@@ -869,6 +868,12 @@ class ReportController extends Controller
             $pairEnd = $sch->lesson_pair_end_time ? substr($sch->lesson_pair_end_time, 0, 5) : '';
             $pairTime = ($pairStart && $pairEnd) ? ($pairStart . '-' . $pairEnd) : '';
 
+            // Davomat va baho tekshirish uchun atribut kalitlari
+            $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+                    . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+            $gradeKey = $sch->employee_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+                      . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+
             if (!isset($grouped[$key])) {
                 $grouped[$key] = [
                     'employee_id' => $sch->employee_id,
@@ -888,32 +893,11 @@ class ReportController extends Controller
                     'semester_code' => $sch->semester_code,
                     'lesson_date' => $sch->lesson_date_str,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
-                    'has_attendance' => false,
-                    'has_grades' => false,
-                    'schedule_count' => 0,
-                    'attendance_count' => 0,
-                    'grade_count' => 0,
-                    'schedule_ids' => [],
+                    'has_attendance' => isset($attendanceSet[$attKey]),
+                    'has_grades' => isset($gradeSet[$gradeKey]),
                 ];
             }
-
-            $grouped[$key]['schedule_ids'][] = $sch->schedule_hemis_id;
-            $grouped[$key]['schedule_count']++;
-
-            if (isset($attendanceSet[$sch->schedule_hemis_id])) {
-                $grouped[$key]['attendance_count']++;
-            }
-            if (isset($gradeSet[$sch->schedule_hemis_id])) {
-                $grouped[$key]['grade_count']++;
-            }
         }
-
-        // has_attendance/has_grades = true faqat BARCHA juftliklar bajarilgan bo'lsa
-        foreach ($grouped as &$g) {
-            $g['has_attendance'] = $g['schedule_count'] > 0 && $g['attendance_count'] >= $g['schedule_count'];
-            $g['has_grades'] = $g['schedule_count'] > 0 && $g['grade_count'] >= $g['schedule_count'];
-        }
-        unset($g);
 
         $results = array_values($grouped);
 
@@ -956,7 +940,6 @@ class ReportController extends Controller
 
         foreach ($pageData as $i => &$item) {
             $item['row_num'] = $offset + $i + 1;
-            unset($item['schedule_ids']);
         }
         unset($item);
 

@@ -322,12 +322,11 @@
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
-        function statusBadge(val, done, total) {
-            var label = done + '/' + total;
+        function statusBadge(val) {
             if (val) {
-                return '<span class="badge badge-status-yes">' + label + '</span>';
+                return '<span class="badge badge-status-yes">Ha</span>';
             }
-            return '<span class="badge badge-status-no">' + label + '</span>';
+            return '<span class="badge badge-status-no">Yo\'q</span>';
         }
 
         function renderTable(data) {
@@ -347,8 +346,8 @@
                 html += '<td><span class="badge badge-training">' + esc(r.training_type) + '</span></td>';
                 html += '<td><span class="badge badge-pair">' + esc(r.lesson_pair_time) + '</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.student_count + '</td>';
-                html += '<td style="text-align:center;">' + statusBadge(r.has_attendance, r.attendance_count, r.schedule_count) + '</td>';
-                html += '<td style="text-align:center;">' + statusBadge(r.has_grades, r.grade_count, r.schedule_count) + '</td>';
+                html += '<td style="text-align:center;">' + statusBadge(r.has_attendance) + '</td>';
+                html += '<td style="text-align:center;">' + statusBadge(r.has_grades) + '</td>';
                 html += '<td><span class="badge badge-date">' + formatDate(r.lesson_date) + '</span></td>';
                 html += '<td style="text-align:center;"><a href="/admin/journal/show/' + encodeURIComponent(r.group_db_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code) + '" target="_blank" class="btn-view-journal" title="Jurnalga o\'tish"><svg style="width:18px;height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></a></td>';
                 html += '</tr>';

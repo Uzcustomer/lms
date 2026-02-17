@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use App\Services\ScheduleImportService;
 
 class ReportController extends Controller
 {
@@ -531,6 +532,42 @@ class ReportController extends Controller
     }
 
     /**
+     * Dars jadvali yangilash — HEMIS dan tanlangan sana oralig'idagi jadvallarni sinxronlash
+     */
+    public function syncSchedulesForReport(Request $request, ScheduleImportService $service)
+    {
+        $request->validate([
+            'date_from' => 'required|date',
+            'date_to' => 'required|date|after_or_equal:date_from',
+        ]);
+
+        $from = Carbon::parse($request->date_from)->startOfDay();
+        $to = Carbon::parse($request->date_to)->endOfDay();
+
+        // Maksimal 31 kun — juda katta oraliq bo'lmasligi uchun
+        if ($from->diffInDays($to) > 31) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sana oralig\'i 31 kundan oshmasligi kerak.',
+            ], 422);
+        }
+
+        try {
+            $service->importBetween($from, $to);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Jadval muvaffaqiyatli yangilandi ({$from->toDateString()} — {$to->toDateString()}).",
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'HEMIS bilan sinxronlashda xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * AJAX: Dars belgilash hisobot ma'lumotlarini hisoblash
      */
     /**
@@ -544,14 +581,17 @@ class ReportController extends Controller
         // 1. Barcha schedulelar (shu sanadagi)
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
-            ->join('semesters as sem', function ($join) {
+            ->leftJoin('semesters as sem', function ($join) {
                 $join->on('sem.code', '=', 'sch.semester_code')
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
-            ->where('sem.current', true)
+            ->where(function ($q) {
+                $q->where('sem.current', true)
+                  ->orWhereNull('sem.id');
+            })
             ->whereRaw('DATE(sch.lesson_date) = ?', [$date])
             ->select(
                 'sch.schedule_hemis_id',
@@ -685,7 +725,7 @@ class ReportController extends Controller
         // 1-QADAM: Jadvallardan ma'lumot olish
         $scheduleQuery = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
-            ->join('semesters as sem', function ($join) {
+            ->leftJoin('semesters as sem', function ($join) {
                 $join->on('sem.code', '=', 'sch.semester_code')
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
@@ -693,9 +733,12 @@ class ReportController extends Controller
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');
 
-        // Joriy semestr filtri
+        // Joriy semestr filtri (LEFT JOIN bo'lgani uchun semester topilmagan yozuvlarni ham qo'shamiz)
         if ($request->get('current_semester', '1') == '1') {
-            $scheduleQuery->where('sem.current', true);
+            $scheduleQuery->where(function ($q) {
+                $q->where('sem.current', true)
+                  ->orWhereNull('sem.id');
+            });
         }
 
         // Filtrlar

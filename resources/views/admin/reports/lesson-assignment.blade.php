@@ -101,9 +101,13 @@
                                 <option value="all_done">Barchasi bajarilgan</option>
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 230px;">
+                        <div class="filter-item" style="min-width: 320px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
+                                <button type="button" id="btn-sync" class="btn-sync" onclick="syncSchedules()" title="HEMIS dan dars jadvalini yangilash">
+                                    <svg id="sync-icon" style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    <span id="sync-text">Yangilash</span>
+                                </button>
                                 <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                     Excel
@@ -261,6 +265,59 @@
             });
         }
 
+        function syncSchedules() {
+            var dateFrom = $('#date_from').val();
+            var dateTo = $('#date_to').val();
+            if (!dateFrom || !dateTo) {
+                alert("Iltimos, avval 'Sanadan' va 'Sanagacha' maydonlarini tanlang.");
+                return;
+            }
+
+            var btn = $('#btn-sync');
+            var icon = $('#sync-icon');
+            var text = $('#sync-text');
+
+            btn.prop('disabled', true).css('opacity', '0.7');
+            icon.css('animation', 'spin 0.8s linear infinite');
+            text.text('Yangilanmoqda...');
+
+            $.ajax({
+                url: '{{ route("admin.reports.lesson-assignment.sync-schedules") }}',
+                type: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    date_from: dateFrom,
+                    date_to: dateTo,
+                },
+                timeout: 180000,
+                success: function(res) {
+                    icon.css('animation', '');
+                    text.text('Yangilash');
+                    btn.prop('disabled', false).css('opacity', '1');
+
+                    if (res.success) {
+                        text.text('Yangilandi!');
+                        btn.css('background', 'linear-gradient(135deg, #16a34a, #22c55e)');
+                        setTimeout(function() {
+                            text.text('Yangilash');
+                            btn.css('background', '');
+                        }, 3000);
+                        loadReport(1);
+                    }
+                },
+                error: function(xhr) {
+                    icon.css('animation', '');
+                    text.text('Yangilash');
+                    btn.prop('disabled', false).css('opacity', '1');
+                    var msg = 'Xatolik yuz berdi';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        msg = xhr.responseJSON.message;
+                    }
+                    alert(msg);
+                }
+            });
+        }
+
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
         function statusBadge(val, type) {
@@ -395,6 +452,10 @@
         .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
         .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
         .date-input::placeholder { color: #94a3b8; font-weight: 400; }
+
+        .btn-sync { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(245,158,11,0.3); height: 36px; }
+        .btn-sync:hover:not(:disabled) { background: linear-gradient(135deg, #d97706, #ea580c); box-shadow: 0 4px 12px rgba(245,158,11,0.4); transform: translateY(-1px); }
+        .btn-sync:disabled { cursor: not-allowed; }
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }

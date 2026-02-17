@@ -3225,14 +3225,21 @@ class JournalController extends Controller
                 return response()->json(['success' => false, 'message' => 'O\'qituvchi topilmadi (hemis_id null)'], 403);
             }
 
-            // Jadvaldagi o'qituvchini tekshirish
-            $isAssigned = DB::table('schedules')
-                ->where('group_id', $groupHemisId)
+            // O'qituvchini tekshirish: curriculum_subject_teachers YOKI jadvaldan
+            $isAssigned = CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
                 ->where('subject_id', $request->subject_id)
-                ->where('semester_code', $request->semester_code)
-                ->where('employee_id', $teacherHemisId)
-                ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+                ->where('group_id', $groupHemisId)
                 ->exists();
+
+            if (!$isAssigned) {
+                $isAssigned = DB::table('schedules')
+                    ->where('group_id', $groupHemisId)
+                    ->where('subject_id', $request->subject_id)
+                    ->where('semester_code', $request->semester_code)
+                    ->where('employee_id', $teacherHemisId)
+                    ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+                    ->exists();
+            }
 
             if (!$isAssigned) {
                 return response()->json(['success' => false, 'message' => "Biriktirilmagan (teacher={$teacherHemisId}, group={$groupHemisId})"], 403);

@@ -807,6 +807,11 @@ class ReportController extends Controller
             'sch.subject_name',
             'sch.group_id',
             'sch.group_name',
+            'sch.training_type_code',
+            'sch.training_type_name',
+            'sch.lesson_pair_code',
+            'sch.lesson_pair_start_time',
+            'sch.lesson_pair_end_time',
             'g.id as group_db_id',
             DB::raw('DATE(sch.lesson_date) as lesson_date_str')
         )->get();
@@ -854,10 +859,15 @@ class ReportController extends Controller
             ->groupBy('group_id')
             ->pluck('cnt', 'group_id');
 
-        // 4-QADAM: Ma'lumotlarni guruhlash (employee + group + subject + date)
+        // 4-QADAM: Ma'lumotlarni guruhlash (employee + group + subject + date + mashg'ulot turi + juftlik)
         $grouped = [];
         foreach ($schedules as $sch) {
-            $key = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str;
+            $key = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+                 . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+
+            $pairStart = $sch->lesson_pair_start_time ? substr($sch->lesson_pair_start_time, 0, 5) : '';
+            $pairEnd = $sch->lesson_pair_end_time ? substr($sch->lesson_pair_end_time, 0, 5) : '';
+            $pairTime = ($pairStart && $pairEnd) ? ($pairStart . '-' . $pairEnd) : '';
 
             if (!isset($grouped[$key])) {
                 $grouped[$key] = [
@@ -873,6 +883,8 @@ class ReportController extends Controller
                     'group_id' => $sch->group_id,
                     'group_db_id' => $sch->group_db_id,
                     'group_name' => $sch->group_name,
+                    'training_type' => $sch->training_type_name,
+                    'lesson_pair_time' => $pairTime,
                     'semester_code' => $sch->semester_code,
                     'lesson_date' => $sch->lesson_date_str,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
@@ -966,7 +978,7 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Dars belgilash');
 
-        $headers = ['#', 'Xodim FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Kafedra', 'Fan', 'Guruh', 'Talaba soni', 'Davomat', 'Baho', 'Dars sanasi'];
+        $headers = ['#', 'Xodim FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Kafedra', 'Fan', 'Guruh', "Mashg'ulot turi", 'Juftlik vaqti', 'Talaba soni', 'Davomat', 'Baho', 'Dars sanasi'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -977,7 +989,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:O1')->applyFromArray($headerStyle);
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -990,20 +1002,22 @@ class ReportController extends Controller
             $sheet->setCellValue([7, $row], $r['department_name']);
             $sheet->setCellValue([8, $row], $r['subject_name']);
             $sheet->setCellValue([9, $row], $r['group_name']);
-            $sheet->setCellValue([10, $row], $r['student_count']);
-            $sheet->setCellValue([11, $row], $r['has_attendance'] ? 'Ha' : "Yo'q");
-            $sheet->setCellValue([12, $row], $r['has_grades'] ? 'Ha' : "Yo'q");
-            $sheet->setCellValue([13, $row], $r['lesson_date']);
+            $sheet->setCellValue([10, $row], $r['training_type'] ?? '');
+            $sheet->setCellValue([11, $row], $r['lesson_pair_time'] ?? '');
+            $sheet->setCellValue([12, $row], $r['student_count']);
+            $sheet->setCellValue([13, $row], $r['has_attendance'] ? 'Ha' : "Yo'q");
+            $sheet->setCellValue([14, $row], $r['has_grades'] ? 'Ha' : "Yo'q");
+            $sheet->setCellValue([15, $row], $r['lesson_date']);
         }
 
-        $widths = [5, 30, 25, 30, 8, 10, 25, 35, 15, 12, 10, 10, 14];
+        $widths = [5, 30, 25, 30, 8, 10, 25, 35, 15, 16, 13, 12, 10, 10, 14];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:O{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

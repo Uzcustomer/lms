@@ -322,7 +322,7 @@
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
-        function statusBadge(val, type) {
+        function statusBadge(val) {
             if (val) {
                 return '<span class="badge badge-status-yes">Ha</span>';
             }

@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('import:attendance-controls')->dailyAt('02:00');
 Schedule::command('command:independent-auto-create')->dailyAt('06:00');
+Schedule::command('reminders:send-grade-reminders')->hourly()->between('8:00', '18:00');

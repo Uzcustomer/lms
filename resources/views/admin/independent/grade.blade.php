@@ -24,7 +24,7 @@
                         <div class="w-3/4">
                             <input type="hidden" value="{{$independent->id}}" name="independent">
                             <dl class="divide-y divide-gray-100">
-                                <div class="px-2 py-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0">
+                                <div class="px-2 py-2 sm:grid sm:grid-cols-5 sm:gap-4 sm:px-0">
                                     <dt class="mt-1 text-sm font-medium text-gray-900">Talaba</dt>
                                     <dd class="mt-1 text-sm font-medium text-gray-900">Yuklangan fayl</dd>
                                     @if ($independent->status == 0)
@@ -32,9 +32,10 @@
                                     @else
                                         <dd class="mt-1 text-sm font-medium text-gray-900">Baho</dd>
                                     @endif
+                                    <dd class="mt-1 text-sm font-medium text-gray-900">Izoh</dd>
                                 </div>
                                 @foreach ($students as $student)
-                                    <div class="px-2 py-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0">
+                                    <div class="px-2 py-2 sm:grid sm:grid-cols-5 sm:gap-4 sm:px-0">
                                         <dt class="mt-1 text-sm font-medium text-gray-900">
                                             {{ $student->full_name }}
                                         </dt>
@@ -64,6 +65,9 @@
                                                 </div>
                                             @endif
                                         </dt>
+                                        <dd class="mt-1 text-sm text-gray-500 italic">
+                                            {{ $student->grade_comment ?? '' }}
+                                        </dd>
                                     </div>
                                 @endforeach
                             </dl>

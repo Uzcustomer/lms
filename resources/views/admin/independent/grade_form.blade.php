@@ -26,7 +26,7 @@
                                 @csrf
                                 <input type="hidden" value="{{$independent->id}}" name="independent">
                                 <dl class="divide-y divide-gray-100">
-                                    <div class="px-2 py-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0">
+                                    <div class="px-2 py-2 sm:grid sm:grid-cols-5 sm:gap-4 sm:px-0">
                                         <dt class="mt-1 text-sm font-medium text-gray-900">Talaba</dt>
                                         <dd class="mt-1 text-sm font-medium text-gray-900">Yuklangan fayl</dd>
                                         @if ($independent->status == 0)
@@ -34,6 +34,7 @@
                                         @else
                                         <dd class="mt-1 text-sm font-medium text-gray-900">Baho</dd>
                                         @endif
+                                        <dd class="mt-1 text-sm font-medium text-gray-900">Izoh</dd>
                                     </div>
                                     @foreach ($students as $student)
                                     @php
@@ -41,7 +42,7 @@
                                         $isLocked = $gradeValue !== null && $gradeValue >= ($minimumLimit ?? 60);
                                         $needsGrading = $gradeValue === null || $gradeValue < ($minimumLimit ?? 60);
                                     @endphp
-                                    <div class="px-2 py-2 sm:grid sm:grid-cols-4 sm:gap-4 sm:px-0">
+                                    <div class="px-2 py-2 sm:grid sm:grid-cols-5 sm:gap-4 sm:px-0">
                                         <dt class="mt-1 text-sm font-medium text-gray-900">
                                             {{ $student->full_name }}
                                         </dt>
@@ -70,6 +71,9 @@
                                                 </div>
                                             @endif
                                         </dt>
+                                        <dd class="mt-1 text-sm text-gray-500 italic">
+                                            {{ $student->grade_comment ?? '' }}
+                                        </dd>
                                         @elseif ($needsGrading)
                                         <dd class="mt-1 text-sm font-medium text-gray-900">
                                             <input type="number" name="baho[{{ $student->id }}]" placeholder="0-100"
@@ -83,10 +87,19 @@
                                                 </div>
                                             @endif
                                         </dd>
+                                        <dd class="mt-1">
+                                            <input type="text" name="izoh[{{ $student->id }}]" placeholder="Izoh (ixtiyoriy)"
+                                                value="{{ $student->grade_comment ?? '' }}"
+                                                class="border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                                style="width:100%">
+                                        </dd>
                                         @else
                                         <dt class="mt-1 text-sm font-medium text-gray-900">
                                             {{ $student->grade }}
                                         </dt>
+                                        <dd class="mt-1 text-sm text-gray-500 italic">
+                                            {{ $student->grade_comment ?? '' }}
+                                        </dd>
                                         @endif
                                     </div>
                                     @endforeach

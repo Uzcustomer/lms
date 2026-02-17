@@ -256,6 +256,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/lesson-assignment', [ReportController::class, 'lessonAssignment'])->name('reports.lesson-assignment');
         Route::get('/reports/lesson-assignment/data', [ReportController::class, 'lessonAssignmentData'])->name('reports.lesson-assignment.data');
+        Route::post('/reports/lesson-assignment/sync-schedules', [ReportController::class, 'syncSchedulesForReport'])->name('reports.lesson-assignment.sync-schedules');
         Route::get('/reports/lesson-assignment/diagnostic', [ReportController::class, 'lessonAssignmentDiagnostic'])->name('reports.lesson-assignment.diagnostic');
 
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');

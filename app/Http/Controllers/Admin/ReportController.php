@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use App\Services\ScheduleImportService;
 
 class ReportController extends Controller
 {
@@ -528,6 +529,42 @@ class ReportController extends Controller
             'kafedras',
             'dekanFacultyIds'
         ));
+    }
+
+    /**
+     * Dars jadvali yangilash — HEMIS dan tanlangan sana oralig'idagi jadvallarni sinxronlash
+     */
+    public function syncSchedulesForReport(Request $request, ScheduleImportService $service)
+    {
+        $request->validate([
+            'date_from' => 'required|date',
+            'date_to' => 'required|date|after_or_equal:date_from',
+        ]);
+
+        $from = Carbon::parse($request->date_from)->startOfDay();
+        $to = Carbon::parse($request->date_to)->endOfDay();
+
+        // Maksimal 31 kun — juda katta oraliq bo'lmasligi uchun
+        if ($from->diffInDays($to) > 31) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sana oralig\'i 31 kundan oshmasligi kerak.',
+            ], 422);
+        }
+
+        try {
+            $service->importBetween($from, $to);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Jadval muvaffaqiyatli yangilandi ({$from->toDateString()} — {$to->toDateString()}).",
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'HEMIS bilan sinxronlashda xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

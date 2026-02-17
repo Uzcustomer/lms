@@ -1,0 +1,519 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Models\Attendance;
+use App\Models\Curriculum;
+use App\Models\CurriculumSubject;
+use App\Models\CurriculumWeek;
+use App\Models\Schedule;
+use App\Models\Semester;
+use App\Models\Student;
+use App\Models\StudentGrade;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class StudentApiController extends Controller
+{
+    /**
+     * Dashboard — GPA, absent count, debt count, recent grades
+     */
+    public function dashboard(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        $avgGpa = $student->avg_gpa ?? 0;
+
+        $totalAbsent = Attendance::where('student_id', $student->id)->count();
+
+        $debtSubjectsCount = StudentGrade::where('student_id', $student->id)
+            ->whereIn('status', ['pending'])
+            ->count();
+
+        $recentGrades = StudentGrade::where('student_id', $student->id)
+            ->where('status', 'recorded')
+            ->orderBy('created_at', 'desc')
+            ->take(10)
+            ->get()
+            ->map(fn($g) => [
+                'id' => $g->id,
+                'subject_name' => $g->subject_name,
+                'grade' => $g->grade,
+                'lesson_date' => $g->lesson_date,
+                'training_type_name' => $g->training_type_name,
+                'employee_name' => $g->employee_name,
+            ]);
+
+        return response()->json([
+            'avg_gpa' => (float) $avgGpa,
+            'total_absent' => $totalAbsent,
+            'debt_subjects_count' => $debtSubjectsCount,
+            'recent_grades' => $recentGrades,
+        ]);
+    }
+
+    /**
+     * Profile — student info
+     */
+    public function profile(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        return response()->json([
+            'full_name' => $student->full_name,
+            'student_id_number' => $student->student_id_number,
+            'image' => $student->image,
+            'birth_date' => $student->birth_date?->format('Y-m-d'),
+            'phone' => $student->other['phone'] ?? '',
+            'email' => $student->other['email'] ?? '',
+            'gender' => $student->gender_name,
+            'faculty' => $student->department_name,
+            'specialty' => $student->specialty_name,
+            'group' => $student->group_name,
+            'level' => $student->level_name,
+            'education_type' => $student->education_type_name,
+            'province' => $student->province_name,
+            'district' => $student->district_name,
+            'semester' => $student->semester_name,
+            'avg_gpa' => $student->avg_gpa,
+            'avg_grade' => $student->avg_grade,
+        ]);
+    }
+
+    /**
+     * Schedule — by semester and week
+     */
+    public function schedule(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        // Get semesters
+        $semesters = Semester::where('curriculum_hemis_id', $student->curriculum_id)
+            ->get()
+            ->map(fn($sem) => [
+                'id' => $sem->semester_hemis_id,
+                'name' => $sem->name,
+                'code' => $sem->code,
+                'current' => (bool) $sem->current,
+            ]);
+
+        $currentSemester = $semesters->firstWhere('current', true);
+        $selectedSemesterId = $request->input('semester_id', $currentSemester['id'] ?? $semesters->first()['id'] ?? null);
+        $selectedSemester = $semesters->firstWhere('id', $selectedSemesterId);
+
+        if (!$selectedSemester) {
+            return response()->json(['message' => 'Semestr topilmadi.'], 404);
+        }
+
+        // Get weeks
+        $weeks = CurriculumWeek::where('semester_hemis_id', $selectedSemesterId)
+            ->orderBy('start_date')
+            ->get()
+            ->map(fn($week) => [
+                'id' => $week->curriculum_week_hemis_id,
+                'start_date' => $week->start_date->format('Y-m-d'),
+                'end_date' => $week->end_date->format('Y-m-d'),
+            ])->values();
+
+        // Find current or selected week
+        $currentDate = Carbon::now();
+        $currentWeek = $weeks->first(fn($w) =>
+            $currentDate->between(Carbon::parse($w['start_date']), Carbon::parse($w['end_date']))
+        );
+        if (!$currentWeek) {
+            $currentWeek = $weeks->first(fn($w) => Carbon::parse($w['start_date'])->isAfter($currentDate));
+        }
+
+        $selectedWeekId = $request->input('week_id', $currentWeek['id'] ?? ($weeks->first()['id'] ?? null));
+        $selectedWeek = $weeks->firstWhere('id', $selectedWeekId);
+
+        $weekStart = $selectedWeek ? Carbon::parse($selectedWeek['start_date']) : null;
+        $weekEnd = $selectedWeek ? Carbon::parse($selectedWeek['end_date']) : null;
+
+        // Query schedule
+        $scheduleQuery = Schedule::where('group_id', $student->group_id)
+            ->where('semester_code', $selectedSemester['code']);
+
+        if ($weekStart && $weekEnd) {
+            $scheduleQuery->whereBetween('lesson_date', [$weekStart, $weekEnd]);
+        }
+
+        $scheduleRecords = $scheduleQuery->get();
+
+        $groupedSchedule = $scheduleRecords
+            ->groupBy(fn($lesson) => Carbon::parse($lesson->lesson_date)->format('Y-m-d'))
+            ->map(function ($dayLessons, $date) {
+                $lessons = $dayLessons
+                    ->unique(fn($l) => $l->subject_id . $l->lesson_pair_start_time . $l->lesson_pair_end_time . $l->auditorium_code . $l->employee_id)
+                    ->map(fn($l) => [
+                        'subject_name' => $l->subject_name,
+                        'subject_id' => $l->subject_id,
+                        'employee_name' => $l->employee_name,
+                        'auditorium' => $l->auditorium_name ?? '',
+                        'start_time' => $l->lesson_pair_start_time,
+                        'end_time' => $l->lesson_pair_end_time,
+                        'training_type' => $l->training_type_name,
+                    ])
+                    ->sortBy('start_time')
+                    ->values();
+
+                return [
+                    'date' => $date,
+                    'day_name' => Carbon::parse($date)->locale('uz')->dayName,
+                    'lessons' => $lessons,
+                ];
+            })
+            ->sortKeys()
+            ->values();
+
+        return response()->json([
+            'semesters' => $semesters,
+            'selected_semester_id' => $selectedSemesterId,
+            'weeks' => $weeks,
+            'selected_week_id' => $selectedWeekId,
+            'schedule' => $groupedSchedule,
+        ]);
+    }
+
+    /**
+     * Subjects with all grade breakdowns (JB, MT, ON, OSKI, Test)
+     */
+    public function subjects(Request $request): JsonResponse
+    {
+        $student = $request->user();
+        $semesterCode = $student->semester_code;
+        $studentHemisId = $student->hemis_id;
+        $groupHemisId = $student->group_id;
+
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+
+        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+
+        $getEffectiveGrade = function ($row) {
+            if ($row->status === 'pending') return null;
+            if ($row->reason === 'absent' && $row->grade === null) {
+                return $row->retake_grade !== null ? $row->retake_grade : null;
+            }
+            if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+                return null;
+            }
+            if ($row->status === 'recorded') return $row->grade;
+            if ($row->status === 'closed') return $row->grade;
+            if ($row->retake_grade !== null) return $row->retake_grade;
+            return null;
+        };
+
+        $curriculumSubjects = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
+            ->where('semester_code', $semesterCode)
+            ->get();
+
+        $subjects = $curriculumSubjects->map(function ($cs) use (
+            $semesterCode, $studentHemisId, $groupHemisId, $educationYearCode,
+            $excludedTrainingCodes, $gradingCutoffDate, $getEffectiveGrade
+        ) {
+            $subjectId = $cs->subject_id;
+
+            // Education year code from schedule
+            $subjectEducationYearCode = $educationYearCode;
+            $scheduleEducationYear = DB::table('schedules')
+                ->where('group_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->whereNotNull('lesson_date')
+                ->whereNotNull('education_year_code')
+                ->orderBy('lesson_date', 'desc')
+                ->value('education_year_code');
+            if ($scheduleEducationYear) {
+                $subjectEducationYearCode = $scheduleEducationYear;
+            }
+
+            // JB (Amaliyot) grades
+            $jbScheduleRows = DB::table('schedules')
+                ->where('group_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                ->whereNotIn('training_type_code', $excludedTrainingCodes)
+                ->whereNotNull('lesson_date')
+                ->select('lesson_date', 'lesson_pair_code')
+                ->orderBy('lesson_date')
+                ->get();
+
+            $minScheduleDate = $jbScheduleRows->pluck('lesson_date')->min();
+
+            $jbGradesRaw = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNotIn('training_type_code', $excludedTrainingCodes)
+                ->whereNotNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                        });
+                }))
+                ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                ->get();
+
+            $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
+                ->merge($jbGradesRaw->map(fn($g) => ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code]))
+                ->unique(fn($item) => $item['date'] . '_' . $item['pair'])
+                ->sortBy('date')
+                ->values();
+
+            $jbPairsPerDay = [];
+            foreach ($jbColumns as $col) {
+                $jbPairsPerDay[$col['date']] = ($jbPairsPerDay[$col['date']] ?? 0) + 1;
+            }
+
+            $jbLessonDates = $jbColumns->pluck('date')->unique()->sort()->values()->toArray();
+            $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, fn($date) =>
+                Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate)
+            ));
+            $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
+            $totalJbDaysForAverage = count($jbLessonDatesForAverage);
+
+            $jbGradesByDatePair = [];
+            foreach ($jbGradesRaw as $g) {
+                $effectiveGrade = $getEffectiveGrade($g);
+                if ($effectiveGrade !== null) {
+                    $jbGradesByDatePair[$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
+                }
+            }
+
+            $dailySum = 0;
+            foreach ($jbLessonDates as $date) {
+                $dayGrades = $jbGradesByDatePair[$date] ?? [];
+                $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                $gradeSum = array_sum($dayGrades);
+                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                    $dailySum += $dayAverage;
+                }
+            }
+            $jnAverage = $totalJbDaysForAverage > 0
+                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                : 0;
+
+            // MT (Mustaqil ta'lim)
+            $mtGradesRaw = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', 99)
+                ->whereNotNull('lesson_date')
+                ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                ->get();
+
+            $mtColumns = $mtGradesRaw->map(fn($g) => ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code])
+                ->unique(fn($item) => $item['date'] . '_' . $item['pair'])
+                ->sortBy('date')
+                ->values();
+
+            $mtPairsPerDay = [];
+            foreach ($mtColumns as $col) {
+                $mtPairsPerDay[$col['date']] = ($mtPairsPerDay[$col['date']] ?? 0) + 1;
+            }
+            $mtLessonDates = $mtColumns->pluck('date')->unique()->sort()->values()->toArray();
+            $totalMtDays = count($mtLessonDates);
+
+            $mtGradesByDatePair = [];
+            foreach ($mtGradesRaw as $g) {
+                $effectiveGrade = $getEffectiveGrade($g);
+                if ($effectiveGrade !== null) {
+                    $mtGradesByDatePair[$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
+                }
+            }
+
+            $mtDailySum = 0;
+            foreach ($mtLessonDates as $date) {
+                $dayGrades = $mtGradesByDatePair[$date] ?? [];
+                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                $mtDailySum += round(array_sum($dayGrades) / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+            }
+            $mtAverage = $totalMtDays > 0
+                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                : 0;
+
+            // Manual MT grade override
+            $manualMt = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', 99)
+                ->whereNull('lesson_date')
+                ->value('grade');
+            if ($manualMt !== null) {
+                $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
+            }
+
+            // ON, OSKI, Test (100, 101, 102)
+            $otherGradesRaw = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereIn('training_type_code', [100, 101, 102])
+                ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason')
+                ->get();
+
+            $otherGrades = ['on' => null, 'oski' => null, 'test' => null];
+            $otherByType = [];
+            foreach ($otherGradesRaw as $g) {
+                $effectiveGrade = $getEffectiveGrade($g);
+                if ($effectiveGrade !== null) {
+                    $otherByType[$g->training_type_code][] = $effectiveGrade;
+                }
+            }
+            if (!empty($otherByType[100])) $otherGrades['on'] = round(array_sum($otherByType[100]) / count($otherByType[100]), 0, PHP_ROUND_HALF_UP);
+            if (!empty($otherByType[101])) $otherGrades['oski'] = round(array_sum($otherByType[101]) / count($otherByType[101]), 0, PHP_ROUND_HALF_UP);
+            if (!empty($otherByType[102])) $otherGrades['test'] = round(array_sum($otherByType[102]) / count($otherByType[102]), 0, PHP_ROUND_HALF_UP);
+
+            // Attendance
+            $absentOff = DB::table('attendances')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                ->whereNotIn('training_type_code', [99, 100, 101, 102])
+                ->sum('absent_off');
+
+            $nonAuditoriumCodes = ['17'];
+            $auditoriumHours = 0;
+            if (is_array($cs->subject_details)) {
+                foreach ($cs->subject_details as $detail) {
+                    $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                    if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                        $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                    }
+                }
+            }
+            if ($auditoriumHours <= 0) {
+                $auditoriumHours = $cs->total_acload ?? 0;
+            }
+            $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
+
+            return [
+                'name' => $cs->subject_name,
+                'credit' => $cs->credit,
+                'subject_id' => $subjectId,
+                'jn_average' => $jnAverage,
+                'mt_average' => $mtAverage,
+                'on' => $otherGrades['on'],
+                'oski' => $otherGrades['oski'],
+                'test' => $otherGrades['test'],
+                'dav_percent' => $davomatPercent,
+                'absent_hours' => $absentOff,
+                'auditorium_hours' => $auditoriumHours,
+            ];
+        });
+
+        return response()->json([
+            'semester' => $student->semester_name,
+            'subjects' => $subjects->values(),
+        ]);
+    }
+
+    /**
+     * Grades detail for a specific subject
+     */
+    public function subjectGrades(Request $request, $subjectId): JsonResponse
+    {
+        $student = $request->user();
+        $semester = $student->semester_code;
+
+        $grades = StudentGrade::where('student_id', $student->id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semester)
+            ->orderBy('lesson_date', 'desc')
+            ->get()
+            ->map(fn($g) => [
+                'id' => $g->id,
+                'subject_name' => $g->subject_name,
+                'grade' => $g->grade,
+                'retake_grade' => $g->retake_grade,
+                'status' => $g->status,
+                'reason' => $g->reason,
+                'lesson_date' => $g->lesson_date,
+                'training_type_name' => $g->training_type_name,
+                'training_type_code' => $g->training_type_code,
+                'employee_name' => $g->employee_name,
+                'lesson_pair_name' => $g->lesson_pair_name,
+                'lesson_pair_start_time' => $g->lesson_pair_start_time,
+                'lesson_pair_end_time' => $g->lesson_pair_end_time,
+            ]);
+
+        return response()->json([
+            'subject_id' => $subjectId,
+            'grades' => $grades,
+        ]);
+    }
+
+    /**
+     * Pending/retake lessons
+     */
+    public function pendingLessons(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        $pendingLessons = StudentGrade::where('student_id', $student->id)
+            ->whereIn('status', ['pending', 'retake'])
+            ->orderBy('lesson_date')
+            ->get()
+            ->map(fn($g) => [
+                'id' => $g->id,
+                'subject_name' => $g->subject_name,
+                'grade' => $g->grade,
+                'retake_grade' => $g->retake_grade,
+                'status' => $g->status,
+                'reason' => $g->reason,
+                'lesson_date' => $g->lesson_date,
+                'training_type_name' => $g->training_type_name,
+                'employee_name' => $g->employee_name,
+                'deadline' => $g->deadline,
+            ]);
+
+        return response()->json([
+            'pending_lessons' => $pendingLessons,
+        ]);
+    }
+
+    /**
+     * Attendance records
+     */
+    public function attendance(Request $request): JsonResponse
+    {
+        $student = $request->user();
+        $semester = $student->semester_code;
+
+        $attendanceData = Attendance::where('student_hemis_id', $student->hemis_id)
+            ->where('semester_code', $semester)
+            ->orderBy('lesson_date', 'desc')
+            ->get()
+            ->map(fn($item) => [
+                'semester' => $item->semester_name,
+                'date' => Carbon::parse($item->lesson_date)->format('Y-m-d'),
+                'subject' => $item->subject_name,
+                'training_type' => $item->training_type_name,
+                'employee' => $item->employee_name,
+                'lesson_pair' => $item->lesson_pair_name,
+                'start_time' => $item->lesson_pair_start_time,
+                'end_time' => $item->lesson_pair_end_time,
+                'is_absent' => $item->absent_on > 0,
+                'hours' => $item->absent_on == 0 ? 2 : 0,
+            ]);
+
+        return response()->json([
+            'attendance' => $attendanceData,
+        ]);
+    }
+}

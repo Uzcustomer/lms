@@ -257,8 +257,10 @@ class StudentController extends Controller
         // MT deadline type setting
         $mtDeadlineType = Setting::get('mt_deadline_type', 'before_last');
 
-        // Fetch independents for this student's group
-        $allIndependents = Independent::where('group_hemis_id', $student->group_id)->get();
+        // Fetch independents for this student's group (only current semester)
+        $allIndependents = Independent::where('group_hemis_id', $student->group_id)
+            ->where('semester_code', $semesterCode)
+            ->get();
         // Index by subject_hemis_id (direct match with curriculum_subject_hemis_id)
         $independentsByHemisId = $allIndependents->groupBy('subject_hemis_id');
         // Also index by subject_name (fallback when hemis_ids differ across curricula)

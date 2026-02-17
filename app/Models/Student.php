@@ -94,6 +94,7 @@ class Student extends Authenticatable
     {
         return $this->studentGrades()
             ->where('subject_id', $subjectId)
+            ->where('semester_code', $this->semester_code)
             ->whereBetween('lesson_date', [$startDate, $endDate])
             ->avg('grade');
     }
@@ -172,6 +173,7 @@ class Student extends Authenticatable
     {
         $grades = $this->studentGrades()
             ->where('subject_id', $subjectId)
+            ->where('semester_code', $this->semester_code)
             ->where('training_type_code', "<>", 11)
             ->whereDate('lesson_date', $date)
             ->get();
@@ -234,6 +236,7 @@ class Student extends Authenticatable
         $grades = $this->studentGrades()
             ->where('training_type_code', "<>", 11)
             ->where('subject_id', $subjectId)
+            ->where('semester_code', $this->semester_code)
             ->get();
 
         $totalGrade = 0;

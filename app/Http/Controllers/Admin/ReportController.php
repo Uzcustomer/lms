@@ -533,6 +533,145 @@ class ReportController extends Controller
     /**
      * AJAX: Dars belgilash hisobot ma'lumotlarini hisoblash
      */
+    /**
+     * Dars belgilash hisoboti diagnostikasi — HEMIS bilan solishtirish
+     */
+    public function lessonAssignmentDiagnostic(Request $request)
+    {
+        $date = $request->get('date', now()->subDay()->format('Y-m-d'));
+        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+
+        // 1. Barcha schedulelar (shu sanadagi)
+        $schedules = DB::table('schedules as sch')
+            ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
+            ->join('semesters as sem', function ($join) {
+                $join->on('sem.code', '=', 'sch.semester_code')
+                    ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
+            })
+            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotNull('sch.lesson_date')
+            ->whereNull('sch.deleted_at')
+            ->where('sem.current', true)
+            ->whereRaw('DATE(sch.lesson_date) = ?', [$date])
+            ->select(
+                'sch.schedule_hemis_id',
+                'sch.employee_id',
+                'sch.employee_name',
+                'sch.subject_id',
+                'sch.subject_name',
+                'sch.group_id',
+                'sch.group_name',
+                'sch.training_type_code',
+                'sch.training_type_name',
+                'sch.lesson_date',
+                'sch.lesson_pair_code'
+            )
+            ->orderBy('sch.employee_name')
+            ->get();
+
+        $scheduleIds = $schedules->pluck('schedule_hemis_id')->toArray();
+
+        // 2. attendance_controls da bor schedule IDlar
+        $acRecords = DB::table('attendance_controls')
+            ->whereIn('subject_schedule_id', $scheduleIds)
+            ->select('subject_schedule_id', 'load', 'employee_name', 'group_name', 'subject_name', 'lesson_date')
+            ->get()
+            ->keyBy('subject_schedule_id');
+
+        // 3. student_grades da bor schedule IDlar
+        $gradeRecords = DB::table('student_grades')
+            ->whereIn('subject_schedule_id', $scheduleIds)
+            ->whereNotNull('grade')
+            ->where('grade', '>', 0)
+            ->select('subject_schedule_id')
+            ->distinct()
+            ->pluck('subject_schedule_id')
+            ->flip();
+
+        // 4. Natijalarni tayyorlash
+        $rows = [];
+        foreach ($schedules as $sch) {
+            $hasAC = isset($acRecords[$sch->schedule_hemis_id]);
+            $acLoad = $hasAC ? $acRecords[$sch->schedule_hemis_id]->load : null;
+            $hasGrade = isset($gradeRecords[$sch->schedule_hemis_id]);
+
+            $rows[] = [
+                'schedule_hemis_id' => $sch->schedule_hemis_id,
+                'employee_name' => $sch->employee_name,
+                'subject_name' => $sch->subject_name,
+                'group_name' => $sch->group_name,
+                'training_type' => $sch->training_type_code . ' (' . $sch->training_type_name . ')',
+                'lesson_pair' => $sch->lesson_pair_code,
+                'lesson_date' => $sch->lesson_date,
+                'ac_exists' => $hasAC ? 'HA' : 'YO\'Q',
+                'ac_load' => $acLoad,
+                'has_grade' => $hasGrade ? 'HA' : 'YO\'Q',
+            ];
+        }
+
+        // 5. Statistika
+        $total = count($rows);
+        $withAC = collect($rows)->where('ac_exists', 'HA')->count();
+        $withoutAC = $total - $withAC;
+        $acLoaded = collect($rows)->where('ac_load', '>', 0)->count();
+        $acNotLoaded = collect($rows)->where('ac_exists', 'HA')->where('ac_load', 0)->count();
+
+        // 6. Guruhlangan (employee+group+subject+date) holat
+        $grouped = [];
+        foreach ($rows as $r) {
+            $key = $r['employee_name'] . '|' . $r['group_name'] . '|' . $r['subject_name'];
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [
+                    'employee_name' => $r['employee_name'],
+                    'subject_name' => $r['subject_name'],
+                    'group_name' => $r['group_name'],
+                    'schedule_count' => 0,
+                    'ac_count' => 0,
+                    'no_ac_count' => 0,
+                    'loaded_count' => 0,
+                    'grade_count' => 0,
+                    'lms_says_attendance' => false,
+                    'lms_says_grade' => false,
+                    'hemis_monitors' => false,
+                ];
+            }
+            $grouped[$key]['schedule_count']++;
+            if ($r['ac_exists'] === 'HA') {
+                $grouped[$key]['ac_count']++;
+                $grouped[$key]['hemis_monitors'] = true;
+                if ($r['ac_load'] > 0) {
+                    $grouped[$key]['loaded_count']++;
+                    $grouped[$key]['lms_says_attendance'] = true;
+                }
+            } else {
+                $grouped[$key]['no_ac_count']++;
+            }
+            if ($r['has_grade'] === 'HA') {
+                $grouped[$key]['grade_count']++;
+                $grouped[$key]['lms_says_grade'] = true;
+            }
+        }
+
+        // LMS hisobotida "belgilanmagan" bo'lib, HEMIS da monitoring yozuvi yo'qlar
+        $falsePositives = collect($grouped)->filter(function ($g) {
+            return !$g['hemis_monitors'] && (!$g['lms_says_attendance'] || !$g['lms_says_grade']);
+        })->values();
+
+        return response()->json([
+            'date' => $date,
+            'summary' => [
+                'jami_schedulelar' => $total,
+                'attendance_controls_da_bor' => $withAC,
+                'attendance_controls_da_YOQ' => $withoutAC,
+                'ac_load_belgilangan' => $acLoaded,
+                'ac_load_belgilanMAGAN' => $acNotLoaded,
+            ],
+            'guruhlangan' => array_values($grouped),
+            'false_positives_hemis_da_yoq' => $falsePositives,
+            'batafsil_har_bir_schedule' => $rows,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
     public function lessonAssignmentData(Request $request)
     {
         // Dekan uchun fakultet majburiy filtr
@@ -609,14 +748,6 @@ class ReportController extends Controller
         if ($request->filled('date_to')) {
             $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
         }
-
-        // Faqat HEMIS darslar monitoringida mavjud bo'lgan jadvallarni ko'rsatish
-        // (attendance_controls jadvalida yozuvi bor bo'lgan darslar)
-        $scheduleQuery->whereExists(function ($query) {
-            $query->select(DB::raw(1))
-                ->from('attendance_controls')
-                ->whereColumn('attendance_controls.subject_schedule_id', 'sch.schedule_hemis_id');
-        });
 
         // Dars jadvalini olish (guruh bo'yicha aggregatsiya)
         $schedules = $scheduleQuery->select(

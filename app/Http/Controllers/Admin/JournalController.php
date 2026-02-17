@@ -1473,6 +1473,7 @@ class JournalController extends Controller
         $subjectId = $request->subject_id;
         $semesterCode = $request->semester_code;
         $grade = $request->grade;
+        $gradeComment = $request->input('grade_comment');
         $isRegrade = (bool) $request->input('regrade', false);
 
         // YN ga yuborilganligini tekshirish — qulflangan bo'lsa tahrirlash mumkin emas
@@ -1688,6 +1689,7 @@ class JournalController extends Controller
                 ->where('id', $existingGrade->id)
                 ->update([
                     'grade' => $grade,
+                    'grade_comment' => $gradeComment,
                     'updated_at' => $now,
                 ]);
         } elseif (!$existingGrade) {
@@ -1720,6 +1722,7 @@ class JournalController extends Controller
                 'lesson_pair_start_time' => '00:00',
                 'lesson_pair_end_time' => '00:00',
                 'grade' => $grade,
+                'grade_comment' => $gradeComment,
                 'lesson_date' => null,
                 'independent_id' => $matchedIndependentId,
                 'created_at_api' => $now,

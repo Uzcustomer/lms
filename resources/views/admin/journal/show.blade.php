@@ -1473,6 +1473,7 @@
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 140px;">Fayl</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 80px;">Baho</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 150px;">Izoh</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 160px;">Tarix</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 110px;">Amal</th>
                                     </tr>
@@ -1560,6 +1561,24 @@
                                                         data-student-id="{{ $student->hemis_id }}"
                                                         placeholder="0-100"
                                                         {{ $inputDisabled ? 'disabled' : '' }}>
+                                                @else
+                                                    <span style="color: #d1d5db;">—</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-1 py-1" id="mt-comment-{{ $student->hemis_id }}">
+                                                @if($hasFile)
+                                                    @if($isLockedPermanent)
+                                                        <span style="font-size: 12px; color: #6b7280; font-style: italic;">{{ $gradeRow->grade_comment ?? '' }}</span>
+                                                    @elseif($hasGrade && !$canRegrade)
+                                                        <span style="font-size: 12px; color: #6b7280; font-style: italic;">{{ $gradeRow->grade_comment ?? '' }}</span>
+                                                    @else
+                                                        <input type="text"
+                                                            id="mt-comment-input-{{ $student->hemis_id }}"
+                                                            style="width: 100%; padding: 3px 6px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; {{ $inputDisabled ? 'background: #f3f4f6; color: #6b7280;' : 'color: #111827;' }}"
+                                                            value="{{ $gradeRow->grade_comment ?? '' }}"
+                                                            placeholder="Ixtiyoriy"
+                                                            {{ $inputDisabled ? 'disabled' : '' }}>
+                                                    @endif
                                                 @else
                                                     <span style="color: #d1d5db;">—</span>
                                                 @endif
@@ -2415,6 +2434,8 @@
             if (isDekan) return;
             const input = document.getElementById('mt-grade-' + studentHemisId);
             const grade = input.value;
+            const commentInput = document.getElementById('mt-comment-input-' + studentHemisId);
+            const comment = commentInput ? commentInput.value : '';
 
             if (grade === '' || isNaN(grade) || grade < 0 || grade > 100) {
                 alert('Iltimos, 0 dan 100 gacha baho kiriting');
@@ -2438,6 +2459,7 @@
                     subject_id: mtGradeConfig.subjectId,
                     semester_code: mtGradeConfig.semesterCode,
                     grade: parseFloat(grade),
+                    grade_comment: comment,
                     regrade: isRegrade ? true : false
                 })
             })
@@ -2449,6 +2471,11 @@
                     input.disabled = true;
                     input.style.background = '#f3f4f6';
                     input.style.color = '#6b7280';
+                    // Lock the comment input - show as text
+                    const commentCell = document.getElementById('mt-comment-' + studentHemisId);
+                    if (commentCell) {
+                        commentCell.innerHTML = '<span style="font-size:12px;color:#6b7280;font-style:italic;">' + (comment || '') + '</span>';
+                    }
                     // Update history
                     if (data.history) {
                         updateMtHistoryCell(studentHemisId, data.history);
@@ -2505,6 +2532,12 @@
             input.style.color = '#111827';
             input.value = '';
             input.focus();
+
+            // Unlock comment input for regrade
+            const commentCell = document.getElementById('mt-comment-' + studentHemisId);
+            if (commentCell) {
+                commentCell.innerHTML = '<input type="text" id="mt-comment-input-' + studentHemisId + '" style="width:100%;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:4px;outline:none;color:#111827;" placeholder="Ixtiyoriy">';
+            }
 
             // Show save button for regrade
             actionCell.innerHTML =

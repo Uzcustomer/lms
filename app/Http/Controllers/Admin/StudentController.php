@@ -495,6 +495,7 @@ class StudentController extends Controller
             $subject = CurriculumSubject::findOrFail($request->subject);
 
             $teacher = StudentGrade::where('subject_id', $subject->subject_id)
+                ->where('semester_code', $semester->code)
                 ->whereNotNull('employee_name')
                 ->first();
 
@@ -542,6 +543,7 @@ class StudentController extends Controller
             if ($traning_type == 'joriy') {
                 $grades = StudentGrade::whereIn('student_hemis_id', $studentIds)
                     ->where('subject_id', $subject->subject_id)
+                    ->where('semester_code', $semester->code)
                     ->whereNotIn('training_type_code', config('app.training_type_code'))
                     ->whereBetween('lesson_date', [$startDate, $endDate])
                     ->get();

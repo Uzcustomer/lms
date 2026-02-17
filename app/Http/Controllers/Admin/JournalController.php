@@ -1362,11 +1362,6 @@ class JournalController extends Controller
                         || ($student->level_code != 16 && $gradeValue < $markingScore->minimum_limit);
 
                     if ($existingGrade) {
-                        // is_final=true baholarni o'tkazib yuborish (yakunlangan, o'zgarmaydi)
-                        if ($existingGrade->is_final) {
-                            continue;
-                        }
-
                         // Mavjud grade ni yangilash — retake_grade va lokal ma'lumotlarga tegmaslik
                         $updateData = [
                             'grade' => $gradeValue,

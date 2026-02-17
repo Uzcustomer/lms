@@ -188,6 +188,7 @@ class LectureScheduleGridExport implements WithEvents
 
     private function weekInRange(int $week, string $weeksStr, string $parity = ''): bool
     {
+        $maxSemesterWeek = 15;
         $weeksStr = trim($weeksStr);
         if (preg_match('/^(\d+)\s*-\s*(\d+)$/', $weeksStr, $m)) {
             return $week >= (int) $m[1] && $week <= (int) $m[2];
@@ -199,11 +200,11 @@ class LectureScheduleGridExport implements WithEvents
         if (is_numeric($weeksStr)) {
             $lessonCount = (int) $weeksStr;
             if ($parity === 'juft') {
-                $maxWeek = $lessonCount * 2;
+                $maxWeek = min($lessonCount * 2, $maxSemesterWeek);
             } elseif ($parity === 'toq') {
-                $maxWeek = $lessonCount * 2 - 1;
+                $maxWeek = min($lessonCount * 2 - 1, $maxSemesterWeek);
             } else {
-                $maxWeek = $lessonCount;
+                $maxWeek = min($lessonCount, $maxSemesterWeek);
             }
             return $week >= 1 && $week <= $maxWeek;
         }

@@ -354,6 +354,20 @@ class LectureScheduleController extends Controller
     }
 
     /**
+     * AJAX: O'quv reja bilan solishtirish
+     */
+    public function compareCurriculum(Request $request)
+    {
+        $batchId = $request->input('batch_id');
+        $batch = LectureScheduleBatch::findOrFail($batchId);
+
+        $service = new LectureScheduleConflictService();
+        $result = $service->compareWithCurriculum($batch);
+
+        return response()->json($result);
+    }
+
+    /**
      * AJAX: ichki konfliktlar
      */
     public function conflicts(Request $request)
@@ -476,14 +490,16 @@ class LectureScheduleController extends Controller
      *
      * weeks maydoni = darslar soni (semestr davomida necha marta dars bo'ladi).
      * Agar paritet berilgan bo'lsa, darslar faqat juft yoki toq haftalarda bo'ladi:
-     *   - darslar_soni=3, juft  → 2, 4, 6 haftalar (max_week = 3*2 = 6)
-     *   - darslar_soni=3, toq   → 1, 3, 5 haftalar (max_week = 3*2 - 1 = 5)
+     *   - darslar_soni=3, juft  → 2, 4, 6 haftalar (max_week = min(3*2, 15) = 6)
+     *   - darslar_soni=3, toq   → 1, 3, 5 haftalar (max_week = min(3*2-1, 15) = 5)
+     *   - darslar_soni=15, toq  → 1, 3, 5,...,15    (max_week = min(29, 15) = 15)
      *   - darslar_soni=6, bo'sh → 1..6 haftalar     (max_week = 6)
      *
      * Formatlar: "1-8", "1,3,5,7", yoki bitta raqam "6" (darslar soni)
      */
     private function weekInRange(int $week, string $weeksStr, string $parity = ''): bool
     {
+        $maxSemesterWeek = 15; // Semestr maksimal hafta soni
         $weeksStr = trim($weeksStr);
 
         // "1-8" formatida oraliq
@@ -498,18 +514,15 @@ class LectureScheduleController extends Controller
         }
 
         // Bitta raqam = darslar soni
-        // Paritetga qarab haqiqiy oxirgi haftani hisoblash
+        // Paritetga qarab haqiqiy oxirgi haftani hisoblash, lekin semestrdan oshmasin
         if (is_numeric($weeksStr)) {
             $lessonCount = (int) $weeksStr;
             if ($parity === 'juft') {
-                // N ta juft hafta: 2, 4, 6, ... → oxirgi hafta = N * 2
-                $maxWeek = $lessonCount * 2;
+                $maxWeek = min($lessonCount * 2, $maxSemesterWeek);
             } elseif ($parity === 'toq') {
-                // N ta toq hafta: 1, 3, 5, ... → oxirgi hafta = N * 2 - 1
-                $maxWeek = $lessonCount * 2 - 1;
+                $maxWeek = min($lessonCount * 2 - 1, $maxSemesterWeek);
             } else {
-                // Har hafta: 1, 2, 3, ... → oxirgi hafta = N
-                $maxWeek = $lessonCount;
+                $maxWeek = min($lessonCount, $maxSemesterWeek);
             }
             return $week >= 1 && $week <= $maxWeek;
         }

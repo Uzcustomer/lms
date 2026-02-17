@@ -280,6 +280,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/sababli-check', [ReportController::class, 'sababliCheckReport'])->name('reports.sababli-check');
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');
 
+        Route::get('/reports/top-students', [ReportController::class, 'topStudents'])->name('reports.top-students');
+
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
         Route::get('/lessons/create', [LessonController::class, 'index'])->name('lessons.create');
@@ -353,6 +355,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/import', [LectureScheduleController::class, 'import'])->name('import');
             Route::get('/data', [LectureScheduleController::class, 'data'])->name('data');
             Route::get('/compare', [LectureScheduleController::class, 'compare'])->name('compare');
+            Route::get('/compare-curriculum', [LectureScheduleController::class, 'compareCurriculum'])->name('compare-curriculum');
             Route::get('/conflicts', [LectureScheduleController::class, 'conflicts'])->name('conflicts');
             Route::post('/move', [LectureScheduleController::class, 'move'])->name('move');
             Route::post('/store', [LectureScheduleController::class, 'store'])->name('store');
@@ -621,6 +624,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/import', [LectureScheduleController::class, 'import'])->name('import');
             Route::get('/data', [LectureScheduleController::class, 'data'])->name('data');
             Route::get('/compare', [LectureScheduleController::class, 'compare'])->name('compare');
+            Route::get('/compare-curriculum', [LectureScheduleController::class, 'compareCurriculum'])->name('compare-curriculum');
             Route::get('/conflicts', [LectureScheduleController::class, 'conflicts'])->name('conflicts');
             Route::post('/move', [LectureScheduleController::class, 'move'])->name('move');
             Route::post('/store', [LectureScheduleController::class, 'store'])->name('store');

@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('import:attendance-controls')->dailyAt('02:00');
 Schedule::command('command:independent-auto-create')->dailyAt('06:00');
+Schedule::command('notify:teachers-attendance')->dailyAt('21:00');

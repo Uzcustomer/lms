@@ -39,6 +39,7 @@ class StudentGrade extends Model
         'lesson_pair_start_time',
         'lesson_pair_end_time',
         'grade',
+        'grade_comment',
         'lesson_date',
         'created_at_api',
         'reason',

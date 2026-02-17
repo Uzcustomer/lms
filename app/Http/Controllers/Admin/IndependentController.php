@@ -235,7 +235,8 @@ class IndependentController extends Controller
                         'students.id',
                         'students.full_name',
                         'students.hemis_id',
-                        DB::raw('COALESCE(student_grades.grade, "") as grade'), // Agar grade bo'lmasa, 0 qaytadi
+                        DB::raw('COALESCE(student_grades.grade, "") as grade'),
+                        'student_grades.grade_comment',
                     )
                     ->where('students.group_id', $independent->group_hemis_id)
                     ->get();
@@ -248,7 +249,8 @@ class IndependentController extends Controller
                     'students.id',
                     'students.full_name',
                     'students.hemis_id',
-                    DB::raw('COALESCE(student_grades.grade, "") as grade'), // Agar grade bo'lmasa, 0 qaytadi
+                    DB::raw('COALESCE(student_grades.grade, "") as grade'),
+                    'student_grades.grade_comment',
                 )
                 ->where('students.group_id', $independent->group_hemis_id)
                 ->get();
@@ -291,7 +293,8 @@ class IndependentController extends Controller
                         'students.id',
                         'students.full_name',
                         'students.hemis_id',
-                        DB::raw('COALESCE(student_grades.grade, "") as grade'), // Agar grade bo'lmasa, 0 qaytadi
+                        DB::raw('COALESCE(student_grades.grade, "") as grade'),
+                        'student_grades.grade_comment',
                     )
                     ->where('students.group_id', $independent->group_hemis_id)
                     ->get();
@@ -304,7 +307,8 @@ class IndependentController extends Controller
                     'students.id',
                     'students.full_name',
                     'students.hemis_id',
-                    DB::raw('COALESCE(student_grades.grade, "") as grade'), // Agar grade bo'lmasa, 0 qaytadi
+                    DB::raw('COALESCE(student_grades.grade, "") as grade'),
+                    'student_grades.grade_comment',
                 )
                 ->where('students.group_id', $independent->group_hemis_id)
                 ->get();
@@ -351,6 +355,7 @@ class IndependentController extends Controller
                 'students.full_name',
                 'students.hemis_id',
                 DB::raw('COALESCE(student_grades.grade, "") as grade'),
+                'student_grades.grade_comment',
             )
             ->where('students.group_id', $independent->group_hemis_id)
             ->get();
@@ -386,6 +391,7 @@ class IndependentController extends Controller
             $independent->status = 1;
             $independent->grade_teacher = $request->user()->short_name ?? $request->user()->name;
             $independent->save();
+            $comments = $request->izoh ?? [];
             foreach ($request->baho as $key => $baho) {
                 $student = Student::find($key);
 
@@ -423,6 +429,7 @@ class IndependentController extends Controller
                     'reason' => 'teacher_victim',
                     'status' => 'recorded',
                     'grade' => $baho,
+                    'grade_comment' => $comments[$key] ?? null,
                     'deadline' => now(),
                 ]);
             }

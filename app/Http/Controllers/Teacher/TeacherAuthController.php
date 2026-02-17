@@ -62,6 +62,15 @@ class TeacherAuthController extends Controller
             ]);
 
             $request->session()->regenerate();
+
+            // Default active_role ni o'rnatish: oqituvchi roli bo'lsa shu, bo'lmasa birinchi rol
+            $roles = $teacher->getRoleNames()->toArray();
+            if (in_array('oqituvchi', $roles)) {
+                session(['active_role' => 'oqituvchi']);
+            } elseif (count($roles) > 0) {
+                session(['active_role' => $roles[0]]);
+            }
+
             ActivityLogService::logLogin('teacher');
 
             if ($teacher->must_change_password) {

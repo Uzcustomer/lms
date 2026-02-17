@@ -956,7 +956,7 @@ class ReportController extends Controller
 
         foreach ($pageData as $i => &$item) {
             $item['row_num'] = $offset + $i + 1;
-            unset($item['schedule_ids'], $item['schedule_count'], $item['attendance_count'], $item['grade_count']);
+            unset($item['schedule_ids']);
         }
         unset($item);
 

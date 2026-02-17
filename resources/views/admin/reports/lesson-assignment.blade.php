@@ -151,6 +151,8 @@
                                         <th><a href="#" class="sort-link" data-sort="department_name">Kafedra <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="training_type">Mashg'ulot turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="lesson_pair_time">Juftlik vaqti <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="student_count">Talaba soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="has_attendance">Davomat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="has_grades">Baho <span class="sort-icon">&#9650;&#9660;</span></a></th>
@@ -341,6 +343,8 @@
                 html += '<td><span class="text-cell" style="color:#92400e;">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td><span class="badge badge-training">' + esc(r.training_type) + '</span></td>';
+                html += '<td><span class="badge badge-pair">' + esc(r.lesson_pair_time) + '</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.student_count + '</td>';
                 html += '<td style="text-align:center;">' + statusBadge(r.has_attendance) + '</td>';
                 html += '<td style="text-align:center;">' + statusBadge(r.has_grades) + '</td>';
@@ -506,6 +510,8 @@
         .badge-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #99f6e4; white-space: nowrap; }
         .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
         .badge-date { background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; white-space: nowrap; font-weight: 500; }
+        .badge-training { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; white-space: nowrap; }
+        .badge-pair { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
         .badge-status-yes { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 4px 12px; font-size: 12px; font-weight: 700; }
         .badge-status-no { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 12px; font-size: 12px; font-weight: 700; }

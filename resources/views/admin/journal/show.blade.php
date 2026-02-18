@@ -1322,7 +1322,8 @@
                                                                 $origVal = round($gradeData['original_grade'], 0);
                                                                 $retakeVal = round($gradeData['retake_grade'], 0);
                                                             @endphp
-                                                            <div class="split-cell" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}">
+                                                            <div class="split-cell @if($canRateAdmin) cursor-pointer hover:bg-red-50 @endif" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $canRateAdmin ? ' — bosib o\'chirish' : '' }}"
+                                                                @if($canRateAdmin) onclick="deleteRetakeGrade(this, {{ $gradeData['id'] }})" @endif>
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -1351,7 +1352,8 @@
                                                         @elseif($hasRetake)
                                                             {{-- NB + otrabotka qilgan: diagonal split --}}
                                                             @php $retakeVal = round($absenceData['retake_grade'], 0); @endphp
-                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}">
+                                                            <div class="split-cell @if($canRateAdmin) cursor-pointer hover:bg-red-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ $canRateAdmin ? ' — bosib o\'chirish' : '' }}"
+                                                                @if($canRateAdmin) onclick="deleteRetakeGrade(this, {{ $gradeRecordId }})" @endif>
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -2997,6 +2999,42 @@
                 alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
                 cellDiv.innerHTML = originalContent;
                 currentEditingCell = null;
+            });
+        }
+
+        function deleteRetakeGrade(cellDiv, gradeId) {
+            if (!confirm('Retake bahosini o\'chirib, NB holatiga qaytarishni xohlaysizmi?')) {
+                return;
+            }
+
+            const originalContent = cellDiv.innerHTML;
+            cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
+
+            fetch('{{ route("admin.journal.delete-retake-grade") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    grade_id: gradeId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Sahifani yangilash — NB holati to'g'ri ko'rinishi uchun
+                    location.reload();
+                } else {
+                    alert('Xatolik: ' + (data.message || 'O\'chirilmadi'));
+                    cellDiv.innerHTML = originalContent;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
+                cellDiv.innerHTML = originalContent;
             });
         }
     </script>

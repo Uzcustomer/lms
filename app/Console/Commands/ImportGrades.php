@@ -57,6 +57,19 @@ class ImportGrades extends Command
         Log::info('[LiveImport] Starting live import at ' . Carbon::now());
 
         $today = Carbon::today();
+
+        // Agar bugungi baholar allaqachon yakunlangan (is_final=true) bo'lsa, import qilmaslik
+        $alreadyFinalized = StudentGrade::where('lesson_date', '>=', $today->copy()->startOfDay())
+            ->where('lesson_date', '<=', $today->copy()->endOfDay())
+            ->where('is_final', true)
+            ->exists();
+
+        if ($alreadyFinalized) {
+            $this->info("Live import: bugungi baholar allaqachon yakunlangan (is_final=true), o'tkazib yuborildi.");
+            Log::info("[LiveImport] Today's grades already finalized, skipping.");
+            return;
+        }
+
         $from = $today->copy()->startOfDay()->timestamp;
         $to = Carbon::now()->timestamp;
 
@@ -294,20 +307,43 @@ class ImportGrades extends Command
         $dateEnd = $date->copy()->endOfDay();
 
         $gradeCount = 0;
+        $skippedCount = 0;
         $softDeletedCount = 0;
 
-        DB::transaction(function () use ($gradeItems, $dateStart, $dateEnd, $isFinal, &$gradeCount, &$softDeletedCount) {
-            // Bugungi is_final=false baholarni soft delete
-            $softDeletedCount = StudentGrade::where('lesson_date', '>=', $dateStart)
-                ->where('lesson_date', '<=', $dateEnd)
-                ->where('is_final', false)
-                ->delete(); // SoftDeletes trait tufayli bu soft delete
+        // Faqat kutilgan sanaga mos yozuvlarni filtrlash
+        $filteredItems = array_filter($gradeItems, function ($item) use ($date, &$skippedCount) {
+            $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
+            if (!$lessonDate->isSameDay($date)) {
+                $skippedCount++;
+                return false;
+            }
+            return true;
+        });
+
+        if ($skippedCount > 0) {
+            $this->warn("Skipped {$skippedCount} records with mismatched lesson_date (expected {$date->toDateString()})");
+            Log::warning("[ApplyGrades] Skipped {$skippedCount} records with lesson_date != {$date->toDateString()}");
+        }
+
+        DB::transaction(function () use ($filteredItems, $dateStart, $dateEnd, $isFinal, &$gradeCount, &$softDeletedCount) {
+            $query = StudentGrade::where('lesson_date', '>=', $dateStart)
+                ->where('lesson_date', '<=', $dateEnd);
+
+            if ($isFinal) {
+                // Final/Backfill: BARCHA eski yozuvlarni o'chirish (is_final=true va false)
+                // Bu backfill'ni qayta ishlatishda duplicate yaratmaslikni ta'minlaydi
+                $softDeletedCount = $query->delete();
+            } else {
+                // Live import: faqat is_final=false yozuvlarni o'chirish
+                // is_final=true (yakunlangan) baholar saqlanib qoladi
+                $softDeletedCount = $query->where('is_final', false)->delete();
+            }
 
             $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
             Log::info("[ApplyGrades] Soft deleted {$softDeletedCount} grades for {$dateStart->toDateString()}");
 
             // Yangi baholarni yozish
-            foreach ($gradeItems as $item) {
+            foreach ($filteredItems as $item) {
                 $this->processGrade($item, $isFinal);
                 $gradeCount++;
             }
@@ -451,7 +487,8 @@ class ImportGrades extends Command
     {
         $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
 
-        $existingGrade = StudentGrade::where([
+        // withTrashed() — soft-deleted yozuvlarni ham tekshirish (duplicate yaratmaslik uchun)
+        $existingGrade = StudentGrade::withTrashed()->where([
             'student_id' => $student->id,
             'subject_name' => $item['subject']['name'],
             'lesson_date' => $lessonDate,

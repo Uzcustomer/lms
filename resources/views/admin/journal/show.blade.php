@@ -942,7 +942,9 @@
                             $isOqituvchi = is_active_oqituvchi();
                             $missedDatesLookup = array_flip($missedDates ?? []);
                             $activeOpenedDatesLookup = array_flip($activeOpenedDates ?? []);
-                            $teacherEditableDates = array_slice($jbLessonDates, -($lessonOpeningDays ?? 3));
+                            $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
+                            $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
+                            $teacherEditableDates = $teacherCanEdit ? array_slice($jbLessonDates, -$teacherEditDays) : [];
                             $teacherEditableDatesLookup = array_flip($teacherEditableDates);
                             $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
                                 return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);

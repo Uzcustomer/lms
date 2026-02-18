@@ -965,6 +965,9 @@ class JournalController extends Controller
             : null;
         $minimumLimit = $markingScore ? $markingScore->minimum_limit : 60;
 
+        // Kurs darajasi bo'yicha deadline sozlamalari (o'qituvchi edit huquqi)
+        $levelDeadline = $levelCode ? Deadline::where('level_code', $levelCode)->first() : null;
+
         // YN rozilik va yuborish ma'lumotlari
         $ynConsents = YnConsent::where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
@@ -1042,7 +1045,8 @@ class JournalController extends Controller
             'minimumLimit',
             'ynConsents',
             'ynSubmission',
-            'canSubmitYn'
+            'canSubmitYn',
+            'levelDeadline'
         ));
     }
 
@@ -1897,11 +1901,25 @@ class JournalController extends Controller
                 return response()->json(['success' => false, 'message' => 'Baho yozuvi topilmadi: id=' . $gradeId], 404);
             }
 
-            // O'qituvchi uchun: faqat oxirgi N kunlik darslarga ruxsat
+            // O'qituvchi uchun: Deadline sozlamasiga bog'langan ruxsat
             if ($isTeacher && !$isAdmin) {
-                $lessonOpeningDays = (int) Setting::get('lesson_opening_days', 3);
+                // Talaba orqali semester va level_code ni aniqlash
                 $student = DB::table('students')->where('hemis_id', $studentGrade->student_hemis_id)->first();
                 $groupHemisId = $student?->group_hemis_id;
+
+                $semesterLevelCode = DB::table('semesters')
+                    ->where('code', $studentGrade->semester_code)
+                    ->value('level_code');
+
+                $levelDeadline = $semesterLevelCode
+                    ? Deadline::where('level_code', $semesterLevelCode)->first()
+                    : null;
+
+                if (!$levelDeadline || !$levelDeadline->retake_by_oqituvchi) {
+                    return response()->json(['success' => false, 'message' => 'Bu kurs darajasida o\'qituvchiga baho qo\'yish ruxsati yo\'q.'], 403);
+                }
+
+                $editDays = $levelDeadline->deadline_days;
 
                 $lastNDates = DB::table('schedules')
                     ->where('group_id', $groupHemisId)
@@ -1915,11 +1933,11 @@ class JournalController extends Controller
                     ->pluck('lesson_date')
                     ->toArray();
 
-                $lastNDates = array_slice($lastNDates, -$lessonOpeningDays);
+                $lastNDates = array_slice($lastNDates, -$editDays);
                 $gradeDateStr = \Carbon\Carbon::parse($studentGrade->lesson_date)->format('Y-m-d');
 
                 if (!in_array($gradeDateStr, $lastNDates)) {
-                    return response()->json(['success' => false, 'message' => "O'qituvchi faqat oxirgi {$lessonOpeningDays} kunlik darslarga baho qo'ya oladi."], 403);
+                    return response()->json(['success' => false, 'message' => "O'qituvchi faqat oxirgi {$editDays} kunlik darslarga baho qo'ya oladi."], 403);
                 }
             }
 
@@ -2041,11 +2059,24 @@ class JournalController extends Controller
             $semesterCode = $request->semester_code;
             $enteredGrade = $request->grade;
 
-            // O'qituvchi uchun: faqat oxirgi N kunlik darslarga ruxsat
+            // O'qituvchi uchun: Deadline sozlamasiga bog'langan ruxsat
             if ($isTeacher && !$isAdmin) {
-                $lessonOpeningDays = (int) Setting::get('lesson_opening_days', 3);
                 $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
                 $groupHemisId = $student?->group_hemis_id;
+
+                $semesterLevelCode = DB::table('semesters')
+                    ->where('code', $semesterCode)
+                    ->value('level_code');
+
+                $levelDeadline = $semesterLevelCode
+                    ? Deadline::where('level_code', $semesterLevelCode)->first()
+                    : null;
+
+                if (!$levelDeadline || !$levelDeadline->retake_by_oqituvchi) {
+                    return response()->json(['success' => false, 'message' => 'Bu kurs darajasida o\'qituvchiga baho qo\'yish ruxsati yo\'q.'], 403);
+                }
+
+                $editDays = $levelDeadline->deadline_days;
 
                 $lastNDates = DB::table('schedules')
                     ->where('group_id', $groupHemisId)
@@ -2059,11 +2090,11 @@ class JournalController extends Controller
                     ->pluck('lesson_date')
                     ->toArray();
 
-                $lastNDates = array_slice($lastNDates, -$lessonOpeningDays);
+                $lastNDates = array_slice($lastNDates, -$editDays);
                 $gradeDateStr = \Carbon\Carbon::parse($lessonDate)->format('Y-m-d');
 
                 if (!in_array($gradeDateStr, $lastNDates)) {
-                    return response()->json(['success' => false, 'message' => "O'qituvchi faqat oxirgi {$lessonOpeningDays} kunlik darslarga baho qo'ya oladi."], 403);
+                    return response()->json(['success' => false, 'message' => "O'qituvchi faqat oxirgi {$editDays} kunlik darslarga baho qo'ya oladi."], 403);
                 }
             }
 

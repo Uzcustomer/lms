@@ -953,6 +953,19 @@
                             $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
                             $totalJbDaysForAverage = count($jbLessonDatesForAverage);
                         @endphp
+                        {{-- DEBUG: O'qituvchi edit sozlamalari --}}
+                        @if($isOqituvchi)
+                        <div class="bg-yellow-50 border border-yellow-300 p-2 mb-2 rounded text-xs">
+                            <strong>DEBUG (o'chiriladi):</strong>
+                            levelDeadline: {{ $levelDeadline ? 'bor (id='.$levelDeadline->id.')' : 'NULL' }} |
+                            retake_by_oqituvchi: {{ ($levelDeadline->retake_by_oqituvchi ?? 'null') }} |
+                            teacherCanEdit: {{ $teacherCanEdit ? 'true' : 'false' }} |
+                            teacherEditDays: {{ $teacherEditDays }} |
+                            teacherEditableDates: {{ json_encode($teacherEditableDates) }} |
+                            jbLessonDates count: {{ count($jbLessonDates) }} |
+                            jbLessonDates[0]: {{ $jbLessonDates[0] ?? 'N/A' }}
+                        </div>
+                        @endif
                         <!-- Compact View (Ixcham) -->
                         <div id="jb-compact-view" class="overflow-x-auto">
                             <table class="journal-table border-collapse text-xs">

@@ -164,7 +164,15 @@ class ImpersonateController extends Controller
             'impersonated_name' => $teacher->full_name,
             'impersonator_active_role' => session('active_role'),
         ]);
-        session()->forget('active_role');
+
+        // O'qituvchi uchun active_role o'rnatish (oqituvchi rolini afzal ko'rish)
+        $teacherRoles = $teacher->getRoleNames()->toArray();
+        $defaultRole = in_array('oqituvchi', $teacherRoles) ? 'oqituvchi' : ($teacherRoles[0] ?? null);
+        if ($defaultRole) {
+            session(['active_role' => $defaultRole]);
+        } else {
+            session()->forget('active_role');
+        }
 
         Auth::guard($currentGuard)->logout();
         Auth::guard('teacher')->login($teacher);

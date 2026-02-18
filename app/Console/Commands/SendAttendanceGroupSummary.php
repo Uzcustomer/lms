@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 
 class SendAttendanceGroupSummary extends Command
 {
-    protected $signature = 'teachers:send-group-summary';
+    protected $signature = 'teachers:send-group-summary {--chat-id= : Test uchun shaxsiy Telegram chat_id}';
 
     protected $description = 'Davomat olmagan yoki baho qo\'ymagan o\'qituvchilar haqida Telegram guruhga jadval ko\'rinishida hisobot yuborish';
 
@@ -167,10 +167,16 @@ class SendAttendanceGroupSummary extends Command
             return strcasecmp($a['department_name'] . $a['employee_name'], $b['department_name'] . $b['employee_name']);
         });
 
+        // Chat ID: --chat-id parametri yoki config dan
+        $groupChatId = $this->option('chat-id') ?: config('services.telegram.attendance_group_id');
+
+        if ($this->option('chat-id')) {
+            $this->info("TEST rejim: xabar {$groupChatId} ga yuboriladi");
+        }
+
         if (empty($results)) {
             $this->info("Barcha o'qituvchilar davomat va baholarni kiritgan. Jami darslar: {$totalSchedules}");
 
-            $groupChatId = config('services.telegram.attendance_group_id');
             if ($groupChatId) {
                 $summaryText = $this->buildSummaryText($todayStr, $now, $totalSchedules, [], 0, 0);
                 $telegram->sendToUser($groupChatId, $summaryText);
@@ -195,9 +201,8 @@ class SendAttendanceGroupSummary extends Command
             }
         }
 
-        $groupChatId = config('services.telegram.attendance_group_id');
         if (!$groupChatId) {
-            $this->error('TELEGRAM_ATTENDANCE_GROUP_ID sozlanmagan. .env fayliga qo\'shing.');
+            $this->error('TELEGRAM_ATTENDANCE_GROUP_ID sozlanmagan yoki --chat-id bering.');
             return 1;
         }
 

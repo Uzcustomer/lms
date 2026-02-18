@@ -43,6 +43,7 @@ return [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),
         'chat_id' => env('TELEGRAM_CHAT_ID'),
+        'attendance_group_id' => env('TELEGRAM_ATTENDANCE_GROUP_ID'),
     ],
 
     'moodle' => [

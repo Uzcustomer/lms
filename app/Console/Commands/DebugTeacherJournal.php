@@ -3,18 +3,27 @@
 namespace App\Console\Commands;
 
 use App\Models\CurriculumSubjectTeacher;
+use App\Models\Teacher;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 class DebugTeacherJournal extends Command
 {
-    protected $signature = 'debug:teacher-journal {employee_hemis_id} {--group-name= : Qidirilayotgan guruh nomi (masalan: 21-09)}';
+    protected $signature = 'debug:teacher-journal
+                            {search : O\'qituvchi nomi, teachers.id yoki hemis_id}
+                            {--group-name=21-09 : Qidirilayotgan guruh nomi (masalan: 21-09)}';
     protected $description = 'O\'qituvchiga biriktirilgan guruhlarni tashxislash - jurnal ko\'rinmasligi sababini aniqlash';
 
     public function handle()
     {
-        $employeeHemisId = (int) $this->argument('employee_hemis_id');
-        $groupNameSearch = $this->option('group-name') ?? '21-09';
+        $search = $this->argument('search');
+        $groupNameSearch = $this->option('group-name');
+
+        // O'qituvchini topish: ism, id yoki hemis_id bo'yicha
+        $employeeHemisId = $this->resolveTeacher($search);
+        if (!$employeeHemisId) {
+            return 1;
+        }
 
         $this->newLine();
         $this->info("╔══════════════════════════════════════════════════════════════╗");
@@ -97,6 +106,9 @@ class DebugTeacherJournal extends Command
 
         $this->line("  Dars jadvali kombinatsiyalari: {$teacherCombos->count()} ta");
 
+        $scheduleGroupIds = [];
+        $scheduleSubjectIds = [];
+
         if ($teacherCombos->isNotEmpty()) {
             $scheduleTable = $teacherCombos->map(fn($c) => [
                 $c->subject_id,
@@ -122,9 +134,6 @@ class DebugTeacherJournal extends Command
 
             $statsByCombo = $allStats->groupBy(fn($item) => $item->subject_id . '-' . $item->group_id);
             $comboKeys = $teacherCombos->map(fn($c) => $c->subject_id . '-' . $c->group_id)->toArray();
-
-            $scheduleGroupIds = [];
-            $scheduleSubjectIds = [];
 
             $this->newLine();
             $this->info("  Primary o'qituvchi tekshiruvi:");
@@ -158,20 +167,18 @@ class DebugTeacherJournal extends Command
             }
         } else {
             $this->warn("  ⚠ schedules da bu o'qituvchi uchun dars TOPILMADI");
-            $scheduleGroupIds = [];
-            $scheduleSubjectIds = [];
         }
 
         // ═══════════════════════════════════════════════════
         // YAKUNIY NATIJA
         // ═══════════════════════════════════════════════════
-        $finalSubjectIds = array_values(array_unique(array_merge($subjectIdsFromCst, $scheduleSubjectIds ?? [])));
-        $finalGroupIds = array_values(array_unique(array_merge($groupIdsFromCst, $scheduleGroupIds ?? [])));
+        $finalSubjectIds = array_values(array_unique(array_merge($subjectIdsFromCst, $scheduleSubjectIds)));
+        $finalGroupIds = array_values(array_unique(array_merge($groupIdsFromCst, $scheduleGroupIds)));
 
         $this->newLine(2);
         $this->info("━━━ YAKUNIY BIRLASHTIRILGAN NATIJA ━━━");
-        $this->line("  subject_ids: " . json_encode($finalSubjectIds) . " ({" . count($finalSubjectIds) . "} ta)");
-        $this->line("  group_ids:   " . json_encode($finalGroupIds) . " ({" . count($finalGroupIds) . "} ta)");
+        $this->line("  subject_ids: " . json_encode($finalSubjectIds) . " (" . count($finalSubjectIds) . " ta)");
+        $this->line("  group_ids:   " . json_encode($finalGroupIds) . " (" . count($finalGroupIds) . " ta)");
 
         // Groups jadvalidan mos guruhlar
         if (!empty($finalGroupIds)) {
@@ -232,6 +239,8 @@ class DebugTeacherJournal extends Command
                         $gidStatus = is_null($c->group_id) ? '⚠ NULL' : $c->group_id;
                         $this->line("       • [{$c->id}] {$c->subject_name} | group_id={$gidStatus} | {$c->training_type_name}");
                     }
+                } else {
+                    $this->line("     CST da curriculum_id={$tg->curriculum_hemis_id} orqali: topilmadi");
                 }
 
                 // schedules da shu guruh bilan dars bormi?
@@ -243,6 +252,26 @@ class DebugTeacherJournal extends Command
                     ->selectRaw('COUNT(*) as cnt')
                     ->value('cnt');
                 $this->line("     Schedules da dars soni: {$schedulesForGroup}");
+
+                if ($schedulesForGroup > 0) {
+                    // Boshqa o'qituvchilar ham shu guruhda dars o'tadimi?
+                    $otherTeachers = DB::table('schedules')
+                        ->where('group_id', $tg->group_hemis_id)
+                        ->where('education_year_current', true)
+                        ->whereNull('deleted_at')
+                        ->select('employee_id')
+                        ->selectRaw('COUNT(*) as cnt')
+                        ->groupBy('employee_id')
+                        ->orderByDesc('cnt')
+                        ->get();
+                    if ($otherTeachers->count() > 1) {
+                        $this->line("     Shu guruhdagi barcha o'qituvchilar:");
+                        foreach ($otherTeachers as $ot) {
+                            $youMarker = $ot->employee_id == $employeeHemisId ? ' ← SIZ' : '';
+                            $this->line("       • employee_id={$ot->employee_id}, dars_soni={$ot->cnt}{$youMarker}");
+                        }
+                    }
+                }
 
                 // Semestr bormi?
                 $currentSemester = DB::table('semesters')
@@ -309,5 +338,75 @@ class DebugTeacherJournal extends Command
         $this->newLine();
 
         return 0;
+    }
+
+    /**
+     * O'qituvchini ism, teachers.id yoki hemis_id bo'yicha topish
+     */
+    private function resolveTeacher(string $search): ?int
+    {
+        // 1. Agar son bo'lsa - avval teachers.id, keyin hemis_id sifatida qidirish
+        if (is_numeric($search)) {
+            $numericId = (int) $search;
+
+            // teachers.id bo'yicha
+            $teacher = Teacher::find($numericId);
+            if ($teacher) {
+                $this->info("  O'qituvchi topildi (teachers.id={$numericId}):");
+                $this->line("    Ism:      {$teacher->name}");
+                $this->line("    HEMIS ID: {$teacher->hemis_id}");
+                $this->line("    Login:    {$teacher->login}");
+                return (int) $teacher->hemis_id;
+            }
+
+            // hemis_id bo'yicha
+            $teacher = Teacher::where('hemis_id', $numericId)->first();
+            if ($teacher) {
+                $this->info("  O'qituvchi topildi (hemis_id={$numericId}):");
+                $this->line("    Ism:      {$teacher->name}");
+                $this->line("    ID:       {$teacher->id}");
+                $this->line("    Login:    {$teacher->login}");
+                return (int) $teacher->hemis_id;
+            }
+
+            $this->error("  ❌ ID={$numericId} bo'yicha o'qituvchi topilmadi (teachers.id ham, hemis_id ham)");
+            return null;
+        }
+
+        // 2. Ism bo'yicha qidirish
+        $teachers = Teacher::where('name', 'like', "%{$search}%")->limit(10)->get();
+
+        if ($teachers->isEmpty()) {
+            $this->error("  ❌ '{$search}' nomli o'qituvchi topilmadi");
+            return null;
+        }
+
+        if ($teachers->count() === 1) {
+            $teacher = $teachers->first();
+            $this->info("  O'qituvchi topildi:");
+            $this->line("    Ism:      {$teacher->name}");
+            $this->line("    ID:       {$teacher->id}");
+            $this->line("    HEMIS ID: {$teacher->hemis_id}");
+            return (int) $teacher->hemis_id;
+        }
+
+        // Bir nechta topilsa — ro'yxat ko'rsatish
+        $this->warn("  '{$search}' bo'yicha {$teachers->count()} ta o'qituvchi topildi:");
+        $tableData = $teachers->map(fn($t) => [
+            $t->id,
+            $t->hemis_id,
+            $t->name,
+            $t->login ?? '-',
+        ])->toArray();
+        $this->table(['ID', 'HEMIS ID', 'Ism', 'Login'], $tableData);
+
+        $selectedId = $this->ask('Qaysi o\'qituvchini tanlaysiz? (teachers.id kiriting)');
+        $selected = $teachers->firstWhere('id', $selectedId);
+        if (!$selected) {
+            $this->error("  ❌ ID={$selectedId} topilmadi");
+            return null;
+        }
+
+        return (int) $selected->hemis_id;
     }
 }

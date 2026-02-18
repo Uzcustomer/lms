@@ -1907,7 +1907,7 @@ class JournalController extends Controller
                 // Faqat NB (absent) yoki past baho (<60) larga ruxsat
                 $isAbsentReason = $studentGrade->reason === 'absent';
                 $isLowGrade = $studentGrade->reason === 'low_grade'
-                    || ($studentGrade->original_grade !== null && round((float)$studentGrade->original_grade) < 60);
+                    || ($studentGrade->grade !== null && round((float)$studentGrade->grade) < 60);
 
                 if (!$isAbsentReason && !$isLowGrade) {
                     return response()->json(['success' => false, 'message' => 'O\'qituvchi faqat NB va past baholarni tahrirlashi mumkin.'], 403);

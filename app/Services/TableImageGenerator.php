@@ -196,12 +196,8 @@ class TableImageGenerator
         // Right border
         imageline($image, $totalWidth - 1, 0, $totalWidth - 1, $totalHeight - 1, $borderColor);
 
-        // Save to temp file
-        $dir = storage_path('app');
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-        $tempPath = $dir . '/telegram_table_' . uniqid() . '.png';
+        // Save to system temp directory (always writable)
+        $tempPath = sys_get_temp_dir() . '/telegram_table_' . uniqid() . '.png';
 
         imagepng($image, $tempPath, 5);
         imagedestroy($image);

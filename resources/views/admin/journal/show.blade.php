@@ -1096,39 +1096,8 @@
                                                                     break;
                                                                 }
                                                             }
-                                                            $nbColorClass = $daySababli ? 'text-green-600' : 'text-red-600';
-
-                                                            // NB edit huquqi (compact view)
-                                                            $compactDateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
-                                                            $compactIsAdminRole = $isImpersonatingAdmin || (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false);
-                                                            $compactIsTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$compactDateStr]);
-                                                            $compactCanRate = !$isDekan && ($compactIsAdminRole || $compactIsTeacherEditable);
-
-                                                            // Shu kun uchun birinchi NB record ni topish
-                                                            $firstNbId = null;
-                                                            $anyNbHasRetake = false;
-                                                            $anyNbDeadlineExpired = false;
-                                                            foreach ($dayAbsences as $pairCode => $absData) {
-                                                                if ($absData['retake_grade'] !== null) {
-                                                                    $anyNbHasRetake = true;
-                                                                }
-                                                                $absDl = $absData['deadline'] ?? null;
-                                                                if ($absDl && now()->greaterThan($absDl)) {
-                                                                    $anyNbDeadlineExpired = true;
-                                                                }
-                                                                if ($firstNbId === null && $absData['retake_grade'] === null) {
-                                                                    $firstNbId = $absData['id'];
-                                                                }
-                                                            }
-                                                            $compactShowNbEdit = $compactCanRate && !$anyNbHasRetake && !$anyNbDeadlineExpired && $firstNbId !== null;
                                                         @endphp
-                                                        @if($compactShowNbEdit)
-                                                            <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $firstNbId }})" title="Bosib otrabotka baho kiriting">
-                                                                <span class="{{ $nbColorClass }} font-medium">NB</span>
-                                                            </div>
-                                                        @else
-                                                            <span class="{{ $nbColorClass }} font-medium">NB</span>
-                                                        @endif
+                                                        <span class="{{ $daySababli ? 'text-green-600' : 'text-red-600' }} font-medium">NB</span>
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -1293,7 +1262,7 @@
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
-                                                        $isAdminRole = $isImpersonatingAdmin || (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false);
+                                                        $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
                                                         $canRateAdmin = !$isDekan && $isAdminRole;
                                                         $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable);

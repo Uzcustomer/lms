@@ -179,7 +179,7 @@ class SendAttendanceGroupSummary extends Command
             $this->info("Barcha o'qituvchilar davomat va baholarni kiritgan. Jami darslar: {$totalSchedules}");
 
             if ($groupChatId) {
-                $summaryText = $this->buildSummaryText($todayStr, $now, $totalSchedules, [], 0, 0);
+                $summaryText = $this->buildSummaryText($todayStr, $now, $totalSchedules, [], 0, 0, 0, 0);
                 $telegram->sendToUser($groupChatId, $summaryText);
             }
 
@@ -190,6 +190,8 @@ class SendAttendanceGroupSummary extends Command
         $totalMissingAttendance = 0;
         $totalMissingGrades = 0;
         $teachersWithIssues = [];
+        $teachersMissingAtt = [];
+        $teachersMissingGrade = [];
 
         // Fakultet kesimi statistikasi
         $facultyStats = [];
@@ -225,15 +227,19 @@ class SendAttendanceGroupSummary extends Command
             if (!$r['has_attendance']) {
                 $totalMissingAttendance += $hours;
                 $teachersWithIssues[$r['employee_id']] = true;
+                $teachersMissingAtt[$r['employee_id']] = true;
                 $facultyStats[$facultyName]['no_attendance'] += $hours;
                 $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
+                $facultyStats[$facultyName]['teachers_att'][$r['employee_id']] = true;
                 $departmentStats[$deptKey]['subjects'][$subjectName]['no_attendance'] += $hours;
             }
             if (!$r['has_grades']) {
                 $totalMissingGrades += $hours;
                 $teachersWithIssues[$r['employee_id']] = true;
+                $teachersMissingGrade[$r['employee_id']] = true;
                 $facultyStats[$facultyName]['no_grades'] += $hours;
                 $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
+                $facultyStats[$facultyName]['teachers_grade'][$r['employee_id']] = true;
                 $departmentStats[$deptKey]['subjects'][$subjectName]['no_grades'] += $hours;
             }
         }
@@ -266,7 +272,7 @@ class SendAttendanceGroupSummary extends Command
         }
 
         // Xulosa xabari (fakultet kesimi bilan)
-        $summaryText = $this->buildSummaryText($todayStr, $now, $totalSchedules, $teachersWithIssues, $totalMissingAttendance, $totalMissingGrades, $facultyStats);
+        $summaryText = $this->buildSummaryText($todayStr, $now, $totalSchedules, $teachersWithIssues, $totalMissingAttendance, $totalMissingGrades, count($teachersMissingAtt), count($teachersMissingGrade), $facultyStats);
 
         // Kafedra kesimi jadval rasmini tayyorlash
         $deptTableRows = [];
@@ -371,7 +377,7 @@ class SendAttendanceGroupSummary extends Command
         return 0;
     }
 
-    private function buildSummaryText(string $today, Carbon $now, int $totalLessons, array $teachersWithIssues, int $missingAttendance, int $missingGrades, array $facultyStats = []): string
+    private function buildSummaryText(string $today, Carbon $now, int $totalLessons, array $teachersWithIssues, int $missingAttendance, int $missingGrades, int $uniqueAttTeachers = 0, int $uniqueGradeTeachers = 0, array $facultyStats = []): string
     {
         $lines = [];
         $lines[] = "📊 KUNLIK HISOBOT — {$now->format('H:i')} {$today}";
@@ -382,13 +388,13 @@ class SendAttendanceGroupSummary extends Command
         $lines[] = "";
 
         if ($missingAttendance > 0) {
-            $lines[] = "❌ Davomat olinmagan: {$missingAttendance} soat";
+            $lines[] = "❌ Davomat olinmagan: {$missingAttendance} soat ({$uniqueAttTeachers} o'qituvchi)";
         } else {
             $lines[] = "✅ Barcha darslar uchun davomat olingan";
         }
 
         if ($missingGrades > 0) {
-            $lines[] = "❌ Baho qo'yilmagan: {$missingGrades} soat";
+            $lines[] = "❌ Baho qo'yilmagan: {$missingGrades} soat ({$uniqueGradeTeachers} o'qituvchi)";
         } else {
             $lines[] = "✅ Barcha darslar uchun baho qo'yilgan";
         }
@@ -409,8 +415,10 @@ class SendAttendanceGroupSummary extends Command
             foreach ($facultyStats as $fname => $fdata) {
                 $num++;
                 $teacherCount = count($fdata['teachers']);
+                $attTeachers = count($fdata['teachers_att'] ?? []);
+                $gradeTeachers = count($fdata['teachers_grade'] ?? []);
                 $lines[] = "{$num}. {$fname}";
-                $lines[] = "   📋 Jami: {$fdata['total']} | ❌ Davomat: {$fdata['no_attendance']} | ❌ Baho: {$fdata['no_grades']} | 👨‍🏫 {$teacherCount}";
+                $lines[] = "   ❌ Dav: {$fdata['no_attendance']} soat ({$attTeachers}) | ❌ Baho: {$fdata['no_grades']} soat ({$gradeTeachers}) | 👨‍🏫 {$teacherCount}";
             }
         }
 

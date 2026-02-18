@@ -90,38 +90,58 @@ class DebugTeacherJournal extends Command
         }
 
         // ═══════════════════════════════════════════════════
-        // 2-MANBA: schedules fallback (FAQAT JORIY SEMESTR)
+        // 2-MANBA: schedules fallback (FAQAT JORIY SEMESTR - SANA BO'YICHA)
         // ═══════════════════════════════════════════════════
         $this->newLine(2);
-        $this->info("━━━ 2-MANBA: schedules fallback (FAQAT JORIY SEMESTR) ━━━");
+        $this->info("━━━ 2-MANBA: schedules fallback (SANA BO'YICHA JORIY SEMESTR) ━━━");
 
-        // Joriy semestr kodlari
-        $currentSemesterCodes = DB::table('semesters')
-            ->where('current', true)
-            ->pluck('code')
+        // curriculum_weeks dan joriy semestr boshlanish sanasini aniqlash
+        $now = now();
+        $currentWeekSemesterIds = DB::table('curriculum_weeks')
+            ->where('start_date', '<=', $now)
+            ->where('end_date', '>=', $now)
+            ->pluck('semester_hemis_id')
             ->unique()
             ->toArray();
-        $this->line("  Joriy semestr kodlari: " . json_encode($currentSemesterCodes));
 
-        if (empty($currentSemesterCodes)) {
-            $this->error("  ❌ Joriy semestr TOPILMADI (semesters.current=true yo'q)!");
-            $scheduleGroupIds = [];
-            $scheduleSubjectIds = [];
+        $semesterDetectionMethod = 'date_range';
+        if (empty($currentWeekSemesterIds)) {
+            $currentWeekSemesterIds = DB::table('curriculum_weeks')
+                ->where('current', true)
+                ->pluck('semester_hemis_id')
+                ->unique()
+                ->toArray();
+            $semesterDetectionMethod = 'current_flag';
+        }
+
+        $semesterStart = null;
+        if (!empty($currentWeekSemesterIds)) {
+            $semesterStart = DB::table('curriculum_weeks')
+                ->whereIn('semester_hemis_id', $currentWeekSemesterIds)
+                ->min('start_date');
+        }
+
+        $this->line("  Aniqlash usuli: {$semesterDetectionMethod}");
+        $this->line("  Topilgan semester_hemis_id lar: " . count($currentWeekSemesterIds) . " ta");
+        $this->line("  Semestr boshlanish sanasi: " . ($semesterStart ?? 'TOPILMADI'));
+
+        $scheduleGroupIds = [];
+        $scheduleSubjectIds = [];
+
+        if (!$semesterStart) {
+            $this->error("  ❌ Joriy semestr boshlanish sanasi TOPILMADI!");
         } else {
             $teacherCombos = DB::table('schedules')
                 ->where('employee_id', $employeeHemisId)
                 ->where('education_year_current', true)
-                ->whereIn('semester_code', $currentSemesterCodes)
+                ->where('lesson_date', '>=', $semesterStart)
                 ->whereNull('deleted_at')
                 ->select('subject_id', 'group_id')
                 ->selectRaw('COUNT(*) as lesson_count')
                 ->groupBy('subject_id', 'group_id')
                 ->get();
 
-            $this->line("  Joriy semestr dars kombinatsiyalari: {$teacherCombos->count()} ta");
-
-            $scheduleGroupIds = [];
-            $scheduleSubjectIds = [];
+            $this->line("  Joriy semestr dars kombinatsiyalari (>= {$semesterStart}): {$teacherCombos->count()} ta");
 
             if ($teacherCombos->isNotEmpty()) {
                 $scheduleTable = $teacherCombos->map(fn($c) => [
@@ -137,7 +157,7 @@ class DebugTeacherJournal extends Command
 
                 $allStats = DB::table('schedules')
                     ->where('education_year_current', true)
-                    ->whereIn('semester_code', $currentSemesterCodes)
+                    ->where('lesson_date', '>=', $semesterStart)
                     ->whereNull('deleted_at')
                     ->whereIn('subject_id', $comboSubjectIds)
                     ->whereIn('group_id', $comboGroupIds)
@@ -151,7 +171,7 @@ class DebugTeacherJournal extends Command
                 $comboKeys = $teacherCombos->map(fn($c) => $c->subject_id . '-' . $c->group_id)->toArray();
 
                 $this->newLine();
-                $this->info("  Primary o'qituvchi tekshiruvi (joriy semestr):");
+                $this->info("  Primary o'qituvchi tekshiruvi (lesson_date >= {$semesterStart}):");
                 foreach ($statsByCombo as $key => $teachers) {
                     if (!in_array($key, $comboKeys)) continue;
 
@@ -181,7 +201,7 @@ class DebugTeacherJournal extends Command
                     }
                 }
             } else {
-                $this->warn("  ⚠ Joriy semestrda bu o'qituvchi uchun dars TOPILMADI");
+                $this->warn("  ⚠ Joriy semestrda (>= {$semesterStart}) bu o'qituvchi uchun dars TOPILMADI");
             }
         }
 

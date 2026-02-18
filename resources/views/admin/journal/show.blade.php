@@ -940,6 +940,7 @@
                             $canOpenLesson = (auth()->guard('web')->user()?->hasAnyRole($openLessonRoles) ?? false)
                                 || (auth()->guard('teacher')->user()?->hasAnyRole($openLessonRoles) ?? false);
                             $isOqituvchi = is_active_oqituvchi();
+                            $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
                             $missedDatesLookup = array_flip($missedDates ?? []);
                             $activeOpenedDatesLookup = array_flip($activeOpenedDates ?? []);
                             $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
@@ -953,19 +954,7 @@
                             $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
                             $totalJbDaysForAverage = count($jbLessonDatesForAverage);
                         @endphp
-                        {{-- DEBUG: O'qituvchi edit sozlamalari --}}
-                        @if($isOqituvchi)
-                        <div class="bg-yellow-50 border border-yellow-300 p-2 mb-2 rounded text-xs">
-                            <strong>DEBUG (o'chiriladi):</strong>
-                            levelDeadline: {{ $levelDeadline ? 'bor (id='.$levelDeadline->id.')' : 'NULL' }} |
-                            retake_by_oqituvchi: {{ ($levelDeadline->retake_by_oqituvchi ?? 'null') }} |
-                            teacherCanEdit: {{ $teacherCanEdit ? 'true' : 'false' }} |
-                            teacherEditDays: {{ $teacherEditDays }} |
-                            teacherEditableDates: {{ json_encode($teacherEditableDates) }} |
-                            jbLessonDates count: {{ count($jbLessonDates) }} |
-                            jbLessonDates[0]: {{ $jbLessonDates[0] ?? 'N/A' }}
-                        </div>
-                        @endif
+                        {{-- NB edit debug console.log da chiqadi (vaqtinchalik) --}}
                         <!-- Compact View (Ixcham) -->
                         <div id="jb-compact-view" class="overflow-x-auto">
                             <table class="journal-table border-collapse text-xs">
@@ -1107,8 +1096,39 @@
                                                                     break;
                                                                 }
                                                             }
+                                                            $nbColorClass = $daySababli ? 'text-green-600' : 'text-red-600';
+
+                                                            // NB edit huquqi (compact view)
+                                                            $compactDateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
+                                                            $compactIsAdminRole = $isImpersonatingAdmin || (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false);
+                                                            $compactIsTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$compactDateStr]);
+                                                            $compactCanRate = !$isDekan && ($compactIsAdminRole || $compactIsTeacherEditable);
+
+                                                            // Shu kun uchun birinchi NB record ni topish
+                                                            $firstNbId = null;
+                                                            $anyNbHasRetake = false;
+                                                            $anyNbDeadlineExpired = false;
+                                                            foreach ($dayAbsences as $pairCode => $absData) {
+                                                                if ($absData['retake_grade'] !== null) {
+                                                                    $anyNbHasRetake = true;
+                                                                }
+                                                                $absDl = $absData['deadline'] ?? null;
+                                                                if ($absDl && now()->greaterThan($absDl)) {
+                                                                    $anyNbDeadlineExpired = true;
+                                                                }
+                                                                if ($firstNbId === null && $absData['retake_grade'] === null) {
+                                                                    $firstNbId = $absData['id'];
+                                                                }
+                                                            }
+                                                            $compactShowNbEdit = $compactCanRate && !$anyNbHasRetake && !$anyNbDeadlineExpired && $firstNbId !== null;
                                                         @endphp
-                                                        <span class="{{ $daySababli ? 'text-green-600' : 'text-red-600' }} font-medium">NB</span>
+                                                        @if($compactShowNbEdit)
+                                                            <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $firstNbId }})" title="Bosib otrabotka baho kiriting">
+                                                                <span class="{{ $nbColorClass }} font-medium">NB</span>
+                                                            </div>
+                                                        @else
+                                                            <span class="{{ $nbColorClass }} font-medium">NB</span>
+                                                        @endif
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -1273,7 +1293,7 @@
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
-                                                        $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+                                                        $isAdminRole = $isImpersonatingAdmin || (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false);
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
                                                         $canRateAdmin = !$isDekan && $isAdminRole;
                                                         $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable);
@@ -2430,6 +2450,33 @@
 
         const isDekan = {{ $isDekan ? 'true' : 'false' }};
         const historyDownloadBase = '{{ url("admin/journal/download-history-file") }}/';
+
+        // ===== DEBUG: NB edit muammosini aniqlash (vaqtinchalik) =====
+        console.log('%c===== NB EDIT DEBUG =====', 'color: #f59e0b; font-weight: bold; font-size: 14px;');
+        console.log('isOqituvchi:', {{ $isOqituvchi ? 'true' : 'false' }});
+        console.log('isDekan:', {{ $isDekan ? 'true' : 'false' }});
+        console.log('isImpersonatingAdmin:', {{ $isImpersonatingAdmin ? 'true' : 'false' }});
+        console.log('levelCode:', '{{ $levelCode ?? "NULL" }}');
+        @if($levelDeadline)
+        console.log('levelDeadline:', {!! json_encode(['id' => $levelDeadline->id, 'level_code' => $levelDeadline->level_code, 'deadline_days' => $levelDeadline->deadline_days, 'retake_by_oqituvchi' => $levelDeadline->retake_by_oqituvchi ?? null, 'retake_by_test_markazi' => $levelDeadline->retake_by_test_markazi ?? null]) !!});
+        @else
+        console.log('%c⚠️ levelDeadline: NULL — deadlines jadvalida bu kurs uchun yozuv YO\'Q!', 'color: #ef4444; font-weight: bold;');
+        @endif
+        console.log('teacherCanEdit:', {{ $teacherCanEdit ? 'true' : 'false' }});
+        console.log('teacherEditDays:', {{ $teacherEditDays }});
+        console.log('teacherEditableDates:', {!! json_encode($teacherEditableDates) !!});
+        console.log('jbLessonDates count:', {{ count($jbLessonDates) }});
+        console.log('jbLessonDates (raw birinchi 5ta):', {!! json_encode(array_slice($jbLessonDates, 0, 5)) !!});
+        @if($isImpersonatingAdmin)
+        console.log('%c✅ Impersonation aniqlandi — admin huquqlari berildi', 'color: #10b981; font-weight: bold;');
+        @endif
+        @if(!$levelDeadline)
+        console.log('%c⚠️ MUAMMO: levelDeadline NULL! Settings > Deadlines da bu kurs uchun deadline sozlash kerak!', 'color: #ef4444; font-weight: bold; font-size: 12px;');
+        @elseif(!($levelDeadline->retake_by_oqituvchi ?? false))
+        console.log('%c⚠️ MUAMMO: retake_by_oqituvchi = FALSE! Settings > Deadlines da O\'qituvchi checkboxini yoqish kerak!', 'color: #ef4444; font-weight: bold; font-size: 12px;');
+        @endif
+        console.log('%c===== /NB EDIT DEBUG =====', 'color: #f59e0b; font-weight: bold;');
+        // ===== /DEBUG =====
 
         function updateMtHistoryCell(studentHemisId, history) {
             const cell = document.getElementById('mt-history-' + studentHemisId);

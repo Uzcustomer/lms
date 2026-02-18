@@ -1876,8 +1876,9 @@ class JournalController extends Controller
      */
     public function saveRetakeGrade(Request $request)
     {
-        // Check admin or teacher role
-        $isAdmin = auth()->user()->hasAnyRole(['admin', 'superadmin']);
+        // Check admin or teacher role (impersonation ham hisobga olinadi)
+        $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
+        $isAdmin = $isImpersonatingAdmin || auth()->user()->hasAnyRole(['admin', 'superadmin']);
         $isTeacher = is_active_oqituvchi();
 
         if (!$isAdmin && !$isTeacher) {

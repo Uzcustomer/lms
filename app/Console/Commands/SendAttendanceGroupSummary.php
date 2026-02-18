@@ -150,6 +150,7 @@ class SendAttendanceGroupSummary extends Command
                     'lesson_date' => $sch->lesson_date_str,
                     'kurs' => (int) ceil($semCode / 2),
                     'employee_id' => $sch->employee_id,
+                    'academic_hours' => $this->calculateAcademicHours($sch->lesson_pair_start_time, $sch->lesson_pair_end_time),
                 ];
             }
         }
@@ -190,14 +191,50 @@ class SendAttendanceGroupSummary extends Command
         $totalMissingGrades = 0;
         $teachersWithIssues = [];
 
+        // Fakultet kesimi statistikasi
+        $facultyStats = [];
+        // Kafedra kesimi statistikasi
+        $departmentStats = [];
+
         foreach ($results as $r) {
+            $facultyName = $r['faculty_name'] ?? 'Noma\'lum';
+            $deptName = $r['department_name'] ?? 'Noma\'lum';
+            $subjectName = $r['subject_name'] ?? '-';
+            $hours = $r['academic_hours'];
+
+            if (!isset($facultyStats[$facultyName])) {
+                $facultyStats[$facultyName] = ['total' => 0, 'no_attendance' => 0, 'no_grades' => 0, 'teachers' => []];
+            }
+
+            // Kafedra ichida fan bo'yicha guruhlash
+            $deptKey = $deptName . '||' . $facultyName;
+            if (!isset($departmentStats[$deptKey])) {
+                $departmentStats[$deptKey] = [
+                    'department_name' => $deptName,
+                    'faculty_name' => $facultyName,
+                    'subjects' => [],
+                ];
+            }
+            if (!isset($departmentStats[$deptKey]['subjects'][$subjectName])) {
+                $departmentStats[$deptKey]['subjects'][$subjectName] = ['no_attendance' => 0, 'no_grades' => 0, 'total' => 0];
+            }
+
+            $facultyStats[$facultyName]['total'] += $hours;
+            $departmentStats[$deptKey]['subjects'][$subjectName]['total'] += $hours;
+
             if (!$r['has_attendance']) {
-                $totalMissingAttendance++;
+                $totalMissingAttendance += $hours;
                 $teachersWithIssues[$r['employee_id']] = true;
+                $facultyStats[$facultyName]['no_attendance'] += $hours;
+                $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
+                $departmentStats[$deptKey]['subjects'][$subjectName]['no_attendance'] += $hours;
             }
             if (!$r['has_grades']) {
-                $totalMissingGrades++;
+                $totalMissingGrades += $hours;
                 $teachersWithIssues[$r['employee_id']] = true;
+                $facultyStats[$facultyName]['no_grades'] += $hours;
+                $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
+                $departmentStats[$deptKey]['subjects'][$subjectName]['no_grades'] += $hours;
             }
         }
 
@@ -228,34 +265,83 @@ class SendAttendanceGroupSummary extends Command
             ];
         }
 
-        // Xulosa xabari
-        $summaryText = $this->buildSummaryText($todayStr, $now, $totalSchedules, $teachersWithIssues, $totalMissingAttendance, $totalMissingGrades);
+        // Xulosa xabari (fakultet kesimi bilan)
+        $summaryText = $this->buildSummaryText($todayStr, $now, $totalSchedules, $teachersWithIssues, $totalMissingAttendance, $totalMissingGrades, $facultyStats);
 
-        // Jadval rasmini generatsiya qilish
+        // Kafedra kesimi jadval rasmini tayyorlash
+        $deptTableRows = [];
+        $rowNum = 0;
+        // Kafedrani jami soat bo'yicha kamayish tartibida saralash
+        $sortedDepts = $departmentStats;
+        uasort($sortedDepts, function ($a, $b) {
+            $totalA = array_sum(array_column($a['subjects'], 'total'));
+            $totalB = array_sum(array_column($b['subjects'], 'total'));
+            return $totalB <=> $totalA;
+        });
+
+        foreach ($sortedDepts as $dept) {
+            // Fanlarni jami soat bo'yicha kamayish tartibida saralash
+            $subjects = $dept['subjects'];
+            uasort($subjects, function ($a, $b) {
+                return $b['total'] <=> $a['total'];
+            });
+
+            foreach ($subjects as $subjectName => $stats) {
+                $rowNum++;
+                $deptTableRows[] = [
+                    $rowNum,
+                    TableImageGenerator::truncate($dept['department_name'], 25),
+                    TableImageGenerator::truncate($subjectName, 25),
+                    $stats['no_attendance'],
+                    $stats['no_grades'],
+                    $stats['total'],
+                ];
+            }
+        }
+
+        $generator = new TableImageGenerator();
+
+        // Kafedra kesimi rasmi
+        $deptHeaders = ['#', 'KAFEDRA', 'FAN NOMI', 'DAVOMAT YO\'Q', 'BAHO YO\'Q', 'JAMI SOAT'];
+        $deptImages = $generator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$now->format('H:i')} {$todayStr} (Jami: " . count($deptTableRows) . ")");
+
+        // Batafsil jadval rasmi
         $headers = [
             '#', 'XODIM FISH', 'FAKULTET', "YO'NALISH", 'KURS', 'SEM',
             'KAFEDRA', 'FAN', 'GURUH', "MASHG'ULOT TURI",
             'VAQT', 'T.SONI', 'DAVOMAT', 'BAHO', 'SANA',
         ];
 
-        $generator = new TableImageGenerator();
-        $images = $generator->generate($headers, $tableRows, "KUNLIK HISOBOT - {$now->format('H:i')} {$todayStr} (Kamida biri yo'q: " . count($results) . ")");
+        $detailImages = $generator->generate($headers, $tableRows, "KUNLIK HISOBOT - {$now->format('H:i')} {$todayStr} (Kamida biri yo'q: " . count($results) . ")");
 
         $tempFiles = [];
 
         try {
+            // 1. Xulosa xabari
             $telegram->sendToUser($groupChatId, $summaryText);
 
-            foreach ($images as $index => $imagePath) {
+            // 2. Kafedra kesimi rasmlari
+            foreach ($deptImages as $index => $imagePath) {
                 $tempFiles[] = $imagePath;
-                $caption = '';
-                if (count($images) > 1) {
-                    $caption = ($index + 1) . '/' . count($images) . '-sahifa';
+                $caption = 'Kafedra kesimi';
+                if (count($deptImages) > 1) {
+                    $caption .= ' ' . ($index + 1) . '/' . count($deptImages) . '-sahifa';
                 }
                 $telegram->sendPhoto($groupChatId, $imagePath, $caption);
             }
 
-            $this->info("Hisobot yuborildi. Jami: {$totalSchedules}, Muammoli: " . count($results) . ", Rasmlar: " . count($images));
+            // 3. Batafsil jadval rasmlari
+            foreach ($detailImages as $index => $imagePath) {
+                $tempFiles[] = $imagePath;
+                $caption = 'Batafsil hisobot';
+                if (count($detailImages) > 1) {
+                    $caption .= ' ' . ($index + 1) . '/' . count($detailImages) . '-sahifa';
+                }
+                $telegram->sendPhoto($groupChatId, $imagePath, $caption);
+            }
+
+            $totalImages = count($deptImages) + count($detailImages);
+            $this->info("Hisobot yuborildi. Jami: {$totalSchedules}, Muammoli: " . count($results) . ", Rasmlar: {$totalImages}");
         } catch (\Throwable $e) {
             Log::error('Telegram guruhga hisobot yuborishda xato: ' . $e->getMessage());
             $this->error('Xato: ' . $e->getMessage());
@@ -271,7 +357,7 @@ class SendAttendanceGroupSummary extends Command
         return 0;
     }
 
-    private function buildSummaryText(string $today, Carbon $now, int $totalLessons, array $teachersWithIssues, int $missingAttendance, int $missingGrades): string
+    private function buildSummaryText(string $today, Carbon $now, int $totalLessons, array $teachersWithIssues, int $missingAttendance, int $missingGrades, array $facultyStats = []): string
     {
         $lines = [];
         $lines[] = "📊 KUNLIK HISOBOT — {$now->format('H:i')} {$today}";
@@ -282,15 +368,36 @@ class SendAttendanceGroupSummary extends Command
         $lines[] = "";
 
         if ($missingAttendance > 0) {
-            $lines[] = "❌ Davomat olinmagan: {$missingAttendance} ta dars";
+            $lines[] = "❌ Davomat olinmagan: {$missingAttendance} soat";
         } else {
             $lines[] = "✅ Barcha darslar uchun davomat olingan";
         }
 
         if ($missingGrades > 0) {
-            $lines[] = "❌ Baho qo'yilmagan: {$missingGrades} ta dars";
+            $lines[] = "❌ Baho qo'yilmagan: {$missingGrades} soat";
         } else {
             $lines[] = "✅ Barcha darslar uchun baho qo'yilgan";
+        }
+
+        // Fakultet kesimi
+        if (!empty($facultyStats)) {
+            $lines[] = "";
+            $lines[] = str_repeat('─', 30);
+            $lines[] = "🏛 FAKULTET KESIMI:";
+            $lines[] = "";
+
+            // Jami soat bo'yicha kamayish tartibida saralash
+            uasort($facultyStats, function ($a, $b) {
+                return $b['total'] <=> $a['total'];
+            });
+
+            $num = 0;
+            foreach ($facultyStats as $fname => $fdata) {
+                $num++;
+                $teacherCount = count($fdata['teachers']);
+                $lines[] = "{$num}. {$fname}";
+                $lines[] = "   📋 Jami: {$fdata['total']} | ❌ Davomat: {$fdata['no_attendance']} | ❌ Baho: {$fdata['no_grades']} | 👨‍🏫 {$teacherCount}";
+            }
         }
 
         $lines[] = "";
@@ -303,5 +410,23 @@ class SendAttendanceGroupSummary extends Command
         }
 
         return implode("\n", $lines);
+    }
+
+    private function calculateAcademicHours(?string $startTime, ?string $endTime): int
+    {
+        if (!$startTime || !$endTime) {
+            return 2; // standart juftlik = 2 soat
+        }
+
+        try {
+            $start = Carbon::createFromFormat('H:i:s', $startTime);
+            $end = Carbon::createFromFormat('H:i:s', $endTime);
+            $minutes = $start->diffInMinutes($end);
+
+            // 60+ minut = 2 akademik soat (juftlik), aks holda 1 soat
+            return $minutes >= 60 ? 2 : 1;
+        } catch (\Throwable $e) {
+            return 2;
+        }
     }
 }

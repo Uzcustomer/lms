@@ -1916,7 +1916,7 @@ class JournalController extends Controller
                 // Biriktirilgan o'qituvchini tekshirish
                 $teacherHemisId = get_teacher_hemis_id();
                 $student = DB::table('students')->where('hemis_id', $studentGrade->student_hemis_id)->first();
-                $groupHemisId = $student?->group_hemis_id;
+                $groupHemisId = $student?->group_id;
 
                 if (!$teacherHemisId) {
                     return response()->json(['success' => false, 'message' => 'O\'qituvchi topilmadi (hemis_id null)'], 403);

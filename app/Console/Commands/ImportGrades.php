@@ -102,64 +102,97 @@ class ImportGrades extends Command
     }
 
     // =========================================================================
-    // FINAL IMPORT — har kuni 00:30 da, kechagi kunni yakunlaydi
+    // FINAL IMPORT — har kuni 00:30 da, yakunlanmagan kunlarni is_final=true qiladi
+    // Faqat kechagini emas, oxirgi 7 kun ichidagi BARCHA is_final=false kunlarni tekshiradi
+    // Bu API fail bo'lgan kunlarni avtomatik qayta urinadi
     // =========================================================================
     private function handleFinalImport()
     {
-        $yesterday = Carbon::yesterday();
+        $this->info('Starting FINAL import...');
+        Log::info('[FinalImport] Starting at ' . Carbon::now());
 
-        // Kechagi kunda is_final baholar bormi?
-        $alreadyFinalized = StudentGrade::where('lesson_date', '>=', $yesterday->copy()->startOfDay())
-            ->where('lesson_date', '<=', $yesterday->copy()->endOfDay())
-            ->where('is_final', true)
-            ->exists();
+        // Oxirgi 7 kun ichida yakunlanmagan (is_final=false) kunlarni topish
+        $lookbackStart = Carbon::today()->subDays(7)->startOfDay();
+        $todayStart = Carbon::today()->startOfDay();
 
-        if ($alreadyFinalized) {
-            $this->info("Final import: {$yesterday->toDateString()} allaqachon yakunlangan, o'tkazib yuborildi.");
-            Log::info("[FinalImport] {$yesterday->toDateString()} already finalized, skipping.");
-            return;
-        }
+        $unfinishedDates = StudentGrade::where('is_final', false)
+            ->where('lesson_date', '>=', $lookbackStart)
+            ->where('lesson_date', '<', $todayStart)
+            ->selectRaw('DATE(lesson_date) as grade_date')
+            ->distinct()
+            ->orderBy('grade_date')
+            ->pluck('grade_date');
 
-        $this->info("Starting FINAL import for {$yesterday->toDateString()}...");
-        Log::info("[FinalImport] Starting for {$yesterday->toDateString()} at " . Carbon::now());
-
-        $from = $yesterday->copy()->startOfDay()->timestamp;
-        $to = $yesterday->copy()->endOfDay()->timestamp;
-
-        // 1-qadam: Kechagi kunni to'liq API dan tortish
-        $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
-
-        if ($gradeItems === false) {
-            $this->error("Final import FAILED for {$yesterday->toDateString()} — API xato.");
-            Log::error("[FinalImport] API failed for {$yesterday->toDateString()}");
+        if ($unfinishedDates->isEmpty()) {
+            $this->info('Final import: barcha kunlar allaqachon yakunlangan.');
+            Log::info('[FinalImport] All recent days already finalized, nothing to do.');
             $this->report['final-import'] = [
-                'total_days' => 1,
+                'total_days' => 0,
                 'success_days' => 0,
-                'failed_pages' => ["API xato — {$yesterday->toDateString()} yakunlanmadi"],
+                'failed_pages' => [],
             ];
             $this->sendTelegramReport();
             return;
         }
 
-        // 2-qadam: Soft delete + is_final=true qilib yozish
-        $this->applyGrades($gradeItems, $yesterday, true);
+        $totalDays = $unfinishedDates->count();
+        $successDays = 0;
+        $failedDays = [];
 
-        // Attendance ham final import qilish
-        $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
-        if ($attendanceItems !== false) {
-            foreach ($attendanceItems as $item) {
-                $this->processAttendance($item, true);
+        $this->info("Yakunlanmagan kunlar: {$totalDays} ta ({$unfinishedDates->first()} — {$unfinishedDates->last()})");
+        Log::info("[FinalImport] Found {$totalDays} unfinished days");
+
+        foreach ($unfinishedDates as $dateStr) {
+            $date = Carbon::parse($dateStr);
+
+            // Agar bu kunda is_final=true baholar allaqachon bo'lsa, o'tkazib yuborish
+            $alreadyFinalized = StudentGrade::where('lesson_date', '>=', $date->copy()->startOfDay())
+                ->where('lesson_date', '<=', $date->copy()->endOfDay())
+                ->where('is_final', true)
+                ->exists();
+
+            if ($alreadyFinalized) {
+                $this->info("  {$date->toDateString()} — allaqachon yakunlangan, o'tkazib yuborildi.");
+                $totalDays--;
+                continue;
             }
+
+            $from = $date->copy()->startOfDay()->timestamp;
+            $to = $date->copy()->endOfDay()->timestamp;
+
+            $this->info("  {$date->toDateString()} — API dan tortilmoqda...");
+
+            // Baholar
+            $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
+
+            if ($gradeItems === false) {
+                $this->error("  {$date->toDateString()} — API xato, keyingi kunga o'tiladi.");
+                $failedDays[] = $date->toDateString();
+                continue;
+            }
+
+            $this->applyGrades($gradeItems, $date, true);
+
+            // Attendance
+            $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
+            if ($attendanceItems !== false) {
+                foreach ($attendanceItems as $item) {
+                    $this->processAttendance($item, true);
+                }
+            }
+
+            $successDays++;
+            $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
         }
 
         $this->report['final-import'] = [
-            'total_days' => 1,
-            'success_days' => 1,
-            'failed_pages' => [],
+            'total_days' => $totalDays,
+            'success_days' => $successDays,
+            'failed_pages' => $failedDays,
         ];
 
         $this->sendTelegramReport();
-        Log::info("[FinalImport] Completed for {$yesterday->toDateString()} at " . Carbon::now());
+        Log::info("[FinalImport] Completed at " . Carbon::now() . ": {$successDays}/{$totalDays} days finalized.");
     }
 
     // =========================================================================
@@ -487,8 +520,10 @@ class ImportGrades extends Command
     {
         $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
 
-        // withTrashed() — soft-deleted yozuvlarni ham tekshirish (duplicate yaratmaslik uchun)
-        $existingGrade = StudentGrade::withTrashed()->where([
+        // Faqat aktiv (soft-delete qilinmagan) yozuvlarni tekshirish
+        // withTrashed() ISHLATMASLIK kerak — chunki applyGrades() eski yozuvlarni soft-delete qiladi,
+        // va yangi absence record yaratilishi kerak, aks holda davomat bahosi yo'qoladi
+        $existingGrade = StudentGrade::where([
             'student_id' => $student->id,
             'subject_name' => $item['subject']['name'],
             'lesson_date' => $lessonDate,

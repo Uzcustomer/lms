@@ -1259,8 +1259,10 @@
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                        $isAdminRole = auth()->user()->hasRole('admin');
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
-                                                        $canRate = !$isDekan && (auth()->user()->hasRole('admin') || $isTeacherEditable);
+                                                        $canRateAdmin = !$isDekan && $isAdminRole;
+                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable);
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi;
                                                         $showRatingInput = false;
@@ -1294,7 +1296,7 @@
                                                             $showRatingInput = $canRate && !$deadlineExpired;
                                                         } elseif (!$isAbsent && $grade === null) {
                                                             $isEmpty = true;
-                                                            $showRatingInput = $canRate;
+                                                            $showRatingInput = $canRateAdmin;
                                                         }
                                                     @endphp
                                                     @if($grade !== null)

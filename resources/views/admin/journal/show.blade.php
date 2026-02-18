@@ -1328,6 +1328,31 @@
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
+                                                        @elseif($hasRetake && $retakeType === 'absent' && $canRateAdmin)
+                                                            {{-- NB + retake baho — admin o'chira oladi --}}
+                                                            @php
+                                                                $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
+                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
+                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                            @endphp
+                                                            <div class="split-cell cursor-pointer hover:bg-red-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'chirish"
+                                                                onclick="deleteRetakeGrade(this, {{ $gradeRecordId }})">
+                                                                <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                                                                <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
+                                                                <span class="split-bottom">{{ round($grade, 0) }}</span>
+                                                            </div>
+                                                        @elseif($hasRetake && $retakeType === 'absent')
+                                                            {{-- NB + retake baho — admin emas, faqat ko'rish --}}
+                                                            @php
+                                                                $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
+                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
+                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                            @endphp
+                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
+                                                                <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                                                                <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
+                                                                <span class="split-bottom">{{ round($grade, 0) }}</span>
+                                                            </div>
                                                         @else
                                                             @php
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;

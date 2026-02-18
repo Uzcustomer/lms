@@ -157,8 +157,22 @@
                                     </td>
                                     @if($grade->status === 'pending'))
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            @php
+                                                $teacher = auth()->guard('teacher')->user();
+                                                $studentLevel = $grade->student->level_code ?? null;
+                                                $dlSettings = $studentLevel ? \App\Models\Deadline::where('level_code', $studentLevel)->first() : null;
+                                                $roleAllowed = true;
+                                                if ($dlSettings) {
+                                                    $roleAllowed = false;
+                                                    if ($teacher->hasRole('test_markazi') && $dlSettings->retake_by_test_markazi) $roleAllowed = true;
+                                                    if ($teacher->hasRole('oqituvchi') && $dlSettings->retake_by_oqituvchi) $roleAllowed = true;
+                                                    if ($grade->reason === 'teacher_victim') $roleAllowed = true;
+                                                }
+                                            @endphp
                                             @if($grade->deadline && now()->greaterThan($grade->deadline))
                                                 <span class="text-red-500 text-xs">Muddat o'tgan</span>
+                                            @elseif(!$roleAllowed)
+                                                <span class="text-orange-500 text-xs">Ruxsat yo'q</span>
                                             @else
                                                 <button onclick="openModal('{{ $grade->id }}')"
                                                         class="text-indigo-600 hover:text-indigo-900">Baho qo'yish

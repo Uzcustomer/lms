@@ -12,6 +12,7 @@ use App\Models\Department;
 use App\Models\Group;
 use App\Models\Schedule;
 use App\Models\Semester;
+use App\Models\Deadline;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\Teacher;
@@ -190,7 +191,7 @@ class TeacherMainController extends Controller
 
         $grade = StudentGrade::findOrFail($gradeId);
 
-        if ($grade->status !== 'pending' || ($grade->student->level_code < 14 && $grade->reason !== 'teacher_victim')) {
+        if ($grade->status !== 'pending') {
             return back()->with('error', 'Bu bahoni o\'zgartirish mumkin emas.');
         }
 
@@ -198,6 +199,34 @@ class TeacherMainController extends Controller
         if ($grade->deadline && now()->greaterThan($grade->deadline)) {
             $deadlineFormatted = \Carbon\Carbon::parse($grade->deadline)->format('d.m.Y H:i');
             return back()->with('error', "Otrabotka muddati o'tgan ({$deadlineFormatted}). Baho qo'yish mumkin emas.");
+        }
+
+        // Rol tekshirish: kurs darajasiga qarab kim otrabotka baho qo'ya olishini tekshirish
+        $teacher = Auth::guard('teacher')->user();
+        $studentLevelCode = $grade->student->level_code ?? null;
+        if ($studentLevelCode) {
+            $deadlineSettings = Deadline::where('level_code', $studentLevelCode)->first();
+            if ($deadlineSettings) {
+                $isOqituvchi = $teacher->hasRole('oqituvchi');
+                $isTestMarkazi = $teacher->hasRole('test_markazi');
+
+                $hasAccess = false;
+                if ($isTestMarkazi && $deadlineSettings->retake_by_test_markazi) {
+                    $hasAccess = true;
+                }
+                if ($isOqituvchi && $deadlineSettings->retake_by_oqituvchi) {
+                    $hasAccess = true;
+                }
+                // teacher_victim hollarda o'qituvchiga har doim ruxsat
+                if ($grade->reason === 'teacher_victim') {
+                    $hasAccess = true;
+                }
+
+                if (!$hasAccess) {
+                    $levelName = $grade->student->level_name ?? $studentLevelCode;
+                    return back()->with('error', "{$levelName} talabalari uchun otrabotka bahosini qo'yish huquqingiz yo'q.");
+                }
+            }
         }
 
         $grade->update([

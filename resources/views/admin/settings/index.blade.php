@@ -133,16 +133,31 @@
                                 <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px; color: #64748b;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
                                 Kurs darajalari bo'yicha muddatlar
                             </div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px;">
                                 @foreach ($deadlines as $deadline)
                                     <div style="padding: 14px 16px; background: #fff; border-radius: 10px; border: 1px solid #e5e7eb;">
                                         <div style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9;">
                                             {{ $deadline->level->level_name ?? $deadline->level_code }}
                                             <span style="font-size: 11px; color: #94a3b8; font-weight: 400; margin-left: 4px;">({{ $deadline->level_code }})</span>
                                         </div>
-                                        <div>
+                                        <div style="margin-bottom: 10px;">
                                             <label style="font-size: 11px; color: #64748b; font-weight: 500; display: block; margin-bottom: 4px;">Muddat (kunlar)</label>
                                             <input type="number" name="deadlines[{{ $deadline->level_code }}][days]" value="{{ old('deadlines.' . $deadline->level_code . '.days', $deadline->deadline_days ?? '') }}" style="width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #111827; outline: none;">
+                                        </div>
+                                        <div>
+                                            <label style="font-size: 11px; color: #64748b; font-weight: 500; display: block; margin-bottom: 6px;">Otrabotka bahosini kim qo'yadi?</label>
+                                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                                <input type="hidden" name="deadlines[{{ $deadline->level_code }}][retake_by_test_markazi]" value="0">
+                                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 5px 8px; border-radius: 6px; border: 1px solid {{ $deadline->retake_by_test_markazi ? '#7c3aed40' : '#e5e7eb' }}; background: {{ $deadline->retake_by_test_markazi ? '#f5f3ff' : '#fff' }};">
+                                                    <input type="checkbox" name="deadlines[{{ $deadline->level_code }}][retake_by_test_markazi]" value="1" {{ old('deadlines.' . $deadline->level_code . '.retake_by_test_markazi', $deadline->retake_by_test_markazi) ? 'checked' : '' }} style="width: 16px; height: 16px; accent-color: #7c3aed;">
+                                                    <span style="font-size: 12px; color: #5b21b6; font-weight: 500;">Test markazi</span>
+                                                </label>
+                                                <input type="hidden" name="deadlines[{{ $deadline->level_code }}][retake_by_oqituvchi]" value="0">
+                                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 5px 8px; border-radius: 6px; border: 1px solid {{ $deadline->retake_by_oqituvchi ? '#05966940' : '#e5e7eb' }}; background: {{ $deadline->retake_by_oqituvchi ? '#ecfdf5' : '#fff' }};">
+                                                    <input type="checkbox" name="deadlines[{{ $deadline->level_code }}][retake_by_oqituvchi]" value="1" {{ old('deadlines.' . $deadline->level_code . '.retake_by_oqituvchi', $deadline->retake_by_oqituvchi) ? 'checked' : '' }} style="width: 16px; height: 16px; accent-color: #059669;">
+                                                    <span style="font-size: 12px; color: #065f46; font-weight: 500;">O'qituvchi</span>
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                 @endforeach

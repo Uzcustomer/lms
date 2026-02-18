@@ -260,7 +260,7 @@
             $('#upload-result').hide();
 
             $.ajax({
-                url: tartibgaSolUrl, type: 'GET', data: params, timeout: 120000,
+                url: tartibgaSolUrl, type: 'GET', data: params, timeout: 300000,
                 success: function(res) {
                     $('#loading-state').hide();
                     $('#btn-tartibga').prop('disabled', false).css('opacity', '1');

@@ -38,11 +38,9 @@ class SettingsController extends Controller
 
     public function updateDeadlines(Request $request)
     {
-        $validated = $request->validate([
+        $request->validate([
             'deadlines' => 'required|array',
             'deadlines.*.days' => 'required|integer|min:1',
-            'deadlines.*.retake_by_test_markazi' => 'nullable',
-            'deadlines.*.retake_by_oqituvchi' => 'nullable',
         ]);
 
         if ($request->filled('spravka_deadline_days')) {
@@ -65,9 +63,10 @@ class SettingsController extends Controller
             Setting::set('lesson_opening_days', (int) $request->lesson_opening_days);
         }
 
+        $deadlines = $request->input('deadlines', []);
         $hasRetakeColumns = \Schema::hasColumn('deadlines', 'retake_by_test_markazi');
 
-        foreach ($validated['deadlines'] as $levelCode => $deadlineData) {
+        foreach ($deadlines as $levelCode => $deadlineData) {
             $data = ['deadline_days' => $deadlineData['days']];
 
             if ($hasRetakeColumns) {
@@ -81,7 +80,7 @@ class SettingsController extends Controller
             );
         }
 
-        return redirect()->route('admin.settings')->with('success', 'Muddatlar muvaffaqiyatli yangilandi!');
+        return redirect()->route('admin.settings', ['tab' => 'deadlines'])->with('success', 'Muddatlar muvaffaqiyatli yangilandi!');
     }
 
     public function updateMarkingSystemScores(Request $request)

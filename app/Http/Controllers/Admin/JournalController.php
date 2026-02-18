@@ -3154,7 +3154,7 @@ class JournalController extends Controller
 
     /**
      * Dars jadvalidan o'qituvchining fan-guruh biriktirishlarini aniqlash.
-     * Faqat joriy semestr darslari hisobga olinadi.
+     * Faqat joriy semestr darslari hisobga olinadi (curriculum_weeks orqali aniq sana).
      * Har bir fan+guruh uchun eng ko'p dars o'tgan o'qituvchi "primary" hisoblanadi.
      *
      * @param int $employeeHemisId O'qituvchining HEMIS ID si
@@ -3162,14 +3162,10 @@ class JournalController extends Controller
      */
     private function getTeacherScheduleAssignments(int $employeeHemisId): array
     {
-        // Joriy semestr kodlarini aniqlash
-        $currentSemesterCodes = DB::table('semesters')
-            ->where('current', true)
-            ->pluck('code')
-            ->unique()
-            ->toArray();
+        // Joriy semestr boshlanish sanasini curriculum_weeks dan aniqlash
+        $semesterStart = $this->getCurrentSemesterStartDate();
 
-        if (empty($currentSemesterCodes)) {
+        if (!$semesterStart) {
             return ['subject_ids' => [], 'group_ids' => []];
         }
 
@@ -3177,7 +3173,7 @@ class JournalController extends Controller
         $teacherCombos = DB::table('schedules')
             ->where('employee_id', $employeeHemisId)
             ->where('education_year_current', true)
-            ->whereIn('semester_code', $currentSemesterCodes)
+            ->where('lesson_date', '>=', $semesterStart)
             ->whereNull('deleted_at')
             ->select('subject_id', 'group_id')
             ->groupBy('subject_id', 'group_id')
@@ -3193,7 +3189,7 @@ class JournalController extends Controller
 
         $allStats = DB::table('schedules')
             ->where('education_year_current', true)
-            ->whereIn('semester_code', $currentSemesterCodes)
+            ->where('lesson_date', '>=', $semesterStart)
             ->whereNull('deleted_at')
             ->whereIn('subject_id', $comboSubjectIds)
             ->whereIn('group_id', $comboGroupIds)
@@ -3232,6 +3228,42 @@ class JournalController extends Controller
             'subject_ids' => array_values(array_unique(array_filter($subjectIds))),
             'group_ids' => array_values(array_unique(array_filter($groupIds))),
         ];
+    }
+
+    /**
+     * Joriy semestrning boshlanish sanasini aniqlash.
+     * curriculum_weeks dan bugungi sana qaysi haftaga tushishini topib,
+     * o'sha semestrning birinchi haftasi boshlanish sanasini qaytaradi.
+     */
+    private function getCurrentSemesterStartDate(): ?string
+    {
+        $now = now();
+
+        // Bugungi sana qaysi curriculum_weeks ga tushadi?
+        $currentWeekSemesterIds = DB::table('curriculum_weeks')
+            ->where('start_date', '<=', $now)
+            ->where('end_date', '>=', $now)
+            ->pluck('semester_hemis_id')
+            ->unique()
+            ->toArray();
+
+        // Agar topilmasa, curriculum_weeks.current=true dan olish
+        if (empty($currentWeekSemesterIds)) {
+            $currentWeekSemesterIds = DB::table('curriculum_weeks')
+                ->where('current', true)
+                ->pluck('semester_hemis_id')
+                ->unique()
+                ->toArray();
+        }
+
+        if (empty($currentWeekSemesterIds)) {
+            return null;
+        }
+
+        // Shu semestrlarning eng erta boshlanish sanasi
+        return DB::table('curriculum_weeks')
+            ->whereIn('semester_hemis_id', $currentWeekSemesterIds)
+            ->min('start_date');
     }
 
     /**

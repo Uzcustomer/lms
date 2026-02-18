@@ -357,10 +357,17 @@ class TeacherMainController extends Controller
                     }
                 }
             } else {
-                // whereHas('studentGrades')->
+                $semesterWeeks = CurriculumWeek::where('semester_hemis_id', $semester->semester_hemis_id)
+                    ->orderBy('start_date')
+                    ->get();
+                $semesterStartDate = $semesterWeeks->first()?->start_date;
+                $semesterEndDate = $semesterWeeks->last()?->end_date;
+
                 $lessonDates = Schedule::where('subject_id', $subject->subject_id)
                     ->where('group_id', $group->group_hemis_id)
-                    ->where('semester_code', $semester->code)
+                    ->when($semesterStartDate && $semesterEndDate, function ($query) use ($semesterStartDate, $semesterEndDate) {
+                        $query->whereBetween('lesson_date', [$semesterStartDate, $semesterEndDate]);
+                    })
                     ->whereNotIn('training_type_code', config('app.training_type_code'))
                     ->distinct('lesson_date')
                     ->pluck('lesson_date')

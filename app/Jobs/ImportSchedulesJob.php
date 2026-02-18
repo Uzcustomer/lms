@@ -38,7 +38,7 @@ class ImportSchedulesJob implements ShouldQueue
         try {
             Artisan::call('import:schedules');
             Artisan::call('command:independent-auto-create');
-            Artisan::call('student:import-data');
+            // student:import-data scheduler orqali boshqariladi (live: har 30 daqiqa, final: 00:30)
             Artisan::call('grades:close-expired');
         } catch (\Exception $e) {
             logger()->error('Import Schedule Error: ' . $e->getMessage());

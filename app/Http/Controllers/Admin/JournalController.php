@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumSubjectTeacher;
+use App\Models\Deadline;
 use App\Models\Department;
 use App\Models\Group;
 use App\Models\LessonOpening;

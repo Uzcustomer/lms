@@ -1956,12 +1956,14 @@ class JournalController extends Controller
 
                 $editDays = $levelDeadline->deadline_days;
 
+                $todayStr = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
                 $lastNDates = DB::table('schedules')
                     ->where('group_id', $groupHemisId)
                     ->where('subject_id', $studentGrade->subject_id)
                     ->where('semester_code', $studentGrade->semester_code)
                     ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
                     ->whereNull('deleted_at')
+                    ->where(DB::raw('DATE(lesson_date)'), '<=', $todayStr)
                     ->select(DB::raw('DATE(lesson_date) as lesson_date'))
                     ->distinct()
                     ->orderBy('lesson_date')

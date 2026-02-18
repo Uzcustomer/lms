@@ -945,7 +945,12 @@
                             $activeOpenedDatesLookup = array_flip($activeOpenedDates ?? []);
                             $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
                             $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
-                            $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($jbLessonDates, -$teacherEditDays) : [];
+                            // Faqat bugungi va o'tgan dars sanalarini olish (kelajak sanalarni chiqarib tashlash)
+                            $todayStr = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
+                            $pastLessonDates = array_values(array_filter($jbLessonDates, function ($d) use ($todayStr) {
+                                return \Carbon\Carbon::parse($d)->format('Y-m-d') <= $todayStr;
+                            }));
+                            $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($pastLessonDates, -$teacherEditDays) : [];
                             $teacherEditableDates = array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $teacherEditableDatesRaw);
                             $teacherEditableDatesLookup = array_flip($teacherEditableDates);
                             $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
@@ -2433,12 +2438,10 @@
         @endif
         console.log('teacherCanEdit:', {{ $teacherCanEdit ? 'true' : 'false' }});
         console.log('teacherEditDays:', {{ $teacherEditDays }});
+        console.log('pastLessonDates (o\'tgan):', {!! json_encode(array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $pastLessonDates)) !!});
         console.log('teacherEditableDates:', {!! json_encode($teacherEditableDates) !!});
-        console.log('jbLessonDates count:', {{ count($jbLessonDates) }});
-        console.log('jbLessonDates (raw birinchi 5ta):', {!! json_encode(array_slice($jbLessonDates, 0, 5)) !!});
-        @if($isImpersonatingAdmin)
-        console.log('%c✅ Impersonation aniqlandi — admin huquqlari berildi', 'color: #10b981; font-weight: bold;');
-        @endif
+        console.log('jbLessonDates (hammasi):', {{ count($jbLessonDates) }}, 'ta');
+        console.log('today:', '{{ $todayStr }}');
         @if(!$levelDeadline)
         console.log('%c⚠️ MUAMMO: levelDeadline NULL! Settings > Deadlines da bu kurs uchun deadline sozlash kerak!', 'color: #ef4444; font-weight: bold; font-size: 12px;');
         @elseif(!($levelDeadline->retake_by_oqituvchi ?? false))

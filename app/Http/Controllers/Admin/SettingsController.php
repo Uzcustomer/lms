@@ -41,6 +41,8 @@ class SettingsController extends Controller
         $validated = $request->validate([
             'deadlines' => 'required|array',
             'deadlines.*.days' => 'required|integer|min:1',
+            'deadlines.*.retake_by_test_markazi' => 'nullable',
+            'deadlines.*.retake_by_oqituvchi' => 'nullable',
         ]);
 
         if ($request->filled('spravka_deadline_days')) {
@@ -63,14 +65,19 @@ class SettingsController extends Controller
             Setting::set('lesson_opening_days', (int) $request->lesson_opening_days);
         }
 
+        $hasRetakeColumns = \Schema::hasColumn('deadlines', 'retake_by_test_markazi');
+
         foreach ($validated['deadlines'] as $levelCode => $deadlineData) {
+            $data = ['deadline_days' => $deadlineData['days']];
+
+            if ($hasRetakeColumns) {
+                $data['retake_by_test_markazi'] = !empty($deadlineData['retake_by_test_markazi']);
+                $data['retake_by_oqituvchi'] = !empty($deadlineData['retake_by_oqituvchi']);
+            }
+
             Deadline::updateOrCreate(
                 ['level_code' => $levelCode],
-                [
-                    'deadline_days' => $deadlineData['days'],
-                    'retake_by_test_markazi' => !empty($deadlineData['retake_by_test_markazi']),
-                    'retake_by_oqituvchi' => !empty($deadlineData['retake_by_oqituvchi']),
-                ]
+                $data
             );
         }
 

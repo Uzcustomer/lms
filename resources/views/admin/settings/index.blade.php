@@ -144,6 +144,7 @@
                                             <label style="font-size: 11px; color: #64748b; font-weight: 500; display: block; margin-bottom: 4px;">Muddat (kunlar)</label>
                                             <input type="number" name="deadlines[{{ $deadline->level_code }}][days]" value="{{ old('deadlines.' . $deadline->level_code . '.days', $deadline->deadline_days ?? '') }}" style="width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; color: #111827; outline: none;">
                                         </div>
+                                        @if(\Schema::hasColumn('deadlines', 'retake_by_test_markazi'))
                                         <div>
                                             <label style="font-size: 11px; color: #64748b; font-weight: 500; display: block; margin-bottom: 6px;">Otrabotka bahosini kim qo'yadi?</label>
                                             <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -159,6 +160,7 @@
                                                 </label>
                                             </div>
                                         </div>
+                                        @endif
                                     </div>
                                 @endforeach
                             </div>

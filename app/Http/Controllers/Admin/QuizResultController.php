@@ -365,6 +365,7 @@ class QuizResultController extends Controller
     {
         try {
             set_time_limit(300);
+            ini_set('memory_limit', '512M');
 
             $query = HemisQuizResult::where('is_active', 1);
 
@@ -381,7 +382,7 @@ class QuizResultController extends Controller
             $studentIds = $results->pluck('student_id')->unique()->values()->toArray();
 
             $students = !empty($studentIds)
-                ? Student::where(function ($q) use ($studentIds) {
+                ? Student::with('curriculum')->where(function ($q) use ($studentIds) {
                     $q->whereIn('hemis_id', $studentIds)
                       ->orWhereIn('student_id_number', $studentIds);
                 })->get()
@@ -504,6 +505,32 @@ class QuizResultController extends Controller
                 }
             }
 
+            // 5) MarkingSystemScore larni bulk yuklash (N+1 query oldini olish)
+            $markingSystemCodes = $students
+                ->map(fn($s) => optional($s->curriculum)->marking_system_code)
+                ->filter()
+                ->unique()
+                ->values()
+                ->toArray();
+
+            $markingScoreLookup = [];
+            if (!empty($markingSystemCodes)) {
+                $allScores = MarkingSystemScore::whereIn('marking_system_code', $markingSystemCodes)->get();
+                foreach ($allScores as $score) {
+                    $markingScoreLookup[$score->marking_system_code] = $score;
+                }
+            }
+            $defaultScore = MarkingSystemScore::getDefault();
+
+            // Student hemis_id -> MarkingSystemScore mapping
+            $studentScoreLookup = [];
+            foreach ($students as $s) {
+                $code = optional($s->curriculum)->marking_system_code;
+                $studentScoreLookup[$s->hemis_id] = ($code && isset($markingScoreLookup[$code]))
+                    ? $markingScoreLookup[$code]
+                    : $defaultScore;
+            }
+
             // ====== DATA TAYYORLASH ======
             $data = [];
             $rowNum = 0;
@@ -535,7 +562,8 @@ class QuizResultController extends Controller
                     $uploadedResultIds, $duplicateMap,
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
-                    $testTypes, $oskiTypes
+                    $testTypes, $oskiTypes,
+                    $studentScoreLookup, $defaultScore
                 );
 
                 // Journal uchun group_db_id va semester_code aniqlash
@@ -604,7 +632,8 @@ class QuizResultController extends Controller
         $uploadedResultIds, $duplicateMap,
         $jnGrades, $mtGrades, $oskiGrades,
         $curriculumSubjects, $groups,
-        $testTypes, $oskiTypes
+        $testTypes, $oskiTypes,
+        $studentScoreLookup = [], $defaultScore = null
     ) {
         $jnAvg = null;
         $mtAvg = null;
@@ -682,7 +711,9 @@ class QuizResultController extends Controller
         }
 
         // 9) YNga ruxsat tekshiruvi (MarkingSystemScore orqali)
-        $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+        $markingScore = $studentScoreLookup[$student->hemis_id]
+            ?? $defaultScore
+            ?? MarkingSystemScore::getDefault();
         $jnThreshold = $markingScore->effectiveLimit('jn');
         $mtThreshold = $markingScore->effectiveLimit('mt');
         $oskiThreshold = $markingScore->effectiveLimit('oski');

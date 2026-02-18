@@ -1,4 +1,10 @@
-@push('styles')
+<x-app-layout>
+    <x-slot name="header">
+        <h2 class="text-xl font-semibold leading-tight text-gray-800">
+            Sistemaga yuklangan natijalar
+        </h2>
+    </x-slot>
+
     <style>
         /* === FILTERS === */
         .filter-container { padding: 12px 16px 10px; background: linear-gradient(135deg, #f0f8f4, #e8f5ee); border-bottom: 2px solid #b7e4c7; }
@@ -80,14 +86,6 @@
         .spinner { width: 36px; height: 36px; margin: 0 auto; border: 3px solid #e2e8f0; border-top-color: #16a34a; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
-@endpush
-
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            Sistemaga yuklangan natijalar
-        </h2>
-    </x-slot>
 
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">

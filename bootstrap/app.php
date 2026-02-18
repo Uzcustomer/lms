@@ -44,8 +44,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:schedules')->daily()->withoutOverlapping(120);
         $schedule->command('import:curriculum-subject-teachers')->dailyAt('22:00');
 
-        // Live import — har 30 daqiqada bugungi baholarni yangilaydi
-        $schedule->command('student:import-data --mode=live')->everyThirtyMinutes()->withoutOverlapping(60);
+        // Live import — har 30 daqiqada bugungi baholarni yangilaydi (faqat 8:30 — 00:00)
+        $schedule->command('student:import-data --mode=live')->everyThirtyMinutes()->between('8:30', '23:59')->withoutOverlapping(60);
         // Final import — har kuni 00:30 da kechagi kunni yakunlaydi
         $schedule->command('student:import-data --mode=final')->dailyAt('00:30')->withoutOverlapping(60);
         $schedule->command('import:teachers')->cron('0 0 */2 * *'); // Every 2 days at midnight

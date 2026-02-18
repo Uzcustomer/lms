@@ -364,6 +364,8 @@ class QuizResultController extends Controller
     public function tartibgaSol(Request $request)
     {
         try {
+            set_time_limit(300);
+
             $query = HemisQuizResult::where('is_active', 1);
 
             if ($request->filled('date_from')) {
@@ -422,7 +424,7 @@ class QuizResultController extends Controller
                 $duplicateMap[$key][] = $result->id;
             }
 
-            // 3) Student lar uchun JN/MT/OSKI baholarini olish (bulk)
+            // 3) Student lar uchun JN/MT/OSKI baholarini olish (chunk bilan)
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
             $fanIds = $results->pluck('fan_id')->unique()->values()->toArray();
 
@@ -430,45 +432,57 @@ class QuizResultController extends Controller
             $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
             $jnGrades = [];
             if (!empty($studentHemisIds) && !empty($fanIds)) {
-                $jnRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                    ->whereIn('subject_id', $fanIds)
-                    ->whereNotIn('training_type_code', $excludedCodes)
-                    ->whereNotNull('grade')
-                    ->get(['student_hemis_id', 'subject_id', 'grade', 'lesson_date']);
+                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                    $jnRows = StudentGrade::whereIn('student_hemis_id', $chunk)
+                        ->whereIn('subject_id', $fanIds)
+                        ->whereNotIn('training_type_code', $excludedCodes)
+                        ->whereNotNull('grade')
+                        ->select('student_hemis_id', 'subject_id', 'grade', 'lesson_date')
+                        ->get();
 
-                foreach ($jnRows as $row) {
-                    $k = $row->student_hemis_id . '|' . $row->subject_id;
-                    $jnGrades[$k][] = ['grade' => $row->grade, 'date' => $row->lesson_date];
+                    foreach ($jnRows as $row) {
+                        $k = $row->student_hemis_id . '|' . $row->subject_id;
+                        $jnGrades[$k][] = ['grade' => $row->grade, 'date' => $row->lesson_date];
+                    }
+                    unset($jnRows);
                 }
             }
 
             // MT baholar (training_type_code = 99)
             $mtGrades = [];
             if (!empty($studentHemisIds) && !empty($fanIds)) {
-                $mtRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                    ->whereIn('subject_id', $fanIds)
-                    ->where('training_type_code', 99)
-                    ->whereNotNull('grade')
-                    ->get(['student_hemis_id', 'subject_id', 'grade']);
+                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                    $mtRows = StudentGrade::whereIn('student_hemis_id', $chunk)
+                        ->whereIn('subject_id', $fanIds)
+                        ->where('training_type_code', 99)
+                        ->whereNotNull('grade')
+                        ->select('student_hemis_id', 'subject_id', 'grade')
+                        ->get();
 
-                foreach ($mtRows as $row) {
-                    $k = $row->student_hemis_id . '|' . $row->subject_id;
-                    $mtGrades[$k][] = $row->grade;
+                    foreach ($mtRows as $row) {
+                        $k = $row->student_hemis_id . '|' . $row->subject_id;
+                        $mtGrades[$k][] = $row->grade;
+                    }
+                    unset($mtRows);
                 }
             }
 
             // OSKI baholar (training_type_code = 101) — YN test uchun kerak
             $oskiGrades = [];
             if (!empty($studentHemisIds) && !empty($fanIds)) {
-                $oskiRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                    ->whereIn('subject_id', $fanIds)
-                    ->where('training_type_code', 101)
-                    ->whereNotNull('grade')
-                    ->get(['student_hemis_id', 'subject_id', 'grade']);
+                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                    $oskiRows = StudentGrade::whereIn('student_hemis_id', $chunk)
+                        ->whereIn('subject_id', $fanIds)
+                        ->where('training_type_code', 101)
+                        ->whereNotNull('grade')
+                        ->select('student_hemis_id', 'subject_id', 'grade')
+                        ->get();
 
-                foreach ($oskiRows as $row) {
-                    $k = $row->student_hemis_id . '|' . $row->subject_id;
-                    $oskiGrades[$k][] = $row->grade;
+                    foreach ($oskiRows as $row) {
+                        $k = $row->student_hemis_id . '|' . $row->subject_id;
+                        $oskiGrades[$k][] = $row->grade;
+                    }
+                    unset($oskiRows);
                 }
             }
 

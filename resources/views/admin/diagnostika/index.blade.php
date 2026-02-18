@@ -1,4 +1,10 @@
-@push('styles')
+<x-app-layout>
+    <x-slot name="header">
+        <h2 class="text-xl font-semibold leading-tight text-gray-800">
+            Diagnostika (Test markazi)
+        </h2>
+    </x-slot>
+
     <link href="/css/scroll-calendar.css" rel="stylesheet" />
     <style>
         /* === FILTERS === */
@@ -121,14 +127,6 @@
         .spinner-sm { width: 16px; height: 16px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; vertical-align: middle; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
-@endpush
-
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            Diagnostika (Test markazi)
-        </h2>
-    </x-slot>
 
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">

@@ -944,7 +944,8 @@
                             $activeOpenedDatesLookup = array_flip($activeOpenedDates ?? []);
                             $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
                             $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
-                            $teacherEditableDates = $teacherCanEdit ? array_slice($jbLessonDates, -$teacherEditDays) : [];
+                            $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($jbLessonDates, -$teacherEditDays) : [];
+                            $teacherEditableDates = array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $teacherEditableDatesRaw);
                             $teacherEditableDatesLookup = array_flip($teacherEditableDates);
                             $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
                                 return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
@@ -1259,7 +1260,7 @@
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
-                                                        $isAdminRole = auth()->user()?->hasRole('admin') ?? false;
+                                                        $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
                                                         $canRateAdmin = !$isDekan && $isAdminRole;
                                                         $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable);

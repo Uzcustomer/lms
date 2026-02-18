@@ -2104,6 +2104,19 @@ class JournalController extends Controller
                 ], 403);
             }
 
+            // Sababli/sababsiz tekshirish (NB uchun)
+            $isExcused = false;
+            if ($studentGrade->reason === 'absent') {
+                $attendance = DB::table('attendances')
+                    ->where('student_hemis_id', $studentGrade->student_hemis_id)
+                    ->where('subject_id', $studentGrade->subject_id)
+                    ->where('semester_code', $studentGrade->semester_code)
+                    ->whereDate('lesson_date', $studentGrade->lesson_date)
+                    ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
+                    ->first();
+                $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
+            }
+
             // Retake bahoni o'chirish va oldingi holatni tiklash
             DB::table('student_grades')
                 ->where('id', $gradeId)
@@ -2119,6 +2132,7 @@ class JournalController extends Controller
                 'message' => 'Retake bahosi o\'chirildi',
                 'reason' => $studentGrade->reason,
                 'original_grade' => $studentGrade->grade,
+                'is_excused' => $isExcused,
             ]);
         } catch (\Exception $e) {
             return response()->json([

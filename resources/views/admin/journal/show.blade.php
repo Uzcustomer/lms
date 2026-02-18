@@ -1328,6 +1328,31 @@
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
+                                                        @elseif($hasRetake && $retakeType === 'absent' && $canRateAdmin)
+                                                            {{-- NB + retake baho — admin o'chira oladi --}}
+                                                            @php
+                                                                $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
+                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
+                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                            @endphp
+                                                            <div class="split-cell cursor-pointer hover:bg-red-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'chirish"
+                                                                onclick="deleteRetakeGrade(this, {{ $gradeRecordId }})">
+                                                                <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                                                                <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
+                                                                <span class="split-bottom">{{ round($grade, 0) }}</span>
+                                                            </div>
+                                                        @elseif($hasRetake && $retakeType === 'absent')
+                                                            {{-- NB + retake baho — admin emas, faqat ko'rish --}}
+                                                            @php
+                                                                $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
+                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
+                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                            @endphp
+                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
+                                                                <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
+                                                                <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
+                                                                <span class="split-bottom">{{ round($grade, 0) }}</span>
+                                                            </div>
                                                         @else
                                                             @php
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
@@ -1997,6 +2022,7 @@
 
     <script>
         window.minimumLimit = {{ $minimumLimit ?? 60 }};
+        window.isAdminRole = {{ (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false) ? 'true' : 'false' }};
 
         // ====== Cascading Sidebar Filters ======
         // Zanjir: Fakultet(erkin) → Yo'nalish → Kurs → Semestr → [Guruh ↔ Fan]
@@ -2943,26 +2969,35 @@
             .then(data => {
                 if (data.success) {
                     const retakeVal = Math.round(data.retake_grade);
+                    const canDelete = window.isAdminRole;
+
                     // Diagonal split cell for NB and low grade retakes
                     if (data.reason === 'absent') {
-                        // NB otrabotka: NB yuqorida, retake pastda
                         const nbColor = data.is_excused ? 'color:#16a34a' : 'color:#dc2626';
                         const nbTitle = data.is_excused ? 'sababli' : 'sababsiz';
-                        cellDiv.innerHTML = `<div class="split-cell" title="NB (${nbTitle}), Otrabotka: ${retakeVal}">
+                        const deleteAttr = canDelete ? `cursor-pointer hover:bg-red-50` : '';
+                        const deleteTitle = canDelete ? ` — bosib o'chirish` : '';
+                        cellDiv.innerHTML = `<div class="split-cell ${deleteAttr}" title="NB (${nbTitle}), Otrabotka: ${retakeVal}${deleteTitle}">
                             <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                             <span class="split-top" style="${nbColor};font-size:10px;">NB</span>
                             <span class="split-bottom">${retakeVal}</span>
                         </div>`;
+                        if (canDelete) {
+                            cellDiv.querySelector('.split-cell').onclick = function() { deleteRetakeGrade(cellDiv, gradeId); };
+                        }
                     } else if (data.reason === 'low_grade' && data.original_grade !== null) {
-                        // Past baho otrabotka: eski baho yuqorida (qizil), retake pastda
                         const origVal = Math.round(data.original_grade);
-                        cellDiv.innerHTML = `<div class="split-cell" title="Oldingi: ${origVal}, Otrabotka: ${retakeVal}">
+                        const deleteAttr = canDelete ? `cursor-pointer hover:bg-red-50` : '';
+                        const deleteTitle = canDelete ? ` — bosib o'chirish` : '';
+                        cellDiv.innerHTML = `<div class="split-cell ${deleteAttr}" title="Oldingi: ${origVal}, Otrabotka: ${retakeVal}${deleteTitle}">
                             <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                             <span class="split-top" style="color:#dc2626;">${origVal}</span>
                             <span class="split-bottom">${retakeVal}</span>
                         </div>`;
+                        if (canDelete) {
+                            cellDiv.querySelector('.split-cell').onclick = function() { deleteRetakeGrade(cellDiv, gradeId); };
+                        }
                     } else {
-                        // Boshqa holatlar: checkmark
                         cellDiv.innerHTML = `<div class="flex items-center justify-center gap-1">
                             <span class="grade-retake font-medium">${retakeVal}</span>
                             <span class="text-green-600 text-xs" title="Baho qo'yilgan: ${data.percentage}%">✓</span>
@@ -3003,7 +3038,7 @@
         }
 
         function deleteRetakeGrade(cellDiv, gradeId) {
-            if (!confirm('Retake bahosini o\'chirib, NB holatiga qaytarishni xohlaysizmi?')) {
+            if (!confirm('Retake bahosini o\'chirib, oldingi holatga qaytarishni xohlaysizmi?')) {
                 return;
             }
 
@@ -3024,8 +3059,31 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Sahifani yangilash — NB holati to'g'ri ko'rinishi uchun
-                    location.reload();
+                    if (data.reason === 'absent') {
+                        // NB holatiga qaytarish — bosilganda yana baho qo'yish mumkin
+                        const nbColor = data.is_excused ? 'text-green-600' : 'text-red-600';
+                        cellDiv.className = 'editable-cell cursor-pointer hover:bg-blue-50';
+                        cellDiv.title = 'Bosib baho kiriting';
+                        cellDiv.innerHTML = `<span class="${nbColor} font-medium">NB</span>`;
+                        cellDiv.onclick = function() { makeEditable(this, gradeId); };
+                    } else if (data.reason === 'low_grade' && data.original_grade !== null) {
+                        // Past baho holatiga qaytarish
+                        const origVal = Math.round(data.original_grade);
+                        cellDiv.className = 'editable-cell cursor-pointer hover:bg-blue-50';
+                        cellDiv.title = 'Bosib baho kiriting';
+                        cellDiv.innerHTML = `<span class="text-red-600 font-medium">${origVal}</span>`;
+                        cellDiv.onclick = function() { makeEditable(this, gradeId); };
+                    } else {
+                        location.reload();
+                        return;
+                    }
+
+                    // Muvaffaqiyat bildiruvchi
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed top-4 right-4 bg-orange-500 text-white px-4 py-2 rounded shadow-lg z-50';
+                    notification.textContent = 'Retake bahosi o\'chirildi';
+                    document.body.appendChild(notification);
+                    setTimeout(() => notification.remove(), 3000);
                 } else {
                     alert('Xatolik: ' + (data.message || 'O\'chirilmadi'));
                     cellDiv.innerHTML = originalContent;

@@ -374,7 +374,7 @@ class DebugTeacherJournal extends Command
         }
 
         // 2. Ism bo'yicha qidirish
-        $teachers = Teacher::where('name', 'like', "%{$search}%")->limit(10)->get();
+        $teachers = Teacher::where('full_name', 'like', "%{$search}%")->limit(10)->get();
 
         if ($teachers->isEmpty()) {
             $this->error("  ❌ '{$search}' nomli o'qituvchi topilmadi");

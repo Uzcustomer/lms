@@ -278,10 +278,14 @@
                     $('#table-area').show();
                     $('#btn-excel, #btn-excel-xulosa').prop('disabled', false);
                 },
-                error: function() {
+                error: function(xhr) {
                     $('#loading-state').hide();
                     $('#btn-tartibga').prop('disabled', false).css('opacity', '1');
-                    $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                    var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        msg = xhr.responseJSON.error;
+                    }
+                    $('#empty-state').show().find('p:first').text(msg);
                 }
             });
         }

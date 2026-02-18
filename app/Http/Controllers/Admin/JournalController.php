@@ -368,7 +368,7 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'created_at')
+            ->select('id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -389,7 +389,7 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final')
+            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -509,6 +509,7 @@ class JournalController extends Controller
                     'reason' => $g->reason,
                     'original_grade' => $g->grade,
                     'is_final' => $g->is_final,
+                    'deadline' => $g->deadline,
                 ]);
             }
         }
@@ -524,6 +525,7 @@ class JournalController extends Controller
                     'reason' => $g->reason,
                     'original_grade' => $g->grade,
                     'is_final' => $g->is_final,
+                    'deadline' => $g->deadline,
                 ]);
             }
         }
@@ -536,7 +538,8 @@ class JournalController extends Controller
             if ($g->reason === 'absent') {
                 $jbAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = [
                     'id' => $g->id,
-                    'retake_grade' => $g->retake_grade
+                    'retake_grade' => $g->retake_grade,
+                    'deadline' => $g->deadline,
                 ];
             }
         }
@@ -546,7 +549,8 @@ class JournalController extends Controller
             if ($g->reason === 'absent') {
                 $mtAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = [
                     'id' => $g->id,
-                    'retake_grade' => $g->retake_grade
+                    'retake_grade' => $g->retake_grade,
+                    'deadline' => $g->deadline,
                 ];
             }
         }
@@ -1902,6 +1906,16 @@ class JournalController extends Controller
             // Check if retake grade already exists
             if ($studentGrade->retake_grade !== null) {
                 return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
+            }
+
+            // Muddat tekshirish: deadline o'tgan bo'lsa, baho qo'yishga ruxsat bermash
+            if ($studentGrade->deadline && now()->greaterThan($studentGrade->deadline)) {
+                $deadlineFormatted = \Carbon\Carbon::parse($studentGrade->deadline)->format('d.m.Y H:i');
+                return response()->json([
+                    'success' => false,
+                    'message' => "Otrabotka muddati o'tgan ({$deadlineFormatted}). Baho qo'yish mumkin emas.",
+                    'deadline_expired' => true,
+                ], 403);
             }
 
             // Check if there's an attendance record to determine if absence was excused

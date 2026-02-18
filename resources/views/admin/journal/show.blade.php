@@ -1263,12 +1263,21 @@
                                                         $hasRetake = false;
                                                         $isEmpty = false;
                                                         $retakeType = null;
+                                                        $deadlineExpired = false;
+                                                        $deadlineStr = null;
+
+                                                        // Muddat tekshirish
+                                                        $gradeDeadline = $gradeData['deadline'] ?? ($jbAbsences[$student->hemis_id][$col['date']][$col['pair']]['deadline'] ?? null);
+                                                        if ($gradeDeadline && now()->greaterThan($gradeDeadline)) {
+                                                            $deadlineExpired = true;
+                                                            $deadlineStr = \Carbon\Carbon::parse($gradeDeadline)->format('d.m.Y');
+                                                        }
 
                                                         if ($isAbsent && isset($jbAbsences[$student->hemis_id][$col['date']][$col['pair']])) {
                                                             $absenceData = $jbAbsences[$student->hemis_id][$col['date']][$col['pair']];
                                                             $gradeRecordId = $absenceData['id'];
                                                             $hasRetake = $absenceData['retake_grade'] !== null;
-                                                            $showRatingInput = $canRate && !$hasRetake;
+                                                            $showRatingInput = $canRate && !$hasRetake && !$deadlineExpired;
                                                             $retakeType = 'absent';
                                                         } elseif ($gradeData && $gradeData['reason'] === 'low_grade' && $gradeData['retake_grade'] !== null) {
                                                             // Otrabotka qilingan (original_grade < minimumLimit)
@@ -1277,7 +1286,7 @@
                                                         } elseif ($gradeData && $gradeData['original_grade'] !== null && round($gradeData['original_grade'], 0) < ($minimumLimit ?? 60) && ($gradeData['retake_grade'] ?? null) === null) {
                                                             // minimumLimit dan past, hali otrabotka qilinmagan
                                                             $gradeRecordId = $gradeData['id'];
-                                                            $showRatingInput = $canRate;
+                                                            $showRatingInput = $canRate && !$deadlineExpired;
                                                         } elseif (!$isAbsent && $grade === null) {
                                                             $isEmpty = true;
                                                             $showRatingInput = $canRate;
@@ -1289,6 +1298,9 @@
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
                                                                 <span class="text-red-600 font-medium">{{ round($grade, 0) }}</span>
                                                             </div>
+                                                        @elseif($deadlineExpired && !$hasRetake && $gradeData && round($gradeData['original_grade'] ?? 0, 0) < ($minimumLimit ?? 60))
+                                                            {{-- Muddat o'tgan, otrabotka qilinmagan --}}
+                                                            <span class="text-red-600 font-medium" title="Muddat o'tgan: {{ $deadlineStr }}">{{ round($grade, 0) }}</span>
                                                         @elseif($hasRetake && $retakeType === 'low_grade')
                                                             {{-- minimumLimit dan past + otrabotka qilgan: diagonal split --}}
                                                             @php
@@ -1318,6 +1330,9 @@
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
                                                                 <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                             </div>
+                                                        @elseif($deadlineExpired && !$hasRetake && $canRate)
+                                                            {{-- NB — muddat o'tgan --}}
+                                                            <span class="{{ $nbColorClass }} font-medium" title="Muddat o'tgan: {{ $deadlineStr }}">NB</span>
                                                         @elseif($hasRetake)
                                                             {{-- NB + otrabotka qilgan: diagonal split --}}
                                                             @php $retakeVal = round($absenceData['retake_grade'], 0); @endphp
@@ -2922,8 +2937,18 @@
                         notification.remove();
                     }, 3000);
                 } else {
-                    alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
-                    cellDiv.innerHTML = originalContent;
+                    // Muddat o'tgan bo'lsa, maxsus xabar ko'rsatish
+                    if (data.deadline_expired) {
+                        alert(data.message);
+                        cellDiv.innerHTML = originalContent;
+                        // Katakni tahrir qilib bo'lmaydigan qilish
+                        cellDiv.onclick = null;
+                        cellDiv.classList.remove('cursor-pointer', 'hover:bg-blue-50', 'editable-cell');
+                        cellDiv.title = data.message;
+                    } else {
+                        alert('Xatolik: ' + (data.message || 'Baho saqlanmadi'));
+                        cellDiv.innerHTML = originalContent;
+                    }
                 }
                 currentEditingCell = null;
             })

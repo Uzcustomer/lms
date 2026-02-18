@@ -194,6 +194,12 @@ class TeacherMainController extends Controller
             return back()->with('error', 'Bu bahoni o\'zgartirish mumkin emas.');
         }
 
+        // Muddat tekshirish: deadline o'tgan bo'lsa, baho qo'yishga ruxsat bermash
+        if ($grade->deadline && now()->greaterThan($grade->deadline)) {
+            $deadlineFormatted = \Carbon\Carbon::parse($grade->deadline)->format('d.m.Y H:i');
+            return back()->with('error', "Otrabotka muddati o'tgan ({$deadlineFormatted}). Baho qo'yish mumkin emas.");
+        }
+
         $grade->update([
             'retake_grade' => $request->grade,
             'status' => 'retake',

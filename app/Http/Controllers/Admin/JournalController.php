@@ -2067,6 +2067,68 @@ class JournalController extends Controller
     }
 
     /**
+     * Delete a retake grade and restore original NB/low_grade status
+     */
+    public function deleteRetakeGrade(Request $request)
+    {
+        // Faqat admin/superadmin o'chira oladi
+        if (!auth()->user()->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'grade_id' => 'required|integer',
+        ]);
+
+        try {
+            $gradeId = $request->grade_id;
+
+            $studentGrade = DB::table('student_grades')
+                ->where('id', $gradeId)
+                ->first();
+
+            if (!$studentGrade) {
+                return response()->json(['success' => false, 'message' => 'Baho yozuvi topilmadi: id=' . $gradeId], 404);
+            }
+
+            if ($studentGrade->retake_grade === null) {
+                return response()->json(['success' => false, 'message' => 'Bu yozuvda retake bahosi yo\'q.'], 400);
+            }
+
+            // YN ga yuborilganligini tekshirish
+            if ($studentGrade->is_yn_locked) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
+
+            // Retake bahoni o'chirish va oldingi holatni tiklash
+            DB::table('student_grades')
+                ->where('id', $gradeId)
+                ->update([
+                    'retake_grade' => null,
+                    'retake_graded_at' => null,
+                    'status' => 'pending',
+                    'updated_at' => now(),
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Retake bahosi o\'chirildi',
+                'reason' => $studentGrade->reason,
+                'original_grade' => $studentGrade->grade,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Xatolik: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Create a new retake grade for empty cells
      */
     public function createRetakeGrade(Request $request)

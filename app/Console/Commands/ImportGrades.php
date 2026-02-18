@@ -326,11 +326,18 @@ class ImportGrades extends Command
         }
 
         DB::transaction(function () use ($filteredItems, $dateStart, $dateEnd, $isFinal, &$gradeCount, &$softDeletedCount) {
-            // Bugungi is_final=false baholarni soft delete
-            $softDeletedCount = StudentGrade::where('lesson_date', '>=', $dateStart)
-                ->where('lesson_date', '<=', $dateEnd)
-                ->where('is_final', false)
-                ->delete(); // SoftDeletes trait tufayli bu soft delete
+            $query = StudentGrade::where('lesson_date', '>=', $dateStart)
+                ->where('lesson_date', '<=', $dateEnd);
+
+            if ($isFinal) {
+                // Final/Backfill: BARCHA eski yozuvlarni o'chirish (is_final=true va false)
+                // Bu backfill'ni qayta ishlatishda duplicate yaratmaslikni ta'minlaydi
+                $softDeletedCount = $query->delete();
+            } else {
+                // Live import: faqat is_final=false yozuvlarni o'chirish
+                // is_final=true (yakunlangan) baholar saqlanib qoladi
+                $softDeletedCount = $query->where('is_final', false)->delete();
+            }
 
             $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
             Log::info("[ApplyGrades] Soft deleted {$softDeletedCount} grades for {$dateStart->toDateString()}");

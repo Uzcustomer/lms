@@ -3092,18 +3092,30 @@ class JournalController extends Controller
 
     /**
      * Dars jadvalidan o'qituvchining fan-guruh biriktirishlarini aniqlash.
-     * Har bir fan+guruh kombinatsiyasi uchun eng ko'p dars o'tgan o'qituvchi "egasi" hisoblanadi.
-     * Agar dars soni teng bo'lsa, oxirgi dars o'tgan o'qituvchi tanlanadi.
+     * Faqat joriy semestr darslari hisobga olinadi.
+     * Har bir fan+guruh uchun eng ko'p dars o'tgan o'qituvchi "primary" hisoblanadi.
      *
      * @param int $employeeHemisId O'qituvchining HEMIS ID si
      * @return array ['subject_ids' => [...], 'group_ids' => [...]]
      */
     private function getTeacherScheduleAssignments(int $employeeHemisId): array
     {
-        // 1-query: O'qituvchining fan+guruh kombinatsiyalarini topish
+        // Joriy semestr kodlarini aniqlash
+        $currentSemesterCodes = DB::table('semesters')
+            ->where('current', true)
+            ->pluck('code')
+            ->unique()
+            ->toArray();
+
+        if (empty($currentSemesterCodes)) {
+            return ['subject_ids' => [], 'group_ids' => []];
+        }
+
+        // 1-query: O'qituvchining joriy semestrdagi fan+guruh kombinatsiyalari
         $teacherCombos = DB::table('schedules')
             ->where('employee_id', $employeeHemisId)
             ->where('education_year_current', true)
+            ->whereIn('semester_code', $currentSemesterCodes)
             ->whereNull('deleted_at')
             ->select('subject_id', 'group_id')
             ->groupBy('subject_id', 'group_id')
@@ -3113,12 +3125,13 @@ class JournalController extends Controller
             return ['subject_ids' => [], 'group_ids' => []];
         }
 
-        // 2-query: Shu fan+guruh kombinatsiyalaridagi BARCHA o'qituvchilarning statistikasi
+        // 2-query: Joriy semestrdagi BARCHA o'qituvchilarning statistikasi
         $comboSubjectIds = $teacherCombos->pluck('subject_id')->unique()->toArray();
         $comboGroupIds = $teacherCombos->pluck('group_id')->unique()->toArray();
 
         $allStats = DB::table('schedules')
             ->where('education_year_current', true)
+            ->whereIn('semester_code', $currentSemesterCodes)
             ->whereNull('deleted_at')
             ->whereIn('subject_id', $comboSubjectIds)
             ->whereIn('group_id', $comboGroupIds)

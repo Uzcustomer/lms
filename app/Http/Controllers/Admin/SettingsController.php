@@ -68,6 +68,8 @@ class SettingsController extends Controller
                 ['level_code' => $levelCode],
                 [
                     'deadline_days' => $deadlineData['days'],
+                    'retake_by_test_markazi' => !empty($deadlineData['retake_by_test_markazi']),
+                    'retake_by_oqituvchi' => !empty($deadlineData['retake_by_oqituvchi']),
                 ]
             );
         }

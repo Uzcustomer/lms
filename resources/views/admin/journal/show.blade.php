@@ -942,6 +942,10 @@
                             $isOqituvchi = is_active_oqituvchi();
                             $missedDatesLookup = array_flip($missedDates ?? []);
                             $activeOpenedDatesLookup = array_flip($activeOpenedDates ?? []);
+                            $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
+                            $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
+                            $teacherEditableDates = $teacherCanEdit ? array_slice($jbLessonDates, -$teacherEditDays) : [];
+                            $teacherEditableDatesLookup = array_flip($teacherEditableDates);
                             $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
                                 return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
                             }));
@@ -1254,8 +1258,11 @@
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
                                                     @php
-                                                        $canRate = !$isDekan && auth()->user()->hasRole('admin');
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                        $isAdminRole = auth()->user()->hasRole('admin');
+                                                        $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
+                                                        $canRateAdmin = !$isDekan && $isAdminRole;
+                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable);
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi;
                                                         $showRatingInput = false;
@@ -1289,7 +1296,7 @@
                                                             $showRatingInput = $canRate && !$deadlineExpired;
                                                         } elseif (!$isAbsent && $grade === null) {
                                                             $isEmpty = true;
-                                                            $showRatingInput = $canRate;
+                                                            $showRatingInput = $canRateAdmin;
                                                         }
                                                     @endphp
                                                     @if($grade !== null)

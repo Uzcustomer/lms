@@ -965,6 +965,9 @@ class JournalController extends Controller
             : null;
         $minimumLimit = $markingScore ? $markingScore->minimum_limit : 60;
 
+        // Kurs darajasi bo'yicha deadline sozlamalari (o'qituvchi edit huquqi)
+        $levelDeadline = $levelCode ? Deadline::where('level_code', $levelCode)->first() : null;
+
         // YN rozilik va yuborish ma'lumotlari
         $ynConsents = YnConsent::where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
@@ -1042,7 +1045,8 @@ class JournalController extends Controller
             'minimumLimit',
             'ynConsents',
             'ynSubmission',
-            'canSubmitYn'
+            'canSubmitYn',
+            'levelDeadline'
         ));
     }
 
@@ -1871,8 +1875,11 @@ class JournalController extends Controller
      */
     public function saveRetakeGrade(Request $request)
     {
-        // Check admin role
-        if (!auth()->user()->hasRole('admin')) {
+        // Check admin or teacher role
+        $isAdmin = auth()->user()->hasRole('admin');
+        $isTeacher = is_active_oqituvchi();
+
+        if (!$isAdmin && !$isTeacher) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -1892,6 +1899,80 @@ class JournalController extends Controller
 
             if (!$studentGrade) {
                 return response()->json(['success' => false, 'message' => 'Baho yozuvi topilmadi: id=' . $gradeId], 404);
+            }
+
+            // O'qituvchi uchun: biriktirilgan + Deadline sozlamasi + faqat NB/<60
+            if ($isTeacher && !$isAdmin) {
+                // Faqat NB (absent) yoki past baho (<60) larga ruxsat
+                $isAbsentReason = $studentGrade->reason === 'absent';
+                $isLowGrade = $studentGrade->reason === 'low_grade'
+                    || ($studentGrade->original_grade !== null && round((float)$studentGrade->original_grade) < 60);
+
+                if (!$isAbsentReason && !$isLowGrade) {
+                    return response()->json(['success' => false, 'message' => 'O\'qituvchi faqat NB va past baholarni tahrirlashi mumkin.'], 403);
+                }
+
+                // Biriktirilgan o'qituvchini tekshirish
+                $teacherHemisId = get_teacher_hemis_id();
+                $student = DB::table('students')->where('hemis_id', $studentGrade->student_hemis_id)->first();
+                $groupHemisId = $student?->group_hemis_id;
+
+                if (!$teacherHemisId) {
+                    return response()->json(['success' => false, 'message' => 'O\'qituvchi topilmadi (hemis_id null)'], 403);
+                }
+
+                $isAssigned = \App\Models\CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
+                    ->where('subject_id', $studentGrade->subject_id)
+                    ->where('group_id', $groupHemisId)
+                    ->exists();
+
+                if (!$isAssigned) {
+                    $isAssigned = DB::table('schedules')
+                        ->where('group_id', $groupHemisId)
+                        ->where('subject_id', $studentGrade->subject_id)
+                        ->where('semester_code', $studentGrade->semester_code)
+                        ->where('employee_id', $teacherHemisId)
+                        ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+                        ->exists();
+                }
+
+                if (!$isAssigned) {
+                    return response()->json(['success' => false, 'message' => 'Siz bu guruh/fanga biriktirilmagansiz.'], 403);
+                }
+
+                // Deadline sozlamasi tekshirish
+                $semesterLevelCode = DB::table('semesters')
+                    ->where('code', $studentGrade->semester_code)
+                    ->value('level_code');
+
+                $levelDeadline = $semesterLevelCode
+                    ? Deadline::where('level_code', $semesterLevelCode)->first()
+                    : null;
+
+                if (!$levelDeadline || !$levelDeadline->retake_by_oqituvchi) {
+                    return response()->json(['success' => false, 'message' => 'Bu kurs darajasida o\'qituvchiga baho qo\'yish ruxsati yo\'q.'], 403);
+                }
+
+                $editDays = $levelDeadline->deadline_days;
+
+                $lastNDates = DB::table('schedules')
+                    ->where('group_id', $groupHemisId)
+                    ->where('subject_id', $studentGrade->subject_id)
+                    ->where('semester_code', $studentGrade->semester_code)
+                    ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+                    ->whereNull('deleted_at')
+                    ->select(DB::raw('DATE(lesson_date) as lesson_date'))
+                    ->distinct()
+                    ->orderBy('lesson_date')
+                    ->pluck('lesson_date')
+                    ->toArray();
+
+                $lastNDates = array_slice($lastNDates, -$editDays);
+                $gradeDateStr = \Carbon\Carbon::parse($studentGrade->lesson_date)->format('Y-m-d');
+
+                if (!in_array($gradeDateStr, $lastNDates)) {
+                    return response()->json(['success' => false, 'message' => "O'qituvchi faqat oxirgi {$editDays} kunlik darslarga baho qo'ya oladi."], 403);
+                }
             }
 
             // YN ga yuborilganligini tekshirish
@@ -1987,7 +2068,7 @@ class JournalController extends Controller
      */
     public function createRetakeGrade(Request $request)
     {
-        // Check admin role
+        // Bo'sh katakga baho qo'yish — faqat admin
         if (!auth()->user()->hasRole('admin')) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }

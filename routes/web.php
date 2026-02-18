@@ -189,7 +189,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-filters-by-group', [JournalController::class, 'getFiltersByGroup'])->name('get-filters-by-group');
             Route::get('/get-filters-by-semester', [JournalController::class, 'getFiltersBySemester'])->name('get-filters-by-semester');
             Route::get('/get-sidebar-options', [JournalController::class, 'getSidebarOptions'])->name('get-sidebar-options');
-            Route::get('/debug-teacher-groups', [JournalController::class, 'debugTeacherGroups'])->name('debug-teacher-groups');
             Route::get('/get-topics', [JournalController::class, 'getTopics'])->name('get-topics');
             Route::get('/download-submission/{submissionId}', [JournalController::class, 'downloadSubmission'])->name('download-submission');
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');

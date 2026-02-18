@@ -43,6 +43,28 @@ class JournalController extends Controller
                 $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
                 $teacherSubjectIds = $assignments['subject_ids'];
                 $teacherGroupIds = $assignments['group_ids'];
+
+                // DEBUG: index() da o'qituvchi uchun guruhlar
+                Log::channel('daily')->info("=== JOURNAL DEBUG: index() o'qituvchi ===", [
+                    'teacher_hemis_id' => $teacherHemisId,
+                    'teacherSubjectIds' => $teacherSubjectIds,
+                    'teacherGroupIds' => $teacherGroupIds,
+                    'teacherSubjectIds_count' => count($teacherSubjectIds),
+                    'teacherGroupIds_count' => count($teacherGroupIds),
+                ]);
+
+                // DEBUG: d1/21-09c guruhini tekshirish
+                $target = DB::table('groups')
+                    ->where('name', 'like', '%21-09%')
+                    ->select('id', 'name', 'group_hemis_id', 'active', 'department_active')
+                    ->get();
+                Log::channel('daily')->info("JOURNAL DEBUG: index() d1/21-09c qidirish", [
+                    'found' => $target->toArray(),
+                    'group_hemis_ids_in_target' => $target->pluck('group_hemis_id')->toArray(),
+                    'is_in_teacher_groups' => $target->pluck('group_hemis_id')
+                        ->intersect(collect($teacherGroupIds))
+                        ->values()->toArray(),
+                ]);
             }
         }
 
@@ -2867,6 +2889,38 @@ class JournalController extends Controller
             if ($teacherHemisId) {
                 $teacherAssignments = $this->getTeacherSubjectAssignments($teacherHemisId);
             }
+
+            // DEBUG: getSidebarOptions da o'qituvchi uchun cheklov
+            Log::channel('daily')->info("=== JOURNAL DEBUG: getSidebarOptions o'qituvchi ===", [
+                'teacher_hemis_id' => $teacherHemisId ?? 'NULL',
+                'assigned_group_ids' => $teacherAssignments['group_ids'],
+                'assigned_subject_ids' => $teacherAssignments['subject_ids'],
+            ]);
+
+            // DEBUG: groups jadvalida shu group_ids bor-yo'qligini tekshirish
+            if (!empty($teacherAssignments['group_ids'])) {
+                $matchingGroups = DB::table('groups')
+                    ->whereIn('group_hemis_id', $teacherAssignments['group_ids'])
+                    ->where('active', true)
+                    ->where('department_active', true)
+                    ->select('id', 'name', 'group_hemis_id')
+                    ->get();
+                Log::channel('daily')->info("JOURNAL DEBUG: groups jadvalidan topilgan guruhlar", [
+                    'matching_groups' => $matchingGroups->toArray(),
+                ]);
+            }
+
+            // DEBUG: d1/21-09c guruhini qidirish
+            $targetGroup = DB::table('groups')
+                ->where('name', 'like', '%21-09%')
+                ->select('id', 'name', 'group_hemis_id', 'active', 'department_active', 'curriculum_hemis_id')
+                ->get();
+            Log::channel('daily')->info("JOURNAL DEBUG: d1/21-09c guruhini qidirish", [
+                'found_groups' => $targetGroup->toArray(),
+                'is_in_teacher_group_ids' => $targetGroup->pluck('group_hemis_id')
+                    ->intersect(collect($teacherAssignments['group_ids']))
+                    ->isNotEmpty(),
+            ]);
         }
 
         // Fakultet department_hemis_id (reused in multiple queries)
@@ -3072,15 +3126,66 @@ class JournalController extends Controller
         // 1-manba: curriculum_subject_teachers
         $records = CurriculumSubjectTeacher::where('employee_id', $employeeHemisId)->get();
 
+        // DEBUG: curriculum_subject_teachers dan kelgan yozuvlar
+        Log::channel('daily')->info("=== JOURNAL DEBUG: getTeacherSubjectAssignments ===", [
+            'employee_hemis_id' => $employeeHemisId,
+            'curriculum_subject_teachers_count' => $records->count(),
+            'all_records' => $records->map(fn($r) => [
+                'id' => $r->id,
+                'subject_id' => $r->subject_id,
+                'subject_name' => $r->subject_name,
+                'group_id' => $r->group_id,
+                'group_id_is_null' => is_null($r->group_id),
+                'curriculum_id' => $r->curriculum_id,
+                'training_type_name' => $r->training_type_name,
+                'active' => $r->active,
+            ])->toArray(),
+        ]);
+
         $subjectIds = $records->pluck('subject_id')->unique()->filter()->values()->toArray();
         $groupIds = $records->pluck('group_id')->unique()->filter()->values()->toArray();
+
+        // DEBUG: NULL group_id bo'lgan yozuvlar bormi?
+        $nullGroupRecords = $records->filter(fn($r) => is_null($r->group_id) || $r->group_id === '' || $r->group_id === 0);
+        if ($nullGroupRecords->isNotEmpty()) {
+            Log::channel('daily')->warning("!!! JOURNAL DEBUG: NULL group_id topildi !!!", [
+                'employee_hemis_id' => $employeeHemisId,
+                'null_group_records_count' => $nullGroupRecords->count(),
+                'null_group_records' => $nullGroupRecords->map(fn($r) => [
+                    'id' => $r->id,
+                    'subject_name' => $r->subject_name,
+                    'group_id_value' => var_export($r->group_id, true),
+                    'curriculum_id' => $r->curriculum_id,
+                    'training_type_name' => $r->training_type_name,
+                ])->toArray(),
+                'explanation' => 'Bu yozuvlar filter() tufayli group_ids dan tushib qoladi!',
+            ]);
+        }
+
+        Log::channel('daily')->info("JOURNAL DEBUG: filter() dan keyin", [
+            'subject_ids_from_cst' => $subjectIds,
+            'group_ids_from_cst' => $groupIds,
+            'group_ids_before_filter' => $records->pluck('group_id')->unique()->values()->toArray(),
+        ]);
 
         // 2-manba (fallback): dars jadvalidan aniqlash
         $scheduleAssignments = $this->getTeacherScheduleAssignments($employeeHemisId);
 
+        Log::channel('daily')->info("JOURNAL DEBUG: schedule fallback natijalari", [
+            'schedule_subject_ids' => $scheduleAssignments['subject_ids'],
+            'schedule_group_ids' => $scheduleAssignments['group_ids'],
+        ]);
+
         // Ikki manbani birlashtirish
         $subjectIds = array_values(array_unique(array_merge($subjectIds, $scheduleAssignments['subject_ids'])));
         $groupIds = array_values(array_unique(array_merge($groupIds, $scheduleAssignments['group_ids'])));
+
+        Log::channel('daily')->info("JOURNAL DEBUG: yakuniy natija", [
+            'final_subject_ids' => $subjectIds,
+            'final_group_ids' => $groupIds,
+            'final_subject_count' => count($subjectIds),
+            'final_group_count' => count($groupIds),
+        ]);
 
         return [
             'subject_ids' => $subjectIds,
@@ -3107,7 +3212,16 @@ class JournalController extends Controller
             ->groupBy('subject_id', 'group_id')
             ->get();
 
+        Log::channel('daily')->info("JOURNAL DEBUG: getTeacherScheduleAssignments", [
+            'employee_hemis_id' => $employeeHemisId,
+            'teacher_combos_count' => $teacherCombos->count(),
+            'teacher_combos' => $teacherCombos->toArray(),
+        ]);
+
         if ($teacherCombos->isEmpty()) {
+            Log::channel('daily')->info("JOURNAL DEBUG: schedules dan hech narsa topilmadi", [
+                'employee_hemis_id' => $employeeHemisId,
+            ]);
             return ['subject_ids' => [], 'group_ids' => []];
         }
 
@@ -3133,6 +3247,7 @@ class JournalController extends Controller
         $groupIds = [];
         $comboKeys = $teacherCombos->map(fn($c) => $c->subject_id . '-' . $c->group_id)->toArray();
 
+        $rejectedCombos = [];
         foreach ($statsByCombo as $key => $teachers) {
             if (!in_array($key, $comboKeys)) {
                 continue;
@@ -3148,13 +3263,198 @@ class JournalController extends Controller
             if ($primary && $primary->employee_id == $employeeHemisId) {
                 $subjectIds[] = $primary->subject_id;
                 $groupIds[] = $primary->group_id;
+            } else {
+                $rejectedCombos[] = [
+                    'combo_key' => $key,
+                    'primary_employee_id' => $primary?->employee_id,
+                    'primary_lesson_count' => $primary?->lesson_count,
+                    'all_teachers' => $teachers->map(fn($t) => [
+                        'employee_id' => $t->employee_id,
+                        'lesson_count' => $t->lesson_count,
+                        'last_lesson' => $t->last_lesson,
+                    ])->toArray(),
+                    'reason' => 'Boshqa o\'qituvchi ko\'proq dars o\'tgan',
+                ];
             }
         }
+
+        if (!empty($rejectedCombos)) {
+            Log::channel('daily')->warning("JOURNAL DEBUG: schedule fallback da rad etilgan kombinatsiyalar", [
+                'employee_hemis_id' => $employeeHemisId,
+                'rejected' => $rejectedCombos,
+            ]);
+        }
+
+        Log::channel('daily')->info("JOURNAL DEBUG: schedule fallback yakuniy", [
+            'accepted_subject_ids' => $subjectIds,
+            'accepted_group_ids' => $groupIds,
+        ]);
 
         return [
             'subject_ids' => array_values(array_unique(array_filter($subjectIds))),
             'group_ids' => array_values(array_unique(array_filter($groupIds))),
         ];
+    }
+
+    /**
+     * DEBUG: O'qituvchiga biriktirilgan guruhlarni tashxislash.
+     * URL: /admin/journal/debug-teacher-groups?teacher_hemis_id=XXX
+     * Agar teacher_hemis_id berilmasa, joriy login qilingan o'qituvchi ishlatiladi.
+     */
+    public function debugTeacherGroups(Request $request)
+    {
+        $debug = [];
+
+        // O'qituvchi HEMIS ID ni aniqlash
+        $teacherHemisId = $request->get('teacher_hemis_id');
+        if (!$teacherHemisId) {
+            $teacherHemisId = get_teacher_hemis_id();
+        }
+        $debug['teacher_hemis_id'] = $teacherHemisId;
+        $debug['is_oqituvchi'] = is_active_oqituvchi();
+
+        if (!$teacherHemisId) {
+            return response()->json([
+                'error' => 'teacher_hemis_id topilmadi. URL ga ?teacher_hemis_id=XXX qo\'shing',
+                'debug' => $debug,
+            ]);
+        }
+
+        // 1-MANBA: curriculum_subject_teachers
+        $cstRecords = CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)->get();
+        $debug['1_curriculum_subject_teachers'] = [
+            'total_records' => $cstRecords->count(),
+            'records' => $cstRecords->map(fn($r) => [
+                'id' => $r->id,
+                'hemis_id' => $r->hemis_id,
+                'subject_id' => $r->subject_id,
+                'subject_name' => $r->subject_name,
+                'group_id' => $r->group_id,
+                'group_id_is_null' => is_null($r->group_id),
+                'group_id_is_empty' => empty($r->group_id),
+                'curriculum_id' => $r->curriculum_id,
+                'training_type_code' => $r->training_type_code,
+                'training_type_name' => $r->training_type_name,
+                'active' => $r->active,
+            ])->toArray(),
+        ];
+
+        // NULL group_id bo'lgan yozuvlar
+        $nullGroupRecords = $cstRecords->filter(fn($r) => empty($r->group_id));
+        $debug['1a_null_group_id_records'] = [
+            'count' => $nullGroupRecords->count(),
+            'records' => $nullGroupRecords->map(fn($r) => [
+                'subject_name' => $r->subject_name,
+                'group_id_raw' => var_export($r->group_id, true),
+                'curriculum_id' => $r->curriculum_id,
+                'training_type_name' => $r->training_type_name,
+            ])->toArray(),
+            'problem' => 'Bu yozuvlar ->filter() tufayli group_ids dan tushib qoladi!',
+        ];
+
+        // filter() dan keyin qolgan group_ids
+        $groupIdsFromCst = $cstRecords->pluck('group_id')->unique()->filter()->values()->toArray();
+        $subjectIdsFromCst = $cstRecords->pluck('subject_id')->unique()->filter()->values()->toArray();
+        $debug['1b_after_filter'] = [
+            'group_ids' => $groupIdsFromCst,
+            'subject_ids' => $subjectIdsFromCst,
+        ];
+
+        // 2-MANBA: schedules fallback
+        $scheduleAssignments = $this->getTeacherScheduleAssignments($teacherHemisId);
+        $debug['2_schedule_fallback'] = $scheduleAssignments;
+
+        // Birlashtirilgan natija
+        $finalSubjectIds = array_values(array_unique(array_merge($subjectIdsFromCst, $scheduleAssignments['subject_ids'])));
+        $finalGroupIds = array_values(array_unique(array_merge($groupIdsFromCst, $scheduleAssignments['group_ids'])));
+        $debug['3_final_merged'] = [
+            'subject_ids' => $finalSubjectIds,
+            'group_ids' => $finalGroupIds,
+        ];
+
+        // d1/21-09c guruhini maxsus qidirish
+        $targetGroup = DB::table('groups')
+            ->where('name', 'like', '%21-09%')
+            ->select('id', 'name', 'group_hemis_id', 'active', 'department_active', 'curriculum_hemis_id')
+            ->get();
+        $debug['4_target_group_d1_21_09c'] = [
+            'found_in_groups_table' => $targetGroup->toArray(),
+            'group_hemis_ids' => $targetGroup->pluck('group_hemis_id')->toArray(),
+            'is_in_final_group_ids' => $targetGroup->pluck('group_hemis_id')
+                ->intersect(collect($finalGroupIds))
+                ->values()->toArray(),
+            'is_active' => $targetGroup->where('active', true)->where('department_active', true)->count() > 0,
+        ];
+
+        // curriculum_subject_teachers da shu guruh HEMIS ID bilan yozuv bormi?
+        if ($targetGroup->isNotEmpty()) {
+            foreach ($targetGroup as $tg) {
+                $cstForGroup = CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
+                    ->where('group_id', $tg->group_hemis_id)
+                    ->get();
+                $debug['4a_cst_for_target_group_' . $tg->name] = [
+                    'group_hemis_id' => $tg->group_hemis_id,
+                    'records_found' => $cstForGroup->count(),
+                    'records' => $cstForGroup->toArray(),
+                ];
+
+                // curriculum_id orqali qidirish
+                $cstByCurriculum = CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
+                    ->where('curriculum_id', $tg->curriculum_hemis_id)
+                    ->get();
+                $debug['4b_cst_by_curriculum_' . $tg->name] = [
+                    'curriculum_hemis_id' => $tg->curriculum_hemis_id,
+                    'records_found' => $cstByCurriculum->count(),
+                    'records' => $cstByCurriculum->map(fn($r) => [
+                        'subject_name' => $r->subject_name,
+                        'group_id' => $r->group_id,
+                        'group_id_is_null' => is_null($r->group_id),
+                        'training_type_name' => $r->training_type_name,
+                    ])->toArray(),
+                ];
+
+                // schedules dan shu guruh uchun dars bormi?
+                $schedulesForGroup = DB::table('schedules')
+                    ->where('employee_id', $teacherHemisId)
+                    ->where('group_id', $tg->group_hemis_id)
+                    ->where('education_year_current', true)
+                    ->whereNull('deleted_at')
+                    ->select('subject_id', 'group_id', 'lesson_date', 'training_type_code')
+                    ->limit(10)
+                    ->get();
+                $debug['4c_schedules_for_target_group_' . $tg->name] = [
+                    'group_hemis_id' => $tg->group_hemis_id,
+                    'records_found' => $schedulesForGroup->count(),
+                    'records' => $schedulesForGroup->toArray(),
+                ];
+            }
+        }
+
+        // Groups jadvalidan: yakuniy group_ids ga mos guruhlar
+        $matchingGroups = DB::table('groups')
+            ->whereIn('group_hemis_id', $finalGroupIds)
+            ->where('active', true)
+            ->where('department_active', true)
+            ->select('id', 'name', 'group_hemis_id')
+            ->orderBy('name')
+            ->get();
+        $debug['5_visible_groups'] = [
+            'count' => $matchingGroups->count(),
+            'groups' => $matchingGroups->toArray(),
+        ];
+
+        // Xulosa
+        $debug['XULOSA'] = [
+            'curriculum_subject_teachers_jami' => $cstRecords->count(),
+            'null_group_id_soni' => $nullGroupRecords->count(),
+            'yakuniy_group_ids_soni' => count($finalGroupIds),
+            'korinishi_kerak_bolgan_guruhlar' => $matchingGroups->pluck('name')->toArray(),
+            'muammo' => $nullGroupRecords->isNotEmpty()
+                ? 'HEMIS API dan group_id NULL kelgan yozuvlar bor. filter() ularga ta\'sir qiladi!'
+                : 'group_id da NULL yozuvlar yo\'q. Boshqa sabab tekshiring.',
+        ];
+
+        return response()->json($debug, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
     /**

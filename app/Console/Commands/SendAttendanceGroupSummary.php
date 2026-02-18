@@ -3,9 +3,12 @@
 namespace App\Console\Commands;
 
 use App\Models\Attendance;
+use App\Models\Group;
 use App\Models\Schedule;
+use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\Teacher;
+use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -15,7 +18,7 @@ class SendAttendanceGroupSummary extends Command
 {
     protected $signature = 'teachers:send-group-summary';
 
-    protected $description = 'Davomat olmagan yoki baho qo\'ymagan o\'qituvchilar haqida Telegram guruhga umumlashtirilgan hisobot yuborish';
+    protected $description = 'Davomat olmagan yoki baho qo\'ymagan o\'qituvchilar haqida Telegram guruhga jadval ko\'rinishida hisobot yuborish';
 
     public function handle(TelegramService $telegram): int
     {
@@ -24,81 +27,122 @@ class SendAttendanceGroupSummary extends Command
         $excludedTrainingTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         $this->info("Bugungi sana: {$today}");
-        $this->info("Telegram guruhga umumlashtirilgan hisobot yuborilmoqda...");
+        $this->info("Telegram guruhga jadval hisobot yuborilmoqda...");
 
-        $todaySchedules = Schedule::whereDate('lesson_date', $today)->get();
+        $todaySchedules = Schedule::whereDate('lesson_date', $today)
+            ->orderBy('department_name')
+            ->orderBy('employee_name')
+            ->orderBy('lesson_pair_code')
+            ->get();
 
         if ($todaySchedules->isEmpty()) {
             $this->info('Bugun uchun dars jadvali topilmadi.');
             return 0;
         }
 
-        $schedulesByTeacher = $todaySchedules->groupBy('employee_id');
+        // Batch load related data to avoid N+1 queries
+        $groupIds = $todaySchedules->pluck('group_id')->unique()->toArray();
 
-        $teachersMissingAttendance = [];
-        $teachersMissingGrades = [];
+        $groups = Group::whereIn('group_hemis_id', $groupIds)
+            ->get()
+            ->keyBy('group_hemis_id');
 
-        foreach ($schedulesByTeacher as $employeeId => $schedules) {
-            $teacher = Teacher::where('hemis_id', $employeeId)->first();
-            $teacherName = $teacher ? $teacher->full_name : ($schedules->first()->employee_name ?? "ID: {$employeeId}");
+        $studentCounts = Student::whereIn('group_id', $groupIds)
+            ->selectRaw('group_id, count(*) as cnt')
+            ->groupBy('group_id')
+            ->pluck('cnt', 'group_id');
 
-            $missingAttendanceCount = 0;
-            $missingGradeCount = 0;
+        // Batch check attendance records
+        $attendanceKeys = [];
+        $attendanceRecords = Attendance::whereDate('lesson_date', $today)
+            ->select('employee_id', 'subject_schedule_id', 'lesson_pair_code')
+            ->distinct()
+            ->get();
 
-            foreach ($schedules as $schedule) {
-                $trainingTypeCode = (int) $schedule->training_type_code;
-
-                // Davomat tekshirish
-                $hasAttendance = Attendance::where('employee_id', $schedule->employee_id)
-                    ->where('subject_schedule_id', $schedule->schedule_hemis_id)
-                    ->whereDate('lesson_date', $today)
-                    ->where('lesson_pair_code', $schedule->lesson_pair_code)
-                    ->exists();
-
-                if (!$hasAttendance) {
-                    $missingAttendanceCount++;
-                }
-
-                // Baho tekshirish (faqat amaliyot turlari uchun)
-                if (!in_array($trainingTypeCode, $excludedTrainingTypes)) {
-                    $hasGrades = StudentGrade::where('employee_id', $schedule->employee_id)
-                        ->where('subject_schedule_id', $schedule->schedule_hemis_id)
-                        ->whereDate('lesson_date', $today)
-                        ->where('lesson_pair_code', $schedule->lesson_pair_code)
-                        ->whereNotNull('grade')
-                        ->exists();
-
-                    if (!$hasGrades) {
-                        $missingGradeCount++;
-                    }
-                }
-            }
-
-            if ($missingAttendanceCount > 0) {
-                $department = $schedules->first()->department_name ?? 'Noma\'lum';
-                $teachersMissingAttendance[] = [
-                    'name' => $teacherName,
-                    'department' => $department,
-                    'count' => $missingAttendanceCount,
-                ];
-            }
-
-            if ($missingGradeCount > 0) {
-                $department = $schedules->first()->department_name ?? 'Noma\'lum';
-                $teachersMissingGrades[] = [
-                    'name' => $teacherName,
-                    'department' => $department,
-                    'count' => $missingGradeCount,
-                ];
-            }
+        foreach ($attendanceRecords as $record) {
+            $key = $record->employee_id . '|' . $record->subject_schedule_id . '|' . $record->lesson_pair_code;
+            $attendanceKeys[$key] = true;
         }
 
-        if (empty($teachersMissingAttendance) && empty($teachersMissingGrades)) {
-            $this->info('Barcha o\'qituvchilar davomat va baholarni kiritgan.');
-            return 0;
+        // Batch check grade records
+        $gradeKeys = [];
+        $gradeRecords = StudentGrade::whereDate('lesson_date', $today)
+            ->whereNotNull('grade')
+            ->select('employee_id', 'subject_schedule_id', 'lesson_pair_code')
+            ->distinct()
+            ->get();
+
+        foreach ($gradeRecords as $record) {
+            $key = $record->employee_id . '|' . $record->subject_schedule_id . '|' . $record->lesson_pair_code;
+            $gradeKeys[$key] = true;
         }
 
-        $message = $this->buildGroupMessage($teachersMissingAttendance, $teachersMissingGrades, $today, $todaySchedules->count());
+        // Build table rows
+        $tableRows = [];
+        $totalMissingAttendance = 0;
+        $totalMissingGrades = 0;
+        $teachersWithIssues = [];
+        $rowNum = 0;
+
+        foreach ($todaySchedules as $schedule) {
+            $trainingTypeCode = (int) $schedule->training_type_code;
+
+            // Check attendance using batch-loaded data
+            $scheduleKey = $schedule->employee_id . '|' . $schedule->schedule_hemis_id . '|' . $schedule->lesson_pair_code;
+            $hasAttendance = isset($attendanceKeys[$scheduleKey]);
+
+            // Check grade
+            $gradeApplicable = !in_array($trainingTypeCode, $excludedTrainingTypes);
+            $hasGrade = true;
+            if ($gradeApplicable) {
+                $hasGrade = isset($gradeKeys[$scheduleKey]);
+            }
+
+            // Track stats
+            if (!$hasAttendance) {
+                $totalMissingAttendance++;
+                $teachersWithIssues[$schedule->employee_id] = true;
+            }
+            if ($gradeApplicable && !$hasGrade) {
+                $totalMissingGrades++;
+                $teachersWithIssues[$schedule->employee_id] = true;
+            }
+
+            // Get group info
+            $group = $groups[$schedule->group_id] ?? null;
+            $specialty = $group ? ($group->specialty_name ?? '-') : '-';
+            $studCount = $studentCounts[$schedule->group_id] ?? 0;
+
+            // Calculate course year from semester code
+            $semCode = max((int) ($schedule->semester_code ?? 1), 1);
+            $kurs = (int) ceil($semCode / 2);
+
+            // Format time
+            $time = '-';
+            if ($schedule->lesson_pair_start_time && $schedule->lesson_pair_end_time) {
+                $time = substr($schedule->lesson_pair_start_time, 0, 5) . '-' . substr($schedule->lesson_pair_end_time, 0, 5);
+            }
+
+            $rowNum++;
+
+            $tableRows[] = [
+                $rowNum,
+                TableImageGenerator::truncate($schedule->employee_name ?? '-', 22),
+                TableImageGenerator::truncate($schedule->faculty_name ?? '-', 18),
+                TableImageGenerator::truncate($specialty, 18),
+                $kurs,
+                $schedule->semester_code ?? '-',
+                TableImageGenerator::truncate($schedule->department_name ?? '-', 18),
+                TableImageGenerator::truncate($schedule->subject_name ?? '-', 22),
+                $schedule->group_name ?? '-',
+                TableImageGenerator::truncate($schedule->training_type_name ?? '-', 14),
+                $time,
+                $studCount,
+                $hasAttendance,       // true/false - TableImageGenerator will render as Ha/Yo'q
+                $gradeApplicable ? $hasGrade : null,  // true/false/null(-)
+                $today,
+            ];
+        }
 
         $groupChatId = config('services.telegram.attendance_group_id');
 
@@ -108,70 +152,82 @@ class SendAttendanceGroupSummary extends Command
             return 1;
         }
 
+        // Build summary text message
+        $summaryText = $this->buildSummaryText($today, $todaySchedules->count(), $teachersWithIssues, $totalMissingAttendance, $totalMissingGrades);
+
+        // Generate table image(s)
+        $headers = [
+            '#', 'XODIM FISH', 'FAKULTET', "YO'NALISH", 'KURS', 'SEM',
+            'KAFEDRA', 'FAN', 'GURUH', "MASHG'ULOT TURI",
+            'VAQT', 'T.SONI', 'DAVOMAT', 'BAHO', 'SANA',
+        ];
+
+        $generator = new TableImageGenerator();
+        $images = $generator->generate($headers, $tableRows, "KUNLIK HISOBOT - {$today}");
+
+        $tempFiles = [];
+
         try {
-            $telegram->sendToUser($groupChatId, $message);
-            $this->info('Umumlashtirilgan hisobot Telegram guruhga yuborildi.');
+            // Send text summary first
+            $telegram->sendToUser($groupChatId, $summaryText);
+
+            // Send table image(s)
+            foreach ($images as $index => $imagePath) {
+                $tempFiles[] = $imagePath;
+                $caption = '';
+                if (count($images) > 1) {
+                    $caption = ($index + 1) . '/' . count($images) . '-sahifa';
+                }
+                $telegram->sendPhoto($groupChatId, $imagePath, $caption);
+            }
+
+            $this->info('Jadval hisobot Telegram guruhga yuborildi. Rasmlar: ' . count($images));
         } catch (\Throwable $e) {
             Log::error('Telegram guruhga hisobot yuborishda xato: ' . $e->getMessage());
             $this->error('Xato: ' . $e->getMessage());
             return 1;
+        } finally {
+            // Clean up temp files
+            foreach ($tempFiles as $file) {
+                if (file_exists($file)) {
+                    @unlink($file);
+                }
+            }
         }
 
         return 0;
     }
 
-    private function buildGroupMessage(array $missingAttendance, array $missingGrades, string $today, int $totalLessons): string
+    private function buildSummaryText(string $today, int $totalLessons, array $teachersWithIssues, int $missingAttendance, int $missingGrades): string
     {
         $lines = [];
         $lines[] = "📊 KUNLIK HISOBOT — {$today}";
         $lines[] = str_repeat('─', 30);
         $lines[] = "";
-
-        $totalTeachers = count(
-            collect(array_merge($missingAttendance, $missingGrades))
-                ->pluck('name')
-                ->unique()
-        );
-        $totalMissingAttendance = array_sum(array_column($missingAttendance, 'count'));
-        $totalMissingGrades = array_sum(array_column($missingGrades, 'count'));
-
         $lines[] = "📋 Jami darslar: {$totalLessons}";
-        $lines[] = "👨‍🏫 Muammoli o'qituvchilar: {$totalTeachers}";
+        $lines[] = "👨‍🏫 Muammoli o'qituvchilar: " . count($teachersWithIssues);
         $lines[] = "";
 
-        if (!empty($missingAttendance)) {
-            $lines[] = "❌ DAVOMAT OLINMAGAN ({$totalMissingAttendance} ta dars):";
-            $lines[] = "";
-
-            // Kafedra bo'yicha guruhlash
-            $byDepartment = collect($missingAttendance)->groupBy('department');
-
-            foreach ($byDepartment as $dept => $teachers) {
-                $lines[] = "  📁 {$dept}:";
-                foreach ($teachers as $teacher) {
-                    $lines[] = "    • {$teacher['name']} — {$teacher['count']} ta dars";
-                }
-            }
-            $lines[] = "";
+        if ($missingAttendance > 0) {
+            $lines[] = "❌ Davomat olinmagan: {$missingAttendance} ta dars";
+        } else {
+            $lines[] = "✅ Barcha darslar uchun davomat olingan";
         }
 
-        if (!empty($missingGrades)) {
-            $lines[] = "❌ BAHO QO'YILMAGAN ({$totalMissingGrades} ta dars):";
-            $lines[] = "";
-
-            $byDepartment = collect($missingGrades)->groupBy('department');
-
-            foreach ($byDepartment as $dept => $teachers) {
-                $lines[] = "  📁 {$dept}:";
-                foreach ($teachers as $teacher) {
-                    $lines[] = "    • {$teacher['name']} — {$teacher['count']} ta dars";
-                }
-            }
-            $lines[] = "";
+        if ($missingGrades > 0) {
+            $lines[] = "❌ Baho qo'yilmagan: {$missingGrades} ta dars";
+        } else {
+            $lines[] = "✅ Barcha darslar uchun baho qo'yilgan";
         }
 
+        $lines[] = "";
         $lines[] = str_repeat('─', 30);
         $lines[] = "🕐 Hisobot vaqti: " . Carbon::now()->format('H:i');
+
+        if ($missingAttendance === 0 && $missingGrades === 0) {
+            $lines[] = "";
+            $lines[] = "🎉 Barcha o'qituvchilar davomat va baholarni kiritgan!";
+        }
 
         return implode("\n", $lines);
     }

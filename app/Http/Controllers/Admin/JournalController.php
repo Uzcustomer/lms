@@ -1871,8 +1871,11 @@ class JournalController extends Controller
      */
     public function saveRetakeGrade(Request $request)
     {
-        // Check admin role
-        if (!auth()->user()->hasRole('admin')) {
+        // Check admin or teacher role
+        $isAdmin = auth()->user()->hasRole('admin');
+        $isTeacher = is_active_oqituvchi();
+
+        if (!$isAdmin && !$isTeacher) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -1892,6 +1895,32 @@ class JournalController extends Controller
 
             if (!$studentGrade) {
                 return response()->json(['success' => false, 'message' => 'Baho yozuvi topilmadi: id=' . $gradeId], 404);
+            }
+
+            // O'qituvchi uchun: faqat oxirgi N kunlik darslarga ruxsat
+            if ($isTeacher && !$isAdmin) {
+                $lessonOpeningDays = (int) Setting::get('lesson_opening_days', 3);
+                $student = DB::table('students')->where('hemis_id', $studentGrade->student_hemis_id)->first();
+                $groupHemisId = $student?->group_hemis_id;
+
+                $lastNDates = DB::table('schedules')
+                    ->where('group_id', $groupHemisId)
+                    ->where('subject_id', $studentGrade->subject_id)
+                    ->where('semester_code', $studentGrade->semester_code)
+                    ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+                    ->whereNull('deleted_at')
+                    ->select(DB::raw('DATE(lesson_date) as lesson_date'))
+                    ->distinct()
+                    ->orderBy('lesson_date')
+                    ->pluck('lesson_date')
+                    ->toArray();
+
+                $lastNDates = array_slice($lastNDates, -$lessonOpeningDays);
+                $gradeDateStr = \Carbon\Carbon::parse($studentGrade->lesson_date)->format('Y-m-d');
+
+                if (!in_array($gradeDateStr, $lastNDates)) {
+                    return response()->json(['success' => false, 'message' => "O'qituvchi faqat oxirgi {$lessonOpeningDays} kunlik darslarga baho qo'ya oladi."], 403);
+                }
             }
 
             // YN ga yuborilganligini tekshirish
@@ -1987,8 +2016,11 @@ class JournalController extends Controller
      */
     public function createRetakeGrade(Request $request)
     {
-        // Check admin role
-        if (!auth()->user()->hasRole('admin')) {
+        // Check admin or teacher role
+        $isAdmin = auth()->user()->hasRole('admin');
+        $isTeacher = is_active_oqituvchi();
+
+        if (!$isAdmin && !$isTeacher) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -2008,6 +2040,32 @@ class JournalController extends Controller
             $subjectId = $request->subject_id;
             $semesterCode = $request->semester_code;
             $enteredGrade = $request->grade;
+
+            // O'qituvchi uchun: faqat oxirgi N kunlik darslarga ruxsat
+            if ($isTeacher && !$isAdmin) {
+                $lessonOpeningDays = (int) Setting::get('lesson_opening_days', 3);
+                $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
+                $groupHemisId = $student?->group_hemis_id;
+
+                $lastNDates = DB::table('schedules')
+                    ->where('group_id', $groupHemisId)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+                    ->whereNull('deleted_at')
+                    ->select(DB::raw('DATE(lesson_date) as lesson_date'))
+                    ->distinct()
+                    ->orderBy('lesson_date')
+                    ->pluck('lesson_date')
+                    ->toArray();
+
+                $lastNDates = array_slice($lastNDates, -$lessonOpeningDays);
+                $gradeDateStr = \Carbon\Carbon::parse($lessonDate)->format('Y-m-d');
+
+                if (!in_array($gradeDateStr, $lastNDates)) {
+                    return response()->json(['success' => false, 'message' => "O'qituvchi faqat oxirgi {$lessonOpeningDays} kunlik darslarga baho qo'ya oladi."], 403);
+                }
+            }
 
             // YN ga yuborilganligini tekshirish
             $ynLocked = DB::table('student_grades')

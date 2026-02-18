@@ -2756,15 +2756,12 @@
 
         function makeEditable(cellDiv, gradeId) {
             if (isDekan) return;
-            // Prevent multiple edits at once
-            if (currentEditingCell) {
-                return;
-            }
+            if (currentEditingCell) return;
 
             currentEditingCell = cellDiv;
             const originalContent = cellDiv.innerHTML;
+            let saving = false;
 
-            // Create input field
             const input = document.createElement('input');
             input.type = 'number';
             input.min = '0';
@@ -2774,47 +2771,47 @@
             input.style.width = '50px';
             input.style.height = '28px';
 
-            // Replace cell content with input
             cellDiv.innerHTML = '';
             cellDiv.appendChild(input);
             input.focus();
             input.select();
 
-            // Save on Enter key
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    if (saving) return;
+                    saving = true;
+                    input.removeEventListener('blur', blurHandler);
                     saveInlineGrade(gradeId, input.value, cellDiv, originalContent);
                 } else if (e.key === 'Escape') {
-                    // Cancel editing
+                    saving = true;
+                    input.removeEventListener('blur', blurHandler);
                     cellDiv.innerHTML = originalContent;
                     currentEditingCell = null;
                 }
             });
 
-            // Save on blur (clicking outside)
-            input.addEventListener('blur', function() {
+            function blurHandler() {
+                if (saving) return;
+                saving = true;
                 if (input.value.trim() !== '') {
                     saveInlineGrade(gradeId, input.value, cellDiv, originalContent);
                 } else {
-                    // Cancel if empty
                     cellDiv.innerHTML = originalContent;
                     currentEditingCell = null;
                 }
-            });
+            }
+            input.addEventListener('blur', blurHandler);
         }
 
         function makeEditableEmpty(cellDiv, studentHemisId, lessonDate, lessonPair, subjectId, semesterCode) {
             if (isDekan) return;
-            // Prevent multiple edits at once
-            if (currentEditingCell) {
-                return;
-            }
+            if (currentEditingCell) return;
 
             currentEditingCell = cellDiv;
             const originalContent = cellDiv.innerHTML;
+            let saving = false;
 
-            // Create input field
             const input = document.createElement('input');
             input.type = 'number';
             input.min = '0';
@@ -2824,34 +2821,37 @@
             input.style.width = '50px';
             input.style.height = '28px';
 
-            // Replace cell content with input
             cellDiv.innerHTML = '';
             cellDiv.appendChild(input);
             input.focus();
             input.select();
 
-            // Save on Enter key
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    if (saving) return;
+                    saving = true;
+                    input.removeEventListener('blur', blurHandler);
                     saveEmptyGrade(studentHemisId, lessonDate, lessonPair, subjectId, semesterCode, input.value, cellDiv, originalContent);
                 } else if (e.key === 'Escape') {
-                    // Cancel editing
+                    saving = true;
+                    input.removeEventListener('blur', blurHandler);
                     cellDiv.innerHTML = originalContent;
                     currentEditingCell = null;
                 }
             });
 
-            // Save on blur (clicking outside)
-            input.addEventListener('blur', function() {
+            function blurHandler() {
+                if (saving) return;
+                saving = true;
                 if (input.value.trim() !== '') {
                     saveEmptyGrade(studentHemisId, lessonDate, lessonPair, subjectId, semesterCode, input.value, cellDiv, originalContent);
                 } else {
-                    // Cancel if empty
                     cellDiv.innerHTML = originalContent;
                     currentEditingCell = null;
                 }
-            });
+            }
+            input.addEventListener('blur', blurHandler);
         }
 
         function saveEmptyGrade(studentHemisId, lessonDate, lessonPair, subjectId, semesterCode, gradeValue, cellDiv, originalContent) {

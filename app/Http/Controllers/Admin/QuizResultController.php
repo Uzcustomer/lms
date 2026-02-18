@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\HemisQuizResult;
+use App\Models\MarkingSystemScore;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\CurriculumSubject;
-use App\Models\Deadline;
 use App\Models\Group;
 use App\Models\Semester;
 use App\Imports\QuizResultImport;
@@ -215,9 +215,6 @@ class QuizResultController extends Controller
                 }
             }
 
-            // 5) Deadline
-            $deadlines = Deadline::all()->keyBy('level_code');
-
             // ====== DATA TAYYORLASH ======
             $data = [];
             $rowNum = 0;
@@ -244,7 +241,7 @@ class QuizResultController extends Controller
                     $result, $student, $ynTuri,
                     $uploadedResultIds, $duplicateMap,
                     $jnGrades, $mtGrades, $oskiGrades,
-                    $curriculumSubjects, $groups, $deadlines,
+                    $curriculumSubjects, $groups,
                     $testTypes, $oskiTypes
                 );
 
@@ -366,218 +363,233 @@ class QuizResultController extends Controller
      */
     public function tartibgaSol(Request $request)
     {
-        $query = HemisQuizResult::where('is_active', 1);
+        try {
+            $query = HemisQuizResult::where('is_active', 1);
 
-        if ($request->filled('date_from')) {
-            $query->whereDate('date_finish', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->whereDate('date_finish', '<=', $request->date_to);
-        }
-
-        $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')->get();
-
-        // Barcha student_id larni yig'ish va bulk query
-        $studentIds = $results->pluck('student_id')->unique()->values()->toArray();
-
-        $students = Student::where(function ($q) use ($studentIds) {
-            $q->whereIn('hemis_id', $studentIds)
-              ->orWhereIn('student_id_number', $studentIds);
-        })->get();
-
-        // Lookup yaratish (hemis_id va student_id_number bo'yicha)
-        $studentLookup = [];
-        foreach ($students as $student) {
-            $studentLookup[$student->hemis_id] = $student;
-            if ($student->student_id_number) {
-                $studentLookup[$student->student_id_number] = $student;
+            if ($request->filled('date_from')) {
+                $query->whereDate('date_finish', '>=', $request->date_from);
             }
-        }
-
-        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
-        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
-
-        // ====== XULOSA UCHUN MA'LUMOTLAR TAYYORLASH ======
-
-        // 1) Allaqachon yuklangan natijalarni aniqlash (quiz_result_id orqali)
-        $allResultIds = $results->pluck('id')->toArray();
-        $uploadedResultIds = [];
-        if (!empty($allResultIds)) {
-            $uploadedResultIds = StudentGrade::where('reason', 'quiz_result')
-                ->whereIn('quiz_result_id', $allResultIds)
-                ->pluck('quiz_result_id')
-                ->toArray();
-        }
-        $uploadedResultIds = array_flip($uploadedResultIds);
-
-        // 2) Dublikatlarni aniqlash: student_id + fan_id + yn_turi + shakl
-        $duplicateMap = []; // key => [result_ids]
-        foreach ($results as $result) {
-            $ynTuri = '-';
-            if (in_array($result->quiz_type, $testTypes)) $ynTuri = 'T';
-            elseif (in_array($result->quiz_type, $oskiTypes)) $ynTuri = 'O';
-            if ($ynTuri === '-') continue;
-
-            $key = $result->student_id . '|' . $result->fan_id . '|' . $ynTuri . '|' . $result->shakl;
-            $duplicateMap[$key][] = $result->id;
-        }
-
-        // 3) Student lar uchun JN/MT/OSKI baholarini olish (bulk)
-        $studentHemisIds = $students->pluck('hemis_id')->toArray();
-        $fanIds = $results->pluck('fan_id')->unique()->values()->toArray();
-
-        // JN baholar (training_type_code NOT IN config list)
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
-        $jnGrades = [];
-        if (!empty($studentHemisIds) && !empty($fanIds)) {
-            $jnRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                ->whereIn('subject_id', $fanIds)
-                ->whereNotIn('training_type_code', $excludedCodes)
-                ->whereNotNull('grade')
-                ->get(['student_hemis_id', 'subject_id', 'grade', 'lesson_date']);
-
-            foreach ($jnRows as $row) {
-                $k = $row->student_hemis_id . '|' . $row->subject_id;
-                $jnGrades[$k][] = ['grade' => $row->grade, 'date' => $row->lesson_date];
-            }
-        }
-
-        // MT baholar (training_type_code = 99)
-        $mtGrades = [];
-        if (!empty($studentHemisIds) && !empty($fanIds)) {
-            $mtRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                ->whereIn('subject_id', $fanIds)
-                ->where('training_type_code', 99)
-                ->whereNotNull('grade')
-                ->get(['student_hemis_id', 'subject_id', 'grade']);
-
-            foreach ($mtRows as $row) {
-                $k = $row->student_hemis_id . '|' . $row->subject_id;
-                $mtGrades[$k][] = $row->grade;
-            }
-        }
-
-        // OSKI baholar (training_type_code = 101) — YN test uchun kerak
-        $oskiGrades = [];
-        if (!empty($studentHemisIds) && !empty($fanIds)) {
-            $oskiRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                ->whereIn('subject_id', $fanIds)
-                ->where('training_type_code', 101)
-                ->whereNotNull('grade')
-                ->get(['student_hemis_id', 'subject_id', 'grade']);
-
-            foreach ($oskiRows as $row) {
-                $k = $row->student_hemis_id . '|' . $row->subject_id;
-                $oskiGrades[$k][] = $row->grade;
-            }
-        }
-
-        // 4) CurriculumSubject — fanlar jadvalda bormi tekshirish
-        $groupIds = $students->pluck('group_id')->unique()->toArray();
-        $groups = Group::whereIn('group_hemis_id', $groupIds)->get()->keyBy('group_hemis_id');
-        $curriculumHemisIds = $groups->pluck('curriculum_hemis_id')->unique()->toArray();
-
-        $curriculumSubjects = [];
-        if (!empty($curriculumHemisIds) && !empty($fanIds)) {
-            $csRows = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumHemisIds)
-                ->whereIn('subject_id', $fanIds)
-                ->get(['curricula_hemis_id', 'subject_id', 'semester_code']);
-
-            foreach ($csRows as $cs) {
-                $curriculumSubjects[$cs->curricula_hemis_id . '|' . $cs->subject_id] = $cs->semester_code;
-            }
-        }
-
-        // 5) Deadline jadval (level_code bo'yicha)
-        $deadlines = Deadline::all()->keyBy('level_code');
-
-        // ====== DATA TAYYORLASH ======
-        $data = [];
-        $rowNum = 0;
-
-        foreach ($results as $result) {
-            $student = $studentLookup[$result->student_id] ?? null;
-
-            // Semestrni Moodle formatidan aniqlash: "3-SEM" -> 3, "5-sem" -> 5
-            $semNum = null;
-            $semLabel = $result->semester ?: ($student ? $student->semester_name : '');
-            if ($semLabel && preg_match('/(\d+)/', $semLabel, $m)) {
-                $semNum = (int) $m[1];
+            if ($request->filled('date_to')) {
+                $query->whereDate('date_finish', '<=', $request->date_to);
             }
 
-            // Kursni semestr raqamidan hisoblash
-            $kurs = $semNum ? (int) ceil($semNum / 2) : null;
+            $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')->get();
 
-            // YN turi aniqlash
-            $ynTuri = '-';
-            if (in_array($result->quiz_type, $testTypes)) {
-                $ynTuri = 'Test';
-            } elseif (in_array($result->quiz_type, $oskiTypes)) {
-                $ynTuri = 'OSKI';
-            }
+            // Barcha student_id larni yig'ish va bulk query
+            $studentIds = $results->pluck('student_id')->unique()->values()->toArray();
 
-            // ====== XULOSA HISOBLASH ======
-            $xulosa = $this->calculateXulosa(
-                $result, $student, $ynTuri,
-                $uploadedResultIds, $duplicateMap,
-                $jnGrades, $mtGrades, $oskiGrades,
-                $curriculumSubjects, $groups, $deadlines,
-                $testTypes, $oskiTypes
-            );
+            $students = !empty($studentIds)
+                ? Student::where(function ($q) use ($studentIds) {
+                    $q->whereIn('hemis_id', $studentIds)
+                      ->orWhereIn('student_id_number', $studentIds);
+                })->get()
+                : collect();
 
-            // Journal uchun group_db_id va semester_code aniqlash
-            $groupDbId = null;
-            $semesterCode = null;
-            if ($student) {
-                $groupModel = $groups[$student->group_id] ?? null;
-                if ($groupModel) {
-                    $groupDbId = $groupModel->id;
-                    $csKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
-                    $semesterCode = $curriculumSubjects[$csKey] ?? null;
+            // Lookup yaratish (hemis_id va student_id_number bo'yicha)
+            $studentLookup = [];
+            foreach ($students as $student) {
+                $studentLookup[$student->hemis_id] = $student;
+                if ($student->student_id_number) {
+                    $studentLookup[$student->student_id_number] = $student;
                 }
             }
 
-            $rowNum++;
-            $data[] = [
-                'id' => $result->id,
-                'row_num' => $rowNum,
-                'student_id' => $result->student_id,
-                'full_name' => $student ? $student->full_name : $result->student_name,
-                'faculty' => $student ? $student->department_name : '-',
-                'direction' => $student ? $student->specialty_name : '-',
-                'kurs' => $kurs ? $kurs . '-kurs' : '-',
-                'semester' => $semNum ? $semNum . '-sem' : ($semLabel ?: '-'),
-                'group' => $student ? $student->group_name : '-',
-                'fan_name' => $result->fan_name,
-                'yn_turi' => $ynTuri,
-                'shakl' => $result->shakl,
-                'grade' => $result->grade,
-                'date' => $result->date_finish ? $result->date_finish->format('d.m.Y') : '',
-                'xulosa' => $xulosa['text'],
-                'xulosa_code' => $xulosa['code'],
-                'jn_avg' => $xulosa['jn_avg'],
-                'mt_avg' => $xulosa['mt_avg'],
-                'oski_avg' => $xulosa['oski_avg'],
-                'group_db_id' => $groupDbId,
-                'fan_id' => $result->fan_id,
-                'semester_code' => $semesterCode,
-            ];
-        }
+            $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+            $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
 
-        return response()->json([
-            'data' => $data,
-            'total' => count($data),
-        ]);
+            // ====== XULOSA UCHUN MA'LUMOTLAR TAYYORLASH ======
+
+            // 1) Allaqachon yuklangan natijalarni aniqlash (quiz_result_id orqali)
+            $allResultIds = $results->pluck('id')->toArray();
+            $uploadedResultIds = [];
+            if (!empty($allResultIds)) {
+                $uploadedResultIds = StudentGrade::where('reason', 'quiz_result')
+                    ->whereIn('quiz_result_id', $allResultIds)
+                    ->pluck('quiz_result_id')
+                    ->toArray();
+            }
+            $uploadedResultIds = array_flip($uploadedResultIds);
+
+            // 2) Dublikatlarni aniqlash: student_id + fan_id + yn_turi + shakl
+            $duplicateMap = []; // key => [result_ids]
+            foreach ($results as $result) {
+                $ynTuri = '-';
+                if (in_array($result->quiz_type, $testTypes)) $ynTuri = 'T';
+                elseif (in_array($result->quiz_type, $oskiTypes)) $ynTuri = 'O';
+                if ($ynTuri === '-') continue;
+
+                $key = $result->student_id . '|' . $result->fan_id . '|' . $ynTuri . '|' . $result->shakl;
+                $duplicateMap[$key][] = $result->id;
+            }
+
+            // 3) Student lar uchun JN/MT/OSKI baholarini olish (bulk)
+            $studentHemisIds = $students->pluck('hemis_id')->toArray();
+            $fanIds = $results->pluck('fan_id')->unique()->values()->toArray();
+
+            // JN baholar (training_type_code NOT IN config list)
+            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+            $jnGrades = [];
+            if (!empty($studentHemisIds) && !empty($fanIds)) {
+                $jnRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+                    ->whereIn('subject_id', $fanIds)
+                    ->whereNotIn('training_type_code', $excludedCodes)
+                    ->whereNotNull('grade')
+                    ->get(['student_hemis_id', 'subject_id', 'grade', 'lesson_date']);
+
+                foreach ($jnRows as $row) {
+                    $k = $row->student_hemis_id . '|' . $row->subject_id;
+                    $jnGrades[$k][] = ['grade' => $row->grade, 'date' => $row->lesson_date];
+                }
+            }
+
+            // MT baholar (training_type_code = 99)
+            $mtGrades = [];
+            if (!empty($studentHemisIds) && !empty($fanIds)) {
+                $mtRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+                    ->whereIn('subject_id', $fanIds)
+                    ->where('training_type_code', 99)
+                    ->whereNotNull('grade')
+                    ->get(['student_hemis_id', 'subject_id', 'grade']);
+
+                foreach ($mtRows as $row) {
+                    $k = $row->student_hemis_id . '|' . $row->subject_id;
+                    $mtGrades[$k][] = $row->grade;
+                }
+            }
+
+            // OSKI baholar (training_type_code = 101) — YN test uchun kerak
+            $oskiGrades = [];
+            if (!empty($studentHemisIds) && !empty($fanIds)) {
+                $oskiRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+                    ->whereIn('subject_id', $fanIds)
+                    ->where('training_type_code', 101)
+                    ->whereNotNull('grade')
+                    ->get(['student_hemis_id', 'subject_id', 'grade']);
+
+                foreach ($oskiRows as $row) {
+                    $k = $row->student_hemis_id . '|' . $row->subject_id;
+                    $oskiGrades[$k][] = $row->grade;
+                }
+            }
+
+            // 4) CurriculumSubject — fanlar jadvalda bormi tekshirish
+            $groupIds = $students->pluck('group_id')->unique()->toArray();
+            $groups = !empty($groupIds)
+                ? Group::whereIn('group_hemis_id', $groupIds)->get()->keyBy('group_hemis_id')
+                : collect();
+            $curriculumHemisIds = $groups->pluck('curriculum_hemis_id')->unique()->toArray();
+
+            $curriculumSubjects = [];
+            if (!empty($curriculumHemisIds) && !empty($fanIds)) {
+                $csRows = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumHemisIds)
+                    ->whereIn('subject_id', $fanIds)
+                    ->get(['curricula_hemis_id', 'subject_id', 'semester_code']);
+
+                foreach ($csRows as $cs) {
+                    $curriculumSubjects[$cs->curricula_hemis_id . '|' . $cs->subject_id] = $cs->semester_code;
+                }
+            }
+
+            // ====== DATA TAYYORLASH ======
+            $data = [];
+            $rowNum = 0;
+
+            foreach ($results as $result) {
+                $student = $studentLookup[$result->student_id] ?? null;
+
+                // Semestrni Moodle formatidan aniqlash: "3-SEM" -> 3, "5-sem" -> 5
+                $semNum = null;
+                $semLabel = $result->semester ?: ($student ? $student->semester_name : '');
+                if ($semLabel && preg_match('/(\d+)/', $semLabel, $m)) {
+                    $semNum = (int) $m[1];
+                }
+
+                // Kursni semestr raqamidan hisoblash
+                $kurs = $semNum ? (int) ceil($semNum / 2) : null;
+
+                // YN turi aniqlash
+                $ynTuri = '-';
+                if (in_array($result->quiz_type, $testTypes)) {
+                    $ynTuri = 'Test';
+                } elseif (in_array($result->quiz_type, $oskiTypes)) {
+                    $ynTuri = 'OSKI';
+                }
+
+                // ====== XULOSA HISOBLASH ======
+                $xulosa = $this->calculateXulosa(
+                    $result, $student, $ynTuri,
+                    $uploadedResultIds, $duplicateMap,
+                    $jnGrades, $mtGrades, $oskiGrades,
+                    $curriculumSubjects, $groups,
+                    $testTypes, $oskiTypes
+                );
+
+                // Journal uchun group_db_id va semester_code aniqlash
+                $groupDbId = null;
+                $semesterCode = null;
+                if ($student) {
+                    $groupModel = $groups[$student->group_id] ?? null;
+                    if ($groupModel) {
+                        $groupDbId = $groupModel->id;
+                        $csKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
+                        $semesterCode = $curriculumSubjects[$csKey] ?? null;
+                    }
+                }
+
+                $rowNum++;
+                $data[] = [
+                    'id' => $result->id,
+                    'row_num' => $rowNum,
+                    'student_id' => $result->student_id,
+                    'full_name' => $student ? $student->full_name : $result->student_name,
+                    'faculty' => $student ? $student->department_name : '-',
+                    'direction' => $student ? $student->specialty_name : '-',
+                    'kurs' => $kurs ? $kurs . '-kurs' : '-',
+                    'semester' => $semNum ? $semNum . '-sem' : ($semLabel ?: '-'),
+                    'group' => $student ? $student->group_name : '-',
+                    'fan_name' => $result->fan_name,
+                    'yn_turi' => $ynTuri,
+                    'shakl' => $result->shakl,
+                    'grade' => $result->grade,
+                    'date' => $result->date_finish ? $result->date_finish->format('d.m.Y') : '',
+                    'xulosa' => $xulosa['text'],
+                    'xulosa_code' => $xulosa['code'],
+                    'jn_avg' => $xulosa['jn_avg'],
+                    'mt_avg' => $xulosa['mt_avg'],
+                    'oski_avg' => $xulosa['oski_avg'],
+                    'group_db_id' => $groupDbId,
+                    'fan_id' => $result->fan_id,
+                    'semester_code' => $semesterCode,
+                ];
+            }
+
+            return response()->json([
+                'data' => $data,
+                'total' => count($data),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('tartibgaSol xatolik: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'error' => $e->getMessage(),
+                'data' => [],
+                'total' => 0,
+            ], 500);
+        }
     }
 
     /**
      * Har bir natija uchun xulosa hisoblash.
+     * MarkingSystemScore orqali JN/MT/OSKI chegaralarini aniqlaydi.
      */
     private function calculateXulosa(
         $result, $student, $ynTuri,
         $uploadedResultIds, $duplicateMap,
         $jnGrades, $mtGrades, $oskiGrades,
-        $curriculumSubjects, $groups, $deadlines,
+        $curriculumSubjects, $groups,
         $testTypes, $oskiTypes
     ) {
         $jnAvg = null;
@@ -655,29 +667,30 @@ class QuizResultController extends Controller
             $oskiAvg = round(array_sum($oskiGrades[$gradeKey]) / count($oskiGrades[$gradeKey]), 1);
         }
 
-        // 9) YNga ruxsat tekshiruvi
-        $deadline = $deadlines[$student->level_code] ?? null;
-        $jnThreshold = $deadline ? $deadline->joriy : 60;
-        $mtThreshold = $deadline ? $deadline->mustaqil_talim : 60;
+        // 9) YNga ruxsat tekshiruvi (MarkingSystemScore orqali)
+        $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+        $jnThreshold = $markingScore->effectiveLimit('jn');
+        $mtThreshold = $markingScore->effectiveLimit('mt');
+        $oskiThreshold = $markingScore->effectiveLimit('oski');
 
         if ($ynTuri === 'OSKI') {
             // OSKI uchun: JN >= threshold, MT >= threshold
-            if ($jnAvg !== null && $jnAvg < $jnThreshold) {
+            if ($jnThreshold > 0 && $jnAvg !== null && $jnAvg < $jnThreshold) {
                 return ['code' => 'jn_low', 'text' => 'JN yetarli emas (' . $jnAvg . '<' . $jnThreshold . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
-            if ($mtAvg !== null && $mtAvg < $mtThreshold) {
+            if ($mtThreshold > 0 && $mtAvg !== null && $mtAvg < $mtThreshold) {
                 return ['code' => 'mt_low', 'text' => 'MT yetarli emas (' . $mtAvg . '<' . $mtThreshold . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
         } elseif ($ynTuri === 'Test') {
-            // YN test uchun: JN >= threshold, MT >= threshold, OSKI >= 60
-            if ($jnAvg !== null && $jnAvg < $jnThreshold) {
+            // YN test uchun: JN >= threshold, MT >= threshold, OSKI >= threshold
+            if ($jnThreshold > 0 && $jnAvg !== null && $jnAvg < $jnThreshold) {
                 return ['code' => 'jn_low', 'text' => 'JN yetarli emas (' . $jnAvg . '<' . $jnThreshold . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
-            if ($mtAvg !== null && $mtAvg < $mtThreshold) {
+            if ($mtThreshold > 0 && $mtAvg !== null && $mtAvg < $mtThreshold) {
                 return ['code' => 'mt_low', 'text' => 'MT yetarli emas (' . $mtAvg . '<' . $mtThreshold . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
-            if ($oskiAvg !== null && $oskiAvg < 60) {
-                return ['code' => 'oski_low', 'text' => 'OSKI yetarli emas (' . $oskiAvg . '<60)', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+            if ($oskiThreshold > 0 && $oskiAvg !== null && $oskiAvg < $oskiThreshold) {
+                return ['code' => 'oski_low', 'text' => 'OSKI yetarli emas (' . $oskiAvg . '<' . $oskiThreshold . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
         }
 

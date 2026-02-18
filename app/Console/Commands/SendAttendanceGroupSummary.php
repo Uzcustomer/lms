@@ -270,7 +270,7 @@ class SendAttendanceGroupSummary extends Command
 
         // Kafedra kesimi jadval rasmini tayyorlash
         $deptTableRows = [];
-        $rowNum = 0;
+        $deptNum = 0;
         // Kafedrani jami soat bo'yicha kamayish tartibida saralash
         $sortedDepts = $departmentStats;
         uasort($sortedDepts, function ($a, $b) {
@@ -280,6 +280,21 @@ class SendAttendanceGroupSummary extends Command
         });
 
         foreach ($sortedDepts as $dept) {
+            $deptNum++;
+            // Kafedra jami yig'indisini hisoblash
+            $deptTotalAtt = array_sum(array_column($dept['subjects'], 'no_attendance'));
+            $deptTotalGrade = array_sum(array_column($dept['subjects'], 'no_grades'));
+            $deptTotal = array_sum(array_column($dept['subjects'], 'total'));
+
+            // Kafedra sarlavha qatori (jami bilan)
+            $deptTableRows[] = [
+                $deptNum,
+                TableImageGenerator::truncate($dept['department_name'], 30),
+                $deptTotalAtt,
+                $deptTotalGrade,
+                $deptTotal,
+            ];
+
             // Fanlarni jami soat bo'yicha kamayish tartibida saralash
             $subjects = $dept['subjects'];
             uasort($subjects, function ($a, $b) {
@@ -287,11 +302,10 @@ class SendAttendanceGroupSummary extends Command
             });
 
             foreach ($subjects as $subjectName => $stats) {
-                $rowNum++;
+                // Fan qatori (tab bilan)
                 $deptTableRows[] = [
-                    $rowNum,
-                    TableImageGenerator::truncate($dept['department_name'], 25),
-                    TableImageGenerator::truncate($subjectName, 25),
+                    '',
+                    '   ' . TableImageGenerator::truncate($subjectName, 27),
                     $stats['no_attendance'],
                     $stats['no_grades'],
                     $stats['total'],
@@ -302,8 +316,8 @@ class SendAttendanceGroupSummary extends Command
         $generator = new TableImageGenerator();
 
         // Kafedra kesimi rasmi
-        $deptHeaders = ['#', 'KAFEDRA', 'FAN NOMI', 'DAVOMAT YO\'Q', 'BAHO YO\'Q', 'JAMI SOAT'];
-        $deptImages = $generator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$now->format('H:i')} {$todayStr} (Jami: " . count($deptTableRows) . ")");
+        $deptHeaders = ['#', 'KAFEDRA / FAN', 'DAV. YO\'Q', 'BAHO YO\'Q', 'JAMI SOAT'];
+        $deptImages = $generator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$now->format('H:i')} {$todayStr} (Kafedralar: {$deptNum})");
 
         // Batafsil jadval rasmi
         $headers = [

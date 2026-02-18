@@ -144,6 +144,10 @@ class TableImageGenerator
 
         $y += $this->headerHeight;
 
+        // Colors for group header rows (e.g., department summary rows)
+        $groupHeaderBg = imagecolorallocate($image, 220, 230, 241);
+        $groupHeaderTextColor = imagecolorallocate($image, 30, 40, 60);
+
         // Data rows
         foreach ($rows as $rowIndex => $row) {
             // Determine row background
@@ -155,8 +159,18 @@ class TableImageGenerator
                 }
             }
 
+            // Check if this is a group header row (first cell is numeric = summary row)
+            $isGroupHeader = isset($row[0]) && is_int($row[0]) && $row[0] > 0
+                && isset($row[1]) && is_string($row[1]) && !str_starts_with($row[1], '   ');
+            // Check if next row exists and is a child (starts with spaces) - confirms grouping
+            $hasChildRow = isset($rows[$rowIndex + 1][0]) && $rows[$rowIndex + 1][0] === '';
+
+            $isGroupHeaderRow = $isGroupHeader && $hasChildRow;
+
             if ($hasIssue) {
                 $bgColor = $redRowBg;
+            } elseif ($isGroupHeaderRow) {
+                $bgColor = $groupHeaderBg;
             } else {
                 $bgColor = ($rowIndex % 2 === 0) ? $evenRowBg : $oddRowBg;
             }
@@ -170,7 +184,7 @@ class TableImageGenerator
                 $cellStr = $this->displayValue($cell);
 
                 // Pick text color based on value
-                $textColor = $black;
+                $textColor = $isGroupHeaderRow ? $groupHeaderTextColor : $black;
                 if ($cell === true) {
                     $textColor = $greenText;
                 } elseif ($cell === false) {
@@ -179,7 +193,8 @@ class TableImageGenerator
                     $textColor = $grayText;
                 }
 
-                $this->drawText($image, $cellStr, $x + $this->cellPadding + 1, $y + ($this->rowHeight - $this->fontSize) / 2, $textColor, $this->fontSize);
+                $useBold = $isGroupHeaderRow;
+                $this->drawText($image, $cellStr, $x + $this->cellPadding + 1, $y + ($this->rowHeight - $this->fontSize) / 2, $textColor, $this->fontSize, $useBold);
 
                 $x += $colWidths[$i] + 1;
                 // Vertical separator

@@ -135,7 +135,7 @@ class ImportGrades extends Command
         $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
         if ($attendanceItems !== false) {
             foreach ($attendanceItems as $item) {
-                $this->processAttendance($item);
+                $this->processAttendance($item, true);
             }
         }
 
@@ -199,7 +199,7 @@ class ImportGrades extends Command
             $attendanceItems = $this->fetchAllPages('attendance-list', $dayFrom, $dayTo);
             if ($attendanceItems !== false) {
                 foreach ($attendanceItems as $item) {
-                    $this->processAttendance($item);
+                    $this->processAttendance($item, true);
                 }
             }
 
@@ -402,7 +402,7 @@ class ImportGrades extends Command
     // =========================================================================
     // Davomatni qayta ishlash (eski logika saqlanadi)
     // =========================================================================
-    private function processAttendance($item)
+    private function processAttendance($item, bool $isFinal = false)
     {
         $student = Student::where('hemis_id', $item['student']['id'])->first();
 
@@ -443,11 +443,11 @@ class ImportGrades extends Command
                 ]
             );
 
-            $this->processGradeForAbsence($item, $student);
+            $this->processGradeForAbsence($item, $student, $isFinal);
         }
     }
 
-    private function processGradeForAbsence($item, $student)
+    private function processGradeForAbsence($item, $student, bool $isFinal = false)
     {
         $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
 
@@ -486,6 +486,7 @@ class ImportGrades extends Command
                 'reason' => 'absent',
                 'deadline' => $this->getDeadline($student->level_code, $lessonDate),
                 'status' => 'pending',
+                'is_final' => $isFinal,
             ]);
         }
     }

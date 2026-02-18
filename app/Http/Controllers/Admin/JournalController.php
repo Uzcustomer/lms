@@ -3090,17 +3090,30 @@ class JournalController extends Controller
 
     /**
      * Dars jadvalidan o'qituvchining fan-guruh biriktirishlarini aniqlash.
-     * O'qituvchi shu guruhda dars o'tgan bo'lsa, unga ko'rsatiladi.
+     * Faqat joriy semestr darslari hisobga olinadi.
+     * Har bir fan+guruh uchun eng ko'p dars o'tgan o'qituvchi "primary" hisoblanadi.
      *
      * @param int $employeeHemisId O'qituvchining HEMIS ID si
      * @return array ['subject_ids' => [...], 'group_ids' => [...]]
      */
     private function getTeacherScheduleAssignments(int $employeeHemisId): array
     {
-        // O'qituvchining fan+guruh kombinatsiyalarini topish
+        // Joriy semestr kodlarini aniqlash
+        $currentSemesterCodes = DB::table('semesters')
+            ->where('current', true)
+            ->pluck('code')
+            ->unique()
+            ->toArray();
+
+        if (empty($currentSemesterCodes)) {
+            return ['subject_ids' => [], 'group_ids' => []];
+        }
+
+        // 1-query: O'qituvchining joriy semestrdagi fan+guruh kombinatsiyalari
         $teacherCombos = DB::table('schedules')
             ->where('employee_id', $employeeHemisId)
             ->where('education_year_current', true)
+            ->whereIn('semester_code', $currentSemesterCodes)
             ->whereNull('deleted_at')
             ->select('subject_id', 'group_id')
             ->groupBy('subject_id', 'group_id')
@@ -3110,9 +3123,50 @@ class JournalController extends Controller
             return ['subject_ids' => [], 'group_ids' => []];
         }
 
+        // 2-query: Joriy semestrdagi BARCHA o'qituvchilarning statistikasi
+        $comboSubjectIds = $teacherCombos->pluck('subject_id')->unique()->toArray();
+        $comboGroupIds = $teacherCombos->pluck('group_id')->unique()->toArray();
+
+        $allStats = DB::table('schedules')
+            ->where('education_year_current', true)
+            ->whereIn('semester_code', $currentSemesterCodes)
+            ->whereNull('deleted_at')
+            ->whereIn('subject_id', $comboSubjectIds)
+            ->whereIn('group_id', $comboGroupIds)
+            ->select('subject_id', 'group_id', 'employee_id')
+            ->selectRaw('COUNT(*) as lesson_count')
+            ->selectRaw('MAX(lesson_date) as last_lesson')
+            ->groupBy('subject_id', 'group_id', 'employee_id')
+            ->get();
+
+        // Har bir fan+guruh uchun eng ko'p dars o'tgan o'qituvchini aniqlash
+        $statsByCombo = $allStats->groupBy(fn($item) => $item->subject_id . '-' . $item->group_id);
+
+        $subjectIds = [];
+        $groupIds = [];
+        $comboKeys = $teacherCombos->map(fn($c) => $c->subject_id . '-' . $c->group_id)->toArray();
+
+        foreach ($statsByCombo as $key => $teachers) {
+            if (!in_array($key, $comboKeys)) {
+                continue;
+            }
+
+            $primary = $teachers->sort(function ($a, $b) {
+                if ($a->lesson_count !== $b->lesson_count) {
+                    return $b->lesson_count - $a->lesson_count;
+                }
+                return strcmp($b->last_lesson ?? '', $a->last_lesson ?? '');
+            })->first();
+
+            if ($primary && $primary->employee_id == $employeeHemisId) {
+                $subjectIds[] = $primary->subject_id;
+                $groupIds[] = $primary->group_id;
+            }
+        }
+
         return [
-            'subject_ids' => $teacherCombos->pluck('subject_id')->unique()->filter()->values()->toArray(),
-            'group_ids' => $teacherCombos->pluck('group_id')->unique()->filter()->values()->toArray(),
+            'subject_ids' => array_values(array_unique(array_filter($subjectIds))),
+            'group_ids' => array_values(array_unique(array_filter($groupIds))),
         ];
     }
 

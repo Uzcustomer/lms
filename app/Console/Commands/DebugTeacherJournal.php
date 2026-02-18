@@ -90,83 +90,99 @@ class DebugTeacherJournal extends Command
         }
 
         // ═══════════════════════════════════════════════════
-        // 2-MANBA: schedules fallback
+        // 2-MANBA: schedules fallback (FAQAT JORIY SEMESTR)
         // ═══════════════════════════════════════════════════
         $this->newLine(2);
-        $this->info("━━━ 2-MANBA: schedules (dars jadvali) fallback ━━━");
+        $this->info("━━━ 2-MANBA: schedules fallback (FAQAT JORIY SEMESTR) ━━━");
 
-        $teacherCombos = DB::table('schedules')
-            ->where('employee_id', $employeeHemisId)
-            ->where('education_year_current', true)
-            ->whereNull('deleted_at')
-            ->select('subject_id', 'group_id')
-            ->selectRaw('COUNT(*) as lesson_count')
-            ->groupBy('subject_id', 'group_id')
-            ->get();
+        // Joriy semestr kodlari
+        $currentSemesterCodes = DB::table('semesters')
+            ->where('current', true)
+            ->pluck('code')
+            ->unique()
+            ->toArray();
+        $this->line("  Joriy semestr kodlari: " . json_encode($currentSemesterCodes));
 
-        $this->line("  Dars jadvali kombinatsiyalari: {$teacherCombos->count()} ta");
-
-        $scheduleGroupIds = [];
-        $scheduleSubjectIds = [];
-
-        if ($teacherCombos->isNotEmpty()) {
-            $scheduleTable = $teacherCombos->map(fn($c) => [
-                $c->subject_id,
-                $c->group_id,
-                $c->lesson_count,
-            ])->toArray();
-            $this->table(['subject_id', 'group_id', 'Dars soni'], $scheduleTable);
-
-            // Har bir combo uchun kim primary ekanini tekshirish
-            $comboSubjectIds = $teacherCombos->pluck('subject_id')->unique()->toArray();
-            $comboGroupIds = $teacherCombos->pluck('group_id')->unique()->toArray();
-
-            $allStats = DB::table('schedules')
+        if (empty($currentSemesterCodes)) {
+            $this->error("  ❌ Joriy semestr TOPILMADI (semesters.current=true yo'q)!");
+            $scheduleGroupIds = [];
+            $scheduleSubjectIds = [];
+        } else {
+            $teacherCombos = DB::table('schedules')
+                ->where('employee_id', $employeeHemisId)
                 ->where('education_year_current', true)
+                ->whereIn('semester_code', $currentSemesterCodes)
                 ->whereNull('deleted_at')
-                ->whereIn('subject_id', $comboSubjectIds)
-                ->whereIn('group_id', $comboGroupIds)
-                ->select('subject_id', 'group_id', 'employee_id')
+                ->select('subject_id', 'group_id')
                 ->selectRaw('COUNT(*) as lesson_count')
-                ->selectRaw('MAX(lesson_date) as last_lesson')
-                ->groupBy('subject_id', 'group_id', 'employee_id')
+                ->groupBy('subject_id', 'group_id')
                 ->get();
 
-            $statsByCombo = $allStats->groupBy(fn($item) => $item->subject_id . '-' . $item->group_id);
-            $comboKeys = $teacherCombos->map(fn($c) => $c->subject_id . '-' . $c->group_id)->toArray();
+            $this->line("  Joriy semestr dars kombinatsiyalari: {$teacherCombos->count()} ta");
 
-            $this->newLine();
-            $this->info("  Primary o'qituvchi tekshiruvi:");
-            foreach ($statsByCombo as $key => $teachers) {
-                if (!in_array($key, $comboKeys)) continue;
+            $scheduleGroupIds = [];
+            $scheduleSubjectIds = [];
 
-                $primary = $teachers->sort(function ($a, $b) {
-                    if ($a->lesson_count !== $b->lesson_count) {
-                        return $b->lesson_count - $a->lesson_count;
+            if ($teacherCombos->isNotEmpty()) {
+                $scheduleTable = $teacherCombos->map(fn($c) => [
+                    $c->subject_id,
+                    $c->group_id,
+                    $c->lesson_count,
+                ])->toArray();
+                $this->table(['subject_id', 'group_id', 'Dars soni (joriy semestr)'], $scheduleTable);
+
+                // Har bir combo uchun kim primary ekanini tekshirish
+                $comboSubjectIds = $teacherCombos->pluck('subject_id')->unique()->toArray();
+                $comboGroupIds = $teacherCombos->pluck('group_id')->unique()->toArray();
+
+                $allStats = DB::table('schedules')
+                    ->where('education_year_current', true)
+                    ->whereIn('semester_code', $currentSemesterCodes)
+                    ->whereNull('deleted_at')
+                    ->whereIn('subject_id', $comboSubjectIds)
+                    ->whereIn('group_id', $comboGroupIds)
+                    ->select('subject_id', 'group_id', 'employee_id')
+                    ->selectRaw('COUNT(*) as lesson_count')
+                    ->selectRaw('MAX(lesson_date) as last_lesson')
+                    ->groupBy('subject_id', 'group_id', 'employee_id')
+                    ->get();
+
+                $statsByCombo = $allStats->groupBy(fn($item) => $item->subject_id . '-' . $item->group_id);
+                $comboKeys = $teacherCombos->map(fn($c) => $c->subject_id . '-' . $c->group_id)->toArray();
+
+                $this->newLine();
+                $this->info("  Primary o'qituvchi tekshiruvi (joriy semestr):");
+                foreach ($statsByCombo as $key => $teachers) {
+                    if (!in_array($key, $comboKeys)) continue;
+
+                    $primary = $teachers->sort(function ($a, $b) {
+                        if ($a->lesson_count !== $b->lesson_count) {
+                            return $b->lesson_count - $a->lesson_count;
+                        }
+                        return strcmp($b->last_lesson ?? '', $a->last_lesson ?? '');
+                    })->first();
+
+                    $isPrimary = $primary && $primary->employee_id == $employeeHemisId;
+                    $icon = $isPrimary ? '✅' : '❌';
+
+                    if ($isPrimary) {
+                        $scheduleSubjectIds[] = $primary->subject_id;
+                        $scheduleGroupIds[] = $primary->group_id;
                     }
-                    return strcmp($b->last_lesson ?? '', $a->last_lesson ?? '');
-                })->first();
 
-                $isPrimary = $primary && $primary->employee_id == $employeeHemisId;
-                $icon = $isPrimary ? '✅' : '❌';
+                    $this->line("    {$icon} [{$key}] Primary: employee={$primary->employee_id}, dars_soni={$primary->lesson_count}" .
+                        ($isPrimary ? '' : " (SIZ EMASSIZ! Siz: {$employeeHemisId})"));
 
-                if ($isPrimary) {
-                    $scheduleSubjectIds[] = $primary->subject_id;
-                    $scheduleGroupIds[] = $primary->group_id;
-                }
-
-                $this->line("    {$icon} [{$key}] Primary: employee={$primary->employee_id}, dars_soni={$primary->lesson_count}" .
-                    ($isPrimary ? '' : " (SIZ EMASSIZ! Siz: {$employeeHemisId})"));
-
-                if (!$isPrimary && $teachers->count() > 1) {
-                    foreach ($teachers as $t) {
-                        $marker = $t->employee_id == $employeeHemisId ? ' ← SIZ' : '';
-                        $this->line("      • employee={$t->employee_id}, dars_soni={$t->lesson_count}, oxirgi={$t->last_lesson}{$marker}");
+                    if (!$isPrimary && $teachers->count() > 1) {
+                        foreach ($teachers as $t) {
+                            $marker = $t->employee_id == $employeeHemisId ? ' ← SIZ' : '';
+                            $this->line("      • employee={$t->employee_id}, dars_soni={$t->lesson_count}, oxirgi={$t->last_lesson}{$marker}");
+                        }
                     }
                 }
+            } else {
+                $this->warn("  ⚠ Joriy semestrda bu o'qituvchi uchun dars TOPILMADI");
             }
-        } else {
-            $this->warn("  ⚠ schedules da bu o'qituvchi uchun dars TOPILMADI");
         }
 
         // ═══════════════════════════════════════════════════

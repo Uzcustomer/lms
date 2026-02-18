@@ -353,6 +353,7 @@ class JournalController extends Controller
         // Filter by education_year_code to exclude grades from previous education years
         // Fall back to minScheduleDate for legacy records without education_year_code
         $jbGradesRaw = DB::table('student_grades')
+            ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
@@ -374,6 +375,7 @@ class JournalController extends Controller
 
         // Get all MT grades with lesson_pair info and status fields
         $mtGradesRaw = DB::table('student_grades')
+            ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
@@ -637,6 +639,7 @@ class JournalController extends Controller
         // Get other averages (ON, OSKI, Test) with status-based grade calculation
         // Filter by education_year_code to exclude old education year data
         $otherGradesRaw = DB::table('student_grades')
+            ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
@@ -694,6 +697,7 @@ class JournalController extends Controller
         // Get manual MT grades (entries without lesson_date)
         // No education_year_code filter: manual MT grades are unique per student/subject/semester
         $manualMtGradesRaw = DB::table('student_grades')
+            ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)

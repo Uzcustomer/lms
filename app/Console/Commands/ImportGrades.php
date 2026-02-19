@@ -18,15 +18,15 @@ use App\Models\MarkingSystemScore;
 
 class ImportGrades extends Command
 {
-    protected string $baseUrl;
-    protected string $token;
+    protected ?string $baseUrl;
+    protected ?string $token;
     protected array $report = [];
 
     public function __construct()
     {
         parent::__construct();
-        $this->baseUrl = config('services.hemis.base_url');
-        $this->token = config('services.hemis.token');
+        $this->baseUrl = config('services.hemis.base_url') ?? '';
+        $this->token = config('services.hemis.token') ?? '';
     }
 
     protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)}';

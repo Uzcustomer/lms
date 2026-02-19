@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 
 class SendAttendanceGroupSummary extends Command
 {
-    protected $signature = 'teachers:send-group-summary {--chat-id= : Test uchun shaxsiy Telegram chat_id}';
+    protected $signature = 'teachers:send-group-summary {--chat-id= : Test uchun shaxsiy Telegram chat_id} {--detail : O\'qituvchilar kesimi batafsil jadvalini ham yuborish}';
 
     protected $description = 'Davomat olmagan yoki baho qo\'ymagan o\'qituvchilar haqida Telegram guruhga jadval ko\'rinishida hisobot yuborish';
 
@@ -339,18 +339,23 @@ class SendAttendanceGroupSummary extends Command
 
         $generator = new TableImageGenerator();
 
-        // Kafedra kesimi rasmi
+        // Kafedra kesimi rasmi (ixcham rejimda - bitta rasmga sig'dirish uchun)
         $deptHeaders = ['#', 'KAFEDRA / FAN', 'DAV. YO\'Q', 'BAHO YO\'Q', 'JAMI SOAT'];
-        $deptImages = $generator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$now->format('H:i')} {$todayStr} (Kafedralar: {$deptNum})");
+        $formattedDate = Carbon::parse($todayStr)->format('d.m.Y');
+        $compactGenerator = (new TableImageGenerator())->compact();
+        $deptImages = $compactGenerator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (Kafedralar: {$deptNum})");
 
-        // Batafsil jadval rasmi
-        $headers = [
-            '#', 'XODIM FISH', 'FAKULTET', "YO'NALISH", 'KURS', 'SEM',
-            'KAFEDRA', 'FAN', 'GURUH', "MASHG'ULOT TURI",
-            'VAQT', 'T.SONI', 'DAVOMAT', 'BAHO', 'SANA',
-        ];
+        // Batafsil jadval rasmi (faqat --detail flag bilan)
+        $detailImages = [];
+        if ($this->option('detail')) {
+            $headers = [
+                '#', 'XODIM FISH', 'FAKULTET', "YO'NALISH", 'KURS', 'SEM',
+                'KAFEDRA', 'FAN', 'GURUH', "MASHG'ULOT TURI",
+                'VAQT', 'T.SONI', 'DAVOMAT', 'BAHO', 'SANA',
+            ];
 
-        $detailImages = $generator->generate($headers, $tableRows, "KUNLIK HISOBOT - {$now->format('H:i')} {$todayStr} (Kamida biri yo'q: " . count($results) . ")");
+            $detailImages = $generator->generate($headers, $tableRows, "O'QITUVCHILAR KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (Kamida biri yo'q: " . count($results) . ")");
+        }
 
         $tempFiles = [];
 
@@ -397,22 +402,20 @@ class SendAttendanceGroupSummary extends Command
 
     private function buildSummaryText(string $today, Carbon $now, int $totalLessons, array $teachersWithIssues, int $missingAttendance, int $missingGrades, int $uniqueAttTeachers = 0, int $uniqueGradeTeachers = 0, array $facultyStats = []): string
     {
+        $formattedDate = Carbon::parse($today)->format('d.m.Y');
+
         $lines = [];
-        $lines[] = "📊 KUNLIK HISOBOT — {$now->format('H:i')} {$today}";
+        $lines[] = "📊 DAVOMAT OLMAGANLAR VA BAHO QO'YMAGANLAR KUNLIK HISOBOTI — {$formattedDate} yil {$now->format('H:i')} soat";
         $lines[] = str_repeat('─', 30);
-        $lines[] = "";
-        $lines[] = "📋 Jami darslar: {$totalLessons}";
-        $lines[] = "👨‍🏫 Muammoli o'qituvchilar: " . count($teachersWithIssues);
-        $lines[] = "";
 
         if ($missingAttendance > 0) {
-            $lines[] = "❌ Davomat olinmagan: {$missingAttendance} soat ({$uniqueAttTeachers} o'qituvchi)";
+            $lines[] = "📝 Davomat olinmagan: {$uniqueAttTeachers} o'qituvchi";
         } else {
             $lines[] = "✅ Barcha darslar uchun davomat olingan";
         }
 
         if ($missingGrades > 0) {
-            $lines[] = "❌ Baho qo'yilmagan: {$missingGrades} soat ({$uniqueGradeTeachers} o'qituvchi)";
+            $lines[] = "💯 Baho qo'yilmagan: {$uniqueGradeTeachers} o'qituvchi";
         } else {
             $lines[] = "✅ Barcha darslar uchun baho qo'yilgan";
         }
@@ -432,11 +435,10 @@ class SendAttendanceGroupSummary extends Command
             $num = 0;
             foreach ($facultyStats as $fname => $fdata) {
                 $num++;
-                $teacherCount = count($fdata['teachers']);
                 $attTeachers = count($fdata['teachers_att'] ?? []);
                 $gradeTeachers = count($fdata['teachers_grade'] ?? []);
                 $lines[] = "{$num}. {$fname}";
-                $lines[] = "   ❌ Dav: {$fdata['no_attendance']} soat ({$attTeachers}) | ❌ Baho: {$fdata['no_grades']} soat ({$gradeTeachers}) | 👨‍🏫 {$teacherCount}";
+                $lines[] = "   📝 Dav: {$fdata['no_attendance']} soat ({$attTeachers}) | 💯 Baho: {$fdata['no_grades']} soat ({$gradeTeachers}) | Jami: {$fdata['total']} soat";
             }
         }
 

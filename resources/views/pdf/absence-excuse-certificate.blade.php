@@ -2,7 +2,21 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
+    @php
+        $months = [
+            1 => 'yanvar', 2 => 'fevral', 3 => 'mart', 4 => 'aprel',
+            5 => 'may', 6 => 'iyun', 7 => 'iyul', 8 => 'avgust',
+            9 => 'sentabr', 10 => 'oktabr', 11 => 'noyabr', 12 => 'dekabr',
+        ];
+        $reviewDate = $excuse->reviewed_at ?? now();
+        $year = now()->year;
+        $month = now()->month;
+        $academicYear = $month >= 9 ? $year . '.' . ($year + 1) : ($year - 1) . '.' . $year;
+    @endphp
     <style>
+        @page {
+            margin: 25px 35px 55px 35px;
+        }
         * {
             margin: 0;
             padding: 0;
@@ -10,220 +24,235 @@
         }
         body {
             font-family: DejaVu Sans, sans-serif;
-            font-size: 13px;
-            line-height: 1.6;
-            color: #1a1a1a;
-            padding: 40px;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #1a365d;
-            padding-bottom: 20px;
-        }
-        .header h1 {
-            font-size: 16px;
-            font-weight: bold;
-            color: #1a365d;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .header h2 {
-            font-size: 13px;
-            font-weight: normal;
-            color: #4a5568;
-            margin-top: 5px;
-        }
-        .title {
-            text-align: center;
-            margin: 30px 0;
-        }
-        .title h3 {
-            font-size: 20px;
-            font-weight: bold;
-            color: #1a365d;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-        .title .number {
             font-size: 12px;
-            color: #718096;
-            margin-top: 5px;
+            line-height: 1.5;
+            color: #000;
         }
-        .content {
-            margin: 20px 0;
+
+        /* Gerb / Logo */
+        .gerb {
+            text-align: center;
+            margin-bottom: 6px;
         }
-        .content p {
-            margin-bottom: 10px;
-            text-align: justify;
+        .gerb img {
+            width: 70px;
+            height: auto;
         }
-        .info-table {
+
+        /* Universitet nomi */
+        .header-uz {
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            line-height: 1.4;
+            color: #003366;
+        }
+        .header-en {
+            text-align: center;
+            font-size: 8px;
+            font-style: italic;
+            color: #444;
+            margin-top: 3px;
+            line-height: 1.3;
+        }
+        .address {
+            text-align: center;
+            font-size: 7.5px;
+            color: #666;
+            margin-top: 4px;
+            padding-bottom: 8px;
+            border-bottom: 2.5px solid #003366;
+        }
+
+        /* Hujjat meta */
+        .doc-meta {
             width: 100%;
-            margin: 20px 0;
+            margin-top: 14px;
             border-collapse: collapse;
         }
-        .info-table td {
-            padding: 8px 12px;
-            border: 1px solid #e2e8f0;
+        .doc-meta td {
             vertical-align: top;
         }
-        .info-table .label {
-            background-color: #f7fafc;
-            font-weight: bold;
-            width: 40%;
-            color: #4a5568;
-        }
-        .info-table .value {
-            color: #1a202c;
-        }
-        .footer {
-            margin-top: 40px;
-            display: table;
-            width: 100%;
-        }
-        .footer-left {
-            display: table-cell;
-            width: 60%;
-            vertical-align: bottom;
-        }
-        .footer-right {
-            display: table-cell;
-            width: 40%;
-            text-align: center;
-            vertical-align: bottom;
-        }
-        .signature-line {
-            margin-top: 40px;
-        }
-        .signature-line .line {
-            border-top: 1px solid #1a1a1a;
-            width: 200px;
-            margin-top: 5px;
-        }
-        .signature-line .label {
+        .doc-meta .left-col {
+            width: 35%;
             font-size: 11px;
-            color: #718096;
+            line-height: 1.6;
+        }
+        .doc-meta .right-col {
+            width: 65%;
+            text-align: center;
+        }
+
+        /* Farmoyish sarlavha */
+        .farmoyish-title {
+            font-size: 15px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #003366;
+            line-height: 1.3;
+        }
+        .academic-year {
+            font-size: 11px;
+            font-weight: bold;
             margin-top: 3px;
         }
-        .qr-section {
+
+        /* Asosiy matn */
+        .body-text {
+            margin-top: 18px;
+            text-align: justify;
+            font-size: 12px;
+            line-height: 1.7;
+        }
+        .body-text p {
+            text-indent: 25px;
+            margin-bottom: 8px;
+        }
+        .student-name {
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        /* Imzolar */
+        .signatures {
+            width: 100%;
+            margin-top: 45px;
+            border-collapse: collapse;
+        }
+        .signatures td {
+            vertical-align: bottom;
+            font-size: 12px;
+        }
+        .signatures .sig-left {
+            width: 50%;
+        }
+        .signatures .sig-right {
+            width: 50%;
+            text-align: right;
+        }
+
+        /* Ijrochi */
+        .executor {
+            margin-top: 50px;
+            font-size: 8px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        /* QR kod */
+        .qr-container {
+            position: fixed;
+            bottom: 10px;
+            right: 35px;
             text-align: center;
         }
-        .qr-section img {
-            width: 120px;
-            height: 120px;
-        }
-        .qr-section .qr-label {
-            font-size: 9px;
-            color: #a0aec0;
-            margin-top: 5px;
-        }
-        .stamp-area {
-            margin-top: 15px;
-            font-size: 11px;
-            color: #718096;
-        }
-        .date-line {
-            margin-top: 20px;
-            font-size: 12px;
-            color: #4a5568;
+        .qr-container img {
+            width: 90px;
+            height: 90px;
         }
     </style>
 </head>
 <body>
 
-    {{-- Sarlavha --}}
-    <div class="header">
-        <h1>TDTU Termiz filiali</h1>
-        <h2>Registrator ofisi</h2>
-    </div>
-
-    {{-- Hujjat nomi --}}
-    <div class="title">
-        <h3>Ma'lumotnoma</h3>
-        <div class="number">Ariza raqami: #{{ $excuse->id }} | {{ $excuse->reviewed_at ? $excuse->reviewed_at->format('d.m.Y') : now()->format('d.m.Y') }}</div>
-    </div>
-
-    {{-- Asosiy matn --}}
-    <div class="content">
-        <p>
-            Mazkur ma'lumotnoma <strong>{{ $excuse->student_full_name }}</strong> (HEMIS ID: {{ $excuse->student_hemis_id }})
-            {{ $excuse->group_name ? $excuse->group_name . ' guruhi' : '' }}
-            talabasi {{ $excuse->start_date->format('d.m.Y') }} sanadan {{ $excuse->end_date->format('d.m.Y') }} sanagacha
-            ({{ $excuse->start_date->diffInDays($excuse->end_date) + 1 }} kun) darslarni <strong>{{ mb_strtolower($excuse->reason_label) }}</strong>
-            sababli qoldirganligini tasdiqlovchi hujjatlari ({{ $excuse->reason_document }}) asosida sababli deb topilganligini bildiradi.
-        </p>
-    </div>
-
-    {{-- Ma'lumotlar jadvali --}}
-    <table class="info-table">
-        <tr>
-            <td class="label">Talaba FIO</td>
-            <td class="value">{{ $excuse->student_full_name }}</td>
-        </tr>
-        <tr>
-            <td class="label">HEMIS ID</td>
-            <td class="value">{{ $excuse->student_hemis_id }}</td>
-        </tr>
-        @if($excuse->group_name)
-        <tr>
-            <td class="label">Guruh</td>
-            <td class="value">{{ $excuse->group_name }}</td>
-        </tr>
+    {{-- Gerb / Logo --}}
+    <div class="gerb">
+        @if(file_exists(public_path('gerb.png')))
+            <img src="{{ public_path('gerb.png') }}" alt="Gerb">
+        @elseif(file_exists(public_path('logo.png')))
+            <img src="{{ public_path('logo.png') }}" alt="Logo">
         @endif
-        @if($excuse->department_name)
+    </div>
+
+    {{-- Universitet nomi (o'zbekcha) --}}
+    <div class="header-uz">
+        O'ZBEKISTON RESPUBLIKASI SOG'LIQNI SAQLASH VAZIRLIGI<br>
+        TOSHKENT DAVLAT TIBBIYOT UNIVERSITETI TERMIZ FILIALI
+    </div>
+
+    {{-- Universitet nomi (inglizcha) --}}
+    <div class="header-en">
+        MINISTRY OF THE HEALTH OF THE REPUBLIC OF UZBEKISTAN<br>
+        TERMEZ BRANCH OF TASHKENT STATE MEDICAL UNIVERSITY
+    </div>
+
+    {{-- Manzil --}}
+    <div class="address">
+        190100, Surxondaryo viloyati, Termiz shahri | Tel/Fax: (0376) 000-00-00 | web: www.tdtutf.uz
+    </div>
+
+    {{-- Hujjat meta: sana + raqam (chap) va sarlavha (o'ng) --}}
+    <table class="doc-meta" cellpadding="0" cellspacing="0">
         <tr>
-            <td class="label">Fakultet</td>
-            <td class="value">{{ $excuse->department_name }}</td>
-        </tr>
-        @endif
-        <tr>
-            <td class="label">Sabab</td>
-            <td class="value">{{ $excuse->reason_label }}</td>
-        </tr>
-        <tr>
-            <td class="label">Asoslovchi hujjat</td>
-            <td class="value">{{ $excuse->reason_document }}</td>
-        </tr>
-        <tr>
-            <td class="label">Dars qoldirish davri</td>
-            <td class="value">{{ $excuse->start_date->format('d.m.Y') }} - {{ $excuse->end_date->format('d.m.Y') }} ({{ $excuse->start_date->diffInDays($excuse->end_date) + 1 }} kun)</td>
-        </tr>
-        <tr>
-            <td class="label">Tasdiqlangan sana</td>
-            <td class="value">{{ $excuse->reviewed_at ? $excuse->reviewed_at->format('d.m.Y H:i') : '-' }}</td>
-        </tr>
-        <tr>
-            <td class="label">Tasdiqlagan</td>
-            <td class="value">{{ $excuse->reviewed_by_name ?? '-' }}</td>
+            <td class="left-col">
+                {{ $reviewDate->format('Y') }} yil
+                &laquo;{{ $reviewDate->format('j') }}&raquo;
+                {{ $months[$reviewDate->month] ?? $reviewDate->format('F') }}<br>
+                08-{{ str_pad($excuse->id, 5, '0', STR_PAD_LEFT) }} - son
+            </td>
+            <td class="right-col">
+                <div class="farmoyish-title">
+                    REGISTRATOR OFISI<br>FARMOYISHI
+                </div>
+                <div class="academic-year">
+                    {{ $academicYear }} o'quv yili
+                </div>
+            </td>
         </tr>
     </table>
 
-    {{-- Imzo va QR kod --}}
-    <div class="footer">
-        <div class="footer-left">
-            <div class="date-line">
-                Berilgan sana: {{ $excuse->reviewed_at ? $excuse->reviewed_at->format('d.m.Y') : now()->format('d.m.Y') }}
-            </div>
+    {{-- Asosiy matn --}}
+    <div class="body-text">
+        <p>
+            Toshkent davlat tibbiyot universiteti Termiz filiali
+            {{ $excuse->department_name ? $excuse->department_name : '' }}
+            {{ $excuse->group_name ? $excuse->group_name . ' guruh' : '' }}
+            talabasi <span class="student-name">{{ $excuse->student_full_name }}</span>
+            (HEMIS ID: {{ $excuse->student_hemis_id }})
+            {{ mb_strtolower($excuse->reason_label) }} sababli
+            {{ $excuse->start_date->format('Y') }}-yil
+            {{ $excuse->start_date->format('j') }}-{{ $excuse->end_date->format('j') }}-{{ $months[$excuse->start_date->month] ?? $excuse->start_date->format('F') }}
+            kunlari ({{ $excuse->start_date->diffInDays($excuse->end_date) + 1 }} kun)
+            darslardan qayta topshirish sharti bilan ozod etilsin.
+        </p>
 
-            <div class="signature-line">
-                <div>Registrator ofisi mas'uli:</div>
-                <div class="line"></div>
-                <div class="label">{{ $excuse->reviewed_by_name ?? '_______________' }}</div>
-            </div>
+        <p>
+            Qayta topshirishga ruxsat berilsin va qo'shimcha qaydnoma asosida
+            yuqorida ko'rsatilgan muddatda topshirishga ruxsat berilsin hamda
+            Hemis platformasida shaxsiy grafik orqali baholari qayd etilsin.
+        </p>
 
-            <div class="stamp-area">
-                M.O'
-            </div>
-        </div>
-        <div class="footer-right">
-            <div class="qr-section">
-                @if(isset($qrCodeBase64))
-                    <img src="data:image/png;base64,{{ $qrCodeBase64 }}" alt="QR Code">
-                @endif
-                <div class="qr-label">Hujjat haqiqiyligini<br>tekshirish uchun skanerlang</div>
-            </div>
-        </div>
+        <p>
+            <strong>Asos:</strong> Talaba tomonidan taqdim etilgan
+            {{ mb_strtolower($excuse->reason_document) }}.
+        </p>
     </div>
+
+    {{-- Imzolar --}}
+    <table class="signatures" cellpadding="0" cellspacing="0">
+        <tr>
+            <td class="sig-left">
+                <strong>Bo'lim boshlig'i</strong>
+            </td>
+            <td class="sig-right">
+                <strong>{{ $excuse->reviewed_by_name ?? '_______________' }}</strong>
+            </td>
+        </tr>
+    </table>
+
+    {{-- Ijrochi ma'lumotlari --}}
+    <div class="executor">
+        Ijrochi: {{ $excuse->reviewed_by_name ?? '-' }}<br>
+        ID {{ str_pad($excuse->id, 6, '0', STR_PAD_LEFT) }}<br>
+        Sana: {{ $reviewDate->format('d.m.Y') }}
+    </div>
+
+    {{-- QR kod --}}
+    @if(isset($qrCodeBase64))
+        <div class="qr-container">
+            <img src="data:image/png;base64,{{ $qrCodeBase64 }}" alt="QR Code">
+        </div>
+    @endif
 
 </body>
 </html>

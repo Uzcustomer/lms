@@ -47,6 +47,9 @@ Route::get('/refresh-csrf', function () {
     return response()->json(['token' => csrf_token()]);
 });
 
+// Sababli ariza tekshirish (QR kod orqali, public)
+Route::get('/absence-excuse/verify/{token}', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'verify'])->name('absence-excuse.verify');
+
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
         Route::post('/login', [AdminAuthController::class, 'login'])->name('login.post');
@@ -104,6 +107,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/absence-report', [AbsenceReportController::class, 'index'])->name('absence_report.index');
         Route::get('/absence-report/data', [AbsenceReportController::class, 'data'])->name('absence_report.data');
         Route::get('/absence-report/detail', [AbsenceReportController::class, 'detail'])->name('absence_report.detail');
+
+        // Sababli dars qoldirish arizalari (Registrator ofisi)
+        Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'index'])->name('index');
+            Route::get('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'show'])->name('show');
+            Route::post('/{id}/approve', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'approve'])->name('approve');
+            Route::post('/{id}/reject', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'reject'])->name('reject');
+            Route::get('/{id}/download', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'download'])->name('download');
+            Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
+        });
 
         Route::prefix('independent')->name('independent.')->group(function () {
             Route::get('', [IndependentController::class, 'index'])->name('index');
@@ -482,6 +495,16 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/independents/download/{submissionId}', [StudentController::class, 'downloadSubmission'])->name('independents.download');
         Route::post('/yn-consent', [StudentController::class, 'submitYnConsent'])->name('yn-consent');
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
+
+        // Sababli dars qoldirish arizasi
+        Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'index'])->name('index');
+            Route::get('/create', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'create'])->name('create');
+            Route::post('/store', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'store'])->name('store');
+            Route::get('/{id}', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'show'])->name('show');
+            Route::get('/{id}/download', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'download'])->name('download');
+            Route::get('/{id}/download-pdf', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
+        });
 
         Route::post('/logout', [StudentAuthController::class, 'logout'])->name('logout');
     });

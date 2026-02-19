@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AbsenceExcuse;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class AbsenceExcuseController extends Controller
 {
@@ -71,9 +74,13 @@ class AbsenceExcuseController extends Controller
         $user = Auth::user();
 
         try {
-            // QR kod generatsiya (SVG formatda — imagick talab qilinmaydi)
+            // QR kod generatsiya (BaconQrCode — SVG formatda, Facade kerak emas)
             $verificationUrl = route('absence-excuse.verify', $excuse->verification_token);
-            $qrCodeSvg = QrCode::size(200)->margin(1)->generate($verificationUrl);
+            $renderer = new ImageRenderer(
+                new RendererStyle(200, 1),
+                new SvgImageBackEnd()
+            );
+            $qrCodeSvg = (new Writer($renderer))->writeString($verificationUrl);
 
             // PDF generatsiya
             $pdf = Pdf::loadView('pdf.absence-excuse-certificate', [

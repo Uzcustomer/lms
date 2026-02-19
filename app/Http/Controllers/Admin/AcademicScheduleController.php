@@ -8,7 +8,6 @@ use App\Models\CurriculumSubject;
 use App\Models\Department;
 use App\Models\ExamSchedule;
 use App\Models\Group;
-use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Specialty;
 use Illuminate\Http\Request;
@@ -239,7 +238,7 @@ class AcademicScheduleController extends Controller
 
         if ($curriculumIds->isEmpty()) return collect();
 
-        // Fanlar (curriculum_subjects dan)
+        // Fanlar
         $subjectQuery = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds);
         if ($semesterCodes->isNotEmpty()) {
             $subjectQuery->whereIn('semester_code', $semesterCodes);
@@ -248,6 +247,8 @@ class AcademicScheduleController extends Controller
             $subjectQuery->where('subject_id', $selectedSubject);
         }
         $subjects = $subjectQuery->get();
+
+        if ($subjects->isEmpty()) return collect();
 
         // Guruhlar
         $groupQuery = Group::where('active', true)
@@ -258,43 +259,6 @@ class AcademicScheduleController extends Controller
         $filteredGroups = $groupQuery->orderBy('name')->get();
 
         if ($filteredGroups->isEmpty()) return collect();
-
-        // curriculum_subjects da yo'q semestrlar uchun schedules jadvalidan to'ldirish
-        if ($semesterCodes->isNotEmpty()) {
-            $coveredSemesters = $subjects->pluck('semester_code')->unique();
-            $missingSemesters = $semesterCodes->diff($coveredSemesters);
-
-            if ($missingSemesters->isNotEmpty()) {
-                $groupHemisIds = $filteredGroups->pluck('group_hemis_id');
-                $groupCurriculumMap = $filteredGroups->pluck('curriculum_hemis_id', 'group_hemis_id');
-
-                $scheduleSubjectQuery = Schedule::whereIn('group_id', $groupHemisIds)
-                    ->whereIn('semester_code', $missingSemesters)
-                    ->where('education_year_current', true);
-
-                if ($selectedSubject) {
-                    $scheduleSubjectQuery->where('subject_id', $selectedSubject);
-                }
-
-                $scheduleSubjects = $scheduleSubjectQuery
-                    ->select('group_id', 'subject_id', 'subject_name', 'semester_code')
-                    ->distinct()
-                    ->get();
-
-                foreach ($scheduleSubjects as $ss) {
-                    $virtual = new \stdClass();
-                    $virtual->subject_id = (string) $ss->subject_id;
-                    $virtual->subject_name = $ss->subject_name;
-                    $virtual->semester_code = $ss->semester_code;
-                    $virtual->credit = null;
-                    $virtual->curricula_hemis_id = $groupCurriculumMap->get((string) $ss->group_id);
-                    $virtual->_group_hemis_id = (string) $ss->group_id;
-                    $subjects->push($virtual);
-                }
-            }
-        }
-
-        if ($subjects->isEmpty()) return collect();
 
         // Mavjud jadvallar
         $scheduleQuery = ExamSchedule::query();
@@ -308,12 +272,7 @@ class AcademicScheduleController extends Controller
         // Ma'lumotlarni yig'ish
         $scheduleData = collect();
         foreach ($filteredGroups as $group) {
-            $groupSubjects = $subjects->filter(function($s) use ($group) {
-                if (isset($s->_group_hemis_id)) {
-                    return (string) $s->_group_hemis_id === (string) $group->group_hemis_id;
-                }
-                return $s->curricula_hemis_id === $group->curriculum_hemis_id;
-            });
+            $groupSubjects = $subjects->filter(fn($s) => $s->curricula_hemis_id === $group->curriculum_hemis_id);
 
             foreach ($groupSubjects as $subject) {
                 $key = $group->group_hemis_id . '_' . $subject->subject_id . '_' . $subject->semester_code;
@@ -524,43 +483,6 @@ class AcademicScheduleController extends Controller
             ->orderBy('subject_name')
             ->get()
             ->pluck('subject_name', 'subject_id');
-
-        // curriculum_subjects da topilmasa, schedules jadvalidan to'ldirish
-        if ($subjects->isEmpty()) {
-            $semesterCodes = collect();
-            if ($request->semester_code) {
-                $semesterCodes = collect([$request->semester_code]);
-            } elseif ($request->current_semester === '1') {
-                $semesterCodes = Semester::where('current', true)->pluck('code')->unique();
-            }
-
-            if ($request->level_code) {
-                $levelSemCodes = Semester::where('current', true)
-                    ->where('level_code', $request->level_code)
-                    ->pluck('code')->unique();
-                $semesterCodes = $semesterCodes->isEmpty() ? $levelSemCodes : $semesterCodes->intersect($levelSemCodes);
-            }
-
-            if ($semesterCodes->isNotEmpty()) {
-                $scheduleQuery = Schedule::whereIn('semester_code', $semesterCodes)
-                    ->where('education_year_current', true);
-
-                if ($request->department_id) {
-                    $groupIds = Group::where('department_hemis_id', $request->department_id)
-                        ->where('active', true)
-                        ->when($request->specialty_id, fn($q) => $q->where('specialty_hemis_id', $request->specialty_id))
-                        ->pluck('group_hemis_id');
-                    $scheduleQuery->whereIn('group_id', $groupIds);
-                }
-
-                $subjects = $scheduleQuery
-                    ->select('subject_id', 'subject_name')
-                    ->distinct()
-                    ->orderBy('subject_name')
-                    ->get()
-                    ->pluck('subject_name', 'subject_id');
-            }
-        }
 
         return response()->json($subjects);
     }

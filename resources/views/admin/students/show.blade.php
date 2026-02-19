@@ -50,6 +50,19 @@
                             @endif
 
                             <!-- 5 ga da'vogar toggle -->
+                            <div class="w-full mb-2 p-2 bg-blue-100 border border-blue-400 rounded text-xs font-mono">
+                                <p>DEBUG MARKER: canToggleFive = {{ $canToggleFive ? 'TRUE' : 'FALSE' }}</p>
+                                <p>is_five_candidate = {{ $student->is_five_candidate ? 'TRUE' : 'FALSE' }}</p>
+                                <p>student id = {{ $student->id }}</p>
+                                @php
+                                    try {
+                                        $toggleRoute = route('admin.students.toggle-five-candidate', $student);
+                                        echo "<p>route = {$toggleRoute}</p>";
+                                    } catch (\Throwable $e) {
+                                        echo "<p style='color:red'>ROUTE ERROR: " . $e->getMessage() . "</p>";
+                                    }
+                                @endphp
+                            </div>
                             @if($canToggleFive)
                             <form action="{{ route('admin.students.toggle-five-candidate', $student) }}" method="POST" class="w-full mb-4">
                                 @csrf

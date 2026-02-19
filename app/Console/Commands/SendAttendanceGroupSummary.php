@@ -437,7 +437,7 @@ class SendAttendanceGroupSummary extends Command
                 $attTeachers = count($fdata['teachers_att'] ?? []);
                 $gradeTeachers = count($fdata['teachers_grade'] ?? []);
                 $lines[] = "<b>{$num}. {$fname}: Jami: {$fdata['total']} soat</b>";
-                $lines[] = "   📝 Davomat: {$fdata['no_attendance']} soat ({$attTeachers}) | 📕 Baho: {$fdata['no_grades']} soat ({$gradeTeachers})";
+                $lines[] = "   📝 Davomat: {$fdata['no_attendance']} soat (👩‍🏫 {$attTeachers}) | 📕 Baho: {$fdata['no_grades']} soat (👩‍🏫 {$gradeTeachers})";
             }
         }
 

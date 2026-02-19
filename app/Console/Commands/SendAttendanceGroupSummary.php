@@ -397,22 +397,23 @@ class SendAttendanceGroupSummary extends Command
 
     private function buildSummaryText(string $today, Carbon $now, int $totalLessons, array $teachersWithIssues, int $missingAttendance, int $missingGrades, int $uniqueAttTeachers = 0, int $uniqueGradeTeachers = 0, array $facultyStats = []): string
     {
+        $formattedDate = Carbon::parse($today)->format('d.m.Y');
+
         $lines = [];
-        $lines[] = "📊 KUNLIK HISOBOT — {$now->format('H:i')} {$today}";
+        $lines[] = "📊 KUNLIK HISOBOT — {$formattedDate} yil {$now->format('H:i')} soat";
         $lines[] = str_repeat('─', 30);
         $lines[] = "";
         $lines[] = "📋 Jami darslar: {$totalLessons}";
         $lines[] = "👨‍🏫 Muammoli o'qituvchilar: " . count($teachersWithIssues);
-        $lines[] = "";
 
         if ($missingAttendance > 0) {
-            $lines[] = "❌ Davomat olinmagan: {$missingAttendance} soat ({$uniqueAttTeachers} o'qituvchi)";
+            $lines[] = "📝 Davomat olinmagan: {$uniqueAttTeachers} o'qituvchi";
         } else {
             $lines[] = "✅ Barcha darslar uchun davomat olingan";
         }
 
         if ($missingGrades > 0) {
-            $lines[] = "❌ Baho qo'yilmagan: {$missingGrades} soat ({$uniqueGradeTeachers} o'qituvchi)";
+            $lines[] = "💯 Baho qo'yilmagan: {$uniqueGradeTeachers} o'qituvchi";
         } else {
             $lines[] = "✅ Barcha darslar uchun baho qo'yilgan";
         }
@@ -432,11 +433,10 @@ class SendAttendanceGroupSummary extends Command
             $num = 0;
             foreach ($facultyStats as $fname => $fdata) {
                 $num++;
-                $teacherCount = count($fdata['teachers']);
                 $attTeachers = count($fdata['teachers_att'] ?? []);
                 $gradeTeachers = count($fdata['teachers_grade'] ?? []);
                 $lines[] = "{$num}. {$fname}";
-                $lines[] = "   ❌ Dav: {$fdata['no_attendance']} soat ({$attTeachers}) | ❌ Baho: {$fdata['no_grades']} soat ({$gradeTeachers}) | 👨‍🏫 {$teacherCount}";
+                $lines[] = "   📝 Dav: {$fdata['no_attendance']} soat ({$attTeachers}) | 💯 Baho: {$fdata['no_grades']} soat ({$gradeTeachers}) | Jami: {$fdata['total']} soat";
             }
         }
 

@@ -13,7 +13,7 @@
 
                 <!-- Filters -->
                 <div class="filter-container">
-                    <!-- Row 1 -->
+                    <!-- Row 1: Ta'lim turi, Fakultet, Yo'nalish, Sanadan, Sanagacha, Joriy semestr -->
                     <div class="filter-row">
                         <div class="filter-item" style="min-width: 140px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
@@ -27,11 +27,19 @@
                                 <option value="">Barchasi</option>
                             </select>
                         </div>
-                        <div class="filter-item" style="flex: 1; min-width: 180px;">
+                        <div class="filter-item" style="flex: 1; min-width: 170px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty_id" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
                             </select>
+                        </div>
+                        <div class="filter-item" style="min-width: 145px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanadan</label>
+                            <input type="text" id="date_from" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
+                        </div>
+                        <div class="filter-item" style="min-width: 145px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanagacha</label>
+                            <input type="text" id="date_to" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
                         </div>
                         <div class="filter-item" style="min-width: 150px;">
                             <label class="filter-label">&nbsp;</label>
@@ -41,13 +49,13 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Row 2 -->
+                    <!-- Row 2: Kurs, Semestr, Guruh, Fan, Holat, Qidirish -->
                     <div class="filter-row">
                         <div class="filter-item" style="min-width: 110px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
                             <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 120px;">
+                        <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
                             <select id="semester_code" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -63,7 +71,7 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject_id" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 155px;">
+                        <div class="filter-item" style="min-width: 150px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Holat</label>
                             <select id="status" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -78,18 +86,6 @@
                                 Qidirish
                             </button>
                         </div>
-                    </div>
-                    <!-- Row 3: Sana filtrlari -->
-                    <div class="filter-row">
-                        <div class="filter-item" style="min-width: 160px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanadan</label>
-                            <input type="text" id="date_from" class="date-input sc-date" autocomplete="off" placeholder="Boshlanish sanasi" />
-                        </div>
-                        <div class="filter-item" style="min-width: 160px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanagacha</label>
-                            <input type="text" id="date_to" class="date-input sc-date" autocomplete="off" placeholder="Tugash sanasi" />
-                        </div>
-                        <div class="filter-item" style="flex: 1;"></div>
                     </div>
                 </div>
 

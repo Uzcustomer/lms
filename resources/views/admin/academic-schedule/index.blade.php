@@ -156,29 +156,31 @@
                                             <td style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
                                             <td style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
                                             <td style="text-align:center;padding:4px 8px;">
-                                                <input type="text" id="ls_{{ $rowIndex }}"
-                                                       name="schedules[{{ $rowIndex }}][lesson_start_date]"
-                                                       data-initial="{{ $item['lesson_start_date'] }}"
-                                                       class="date-input sc-date" autocomplete="off" />
+                                                @if($item['lesson_start_date'])
+                                                    <span class="lesson-date-badge">{{ \Carbon\Carbon::parse($item['lesson_start_date'])->format('d.m.Y') }}</span>
+                                                @else
+                                                    <span style="color:#cbd5e1;">—</span>
+                                                @endif
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
-                                                <input type="text" id="le_{{ $rowIndex }}"
-                                                       name="schedules[{{ $rowIndex }}][lesson_end_date]"
-                                                       data-initial="{{ $item['lesson_end_date'] }}"
-                                                       class="date-input sc-date" autocomplete="off" />
+                                                @if($item['lesson_end_date'])
+                                                    <span class="lesson-date-badge">{{ \Carbon\Carbon::parse($item['lesson_end_date'])->format('d.m.Y') }}</span>
+                                                @else
+                                                    <span style="color:#cbd5e1;">—</span>
+                                                @endif
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
                                                     <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
-                                                        <input type="text" id="oski_{{ $rowIndex }}"
+                                                        <input type="date"
                                                                name="schedules[{{ $rowIndex }}][oski_date]"
-                                                               data-initial="{{ $item['oski_date'] }}"
-                                                               class="date-input sc-date" autocomplete="off" />
+                                                               value="{{ $item['oski_date'] }}"
+                                                               class="date-input-native" />
                                                     </div>
                                                     <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
                                                         <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
                                                                {{ $item['oski_na'] ? 'checked' : '' }}
-                                                               onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}', 'oski_{{ $rowIndex }}')">
+                                                               onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
                                                         <span class="na-label">N/A</span>
                                                     </label>
                                                 </div>
@@ -186,15 +188,15 @@
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
                                                     <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
-                                                        <input type="text" id="test_{{ $rowIndex }}"
+                                                        <input type="date"
                                                                name="schedules[{{ $rowIndex }}][test_date]"
-                                                               data-initial="{{ $item['test_date'] }}"
-                                                               class="date-input sc-date" autocomplete="off" />
+                                                               value="{{ $item['test_date'] }}"
+                                                               class="date-input-native" />
                                                     </div>
                                                     <label class="na-toggle" title="Bu fan uchun Test yo'q">
                                                         <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
                                                                {{ $item['test_na'] ? 'checked' : '' }}
-                                                               onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}', 'test_{{ $rowIndex }}')">
+                                                               onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
                                                         <span class="na-label">N/A</span>
                                                     </label>
                                                 </div>
@@ -272,11 +274,11 @@
             btn.classList.toggle('active');
         }
 
-        function toggleNa(checkbox, wrapId, inputId) {
+        function toggleNa(checkbox, wrapId) {
             var wrap = document.getElementById(wrapId);
             if (checkbox.checked) {
                 wrap.style.display = 'none';
-                var inp = document.getElementById(inputId);
+                var inp = wrap.querySelector('input[type="date"]');
                 if (inp) inp.value = '';
             } else {
                 wrap.style.display = '';
@@ -411,13 +413,7 @@
                 calTo.setValue('{{ request()->get("date_to") }}');
             @endif
 
-            // Init schedule date calendars
-            $('[id^="oski_"], [id^="test_"], [id^="ls_"], [id^="le_"]').each(function() {
-                if (this.type === 'hidden') return;
-                var cal = new ScrollCalendar(this.id);
-                var val = $(this).attr('data-initial');
-                if (val) cal.setValue(val);
-            });
+            // OSKI/Test uchun standart <input type="date"> ishlatiladi - ScrollCalendar kerak emas
         });
     </script>
 
@@ -466,6 +462,10 @@
         .data-row .sc-wrap { min-width: 140px; }
         .data-row .sc-dropdown { z-index: 9999; }
 
+        .lesson-date-badge { display: inline-flex; padding: 4px 8px; font-size: 12px; font-weight: 600; border-radius: 6px; line-height: 1.3; background: #f0f9ff; color: #0369a1; }
+        .date-input-native { height: 32px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 8px; font-size: 13px; font-weight: 500; color: #1e293b; background: #fff; width: 100%; min-width: 130px; outline: none; transition: border-color 0.2s; }
+        .date-input-native:hover { border-color: #2b5ea7; }
+        .date-input-native:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .exam-cell { display: flex; align-items: center; gap: 6px; justify-content: center; }
         .exam-date-wrap { flex: 1; min-width: 0; }
         .na-toggle { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }

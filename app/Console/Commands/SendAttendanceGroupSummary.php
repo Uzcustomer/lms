@@ -100,6 +100,7 @@ class SendAttendanceGroupSummary extends Command
 
         // Davomat: attendance_controls jadvalidan (web hisobot bilan bir xil)
         $attendanceSet = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
             ->whereRaw('DATE(lesson_date) = ?', [$todayStr])

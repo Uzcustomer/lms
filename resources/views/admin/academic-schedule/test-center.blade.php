@@ -34,11 +34,11 @@
                             </select>
                         </div>
                         <div class="filter-item" style="min-width: 145px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanadan</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Dars tugash (dan)</label>
                             <input type="text" id="date_from" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
                         </div>
                         <div class="filter-item" style="min-width: 145px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanagacha</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Dars tugash (gacha)</label>
                             <input type="text" id="date_to" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
                         </div>
                         <div class="filter-item" style="min-width: 150px;">

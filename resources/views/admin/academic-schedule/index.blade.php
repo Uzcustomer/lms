@@ -48,11 +48,11 @@
                             </select>
                         </div>
                         <div class="filter-item" style="min-width: 145px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanadan</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Dars tugash (dan)</label>
                             <input type="text" id="date_from" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
                         </div>
                         <div class="filter-item" style="min-width: 145px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanagacha</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Dars tugash (gacha)</label>
                             <input type="text" id="date_to" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
                         </div>
                         <div class="filter-item" style="min-width: 150px;">
@@ -172,10 +172,11 @@
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
                                                     <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
-                                                        <input type="date"
-                                                               name="schedules[{{ $rowIndex }}][oski_date]"
-                                                               value="{{ $item['oski_date'] }}"
-                                                               class="date-input-native" />
+                                                        <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
+                                                               value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('d.m.Y') : '' }}"
+                                                               data-hidden="oski_h_{{ $rowIndex }}"
+                                                               maxlength="10" autocomplete="off" />
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="{{ $item['oski_date'] }}" />
                                                     </div>
                                                     <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
                                                         <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
@@ -188,10 +189,11 @@
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
                                                     <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
-                                                        <input type="date"
-                                                               name="schedules[{{ $rowIndex }}][test_date]"
-                                                               value="{{ $item['test_date'] }}"
-                                                               class="date-input-native" />
+                                                        <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
+                                                               value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('d.m.Y') : '' }}"
+                                                               data-hidden="test_h_{{ $rowIndex }}"
+                                                               maxlength="10" autocomplete="off" />
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="{{ $item['test_date'] }}" />
                                                     </div>
                                                     <label class="na-toggle" title="Bu fan uchun Test yo'q">
                                                         <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
@@ -278,11 +280,91 @@
             var wrap = document.getElementById(wrapId);
             if (checkbox.checked) {
                 wrap.style.display = 'none';
-                var inp = wrap.querySelector('input[type="date"]');
-                if (inp) inp.value = '';
+                var txt = wrap.querySelector('.date-input-masked');
+                var hid = wrap.querySelector('input[type="hidden"]');
+                if (txt) { txt.value = ''; txt.classList.remove('date-error'); }
+                if (hid) hid.value = '';
             } else {
                 wrap.style.display = '';
             }
+        }
+
+        // dd.mm.yyyy mask va validatsiya
+        function initDateMask() {
+            document.querySelectorAll('.date-input-masked').forEach(function(inp) {
+                // Faqat raqam va nuqta qo'yish
+                inp.addEventListener('input', function(e) {
+                    var v = this.value.replace(/[^\d]/g, '');
+                    if (v.length > 8) v = v.substring(0, 8);
+                    var parts = [];
+                    if (v.length > 0) parts.push(v.substring(0, Math.min(2, v.length)));
+                    if (v.length > 2) parts.push(v.substring(2, Math.min(4, v.length)));
+                    if (v.length > 4) parts.push(v.substring(4, 8));
+                    this.value = parts.join('.');
+                    syncHidden(this);
+                });
+
+                // Blur da tekshirish
+                inp.addEventListener('blur', function() {
+                    validateDateInput(this);
+                });
+            });
+        }
+
+        function validateDateInput(inp) {
+            var v = inp.value.trim();
+            if (!v) {
+                inp.classList.remove('date-error');
+                inp.title = '';
+                syncHidden(inp);
+                return true;
+            }
+            var m = v.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+            if (!m) {
+                inp.classList.add('date-error');
+                inp.title = 'Format: kk.oo.yyyy';
+                clearHidden(inp);
+                return false;
+            }
+            var day = parseInt(m[1], 10);
+            var month = parseInt(m[2], 10);
+            var year = parseInt(m[3], 10);
+            var err = '';
+            if (month < 1 || month > 12) err = 'Oy 01-12 orasida bo\'lishi kerak';
+            else if (day < 1 || day > 31) err = 'Kun 01-31 orasida bo\'lishi kerak';
+            else {
+                // Oydagi kunlar sonini tekshirish
+                var maxDay = new Date(year, month, 0).getDate();
+                if (day > maxDay) err = month + '-oyda ' + maxDay + ' kun bor';
+            }
+            if (year < 2020 || year > 2040) err = 'Yil 2020-2040 orasida bo\'lishi kerak';
+            if (err) {
+                inp.classList.add('date-error');
+                inp.title = err;
+                clearHidden(inp);
+                return false;
+            }
+            inp.classList.remove('date-error');
+            inp.title = '';
+            syncHidden(inp);
+            return true;
+        }
+
+        function syncHidden(inp) {
+            var hidId = inp.getAttribute('data-hidden');
+            if (!hidId) return;
+            var hid = document.getElementById(hidId);
+            if (!hid) return;
+            var v = inp.value.trim();
+            var m = v.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+            hid.value = m ? (m[3] + '-' + m[2] + '-' + m[1]) : '';
+        }
+
+        function clearHidden(inp) {
+            var hidId = inp.getAttribute('data-hidden');
+            if (!hidId) return;
+            var hid = document.getElementById(hidId);
+            if (hid) hid.value = '';
         }
 
         // Dropdown parametrlarini yig'ish
@@ -413,7 +495,20 @@
                 calTo.setValue('{{ request()->get("date_to") }}');
             @endif
 
-            // OSKI/Test uchun standart <input type="date"> ishlatiladi - ScrollCalendar kerak emas
+            // dd.mm.yyyy mask ishga tushirish
+            initDateMask();
+
+            // Form submit da validatsiya
+            $('form').on('submit', function(e) {
+                var hasError = false;
+                document.querySelectorAll('.date-input-masked').forEach(function(inp) {
+                    if (!validateDateInput(inp)) hasError = true;
+                });
+                if (hasError) {
+                    e.preventDefault();
+                    alert('Sana formatida xatolik bor. Iltimos, tekshiring (kk.oo.yyyy).');
+                }
+            });
         });
     </script>
 
@@ -463,9 +558,12 @@
         .data-row .sc-dropdown { z-index: 9999; }
 
         .lesson-date-badge { display: inline-flex; padding: 4px 8px; font-size: 12px; font-weight: 600; border-radius: 6px; line-height: 1.3; background: #f0f9ff; color: #0369a1; }
-        .date-input-native { height: 32px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 8px; font-size: 13px; font-weight: 500; color: #1e293b; background: #fff; width: 100%; min-width: 130px; outline: none; transition: border-color 0.2s; }
-        .date-input-native:hover { border-color: #2b5ea7; }
-        .date-input-native:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
+        .date-input-masked { height: 32px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 8px; font-size: 13px; font-weight: 500; color: #1e293b; background: #fff; width: 100%; min-width: 110px; outline: none; transition: border-color 0.2s; text-align: center; letter-spacing: 0.5px; }
+        .date-input-masked:hover { border-color: #2b5ea7; }
+        .date-input-masked:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
+        .date-input-masked::placeholder { color: #94a3b8; font-weight: 400; letter-spacing: 0; }
+        .date-input-masked.date-error { border-color: #ef4444; background: #fef2f2; }
+        .date-input-masked.date-error:focus { box-shadow: 0 0 0 2px rgba(239,68,68,0.2); }
         .exam-cell { display: flex; align-items: center; gap: 6px; justify-content: center; }
         .exam-date-wrap { flex: 1; min-width: 0; }
         .na-toggle { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }

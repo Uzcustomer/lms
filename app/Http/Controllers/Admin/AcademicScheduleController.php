@@ -249,28 +249,16 @@ class AcademicScheduleController extends Controller
             $scheduleData = $scheduleData->filter(fn($item) => !$item['oski_date'] && !$item['test_date']);
         }
 
-        // Sana oralig'i filtri
+        // Sana oralig'i filtri (dars tugash sanasi bo'yicha)
         if ($dateFrom || $dateTo) {
             $scheduleData = $scheduleData->filter(function ($item) use ($dateFrom, $dateTo) {
-                $oskiDate = $item['oski_date'];
-                $testDate = $item['test_date'];
-                if (!$oskiDate && !$testDate) return false;
+                $lessonEnd = $item['lesson_end_date'];
+                if (!$lessonEnd) return false;
 
-                $matchOski = false;
-                $matchTest = false;
+                if ($dateFrom && $lessonEnd < $dateFrom) return false;
+                if ($dateTo && $lessonEnd > $dateTo) return false;
 
-                if ($oskiDate) {
-                    $matchOski = true;
-                    if ($dateFrom && $oskiDate < $dateFrom) $matchOski = false;
-                    if ($dateTo && $oskiDate > $dateTo) $matchOski = false;
-                }
-                if ($testDate) {
-                    $matchTest = true;
-                    if ($dateFrom && $testDate < $dateFrom) $matchTest = false;
-                    if ($dateTo && $testDate > $dateTo) $matchTest = false;
-                }
-
-                return $matchOski || $matchTest;
+                return true;
             });
         }
 

@@ -553,11 +553,22 @@ class ReportController extends Controller
         }
 
         try {
+            // Jadval (schedules) yangilash
             $service->importBetween($from, $to);
+
+            // Davomat nazorati (attendance_controls) ham yangilash — har bir kun uchun
+            $current = $from->copy();
+            while ($current->lte($to)) {
+                \Illuminate\Support\Facades\Artisan::call('import:attendance-controls', [
+                    '--date' => $current->toDateString(),
+                    '--silent' => true,
+                ]);
+                $current->addDay();
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => "Jadval muvaffaqiyatli yangilandi ({$from->toDateString()} — {$to->toDateString()}).",
+                'message' => "Jadval va davomat nazorati yangilandi ({$from->toDateString()} — {$to->toDateString()}).",
             ]);
         } catch (\Throwable $e) {
             return response()->json([
@@ -613,6 +624,7 @@ class ReportController extends Controller
 
         // 2. attendance_controls da bor schedule IDlar
         $acRecords = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleIds)
             ->select('subject_schedule_id', 'load', 'employee_name', 'group_name', 'subject_name', 'lesson_date')
             ->get()
@@ -830,6 +842,7 @@ class ReportController extends Controller
 
         // Davomat: employee + group + subject + date + training_type + lesson_pair
         $attendanceSet = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
             ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
@@ -1937,6 +1950,7 @@ class ReportController extends Controller
         $allGroupHemisIds = array_unique(array_values($studentGroupMap));
         foreach (array_chunk($allGroupHemisIds, 1000) as $groupChunk) {
             $acRecords = DB::table('attendance_controls')
+                ->whereNull('deleted_at')
                 ->whereIn('group_id', $groupChunk)
                 ->where('load', '>', 0)
                 ->whereNotNull('lesson_date')
@@ -2299,6 +2313,7 @@ class ReportController extends Controller
             $cl = 'utf8mb4_unicode_ci';
 
             $query = DB::table('attendance_controls as ac')
+                ->whereNull('ac.deleted_at')
                 ->leftJoin('groups as g', function ($join) use ($cl) {
                     $join->whereRaw("g.group_hemis_id COLLATE $cl = ac.group_id COLLATE $cl");
                 })

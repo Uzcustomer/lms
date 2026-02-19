@@ -37,6 +37,19 @@ class SendAttendanceGroupSummary extends Command
             $this->warn("HEMIS yangilashda xato: " . $e->getMessage());
         }
 
+        // 1.5-QADAM: Bugungi davomat nazorati (attendance_controls) yangilash
+        $this->info("HEMIS dan bugungi davomat nazorati yangilanmoqda...");
+        try {
+            \Illuminate\Support\Facades\Artisan::call('import:attendance-controls', [
+                '--date' => $todayStr,
+                '--silent' => true,
+            ]);
+            $this->info("Davomat nazorati yangilandi.");
+        } catch (\Throwable $e) {
+            Log::warning('Davomat nazorati yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
+            $this->warn("Davomat nazorati yangilashda xato: " . $e->getMessage());
+        }
+
         // 2-QADAM: Jadvaldan ma'lumot olish (web hisobot bilan bir xil logika)
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
@@ -87,6 +100,7 @@ class SendAttendanceGroupSummary extends Command
 
         // Davomat: attendance_controls jadvalidan (web hisobot bilan bir xil)
         $attendanceSet = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
             ->whereRaw('DATE(lesson_date) = ?', [$todayStr])

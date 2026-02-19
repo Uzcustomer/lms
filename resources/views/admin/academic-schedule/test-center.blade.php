@@ -19,27 +19,18 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
                             <select id="education_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($educationTypes as $type)
-                                    <option value="{{ $type->education_type_code }}" {{ ($selectedEducationType ?? '') == $type->education_type_code ? 'selected' : '' }}>{{ $type->education_type_name }}</option>
-                                @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="flex: 1; min-width: 170px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
                             <select id="department_id" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($departments as $dept)
-                                    <option value="{{ $dept->department_hemis_id }}" {{ ($selectedDepartment ?? '') == $dept->department_hemis_id ? 'selected' : '' }}>{{ $dept->name }}</option>
-                                @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="flex: 1; min-width: 180px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty_id" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($specialties as $sp)
-                                    <option value="{{ $sp->specialty_hemis_id }}" {{ ($selectedSpecialty ?? '') == $sp->specialty_hemis_id ? 'selected' : '' }}>{{ $sp->name }}</option>
-                                @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="min-width: 150px;">
@@ -60,18 +51,12 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
                             <select id="semester_code" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($semesters as $sem)
-                                    <option value="{{ $sem->code }}" {{ ($selectedSemester ?? '') == $sem->code ? 'selected' : '' }}>{{ $sem->name }}</option>
-                                @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="min-width: 140px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                             <select id="group_id" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($groups as $gr)
-                                    <option value="{{ $gr->group_hemis_id }}" {{ ($selectedGroup ?? '') == $gr->group_hemis_id ? 'selected' : '' }}>{{ $gr->name }}</option>
-                                @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="flex: 1; min-width: 200px;">
@@ -93,6 +78,18 @@
                                 Qidirish
                             </button>
                         </div>
+                    </div>
+                    <!-- Row 3: Sana filtrlari -->
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanadan</label>
+                            <input type="text" id="date_from" class="date-input sc-date" autocomplete="off" placeholder="Boshlanish sanasi" />
+                        </div>
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanagacha</label>
+                            <input type="text" id="date_to" class="date-input sc-date" autocomplete="off" placeholder="Tugash sanasi" />
+                        </div>
+                        <div class="filter-item" style="flex: 1;"></div>
                     </div>
                 </div>
 
@@ -120,16 +117,18 @@
                                     <th>Yo'nalish</th>
                                     <th>Fan nomi</th>
                                     <th style="width:70px;text-align:center;">Kredit</th>
-                                    <th style="width:130px;text-align:center;">OSKI sanasi</th>
-                                    <th style="width:130px;text-align:center;">Test sanasi</th>
-                                    <th style="width:110px;text-align:center;">Holat</th>
+                                    <th style="width:160px;text-align:center;">OSKI sanasi</th>
+                                    <th style="width:160px;text-align:center;">Test sanasi</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @php $rowIndex = 0; @endphp
+                                @php
+                                    $rowIndex = 0;
+                                    $today = now()->format('Y-m-d');
+                                @endphp
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     <tr class="group-header-row">
-                                        <td colspan="8">
+                                        <td colspan="7">
                                             {{ $items->first()['group']->name }}
                                             <span style="margin-left:8px;font-size:11px;font-weight:400;color:#3b82f6;">
                                                 ({{ $items->first()['specialty_name'] }})
@@ -137,55 +136,38 @@
                                         </td>
                                     </tr>
                                     @foreach($items as $item)
-                                        @php
-                                            $now = now();
-                                            $oskiDate = $item['oski_date_carbon'] ?? null;
-                                            $testDate = $item['test_date_carbon'] ?? null;
-
-                                            $oskiPassed = $oskiDate && $oskiDate->lt($now);
-                                            $testPassed = $testDate && $testDate->lt($now);
-                                            $oskiToday = $oskiDate && $oskiDate->isToday();
-                                            $testToday = $testDate && $testDate->isToday();
-                                            $oskiSoon = $oskiDate && !$oskiPassed && $oskiDate->diffInDays($now) <= 3;
-                                            $testSoon = $testDate && !$testPassed && $testDate->diffInDays($now) <= 3;
-
-                                            $hasDate = $item['oski_date'] || $item['test_date'];
-                                        @endphp
                                         <tr class="data-row">
                                             <td style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
                                             <td style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
                                             <td style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
                                             <td style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
-                                            <td style="text-align:center;">
+                                            <td style="text-align:center;padding:4px 8px;">
                                                 @if($item['oski_date'])
-                                                    <span class="date-badge {{ $oskiToday ? 'badge-today' : ($oskiPassed ? 'badge-passed' : ($oskiSoon ? 'badge-soon' : 'badge-pending')) }}">
-                                                        {{ \Carbon\Carbon::parse($item['oski_date'])->format('d.m.Y') }}
-                                                    </span>
+                                                    @php
+                                                        $oskiDate = $item['oski_date_carbon'];
+                                                        $badgeClass = 'badge-pending';
+                                                        if ($oskiDate && $oskiDate->format('Y-m-d') === $today) $badgeClass = 'badge-today';
+                                                        elseif ($oskiDate && $oskiDate->isPast()) $badgeClass = 'badge-passed';
+                                                        elseif ($oskiDate && $oskiDate->diffInDays(now()) <= 3) $badgeClass = 'badge-soon';
+                                                    @endphp
+                                                    <span class="date-badge {{ $badgeClass }}">{{ $oskiDate?->format('d.m.Y') }}</span>
                                                 @else
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
                                             </td>
-                                            <td style="text-align:center;">
+                                            <td style="text-align:center;padding:4px 8px;">
                                                 @if($item['test_date'])
-                                                    <span class="date-badge {{ $testToday ? 'badge-today' : ($testPassed ? 'badge-passed' : ($testSoon ? 'badge-soon' : 'badge-pending-blue')) }}">
-                                                        {{ \Carbon\Carbon::parse($item['test_date'])->format('d.m.Y') }}
-                                                    </span>
+                                                    @php
+                                                        $testDate = $item['test_date_carbon'];
+                                                        $badgeClass = 'badge-pending-blue';
+                                                        if ($testDate && $testDate->format('Y-m-d') === $today) $badgeClass = 'badge-today';
+                                                        elseif ($testDate && $testDate->isPast()) $badgeClass = 'badge-passed';
+                                                        elseif ($testDate && $testDate->diffInDays(now()) <= 3) $badgeClass = 'badge-soon';
+                                                    @endphp
+                                                    <span class="date-badge {{ $badgeClass }}">{{ $testDate?->format('d.m.Y') }}</span>
                                                 @else
                                                     <span style="color:#cbd5e1;">—</span>
-                                                @endif
-                                            </td>
-                                            <td style="text-align:center;">
-                                                @if(!$hasDate)
-                                                    <span class="status-badge status-empty">Belgilanmagan</span>
-                                                @elseif(($oskiDate && $oskiToday) || ($testDate && $testToday))
-                                                    <span class="status-badge status-today">Bugun</span>
-                                                @elseif(($oskiDate && $oskiSoon) || ($testDate && $testSoon))
-                                                    <span class="status-badge status-soon">Yaqinda</span>
-                                                @elseif(($oskiDate && !$oskiPassed) || ($testDate && !$testPassed))
-                                                    <span class="status-badge status-pending">Kutilmoqda</span>
-                                                @else
-                                                    <span class="status-badge status-passed">O'tgan</span>
                                                 @endif
                                             </td>
                                         </tr>
@@ -215,8 +197,23 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <link href="/css/scroll-calendar.css" rel="stylesheet" />
+    <script src="/js/scroll-calendar.js"></script>
 
     <script>
+        var isUpdatingFilters = false;
+        var filterUrl = '{{ route($routePrefix . ".academic-schedule.get-filter-options") }}';
+
+        var initialValues = {
+            education_type: '{{ $selectedEducationType ?? '' }}',
+            department_id: '{{ $selectedDepartment ?? '' }}',
+            specialty_id: '{{ $selectedSpecialty ?? '' }}',
+            level_code: '{{ $selectedLevelCode ?? '' }}',
+            semester_code: '{{ $selectedSemester ?? '' }}',
+            group_id: '{{ $selectedGroup ?? '' }}',
+            subject_id: '{{ $selectedSubject ?? '' }}'
+        };
+
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
             if ($.trim(params.term) === '') return data;
@@ -225,8 +222,6 @@
             if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) return $.extend({}, data, true);
             return null;
         }
-
-        function rd(el, ph) { $(el).empty().append('<option value="">' + (ph || 'Barchasi') + '</option>').trigger('change'); }
 
         function toggleSemester() {
             var btn = document.getElementById('current-semester-toggle');
@@ -244,6 +239,64 @@
             };
         }
 
+        function updateSelect(selector, items, valueKey, textKey) {
+            var $el = $(selector);
+            var currentVal = $el.val();
+            $el.empty().append('<option value="">Barchasi</option>');
+            $.each(items, function(i, item) {
+                $el.append('<option value="' + item[valueKey] + '">' + item[textKey] + '</option>');
+            });
+            if (currentVal && $el.find('option[value="' + currentVal + '"]').length) {
+                $el.val(currentVal);
+            }
+            $el.trigger('change.select2');
+        }
+
+        function loadAllFilters(callback) {
+            if (isUpdatingFilters) return;
+            isUpdatingFilters = true;
+
+            $.get(filterUrl, fp(), function(data) {
+                updateSelect('#education_type', data.educationTypes, 'education_type_code', 'education_type_name');
+                updateSelect('#department_id', data.departments, 'department_hemis_id', 'name');
+                updateSelect('#specialty_id', data.specialties, 'specialty_hemis_id', 'name');
+                updateSelect('#level_code', data.levels, 'level_code', 'level_name');
+                updateSelect('#semester_code', data.semesters, 'code', 'name');
+                updateSelect('#group_id', data.groups, 'group_hemis_id', 'name');
+                updateSelect('#subject_id', data.subjects, 'subject_id', 'subject_name');
+
+                isUpdatingFilters = false;
+                if (callback) callback();
+            }).fail(function() {
+                isUpdatingFilters = false;
+            });
+        }
+
+        function initFilters() {
+            isUpdatingFilters = true;
+            $.get(filterUrl, initialValues, function(data) {
+                updateSelect('#education_type', data.educationTypes, 'education_type_code', 'education_type_name');
+                updateSelect('#department_id', data.departments, 'department_hemis_id', 'name');
+                updateSelect('#specialty_id', data.specialties, 'specialty_hemis_id', 'name');
+                updateSelect('#level_code', data.levels, 'level_code', 'level_name');
+                updateSelect('#semester_code', data.semesters, 'code', 'name');
+                updateSelect('#group_id', data.groups, 'group_hemis_id', 'name');
+                updateSelect('#subject_id', data.subjects, 'subject_id', 'subject_name');
+
+                if (initialValues.education_type) $('#education_type').val(initialValues.education_type).trigger('change.select2');
+                if (initialValues.department_id) $('#department_id').val(initialValues.department_id).trigger('change.select2');
+                if (initialValues.specialty_id) $('#specialty_id').val(initialValues.specialty_id).trigger('change.select2');
+                if (initialValues.level_code) $('#level_code').val(initialValues.level_code).trigger('change.select2');
+                if (initialValues.semester_code) $('#semester_code').val(initialValues.semester_code).trigger('change.select2');
+                if (initialValues.group_id) $('#group_id').val(initialValues.group_id).trigger('change.select2');
+                if (initialValues.subject_id) $('#subject_id').val(initialValues.subject_id).trigger('change.select2');
+
+                isUpdatingFilters = false;
+            }).fail(function() {
+                isUpdatingFilters = false;
+            });
+        }
+
         function applyFilter() {
             var url = new URL(window.location.href.split('?')[0]);
             url.searchParams.set('searched', '1');
@@ -256,6 +309,8 @@
             var subj = $('#subject_id').val();
             var status = $('#status').val();
             var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
+            var dateFrom = $('#date_from').val();
+            var dateTo = $('#date_to').val();
             if (et) url.searchParams.set('education_type', et);
             if (dept) url.searchParams.set('department_id', dept);
             if (spec) url.searchParams.set('specialty_id', spec);
@@ -264,65 +319,10 @@
             if (grp) url.searchParams.set('group_id', grp);
             if (subj) url.searchParams.set('subject_id', subj);
             if (status) url.searchParams.set('status', status);
+            if (dateFrom) url.searchParams.set('date_from', dateFrom);
+            if (dateTo) url.searchParams.set('date_to', dateTo);
             url.searchParams.set('current_semester', cs);
             window.location.href = url.toString();
-        }
-
-        function loadLevels(cb) {
-            rd('#level_code');
-            $.get('{{ route($routePrefix . ".academic-schedule.get-level-codes") }}', fp(), function(d) {
-                $.each(d, function(k, v) { $('#level_code').append('<option value="' + k + '">' + v + '</option>'); });
-                @if($selectedLevelCode)
-                    $('#level_code').val('{{ $selectedLevelCode }}').trigger('change');
-                @endif
-                if (cb) cb();
-            });
-        }
-
-        function loadSemesters() {
-            rd('#semester_code');
-            var params = fp();
-            if (!params.department_id && !params.level_code) return;
-            $.get('{{ route($routePrefix . ".academic-schedule.get-semesters") }}', params, function(d) {
-                $.each(d, function(i, item) { $('#semester_code').append('<option value="' + item.code + '">' + item.name + '</option>'); });
-                @if($selectedSemester)
-                    $('#semester_code').val('{{ $selectedSemester }}').trigger('change');
-                @endif
-            });
-        }
-
-        function loadSubjects() {
-            rd('#subject_id');
-            $.get('{{ route($routePrefix . ".academic-schedule.get-subjects") }}', fp(), function(d) {
-                $.each(d, function(k, v) { $('#subject_id').append('<option value="' + k + '">' + v + '</option>'); });
-                @if($selectedSubject)
-                    $('#subject_id').val('{{ $selectedSubject }}').trigger('change');
-                @endif
-            });
-        }
-
-        function loadGroups() {
-            rd('#group_id');
-            var params = fp();
-            if (!params.department_id) return;
-            $.get('{{ route($routePrefix . ".academic-schedule.get-groups") }}', params, function(d) {
-                $.each(d, function(i, item) { $('#group_id').append('<option value="' + item.group_hemis_id + '">' + item.name + '</option>'); });
-                @if($selectedGroup)
-                    $('#group_id').val('{{ $selectedGroup }}').trigger('change');
-                @endif
-            });
-        }
-
-        function loadSpecialties() {
-            rd('#specialty_id');
-            var deptId = $('#department_id').val();
-            if (!deptId) return;
-            $.get('{{ route($routePrefix . ".academic-schedule.get-specialties") }}', {department_id: deptId}, function(d) {
-                $.each(d, function(i, item) { $('#specialty_id').append('<option value="' + item.specialty_hemis_id + '">' + item.name + '</option>'); });
-                @if($selectedSpecialty)
-                    $('#specialty_id').val('{{ $selectedSpecialty }}').trigger('change');
-                @endif
-            });
         }
 
         $(document).ready(function() {
@@ -331,13 +331,21 @@
                 .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
 
-            $('#education_type').on('change', function() { loadLevels(); loadSemesters(); loadSubjects(); loadGroups(); });
-            $('#department_id').on('change', function() { loadSpecialties(); loadSemesters(); loadSubjects(); loadGroups(); });
-            $('#specialty_id').on('change', function() { loadSemesters(); loadSubjects(); loadGroups(); });
-            $('#level_code').on('change', function() { loadSemesters(); loadSubjects(); loadGroups(); });
-            $('#semester_code').on('change', function() { loadSubjects(); loadGroups(); });
+            $('#education_type, #department_id, #specialty_id, #level_code, #semester_code').on('change', function() {
+                if (!isUpdatingFilters) loadAllFilters();
+            });
 
-            loadLevels(function() { loadSubjects(); });
+            initFilters();
+
+            // Scroll calendar for date filters
+            var calFrom = new ScrollCalendar('date_from');
+            var calTo = new ScrollCalendar('date_to');
+            @if(request()->get('date_from'))
+                calFrom.setValue('{{ request()->get("date_from") }}');
+            @endif
+            @if(request()->get('date_to'))
+                calTo.setValue('{{ request()->get("date_to") }}');
+            @endif
         });
     </script>
 
@@ -357,6 +365,11 @@
         .select2-container--classic .select2-selection--single .select2-selection__clear:hover { color: #fff; background: #ef4444; }
         .select2-dropdown { font-size: 0.8rem; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
         .select2-container--classic .select2-results__option--highlighted { background-color: #2b5ea7; }
+
+        .date-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 30px 0 10px; font-size: 0.8rem; font-weight: 500; color: #1e293b; background: #fff; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; outline: none; }
+        .date-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
+        .date-input::placeholder { color: #94a3b8; font-weight: 400; }
 
         .toggle-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 0; height: 36px; user-select: none; }
         .toggle-track { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; transition: background 0.25s; flex-shrink: 0; }

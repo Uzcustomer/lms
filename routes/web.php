@@ -386,11 +386,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
             Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
-            Route::get('/get-specialties', [AcademicScheduleController::class, 'getSpecialties'])->name('get-specialties');
-            Route::get('/get-semesters', [AcademicScheduleController::class, 'getSemesters'])->name('get-semesters');
-            Route::get('/get-groups', [AcademicScheduleController::class, 'getGroups'])->name('get-groups');
-            Route::get('/get-level-codes', [AcademicScheduleController::class, 'getLevelCodes'])->name('get-level-codes');
-            Route::get('/get-subjects', [AcademicScheduleController::class, 'getSubjects'])->name('get-subjects');
+            Route::get('/get-filter-options', [AcademicScheduleController::class, 'getFilterOptions'])->name('get-filter-options');
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
         });
 
@@ -672,11 +668,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
             Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
-            Route::get('/get-specialties', [AcademicScheduleController::class, 'getSpecialties'])->name('get-specialties');
-            Route::get('/get-semesters', [AcademicScheduleController::class, 'getSemesters'])->name('get-semesters');
-            Route::get('/get-groups', [AcademicScheduleController::class, 'getGroups'])->name('get-groups');
-            Route::get('/get-level-codes', [AcademicScheduleController::class, 'getLevelCodes'])->name('get-level-codes');
-            Route::get('/get-subjects', [AcademicScheduleController::class, 'getSubjects'])->name('get-subjects');
+            Route::get('/get-filter-options', [AcademicScheduleController::class, 'getFilterOptions'])->name('get-filter-options');
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
         });
     });

@@ -363,7 +363,7 @@ class ImportGrades extends Command
             $retakeBackup = StudentGrade::where('lesson_date', '>=', $dateStart)
                 ->where('lesson_date', '<=', $dateEnd)
                 ->whereNotNull('retake_grade')
-                ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code',
+                ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code',
                         'retake_grade', 'retake_graded_at', 'retake_by', 'retake_file_path', 'graded_by_user_id'])
                 ->keyBy(function ($item) {
                     return $item->student_hemis_id . '_' . $item->subject_id . '_' .
@@ -395,6 +395,7 @@ class ImportGrades extends Command
 
             // 4-QADAM: Saqlangan retake ma'lumotlarni yangi yozuvlarga qayta qo'yish
             $retakeRestored = 0;
+            $restoredKeys = [];
             foreach ($retakeBackup as $key => $retake) {
                 $updated = StudentGrade::where('student_hemis_id', $retake->student_hemis_id)
                     ->where('subject_id', $retake->subject_id)
@@ -413,12 +414,29 @@ class ImportGrades extends Command
                     ]);
                 if ($updated) {
                     $retakeRestored++;
+                    $restoredKeys[] = $key;
                 }
             }
 
-            if ($retakeRestored > 0) {
-                $this->info("Restored {$retakeRestored} retake grades for {$dateStart->toDateString()}");
-                Log::info("[ApplyGrades] Restored {$retakeRestored} retake grades for {$dateStart->toDateString()}");
+            // 5-QADAM: HEMIS da yo'q yozuvlarni (teacher_victim, lokal NB) to'g'ridan-to'g'ri tiklash
+            // Yangi yozuv yaratilmagan — eski yozuvni un-delete qilish
+            $undeleted = 0;
+            foreach ($retakeBackup as $key => $retake) {
+                if (in_array($key, $restoredKeys)) {
+                    continue; // 4-qadamda tiklangan, o'tkazib yuborish
+                }
+                StudentGrade::withTrashed()
+                    ->where('id', $retake->id)
+                    ->update([
+                        'deleted_at' => null,
+                        'is_final' => $isFinal,
+                    ]);
+                $undeleted++;
+            }
+
+            if ($retakeRestored > 0 || $undeleted > 0) {
+                $this->info("Retake grades: {$retakeRestored} restored to new records, {$undeleted} un-deleted for {$dateStart->toDateString()}");
+                Log::info("[ApplyGrades] Retake: {$retakeRestored} restored, {$undeleted} un-deleted for {$dateStart->toDateString()}");
             }
         });
 

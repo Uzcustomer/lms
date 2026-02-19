@@ -36,19 +36,20 @@ class TeacherApiController extends Controller
             ->count();
         $groupCount = $teacher->groups()->count();
 
+        $studentsCount = StudentGrade::where('employee_id', $teacher->hemis_id)
+            ->distinct('student_hemis_id')
+            ->count('student_hemis_id');
+
         return response()->json([
-            'teacher' => [
-                'id' => $teacher->id,
-                'full_name' => $teacher->full_name,
+            'data' => [
+                'teacher_name' => $teacher->full_name,
                 'department' => $teacher->department,
                 'staff_position' => $teacher->staff_position,
                 'image' => $teacher->image,
-                'roles' => $teacher->getRoleNames(),
-            ],
-            'stats' => [
-                'total_student_grades' => $totalStudentGrades,
+                'total_grades' => $totalStudentGrades,
                 'pending_grades' => $pendingGrades,
-                'group_count' => $groupCount,
+                'groups_count' => $groupCount,
+                'students_count' => $studentsCount,
             ],
         ]);
     }
@@ -61,22 +62,25 @@ class TeacherApiController extends Controller
         $teacher = $request->user();
 
         return response()->json([
-            'id' => $teacher->id,
-            'full_name' => $teacher->full_name,
-            'short_name' => $teacher->short_name,
-            'first_name' => $teacher->first_name,
-            'second_name' => $teacher->second_name,
-            'third_name' => $teacher->third_name,
-            'employee_id_number' => $teacher->employee_id_number,
-            'birth_date' => $teacher->birth_date,
-            'image' => $teacher->image,
-            'specialty' => $teacher->specialty,
-            'gender' => $teacher->gender,
-            'department' => $teacher->department,
-            'staff_position' => $teacher->staff_position,
-            'employment_form' => $teacher->employment_form,
-            'phone' => $teacher->phone,
-            'roles' => $teacher->getRoleNames(),
+            'data' => [
+                'id' => $teacher->id,
+                'full_name' => $teacher->full_name,
+                'short_name' => $teacher->short_name,
+                'first_name' => $teacher->first_name,
+                'second_name' => $teacher->second_name,
+                'third_name' => $teacher->third_name,
+                'employee_id_number' => $teacher->employee_id_number,
+                'birth_date' => $teacher->birth_date,
+                'image' => $teacher->image,
+                'specialty' => $teacher->specialty,
+                'gender' => $teacher->gender,
+                'department' => $teacher->department,
+                'staff_position' => $teacher->staff_position,
+                'employment_form' => $teacher->employment_form,
+                'phone' => $teacher->phone,
+                'login' => $teacher->login ?? $teacher->employee_id_number,
+                'roles' => $teacher->getRoleNames(),
+            ],
         ]);
     }
 
@@ -119,7 +123,7 @@ class TeacherApiController extends Controller
 
         return response()->json([
             'data' => $groupedStudents,
-            'pagination' => [
+            'meta' => [
                 'current_page' => $studentGrades->currentPage(),
                 'last_page' => $studentGrades->lastPage(),
                 'per_page' => $studentGrades->perPage(),
@@ -150,11 +154,13 @@ class TeacherApiController extends Controller
         }
 
         return response()->json([
-            'groups' => $groups->map(fn($g) => [
+            'data' => $groups->map(fn($g) => [
                 'id' => $g->id,
                 'group_hemis_id' => $g->group_hemis_id,
                 'name' => $g->name,
                 'curriculum_hemis_id' => $g->curriculum_hemis_id,
+                'department_name' => $g->department_name ?? null,
+                'students_count' => Student::where('group_id', $g->group_hemis_id)->count(),
             ])->values(),
         ]);
     }
@@ -174,7 +180,7 @@ class TeacherApiController extends Controller
         $semesters = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
             ->get(['id', 'name', 'code', 'current']);
 
-        return response()->json(['semesters' => $semesters]);
+        return response()->json(['data' => $semesters]);
     }
 
     /**
@@ -212,7 +218,7 @@ class TeacherApiController extends Controller
                 ->get(['id', 'subject_name', 'subject_id', 'credit']);
         }
 
-        return response()->json(['subjects' => $subjects]);
+        return response()->json(['data' => $subjects]);
     }
 
     /**
@@ -243,13 +249,15 @@ class TeacherApiController extends Controller
         $student = Student::find($studentId);
 
         return response()->json([
-            'student' => $student ? [
-                'id' => $student->id,
-                'full_name' => $student->full_name,
-                'student_id_number' => $student->student_id_number,
-                'group_name' => $student->group_name,
-            ] : null,
-            'grades' => $grades,
+            'data' => [
+                'student' => $student ? [
+                    'id' => $student->id,
+                    'full_name' => $student->full_name,
+                    'student_id_number' => $student->student_id_number,
+                    'group_name' => $student->group_name,
+                ] : null,
+                'grades' => $grades,
+            ],
         ]);
     }
 
@@ -301,10 +309,12 @@ class TeacherApiController extends Controller
         })->values();
 
         return response()->json([
-            'group' => $group->name,
-            'semester' => $semester->name,
-            'subject' => $subject->subject_name,
-            'students' => $result,
+            'data' => [
+                'group' => $group->name,
+                'semester' => $semester->name,
+                'subject' => $subject->subject_name,
+                'students' => $result,
+            ],
         ]);
     }
 }

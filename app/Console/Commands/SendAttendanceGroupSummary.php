@@ -227,6 +227,8 @@ class SendAttendanceGroupSummary extends Command
             }
 
             // Kafedra ichida fan bo'yicha guruhlash (faqat kafedra nomi bo'yicha)
+            // Fan nomini normalizatsiya qilish: (a), (b), (c) kabi qo'shimchalarni olib tashlash
+            $normalizedSubject = $this->normalizeSubjectName($subjectName);
             $deptKey = $deptName;
             if (!isset($departmentStats[$deptKey])) {
                 $departmentStats[$deptKey] = [
@@ -234,12 +236,12 @@ class SendAttendanceGroupSummary extends Command
                     'subjects' => [],
                 ];
             }
-            if (!isset($departmentStats[$deptKey]['subjects'][$subjectName])) {
-                $departmentStats[$deptKey]['subjects'][$subjectName] = ['no_attendance' => 0, 'no_grades' => 0, 'total' => 0];
+            if (!isset($departmentStats[$deptKey]['subjects'][$normalizedSubject])) {
+                $departmentStats[$deptKey]['subjects'][$normalizedSubject] = ['no_attendance' => 0, 'no_grades' => 0, 'total' => 0];
             }
 
             $facultyStats[$facultyName]['total'] += $hours;
-            $departmentStats[$deptKey]['subjects'][$subjectName]['total'] += $hours;
+            $departmentStats[$deptKey]['subjects'][$normalizedSubject]['total'] += $hours;
 
             if (!$r['has_attendance']) {
                 $totalMissingAttendance += $hours;
@@ -248,7 +250,7 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName]['no_attendance'] += $hours;
                 $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
                 $facultyStats[$facultyName]['teachers_att'][$r['employee_id']] = true;
-                $departmentStats[$deptKey]['subjects'][$subjectName]['no_attendance'] += $hours;
+                $departmentStats[$deptKey]['subjects'][$normalizedSubject]['no_attendance'] += $hours;
             }
             if (!$r['has_grades']) {
                 $totalMissingGrades += $hours;
@@ -257,7 +259,7 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName]['no_grades'] += $hours;
                 $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
                 $facultyStats[$facultyName]['teachers_grade'][$r['employee_id']] = true;
-                $departmentStats[$deptKey]['subjects'][$subjectName]['no_grades'] += $hours;
+                $departmentStats[$deptKey]['subjects'][$normalizedSubject]['no_grades'] += $hours;
             }
         }
 
@@ -451,6 +453,16 @@ class SendAttendanceGroupSummary extends Command
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Fan nomidan (a), (b), (c) kabi qo'shimchalarni olib tashlash.
+     * Masalan: "Ichki kasalliklar propedevtikasi (a)" -> "Ichki kasalliklar propedevtikasi"
+     */
+    private function normalizeSubjectName(string $name): string
+    {
+        // Oxiridagi (a), (b), ... (z), (1), (2), ... kabi qo'shimchalarni olib tashlash
+        return trim(preg_replace('/\s*\([a-zA-Zа-яА-ЯёЁ0-9]\)\s*$/', '', $name));
     }
 
     private function calculateAcademicHours(?string $startTime, ?string $endTime): int

@@ -33,27 +33,18 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
                             <select id="education_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($educationTypes as $type)
-                                    <option value="{{ $type->education_type_code }}" {{ ($selectedEducationType ?? '') == $type->education_type_code ? 'selected' : '' }}>{{ $type->education_type_name }}</option>
-                                @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="flex: 1; min-width: 170px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
                             <select id="department_id" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($departments as $dept)
-                                    <option value="{{ $dept->department_hemis_id }}" {{ ($selectedDepartment ?? '') == $dept->department_hemis_id ? 'selected' : '' }}>{{ $dept->name }}</option>
-                                @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="flex: 1; min-width: 180px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty_id" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($specialties as $sp)
-                                    <option value="{{ $sp->specialty_hemis_id }}" {{ ($selectedSpecialty ?? '') == $sp->specialty_hemis_id ? 'selected' : '' }}>{{ $sp->name }}</option>
-                                @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="min-width: 150px;">
@@ -74,18 +65,12 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
                             <select id="semester_code" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($semesters as $sem)
-                                    <option value="{{ $sem->code }}" {{ ($selectedSemester ?? '') == $sem->code ? 'selected' : '' }}>{{ $sem->name }}</option>
-                                @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="min-width: 140px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                             <select id="group_id" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($groups as $gr)
-                                    <option value="{{ $gr->group_hemis_id }}" {{ ($selectedGroup ?? '') == $gr->group_hemis_id ? 'selected' : '' }}>{{ $gr->name }}</option>
-                                @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="flex: 1; min-width: 200px;">
@@ -107,6 +92,18 @@
                                 Qidirish
                             </button>
                         </div>
+                    </div>
+                    <!-- Row 3: Sana filtrlari -->
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanadan</label>
+                            <input type="text" id="date_from" class="date-input sc-date" autocomplete="off" placeholder="Boshlanish sanasi" />
+                        </div>
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Sanagacha</label>
+                            <input type="text" id="date_to" class="date-input sc-date" autocomplete="off" placeholder="Tugash sanasi" />
+                        </div>
+                        <div class="filter-item" style="flex: 1;"></div>
                     </div>
                 </div>
 
@@ -217,6 +214,20 @@
     <script src="/js/scroll-calendar.js"></script>
 
     <script>
+        var isUpdatingFilters = false;
+        var filterUrl = '{{ route($routePrefix . ".academic-schedule.get-filter-options") }}';
+
+        // Initial values from server (sahifa qayta yuklanganda)
+        var initialValues = {
+            education_type: '{{ $selectedEducationType ?? '' }}',
+            department_id: '{{ $selectedDepartment ?? '' }}',
+            specialty_id: '{{ $selectedSpecialty ?? '' }}',
+            level_code: '{{ $selectedLevelCode ?? '' }}',
+            semester_code: '{{ $selectedSemester ?? '' }}',
+            group_id: '{{ $selectedGroup ?? '' }}',
+            subject_id: '{{ $selectedSubject ?? '' }}'
+        };
+
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
             if ($.trim(params.term) === '') return data;
@@ -226,13 +237,12 @@
             return null;
         }
 
-        function rd(el, ph) { $(el).empty().append('<option value="">' + (ph || 'Barchasi') + '</option>').trigger('change'); }
-
         function toggleSemester() {
             var btn = document.getElementById('current-semester-toggle');
             btn.classList.toggle('active');
         }
 
+        // Dropdown parametrlarini yig'ish
         function fp() {
             return {
                 education_type: $('#education_type').val() || '',
@@ -242,6 +252,69 @@
                 semester_code: $('#semester_code').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0'
             };
+        }
+
+        // Dropdown ni yangilash (tanlangan qiymatni saqlab)
+        function updateSelect(selector, items, valueKey, textKey) {
+            var $el = $(selector);
+            var currentVal = $el.val();
+            $el.empty().append('<option value="">Barchasi</option>');
+            $.each(items, function(i, item) {
+                $el.append('<option value="' + item[valueKey] + '">' + item[textKey] + '</option>');
+            });
+            // Agar avvalgi qiymat hali ham mavjud bo'lsa - tiklash
+            if (currentVal && $el.find('option[value="' + currentVal + '"]').length) {
+                $el.val(currentVal);
+            }
+            $el.trigger('change.select2');
+        }
+
+        // Bidirectional filter: barcha dropdownlarni yangilash
+        function loadAllFilters(callback) {
+            if (isUpdatingFilters) return;
+            isUpdatingFilters = true;
+
+            $.get(filterUrl, fp(), function(data) {
+                updateSelect('#education_type', data.educationTypes, 'education_type_code', 'education_type_name');
+                updateSelect('#department_id', data.departments, 'department_hemis_id', 'name');
+                updateSelect('#specialty_id', data.specialties, 'specialty_hemis_id', 'name');
+                updateSelect('#level_code', data.levels, 'level_code', 'level_name');
+                updateSelect('#semester_code', data.semesters, 'code', 'name');
+                updateSelect('#group_id', data.groups, 'group_hemis_id', 'name');
+                updateSelect('#subject_id', data.subjects, 'subject_id', 'subject_name');
+
+                isUpdatingFilters = false;
+                if (callback) callback();
+            }).fail(function() {
+                isUpdatingFilters = false;
+            });
+        }
+
+        // Boshlang'ich yuklash (query params bor bo'lsa qiymatlarni tiklash)
+        function initFilters() {
+            isUpdatingFilters = true;
+            $.get(filterUrl, initialValues, function(data) {
+                updateSelect('#education_type', data.educationTypes, 'education_type_code', 'education_type_name');
+                updateSelect('#department_id', data.departments, 'department_hemis_id', 'name');
+                updateSelect('#specialty_id', data.specialties, 'specialty_hemis_id', 'name');
+                updateSelect('#level_code', data.levels, 'level_code', 'level_name');
+                updateSelect('#semester_code', data.semesters, 'code', 'name');
+                updateSelect('#group_id', data.groups, 'group_hemis_id', 'name');
+                updateSelect('#subject_id', data.subjects, 'subject_id', 'subject_name');
+
+                // Initial qiymatlarni tiklash
+                if (initialValues.education_type) $('#education_type').val(initialValues.education_type).trigger('change.select2');
+                if (initialValues.department_id) $('#department_id').val(initialValues.department_id).trigger('change.select2');
+                if (initialValues.specialty_id) $('#specialty_id').val(initialValues.specialty_id).trigger('change.select2');
+                if (initialValues.level_code) $('#level_code').val(initialValues.level_code).trigger('change.select2');
+                if (initialValues.semester_code) $('#semester_code').val(initialValues.semester_code).trigger('change.select2');
+                if (initialValues.group_id) $('#group_id').val(initialValues.group_id).trigger('change.select2');
+                if (initialValues.subject_id) $('#subject_id').val(initialValues.subject_id).trigger('change.select2');
+
+                isUpdatingFilters = false;
+            }).fail(function() {
+                isUpdatingFilters = false;
+            });
         }
 
         function applyFilter() {
@@ -256,6 +329,8 @@
             var subj = $('#subject_id').val();
             var status = $('#status').val();
             var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
+            var dateFrom = $('#date_from').val();
+            var dateTo = $('#date_to').val();
             if (et) url.searchParams.set('education_type', et);
             if (dept) url.searchParams.set('department_id', dept);
             if (spec) url.searchParams.set('specialty_id', spec);
@@ -264,65 +339,10 @@
             if (grp) url.searchParams.set('group_id', grp);
             if (subj) url.searchParams.set('subject_id', subj);
             if (status) url.searchParams.set('status', status);
+            if (dateFrom) url.searchParams.set('date_from', dateFrom);
+            if (dateTo) url.searchParams.set('date_to', dateTo);
             url.searchParams.set('current_semester', cs);
             window.location.href = url.toString();
-        }
-
-        function loadLevels(cb) {
-            rd('#level_code');
-            $.get('{{ route($routePrefix . ".academic-schedule.get-level-codes") }}', fp(), function(d) {
-                $.each(d, function(k, v) { $('#level_code').append('<option value="' + k + '">' + v + '</option>'); });
-                @if($selectedLevelCode)
-                    $('#level_code').val('{{ $selectedLevelCode }}').trigger('change');
-                @endif
-                if (cb) cb();
-            });
-        }
-
-        function loadSemesters() {
-            rd('#semester_code');
-            var params = fp();
-            if (!params.department_id && !params.level_code) return;
-            $.get('{{ route($routePrefix . ".academic-schedule.get-semesters") }}', params, function(d) {
-                $.each(d, function(i, item) { $('#semester_code').append('<option value="' + item.code + '">' + item.name + '</option>'); });
-                @if($selectedSemester)
-                    $('#semester_code').val('{{ $selectedSemester }}').trigger('change');
-                @endif
-            });
-        }
-
-        function loadSubjects() {
-            rd('#subject_id');
-            $.get('{{ route($routePrefix . ".academic-schedule.get-subjects") }}', fp(), function(d) {
-                $.each(d, function(k, v) { $('#subject_id').append('<option value="' + k + '">' + v + '</option>'); });
-                @if($selectedSubject)
-                    $('#subject_id').val('{{ $selectedSubject }}').trigger('change');
-                @endif
-            });
-        }
-
-        function loadGroups() {
-            rd('#group_id');
-            var params = fp();
-            if (!params.department_id) return;
-            $.get('{{ route($routePrefix . ".academic-schedule.get-groups") }}', params, function(d) {
-                $.each(d, function(i, item) { $('#group_id').append('<option value="' + item.group_hemis_id + '">' + item.name + '</option>'); });
-                @if($selectedGroup)
-                    $('#group_id').val('{{ $selectedGroup }}').trigger('change');
-                @endif
-            });
-        }
-
-        function loadSpecialties() {
-            rd('#specialty_id');
-            var deptId = $('#department_id').val();
-            if (!deptId) return;
-            $.get('{{ route($routePrefix . ".academic-schedule.get-specialties") }}', {department_id: deptId}, function(d) {
-                $.each(d, function(i, item) { $('#specialty_id').append('<option value="' + item.specialty_hemis_id + '">' + item.name + '</option>'); });
-                @if($selectedSpecialty)
-                    $('#specialty_id').val('{{ $selectedSpecialty }}').trigger('change');
-                @endif
-            });
         }
 
         $(document).ready(function() {
@@ -332,17 +352,25 @@
                 .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
 
-            // Cascading
-            $('#education_type').on('change', function() { loadLevels(); loadSemesters(); loadSubjects(); loadGroups(); });
-            $('#department_id').on('change', function() { loadSpecialties(); loadSemesters(); loadSubjects(); loadGroups(); });
-            $('#specialty_id').on('change', function() { loadSemesters(); loadSubjects(); loadGroups(); });
-            $('#level_code').on('change', function() { loadSemesters(); loadSubjects(); loadGroups(); });
-            $('#semester_code').on('change', function() { loadSubjects(); loadGroups(); });
+            // Bidirectional: har qanday asosiy filtr o'zgarganda barcha filtrlarni yangilash
+            $('#education_type, #department_id, #specialty_id, #level_code, #semester_code').on('change', function() {
+                if (!isUpdatingFilters) loadAllFilters();
+            });
 
-            // Init level codes
-            loadLevels(function() { loadSubjects(); });
+            // Init
+            initFilters();
 
-            // Init scroll calendars
+            // Scroll calendar for date filters
+            var calFrom = new ScrollCalendar('date_from');
+            var calTo = new ScrollCalendar('date_to');
+            @if(request()->get('date_from'))
+                calFrom.setValue('{{ request()->get("date_from") }}');
+            @endif
+            @if(request()->get('date_to'))
+                calTo.setValue('{{ request()->get("date_to") }}');
+            @endif
+
+            // Init schedule date calendars
             $('[id^="oski_"], [id^="test_"]').each(function() {
                 var cal = new ScrollCalendar(this.id);
                 var val = $(this).attr('data-initial');

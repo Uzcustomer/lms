@@ -41,6 +41,7 @@ class AcademicScheduleController extends Controller
         $selectedSpecialty = $request->get('specialty_id');
         $selectedSemester = $request->get('semester_code');
         $selectedGroup = $request->get('group_id');
+        $selectedStatus = $request->get('status');
 
         // Yo'nalishlar
         $specialties = collect();
@@ -131,6 +132,13 @@ class AcademicScheduleController extends Controller
                 }
             }
 
+            // Holat bo'yicha filtr
+            if ($selectedStatus === 'belgilangan') {
+                $scheduleData = $scheduleData->filter(fn($item) => $item['oski_date'] || $item['test_date']);
+            } elseif ($selectedStatus === 'belgilanmagan') {
+                $scheduleData = $scheduleData->filter(fn($item) => !$item['oski_date'] && !$item['test_date']);
+            }
+
             // Guruh bo'yicha guruhlash
             $scheduleData = $scheduleData->groupBy(fn($item) => $item['group']->group_hemis_id);
         }
@@ -147,6 +155,7 @@ class AcademicScheduleController extends Controller
             'selectedSpecialty',
             'selectedSemester',
             'selectedGroup',
+            'selectedStatus',
             'currentEducationYear',
             'routePrefix',
         ));
@@ -270,6 +279,9 @@ class AcademicScheduleController extends Controller
      */
     public function testCenterView(Request $request)
     {
+        $currentSemesters = Semester::where('current', true)->get();
+        $currentEducationYear = $currentSemesters->first()?->education_year;
+
         $departments = Department::where('structure_type_code', 11)
             ->where('active', true)
             ->orderBy('name')
@@ -279,6 +291,7 @@ class AcademicScheduleController extends Controller
         $selectedSpecialty = $request->get('specialty_id');
         $selectedSemester = $request->get('semester_code');
         $selectedGroup = $request->get('group_id');
+        $selectedStatus = $request->get('status');
 
         $specialties = collect();
         if ($selectedDepartment) {
@@ -312,28 +325,66 @@ class AcademicScheduleController extends Controller
             $groups = $groupQuery->orderBy('name')->get();
         }
 
-        // Faqat belgilangan sanalar bor yozuvlarni ko'rsatish
-        $schedules = collect();
-        if ($selectedDepartment) {
-            $query = ExamSchedule::where('department_hemis_id', $selectedDepartment)
-                ->where(function ($q) {
-                    $q->whereNotNull('oski_date')->orWhereNotNull('test_date');
+        // Fanlar va jadval ma'lumotlari (index bilan bir xil)
+        $scheduleData = collect();
+        if ($selectedDepartment && $selectedSemester) {
+            $subjectQuery = CurriculumSubject::where('semester_code', $selectedSemester)
+                ->whereHas('curriculum', function ($q) use ($selectedDepartment, $selectedSpecialty, $currentEducationYear) {
+                    $q->where('department_hemis_id', $selectedDepartment)
+                      ->where('current', true);
+                    if ($selectedSpecialty) {
+                        $q->where('specialty_hemis_id', $selectedSpecialty);
+                    }
                 });
 
+            $subjects = $subjectQuery->get();
+
+            $filteredGroups = Group::where('department_hemis_id', $selectedDepartment)
+                ->where('active', true);
             if ($selectedSpecialty) {
-                $query->where('specialty_hemis_id', $selectedSpecialty);
-            }
-            if ($selectedSemester) {
-                $query->where('semester_code', $selectedSemester);
+                $filteredGroups->where('specialty_hemis_id', $selectedSpecialty);
             }
             if ($selectedGroup) {
-                $query->where('group_hemis_id', $selectedGroup);
+                $filteredGroups->where('group_hemis_id', $selectedGroup);
+            }
+            $filteredGroups = $filteredGroups->get();
+
+            $existingSchedules = ExamSchedule::where('department_hemis_id', $selectedDepartment)
+                ->where('semester_code', $selectedSemester)
+                ->when($selectedSpecialty, fn($q) => $q->where('specialty_hemis_id', $selectedSpecialty))
+                ->when($selectedGroup, fn($q) => $q->where('group_hemis_id', $selectedGroup))
+                ->get()
+                ->keyBy(fn($item) => $item->group_hemis_id . '_' . $item->subject_id);
+
+            foreach ($filteredGroups as $group) {
+                $groupSubjects = $subjects->filter(function ($subject) use ($group) {
+                    return $subject->curricula_hemis_id === $group->curriculum_hemis_id;
+                });
+
+                foreach ($groupSubjects as $subject) {
+                    $key = $group->group_hemis_id . '_' . $subject->subject_id;
+                    $existing = $existingSchedules->get($key);
+
+                    $scheduleData->push([
+                        'group' => $group,
+                        'subject' => $subject,
+                        'specialty_name' => $group->specialty_name,
+                        'oski_date' => $existing?->oski_date?->format('Y-m-d'),
+                        'test_date' => $existing?->test_date?->format('Y-m-d'),
+                        'oski_date_carbon' => $existing?->oski_date,
+                        'test_date_carbon' => $existing?->test_date,
+                    ]);
+                }
             }
 
-            $schedules = $query->orderBy('test_date')->orderBy('oski_date')->get();
+            // Holat bo'yicha filtr
+            if ($selectedStatus === 'belgilangan') {
+                $scheduleData = $scheduleData->filter(fn($item) => $item['oski_date'] || $item['test_date']);
+            } elseif ($selectedStatus === 'belgilanmagan') {
+                $scheduleData = $scheduleData->filter(fn($item) => !$item['oski_date'] && !$item['test_date']);
+            }
 
-            // Guruh bo'yicha guruhlash
-            $schedules = $schedules->groupBy('group_hemis_id');
+            $scheduleData = $scheduleData->groupBy(fn($item) => $item['group']->group_hemis_id);
         }
 
         $routePrefix = $this->routePrefix();
@@ -343,11 +394,13 @@ class AcademicScheduleController extends Controller
             'specialties',
             'semesters',
             'groups',
-            'schedules',
+            'scheduleData',
             'selectedDepartment',
             'selectedSpecialty',
             'selectedSemester',
             'selectedGroup',
+            'selectedStatus',
+            'currentEducationYear',
             'routePrefix',
         ));
     }

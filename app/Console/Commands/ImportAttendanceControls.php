@@ -82,74 +82,53 @@ class ImportAttendanceControls extends Command
     private function handleFinalImport(string $token, TelegramService $telegram, bool $silent)
     {
         if (!$silent) {
-            $telegram->notify("🟢 Davomat nazorati FINAL import boshlandi");
+            $telegram->notify("🟢 Davomat nazorati FINAL import boshlandi (butun semestr)");
         }
-        $this->info('Starting FINAL attendance controls import...');
+        $this->info('Starting FINAL attendance controls import (butun semestr)...');
 
-        // Oxirgi 7 kun ichida yakunlanmagan kunlarni topish
-        $lookbackStart = Carbon::today()->subDays(7)->startOfDay();
-        $todayStart = Carbon::today()->startOfDay();
+        // HEMIS dan BARCHA yozuvlarni olish (sana filtrsiz — butun semestr)
+        $items = $this->fetchAllPages($token);
 
-        $unfinishedDates = AttendanceControl::where('is_final', false)
-            ->where('lesson_date', '>=', $lookbackStart)
-            ->where('lesson_date', '<', $todayStart)
-            ->selectRaw('DATE(lesson_date) as ctrl_date')
-            ->distinct()
-            ->orderBy('ctrl_date')
-            ->pluck('ctrl_date');
-
-        if ($unfinishedDates->isEmpty()) {
-            $this->info('Final import: barcha kunlar allaqachon yakunlangan.');
+        if ($items === false) {
+            $this->error('Final import: API xato — import bekor qilindi.');
             if (!$silent) {
-                $telegram->notify("✅ Davomat nazorati: barcha kunlar yakunlangan, yangi import yo'q.");
+                $telegram->notify("❌ Davomat nazorati FINAL import xato: API javob bermadi");
             }
             return;
         }
 
-        $totalDays = $unfinishedDates->count();
+        if (empty($items)) {
+            $this->info('Final import: API dan hech qanday yozuv kelmadi.');
+            if (!$silent) {
+                $telegram->notify("✅ Davomat nazorati: API da yozuv yo'q.");
+            }
+            return;
+        }
+
+        // Sanalar bo'yicha guruhlash
+        $todayStr = Carbon::today()->toDateString();
+        $groupedByDate = collect($items)->groupBy(function ($item) {
+            return isset($item['lesson_date']) ? date('Y-m-d', $item['lesson_date']) : null;
+        })->filter(function ($dateItems, $date) use ($todayStr) {
+            // null sanalarni va bugungi sanani o'tkazib yuborish (bugunni live import boshqaradi)
+            return $date !== null && $date < $todayStr;
+        })->sortKeys();
+
+        $totalDays = $groupedByDate->count();
         $successDays = 0;
-        $failedDays = [];
+        $totalRecords = 0;
 
-        $this->info("Yakunlanmagan kunlar: {$totalDays} ta ({$unfinishedDates->first()} — {$unfinishedDates->last()})");
+        $this->info("Jami: " . count($items) . " yozuv, {$totalDays} kun (bugundan oldingi)");
 
-        foreach ($unfinishedDates as $dateStr) {
+        foreach ($groupedByDate as $dateStr => $dateItems) {
             $date = Carbon::parse($dateStr);
-
-            // Agar bu kunda is_final=true allaqachon bo'lsa, o'tkazib yuborish
-            $alreadyFinalized = AttendanceControl::where('lesson_date', '>=', $date->copy()->startOfDay())
-                ->where('lesson_date', '<=', $date->copy()->endOfDay())
-                ->where('is_final', true)
-                ->exists();
-
-            if ($alreadyFinalized) {
-                $this->info("  {$date->toDateString()} — allaqachon yakunlangan, o'tkazib yuborildi.");
-                $totalDays--;
-                continue;
-            }
-
-            $from = $date->copy()->startOfDay()->timestamp;
-            $to = $date->copy()->endOfDay()->timestamp;
-
-            $this->info("  {$date->toDateString()} — API dan tortilmoqda...");
-
-            $items = $this->fetchAllPages($token, $from, $to);
-
-            if ($items === false) {
-                $this->error("  {$date->toDateString()} — API xato, keyingi kunga o'tiladi.");
-                $failedDays[] = $date->toDateString();
-                continue;
-            }
-
-            $this->applyAttendanceControls($items, $date, true);
-
+            $this->applyAttendanceControls($dateItems->toArray(), $date, true);
             $successDays++;
-            $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
+            $totalRecords += $dateItems->count();
+            $this->info("  {$dateStr} — {$dateItems->count()} yozuv yakunlandi ({$successDays}/{$totalDays})");
         }
 
-        $msg = "✅ Davomat nazorati FINAL import: {$successDays}/{$totalDays} kun";
-        if (!empty($failedDays)) {
-            $msg .= "\n❌ Xato: " . implode(', ', $failedDays);
-        }
+        $msg = "✅ Davomat nazorati FINAL import: {$successDays} kun, {$totalRecords} yozuv (butun semestr)";
         if (!$silent) {
             $telegram->notify($msg);
         }
@@ -160,7 +139,7 @@ class ImportAttendanceControls extends Command
     // API dan barcha sahifalarni xotiraga yig'ish (sana filtr bilan)
     // Muvaffaqiyatli bo'lsa array, xato bo'lsa false qaytaradi
     // =========================================================================
-    private function fetchAllPages(string $token, int $from, int $to): array|false
+    private function fetchAllPages(string $token, ?int $from = null, ?int $to = null): array|false
     {
         $allItems = [];
         $page = 1;
@@ -169,7 +148,10 @@ class ImportAttendanceControls extends Command
         $maxRetries = 3;
 
         do {
-            $url = "https://student.ttatf.uz/rest/v1/data/attendance-control-list?limit={$pageSize}&page={$page}&lesson_date_from={$from}&lesson_date_to={$to}";
+            $url = "https://student.ttatf.uz/rest/v1/data/attendance-control-list?limit={$pageSize}&page={$page}";
+            if ($from !== null && $to !== null) {
+                $url .= "&lesson_date_from={$from}&lesson_date_to={$to}";
+            }
 
             $retryCount = 0;
             $pageSuccess = false;

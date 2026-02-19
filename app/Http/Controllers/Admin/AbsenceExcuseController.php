@@ -72,14 +72,24 @@ class AbsenceExcuseController extends Controller
         try {
             $verificationUrl = route('absence-excuse.verify', $excuse->verification_token);
 
-            // QR kod generatsiya (paket mavjud bo'lsa SVG, bo'lmasa URL ko'rsatiladi)
+            // QR kod generatsiya
             $qrCodeSvg = null;
+            $qrCodeBase64 = null;
+
             if (class_exists(\BaconQrCode\Writer::class)) {
+                // 1-usul: BaconQrCode (local, SVG)
                 $renderer = new \BaconQrCode\Renderer\ImageRenderer(
                     new \BaconQrCode\Renderer\RendererStyle\RendererStyle(200, 1),
                     new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
                 );
                 $qrCodeSvg = (new \BaconQrCode\Writer($renderer))->writeString($verificationUrl);
+            } else {
+                // 2-usul: Online API orqali PNG
+                $apiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&format=png&data=' . urlencode($verificationUrl);
+                $pngData = @file_get_contents($apiUrl);
+                if ($pngData) {
+                    $qrCodeBase64 = base64_encode($pngData);
+                }
             }
 
             // PDF generatsiya
@@ -88,6 +98,7 @@ class AbsenceExcuseController extends Controller
                     ? tap($excuse)->forceFill(['status' => 'approved', 'reviewed_by_name' => $user->name ?? $user->full_name ?? $user->short_name, 'reviewed_at' => now()])
                     : $excuse,
                 'qrCodeSvg' => $qrCodeSvg,
+                'qrCodeBase64' => $qrCodeBase64,
                 'verificationUrl' => $verificationUrl,
             ]);
 

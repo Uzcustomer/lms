@@ -553,11 +553,22 @@ class ReportController extends Controller
         }
 
         try {
+            // Jadval (schedules) yangilash
             $service->importBetween($from, $to);
+
+            // Davomat nazorati (attendance_controls) ham yangilash — har bir kun uchun
+            $current = $from->copy();
+            while ($current->lte($to)) {
+                \Illuminate\Support\Facades\Artisan::call('import:attendance-controls', [
+                    '--date' => $current->toDateString(),
+                    '--silent' => true,
+                ]);
+                $current->addDay();
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => "Jadval muvaffaqiyatli yangilandi ({$from->toDateString()} — {$to->toDateString()}).",
+                'message' => "Jadval va davomat nazorati yangilandi ({$from->toDateString()} — {$to->toDateString()}).",
             ]);
         } catch (\Throwable $e) {
             return response()->json([

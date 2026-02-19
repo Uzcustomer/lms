@@ -4,19 +4,20 @@ namespace App\Console\Commands;
 
 use App\Models\AttendanceControl;
 use App\Services\TelegramService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
 class ImportAttendanceControls extends Command
 {
-    protected $signature = 'import:attendance-controls';
+    protected $signature = 'import:attendance-controls {--date= : Faqat shu kun uchun import (Y-m-d, masalan 2026-02-18)} {--silent : Telegram xabar yubormaslik}';
 
     protected $description = 'Import attendance controls from HEMIS API';
 
     public function handle(TelegramService $telegram)
     {
-        $telegram->notify("🟢 Davomat nazorati importi boshlandi");
-        $this->info('Fetching attendance controls from HEMIS API...');
+        $dateOption = $this->option('date');
+        $silent = $this->option('silent');
 
         $token = config('services.hemis.token');
         $page = 1;
@@ -24,12 +25,27 @@ class ImportAttendanceControls extends Command
         $totalImported = 0;
         $totalPages = 1;
 
+        // Sana bo'yicha filtr
+        $dateParams = '';
+        if ($dateOption) {
+            $date = Carbon::parse($dateOption);
+            $from = $date->copy()->startOfDay()->timestamp;
+            $to = $date->copy()->endOfDay()->timestamp;
+            $dateParams = "&lesson_date_from={$from}&lesson_date_to={$to}";
+            $this->info("Faqat {$date->toDateString()} uchun import...");
+        } else {
+            if (!$silent) {
+                $telegram->notify("🟢 Davomat nazorati importi boshlandi");
+            }
+            $this->info('Fetching attendance controls from HEMIS API...');
+        }
+
         do {
             try {
                 $response = Http::withoutVerifying()
                     ->withToken($token)
                     ->timeout(60)
-                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-control-list?limit=$pageSize&page=$page");
+                    ->get("https://student.ttatf.uz/rest/v1/data/attendance-control-list?limit=$pageSize&page=$page{$dateParams}");
 
                 if ($response->successful()) {
                     $json = $response->json();
@@ -75,18 +91,24 @@ class ImportAttendanceControls extends Command
 
                     $page++;
                 } else {
-                    $telegram->notify("❌ Davomat nazorati importida xatolik (API status: {$response->status()})");
+                    if (!$silent) {
+                        $telegram->notify("❌ Davomat nazorati importida xatolik (API status: {$response->status()})");
+                    }
                     $this->error('Failed to fetch data from HEMIS API. Status: ' . $response->status());
                     break;
                 }
             } catch (\Exception $e) {
-                $telegram->notify("❌ Davomat nazorati importida xatolik: " . $e->getMessage());
+                if (!$silent) {
+                    $telegram->notify("❌ Davomat nazorati importida xatolik: " . $e->getMessage());
+                }
                 $this->error('Error: ' . $e->getMessage());
                 break;
             }
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ Davomat nazorati importi tugadi. Jami: {$totalImported} ta");
+        if (!$silent && !$dateOption) {
+            $telegram->notify("✅ Davomat nazorati importi tugadi. Jami: {$totalImported} ta");
+        }
         $this->info("Import completed. Total: {$totalImported} records.");
     }
 }

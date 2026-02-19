@@ -367,6 +367,17 @@ class ImportGrades extends Command
             if ($isFinal) {
                 // Final/Backfill: BARCHA eski yozuvlarni o'chirish (retake'dan tashqari)
                 $softDeletedCount = $query->delete();
+
+                // Retake yozuvlarni o'chirmasdan is_final=true ga yangilash
+                // (aks holda final import bu sanani doim "yakunlanmagan" deb topadi)
+                StudentGrade::where('lesson_date', '>=', $dateStart)
+                    ->where('lesson_date', '<=', $dateEnd)
+                    ->where(function ($q) {
+                        $q->where('status', 'retake')
+                          ->orWhereNotNull('retake_grade');
+                    })
+                    ->where('is_final', false)
+                    ->update(['is_final' => true]);
             } else {
                 // Live import: faqat is_final=false yozuvlarni o'chirish (retake'dan tashqari)
                 $softDeletedCount = $query->where('is_final', false)->delete();

@@ -109,38 +109,30 @@
                             <thead>
                                 <tr>
                                     <th style="width:44px;padding-left:16px;">#</th>
-                                    <th>Guruh</th>
-                                    <th>Yo'nalish</th>
-                                    <th>Fan nomi</th>
-                                    <th style="width:70px;text-align:center;">Kredit</th>
-                                    <th style="width:120px;text-align:center;">Dars boshlanish</th>
-                                    <th style="width:120px;text-align:center;">Dars tugash</th>
-                                    <th style="width:160px;text-align:center;">OSKI sanasi</th>
-                                    <th style="width:160px;text-align:center;">Test sanasi</th>
+                                    <th class="sortable" data-col="1">Guruh <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="2">Yo'nalish <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="3">Fan nomi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="4" style="width:70px;text-align:center;">Kredit <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="5" style="width:120px;text-align:center;">Dars boshlanish <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="6" style="width:120px;text-align:center;">Dars tugash <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="7" style="width:160px;text-align:center;">OSKI sanasi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="8" style="width:160px;text-align:center;">Test sanasi <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="schedule-tbody">
                                 @php
                                     $rowIndex = 0;
                                     $today = now()->format('Y-m-d');
                                 @endphp
                                 @foreach($scheduleData as $groupHemisId => $items)
-                                    <tr class="group-header-row">
-                                        <td colspan="9">
-                                            {{ $items->first()['group']->name }}
-                                            <span style="margin-left:8px;font-size:11px;font-weight:400;color:#3b82f6;">
-                                                ({{ $items->first()['specialty_name'] }})
-                                            </span>
-                                        </td>
-                                    </tr>
                                     @foreach($items as $item)
                                         <tr class="data-row">
-                                            <td style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
-                                            <td style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
-                                            <td style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
-                                            <td style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
-                                            <td style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
-                                            <td style="text-align:center;padding:4px 8px;">
+                                            <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
+                                            <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
+                                            <td data-sort-value="{{ $item['specialty_name'] }}" style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
+                                            <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
+                                            <td data-sort-value="{{ $item['subject']->credit }}" style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
+                                            <td data-sort-value="{{ $item['lesson_start_date'] ?? '' }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['lesson_start_date'])
                                                     @php
                                                         $lsDate = $item['lesson_start_date_carbon'];
@@ -167,7 +159,7 @@
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
                                             </td>
-                                            <td style="text-align:center;padding:4px 8px;">
+                                            <td data-sort-value="{{ $item['oski_na'] ? '' : ($item['oski_date'] ?? '') }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['oski_na'])
                                                     <span class="na-badge">N/A</span>
                                                 @elseif($item['oski_date'])
@@ -183,7 +175,7 @@
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
                                             </td>
-                                            <td style="text-align:center;padding:4px 8px;">
+                                            <td data-sort-value="{{ $item['test_na'] ? '' : ($item['test_date'] ?? '') }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['test_na'])
                                                     <span class="na-badge">N/A</span>
                                                 @elseif($item['test_date'])
@@ -375,7 +367,55 @@
             @if(request()->get('date_to'))
                 calTo.setValue('{{ request()->get("date_to") }}');
             @endif
+
+            // Sort funksiyasi
+            initTableSort();
         });
+
+        // Jadval ustunlarini bosganda sort
+        var currentSortCol = -1;
+        var currentSortDir = 'asc';
+
+        function initTableSort() {
+            document.querySelectorAll('.sortable').forEach(function(th) {
+                th.addEventListener('click', function() {
+                    var col = parseInt(this.getAttribute('data-col'));
+                    if (currentSortCol === col) {
+                        currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortCol = col;
+                        currentSortDir = 'asc';
+                    }
+                    sortTable(col, currentSortDir);
+                    document.querySelectorAll('.sortable .sort-icon').forEach(function(s) { s.textContent = ''; });
+                    this.querySelector('.sort-icon').textContent = currentSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+                });
+            });
+        }
+
+        function sortTable(colIndex, dir) {
+            var tbody = document.getElementById('schedule-tbody');
+            if (!tbody) return;
+            var rows = Array.from(tbody.querySelectorAll('tr.data-row'));
+            rows.sort(function(a, b) {
+                var aCell = a.cells[colIndex];
+                var bCell = b.cells[colIndex];
+                var aVal = (aCell && aCell.getAttribute('data-sort-value')) || '';
+                var bVal = (bCell && bCell.getAttribute('data-sort-value')) || '';
+                var aNum = parseFloat(aVal);
+                var bNum = parseFloat(bVal);
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    return dir === 'asc' ? aNum - bNum : bNum - aNum;
+                }
+                var cmp = aVal.localeCompare(bVal, 'uz');
+                return dir === 'asc' ? cmp : -cmp;
+            });
+            rows.forEach(function(row, i) {
+                tbody.appendChild(row);
+                var numCell = row.querySelector('.row-num');
+                if (numCell) numCell.textContent = i + 1;
+            });
+        }
     </script>
 
     <style>
@@ -415,7 +455,9 @@
         .schedule-table thead { position: sticky; top: 0; z-index: 10; }
         .schedule-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
         .schedule-table th { padding: 14px 12px; text-align: left; font-weight: 600; font-size: 11.5px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
-        .group-header-row td { padding: 8px 16px; font-size: 13px; font-weight: 700; color: #1e3a5f; background: linear-gradient(135deg, #eff6ff, #dbeafe); border-bottom: 1px solid #bfdbfe; }
+        .schedule-table th.sortable { cursor: pointer; user-select: none; transition: background 0.15s; }
+        .schedule-table th.sortable:hover { background: rgba(43,94,167,0.1); }
+        .sort-icon { font-size: 10px; color: #2b5ea7; }
         .data-row td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
         .data-row:hover td { background: #f8fafc; }
 

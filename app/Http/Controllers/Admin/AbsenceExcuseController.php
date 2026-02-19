@@ -64,36 +64,42 @@ class AbsenceExcuseController extends Controller
     {
         $excuse = AbsenceExcuse::findOrFail($id);
 
-        if (!$excuse->isPending()) {
+        if (!$excuse->isPending() && !($excuse->isApproved() && !$excuse->approved_pdf_path)) {
             return back()->with('error', 'Bu ariza allaqachon ko\'rib chiqilgan.');
         }
 
         $user = Auth::user();
 
-        $excuse->update([
-            'status' => 'approved',
-            'reviewed_by' => $user->id,
-            'reviewed_by_name' => $user->name ?? $user->full_name ?? $user->short_name,
-            'reviewed_at' => now(),
-        ]);
+        try {
+            // QR kod generatsiya (SVG formatda — imagick talab qilinmaydi)
+            $verificationUrl = route('absence-excuse.verify', $excuse->verification_token);
+            $qrCodeSvg = QrCode::size(200)->margin(1)->generate($verificationUrl);
 
-        // QR kod generatsiya (SVG formatda — imagick talab qilinmaydi)
-        $verificationUrl = route('absence-excuse.verify', $excuse->verification_token);
-        $qrCodeSvg = QrCode::size(200)->margin(1)->generate($verificationUrl);
+            // PDF generatsiya
+            $pdf = Pdf::loadView('pdf.absence-excuse-certificate', [
+                'excuse' => $excuse->isPending()
+                    ? tap($excuse)->forceFill(['status' => 'approved', 'reviewed_by_name' => $user->name ?? $user->full_name ?? $user->short_name, 'reviewed_at' => now()])
+                    : $excuse,
+                'qrCodeSvg' => $qrCodeSvg,
+                'verificationUrl' => $verificationUrl,
+            ]);
 
-        // PDF generatsiya
-        $pdf = Pdf::loadView('pdf.absence-excuse-certificate', [
-            'excuse' => $excuse,
-            'qrCodeSvg' => $qrCodeSvg,
-            'verificationUrl' => $verificationUrl,
-        ]);
+            $pdfPath = 'absence-excuses/approved/' . $excuse->verification_token . '.pdf';
+            Storage::disk('public')->put($pdfPath, $pdf->output());
 
-        $pdfPath = 'absence-excuses/approved/' . $excuse->verification_token . '.pdf';
-        Storage::disk('public')->put($pdfPath, $pdf->output());
+            // Faqat PDF muvaffaqiyatli bo'lgandan keyin status o'zgartiriladi
+            $excuse->update([
+                'status' => 'approved',
+                'reviewed_by' => $user->id,
+                'reviewed_by_name' => $user->name ?? $user->full_name ?? $user->short_name,
+                'reviewed_at' => $excuse->reviewed_at ?? now(),
+                'approved_pdf_path' => $pdfPath,
+            ]);
 
-        $excuse->update(['approved_pdf_path' => $pdfPath]);
-
-        return back()->with('success', 'Ariza muvaffaqiyatli tasdiqlandi. PDF hujjat yaratildi.');
+            return back()->with('success', 'Ariza muvaffaqiyatli tasdiqlandi. PDF hujjat yaratildi.');
+        } catch (\Throwable $e) {
+            return back()->with('error', 'PDF generatsiyada xatolik: ' . $e->getMessage());
+        }
     }
 
     public function reject(Request $request, $id)

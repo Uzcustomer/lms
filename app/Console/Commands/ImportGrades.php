@@ -438,12 +438,16 @@ class ImportGrades extends Command
 
         if ($existingRetake) {
             // Retake bahosini saqlab, faqat HEMIS ma'lumotlarini yangilash
-            $existingRetake->update([
+            $updateData = [
                 'grade' => $gradeValue,
                 'employee_id' => $item['employee']['id'],
                 'employee_name' => $item['employee']['name'],
-                'is_final' => $isFinal,
-            ]);
+            ];
+            // is_final faqat true ga o'tkaziladi (false ga tushirilmaydi)
+            if ($isFinal) {
+                $updateData['is_final'] = true;
+            }
+            $existingRetake->update($updateData);
             return;
         }
 

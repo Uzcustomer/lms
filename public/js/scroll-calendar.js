@@ -218,8 +218,33 @@
         document.querySelectorAll('.sc-dropdown').forEach(function(el) {
             el.style.display = 'none';
         });
+        // Reset position before measuring
+        this.dd.style.left = '0';
+        this.dd.style.right = 'auto';
         this.dd.style.display = 'block';
         this.isOpen = true;
+
+        // Ekran chetidan chiqib ketmasligi uchun pozitsiyani tekshirish
+        var rect = this.dd.getBoundingClientRect();
+        var viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+        if (rect.right > viewportWidth - 8) {
+            this.dd.style.left = 'auto';
+            this.dd.style.right = '0';
+        }
+        // Pastdan ham chiqib ketsa tepaga ko'rsatish
+        var viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        if (rect.bottom > viewportHeight - 8) {
+            this.dd.style.top = 'auto';
+            this.dd.style.bottom = '100%';
+            this.dd.style.marginTop = '0';
+            this.dd.style.marginBottom = '4px';
+        } else {
+            this.dd.style.top = '100%';
+            this.dd.style.bottom = 'auto';
+            this.dd.style.marginTop = '4px';
+            this.dd.style.marginBottom = '0';
+        }
+
         this._scrollToDate(this.selected || this.today);
         this._updateHeader();
     };

@@ -113,6 +113,8 @@
                                     <th>Yo'nalish</th>
                                     <th>Fan nomi</th>
                                     <th style="width:70px;text-align:center;">Kredit</th>
+                                    <th style="width:120px;text-align:center;">Dars boshlanish</th>
+                                    <th style="width:120px;text-align:center;">Dars tugash</th>
                                     <th style="width:160px;text-align:center;">OSKI sanasi</th>
                                     <th style="width:160px;text-align:center;">Test sanasi</th>
                                 </tr>
@@ -124,7 +126,7 @@
                                 @endphp
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     <tr class="group-header-row">
-                                        <td colspan="7">
+                                        <td colspan="9">
                                             {{ $items->first()['group']->name }}
                                             <span style="margin-left:8px;font-size:11px;font-weight:400;color:#3b82f6;">
                                                 ({{ $items->first()['specialty_name'] }})
@@ -139,7 +141,36 @@
                                             <td style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
                                             <td style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
                                             <td style="text-align:center;padding:4px 8px;">
-                                                @if($item['oski_date'])
+                                                @if($item['lesson_start_date'])
+                                                    @php
+                                                        $lsDate = $item['lesson_start_date_carbon'];
+                                                        $lsBadge = 'badge-pending';
+                                                        if ($lsDate && $lsDate->format('Y-m-d') === $today) $lsBadge = 'badge-today';
+                                                        elseif ($lsDate && $lsDate->isPast()) $lsBadge = 'badge-passed';
+                                                    @endphp
+                                                    <span class="date-badge {{ $lsBadge }}">{{ $lsDate?->format('d.m.Y') }}</span>
+                                                @else
+                                                    <span style="color:#cbd5e1;">—</span>
+                                                @endif
+                                            </td>
+                                            <td style="text-align:center;padding:4px 8px;">
+                                                @if($item['lesson_end_date'])
+                                                    @php
+                                                        $leDate = $item['lesson_end_date_carbon'];
+                                                        $leBadge = 'badge-pending';
+                                                        if ($leDate && $leDate->format('Y-m-d') === $today) $leBadge = 'badge-today';
+                                                        elseif ($leDate && $leDate->isPast()) $leBadge = 'badge-passed';
+                                                        elseif ($leDate && $leDate->diffInDays(now()) <= 3) $leBadge = 'badge-soon';
+                                                    @endphp
+                                                    <span class="date-badge {{ $leBadge }}">{{ $leDate?->format('d.m.Y') }}</span>
+                                                @else
+                                                    <span style="color:#cbd5e1;">—</span>
+                                                @endif
+                                            </td>
+                                            <td style="text-align:center;padding:4px 8px;">
+                                                @if($item['oski_na'])
+                                                    <span class="na-badge">N/A</span>
+                                                @elseif($item['oski_date'])
                                                     @php
                                                         $oskiDate = $item['oski_date_carbon'];
                                                         $badgeClass = 'badge-pending';
@@ -153,7 +184,9 @@
                                                 @endif
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
-                                                @if($item['test_date'])
+                                                @if($item['test_na'])
+                                                    <span class="na-badge">N/A</span>
+                                                @elseif($item['test_date'])
                                                     @php
                                                         $testDate = $item['test_date_carbon'];
                                                         $badgeClass = 'badge-pending-blue';
@@ -399,5 +432,6 @@
         .status-soon { background: #ffedd5; color: #9a3412; }
         .status-passed { background: #f1f5f9; color: #64748b; }
         .status-empty { background: #fef2f2; color: #dc2626; }
+        .na-badge { display: inline-flex; padding: 4px 10px; font-size: 11px; font-weight: 700; border-radius: 6px; line-height: 1.3; background: #fef2f2; color: #dc2626; text-transform: uppercase; letter-spacing: 0.03em; }
     </style>
 </x-app-layout>

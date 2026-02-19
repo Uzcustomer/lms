@@ -131,15 +131,17 @@
                                     <th>Yo'nalish</th>
                                     <th>Fan nomi</th>
                                     <th style="width:70px;text-align:center;">Kredit</th>
-                                    <th style="width:170px;text-align:center;">OSKI sanasi</th>
-                                    <th style="width:170px;text-align:center;">Test sanasi</th>
+                                    <th style="width:160px;text-align:center;">Dars boshlanish</th>
+                                    <th style="width:160px;text-align:center;">Dars tugash</th>
+                                    <th style="width:190px;text-align:center;">OSKI sanasi</th>
+                                    <th style="width:190px;text-align:center;">Test sanasi</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @php $rowIndex = 0; @endphp
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     <tr class="group-header-row">
-                                        <td colspan="7">
+                                        <td colspan="9">
                                             {{ $items->first()['group']->name }}
                                             <span style="margin-left:8px;font-size:11px;font-weight:400;color:#3b82f6;">
                                                 ({{ $items->first()['specialty_name'] }})
@@ -154,16 +156,48 @@
                                             <td style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
                                             <td style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
                                             <td style="text-align:center;padding:4px 8px;">
-                                                <input type="text" id="oski_{{ $rowIndex }}"
-                                                       name="schedules[{{ $rowIndex }}][oski_date]"
-                                                       data-initial="{{ $item['oski_date'] }}"
+                                                <input type="text" id="ls_{{ $rowIndex }}"
+                                                       name="schedules[{{ $rowIndex }}][lesson_start_date]"
+                                                       data-initial="{{ $item['lesson_start_date'] }}"
                                                        class="date-input sc-date" autocomplete="off" />
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
-                                                <input type="text" id="test_{{ $rowIndex }}"
-                                                       name="schedules[{{ $rowIndex }}][test_date]"
-                                                       data-initial="{{ $item['test_date'] }}"
+                                                <input type="text" id="le_{{ $rowIndex }}"
+                                                       name="schedules[{{ $rowIndex }}][lesson_end_date]"
+                                                       data-initial="{{ $item['lesson_end_date'] }}"
                                                        class="date-input sc-date" autocomplete="off" />
+                                            </td>
+                                            <td style="text-align:center;padding:4px 8px;">
+                                                <div class="exam-cell">
+                                                    <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
+                                                        <input type="text" id="oski_{{ $rowIndex }}"
+                                                               name="schedules[{{ $rowIndex }}][oski_date]"
+                                                               data-initial="{{ $item['oski_date'] }}"
+                                                               class="date-input sc-date" autocomplete="off" />
+                                                    </div>
+                                                    <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
+                                                        <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
+                                                               {{ $item['oski_na'] ? 'checked' : '' }}
+                                                               onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}', 'oski_{{ $rowIndex }}')">
+                                                        <span class="na-label">N/A</span>
+                                                    </label>
+                                                </div>
+                                            </td>
+                                            <td style="text-align:center;padding:4px 8px;">
+                                                <div class="exam-cell">
+                                                    <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
+                                                        <input type="text" id="test_{{ $rowIndex }}"
+                                                               name="schedules[{{ $rowIndex }}][test_date]"
+                                                               data-initial="{{ $item['test_date'] }}"
+                                                               class="date-input sc-date" autocomplete="off" />
+                                                    </div>
+                                                    <label class="na-toggle" title="Bu fan uchun Test yo'q">
+                                                        <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
+                                                               {{ $item['test_na'] ? 'checked' : '' }}
+                                                               onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}', 'test_{{ $rowIndex }}')">
+                                                        <span class="na-label">N/A</span>
+                                                    </label>
+                                                </div>
                                             </td>
                                             <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                             <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
@@ -236,6 +270,17 @@
         function toggleSemester() {
             var btn = document.getElementById('current-semester-toggle');
             btn.classList.toggle('active');
+        }
+
+        function toggleNa(checkbox, wrapId, inputId) {
+            var wrap = document.getElementById(wrapId);
+            if (checkbox.checked) {
+                wrap.style.display = 'none';
+                var inp = document.getElementById(inputId);
+                if (inp) inp.value = '';
+            } else {
+                wrap.style.display = '';
+            }
         }
 
         // Dropdown parametrlarini yig'ish
@@ -367,7 +412,8 @@
             @endif
 
             // Init schedule date calendars
-            $('[id^="oski_"], [id^="test_"]').each(function() {
+            $('[id^="oski_"], [id^="test_"], [id^="ls_"], [id^="le_"]').each(function() {
+                if (this.type === 'hidden') return;
                 var cal = new ScrollCalendar(this.id);
                 var val = $(this).attr('data-initial');
                 if (val) cal.setValue(val);
@@ -419,5 +465,12 @@
         .data-row:hover td { background: #f8fafc; }
         .data-row .sc-wrap { min-width: 140px; }
         .data-row .sc-dropdown { z-index: 9999; }
+
+        .exam-cell { display: flex; align-items: center; gap: 6px; justify-content: center; }
+        .exam-date-wrap { flex: 1; min-width: 0; }
+        .na-toggle { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+        .na-toggle input[type="checkbox"] { width: 14px; height: 14px; accent-color: #ef4444; cursor: pointer; margin: 0; }
+        .na-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.03em; }
+        .na-toggle input:checked + .na-label { color: #ef4444; }
     </style>
 </x-app-layout>

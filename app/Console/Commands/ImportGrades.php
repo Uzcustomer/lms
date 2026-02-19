@@ -77,12 +77,13 @@ class ImportGrades extends Command
         $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
 
         if ($gradeItems === false) {
-            $this->error('Grade API failed — eski baholar saqlanib qoldi.');
-            Log::error('[LiveImport] Grade API failed, skipping soft delete.');
+            $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
+            $this->error("Grade API failed — eski baholar saqlanib qoldi. ({$errorDetail})");
+            Log::error("[LiveImport] Grade API failed: {$errorDetail}");
             $this->report['student-grade-list'] = [
                 'total_days' => 1,
                 'success_days' => 0,
-                'failed_pages' => ['API xato — baholar yangilanmadi'],
+                'failed_pages' => ["API xato ({$errorDetail})"],
             ];
         } else {
             // 2-qadam: Muvaffaqiyatli — soft delete + yangi yozish
@@ -166,8 +167,9 @@ class ImportGrades extends Command
             $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
 
             if ($gradeItems === false) {
-                $this->error("  {$date->toDateString()} — API xato, keyingi kunga o'tiladi.");
-                $failedDays[] = $date->toDateString();
+                $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
+                $this->error("  {$date->toDateString()} — API xato ({$errorDetail}), keyingi kunga o'tiladi.");
+                $failedDays[] = "{$date->toDateString()} ({$errorDetail})";
                 continue;
             }
 
@@ -234,8 +236,9 @@ class ImportGrades extends Command
             $gradeItems = $this->fetchAllPages('student-grade-list', $dayFrom, $dayTo);
 
             if ($gradeItems === false) {
-                $this->error("XATO: {$date->toDateString()} — baholar import qilinmadi, keyingi kunga o'tiladi.");
-                $failedDays[] = $date->toDateString();
+                $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
+                $this->error("XATO: {$date->toDateString()} — baholar import qilinmadi ({$errorDetail}), keyingi kunga o'tiladi.");
+                $failedDays[] = "{$date->toDateString()} ({$errorDetail})";
                 continue;
             }
 
@@ -272,12 +275,15 @@ class ImportGrades extends Command
     // API dan barcha sahifalarni xotiraga yig'ish
     // Muvaffaqiyatli bo'lsa array, xato bo'lsa false qaytaradi
     // =========================================================================
+    private string $lastFetchError = '';
+
     private function fetchAllPages(string $endpoint, int $from, int $to): array|false
     {
         $allItems = [];
         $currentPage = 1;
         $totalPages = 1;
         $maxRetries = 3;
+        $this->lastFetchError = '';
 
         do {
             $queryParams = [
@@ -289,6 +295,7 @@ class ImportGrades extends Command
 
             $retryCount = 0;
             $pageSuccess = false;
+            $lastError = '';
 
             while ($retryCount < $maxRetries && !$pageSuccess) {
                 try {
@@ -304,13 +311,16 @@ class ImportGrades extends Command
                         sleep(2);
                     } else {
                         $retryCount++;
-                        Log::error("[Fetch] {$endpoint} page {$currentPage} failed. Status: {$response->status()}");
+                        $lastError = "HTTP {$response->status()}";
+                        $body = substr($response->body(), 0, 200);
+                        Log::error("[Fetch] {$endpoint} page {$currentPage} failed. Status: {$response->status()}, Body: {$body}");
                         if ($retryCount < $maxRetries) {
                             sleep(5);
                         }
                     }
                 } catch (\Exception $e) {
                     $retryCount++;
+                    $lastError = $e->getMessage();
                     Log::error("[Fetch] {$endpoint} page {$currentPage} exception: " . $e->getMessage());
                     if ($retryCount < $maxRetries) {
                         sleep(5);
@@ -319,8 +329,9 @@ class ImportGrades extends Command
             }
 
             if (!$pageSuccess) {
-                $this->error("Failed {$endpoint} page {$currentPage} after {$maxRetries} retries — ABORTING.");
-                Log::error("[Fetch] Aborting {$endpoint} — page {$currentPage} failed after all retries.");
+                $this->lastFetchError = "sahifa {$currentPage}: {$lastError}";
+                $this->error("Failed {$endpoint} page {$currentPage} after {$maxRetries} retries — ABORTING. Error: {$lastError}");
+                Log::error("[Fetch] Aborting {$endpoint} — page {$currentPage} failed after all retries. Last error: {$lastError}");
                 return false;
             }
 
@@ -452,11 +463,12 @@ class ImportGrades extends Command
         $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
 
         if ($attendanceItems === false) {
-            $this->error('Attendance API failed.');
+            $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
+            $this->error("Attendance API failed. ({$errorDetail})");
             $this->report['attendance-list'] = [
                 'total_days' => 1,
                 'success_days' => 0,
-                'failed_pages' => ['API xato'],
+                'failed_pages' => ["API xato ({$errorDetail})"],
             ];
             return;
         }

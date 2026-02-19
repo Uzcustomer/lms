@@ -64,67 +64,343 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Avatar & Name
-                  CircleAvatar(
-                    radius: 48,
-                    backgroundColor: AppTheme.primaryColor,
-                    child: Text(
-                      _getInitials(profile['full_name']?.toString() ?? ''),
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    profile['full_name']?.toString() ?? '',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    profile['student_id_number']?.toString() ?? '',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Academic info
-                  _InfoSection(
-                    title: 'Akademik ma\'lumotlar',
-                    items: [
-                      _InfoItem('Guruh', profile['group_name']),
-                      _InfoItem('Fakultet', profile['department_name']),
-                      _InfoItem('Yo\'nalish', profile['specialty_name']),
-                      _InfoItem('Kurs', profile['semester_name']),
-                      _InfoItem('GPA', profile['avg_gpa']),
-                      _InfoItem('O\'rtacha baho', profile['avg_grade']),
-                      _InfoItem('Jami kredit', profile['total_credit']),
-                    ],
-                  ),
+                  // Profile Card: Avatar + Info
+                  _buildProfileCard(context, profile),
                   const SizedBox(height: 16),
 
-                  // Personal info
-                  _InfoSection(
-                    title: 'Shaxsiy ma\'lumotlar',
-                    items: [
-                      _InfoItem('Jinsi', profile['gender'] == 11 ? 'Erkak' : 'Ayol'),
-                      _InfoItem('Viloyat', profile['province_name']),
-                      _InfoItem('Tuman', profile['district_name']),
-                      _InfoItem('Ta\'lim shakli', profile['education_type_name']),
-                      _InfoItem('Ta\'lim turi', profile['education_form_name']),
-                    ],
-                  ),
+                  // Academic Table
+                  _buildAcademicTable(context, profile),
+                  const SizedBox(height: 16),
+
+                  // Personal Info
+                  _buildPersonalInfo(context, profile),
                 ],
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildProfileCard(BuildContext context, Map<String, dynamic> profile) {
+    final fullName = profile['full_name']?.toString() ?? '';
+    final studentId = profile['student_id_number']?.toString() ?? '';
+    final faculty = profile['department_name']?.toString() ?? '';
+    final major = profile['specialty_name']?.toString() ?? '';
+    final photoUrl = profile['photo']?.toString();
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        child: Column(
+          children: [
+            // Avatar
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.primaryColor.withAlpha(50), width: 3),
+              ),
+              child: CircleAvatar(
+                radius: 52,
+                backgroundColor: AppTheme.primaryColor.withAlpha(30),
+                backgroundImage:
+                    photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                child: photoUrl == null || photoUrl.isEmpty
+                    ? Text(
+                        _getInitials(fullName),
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryColor,
+                        ),
+                      )
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Full Name
+            Text(
+              fullName,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+
+            // Student Number
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withAlpha(20),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                studentId,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryColor,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Faculty & Major
+            _buildInfoRow(Icons.account_balance, 'Fakultet', faculty),
+            const SizedBox(height: 8),
+            _buildInfoRow(Icons.school, 'Yo\'nalish', major),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppTheme.textSecondary),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAcademicTable(BuildContext context, Map<String, dynamic> profile) {
+    final semesters = profile['semesters'];
+    final currentEducationYear = profile['education_year']?.toString() ?? '';
+    final currentLevel = profile['level']?.toString() ?? profile['course']?.toString() ?? '';
+    final currentSemester = profile['semester_name']?.toString() ?? '';
+    final groupName = profile['group_name']?.toString() ?? '';
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Akademik ma\'lumotlar',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                  ),
+            ),
+            const SizedBox(height: 12),
+
+            // Table
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.dividerColor),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _buildTable(profile, semesters, currentEducationYear, currentLevel,
+                    currentSemester, groupName),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTable(
+    Map<String, dynamic> profile,
+    dynamic semesters,
+    String currentEducationYear,
+    String currentLevel,
+    String currentSemester,
+    String groupName,
+  ) {
+    // If API returns a list of semesters, use that
+    if (semesters != null && semesters is List && semesters.isNotEmpty) {
+      return Table(
+        columnWidths: const {
+          0: FixedColumnWidth(40),
+          1: FlexColumnWidth(2),
+          2: FlexColumnWidth(1),
+          3: FlexColumnWidth(1.5),
+        },
+        border: TableBorder(
+          horizontalInside: BorderSide(color: AppTheme.dividerColor.withAlpha(150)),
+        ),
+        children: [
+          _buildTableHeader(),
+          ...semesters.asMap().entries.map((entry) {
+            final i = entry.key;
+            final s = entry.value;
+            return _buildTableRow(
+              (i + 1).toString(),
+              s['education_year']?.toString() ?? '',
+              s['level']?.toString() ?? s['course']?.toString() ?? '',
+              s['semester']?.toString() ?? s['semester_name']?.toString() ?? '',
+              isEven: i.isEven,
+            );
+          }),
+        ],
+      );
+    }
+
+    // Fallback: show current semester data from profile
+    return Table(
+      columnWidths: const {
+        0: FixedColumnWidth(40),
+        1: FlexColumnWidth(2),
+        2: FlexColumnWidth(1),
+        3: FlexColumnWidth(1.5),
+      },
+      border: TableBorder(
+        horizontalInside: BorderSide(color: AppTheme.dividerColor.withAlpha(150)),
+      ),
+      children: [
+        _buildTableHeader(),
+        _buildTableRow(
+          '1',
+          currentEducationYear.isNotEmpty ? currentEducationYear : '-',
+          currentLevel.isNotEmpty ? currentLevel : '-',
+          currentSemester.isNotEmpty ? currentSemester : '-',
+          isEven: true,
+        ),
+      ],
+    );
+  }
+
+  TableRow _buildTableHeader() {
+    return TableRow(
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor.withAlpha(20),
+      ),
+      children: const [
+        _TableHeaderCell('#'),
+        _TableHeaderCell('O\'quv yili'),
+        _TableHeaderCell('Bosqich'),
+        _TableHeaderCell('Semestr'),
+      ],
+    );
+  }
+
+  TableRow _buildTableRow(
+    String number,
+    String year,
+    String level,
+    String semester, {
+    bool isEven = false,
+  }) {
+    return TableRow(
+      decoration: BoxDecoration(
+        color: isEven ? Colors.white : AppTheme.backgroundColor,
+      ),
+      children: [
+        _TableCell(number, center: true),
+        _TableCell(year),
+        _TableCell(level, center: true),
+        _TableCell(semester),
+      ],
+    );
+  }
+
+  Widget _buildPersonalInfo(BuildContext context, Map<String, dynamic> profile) {
+    final gender = profile['gender'];
+    final province = profile['province_name']?.toString();
+    final district = profile['district_name']?.toString();
+    final educationType = profile['education_type_name']?.toString();
+    final educationForm = profile['education_form_name']?.toString();
+    final groupName = profile['group_name']?.toString();
+
+    final items = <MapEntry<String, String>>[];
+    if (groupName != null && groupName.isNotEmpty) {
+      items.add(MapEntry('Guruh', groupName));
+    }
+    if (gender != null) {
+      items.add(MapEntry('Jinsi', gender == 11 ? 'Erkak' : 'Ayol'));
+    }
+    if (educationType != null && educationType.isNotEmpty) {
+      items.add(MapEntry('Ta\'lim shakli', educationType));
+    }
+    if (educationForm != null && educationForm.isNotEmpty) {
+      items.add(MapEntry('Ta\'lim turi', educationForm));
+    }
+    if (province != null && province.isNotEmpty) {
+      items.add(MapEntry('Viloyat', province));
+    }
+    if (district != null && district.isNotEmpty) {
+      items.add(MapEntry('Tuman', district));
+    }
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Shaxsiy ma\'lumotlar',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            ...items.map((item) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 120,
+                        child: Text(
+                          item.key,
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          item.value,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+        ),
       ),
     );
   }
@@ -162,67 +438,44 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   }
 }
 
-class _InfoSection extends StatelessWidget {
-  final String title;
-  final List<_InfoItem> items;
-
-  const _InfoSection({required this.title, required this.items});
+class _TableHeaderCell extends StatelessWidget {
+  final String text;
+  const _TableHeaderCell(this.text);
 
   @override
   Widget build(BuildContext context) {
-    final validItems = items.where((i) => i.value != null).toList();
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryColor,
-                  ),
-            ),
-            const Divider(),
-            ...validItems.map((item) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 130,
-                        child: Text(
-                          item.label,
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          item.value?.toString() ?? '',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-          ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: AppTheme.primaryColor,
         ),
+        textAlign: TextAlign.center,
       ),
     );
   }
 }
 
-class _InfoItem {
-  final String label;
-  final dynamic value;
+class _TableCell extends StatelessWidget {
+  final String text;
+  final bool center;
+  const _TableCell(this.text, {this.center = false});
 
-  _InfoItem(this.label, this.value);
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          color: AppTheme.textPrimary,
+        ),
+        textAlign: center ? TextAlign.center : TextAlign.start,
+      ),
+    );
+  }
 }

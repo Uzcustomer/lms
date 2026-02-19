@@ -196,6 +196,15 @@ class AcademicScheduleController extends Controller
         $existingSchedules = $scheduleQuery->get()
             ->keyBy(fn($item) => $item->group_hemis_id . '_' . $item->subject_id . '_' . $item->semester_code);
 
+        // Dars jadvalidan boshlanish/tugash sanalarini olish (schedules jadvalidan)
+        $lessonDates = DB::table('schedules')
+            ->select('group_id', 'subject_id', DB::raw('MIN(lesson_date) as lesson_start'), DB::raw('MAX(lesson_date) as lesson_end'))
+            ->whereIn('group_id', $filteredGroups->pluck('group_hemis_id'))
+            ->whereNull('deleted_at')
+            ->groupBy('group_id', 'subject_id')
+            ->get()
+            ->keyBy(fn($r) => $r->group_id . '_' . $r->subject_id);
+
         // Ma'lumotlarni yig'ish
         $scheduleData = collect();
         foreach ($filteredGroups as $group) {
@@ -205,12 +214,16 @@ class AcademicScheduleController extends Controller
                 $key = $group->group_hemis_id . '_' . $subject->subject_id . '_' . $subject->semester_code;
                 $existing = $existingSchedules->get($key);
 
+                // Dars sanalarini schedules jadvalidan olish
+                $lessonKey = $group->group_hemis_id . '_' . $subject->curriculum_subject_hemis_id;
+                $lessonInfo = $lessonDates->get($lessonKey);
+
                 $item = [
                     'group' => $group,
                     'subject' => $subject,
                     'specialty_name' => $group->specialty_name,
-                    'lesson_start_date' => $existing?->lesson_start_date?->format('Y-m-d'),
-                    'lesson_end_date' => $existing?->lesson_end_date?->format('Y-m-d'),
+                    'lesson_start_date' => $lessonInfo?->lesson_start ? substr($lessonInfo->lesson_start, 0, 10) : null,
+                    'lesson_end_date' => $lessonInfo?->lesson_end ? substr($lessonInfo->lesson_end, 0, 10) : null,
                     'oski_date' => $existing?->oski_date?->format('Y-m-d'),
                     'oski_na' => (bool) $existing?->oski_na,
                     'test_date' => $existing?->test_date?->format('Y-m-d'),
@@ -219,8 +232,8 @@ class AcademicScheduleController extends Controller
                 ];
 
                 if ($includeCarbon) {
-                    $item['lesson_start_date_carbon'] = $existing?->lesson_start_date;
-                    $item['lesson_end_date_carbon'] = $existing?->lesson_end_date;
+                    $item['lesson_start_date_carbon'] = $lessonInfo?->lesson_start ? \Carbon\Carbon::parse($lessonInfo->lesson_start) : null;
+                    $item['lesson_end_date_carbon'] = $lessonInfo?->lesson_end ? \Carbon\Carbon::parse($lessonInfo->lesson_end) : null;
                     $item['oski_date_carbon'] = $existing?->oski_date;
                     $item['test_date_carbon'] = $existing?->test_date;
                 }
@@ -236,28 +249,16 @@ class AcademicScheduleController extends Controller
             $scheduleData = $scheduleData->filter(fn($item) => !$item['oski_date'] && !$item['test_date']);
         }
 
-        // Sana oralig'i filtri
+        // Sana oralig'i filtri (dars tugash sanasi bo'yicha)
         if ($dateFrom || $dateTo) {
             $scheduleData = $scheduleData->filter(function ($item) use ($dateFrom, $dateTo) {
-                $oskiDate = $item['oski_date'];
-                $testDate = $item['test_date'];
-                if (!$oskiDate && !$testDate) return false;
+                $lessonEnd = $item['lesson_end_date'];
+                if (!$lessonEnd) return false;
 
-                $matchOski = false;
-                $matchTest = false;
+                if ($dateFrom && $lessonEnd < $dateFrom) return false;
+                if ($dateTo && $lessonEnd > $dateTo) return false;
 
-                if ($oskiDate) {
-                    $matchOski = true;
-                    if ($dateFrom && $oskiDate < $dateFrom) $matchOski = false;
-                    if ($dateTo && $oskiDate > $dateTo) $matchOski = false;
-                }
-                if ($testDate) {
-                    $matchTest = true;
-                    if ($dateFrom && $testDate < $dateFrom) $matchTest = false;
-                    if ($dateTo && $testDate > $dateTo) $matchTest = false;
-                }
-
-                return $matchOski || $matchTest;
+                return true;
             });
         }
 
@@ -278,8 +279,6 @@ class AcademicScheduleController extends Controller
             'schedules.*.specialty_hemis_id' => 'required|string',
             'schedules.*.curriculum_hemis_id' => 'required|string',
             'schedules.*.semester_code' => 'required|string',
-            'schedules.*.lesson_start_date' => 'nullable|date',
-            'schedules.*.lesson_end_date' => 'nullable|date',
             'schedules.*.oski_date' => 'nullable|date',
             'schedules.*.test_date' => 'nullable|date',
         ]);
@@ -293,8 +292,7 @@ class AcademicScheduleController extends Controller
             foreach ($request->schedules as $schedule) {
                 $oskiNa = !empty($schedule['oski_na']);
                 $testNa = !empty($schedule['test_na']);
-                $hasAnyData = !empty($schedule['lesson_start_date']) || !empty($schedule['lesson_end_date']) || !empty($schedule['oski_date'])
-                    || !empty($schedule['test_date']) || $oskiNa || $testNa;
+                $hasAnyData = !empty($schedule['oski_date']) || !empty($schedule['test_date']) || $oskiNa || $testNa;
 
                 if (!$hasAnyData) {
                     ExamSchedule::where('group_hemis_id', $schedule['group_hemis_id'])
@@ -315,8 +313,6 @@ class AcademicScheduleController extends Controller
                         'specialty_hemis_id' => $schedule['specialty_hemis_id'],
                         'curriculum_hemis_id' => $schedule['curriculum_hemis_id'],
                         'subject_name' => $schedule['subject_name'],
-                        'lesson_start_date' => $schedule['lesson_start_date'] ?: null,
-                        'lesson_end_date' => $schedule['lesson_end_date'] ?: null,
                         'oski_date' => $schedule['oski_date'] ?: null,
                         'oski_na' => $oskiNa,
                         'test_date' => $schedule['test_date'] ?: null,

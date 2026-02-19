@@ -17,8 +17,6 @@ class ExamSchedule extends Model
         'group_hemis_id',
         'subject_id',
         'subject_name',
-        'lesson_start_date',
-        'lesson_end_date',
         'oski_date',
         'oski_na',
         'test_date',
@@ -29,8 +27,6 @@ class ExamSchedule extends Model
     ];
 
     protected $casts = [
-        'lesson_start_date' => 'date',
-        'lesson_end_date' => 'date',
         'oski_date' => 'date',
         'oski_na' => 'boolean',
         'test_date' => 'date',

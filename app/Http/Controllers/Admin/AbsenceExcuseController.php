@@ -4,10 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AbsenceExcuse;
-use BaconQrCode\Renderer\Image\SvgImageBackEnd;
-use BaconQrCode\Renderer\ImageRenderer;
-use BaconQrCode\Renderer\RendererStyle\RendererStyle;
-use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -74,13 +70,27 @@ class AbsenceExcuseController extends Controller
         $user = Auth::user();
 
         try {
-            // QR kod generatsiya (BaconQrCode — SVG formatda, Facade kerak emas)
             $verificationUrl = route('absence-excuse.verify', $excuse->verification_token);
-            $renderer = new ImageRenderer(
-                new RendererStyle(200, 1),
-                new SvgImageBackEnd()
-            );
-            $qrCodeSvg = (new Writer($renderer))->writeString($verificationUrl);
+
+            // QR kod generatsiya
+            $qrCodeSvg = null;
+            $qrCodeBase64 = null;
+
+            if (class_exists(\BaconQrCode\Writer::class)) {
+                // 1-usul: BaconQrCode (local, SVG)
+                $renderer = new \BaconQrCode\Renderer\ImageRenderer(
+                    new \BaconQrCode\Renderer\RendererStyle\RendererStyle(200, 1),
+                    new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
+                );
+                $qrCodeSvg = (new \BaconQrCode\Writer($renderer))->writeString($verificationUrl);
+            } else {
+                // 2-usul: Online API orqali PNG
+                $apiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&format=png&data=' . urlencode($verificationUrl);
+                $pngData = @file_get_contents($apiUrl);
+                if ($pngData) {
+                    $qrCodeBase64 = base64_encode($pngData);
+                }
+            }
 
             // PDF generatsiya
             $pdf = Pdf::loadView('pdf.absence-excuse-certificate', [
@@ -88,6 +98,7 @@ class AbsenceExcuseController extends Controller
                     ? tap($excuse)->forceFill(['status' => 'approved', 'reviewed_by_name' => $user->name ?? $user->full_name ?? $user->short_name, 'reviewed_at' => now()])
                     : $excuse,
                 'qrCodeSvg' => $qrCodeSvg,
+                'qrCodeBase64' => $qrCodeBase64,
                 'verificationUrl' => $verificationUrl,
             ]);
 

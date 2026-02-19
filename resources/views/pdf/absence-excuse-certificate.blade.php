@@ -247,10 +247,10 @@
         Sana: {{ $reviewDate->format('d.m.Y') }}
     </div>
 
-    {{-- QR kod --}}
-    @if(isset($qrCodeBase64))
+    {{-- QR kod (inline SVG) --}}
+    @if(isset($qrCodeSvg))
         <div class="qr-container">
-            <img src="data:image/png;base64,{{ $qrCodeBase64 }}" alt="QR Code">
+            {!! $qrCodeSvg !!}
         </div>
     @endif
 

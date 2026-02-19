@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  static const Color primaryColor = Color(0xFF1565C0);
-  static const Color primaryLight = Color(0xFF42A5F5);
-  static const Color primaryDark = Color(0xFF0D47A1);
+  static const Color primaryColor = Color(0xFF1A2B4A);
+  static const Color primaryLight = Color(0xFF2C4A6E);
+  static const Color primaryDark = Color(0xFF0F1C32);
   static const Color accentColor = Color(0xFF26A69A);
-  static const Color backgroundColor = Color(0xFFF5F7FA);
+  static const Color backgroundColor = Color(0xFFECEEF3);
   static const Color surfaceColor = Colors.white;
   static const Color errorColor = Color(0xFFE53935);
   static const Color successColor = Color(0xFF43A047);
@@ -25,10 +25,11 @@ class AppTheme {
       ),
       textTheme: GoogleFonts.interTextTheme(),
       appBarTheme: AppBarTheme(
-        centerTitle: true,
+        centerTitle: false,
         elevation: 0,
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
+        toolbarHeight: 64,
         titleTextStyle: GoogleFonts.inter(
           fontSize: 18,
           fontWeight: FontWeight.w600,

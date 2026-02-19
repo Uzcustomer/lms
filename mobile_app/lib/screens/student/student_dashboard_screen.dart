@@ -26,7 +26,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: const Text('TDTU LMS'),
+        title: Row(
+          children: [
+            Image.asset(
+              'assets/images/logo.png',
+              height: 36,
+            ),
+            const SizedBox(width: 10),
+            const Text('TDTU LMS'),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),

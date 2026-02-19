@@ -400,11 +400,8 @@ class SendAttendanceGroupSummary extends Command
         $formattedDate = Carbon::parse($today)->format('d.m.Y');
 
         $lines = [];
-        $lines[] = "📊 KUNLIK HISOBOT — {$formattedDate} yil {$now->format('H:i')} soat";
+        $lines[] = "📊 DAVOMAT OLMAGANLAR VA BAHO QO'YMAGANLAR KUNLIK HISOBOTI — {$formattedDate} yil {$now->format('H:i')} soat";
         $lines[] = str_repeat('─', 30);
-        $lines[] = "";
-        $lines[] = "📋 Jami darslar: {$totalLessons}";
-        $lines[] = "👨‍🏫 Muammoli o'qituvchilar: " . count($teachersWithIssues);
 
         if ($missingAttendance > 0) {
             $lines[] = "📝 Davomat olinmagan: {$uniqueAttTeachers} o'qituvchi";

@@ -147,14 +147,14 @@
                                             <td data-sort-value="{{ $item['specialty_name'] }}" style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
                                             <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
                                             <td data-sort-value="{{ $item['subject']->credit }}" style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
-                                            <td data-sort-value="{{ $item['lesson_start_date'] ?? '' }}" style="text-align:center;padding:4px 8px;">
+                                            <td data-sort-value="{{ $item['lesson_start_date'] ? \Carbon\Carbon::parse($item['lesson_start_date'])->format('d.m.Y') : '' }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['lesson_start_date'])
                                                     <span class="lesson-date-badge">{{ \Carbon\Carbon::parse($item['lesson_start_date'])->format('d.m.Y') }}</span>
                                                 @else
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
                                             </td>
-                                            <td data-sort-value="{{ $item['lesson_end_date'] ?? '' }}" style="text-align:center;padding:4px 8px;">
+                                            <td data-sort-value="{{ $item['lesson_end_date'] ? \Carbon\Carbon::parse($item['lesson_end_date'])->format('d.m.Y') : '' }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['lesson_end_date'])
                                                     <span class="lesson-date-badge">{{ \Carbon\Carbon::parse($item['lesson_end_date'])->format('d.m.Y') }}</span>
                                                 @else
@@ -397,7 +397,19 @@
                 if (/^\d+(\.\d+)?$/.test(aVal) && /^\d+(\.\d+)?$/.test(bVal)) {
                     return dir === 'asc' ? parseFloat(aVal) - parseFloat(bVal) : parseFloat(bVal) - parseFloat(aVal);
                 }
-                // Matn/sana tartiblash (yyyy-mm-dd format to'g'ri tartiblanadi)
+                // dd.mm.yyyy sana formatini aniqlash va sort qilish
+                var dateRe = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+                var aM = aVal.match(dateRe);
+                var bM = bVal.match(dateRe);
+                if (aM && bM) {
+                    var aD = aM[3] + aM[2] + aM[1];
+                    var bD = bM[3] + bM[2] + bM[1];
+                    return dir === 'asc' ? aD.localeCompare(bD) : bD.localeCompare(aD);
+                }
+                // Bo'sh sanalarni oxiriga surish
+                if (aM && !bM) return dir === 'asc' ? -1 : 1;
+                if (!aM && bM) return dir === 'asc' ? 1 : -1;
+                // Matn tartiblash
                 var cmp = aVal.localeCompare(bVal, 'uz');
                 return dir === 'asc' ? cmp : -cmp;
             });

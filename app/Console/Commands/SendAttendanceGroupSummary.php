@@ -227,8 +227,8 @@ class SendAttendanceGroupSummary extends Command
             }
 
             // Kafedra ichida fan bo'yicha guruhlash (faqat kafedra nomi bo'yicha)
-            // Fan nomini normalizatsiya qilish: (a), (b), (c) kabi qo'shimchalarni olib tashlash
-            $normalizedSubject = $this->normalizeSubjectName($subjectName);
+            // Fan nomini normalizatsiya qilish: (a), (b), (c) va ko'rinmas belgilarni tozalash
+            $subjectKey = $this->normalizeSubjectKey($subjectName);
             $deptKey = $deptName;
             if (!isset($departmentStats[$deptKey])) {
                 $departmentStats[$deptKey] = [
@@ -236,12 +236,17 @@ class SendAttendanceGroupSummary extends Command
                     'subjects' => [],
                 ];
             }
-            if (!isset($departmentStats[$deptKey]['subjects'][$normalizedSubject])) {
-                $departmentStats[$deptKey]['subjects'][$normalizedSubject] = ['no_attendance' => 0, 'no_grades' => 0, 'total' => 0];
+            if (!isset($departmentStats[$deptKey]['subjects'][$subjectKey])) {
+                $departmentStats[$deptKey]['subjects'][$subjectKey] = [
+                    'display_name' => $this->normalizeSubjectDisplay($subjectName),
+                    'no_attendance' => 0,
+                    'no_grades' => 0,
+                    'total' => 0,
+                ];
             }
 
             $facultyStats[$facultyName]['total'] += $hours;
-            $departmentStats[$deptKey]['subjects'][$normalizedSubject]['total'] += $hours;
+            $departmentStats[$deptKey]['subjects'][$subjectKey]['total'] += $hours;
 
             if (!$r['has_attendance']) {
                 $totalMissingAttendance += $hours;
@@ -250,7 +255,7 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName]['no_attendance'] += $hours;
                 $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
                 $facultyStats[$facultyName]['teachers_att'][$r['employee_id']] = true;
-                $departmentStats[$deptKey]['subjects'][$normalizedSubject]['no_attendance'] += $hours;
+                $departmentStats[$deptKey]['subjects'][$subjectKey]['no_attendance'] += $hours;
             }
             if (!$r['has_grades']) {
                 $totalMissingGrades += $hours;
@@ -259,7 +264,7 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName]['no_grades'] += $hours;
                 $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
                 $facultyStats[$facultyName]['teachers_grade'][$r['employee_id']] = true;
-                $departmentStats[$deptKey]['subjects'][$normalizedSubject]['no_grades'] += $hours;
+                $departmentStats[$deptKey]['subjects'][$subjectKey]['no_grades'] += $hours;
             }
         }
 
@@ -326,11 +331,11 @@ class SendAttendanceGroupSummary extends Command
                 return $b['total'] <=> $a['total'];
             });
 
-            foreach ($subjects as $subjectName => $stats) {
+            foreach ($subjects as $stats) {
                 // Fan qatori (tab bilan)
                 $deptTableRows[] = [
                     '',
-                    '   ' . TableImageGenerator::truncate($subjectName, 27),
+                    '   ' . TableImageGenerator::truncate($stats['display_name'], 27),
                     $stats['no_attendance'],
                     $stats['no_grades'],
                     $stats['total'],
@@ -456,13 +461,28 @@ class SendAttendanceGroupSummary extends Command
     }
 
     /**
-     * Fan nomidan (a), (b), (c) kabi qo'shimchalarni olib tashlash.
-     * Masalan: "Ichki kasalliklar propedevtikasi (a)" -> "Ichki kasalliklar propedevtikasi"
+     * Fan nomini normalizatsiya qilish (kafedralar kesimi uchun guruhlash kaliti).
+     * 1) Oxiridagi (a), (b), (1), (ab) kabi qisqa qavsli qo'shimchalarni olib tashlash
+     * 2) Ko'rinmas belgilar va har xil bo'shliq turlarini bir xillashtirish
+     * 3) Kichik harfga o'tkazish (guruhlash uchun)
      */
-    private function normalizeSubjectName(string $name): string
+    private function normalizeSubjectKey(string $name): string
     {
-        // Oxiridagi (a), (b), ... (z), (1), (2), ... kabi qo'shimchalarni olib tashlash
-        return trim(preg_replace('/\s*\([a-zA-Zа-яА-ЯёЁ0-9]\)\s*$/', '', $name));
+        // Oxiridagi qavsli qo'shimchalarni olib tashlash (1-5 belgili)
+        $name = preg_replace('/\s*\([^)]{1,5}\)\s*$/u', '', $name);
+        // Har xil bo'shliq turlarini (non-breaking space, tab, ...) oddiy bo'shliqqa aylantirish
+        $name = preg_replace('/[\s\x{00A0}\x{200B}\x{FEFF}]+/u', ' ', $name);
+        return mb_strtolower(trim($name), 'UTF-8');
+    }
+
+    /**
+     * Fan nomidan qavsli qo'shimchalarni olib tashlash (ko'rsatish uchun).
+     */
+    private function normalizeSubjectDisplay(string $name): string
+    {
+        $name = preg_replace('/\s*\([^)]{1,5}\)\s*$/u', '', $name);
+        $name = preg_replace('/[\s\x{00A0}\x{200B}\x{FEFF}]+/u', ' ', $name);
+        return trim($name);
     }
 
     private function calculateAcademicHours(?string $startTime, ?string $endTime): int

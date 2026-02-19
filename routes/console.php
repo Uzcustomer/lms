@@ -19,6 +19,11 @@ Schedule::command('teachers:send-reminders')->dailyAt('19:00');
 Schedule::command('teachers:send-reminders')->dailyAt('21:00');
 Schedule::command('teachers:send-reminders')->dailyAt('23:00');
 
+// Hisobotdan oldin attendance_controls yangilansin
+Schedule::command('import:attendance-controls')->dailyAt('13:50');
+Schedule::command('import:attendance-controls')->dailyAt('17:50');
+Schedule::command('import:attendance-controls')->dailyAt('21:50');
+
 // Telegram guruhga umumlashtirilgan hisobot (har kuni 14:00, 18:00, 22:00)
 Schedule::command('teachers:send-group-summary')->dailyAt('14:00');
 Schedule::command('teachers:send-group-summary')->dailyAt('18:00');

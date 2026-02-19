@@ -22,6 +22,8 @@ Schedule::command('teachers:send-reminders')->dailyAt('23:00');
 
 // Telegram guruhga umumlashtirilgan hisobot (har kuni 14:00, 18:00, 22:00)
 // Hisobot o'zi ichida attendance_controls live import qiladi (SendAttendanceGroupSummary 1.5-qadam)
+// 14:00 va 18:00 — faqat fakultet va kafedra kesimi
+// 22:00 — fakultet, kafedra + o'qituvchilar kesimi (batafsil)
 Schedule::command('teachers:send-group-summary')->dailyAt('14:00');
 Schedule::command('teachers:send-group-summary')->dailyAt('18:00');
-Schedule::command('teachers:send-group-summary')->dailyAt('22:00');
+Schedule::command('teachers:send-group-summary --detail')->dailyAt('22:00');

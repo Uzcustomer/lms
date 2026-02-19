@@ -39,6 +39,16 @@
                                 </span>
                             @endif
 
+                            <!-- DEBUG INFO -->
+                            @if(isset($debug))
+                            <div class="w-full mb-4 p-3 bg-red-50 border-2 border-red-300 rounded-lg text-xs font-mono">
+                                <p class="font-bold text-red-700 mb-2">DEBUG INFO:</p>
+                                @foreach($debug as $key => $val)
+                                    <p><strong>{{ $key }}:</strong> {{ is_array($val) ? json_encode($val) : $val }}</p>
+                                @endforeach
+                            </div>
+                            @endif
+
                             <!-- 5 ga da'vogar toggle -->
                             @if($canToggleFive)
                             <form action="{{ route('admin.students.toggle-five-candidate', $student) }}" method="POST" class="w-full mb-4">

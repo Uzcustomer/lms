@@ -22,28 +22,37 @@ class AcademicScheduleController extends Controller
 
     /**
      * O'quv bo'limi uchun: YN kunini belgilash sahifasi
-     * Fakultet, yo'nalish, kurs, fanlar, guruhlar ro'yxati
      */
     public function index(Request $request)
     {
-        // Joriy yildagi joriy semestrlar
         $currentSemesters = Semester::where('current', true)->get();
         $currentEducationYear = $currentSemesters->first()?->education_year;
 
-        // Fakultetlar (structure_type_code = 11 — fakultetlar)
+        // Ta'lim turlari
+        $educationTypes = Curriculum::where('current', true)
+            ->select('education_type_code', 'education_type_name')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        // Fakultetlar
         $departments = Department::where('structure_type_code', 11)
             ->where('active', true)
             ->orderBy('name')
             ->get();
 
         // Filtrlar
+        $selectedEducationType = $request->get('education_type');
         $selectedDepartment = $request->get('department_id');
         $selectedSpecialty = $request->get('specialty_id');
+        $selectedLevelCode = $request->get('level_code');
         $selectedSemester = $request->get('semester_code');
         $selectedGroup = $request->get('group_id');
+        $selectedSubject = $request->get('subject_id');
         $selectedStatus = $request->get('status');
+        $currentSemesterToggle = $request->get('current_semester', '1');
+        $isSearched = $request->has('searched');
 
-        // Yo'nalishlar
+        // Dropdown data (sahifaga qayta yuklanganda tanlanganlarni ko'rsatish uchun)
         $specialties = collect();
         if ($selectedDepartment) {
             $specialties = Specialty::where('department_hemis_id', $selectedDepartment)
@@ -51,114 +60,250 @@ class AcademicScheduleController extends Controller
                 ->get();
         }
 
-        // Semestrlar (joriy o'quv rejadagi)
         $semesters = collect();
         if ($selectedDepartment) {
-            $semesters = Semester::where('current', true)
-                ->whereHas('curriculum', function ($q) use ($selectedDepartment, $selectedSpecialty) {
+            $query = Semester::where('current', true)
+                ->whereHas('curriculum', function ($q) use ($selectedDepartment, $selectedSpecialty, $selectedEducationType) {
                     $q->where('department_hemis_id', $selectedDepartment);
-                    if ($selectedSpecialty) {
-                        $q->where('specialty_hemis_id', $selectedSpecialty);
-                    }
-                })
-                ->select('code', 'name')
-                ->distinct()
-                ->orderBy('code')
-                ->get();
+                    if ($selectedSpecialty) $q->where('specialty_hemis_id', $selectedSpecialty);
+                    if ($selectedEducationType) $q->where('education_type_code', $selectedEducationType);
+                });
+            if ($selectedLevelCode) $query->where('level_code', $selectedLevelCode);
+            $semesters = $query->select('code', 'name')->distinct()->orderBy('code')->get();
         }
 
-        // Guruhlar
         $groups = collect();
         if ($selectedDepartment) {
-            $groupQuery = Group::where('department_hemis_id', $selectedDepartment)
-                ->where('active', true);
-            if ($selectedSpecialty) {
-                $groupQuery->where('specialty_hemis_id', $selectedSpecialty);
-            }
+            $groupQuery = Group::where('department_hemis_id', $selectedDepartment)->where('active', true);
+            if ($selectedSpecialty) $groupQuery->where('specialty_hemis_id', $selectedSpecialty);
             $groups = $groupQuery->orderBy('name')->get();
         }
 
         // Fanlar ro'yxati va jadval ma'lumotlari
         $scheduleData = collect();
-        if ($selectedDepartment && $selectedSemester) {
-            $subjectQuery = CurriculumSubject::where('semester_code', $selectedSemester)
-                ->whereHas('curriculum', function ($q) use ($selectedDepartment, $selectedSpecialty, $currentEducationYear) {
-                    $q->where('department_hemis_id', $selectedDepartment)
-                      ->where('current', true);
-                    if ($selectedSpecialty) {
-                        $q->where('specialty_hemis_id', $selectedSpecialty);
-                    }
-                });
-
-            $subjects = $subjectQuery->get();
-
-            // Guruhlarni olish
-            $filteredGroups = Group::where('department_hemis_id', $selectedDepartment)
-                ->where('active', true);
-            if ($selectedSpecialty) {
-                $filteredGroups->where('specialty_hemis_id', $selectedSpecialty);
-            }
-            if ($selectedGroup) {
-                $filteredGroups->where('group_hemis_id', $selectedGroup);
-            }
-            $filteredGroups = $filteredGroups->get();
-
-            // Mavjud jadvallarni olish
-            $existingSchedules = ExamSchedule::where('department_hemis_id', $selectedDepartment)
-                ->where('semester_code', $selectedSemester)
-                ->when($selectedSpecialty, fn($q) => $q->where('specialty_hemis_id', $selectedSpecialty))
-                ->when($selectedGroup, fn($q) => $q->where('group_hemis_id', $selectedGroup))
-                ->get()
-                ->keyBy(fn($item) => $item->group_hemis_id . '_' . $item->subject_id);
-
-            // Har bir guruh uchun fanlarni chiqarish
-            foreach ($filteredGroups as $group) {
-                $groupSubjects = $subjects->filter(function ($subject) use ($group) {
-                    return $subject->curricula_hemis_id === $group->curriculum_hemis_id;
-                });
-
-                foreach ($groupSubjects as $subject) {
-                    $key = $group->group_hemis_id . '_' . $subject->subject_id;
-                    $existing = $existingSchedules->get($key);
-
-                    $scheduleData->push([
-                        'group' => $group,
-                        'subject' => $subject,
-                        'specialty_name' => $group->specialty_name,
-                        'oski_date' => $existing?->oski_date?->format('Y-m-d'),
-                        'test_date' => $existing?->test_date?->format('Y-m-d'),
-                        'schedule_id' => $existing?->id,
-                    ]);
-                }
-            }
-
-            // Holat bo'yicha filtr
-            if ($selectedStatus === 'belgilangan') {
-                $scheduleData = $scheduleData->filter(fn($item) => $item['oski_date'] || $item['test_date']);
-            } elseif ($selectedStatus === 'belgilanmagan') {
-                $scheduleData = $scheduleData->filter(fn($item) => !$item['oski_date'] && !$item['test_date']);
-            }
-
-            // Guruh bo'yicha guruhlash
-            $scheduleData = $scheduleData->groupBy(fn($item) => $item['group']->group_hemis_id);
+        if ($isSearched) {
+            $scheduleData = $this->loadScheduleData(
+                $currentSemesters, $selectedDepartment, $selectedSpecialty,
+                $selectedSemester, $selectedGroup, $selectedEducationType,
+                $selectedLevelCode, $selectedSubject, $selectedStatus,
+                $currentSemesterToggle
+            );
         }
 
         $routePrefix = $this->routePrefix();
 
         return view('admin.academic-schedule.index', compact(
             'departments',
+            'educationTypes',
             'specialties',
             'semesters',
             'groups',
             'scheduleData',
+            'selectedEducationType',
             'selectedDepartment',
             'selectedSpecialty',
+            'selectedLevelCode',
             'selectedSemester',
             'selectedGroup',
+            'selectedSubject',
             'selectedStatus',
+            'currentSemesterToggle',
+            'isSearched',
             'currentEducationYear',
             'routePrefix',
         ));
+    }
+
+    /**
+     * Test markazi uchun: Yakuniy nazoratlar jadvali (faqat ko'rish)
+     */
+    public function testCenterView(Request $request)
+    {
+        $currentSemesters = Semester::where('current', true)->get();
+        $currentEducationYear = $currentSemesters->first()?->education_year;
+
+        $educationTypes = Curriculum::where('current', true)
+            ->select('education_type_code', 'education_type_name')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $departments = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
+
+        $selectedEducationType = $request->get('education_type');
+        $selectedDepartment = $request->get('department_id');
+        $selectedSpecialty = $request->get('specialty_id');
+        $selectedLevelCode = $request->get('level_code');
+        $selectedSemester = $request->get('semester_code');
+        $selectedGroup = $request->get('group_id');
+        $selectedSubject = $request->get('subject_id');
+        $selectedStatus = $request->get('status');
+        $currentSemesterToggle = $request->get('current_semester', '1');
+        $isSearched = $request->has('searched');
+
+        $specialties = collect();
+        if ($selectedDepartment) {
+            $specialties = Specialty::where('department_hemis_id', $selectedDepartment)
+                ->orderBy('name')
+                ->get();
+        }
+
+        $semesters = collect();
+        if ($selectedDepartment) {
+            $query = Semester::where('current', true)
+                ->whereHas('curriculum', function ($q) use ($selectedDepartment, $selectedSpecialty, $selectedEducationType) {
+                    $q->where('department_hemis_id', $selectedDepartment);
+                    if ($selectedSpecialty) $q->where('specialty_hemis_id', $selectedSpecialty);
+                    if ($selectedEducationType) $q->where('education_type_code', $selectedEducationType);
+                });
+            if ($selectedLevelCode) $query->where('level_code', $selectedLevelCode);
+            $semesters = $query->select('code', 'name')->distinct()->orderBy('code')->get();
+        }
+
+        $groups = collect();
+        if ($selectedDepartment) {
+            $groupQuery = Group::where('department_hemis_id', $selectedDepartment)->where('active', true);
+            if ($selectedSpecialty) $groupQuery->where('specialty_hemis_id', $selectedSpecialty);
+            $groups = $groupQuery->orderBy('name')->get();
+        }
+
+        $scheduleData = collect();
+        if ($isSearched) {
+            $scheduleData = $this->loadScheduleData(
+                $currentSemesters, $selectedDepartment, $selectedSpecialty,
+                $selectedSemester, $selectedGroup, $selectedEducationType,
+                $selectedLevelCode, $selectedSubject, $selectedStatus,
+                $currentSemesterToggle, true
+            );
+        }
+
+        $routePrefix = $this->routePrefix();
+
+        return view('admin.academic-schedule.test-center', compact(
+            'departments',
+            'educationTypes',
+            'specialties',
+            'semesters',
+            'groups',
+            'scheduleData',
+            'selectedEducationType',
+            'selectedDepartment',
+            'selectedSpecialty',
+            'selectedLevelCode',
+            'selectedSemester',
+            'selectedGroup',
+            'selectedSubject',
+            'selectedStatus',
+            'currentSemesterToggle',
+            'isSearched',
+            'currentEducationYear',
+            'routePrefix',
+        ));
+    }
+
+    /**
+     * Umumiy: jadval ma'lumotlarini yuklash (index va test-center uchun)
+     */
+    private function loadScheduleData(
+        $currentSemesters, $selectedDepartment, $selectedSpecialty,
+        $selectedSemester, $selectedGroup, $selectedEducationType,
+        $selectedLevelCode, $selectedSubject, $selectedStatus,
+        $currentSemesterToggle, $includeCarbon = false
+    ) {
+        // Semestr kodlarini aniqlash
+        $semesterCodes = collect();
+        if ($selectedSemester) {
+            $semesterCodes = collect([$selectedSemester]);
+        } elseif ($currentSemesterToggle === '1') {
+            $semesterCodes = $currentSemesters->pluck('code')->unique();
+        }
+
+        if ($selectedLevelCode) {
+            $levelSemCodes = Semester::where('current', true)
+                ->where('level_code', $selectedLevelCode)
+                ->pluck('code')->unique();
+            $semesterCodes = $semesterCodes->isEmpty()
+                ? $levelSemCodes
+                : $semesterCodes->intersect($levelSemCodes);
+        }
+
+        // O'quv rejalarini olish
+        $curriculumQuery = Curriculum::where('current', true);
+        if ($selectedDepartment) $curriculumQuery->where('department_hemis_id', $selectedDepartment);
+        if ($selectedSpecialty) $curriculumQuery->where('specialty_hemis_id', $selectedSpecialty);
+        if ($selectedEducationType) $curriculumQuery->where('education_type_code', $selectedEducationType);
+        $curriculumIds = $curriculumQuery->pluck('curricula_hemis_id');
+
+        if ($curriculumIds->isEmpty()) return collect();
+
+        // Fanlar
+        $subjectQuery = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds);
+        if ($semesterCodes->isNotEmpty()) {
+            $subjectQuery->whereIn('semester_code', $semesterCodes);
+        }
+        if ($selectedSubject) {
+            $subjectQuery->where('subject_id', $selectedSubject);
+        }
+        $subjects = $subjectQuery->get();
+
+        if ($subjects->isEmpty()) return collect();
+
+        // Guruhlar
+        $groupQuery = Group::where('active', true)
+            ->whereIn('curriculum_hemis_id', $curriculumIds);
+        if ($selectedDepartment) $groupQuery->where('department_hemis_id', $selectedDepartment);
+        if ($selectedSpecialty) $groupQuery->where('specialty_hemis_id', $selectedSpecialty);
+        if ($selectedGroup) $groupQuery->where('group_hemis_id', $selectedGroup);
+        $filteredGroups = $groupQuery->orderBy('name')->get();
+
+        if ($filteredGroups->isEmpty()) return collect();
+
+        // Mavjud jadvallar
+        $scheduleQuery = ExamSchedule::query();
+        if ($selectedDepartment) $scheduleQuery->where('department_hemis_id', $selectedDepartment);
+        if ($selectedSpecialty) $scheduleQuery->where('specialty_hemis_id', $selectedSpecialty);
+        if ($selectedGroup) $scheduleQuery->where('group_hemis_id', $selectedGroup);
+        if ($semesterCodes->isNotEmpty()) $scheduleQuery->whereIn('semester_code', $semesterCodes);
+        $existingSchedules = $scheduleQuery->get()
+            ->keyBy(fn($item) => $item->group_hemis_id . '_' . $item->subject_id . '_' . $item->semester_code);
+
+        // Ma'lumotlarni yig'ish
+        $scheduleData = collect();
+        foreach ($filteredGroups as $group) {
+            $groupSubjects = $subjects->filter(fn($s) => $s->curricula_hemis_id === $group->curriculum_hemis_id);
+
+            foreach ($groupSubjects as $subject) {
+                $key = $group->group_hemis_id . '_' . $subject->subject_id . '_' . $subject->semester_code;
+                $existing = $existingSchedules->get($key);
+
+                $item = [
+                    'group' => $group,
+                    'subject' => $subject,
+                    'specialty_name' => $group->specialty_name,
+                    'oski_date' => $existing?->oski_date?->format('Y-m-d'),
+                    'test_date' => $existing?->test_date?->format('Y-m-d'),
+                    'schedule_id' => $existing?->id,
+                ];
+
+                if ($includeCarbon) {
+                    $item['oski_date_carbon'] = $existing?->oski_date;
+                    $item['test_date_carbon'] = $existing?->test_date;
+                }
+
+                $scheduleData->push($item);
+            }
+        }
+
+        // Holat filtri
+        if ($selectedStatus === 'belgilangan') {
+            $scheduleData = $scheduleData->filter(fn($item) => $item['oski_date'] || $item['test_date']);
+        } elseif ($selectedStatus === 'belgilanmagan') {
+            $scheduleData = $scheduleData->filter(fn($item) => !$item['oski_date'] && !$item['test_date']);
+        }
+
+        return $scheduleData->groupBy(fn($item) => $item['group']->group_hemis_id);
     }
 
     /**
@@ -186,9 +331,7 @@ class AcademicScheduleController extends Controller
         DB::beginTransaction();
         try {
             foreach ($request->schedules as $schedule) {
-                // Faqat sana belgilangan qatorlarni saqlash
                 if (empty($schedule['oski_date']) && empty($schedule['test_date'])) {
-                    // Agar oldin bor bo'lsa o'chirish
                     ExamSchedule::where('group_hemis_id', $schedule['group_hemis_id'])
                         ->where('subject_id', $schedule['subject_id'])
                         ->where('semester_code', $schedule['semester_code'])
@@ -241,13 +384,23 @@ class AcademicScheduleController extends Controller
      */
     public function getSemesters(Request $request)
     {
-        $query = Semester::where('current', true)
-            ->whereHas('curriculum', function ($q) use ($request) {
+        $query = Semester::where('current', true);
+
+        if ($request->department_id) {
+            $query->whereHas('curriculum', function ($q) use ($request) {
                 $q->where('department_hemis_id', $request->department_id);
                 if ($request->specialty_id) {
                     $q->where('specialty_hemis_id', $request->specialty_id);
                 }
+                if ($request->education_type) {
+                    $q->where('education_type_code', $request->education_type);
+                }
             });
+        }
+
+        if ($request->level_code) {
+            $query->where('level_code', $request->level_code);
+        }
 
         $semesters = $query->select('code', 'name')
             ->distinct()
@@ -262,8 +415,11 @@ class AcademicScheduleController extends Controller
      */
     public function getGroups(Request $request)
     {
-        $query = Group::where('department_hemis_id', $request->department_id)
-            ->where('active', true);
+        $query = Group::where('active', true);
+
+        if ($request->department_id) {
+            $query->where('department_hemis_id', $request->department_id);
+        }
 
         if ($request->specialty_id) {
             $query->where('specialty_hemis_id', $request->specialty_id);
@@ -275,133 +431,59 @@ class AcademicScheduleController extends Controller
     }
 
     /**
-     * Test markazi uchun: Yakuniy nazoratlar jadvali (faqat ko'rish)
+     * Filter: Kurs (level_code)
      */
-    public function testCenterView(Request $request)
+    public function getLevelCodes(Request $request)
     {
-        $currentSemesters = Semester::where('current', true)->get();
-        $currentEducationYear = $currentSemesters->first()?->education_year;
+        $query = Semester::where('current', true);
 
-        $departments = Department::where('structure_type_code', 11)
-            ->where('active', true)
-            ->orderBy('name')
-            ->get();
-
-        $selectedDepartment = $request->get('department_id');
-        $selectedSpecialty = $request->get('specialty_id');
-        $selectedSemester = $request->get('semester_code');
-        $selectedGroup = $request->get('group_id');
-        $selectedStatus = $request->get('status');
-
-        $specialties = collect();
-        if ($selectedDepartment) {
-            $specialties = Specialty::where('department_hemis_id', $selectedDepartment)
-                ->orderBy('name')
-                ->get();
+        if ($request->education_type) {
+            $query->whereHas('curriculum', function ($q) use ($request) {
+                $q->where('education_type_code', $request->education_type);
+            });
         }
 
-        $semesters = collect();
-        if ($selectedDepartment) {
-            $semesters = Semester::where('current', true)
-                ->whereHas('curriculum', function ($q) use ($selectedDepartment, $selectedSpecialty) {
-                    $q->where('department_hemis_id', $selectedDepartment);
-                    if ($selectedSpecialty) {
-                        $q->where('specialty_hemis_id', $selectedSpecialty);
-                    }
-                })
-                ->select('code', 'name')
-                ->distinct()
-                ->orderBy('code')
-                ->get();
+        $levels = $query->select('level_code', 'level_name')
+            ->distinct()
+            ->orderBy('level_code')
+            ->get()
+            ->pluck('level_name', 'level_code');
+
+        return response()->json($levels);
+    }
+
+    /**
+     * Filter: Fanlar
+     */
+    public function getSubjects(Request $request)
+    {
+        $query = CurriculumSubject::whereHas('curriculum', function ($q) use ($request) {
+            $q->where('current', true);
+            if ($request->department_id) $q->where('department_hemis_id', $request->department_id);
+            if ($request->specialty_id) $q->where('specialty_hemis_id', $request->specialty_id);
+            if ($request->education_type) $q->where('education_type_code', $request->education_type);
+        });
+
+        if ($request->semester_code) {
+            $query->where('semester_code', $request->semester_code);
+        } elseif ($request->current_semester === '1') {
+            $currentCodes = Semester::where('current', true)->pluck('code')->unique();
+            $query->whereIn('semester_code', $currentCodes);
         }
 
-        $groups = collect();
-        if ($selectedDepartment) {
-            $groupQuery = Group::where('department_hemis_id', $selectedDepartment)
-                ->where('active', true);
-            if ($selectedSpecialty) {
-                $groupQuery->where('specialty_hemis_id', $selectedSpecialty);
-            }
-            $groups = $groupQuery->orderBy('name')->get();
+        if ($request->level_code) {
+            $levelSemCodes = Semester::where('current', true)
+                ->where('level_code', $request->level_code)
+                ->pluck('code')->unique();
+            $query->whereIn('semester_code', $levelSemCodes);
         }
 
-        // Fanlar va jadval ma'lumotlari (index bilan bir xil)
-        $scheduleData = collect();
-        if ($selectedDepartment && $selectedSemester) {
-            $subjectQuery = CurriculumSubject::where('semester_code', $selectedSemester)
-                ->whereHas('curriculum', function ($q) use ($selectedDepartment, $selectedSpecialty, $currentEducationYear) {
-                    $q->where('department_hemis_id', $selectedDepartment)
-                      ->where('current', true);
-                    if ($selectedSpecialty) {
-                        $q->where('specialty_hemis_id', $selectedSpecialty);
-                    }
-                });
+        $subjects = $query->select('subject_id', 'subject_name')
+            ->distinct()
+            ->orderBy('subject_name')
+            ->get()
+            ->pluck('subject_name', 'subject_id');
 
-            $subjects = $subjectQuery->get();
-
-            $filteredGroups = Group::where('department_hemis_id', $selectedDepartment)
-                ->where('active', true);
-            if ($selectedSpecialty) {
-                $filteredGroups->where('specialty_hemis_id', $selectedSpecialty);
-            }
-            if ($selectedGroup) {
-                $filteredGroups->where('group_hemis_id', $selectedGroup);
-            }
-            $filteredGroups = $filteredGroups->get();
-
-            $existingSchedules = ExamSchedule::where('department_hemis_id', $selectedDepartment)
-                ->where('semester_code', $selectedSemester)
-                ->when($selectedSpecialty, fn($q) => $q->where('specialty_hemis_id', $selectedSpecialty))
-                ->when($selectedGroup, fn($q) => $q->where('group_hemis_id', $selectedGroup))
-                ->get()
-                ->keyBy(fn($item) => $item->group_hemis_id . '_' . $item->subject_id);
-
-            foreach ($filteredGroups as $group) {
-                $groupSubjects = $subjects->filter(function ($subject) use ($group) {
-                    return $subject->curricula_hemis_id === $group->curriculum_hemis_id;
-                });
-
-                foreach ($groupSubjects as $subject) {
-                    $key = $group->group_hemis_id . '_' . $subject->subject_id;
-                    $existing = $existingSchedules->get($key);
-
-                    $scheduleData->push([
-                        'group' => $group,
-                        'subject' => $subject,
-                        'specialty_name' => $group->specialty_name,
-                        'oski_date' => $existing?->oski_date?->format('Y-m-d'),
-                        'test_date' => $existing?->test_date?->format('Y-m-d'),
-                        'oski_date_carbon' => $existing?->oski_date,
-                        'test_date_carbon' => $existing?->test_date,
-                    ]);
-                }
-            }
-
-            // Holat bo'yicha filtr
-            if ($selectedStatus === 'belgilangan') {
-                $scheduleData = $scheduleData->filter(fn($item) => $item['oski_date'] || $item['test_date']);
-            } elseif ($selectedStatus === 'belgilanmagan') {
-                $scheduleData = $scheduleData->filter(fn($item) => !$item['oski_date'] && !$item['test_date']);
-            }
-
-            $scheduleData = $scheduleData->groupBy(fn($item) => $item['group']->group_hemis_id);
-        }
-
-        $routePrefix = $this->routePrefix();
-
-        return view('admin.academic-schedule.test-center', compact(
-            'departments',
-            'specialties',
-            'semesters',
-            'groups',
-            'scheduleData',
-            'selectedDepartment',
-            'selectedSpecialty',
-            'selectedSemester',
-            'selectedGroup',
-            'selectedStatus',
-            'currentEducationYear',
-            'routePrefix',
-        ));
+        return response()->json($subjects);
     }
 }

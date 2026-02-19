@@ -14,6 +14,25 @@ class TableImageGenerator
     private int $headerHeight = 28;
     private int $titleHeight = 36;
     private int $maxRowsPerImage = 35;
+    private bool $compactMode = false;
+
+    /**
+     * Ixcham rejimni yoqish (kichik shrift, past qator balandligi, ko'proq qator).
+     */
+    public function compact(): self
+    {
+        $this->compactMode = true;
+        $this->fontSize = 7;
+        $this->headerFontSize = 8;
+        $this->titleFontSize = 10;
+        $this->cellPadding = 3;
+        $this->rowHeight = 16;
+        $this->headerHeight = 20;
+        $this->titleHeight = 26;
+        $this->maxRowsPerImage = 120;
+
+        return $this;
+    }
 
     public function __construct()
     {

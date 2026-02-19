@@ -339,9 +339,11 @@ class SendAttendanceGroupSummary extends Command
 
         $generator = new TableImageGenerator();
 
-        // Kafedra kesimi rasmi
+        // Kafedra kesimi rasmi (ixcham rejimda - bitta rasmga sig'dirish uchun)
         $deptHeaders = ['#', 'KAFEDRA / FAN', 'DAV. YO\'Q', 'BAHO YO\'Q', 'JAMI SOAT'];
-        $deptImages = $generator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$now->format('H:i')} {$todayStr} (Kafedralar: {$deptNum})");
+        $formattedDate = Carbon::parse($todayStr)->format('d.m.Y');
+        $compactGenerator = (new TableImageGenerator())->compact();
+        $deptImages = $compactGenerator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (Kafedralar: {$deptNum})");
 
         // Batafsil jadval rasmi
         $headers = [

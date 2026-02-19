@@ -23,7 +23,7 @@ class SendAttendanceGroupSummary extends Command
         $todayStr = $today->format('Y-m-d');
         $now = Carbon::now();
 
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
 
         $this->info("Bugungi sana: {$todayStr}");
 

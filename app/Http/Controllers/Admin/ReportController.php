@@ -587,7 +587,7 @@ class ReportController extends Controller
     public function lessonAssignmentDiagnostic(Request $request)
     {
         $date = $request->get('date', now()->subDay()->format('Y-m-d'));
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
 
         // 1. Barcha schedulelar (shu sanadagi)
         $schedules = DB::table('schedules as sch')
@@ -732,7 +732,7 @@ class ReportController extends Controller
             $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
 
         // 1-QADAM: Jadvallardan ma'lumot olish
         $scheduleQuery = DB::table('schedules as sch')

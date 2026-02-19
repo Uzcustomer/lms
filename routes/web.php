@@ -284,6 +284,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');
 
         Route::get('/reports/top-students', [ReportController::class, 'topStudents'])->name('reports.top-students');
+        Route::get('/reports/top-students/data', [ReportController::class, 'topStudentsData'])->name('reports.top-students.data');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 

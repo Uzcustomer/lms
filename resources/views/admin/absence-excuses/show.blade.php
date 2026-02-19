@@ -65,7 +65,26 @@
                                     <label class="block text-sm font-medium text-gray-500 dark:text-gray-400">Sanalar</label>
                                     <p class="mt-1 text-sm text-gray-900 dark:text-white">
                                         {{ $excuse->start_date->format('d.m.Y') }} - {{ $excuse->end_date->format('d.m.Y') }}
+                                        <span class="text-gray-500 text-xs">({{ $excuse->start_date->diffInDays($excuse->end_date) + 1 }} kun)</span>
                                     </p>
+                                </div>
+                            </div>
+
+                            {{-- Talab qilinadigan hujjat va max kun --}}
+                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                <div class="flex items-start">
+                                    <svg class="w-4 h-4 text-blue-500 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="text-sm">
+                                        <p class="text-blue-800 dark:text-blue-300"><span class="font-medium">Talab qilinadigan hujjat:</span> {{ $excuse->reason_document }}</p>
+                                        @if($excuse->reason_max_days)
+                                            <p class="text-blue-700 dark:text-blue-400 text-xs mt-1">Maksimum {{ $excuse->reason_max_days }} kun ruxsat etiladi</p>
+                                        @endif
+                                        @if($excuse->reason_note)
+                                            <p class="text-blue-600 dark:text-blue-400 text-xs mt-1 italic">{{ $excuse->reason_note }}</p>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
 

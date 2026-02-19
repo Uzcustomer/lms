@@ -48,7 +48,7 @@ class AbsenceExcuseController extends Controller
             'rejected' => AbsenceExcuse::where('status', 'rejected')->count(),
         ];
 
-        $reasons = AbsenceExcuse::REASONS;
+        $reasons = AbsenceExcuse::reasonLabels();
 
         return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons'));
     }

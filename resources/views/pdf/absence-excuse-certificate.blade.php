@@ -149,8 +149,8 @@
             Mazkur ma'lumotnoma <strong>{{ $excuse->student_full_name }}</strong> (HEMIS ID: {{ $excuse->student_hemis_id }})
             {{ $excuse->group_name ? $excuse->group_name . ' guruhi' : '' }}
             talabasi {{ $excuse->start_date->format('d.m.Y') }} sanadan {{ $excuse->end_date->format('d.m.Y') }} sanagacha
-            darslarni <strong>{{ mb_strtolower($excuse->reason_label) }}</strong> sababli qoldirganligini tasdiqlovchi
-            hujjatlari asosida sababli deb topilganligini bildiradi.
+            ({{ $excuse->start_date->diffInDays($excuse->end_date) + 1 }} kun) darslarni <strong>{{ mb_strtolower($excuse->reason_label) }}</strong>
+            sababli qoldirganligini tasdiqlovchi hujjatlari ({{ $excuse->reason_document }}) asosida sababli deb topilganligini bildiradi.
         </p>
     </div>
 
@@ -181,8 +181,12 @@
             <td class="value">{{ $excuse->reason_label }}</td>
         </tr>
         <tr>
+            <td class="label">Asoslovchi hujjat</td>
+            <td class="value">{{ $excuse->reason_document }}</td>
+        </tr>
+        <tr>
             <td class="label">Dars qoldirish davri</td>
-            <td class="value">{{ $excuse->start_date->format('d.m.Y') }} - {{ $excuse->end_date->format('d.m.Y') }}</td>
+            <td class="value">{{ $excuse->start_date->format('d.m.Y') }} - {{ $excuse->end_date->format('d.m.Y') }} ({{ $excuse->start_date->diffInDays($excuse->end_date) + 1 }} kun)</td>
         </tr>
         <tr>
             <td class="label">Tasdiqlangan sana</td>

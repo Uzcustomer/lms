@@ -35,7 +35,24 @@ class AbsenceExcuseController extends Controller
         $request->validate([
             'reason' => "required|in:{$reasonKeys}",
             'start_date' => 'required|date|before_or_equal:end_date',
-            'end_date' => 'required|date|after_or_equal:start_date',
+            'end_date' => [
+                'required',
+                'date',
+                'after_or_equal:start_date',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($request->reason && $request->start_date && $value) {
+                        $reasonData = AbsenceExcuse::REASONS[$request->reason] ?? null;
+                        if ($reasonData && $reasonData['max_days']) {
+                            $start = \Carbon\Carbon::parse($request->start_date);
+                            $end = \Carbon\Carbon::parse($value);
+                            $days = $start->diffInDays($end) + 1;
+                            if ($days > $reasonData['max_days']) {
+                                $fail("Tanlangan sabab uchun maksimum {$reasonData['max_days']} kun ruxsat etiladi. Siz {$days} kun belgiladingiz.");
+                            }
+                        }
+                    }
+                },
+            ],
             'description' => 'nullable|string|max:1000',
             'file' => [
                 'required',

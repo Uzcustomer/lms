@@ -197,13 +197,18 @@ class AcademicScheduleController extends Controller
             ->keyBy(fn($item) => $item->group_hemis_id . '_' . $item->subject_id . '_' . $item->semester_code);
 
         // Dars jadvalidan boshlanish/tugash sanalarini olish (schedules jadvalidan)
-        $lessonDates = DB::table('schedules')
-            ->select('group_id', 'subject_id', DB::raw('MIN(lesson_date) as lesson_start'), DB::raw('MAX(lesson_date) as lesson_end'))
+        $lessonDatesRaw = DB::table('schedules')
+            ->select('group_id', 'subject_id', 'subject_name', DB::raw('MIN(lesson_date) as lesson_start'), DB::raw('MAX(lesson_date) as lesson_end'))
             ->whereIn('group_id', $filteredGroups->pluck('group_hemis_id'))
             ->whereNull('deleted_at')
-            ->groupBy('group_id', 'subject_id')
-            ->get()
-            ->keyBy(fn($r) => $r->group_id . '_' . $r->subject_id);
+            ->groupBy('group_id', 'subject_id', 'subject_name')
+            ->get();
+
+        // Ikki xil key bilan map qilish (HEMIS subject_id yoki curriculum_subject_hemis_id bo'lishi mumkin)
+        $lessonDatesMap = [];
+        foreach ($lessonDatesRaw as $row) {
+            $lessonDatesMap[$row->group_id . '_' . $row->subject_id] = $row;
+        }
 
         // Ma'lumotlarni yig'ish
         $scheduleData = collect();
@@ -215,8 +220,10 @@ class AcademicScheduleController extends Controller
                 $existing = $existingSchedules->get($key);
 
                 // Dars sanalarini schedules jadvalidan olish
-                $lessonKey = $group->group_hemis_id . '_' . $subject->curriculum_subject_hemis_id;
-                $lessonInfo = $lessonDates->get($lessonKey);
+                // HEMIS subject_id yoki curriculum_subject_hemis_id bo'lishi mumkin
+                $lessonInfo = $lessonDatesMap[$group->group_hemis_id . '_' . $subject->curriculum_subject_hemis_id]
+                           ?? $lessonDatesMap[$group->group_hemis_id . '_' . $subject->subject_id]
+                           ?? null;
 
                 $item = [
                     'group' => $group,

@@ -360,15 +360,15 @@ class ImportGrades extends Command
 
         DB::transaction(function () use ($filteredItems, $dateStart, $dateEnd, $isFinal, &$gradeCount, &$softDeletedCount) {
             $query = StudentGrade::where('lesson_date', '>=', $dateStart)
-                ->where('lesson_date', '<=', $dateEnd);
+                ->where('lesson_date', '<=', $dateEnd)
+                ->where('status', '!=', 'retake')   // retake baholarni o'chirmaslik!
+                ->whereNull('retake_grade');          // retake_grade bor yozuvlarni ham saqlash
 
             if ($isFinal) {
-                // Final/Backfill: BARCHA eski yozuvlarni o'chirish (is_final=true va false)
-                // Bu backfill'ni qayta ishlatishda duplicate yaratmaslikni ta'minlaydi
+                // Final/Backfill: BARCHA eski yozuvlarni o'chirish (retake'dan tashqari)
                 $softDeletedCount = $query->delete();
             } else {
-                // Live import: faqat is_final=false yozuvlarni o'chirish
-                // is_final=true (yakunlangan) baholar saqlanib qoladi
+                // Live import: faqat is_final=false yozuvlarni o'chirish (retake'dan tashqari)
                 $softDeletedCount = $query->where('is_final', false)->delete();
             }
 
@@ -427,6 +427,25 @@ class ImportGrades extends Command
 
         $gradeValue = $item['grade'];
         $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
+
+        // Retake bahosi bor yozuv o'chirilmagan bo'lishi mumkin — duplicate yaratmaslik
+        $existingRetake = StudentGrade::where('hemis_id', $item['id'])
+            ->where(function ($q) {
+                $q->where('status', 'retake')
+                  ->orWhereNotNull('retake_grade');
+            })
+            ->first();
+
+        if ($existingRetake) {
+            // Retake bahosini saqlab, faqat HEMIS ma'lumotlarini yangilash
+            $existingRetake->update([
+                'grade' => $gradeValue,
+                'employee_id' => $item['employee']['id'],
+                'employee_name' => $item['employee']['name'],
+                'is_final' => $isFinal,
+            ]);
+            return;
+        }
 
         $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
         $studentMinLimit = $markingScore ? $markingScore->minimum_limit : 0;

@@ -209,12 +209,18 @@ class AcademicScheduleController extends Controller
                     'group' => $group,
                     'subject' => $subject,
                     'specialty_name' => $group->specialty_name,
+                    'lesson_start_date' => $existing?->lesson_start_date?->format('Y-m-d'),
+                    'lesson_end_date' => $existing?->lesson_end_date?->format('Y-m-d'),
                     'oski_date' => $existing?->oski_date?->format('Y-m-d'),
+                    'oski_na' => (bool) $existing?->oski_na,
                     'test_date' => $existing?->test_date?->format('Y-m-d'),
+                    'test_na' => (bool) $existing?->test_na,
                     'schedule_id' => $existing?->id,
                 ];
 
                 if ($includeCarbon) {
+                    $item['lesson_start_date_carbon'] = $existing?->lesson_start_date;
+                    $item['lesson_end_date_carbon'] = $existing?->lesson_end_date;
                     $item['oski_date_carbon'] = $existing?->oski_date;
                     $item['test_date_carbon'] = $existing?->test_date;
                 }
@@ -272,6 +278,8 @@ class AcademicScheduleController extends Controller
             'schedules.*.specialty_hemis_id' => 'required|string',
             'schedules.*.curriculum_hemis_id' => 'required|string',
             'schedules.*.semester_code' => 'required|string',
+            'schedules.*.lesson_start_date' => 'nullable|date',
+            'schedules.*.lesson_end_date' => 'nullable|date',
             'schedules.*.oski_date' => 'nullable|date',
             'schedules.*.test_date' => 'nullable|date',
         ]);
@@ -283,7 +291,12 @@ class AcademicScheduleController extends Controller
         DB::beginTransaction();
         try {
             foreach ($request->schedules as $schedule) {
-                if (empty($schedule['oski_date']) && empty($schedule['test_date'])) {
+                $oskiNa = !empty($schedule['oski_na']);
+                $testNa = !empty($schedule['test_na']);
+                $hasAnyData = !empty($schedule['lesson_start_date']) || !empty($schedule['lesson_end_date']) || !empty($schedule['oski_date'])
+                    || !empty($schedule['test_date']) || $oskiNa || $testNa;
+
+                if (!$hasAnyData) {
                     ExamSchedule::where('group_hemis_id', $schedule['group_hemis_id'])
                         ->where('subject_id', $schedule['subject_id'])
                         ->where('semester_code', $schedule['semester_code'])
@@ -302,8 +315,12 @@ class AcademicScheduleController extends Controller
                         'specialty_hemis_id' => $schedule['specialty_hemis_id'],
                         'curriculum_hemis_id' => $schedule['curriculum_hemis_id'],
                         'subject_name' => $schedule['subject_name'],
+                        'lesson_start_date' => $schedule['lesson_start_date'] ?: null,
+                        'lesson_end_date' => $schedule['lesson_end_date'] ?: null,
                         'oski_date' => $schedule['oski_date'] ?: null,
+                        'oski_na' => $oskiNa,
                         'test_date' => $schedule['test_date'] ?: null,
+                        'test_na' => $testNa,
                         'education_year' => $educationYear,
                         'updated_by' => $userId,
                         'created_by' => $userId,

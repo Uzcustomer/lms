@@ -40,14 +40,6 @@
                             @endif
 
                             <!-- 5 ga da'vogar toggle -->
-                            @php
-                                $userRoles = auth()->user()?->getRoleNames()->toArray() ?? [];
-                                $activeRole = session('active_role', $userRoles[0] ?? '');
-                                if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
-                                    $activeRole = $userRoles[0];
-                                }
-                                $canToggleFive = in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'dekan']);
-                            @endphp
                             @if($canToggleFive)
                             <form action="{{ route('admin.students.toggle-five-candidate', $student) }}" method="POST" class="w-full mb-4">
                                 @csrf

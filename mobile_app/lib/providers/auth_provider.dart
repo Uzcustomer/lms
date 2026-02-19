@@ -67,6 +67,11 @@ class AuthProvider extends ChangeNotifier {
       _state = AuthState.error;
       notifyListeners();
       return false;
+    } catch (e) {
+      _errorMessage = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _state = AuthState.error;
+      notifyListeners();
+      return false;
     }
   }
 
@@ -96,6 +101,11 @@ class AuthProvider extends ChangeNotifier {
       _state = AuthState.error;
       notifyListeners();
       return false;
+    } catch (e) {
+      _errorMessage = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _state = AuthState.error;
+      notifyListeners();
+      return false;
     }
   }
 
@@ -112,6 +122,11 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
+      _state = AuthState.requires2fa;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _errorMessage = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
       _state = AuthState.requires2fa;
       notifyListeners();
       return false;

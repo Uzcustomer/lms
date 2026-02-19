@@ -210,28 +210,13 @@ class StudentController extends Controller
     {
         $user = auth()->user();
         $userRoles = $user?->getRoleNames()->toArray() ?? [];
-        $sessionRole = session('active_role');
-        $activeRole = $sessionRole ?? ($userRoles[0] ?? '');
+        $activeRole = session('active_role', $userRoles[0] ?? '');
         if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
             $activeRole = $userRoles[0];
         }
         $canToggleFive = in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'dekan']);
 
-        // DEBUG
-        $debug = [
-            'guard' => auth()->getDefaultDriver(),
-            'user_class' => $user ? get_class($user) : 'NULL',
-            'user_id' => $user?->id,
-            'user_name' => $user?->name ?? $user?->full_name ?? 'NULL',
-            'userRoles' => $userRoles,
-            'session_active_role' => $sessionRole,
-            'resolved_activeRole' => $activeRole,
-            'canToggleFive' => $canToggleFive,
-            'web_guard' => auth()->guard('web')->check() ? 'YES (id=' . auth()->guard('web')->id() . ')' : 'NO',
-            'teacher_guard' => auth()->guard('teacher')->check() ? 'YES (id=' . auth()->guard('teacher')->id() . ')' : 'NO',
-        ];
-
-        return view('admin.students.show', compact('student', 'canToggleFive', 'debug'));
+        return view('admin.students.show', compact('student', 'canToggleFive'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)

@@ -24,6 +24,8 @@ class SendAttendanceGroupSummary extends Command
         $now = Carbon::now();
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
+        // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi (ma'ruza va h.k.)
+        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         $this->info("Bugungi sana: {$todayStr}");
 
@@ -146,6 +148,8 @@ class SendAttendanceGroupSummary extends Command
 
             if (!isset($grouped[$key])) {
                 $semCode = max((int) ($sch->semester_code ?? 1), 1);
+                // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
+                $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
 
                 $grouped[$key] = [
                     'employee_name' => $sch->employee_name,
@@ -160,7 +164,7 @@ class SendAttendanceGroupSummary extends Command
                     'lesson_pair_time' => $pairTime,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
                     'has_attendance' => isset($attendanceSet[$attKey]),
-                    'has_grades' => isset($gradeSet[$gradeKey]),
+                    'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
                     'lesson_date' => $sch->lesson_date_str,
                     'kurs' => (int) ceil($semCode / 2),
                     'employee_id' => $sch->employee_id,

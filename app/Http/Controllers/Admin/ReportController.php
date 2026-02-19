@@ -588,6 +588,7 @@ class ReportController extends Controller
     {
         $date = $request->get('date', now()->subDay()->format('Y-m-d'));
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
+        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         // 1. Barcha schedulelar (shu sanadagi)
         $schedules = DB::table('schedules as sch')
@@ -645,7 +646,9 @@ class ReportController extends Controller
         foreach ($schedules as $sch) {
             $hasAC = isset($acRecords[$sch->schedule_hemis_id]);
             $acLoad = $hasAC ? $acRecords[$sch->schedule_hemis_id]->load : null;
-            $hasGrade = isset($gradeRecords[$sch->schedule_hemis_id]);
+            // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
+            $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+            $hasGrade = $skipGradeCheck || isset($gradeRecords[$sch->schedule_hemis_id]);
 
             $rows[] = [
                 'schedule_hemis_id' => $sch->schedule_hemis_id,
@@ -733,6 +736,8 @@ class ReportController extends Controller
         }
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
+        // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi (ma'ruza va h.k.)
+        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         // 1-QADAM: Jadvallardan ma'lumot olish
         $scheduleQuery = DB::table('schedules as sch')
@@ -888,6 +893,9 @@ class ReportController extends Controller
                       . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
 
             if (!isset($grouped[$key])) {
+                // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
+                $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+
                 $grouped[$key] = [
                     'employee_id' => $sch->employee_id,
                     'employee_name' => $sch->employee_name,
@@ -907,7 +915,7 @@ class ReportController extends Controller
                     'lesson_date' => $sch->lesson_date_str,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
                     'has_attendance' => isset($attendanceSet[$attKey]),
-                    'has_grades' => isset($gradeSet[$gradeKey]),
+                    'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
                 ];
             }
         }

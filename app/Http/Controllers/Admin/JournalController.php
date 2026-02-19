@@ -1992,8 +1992,8 @@ class JournalController extends Controller
                 return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
             }
 
-            // Muddat tekshirish: deadline o'tgan bo'lsa, baho qo'yishga ruxsat bermash
-            if ($studentGrade->deadline && now()->greaterThan($studentGrade->deadline)) {
+            // Muddat tekshirish: deadline o'tgan bo'lsa, baho qo'yishga ruxsat bermash (admin uchun cheklov yo'q)
+            if (!$isAdmin && $studentGrade->deadline && now()->greaterThan($studentGrade->deadline)) {
                 $deadlineFormatted = \Carbon\Carbon::parse($studentGrade->deadline)->format('d.m.Y H:i');
                 return response()->json([
                     'success' => false,

@@ -359,37 +359,66 @@ class ImportGrades extends Command
         }
 
         DB::transaction(function () use ($filteredItems, $dateStart, $dateEnd, $isFinal, &$gradeCount, &$softDeletedCount) {
-            $query = StudentGrade::where('lesson_date', '>=', $dateStart)
+            // 1-QADAM: Retake ma'lumotlarni xotiraga saqlash (o'chirishdan oldin)
+            $retakeBackup = StudentGrade::where('lesson_date', '>=', $dateStart)
                 ->where('lesson_date', '<=', $dateEnd)
-                ->where('status', '!=', 'retake')   // retake baholarni o'chirmaslik!
-                ->whereNull('retake_grade');          // retake_grade bor yozuvlarni ham saqlash
+                ->whereNotNull('retake_grade')
+                ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code',
+                        'retake_grade', 'retake_graded_at', 'retake_by', 'retake_file_path', 'graded_by_user_id'])
+                ->keyBy(function ($item) {
+                    return $item->student_hemis_id . '_' . $item->subject_id . '_' .
+                           $item->lesson_date . '_' . $item->lesson_pair_code;
+                });
+
+            if ($retakeBackup->isNotEmpty()) {
+                $this->info("Backed up {$retakeBackup->count()} retake grades for {$dateStart->toDateString()}");
+            }
+
+            // 2-QADAM: BARCHA eski yozuvlarni soft-delete (retake ham — HEMIS yangilanishi uchun)
+            $query = StudentGrade::where('lesson_date', '>=', $dateStart)
+                ->where('lesson_date', '<=', $dateEnd);
 
             if ($isFinal) {
-                // Final/Backfill: BARCHA eski yozuvlarni o'chirish (retake'dan tashqari)
                 $softDeletedCount = $query->delete();
-
-                // Retake yozuvlarni o'chirmasdan is_final=true ga yangilash
-                // (aks holda final import bu sanani doim "yakunlanmagan" deb topadi)
-                StudentGrade::where('lesson_date', '>=', $dateStart)
-                    ->where('lesson_date', '<=', $dateEnd)
-                    ->where(function ($q) {
-                        $q->where('status', 'retake')
-                          ->orWhereNotNull('retake_grade');
-                    })
-                    ->where('is_final', false)
-                    ->update(['is_final' => true]);
             } else {
-                // Live import: faqat is_final=false yozuvlarni o'chirish (retake'dan tashqari)
                 $softDeletedCount = $query->where('is_final', false)->delete();
             }
 
             $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
             Log::info("[ApplyGrades] Soft deleted {$softDeletedCount} grades for {$dateStart->toDateString()}");
 
-            // Yangi baholarni yozish
+            // 3-QADAM: HEMIS dan yangi yozuvlarni yaratish (to'liq yangi ma'lumot)
             foreach ($filteredItems as $item) {
                 $this->processGrade($item, $isFinal);
                 $gradeCount++;
+            }
+
+            // 4-QADAM: Saqlangan retake ma'lumotlarni yangi yozuvlarga qayta qo'yish
+            $retakeRestored = 0;
+            foreach ($retakeBackup as $key => $retake) {
+                $updated = StudentGrade::where('student_hemis_id', $retake->student_hemis_id)
+                    ->where('subject_id', $retake->subject_id)
+                    ->whereDate('lesson_date', $retake->lesson_date)
+                    ->where('lesson_pair_code', $retake->lesson_pair_code)
+                    ->whereNull('deleted_at')
+                    ->whereNull('retake_grade')
+                    ->update([
+                        'retake_grade' => $retake->retake_grade,
+                        'status' => 'retake',
+                        'retake_graded_at' => $retake->retake_graded_at,
+                        'retake_by' => $retake->retake_by,
+                        'retake_file_path' => $retake->retake_file_path,
+                        'graded_by_user_id' => $retake->graded_by_user_id,
+                        'is_final' => $isFinal,
+                    ]);
+                if ($updated) {
+                    $retakeRestored++;
+                }
+            }
+
+            if ($retakeRestored > 0) {
+                $this->info("Restored {$retakeRestored} retake grades for {$dateStart->toDateString()}");
+                Log::info("[ApplyGrades] Restored {$retakeRestored} retake grades for {$dateStart->toDateString()}");
             }
         });
 
@@ -438,29 +467,6 @@ class ImportGrades extends Command
 
         $gradeValue = $item['grade'];
         $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
-
-        // Retake bahosi bor yozuv o'chirilmagan bo'lishi mumkin — duplicate yaratmaslik
-        $existingRetake = StudentGrade::where('hemis_id', $item['id'])
-            ->where(function ($q) {
-                $q->where('status', 'retake')
-                  ->orWhereNotNull('retake_grade');
-            })
-            ->first();
-
-        if ($existingRetake) {
-            // Retake bahosini saqlab, faqat HEMIS ma'lumotlarini yangilash
-            $updateData = [
-                'grade' => $gradeValue,
-                'employee_id' => $item['employee']['id'],
-                'employee_name' => $item['employee']['name'],
-            ];
-            // is_final faqat true ga o'tkaziladi (false ga tushirilmaydi)
-            if ($isFinal) {
-                $updateData['is_final'] = true;
-            }
-            $existingRetake->update($updateData);
-            return;
-        }
 
         $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
         $studentMinLimit = $markingScore ? $markingScore->minimum_limit : 0;

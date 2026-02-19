@@ -393,13 +393,11 @@
                 var bCell = b.cells[colIndex];
                 var aVal = (aCell && aCell.getAttribute('data-sort-value')) || '';
                 var bVal = (bCell && bCell.getAttribute('data-sort-value')) || '';
-                // Raqam tekshirish (kredit)
-                var aNum = parseFloat(aVal);
-                var bNum = parseFloat(bVal);
-                if (!isNaN(aNum) && !isNaN(bNum)) {
-                    return dir === 'asc' ? aNum - bNum : bNum - aNum;
+                // Faqat toza raqamlarni raqam sifatida sort (kredit)
+                if (/^\d+(\.\d+)?$/.test(aVal) && /^\d+(\.\d+)?$/.test(bVal)) {
+                    return dir === 'asc' ? parseFloat(aVal) - parseFloat(bVal) : parseFloat(bVal) - parseFloat(aVal);
                 }
-                // Matn tartiblash
+                // Matn/sana tartiblash (yyyy-mm-dd format to'g'ri tartiblanadi)
                 var cmp = aVal.localeCompare(bVal, 'uz');
                 return dir === 'asc' ? cmp : -cmp;
             });

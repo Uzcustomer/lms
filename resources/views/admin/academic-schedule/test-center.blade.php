@@ -402,10 +402,8 @@
                 var bCell = b.cells[colIndex];
                 var aVal = (aCell && aCell.getAttribute('data-sort-value')) || '';
                 var bVal = (bCell && bCell.getAttribute('data-sort-value')) || '';
-                var aNum = parseFloat(aVal);
-                var bNum = parseFloat(bVal);
-                if (!isNaN(aNum) && !isNaN(bNum)) {
-                    return dir === 'asc' ? aNum - bNum : bNum - aNum;
+                if (/^\d+(\.\d+)?$/.test(aVal) && /^\d+(\.\d+)?$/.test(bVal)) {
+                    return dir === 'asc' ? parseFloat(aVal) - parseFloat(bVal) : parseFloat(bVal) - parseFloat(aVal);
                 }
                 var cmp = aVal.localeCompare(bVal, 'uz');
                 return dir === 'asc' ? cmp : -cmp;

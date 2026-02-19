@@ -89,6 +89,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/students/filter/semesters', [AdminStudentController::class, 'getFilterSemesters'])->name('students.filter.semesters');
         Route::get('/students/{student}', [AdminStudentController::class, 'show'])->name('students.show');
         Route::post('/students/{student}/reset-local-password', [AdminStudentController::class, 'resetLocalPassword'])->name('students.reset-local-password');
+        Route::post('/students/{student}/toggle-five-candidate', [AdminStudentController::class, 'toggleFiveCandidate'])->name('students.toggle-five-candidate');
         Route::post('/students/bulk-reset-password', [AdminStudentController::class, 'bulkResetLocalPassword'])->name('students.bulk-reset-password');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
@@ -285,6 +286,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');
 
         Route::get('/reports/top-students', [ReportController::class, 'topStudents'])->name('reports.top-students');
+        Route::get('/reports/top-students/data', [ReportController::class, 'topStudentsData'])->name('reports.top-students.data');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 

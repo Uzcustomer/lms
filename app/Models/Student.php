@@ -38,6 +38,7 @@ class Student extends Authenticatable
         'roommate_count',
         'total_acload',
         'is_graduate',
+        'is_five_candidate',
         'other',
         'phone',
         'telegram_username',
@@ -58,6 +59,7 @@ class Student extends Authenticatable
         'local_password' => 'hashed',
         'local_password_expires_at' => 'datetime',
         'must_change_password' => 'boolean',
+        'is_five_candidate' => 'boolean',
         'telegram_verified_at' => 'datetime',
         'login_code_expires_at' => 'datetime',
     ];

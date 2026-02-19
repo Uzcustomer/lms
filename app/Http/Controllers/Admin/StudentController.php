@@ -239,6 +239,26 @@ class StudentController extends Controller
         }
     }
 
+    public function toggleFiveCandidate(Request $request, Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'dekan'])) {
+            return back()->with('error', "Sizda bu amalni bajarish huquqi yo'q.");
+        }
+
+        $student->is_five_candidate = !$student->is_five_candidate;
+        $student->save();
+
+        $status = $student->is_five_candidate ? "ro'yxatga kiritildi" : "ro'yxatdan chiqarildi";
+        return back()->with('success', "{$student->full_name} 5 ga da'vogar {$status}.");
+    }
+
     public function bulkResetLocalPassword(Request $request)
     {
         $user = Auth::user();

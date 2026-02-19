@@ -231,12 +231,11 @@ class ImportAttendanceControls extends Command
 
             $this->info("Soft deleted {$softDeletedCount} old records for {$dateStart->toDateString()}");
 
-            // Yangi yozuvlarni kiritish
+            // Yangi yozuvlarni kiritish (soft-deleted bo'lsa restore qilib yangilaydi)
             foreach ($items as $item) {
                 $lessonDate = isset($item['lesson_date']) ? date('Y-m-d H:i:s', $item['lesson_date']) : null;
 
-                AttendanceControl::create([
-                    'hemis_id' => $item['id'],
+                $values = [
                     'subject_schedule_id' => $item['_subject_schedule'] ?? null,
                     'subject_id' => $item['subject']['id'] ?? null,
                     'subject_code' => $item['subject']['code'] ?? null,
@@ -260,7 +259,13 @@ class ImportAttendanceControls extends Command
                     'lesson_date' => $lessonDate,
                     'load' => $item['load'] ?? 2,
                     'is_final' => $isFinal,
-                ]);
+                    'deleted_at' => null,
+                ];
+
+                AttendanceControl::withTrashed()->updateOrCreate(
+                    ['hemis_id' => $item['id']],
+                    $values
+                );
                 $written++;
             }
         });

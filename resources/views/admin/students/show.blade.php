@@ -129,6 +129,7 @@
                                         <tr><td class="py-1 text-gray-500">total_acload</td><td class="py-1 text-gray-900">{{ $student->total_acload ?? '-' }}</td></tr>
                                         <tr><td class="py-1 text-gray-500">year_of_enter</td><td class="py-1 text-gray-900">{{ $student->year_of_enter ?? '-' }}</td></tr>
                                         <tr><td class="py-1 text-gray-500">is_graduate</td><td class="py-1 text-gray-900">{{ $student->is_graduate ? 'Ha' : 'Yo\'q' }}</td></tr>
+                                        @if($canToggleFive)
                                         <tr>
                                             <td class="py-1 text-gray-500">5 ga da'vogar</td>
                                             <td class="py-1">
@@ -142,6 +143,7 @@
                                                 @endif
                                             </td>
                                         </tr>
+                                        @endif
                                         <tr><td class="py-1 text-gray-500">roommate_count</td><td class="py-1 text-gray-900">{{ $student->roommate_count ?? '-' }}</td></tr>
                                     </table>
                                 </div>

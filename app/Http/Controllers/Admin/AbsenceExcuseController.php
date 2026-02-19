@@ -77,19 +77,14 @@ class AbsenceExcuseController extends Controller
             'reviewed_at' => now(),
         ]);
 
-        // QR kod generatsiya
+        // QR kod generatsiya (SVG formatda — imagick talab qilinmaydi)
         $verificationUrl = route('absence-excuse.verify', $excuse->verification_token);
-        $qrCodeBase64 = base64_encode(
-            QrCode::format('png')
-                ->size(200)
-                ->margin(1)
-                ->generate($verificationUrl)
-        );
+        $qrCodeSvg = QrCode::size(200)->margin(1)->generate($verificationUrl);
 
         // PDF generatsiya
         $pdf = Pdf::loadView('pdf.absence-excuse-certificate', [
             'excuse' => $excuse,
-            'qrCodeBase64' => $qrCodeBase64,
+            'qrCodeSvg' => $qrCodeSvg,
             'verificationUrl' => $verificationUrl,
         ]);
 

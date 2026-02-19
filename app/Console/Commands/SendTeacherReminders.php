@@ -7,6 +7,7 @@ use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -108,6 +109,7 @@ class SendTeacherReminders extends Command
         $schedulesByTeacher = $schedules->groupBy('employee_id');
 
         $sentCount = 0;
+        $congratsCount = 0;
         $skippedCount = 0;
 
         foreach ($schedulesByTeacher as $employeeId => $teacherSchedules) {
@@ -145,7 +147,24 @@ class SendTeacherReminders extends Command
                 }
             }
 
+            // Agar barcha darslar to'liq bajarilgan bo'lsa — tabrik yuborish (kuniga 1 marta)
             if (empty($missingAttendance) && empty($missingGrades)) {
+                $cacheKey = "teacher_congrats_{$employeeId}_{$today}";
+
+                if (!Cache::has($cacheKey)) {
+                    $congratsMessage = $this->buildCongratsMessage($teacher, $teacherSchedules, $today);
+
+                    try {
+                        $telegram->sendToUser($teacher->telegram_chat_id, $congratsMessage);
+                        Cache::put($cacheKey, true, Carbon::tomorrow());
+                        $congratsCount++;
+                        $this->info("Tabrik yuborildi: {$teacher->full_name}");
+                    } catch (\Throwable $e) {
+                        Log::error("Telegram tabrik yuborishda xato (Teacher: {$teacher->full_name}): " . $e->getMessage());
+                        $this->error("Tabrik xato: {$teacher->full_name} - " . $e->getMessage());
+                    }
+                }
+
                 continue;
             }
 
@@ -161,9 +180,26 @@ class SendTeacherReminders extends Command
             }
         }
 
-        $this->info("Yakunlandi. Yuborildi: {$sentCount}, O'tkazib yuborildi: {$skippedCount}");
+        $this->info("Yakunlandi. Eslatmalar: {$sentCount}, Tabriklar: {$congratsCount}, O'tkazib yuborildi: {$skippedCount}");
 
         return 0;
+    }
+
+    private function buildCongratsMessage(Teacher $teacher, $teacherSchedules, string $today): string
+    {
+        $formattedDate = Carbon::parse($today)->format('d.m.Y');
+        $lessonCount = $teacherSchedules->unique(function ($s) {
+            return $s->employee_id . '|' . $s->group_id . '|' . $s->subject_id . '|' . $s->training_type_code . '|' . $s->lesson_pair_code;
+        })->count();
+
+        $lines = [];
+        $lines[] = "Hurmatli {$teacher->full_name}!";
+        $lines[] = "";
+        $lines[] = "Tabriklaymiz! Siz bugungi ({$formattedDate}) dars jadvalidagi barcha {$lessonCount} ta darsning davomatini oldingiz va baholarini qo'ydingiz.";
+        $lines[] = "";
+        $lines[] = "Mas'uliyatli mehnatingiz uchun rahmat! Shu zayl davom eting!";
+
+        return implode("\n", $lines);
     }
 
     private function buildMessage(Teacher $teacher, array $missingAttendance, array $missingGrades, string $today): string

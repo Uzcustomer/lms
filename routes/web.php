@@ -30,6 +30,7 @@ use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\LectureScheduleController;
 use App\Http\Controllers\Admin\TimetableViewController;
 use App\Http\Controllers\Admin\ImpersonateController;
+use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\MoodleImportController;
 
 
@@ -379,6 +380,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/filter-options', [TimetableViewController::class, 'filterOptions'])->name('filter-options');
         });
 
+        // O'quv bo'limi: YN kunini belgilash (imtihon jadvali)
+        Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
+            Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
+            Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
+            Route::get('/get-specialties', [AcademicScheduleController::class, 'getSpecialties'])->name('get-specialties');
+            Route::get('/get-semesters', [AcademicScheduleController::class, 'getSemesters'])->name('get-semesters');
+            Route::get('/get-groups', [AcademicScheduleController::class, 'getGroups'])->name('get-groups');
+            Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
+        });
+
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
         Route::post('/impersonate/student/{student}', [ImpersonateController::class, 'impersonateStudent'])->name('impersonate.student');
         Route::post('/impersonate/teacher/{teacher}', [ImpersonateController::class, 'impersonateTeacher'])->name('impersonate.teacher');
@@ -652,6 +663,16 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::get('/get-students', [LessonController::class, 'getStudents'])->name('get.students');
         // Route::get('/get-semesters', [LessonController::class, 'getSemesters'])->name('get.semesters');
         // Route::get('/get-subjects', [LessonController::class, 'getSubjects'])->name('get.subjects');
+
+        // O'quv bo'limi: YN kunini belgilash (imtihon jadvali)
+        Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
+            Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
+            Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
+            Route::get('/get-specialties', [AcademicScheduleController::class, 'getSpecialties'])->name('get-specialties');
+            Route::get('/get-semesters', [AcademicScheduleController::class, 'getSemesters'])->name('get-semesters');
+            Route::get('/get-groups', [AcademicScheduleController::class, 'getGroups'])->name('get-groups');
+            Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
+        });
     });
 });
 

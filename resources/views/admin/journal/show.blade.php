@@ -1292,7 +1292,7 @@
                                                             $absenceData = $jbAbsences[$student->hemis_id][$col['date']][$col['pair']];
                                                             $gradeRecordId = $absenceData['id'];
                                                             $hasRetake = $absenceData['retake_grade'] !== null;
-                                                            $showRatingInput = $canRate && !$hasRetake && !$deadlineExpired;
+                                                            $showRatingInput = $canRate && !$hasRetake && ($isAdminRole || !$deadlineExpired);
                                                             $retakeType = 'absent';
                                                         } elseif ($gradeData && $gradeData['reason'] === 'low_grade' && $gradeData['retake_grade'] !== null) {
                                                             // Otrabotka qilingan (original_grade < minimumLimit)
@@ -1301,7 +1301,7 @@
                                                         } elseif ($gradeData && $gradeData['original_grade'] !== null && round($gradeData['original_grade'], 0) < ($minimumLimit ?? 60) && ($gradeData['retake_grade'] ?? null) === null) {
                                                             // minimumLimit dan past, hali otrabotka qilinmagan
                                                             $gradeRecordId = $gradeData['id'];
-                                                            $showRatingInput = $canRate && !$deadlineExpired;
+                                                            $showRatingInput = $canRate && ($isAdminRole || !$deadlineExpired);
                                                         } elseif (!$isAbsent && $grade === null) {
                                                             $isEmpty = true;
                                                             $showRatingInput = $canRateAdmin;

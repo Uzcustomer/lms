@@ -60,13 +60,12 @@ class LmsApp extends StatelessWidget {
             switch (auth.state) {
               case AuthState.initial:
                 return const SplashScreen();
-              case AuthState.loading:
-                return const SplashScreen();
               case AuthState.authenticated:
                 if (auth.isTeacher) {
                   return const TeacherHomeScreen();
                 }
                 return const StudentHomeScreen();
+              case AuthState.loading:
               case AuthState.unauthenticated:
               case AuthState.error:
               case AuthState.requires2fa:

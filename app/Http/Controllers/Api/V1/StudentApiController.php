@@ -48,10 +48,14 @@ class StudentApiController extends Controller
             ]);
 
         return response()->json([
-            'avg_gpa' => (float) $avgGpa,
-            'total_absent' => $totalAbsent,
-            'debt_subjects_count' => $debtSubjectsCount,
-            'recent_grades' => $recentGrades,
+            'data' => [
+                'student_name' => $student->full_name,
+                'gpa' => (float) $avgGpa,
+                'avg_grade' => $student->avg_grade ?? 0,
+                'debt_subjects' => $debtSubjectsCount,
+                'total_absences' => $totalAbsent,
+                'recent_grades' => $recentGrades,
+            ],
         ]);
     }
 
@@ -63,23 +67,27 @@ class StudentApiController extends Controller
         $student = $request->user();
 
         return response()->json([
-            'full_name' => $student->full_name,
-            'student_id_number' => $student->student_id_number,
-            'image' => $student->image,
-            'birth_date' => $student->birth_date?->format('Y-m-d'),
-            'phone' => $student->other['phone'] ?? '',
-            'email' => $student->other['email'] ?? '',
-            'gender' => $student->gender_name,
-            'faculty' => $student->department_name,
-            'specialty' => $student->specialty_name,
-            'group' => $student->group_name,
-            'level' => $student->level_name,
-            'education_type' => $student->education_type_name,
-            'province' => $student->province_name,
-            'district' => $student->district_name,
-            'semester' => $student->semester_name,
-            'avg_gpa' => $student->avg_gpa,
-            'avg_grade' => $student->avg_grade,
+            'data' => [
+                'full_name' => $student->full_name,
+                'student_id_number' => $student->student_id_number,
+                'image' => $student->image,
+                'birth_date' => $student->birth_date?->format('Y-m-d'),
+                'phone' => $student->other['phone'] ?? '',
+                'email' => $student->other['email'] ?? '',
+                'gender' => $student->gender,
+                'group_name' => $student->group_name,
+                'department_name' => $student->department_name,
+                'specialty_name' => $student->specialty_name,
+                'level_name' => $student->level_name,
+                'education_type_name' => $student->education_type_name,
+                'education_form_name' => $student->education_form_name ?? null,
+                'province_name' => $student->province_name,
+                'district_name' => $student->district_name,
+                'semester_name' => $student->semester_name,
+                'avg_gpa' => $student->avg_gpa,
+                'avg_grade' => $student->avg_grade,
+                'total_credit' => $student->total_credit ?? null,
+            ],
         ]);
     }
 
@@ -152,12 +160,13 @@ class StudentApiController extends Controller
                         'subject_name' => $l->subject_name,
                         'subject_id' => $l->subject_id,
                         'employee_name' => $l->employee_name,
-                        'auditorium' => $l->auditorium_name ?? '',
-                        'start_time' => $l->lesson_pair_start_time,
-                        'end_time' => $l->lesson_pair_end_time,
-                        'training_type' => $l->training_type_name,
+                        'auditorium_name' => $l->auditorium_name ?? '',
+                        'lesson_pair_code' => $l->lesson_pair_code ?? null,
+                        'lesson_pair_start_time' => $l->lesson_pair_start_time,
+                        'lesson_pair_end_time' => $l->lesson_pair_end_time,
+                        'training_type_name' => $l->training_type_name,
                     ])
-                    ->sortBy('start_time')
+                    ->sortBy('lesson_pair_start_time')
                     ->values();
 
                 return [
@@ -169,12 +178,27 @@ class StudentApiController extends Controller
             ->sortKeys()
             ->values();
 
+        // Build days map keyed by day_name for mobile app
+        $days = [];
+        foreach ($groupedSchedule as $day) {
+            $days[$day['day_name']] = $day['lessons'];
+        }
+
+        $weekLabel = null;
+        if ($selectedWeek) {
+            $weekLabel = Carbon::parse($selectedWeek['start_date'])->format('d.m') . ' - ' . Carbon::parse($selectedWeek['end_date'])->format('d.m.Y');
+        }
+
         return response()->json([
-            'semesters' => $semesters,
-            'selected_semester_id' => $selectedSemesterId,
-            'weeks' => $weeks,
-            'selected_week_id' => $selectedWeekId,
-            'schedule' => $groupedSchedule,
+            'data' => [
+                'semesters' => $semesters,
+                'selected_semester_id' => $selectedSemesterId,
+                'weeks' => $weeks,
+                'selected_week_id' => $selectedWeekId,
+                'week_label' => $weekLabel,
+                'days' => $days,
+                'schedule' => $groupedSchedule,
+            ],
         ]);
     }
 
@@ -402,15 +426,25 @@ class StudentApiController extends Controller
             }
             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
 
+            $total = null;
+            $gradeComponents = array_filter([$jnAverage, $mtAverage, $otherGrades['on'], $otherGrades['oski'], $otherGrades['test']], fn($v) => $v !== null && $v > 0);
+            if (!empty($gradeComponents)) {
+                $total = (int) round(array_sum($gradeComponents) / count($gradeComponents));
+            }
+
             return [
-                'name' => $cs->subject_name,
+                'subject_name' => $cs->subject_name,
                 'credit' => $cs->credit,
                 'subject_id' => $subjectId,
-                'jn_average' => $jnAverage,
-                'mt_average' => $mtAverage,
-                'on' => $otherGrades['on'],
-                'oski' => $otherGrades['oski'],
-                'test' => $otherGrades['test'],
+                'employee_name' => null,
+                'grades' => [
+                    'jn' => $jnAverage > 0 ? $jnAverage : null,
+                    'mt' => $mtAverage > 0 ? $mtAverage : null,
+                    'on' => $otherGrades['on'],
+                    'oski' => $otherGrades['oski'],
+                    'test' => $otherGrades['test'],
+                    'total' => $total,
+                ],
                 'dav_percent' => $davomatPercent,
                 'absent_hours' => $absentOff,
                 'auditorium_hours' => $auditoriumHours,
@@ -418,8 +452,7 @@ class StudentApiController extends Controller
         });
 
         return response()->json([
-            'semester' => $student->semester_name,
-            'subjects' => $subjects->values(),
+            'data' => $subjects->values(),
         ]);
     }
 
@@ -453,8 +486,10 @@ class StudentApiController extends Controller
             ]);
 
         return response()->json([
-            'subject_id' => $subjectId,
-            'grades' => $grades,
+            'data' => [
+                'subject_id' => $subjectId,
+                'grades' => $grades,
+            ],
         ]);
     }
 
@@ -483,7 +518,7 @@ class StudentApiController extends Controller
             ]);
 
         return response()->json([
-            'pending_lessons' => $pendingLessons,
+            'data' => $pendingLessons,
         ]);
     }
 
@@ -513,7 +548,9 @@ class StudentApiController extends Controller
             ]);
 
         return response()->json([
-            'attendance' => $attendanceData,
+            'data' => [
+                'attendance' => $attendanceData,
+            ],
         ]);
     }
 }

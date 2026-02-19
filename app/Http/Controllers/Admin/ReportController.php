@@ -3728,9 +3728,10 @@ class ReportController extends Controller
                 }
             }
 
-            // 2-QADAM: Talabalar ro'yxati
+            // 2-QADAM: Faqat "5 ga da'vogar" ro'yxatidagi talabalar
             $studentQuery = DB::table('students as s')
-                ->select('s.hemis_id', 's.group_id', 's.level_code', 's.student_status_code');
+                ->select('s.hemis_id', 's.group_id', 's.level_code', 's.student_status_code')
+                ->where('s.is_five_candidate', true);
 
             if ($request->filled('student_status')) {
                 $studentQuery->where('s.student_status_code', $request->student_status);

@@ -144,7 +144,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
                         </svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">5 ga da'vogar talabalarning o'zlashtirish ko'rsatkichlari</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Talaba profilida "5 ga da'vogarlikka kiritish" orqali belgilangan talabalar nazorat qilinadi</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
@@ -257,7 +257,7 @@
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
 
                     if (!res.data || res.data.length === 0) {
-                        $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
+                        $('#empty-state').show().find('p:first').text("5 ga da'vogar talaba topilmadi. Talaba profilidan ro'yxatga kiriting.");
                         $('#table-area').hide();
                         $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
                         return;

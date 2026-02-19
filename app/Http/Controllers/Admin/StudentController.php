@@ -239,6 +239,15 @@ class StudentController extends Controller
         }
     }
 
+    public function toggleFiveCandidate(Request $request, Student $student)
+    {
+        $student->is_five_candidate = !$student->is_five_candidate;
+        $student->save();
+
+        $status = $student->is_five_candidate ? "ro'yxatga kiritildi" : "ro'yxatdan chiqarildi";
+        return back()->with('success', "{$student->full_name} 5 ga da'vogar {$status}.");
+    }
+
     public function bulkResetLocalPassword(Request $request)
     {
         $user = Auth::user();

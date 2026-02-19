@@ -226,12 +226,11 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName] = ['total' => 0, 'no_attendance' => 0, 'no_grades' => 0, 'teachers' => []];
             }
 
-            // Kafedra ichida fan bo'yicha guruhlash
-            $deptKey = $deptName . '||' . $facultyName;
+            // Kafedra ichida fan bo'yicha guruhlash (faqat kafedra nomi bo'yicha)
+            $deptKey = $deptName;
             if (!isset($departmentStats[$deptKey])) {
                 $departmentStats[$deptKey] = [
                     'department_name' => $deptName,
-                    'faculty_name' => $facultyName,
                     'subjects' => [],
                 ];
             }

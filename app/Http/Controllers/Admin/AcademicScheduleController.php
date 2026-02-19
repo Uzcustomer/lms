@@ -28,10 +28,10 @@ class AcademicScheduleController extends Controller
         $currentSemesters = Semester::where('current', true)->get();
         $currentEducationYear = $currentSemesters->first()?->education_year;
 
-        // Ta'lim turlari (current yoki aktiv guruhlar bo'lgan curriculum'lar)
+        // Ta'lim turlari (current yoki joriy semestri bor curriculum'lar)
         $educationTypes = Curriculum::where(function($q) {
                 $q->where('current', true)
-                  ->orWhereIn('curricula_hemis_id', Group::where('active', true)->select('curriculum_hemis_id'));
+                  ->orWhereIn('curricula_hemis_id', Semester::where('current', true)->select('curriculum_hemis_id'));
             })
             ->select('education_type_code', 'education_type_name')
             ->groupBy('education_type_code', 'education_type_name')
@@ -127,7 +127,7 @@ class AcademicScheduleController extends Controller
 
         $educationTypes = Curriculum::where(function($q) {
                 $q->where('current', true)
-                  ->orWhereIn('curricula_hemis_id', Group::where('active', true)->select('curriculum_hemis_id'));
+                  ->orWhereIn('curricula_hemis_id', Semester::where('current', true)->select('curriculum_hemis_id'));
             })
             ->select('education_type_code', 'education_type_name')
             ->groupBy('education_type_code', 'education_type_name')
@@ -235,10 +235,10 @@ class AcademicScheduleController extends Controller
                 : $semesterCodes->intersect($levelSemCodes);
         }
 
-        // O'quv rejalarini olish (current=1 yoki aktiv guruhlar bo'lgan)
+        // O'quv rejalarini olish (current=1 yoki joriy semestri bor)
         $curriculumQuery = Curriculum::where(function($q) {
             $q->where('current', true)
-              ->orWhereIn('curricula_hemis_id', Group::where('active', true)->select('curriculum_hemis_id'));
+              ->orWhereIn('curricula_hemis_id', Semester::where('current', true)->select('curriculum_hemis_id'));
         });
         if ($selectedDepartment) $curriculumQuery->where('department_hemis_id', $selectedDepartment);
         if ($selectedSpecialty) $curriculumQuery->where('specialty_hemis_id', $selectedSpecialty);
@@ -469,7 +469,7 @@ class AcademicScheduleController extends Controller
         $query = CurriculumSubject::whereHas('curriculum', function ($q) use ($request) {
             $q->where(function($sub) {
                 $sub->where('current', true)
-                    ->orWhereIn('curricula_hemis_id', Group::where('active', true)->select('curriculum_hemis_id'));
+                    ->orWhereIn('curricula_hemis_id', Semester::where('current', true)->select('curriculum_hemis_id'));
             });
             if ($request->department_id) $q->where('department_hemis_id', $request->department_id);
             if ($request->specialty_id) $q->where('specialty_hemis_id', $request->specialty_id);

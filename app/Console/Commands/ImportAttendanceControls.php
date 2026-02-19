@@ -70,10 +70,10 @@ class ImportAttendanceControls extends Command
             return;
         }
 
-        // 2-qadam: API muvaffaqiyatli — soft delete + yangi yozish
+        // 2-qadam: API muvaffaqiyatli — faqat upsert (soft delete yo'q)
         $this->applyAttendanceControls($items, $date, false);
 
-        $this->info("Live import tugadi: {$todayStr}, jami: " . count($items));
+        $this->info("Live import tugadi: {$todayStr}, API dan: " . count($items) . " ta yozuv");
     }
 
     // =========================================================================
@@ -205,31 +205,29 @@ class ImportAttendanceControls extends Command
     }
 
     // =========================================================================
-    // Davomat nazoratini bazaga yozish: soft delete + insert/update
-    // ImportGrades::applyGrades() bilan bir xil logika
+    // Davomat nazoratini bazaga yozish
+    // Live: faqat upsert (soft-delete QILMAYDI — API har doim to'liq ma'lumot qaytarmaydi)
+    // Final: soft delete + upsert (tunda, barcha ma'lumot to'liq bo'lganda)
     // =========================================================================
     private function applyAttendanceControls(array $items, Carbon $date, bool $isFinal): void
     {
         $dateStart = $date->copy()->startOfDay();
         $dateEnd = $date->copy()->endOfDay();
+        $dateStr = $dateStart->toDateString();
 
         $written = 0;
         $softDeletedCount = 0;
 
-        DB::transaction(function () use ($items, $dateStart, $dateEnd, $isFinal, &$written, &$softDeletedCount) {
-            $query = AttendanceControl::where('lesson_date', '>=', $dateStart)
-                ->where('lesson_date', '<=', $dateEnd);
-
+        DB::transaction(function () use ($items, $dateStart, $dateEnd, $dateStr, $isFinal, &$written, &$softDeletedCount) {
+            // Soft delete faqat FINAL import da — live import da qilmaslik!
+            // Sabab: HEMIS API kun davomida to'liq ma'lumot qaytarmasligi mumkin,
+            // oldingi importda kiritilgan yozuvlarni yo'qotib qo'yadi.
             if ($isFinal) {
-                // Final: BARCHA eski yozuvlarni soft delete (is_final=true va false)
-                $softDeletedCount = $query->delete();
-            } else {
-                // Live: faqat is_final=false yozuvlarni soft delete
-                // is_final=true (yakunlangan) yozuvlar saqlanadi
-                $softDeletedCount = $query->where('is_final', false)->delete();
+                $softDeletedCount = AttendanceControl::where('lesson_date', '>=', $dateStart)
+                    ->where('lesson_date', '<=', $dateEnd)
+                    ->delete();
+                $this->info("Soft deleted {$softDeletedCount} old records for {$dateStr}");
             }
-
-            $this->info("Soft deleted {$softDeletedCount} old records for {$dateStart->toDateString()}");
 
             // Yangi yozuvlarni kiritish (soft-deleted bo'lsa restore qilib yangilaydi)
             foreach ($items as $item) {
@@ -270,6 +268,6 @@ class ImportAttendanceControls extends Command
             }
         });
 
-        $this->info("Written {$written} records (is_final=" . ($isFinal ? 'true' : 'false') . ")");
+        $this->info("Written {$written} records for {$dateStr} (is_final=" . ($isFinal ? 'true' : 'false') . ")");
     }
 }

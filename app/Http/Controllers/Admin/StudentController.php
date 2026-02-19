@@ -208,7 +208,15 @@ class StudentController extends Controller
 
     public function show(Student $student)
     {
-        return view('admin.students.show', compact('student'));
+        $user = auth()->user();
+        $userRoles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $userRoles[0] ?? '');
+        if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
+            $activeRole = $userRoles[0];
+        }
+        $canToggleFive = in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'dekan']);
+
+        return view('admin.students.show', compact('student', 'canToggleFive'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)

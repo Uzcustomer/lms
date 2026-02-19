@@ -4,10 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AbsenceExcuse;
-use BaconQrCode\Renderer\Image\SvgImageBackEnd;
-use BaconQrCode\Renderer\ImageRenderer;
-use BaconQrCode\Renderer\RendererStyle\RendererStyle;
-use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -74,13 +70,17 @@ class AbsenceExcuseController extends Controller
         $user = Auth::user();
 
         try {
-            // QR kod generatsiya (BaconQrCode — SVG formatda, Facade kerak emas)
             $verificationUrl = route('absence-excuse.verify', $excuse->verification_token);
-            $renderer = new ImageRenderer(
-                new RendererStyle(200, 1),
-                new SvgImageBackEnd()
-            );
-            $qrCodeSvg = (new Writer($renderer))->writeString($verificationUrl);
+
+            // QR kod generatsiya (paket mavjud bo'lsa SVG, bo'lmasa URL ko'rsatiladi)
+            $qrCodeSvg = null;
+            if (class_exists(\BaconQrCode\Writer::class)) {
+                $renderer = new \BaconQrCode\Renderer\ImageRenderer(
+                    new \BaconQrCode\Renderer\RendererStyle\RendererStyle(200, 1),
+                    new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
+                );
+                $qrCodeSvg = (new \BaconQrCode\Writer($renderer))->writeString($verificationUrl);
+            }
 
             // PDF generatsiya
             $pdf = Pdf::loadView('pdf.absence-excuse-certificate', [

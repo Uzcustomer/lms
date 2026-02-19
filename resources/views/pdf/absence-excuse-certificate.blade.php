@@ -247,10 +247,14 @@
         Sana: {{ $reviewDate->format('d.m.Y') }}
     </div>
 
-    {{-- QR kod (inline SVG) --}}
-    @if(isset($qrCodeSvg))
+    {{-- QR kod (inline SVG) yoki tekshirish URL --}}
+    @if(!empty($qrCodeSvg))
         <div class="qr-container">
             {!! $qrCodeSvg !!}
+        </div>
+    @elseif(isset($verificationUrl))
+        <div class="qr-container" style="font-size: 7px; color: #666; width: 120px; word-break: break-all;">
+            Tekshirish:<br>{{ $verificationUrl }}
         </div>
     @endif
 

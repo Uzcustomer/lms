@@ -129,14 +129,13 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
             return RefreshIndicator(
               onRefresh: () => provider.loadSubjects(),
-              child: ListView.builder(
+              child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
                 itemCount: subjects.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final subject = subjects[index] as Map<String, dynamic>;
-                  final isFirst = index == 0;
-                  final isLast = index == subjects.length - 1;
-                  return _buildSubjectAccordion(context, subject, index, isDark, l, isFirst, isLast);
+                  return _buildSubjectAccordion(context, subject, index, isDark, l);
                 },
               ),
             );
@@ -151,8 +150,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     int index,
     bool isDark,
     AppLocalizations l,
-    bool isFirst,
-    bool isLast,
   ) {
     final isExpanded = _expandedIndex == index;
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
@@ -163,18 +160,14 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return Container(
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.vertical(
-          top: isFirst ? const Radius.circular(16) : Radius.zero,
-          bottom: isLast ? const Radius.circular(16) : Radius.zero,
-        ),
-        border: Border(
-          bottom: isLast
-              ? BorderSide.none
-              : BorderSide(
-                  color: isDark ? AppTheme.darkDivider : const Color(0xFFE8E8E8),
-                  width: 0.5,
-                ),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(isDark ? 30 : 10),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -184,10 +177,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 _expandedIndex = isExpanded ? -1 : index;
               });
             },
-            borderRadius: BorderRadius.vertical(
-              top: isFirst ? const Radius.circular(16) : Radius.zero,
-              bottom: isLast && !isExpanded ? const Radius.circular(16) : Radius.zero,
-            ),
+            borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: Row(

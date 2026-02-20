@@ -99,61 +99,45 @@ class AcademicScheduleController extends Controller
         $currentSemesterToggle = $request->get('current_semester', '1');
         $isSearched = true;
 
-        // Ma'lumotlarni yuklash (sana filtrini o'zimiz qo'llaymiz, loadScheduleData ga bermaymiz)
+        // Ma'lumotlarni yuklash (YN sanasi bo'yicha filtr)
         $scheduleData = $this->loadScheduleData(
             $currentSemesters, $selectedDepartment, $selectedSpecialty,
             $selectedSemester, $selectedGroup, $selectedEducationType,
             $selectedLevelCode, $selectedSubject, $selectedStatus,
-            $currentSemesterToggle, true, null, null
+            $currentSemesterToggle, true, $dateFrom, $dateTo, true
         );
 
         // OSKI/Test ma'lumotlarini alohida qatorlarga ajratish (YN turi + YN sanasi)
         $transformedData = collect();
         foreach ($scheduleData as $groupHemisId => $items) {
             foreach ($items as $item) {
-                $hasOski = $item['oski_date'] || $item['oski_na'];
-                $hasTest = $item['test_date'] || $item['test_na'];
+                $oskiDate = $item['oski_date'] ?? null;
+                $testDate = $item['test_date'] ?? null;
+                $oskiNa = $item['oski_na'] ?? false;
+                $testNa = $item['test_na'] ?? false;
 
-                if ($hasOski) {
+                // OSKI qatori: sana oraliqqa to'g'ri kelsa yoki N/A bo'lsa
+                $oskiInRange = $oskiDate && (!$dateFrom || $oskiDate >= $dateFrom) && (!$dateTo || $oskiDate <= $dateTo);
+                if ($oskiInRange || ($oskiNa && !$dateFrom && !$dateTo)) {
                     $ynItem = $item;
                     $ynItem['yn_type'] = 'OSKI';
-                    $ynItem['yn_date'] = $item['oski_date'];
+                    $ynItem['yn_date'] = $oskiDate;
                     $ynItem['yn_date_carbon'] = $item['oski_date_carbon'] ?? null;
-                    $ynItem['yn_na'] = $item['oski_na'];
+                    $ynItem['yn_na'] = $oskiNa;
                     $transformedData->push($ynItem);
                 }
 
-                if ($hasTest) {
+                // Test qatori: sana oraliqqa to'g'ri kelsa yoki N/A bo'lsa
+                $testInRange = $testDate && (!$dateFrom || $testDate >= $dateFrom) && (!$dateTo || $testDate <= $dateTo);
+                if ($testInRange || ($testNa && !$dateFrom && !$dateTo)) {
                     $ynItem = $item;
                     $ynItem['yn_type'] = 'Test';
-                    $ynItem['yn_date'] = $item['test_date'];
+                    $ynItem['yn_date'] = $testDate;
                     $ynItem['yn_date_carbon'] = $item['test_date_carbon'] ?? null;
-                    $ynItem['yn_na'] = $item['test_na'];
-                    $transformedData->push($ynItem);
-                }
-
-                if (!$hasOski && !$hasTest) {
-                    $ynItem = $item;
-                    $ynItem['yn_type'] = null;
-                    $ynItem['yn_date'] = null;
-                    $ynItem['yn_date_carbon'] = null;
-                    $ynItem['yn_na'] = false;
+                    $ynItem['yn_na'] = $testNa;
                     $transformedData->push($ynItem);
                 }
             }
-        }
-
-        // YN sanasi bo'yicha filtr (OSKI yoki Test sanasi)
-        if ($dateFrom || $dateTo) {
-            $transformedData = $transformedData->filter(function ($item) use ($dateFrom, $dateTo) {
-                $ynDate = $item['yn_date'];
-                if (!$ynDate) return false;
-
-                if ($dateFrom && $ynDate < $dateFrom) return false;
-                if ($dateTo && $ynDate > $dateTo) return false;
-
-                return true;
-            });
         }
 
         $scheduleData = $transformedData->groupBy(fn($item) => $item['group']->group_hemis_id);
@@ -187,7 +171,7 @@ class AcademicScheduleController extends Controller
         $selectedSemester, $selectedGroup, $selectedEducationType,
         $selectedLevelCode, $selectedSubject, $selectedStatus,
         $currentSemesterToggle, $includeCarbon = false,
-        $dateFrom = null, $dateTo = null
+        $dateFrom = null, $dateTo = null, $filterByYnDate = false
     ) {
         // Semestr kodlarini aniqlash
         $semesterCodes = collect();
@@ -309,17 +293,32 @@ class AcademicScheduleController extends Controller
             $scheduleData = $scheduleData->filter(fn($item) => !$item['oski_date'] && !$item['test_date']);
         }
 
-        // Sana oralig'i filtri (dars tugash sanasi bo'yicha)
+        // Sana oralig'i filtri
         if ($dateFrom || $dateTo) {
-            $scheduleData = $scheduleData->filter(function ($item) use ($dateFrom, $dateTo) {
-                $lessonEnd = $item['lesson_end_date'];
-                if (!$lessonEnd) return false;
+            if ($filterByYnDate) {
+                // YN sanasi bo'yicha filtr (OSKI yoki Test sanasi)
+                $scheduleData = $scheduleData->filter(function ($item) use ($dateFrom, $dateTo) {
+                    $oskiDate = $item['oski_date'];
+                    $testDate = $item['test_date'];
 
-                if ($dateFrom && $lessonEnd < $dateFrom) return false;
-                if ($dateTo && $lessonEnd > $dateTo) return false;
+                    // OSKI yoki Test sanalaridan kamida biri oraliqqa to'g'ri kelsa ko'rsatiladi
+                    $oskiMatch = $oskiDate && (!$dateFrom || $oskiDate >= $dateFrom) && (!$dateTo || $oskiDate <= $dateTo);
+                    $testMatch = $testDate && (!$dateFrom || $testDate >= $dateFrom) && (!$dateTo || $testDate <= $dateTo);
 
-                return true;
-            });
+                    return $oskiMatch || $testMatch;
+                });
+            } else {
+                // Dars tugash sanasi bo'yicha filtr
+                $scheduleData = $scheduleData->filter(function ($item) use ($dateFrom, $dateTo) {
+                    $lessonEnd = $item['lesson_end_date'];
+                    if (!$lessonEnd) return false;
+
+                    if ($dateFrom && $lessonEnd < $dateFrom) return false;
+                    if ($dateTo && $lessonEnd > $dateTo) return false;
+
+                    return true;
+                });
+            }
         }
 
         return $scheduleData->groupBy(fn($item) => $item['group']->group_hemis_id);

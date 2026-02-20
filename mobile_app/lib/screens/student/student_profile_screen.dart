@@ -27,8 +27,26 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: const Text('Profil'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.person, color: Colors.white, size: 22),
+            SizedBox(width: 8),
+            Text('Profil'),
+          ],
+        ),
+        centerTitle: true,
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {},
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => _showLogoutDialog(context),
@@ -67,10 +85,6 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 children: [
                   // Profile Card: Avatar + Info
                   _buildProfileCard(context, profile),
-                  const SizedBox(height: 16),
-
-                  // Academic Table
-                  _buildAcademicTable(context, profile),
                   const SizedBox(height: 16),
 
                   // Personal Info
@@ -187,143 +201,6 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildAcademicTable(BuildContext context, Map<String, dynamic> profile) {
-    final semesters = profile['semesters'];
-    final currentEducationYear = profile['education_year']?.toString() ?? '';
-    final currentLevel = profile['level']?.toString() ?? profile['course']?.toString() ?? '';
-    final currentSemester = profile['semester_name']?.toString() ?? '';
-    final groupName = profile['group_name']?.toString() ?? '';
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Akademik ma\'lumotlar',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryColor,
-                  ),
-            ),
-            const SizedBox(height: 12),
-
-            // Table
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.dividerColor),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: _buildTable(profile, semesters, currentEducationYear, currentLevel,
-                    currentSemester, groupName),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTable(
-    Map<String, dynamic> profile,
-    dynamic semesters,
-    String currentEducationYear,
-    String currentLevel,
-    String currentSemester,
-    String groupName,
-  ) {
-    // If API returns a list of semesters, use that
-    if (semesters != null && semesters is List && semesters.isNotEmpty) {
-      return Table(
-        columnWidths: const {
-          0: FixedColumnWidth(40),
-          1: FlexColumnWidth(2),
-          2: FlexColumnWidth(1),
-          3: FlexColumnWidth(1.5),
-        },
-        border: TableBorder(
-          horizontalInside: BorderSide(color: AppTheme.dividerColor.withAlpha(150)),
-        ),
-        children: [
-          _buildTableHeader(),
-          ...semesters.asMap().entries.map((entry) {
-            final i = entry.key;
-            final s = entry.value;
-            return _buildTableRow(
-              (i + 1).toString(),
-              s['education_year']?.toString() ?? '',
-              s['level']?.toString() ?? s['course']?.toString() ?? '',
-              s['semester']?.toString() ?? s['semester_name']?.toString() ?? '',
-              isEven: i.isEven,
-            );
-          }),
-        ],
-      );
-    }
-
-    // Fallback: show current semester data from profile
-    return Table(
-      columnWidths: const {
-        0: FixedColumnWidth(40),
-        1: FlexColumnWidth(2),
-        2: FlexColumnWidth(1),
-        3: FlexColumnWidth(1.5),
-      },
-      border: TableBorder(
-        horizontalInside: BorderSide(color: AppTheme.dividerColor.withAlpha(150)),
-      ),
-      children: [
-        _buildTableHeader(),
-        _buildTableRow(
-          '1',
-          currentEducationYear.isNotEmpty ? currentEducationYear : '-',
-          currentLevel.isNotEmpty ? currentLevel : '-',
-          currentSemester.isNotEmpty ? currentSemester : '-',
-          isEven: true,
-        ),
-      ],
-    );
-  }
-
-  TableRow _buildTableHeader() {
-    return TableRow(
-      decoration: BoxDecoration(
-        color: AppTheme.primaryColor.withAlpha(20),
-      ),
-      children: const [
-        _TableHeaderCell('#'),
-        _TableHeaderCell('O\'quv yili'),
-        _TableHeaderCell('Bosqich'),
-        _TableHeaderCell('Semestr'),
-      ],
-    );
-  }
-
-  TableRow _buildTableRow(
-    String number,
-    String year,
-    String level,
-    String semester, {
-    bool isEven = false,
-  }) {
-    return TableRow(
-      decoration: BoxDecoration(
-        color: isEven ? Colors.white : AppTheme.backgroundColor,
-      ),
-      children: [
-        _TableCell(number, center: true),
-        _TableCell(year),
-        _TableCell(level, center: true),
-        _TableCell(semester),
       ],
     );
   }
@@ -450,44 +327,3 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   }
 }
 
-class _TableHeaderCell extends StatelessWidget {
-  final String text;
-  const _TableHeaderCell(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: AppTheme.primaryColor,
-        ),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
-}
-
-class _TableCell extends StatelessWidget {
-  final String text;
-  final bool center;
-  const _TableCell(this.text, {this.center = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 12,
-          color: AppTheme.textPrimary,
-        ),
-        textAlign: center ? TextAlign.center : TextAlign.start,
-      ),
-    );
-  }
-}

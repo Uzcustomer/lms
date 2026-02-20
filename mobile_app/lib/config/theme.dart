@@ -25,7 +25,7 @@ class AppTheme {
       ),
       textTheme: GoogleFonts.interTextTheme(),
       appBarTheme: AppBarTheme(
-        centerTitle: false,
+        centerTitle: true,
         elevation: 0,
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
@@ -108,7 +108,7 @@ class AppTheme {
       scaffoldBackgroundColor: darkBackground,
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       appBarTheme: AppBarTheme(
-        centerTitle: false,
+        centerTitle: true,
         elevation: 0,
         backgroundColor: darkSurface,
         foregroundColor: Colors.white,

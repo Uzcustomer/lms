@@ -61,21 +61,27 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverAppBar(
-            title: Row(
-              children: [
-                const Icon(Icons.grade, color: Colors.white),
-                const SizedBox(width: 10),
-                Text(l.grades),
-              ],
-            ),
-            floating: true,
-            snap: true,
+      appBar: AppBar(
+        title: Text(l.grades),
+        centerTitle: true,
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {},
           ),
         ],
-        body: Consumer<StudentProvider>(
+      ),
+      body: Consumer<StudentProvider>(
           builder: (context, provider, _) {
             if (provider.isLoading && provider.subjects == null) {
               return const LoadingWidget();

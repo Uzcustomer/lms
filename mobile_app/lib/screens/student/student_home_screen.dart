@@ -73,44 +73,44 @@ class _StudentHomeScreenState extends State<StudentHomeScreen>
     ];
 
     return Scaffold(
+      extendBody: true,
       body: _screens[_currentIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: const Border(
-            top: BorderSide(
-              color: AppTheme.dividerColor,
-              width: 1.0,
-            ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(20),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(15),
-              blurRadius: 10,
-              offset: const Offset(0, -3),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(navItems.length, (index) {
-                final item = navItems[index];
-                final isActive = _currentIndex == index;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => _onTabTapped(index),
-                    behavior: HitTestBehavior.opaque,
-                    child: _AnimatedNavItem(
-                      animation: _scaleAnimations[index],
-                      isActive: isActive,
-                      item: item,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: List.generate(navItems.length, (index) {
+                  final item = navItems[index];
+                  final isActive = _currentIndex == index;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => _onTabTapped(index),
+                      behavior: HitTestBehavior.opaque,
+                      child: _AnimatedNavItem(
+                        animation: _scaleAnimations[index],
+                        isActive: isActive,
+                        item: item,
+                      ),
                     ),
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
             ),
           ),
         ),

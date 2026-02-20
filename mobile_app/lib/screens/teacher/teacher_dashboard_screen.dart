@@ -26,6 +26,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
+        leading: const Padding(
+          padding: EdgeInsets.all(12),
+          child: Icon(Icons.account_balance, size: 28),
+        ),
         title: const Text('TDTU LMS'),
         actions: [
           IconButton(

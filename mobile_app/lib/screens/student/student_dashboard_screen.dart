@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
+import '../../providers/settings_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/loading_widget.dart';
 
@@ -24,14 +27,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     });
   }
 
-  /// Build full image URL from the image field
   String? _buildImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) return null;
-    // If already a full URL, return as-is
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
       return imagePath;
     }
-    // Build URL from base (remove /api/v1 suffix for asset URLs)
     final baseHost = Uri.parse(ApiConfig.baseUrl).origin;
     final path = imagePath.startsWith('/') ? imagePath : '/$imagePath';
     return '$baseHost$path';
@@ -39,8 +39,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
       body: Consumer<StudentProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.dashboard == null && provider.profile == null) {
@@ -57,14 +60,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 children: [
                   const Icon(Icons.error_outline, size: 48, color: AppTheme.textSecondary),
                   const SizedBox(height: 16),
-                  Text(provider.error ?? 'Ma\'lumot topilmadi'),
+                  Text(provider.error ?? l.noData),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
                       provider.loadDashboard();
                       provider.loadProfile();
                     },
-                    child: const Text('Qayta yuklash'),
+                    child: Text(l.reload),
                   ),
                 ],
               ),
@@ -82,22 +85,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 children: [
-                  // Profile header section
-                  _buildProfileHeader(context, data, profile),
+                  _buildProfileHeader(context, data, profile, l, isDark),
                   const SizedBox(height: 16),
-
-                  // Stats & cards section
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Stat cards grid
                         Row(
                           children: [
                             Expanded(
                               child: StatCard(
-                                title: 'GPA',
+                                title: l.gpa,
                                 value: (data?['gpa'] ?? profile?['avg_gpa'] ?? 0).toString(),
                                 icon: Icons.trending_up,
                                 color: AppTheme.primaryColor,
@@ -106,7 +105,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: StatCard(
-                                title: 'O\'rtacha baho',
+                                title: l.avgGrade,
                                 value: (data?['avg_grade'] ?? profile?['avg_grade'] ?? 0).toString(),
                                 icon: Icons.star_outline,
                                 color: AppTheme.accentColor,
@@ -119,7 +118,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           children: [
                             Expanded(
                               child: StatCard(
-                                title: 'Qarzlar',
+                                title: l.debts,
                                 value: (data?['debt_subjects'] ?? 0).toString(),
                                 icon: Icons.warning_amber_outlined,
                                 color: data?['debt_subjects'] != null && data!['debt_subjects'] > 0
@@ -130,7 +129,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: StatCard(
-                                title: 'Darsga kelmagan',
+                                title: l.absences,
                                 value: (data?['total_absences'] ?? 0).toString(),
                                 icon: Icons.event_busy_outlined,
                                 color: AppTheme.warningColor,
@@ -139,11 +138,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
-
-                        // Recent grades
                         if (data?['recent_grades'] != null) ...[
                           Text(
-                            'So\'nggi baholar',
+                            l.recentGrades,
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -179,9 +176,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                                           color: AppTheme.warningColor.withAlpha(25),
                                           borderRadius: BorderRadius.circular(8),
                                         ),
-                                        child: const Text(
-                                          'Kutilmoqda',
-                                          style: TextStyle(
+                                        child: Text(
+                                          l.pending,
+                                          style: const TextStyle(
                                             fontSize: 11,
                                             color: AppTheme.warningColor,
                                           ),
@@ -209,6 +206,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     BuildContext context,
     Map<String, dynamic>? data,
     Map<String, dynamic>? profile,
+    AppLocalizations l,
+    bool isDark,
   ) {
     final fullName = profile?['full_name']?.toString() ??
         data?['student_name']?.toString() ??
@@ -217,26 +216,26 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final faculty = profile?['department_name']?.toString() ?? '';
     final specialty = profile?['specialty_name']?.toString() ?? '';
     final imageUrl = _buildImageUrl(profile?['image']?.toString());
-    final course = profile?['level_code']?.toString() ?? profile?['level_name']?.toString() ?? '';
-    final gpa = (data?['gpa'] ?? profile?['avg_gpa'] ?? '').toString();
-    final avgGrade = (data?['avg_grade'] ?? profile?['avg_grade'] ?? '').toString();
+    // Use calculated course from backend (not level_code)
+    final course = profile?['course']?.toString() ?? '';
     final yearOfEnter = profile?['year_of_enter']?.toString() ?? '';
     final educationYear = profile?['education_year_name']?.toString() ?? '';
     final semesterName = profile?['semester_name']?.toString() ?? '';
 
     final statusBarHeight = MediaQuery.of(context).padding.top;
-
-    // Header extends far enough to sit behind half of the white card
-    const headerBottomPadding = 200.0;
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final divColor = isDark ? AppTheme.darkDivider : AppTheme.dividerColor;
 
     return Stack(
       children: [
-        // Dark blue curved background — extends behind the card
+        // Dark blue curved background
         Container(
           width: double.infinity,
           padding: EdgeInsets.only(
             top: statusBarHeight + 12,
-            bottom: headerBottomPadding,
+            bottom: 200,
           ),
           decoration: const BoxDecoration(
             color: AppTheme.primaryColor,
@@ -247,7 +246,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ),
           child: Column(
             children: [
-              // Top bar: logo + settings
+              // Top bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
@@ -255,15 +254,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(
-                          Icons.account_balance,
-                          color: Colors.white,
-                          size: 28,
-                        ),
+                        const Icon(Icons.account_balance, color: Colors.white, size: 28),
                         const SizedBox(width: 10),
-                        const Text(
-                          'TDTU LMS',
-                          style: TextStyle(
+                        Text(
+                          l.appTitle,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
@@ -279,7 +274,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.settings, color: Colors.white, size: 24),
-                          onPressed: () {},
+                          onPressed: () => _showSettingsSheet(context),
                         ),
                       ],
                     ),
@@ -288,64 +283,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Profile photo centered in header
-              Stack(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 4),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(40),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundColor: Colors.white.withAlpha(50),
-                      backgroundImage:
-                          imageUrl != null && imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
-                      child: imageUrl == null || imageUrl.isEmpty
-                          ? Text(
-                              _getInitials(fullName),
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-                  // Camera icon overlay
-                  Positioned(
-                    bottom: 4,
-                    right: 4,
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppTheme.primaryColor, width: 2),
-                      ),
-                      child: const Icon(
-                        Icons.camera_alt,
-                        color: AppTheme.primaryColor,
-                        size: 14,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              // Profile photo
+              _buildProfileAvatar(imageUrl, fullName),
             ],
           ),
         ),
 
-        // White card with student info + mini stats — overlaps the header
+        // White card
         Container(
           width: double.infinity,
           margin: EdgeInsets.only(
@@ -355,7 +299,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ),
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardColor,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -367,19 +311,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ),
           child: Column(
             children: [
-              // Name
               Text(
                 fullName,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
+                  color: textColor,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 4),
-
-              // Student ID
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
                 decoration: BoxDecoration(
@@ -396,8 +337,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-
-              // Faculty (orange)
               if (faculty.isNotEmpty)
                 Text(
                   faculty,
@@ -412,60 +351,39 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 const SizedBox(height: 2),
                 Text(
                   specialty,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: AppTheme.textSecondary,
+                    color: subTextColor,
                   ),
                   textAlign: TextAlign.center,
                 ),
               ],
               const SizedBox(height: 12),
-
-              // "Profilni to'ldirish" button
               OutlinedButton(
                 onPressed: () {},
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.textSecondary,
-                  side: const BorderSide(color: AppTheme.dividerColor),
+                  foregroundColor: subTextColor,
+                  side: BorderSide(color: divColor),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 ),
-                child: const Text(
-                  'Profilni to\'ldirish',
-                  style: TextStyle(fontSize: 13),
-                ),
+                child: Text(l.fillProfile, style: const TextStyle(fontSize: 13)),
               ),
               const SizedBox(height: 16),
-
-              // Divider
-              const Divider(height: 1, color: AppTheme.dividerColor),
+              Divider(height: 1, color: divColor),
               const SizedBox(height: 12),
-
-              // Mini stats row (5 columns): O'qishga kirgan yili, O'quv yili, Semestr, Kurs, GPA
               Row(
                 children: [
-                  _buildMiniStat(
-                    'Kirgan yili',
-                    yearOfEnter.isNotEmpty ? yearOfEnter : '-',
-                  ),
-                  _buildVerticalDivider(),
-                  _buildMiniStat(
-                    'O\'quv yili',
-                    educationYear.isNotEmpty ? educationYear : '-',
-                  ),
-                  _buildVerticalDivider(),
-                  _buildMiniStat(
-                    'Semestr',
-                    semesterName.isNotEmpty ? semesterName : '-',
-                  ),
-                  _buildVerticalDivider(),
-                  _buildMiniStat(
-                    'Kurs',
-                    course.isNotEmpty ? course : '-',
-                  ),
+                  _buildMiniStat(l.enrollmentYear, yearOfEnter.isNotEmpty ? yearOfEnter : '-', textColor, subTextColor),
+                  _buildVerticalDivider(divColor),
+                  _buildMiniStat(l.educationYear, educationYear.isNotEmpty ? educationYear : '-', textColor, subTextColor),
+                  _buildVerticalDivider(divColor),
+                  _buildMiniStat(l.semester, semesterName.isNotEmpty ? semesterName : '-', textColor, subTextColor),
+                  _buildVerticalDivider(divColor),
+                  _buildMiniStat(l.course, course.isNotEmpty ? '$course-kurs' : '-', textColor, subTextColor),
                 ],
               ),
             ],
@@ -475,16 +393,267 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildMiniStat(String label, String value) {
+  Widget _buildProfileAvatar(String? imageUrl, String fullName) {
+    return Stack(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 4),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(40),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: imageUrl != null && imageUrl.isNotEmpty
+              ? ClipOval(
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 100,
+                      height: 100,
+                      color: Colors.white.withAlpha(50),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.white.withAlpha(50),
+                      child: Text(
+                        _getInitials(fullName),
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.white.withAlpha(50),
+                  child: Text(
+                    _getInitials(fullName),
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+        ),
+        Positioned(
+          bottom: 4,
+          right: 4,
+          child: Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.primaryColor, width: 2),
+            ),
+            child: const Icon(Icons.camera_alt, color: AppTheme.primaryColor, size: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showSettingsSheet(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final settings = context.read<SettingsProvider>();
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final isDark = settings.isDark;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[400],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    l.settings,
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Theme toggle
+                  Text(
+                    l.theme,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildThemeOption(
+                        ctx,
+                        icon: Icons.light_mode,
+                        label: l.lightMode,
+                        isSelected: !isDark,
+                        onTap: () {
+                          settings.setThemeMode(ThemeMode.light);
+                          setSheetState(() {});
+                        },
+                      ),
+                      const SizedBox(width: 12),
+                      _buildThemeOption(
+                        ctx,
+                        icon: Icons.dark_mode,
+                        label: l.darkMode,
+                        isSelected: isDark,
+                        onTap: () {
+                          settings.setThemeMode(ThemeMode.dark);
+                          setSheetState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Language selection
+                  Text(
+                    l.language,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildLangOption(ctx, 'UZ', l.uzbek, 'uz', settings),
+                      const SizedBox(width: 8),
+                      _buildLangOption(ctx, 'RU', l.russian, 'ru', settings),
+                      const SizedBox(width: 8),
+                      _buildLangOption(ctx, 'EN', l.english, 'en', settings),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildThemeOption(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primaryColor : Colors.grey[200],
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: isSelected ? Colors.white : Colors.grey[600], size: 28),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? Colors.white : Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLangOption(
+    BuildContext context,
+    String code,
+    String label,
+    String langCode,
+    SettingsProvider settings,
+  ) {
+    final isSelected = settings.languageCode == langCode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          settings.setLocale(Locale(langCode));
+          Navigator.pop(context);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primaryColor : Colors.grey[200],
+            borderRadius: BorderRadius.circular(14),
+            border: isSelected ? null : Border.all(color: Colors.grey[300]!),
+          ),
+          child: Column(
+            children: [
+              Text(
+                code,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? Colors.white : Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isSelected ? Colors.white70 : Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniStat(String label, String value, Color textColor, Color subTextColor) {
     return Expanded(
       child: Column(
         children: [
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 10,
-              color: AppTheme.textSecondary,
-            ),
+            style: TextStyle(fontSize: 10, color: subTextColor),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -506,12 +675,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildVerticalDivider() {
-    return Container(
-      width: 1,
-      height: 35,
-      color: AppTheme.dividerColor,
-    );
+  Widget _buildVerticalDivider(Color color) {
+    return Container(width: 1, height: 35, color: color);
   }
 
   String _getInitials(String name) {

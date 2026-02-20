@@ -66,6 +66,21 @@ class StudentApiController extends Controller
     {
         $student = $request->user();
 
+        // Calculate course number from semester name (e.g. "8-semestr" -> kurs 4)
+        $course = null;
+        if ($student->semester_name && preg_match('/(\d+)/', $student->semester_name, $matches)) {
+            $semNum = (int) $matches[1];
+            $course = (int) ceil($semNum / 2);
+        }
+        if (!$course && $student->year_of_enter) {
+            $enterYear = (int) $student->year_of_enter;
+            $currentMonth = (int) date('m');
+            $currentYear = (int) date('Y');
+            $course = $currentMonth >= 9
+                ? $currentYear - $enterYear + 1
+                : $currentYear - $enterYear;
+        }
+
         return response()->json([
             'data' => [
                 'full_name' => $student->full_name,
@@ -80,6 +95,7 @@ class StudentApiController extends Controller
                 'specialty_name' => $student->specialty_name,
                 'level_code' => $student->level_code,
                 'level_name' => $student->level_name,
+                'course' => $course,
                 'education_type_name' => $student->education_type_name,
                 'education_form_name' => $student->education_form_name ?? null,
                 'education_year_code' => $student->education_year_code,

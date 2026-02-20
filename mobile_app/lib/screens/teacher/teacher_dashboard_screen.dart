@@ -30,7 +30,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
           padding: EdgeInsets.all(12),
           child: Icon(Icons.account_balance, size: 28),
         ),
-        title: const Text('TDTU LMS'),
+        title: const Text('Tashmedunitf Lms'),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),

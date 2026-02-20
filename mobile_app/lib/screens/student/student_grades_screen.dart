@@ -7,6 +7,7 @@ import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
+import 'student_journal_screen.dart';
 
 class StudentGradesScreen extends StatefulWidget {
   const StudentGradesScreen({super.key});
@@ -117,7 +118,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             return RefreshIndicator(
               onRefresh: () => provider.loadSubjects(),
               child: ListView.builder(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
                 itemCount: subjects.length,
                 itemBuilder: (context, index) {
                   final subject = subjects[index] as Map<String, dynamic>;
@@ -364,7 +365,21 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    final subjectId = subject['subject_id'];
+                    final subjectName = subject['subject_name']?.toString() ?? '';
+                    if (subjectId != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StudentJournalScreen(
+                            subjectId: subjectId is int ? subjectId : int.parse(subjectId.toString()),
+                            subjectName: subjectName,
+                          ),
+                        ),
+                      );
+                    }
+                  },
                   icon: const Icon(Icons.info_outline, size: 18),
                   label: Text(l.get('details'), style: const TextStyle(fontSize: 13)),
                   style: ElevatedButton.styleFrom(

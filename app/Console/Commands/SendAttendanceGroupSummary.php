@@ -75,6 +75,7 @@ class SendAttendanceGroupSummary extends Command
                 'sch.employee_name',
                 'sch.faculty_name',
                 'g.specialty_name',
+                'sem.level_code',
                 'sem.level_name',
                 'sch.semester_code',
                 'sch.semester_name',
@@ -168,7 +169,7 @@ class SendAttendanceGroupSummary extends Command
                     'has_attendance' => isset($attendanceSet[$attKey]),
                     'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
                     'lesson_date' => $sch->lesson_date_str,
-                    'kurs' => (int) ceil($semCode / 2),
+                    'kurs' => (int) ($sch->level_code ?? ceil($semCode / 2)),
                     'employee_id' => $sch->employee_id,
                     'academic_hours' => $this->calculateAcademicHours($sch->lesson_pair_start_time, $sch->lesson_pair_end_time),
                 ];

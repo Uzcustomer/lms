@@ -31,11 +31,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   String? _buildImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) return null;
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-      // Web da tashqi domainlardan rasm yuklash CORS xatosi beradi
-      if (kIsWeb) {
-        final imageHost = Uri.parse(imagePath).host;
-        final apiHost = Uri.parse(ApiConfig.baseUrl).host;
-        if (imageHost != apiHost) return null;
+      final imageHost = Uri.parse(imagePath).host;
+      final apiHost = Uri.parse(ApiConfig.baseUrl).host;
+      if (imageHost != apiHost) {
+        // Proxy cross-origin images through backend to avoid CORS
+        final encoded = Uri.encodeComponent(imagePath);
+        return '${ApiConfig.baseUrl}${ApiConfig.imageProxy}?url=$encoded';
       }
       return imagePath;
     }

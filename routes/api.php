@@ -22,6 +22,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/teacher/verify-2fa', [AuthController::class, 'teacherVerify2fa']);
     Route::post('/teacher/resend-2fa', [AuthController::class, 'teacherResend2fa']);
 
+    // ── Image proxy (no auth, domain-restricted) ──────────
+    Route::get('/image-proxy', [AuthController::class, 'imageProxy']);
+
     // ── Authenticated (Sanctum) ───────────────────────────
     Route::middleware('auth:sanctum')->group(function () {
 

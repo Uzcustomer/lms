@@ -152,16 +152,36 @@ class ImportGrades extends Command
         foreach ($unfinishedDates as $dateStr) {
             $date = Carbon::parse($dateStr);
 
+            $dateStartOfDay = $date->copy()->startOfDay();
+            $dateEndOfDay = $date->copy()->endOfDay();
+
             // Faqat BARCHA yozuvlar is_final=true bo'lgandagina o'tkazish
-            // Bir nechta is_final=true (retake) bor, lekin boshqalar is_final=false bo'lsa — import qilish kerak
-            $hasUnfinalizedForDate = StudentGrade::where('lesson_date', '>=', $date->copy()->startOfDay())
-                ->where('lesson_date', '<=', $date->copy()->endOfDay())
+            $hasUnfinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                ->where('lesson_date', '<=', $dateEndOfDay)
                 ->where('is_final', false)
                 ->exists();
 
             if (!$hasUnfinalizedForDate) {
                 $this->info("  {$date->toDateString()} — BARCHA yozuvlar yakunlangan, o'tkazib yuborildi.");
                 $totalDays--;
+                continue;
+            }
+
+            // Agar shu kun uchun is_final=true yozuvlar ALLAQACHON mavjud bo'lsa,
+            // is_final=false qoldiqlarni tozalab, API ni qayta chaqirmaslik
+            $hasFinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                ->where('lesson_date', '<=', $dateEndOfDay)
+                ->where('is_final', true)
+                ->exists();
+
+            if ($hasFinalizedForDate) {
+                $cleaned = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                    ->where('lesson_date', '<=', $dateEndOfDay)
+                    ->where('is_final', false)
+                    ->delete();
+                $this->info("  {$date->toDateString()} — is_final=true allaqachon mavjud, {$cleaned} ta is_final=false qoldiq tozalandi.");
+                Log::info("[FinalImport] {$date->toDateString()} — cleaned {$cleaned} leftover is_final=false records (is_final=true already exists).");
+                $successDays++;
                 continue;
             }
 
@@ -500,6 +520,20 @@ class ImportGrades extends Command
             if ($restoredLocal > 0) {
                 $this->info("Local grades: {$restoredLocal} restored (HEMIS da yo'q, o'qituvchi qo'ygan) for {$dateStart->toDateString()}");
                 Log::info("[ApplyGrades] Local grades: {$restoredLocal} restored for {$dateStart->toDateString()}");
+            }
+
+            // 7-QADAM: Xavfsizlik tozalash — final importdan keyin is_final=false qoldiqlar qolmasligi kerak
+            // Agar step 6 (orphan restoration) eski is_final=false yozuvlarni qayta tiklagan bo'lsa,
+            // ularni shu yerda tozalab tashlash
+            if ($isFinal) {
+                $leftoverCount = StudentGrade::where('lesson_date', '>=', $dateStart)
+                    ->where('lesson_date', '<=', $dateEnd)
+                    ->where('is_final', false)
+                    ->delete();
+                if ($leftoverCount > 0) {
+                    $this->warn("Safety cleanup: {$leftoverCount} ta is_final=false qoldiq tozalandi ({$dateStart->toDateString()})");
+                    Log::warning("[ApplyGrades] Safety cleanup: {$leftoverCount} is_final=false leftovers soft-deleted for {$dateStart->toDateString()}");
+                }
             }
         });
 

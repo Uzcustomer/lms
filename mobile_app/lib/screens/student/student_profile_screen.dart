@@ -234,19 +234,28 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       elevation: 0,
       color: cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: isDark ? AppTheme.darkSurface : AppTheme.primaryColor,
+            child: Text(
               l.personalInfo,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryColor,
-                  ),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Colors.white,
+              ),
             ),
-            const SizedBox(height: 12),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             ...items.map((item) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(
@@ -262,18 +271,20 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                       Expanded(
                         child: Text(
                           item.value,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontWeight: FontWeight.w500,
                             fontSize: 13,
-                            color: textColor,
+                            color: AppTheme.successColor,
                           ),
                         ),
                       ),
                     ],
                   ),
                 )),
-          ],
-        ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

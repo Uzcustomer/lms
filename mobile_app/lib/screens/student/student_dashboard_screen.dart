@@ -322,11 +322,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  _buildMiniStat(l.enrollmentYear, yearOfEnter.isNotEmpty ? yearOfEnter : '-', subTextColor, const Color(0xFFFF9800)),
+                  _buildMiniStat(l.enrollmentYear, yearOfEnter.isNotEmpty ? yearOfEnter : '-', subTextColor, AppTheme.successColor),
                   _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.educationYear, educationYear.isNotEmpty ? educationYear : '-', subTextColor, const Color(0xFFFF9800)),
+                  _buildMiniStat(l.educationYear, educationYear.isNotEmpty ? educationYear : '-', subTextColor, AppTheme.successColor),
                   _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.semester, semesterName.isNotEmpty ? semesterName : '-', subTextColor, const Color(0xFFFF9800)),
+                  _buildMiniStat(l.semester, semesterName.isNotEmpty ? semesterName : '-', subTextColor, AppTheme.successColor),
                   _buildVerticalDivider(divColor),
                   _buildMiniStat(l.course, course.isNotEmpty ? '$course-kurs' : '-', subTextColor, AppTheme.successColor),
                 ],

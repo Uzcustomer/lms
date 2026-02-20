@@ -33,6 +33,7 @@ class SendAttendanceFinalDailyReport extends Command
         // Jadvaldan kechagi kun ma'lumotlarini olish
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
+            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
             ->leftJoin('semesters as sem', function ($join) {
                 $join->on('sem.code', '=', 'sch.semester_code')
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
@@ -41,6 +42,7 @@ class SendAttendanceFinalDailyReport extends Command
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->whereRaw('DATE(sch.lesson_date) = ?', [$reportDateStr])
+            ->whereRaw('LOWER(c.education_type_name) LIKE ?', ['%bakalavr%'])
             ->where(function ($q) {
                 $q->where('sem.current', true)
                   ->orWhereNull('sem.id');

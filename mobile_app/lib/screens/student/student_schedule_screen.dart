@@ -127,10 +127,6 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {},
           ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {},
-          ),
         ],
       ),
       body: Consumer<StudentProvider>(

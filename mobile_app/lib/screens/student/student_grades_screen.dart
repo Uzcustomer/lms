@@ -91,10 +91,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {},
           ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {},
-          ),
         ],
       ),
       body: Consumer<StudentProvider>(
@@ -157,6 +153,14 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final accentColor = _subjectAccentColors[index % _subjectAccentColors.length];
 
+    final headerColor = isExpanded
+        ? (isDark ? AppTheme.darkSurface : AppTheme.primaryColor)
+        : cardColor;
+    final headerTextColor = isExpanded ? Colors.white : textColor;
+    final arrowColor = isExpanded
+        ? Colors.white70
+        : (isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary);
+
     return Container(
       decoration: BoxDecoration(
         color: cardColor,
@@ -169,6 +173,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           InkWell(
@@ -177,9 +182,15 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 _expandedIndex = isExpanded ? -1 : index;
               });
             },
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: headerColor,
+                borderRadius: isExpanded
+                    ? const BorderRadius.vertical(top: Radius.circular(16))
+                    : BorderRadius.circular(16),
+              ),
               child: Row(
                 children: [
                   // Big icon with bg color
@@ -203,7 +214,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
-                        color: textColor,
+                        color: headerTextColor,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -215,7 +226,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                     duration: const Duration(milliseconds: 200),
                     child: Icon(
                       Icons.keyboard_arrow_down,
-                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                      color: arrowColor,
                     ),
                   ),
                 ],
@@ -282,8 +293,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               );
             },
           ),
-
-          const SizedBox(height: 6),
 
           // Davomat
           Container(

@@ -31,10 +31,38 @@
                           x-data="{
                               reason: '{{ old('reason', '') }}',
                               reasons: {{ Js::from($reasons) }},
+                              endDate: '{{ old('end_date', '') }}',
+                              deadlineWarning: '',
+                              deadlineExpired: false,
                               get selectedReason() {
                                   return this.reason ? this.reasons[this.reason] : null;
+                              },
+                              checkDeadline() {
+                                  this.deadlineWarning = '';
+                                  this.deadlineExpired = false;
+                                  if (!this.endDate) return;
+                                  const end = new Date(this.endDate);
+                                  let nextDay = new Date(end);
+                                  nextDay.setDate(nextDay.getDate() + 1);
+                                  if (nextDay.getDay() === 0) {
+                                      nextDay.setDate(nextDay.getDate() + 1);
+                                  }
+                                  const today = new Date();
+                                  today.setHours(0,0,0,0);
+                                  nextDay.setHours(0,0,0,0);
+                                  if (today < nextDay) return;
+                                  const diffDays = Math.floor((today - nextDay) / (1000 * 60 * 60 * 24));
+                                  if (diffDays > 10) {
+                                      this.deadlineWarning = 'Hujjatlarni taqdim qilish muddati o\'tgan (' + diffDays + ' kun o\'tdi). Tugash sanasidan keyin 10 kun ichida ariza topshirishingiz kerak edi.';
+                                      this.deadlineExpired = true;
+                                  } else {
+                                      const remaining = 10 - diffDays;
+                                      this.deadlineWarning = 'Ariza topshirish uchun ' + remaining + ' kun qoldi.';
+                                      this.deadlineExpired = false;
+                                  }
                               }
-                          }">
+                          }"
+                          x-init="checkDeadline()">
                         @csrf
 
                         {{-- Sabab tanlash --}}
@@ -98,10 +126,29 @@
                                     Tugash sanasi <span class="text-red-500">*</span>
                                 </label>
                                 <input type="date" name="end_date" id="end_date" value="{{ old('end_date') }}" required
+                                       x-model="endDate"
+                                       @change="checkDeadline()"
                                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                 @error('end_date')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
+                            </div>
+                        </div>
+
+                        {{-- 10 kunlik muddat ogohlantirishi --}}
+                        <div x-show="deadlineWarning" x-transition>
+                            <div :class="deadlineExpired ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'"
+                                 class="border rounded-lg p-3">
+                                <div class="flex items-center">
+                                    <svg class="w-5 h-5 mr-2 flex-shrink-0"
+                                         :class="deadlineExpired ? 'text-red-500' : 'text-amber-500'"
+                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <p class="text-sm font-medium"
+                                       :class="deadlineExpired ? 'text-red-700' : 'text-amber-700'"
+                                       x-text="deadlineWarning"></p>
+                                </div>
                             </div>
                         </div>
 
@@ -141,8 +188,10 @@
                                 Orqaga
                             </a>
                             <button type="submit"
-                                    class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md
-                                           hover:bg-indigo-700 focus:outline-none focus:ring-2
+                                    :disabled="deadlineExpired"
+                                    :class="deadlineExpired ? 'bg-gray-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'"
+                                    class="px-6 py-2 text-white font-semibold rounded-md
+                                           focus:outline-none focus:ring-2
                                            focus:ring-indigo-500 focus:ring-offset-2 transition">
                                 Ariza yuborish
                             </button>

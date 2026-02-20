@@ -110,6 +110,11 @@ class AbsenceExcuse extends Model
         return $this->belongsTo(Student::class);
     }
 
+    public function makeups()
+    {
+        return $this->hasMany(AbsenceExcuseMakeup::class);
+    }
+
     public function scopePending($query)
     {
         return $query->where('status', 'pending');

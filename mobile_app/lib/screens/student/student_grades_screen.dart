@@ -311,21 +311,36 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
           const SizedBox(height: 12),
 
+          // MT submission info
+          if (subject['mt_submission'] != null) ...[
+            _buildMtInfo(context, subject['mt_submission'] as Map<String, dynamic>, isDark, l),
+            const SizedBox(height: 12),
+          ],
+
           // Buttons
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _isUploading ? null : () => _uploadMT(context, subject),
+                  onPressed: _canUploadMT(subject) && !_isUploading
+                      ? () => _uploadMT(context, subject)
+                      : null,
                   icon: _isUploading
                       ? const SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.upload_file, size: 18),
+                      : Icon(
+                          _hasMtSubmission(subject) ? Icons.refresh : Icons.upload_file,
+                          size: 18,
+                        ),
                   label: Text(
-                    _isUploading ? l.get('uploading') : l.get('mt_upload'),
+                    _isUploading
+                        ? l.get('uploading')
+                        : _hasMtSubmission(subject)
+                            ? l.get('mt_reupload')
+                            : l.get('mt_upload'),
                     style: const TextStyle(fontSize: 13),
                   ),
                   style: OutlinedButton.styleFrom(
@@ -398,6 +413,95 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               color: textColor,
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  bool _canUploadMT(Map<String, dynamic> subject) {
+    final mt = subject['mt_submission'] as Map<String, dynamic>?;
+    if (mt == null) return false;
+    return mt['can_submit'] == true;
+  }
+
+  bool _hasMtSubmission(Map<String, dynamic> subject) {
+    final mt = subject['mt_submission'] as Map<String, dynamic>?;
+    if (mt == null) return false;
+    return mt['has_submission'] == true;
+  }
+
+  Widget _buildMtInfo(BuildContext context, Map<String, dynamic> mt, bool isDark, AppLocalizations l) {
+    final hasSubmission = mt['has_submission'] == true;
+    final isOverdue = mt['is_overdue'] == true;
+    final gradeLocked = mt['grade_locked'] == true;
+    final grade = mt['grade'];
+    final deadline = mt['deadline']?.toString() ?? '';
+    final fileName = mt['file_name']?.toString();
+    final remaining = mt['remaining_attempts'] ?? 0;
+
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
+
+    if (gradeLocked) {
+      statusColor = AppTheme.successColor;
+      statusText = '${l.get("mt_graded")}: $grade';
+      statusIcon = Icons.check_circle;
+    } else if (hasSubmission && grade != null) {
+      statusColor = AppTheme.warningColor;
+      statusText = '${l.get("mt_graded")}: $grade (${l.get("mt_remaining")}: $remaining)';
+      statusIcon = Icons.warning;
+    } else if (hasSubmission) {
+      statusColor = AppTheme.accentColor;
+      statusText = l.get('mt_uploaded');
+      statusIcon = Icons.cloud_done;
+    } else if (isOverdue) {
+      statusColor = AppTheme.errorColor;
+      statusText = l.get('mt_overdue');
+      statusIcon = Icons.error;
+    } else {
+      statusColor = AppTheme.textSecondary;
+      statusText = l.get('mt_not_uploaded');
+      statusIcon = Icons.cloud_upload_outlined;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: statusColor.withAlpha(isDark ? 30 : 20),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: statusColor.withAlpha(60)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(statusIcon, size: 16, color: statusColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  statusText,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: statusColor),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${l.get("mt_deadline")}: $deadline ${mt['deadline_time'] ?? ''}',
+            style: TextStyle(fontSize: 11, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+          ),
+          if (fileName != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                fileName,
+                style: TextStyle(fontSize: 11, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
         ],
       ),
     );

@@ -124,7 +124,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             );
           },
         ),
-      ),
     );
   }
 

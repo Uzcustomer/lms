@@ -426,7 +426,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari
-    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
         // Old routes — redirect to unified settings
         Route::get('/password-settings', fn () => redirect()->route('admin.settings', ['tab' => 'password']))->name('password-settings.index');
         Route::post('/password-settings', [SettingsController::class, 'updatePassword'])->name('password-settings.update');

@@ -55,6 +55,7 @@ class SendAttendanceGroupSummary extends Command
         // 2-QADAM: Jadvaldan ma'lumot olish (web hisobot bilan bir xil logika)
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
+            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
             ->leftJoin('semesters as sem', function ($join) {
                 $join->on('sem.code', '=', 'sch.semester_code')
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
@@ -63,6 +64,7 @@ class SendAttendanceGroupSummary extends Command
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->whereRaw('DATE(sch.lesson_date) = ?', [$todayStr])
+            ->whereRaw('LOWER(c.education_type_name) LIKE ?', ['%bakalavr%'])
             ->where(function ($q) {
                 $q->where('sem.current', true)
                   ->orWhereNull('sem.id');

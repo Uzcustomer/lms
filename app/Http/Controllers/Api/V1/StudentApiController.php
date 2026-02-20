@@ -11,6 +11,7 @@ use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentGrade;
+use App\Models\StudentMtSubmission;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -540,6 +541,78 @@ class StudentApiController extends Controller
 
         return response()->json([
             'data' => $pendingLessons,
+        ]);
+    }
+
+    /**
+     * Upload MT (Mustaqil ta'lim) file
+     */
+    public function mtUpload(Request $request, $subjectId): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|max:20480|mimes:pdf,doc,docx,ppt,pptx,zip,rar',
+        ]);
+
+        $student = $request->user();
+        $file = $request->file('file');
+
+        $cs = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
+            ->where('semester_code', $student->semester_code)
+            ->where('subject_id', $subjectId)
+            ->first();
+
+        if (!$cs) {
+            return response()->json(['message' => 'Fan topilmadi.'], 404);
+        }
+
+        $path = $file->store("mt_submissions/{$student->id}/{$subjectId}", 'public');
+
+        $submission = StudentMtSubmission::create([
+            'student_id' => $student->id,
+            'student_hemis_id' => $student->hemis_id,
+            'subject_id' => $subjectId,
+            'subject_name' => $cs->subject_name,
+            'semester_code' => $student->semester_code,
+            'file_path' => $path,
+            'file_name' => $file->getClientOriginalName(),
+            'file_size' => $file->getSize(),
+            'status' => 'pending',
+        ]);
+
+        return response()->json([
+            'message' => 'Fayl muvaffaqiyatli yuklandi.',
+            'data' => [
+                'id' => $submission->id,
+                'file_name' => $submission->file_name,
+                'status' => $submission->status,
+                'created_at' => $submission->created_at->toISOString(),
+            ],
+        ]);
+    }
+
+    /**
+     * Get MT submissions for a subject
+     */
+    public function mtSubmissions(Request $request, $subjectId): JsonResponse
+    {
+        $student = $request->user();
+
+        $submissions = StudentMtSubmission::where('student_id', $student->id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $student->semester_code)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($s) => [
+                'id' => $s->id,
+                'file_name' => $s->file_name,
+                'file_size' => $s->file_size,
+                'status' => $s->status,
+                'teacher_comment' => $s->teacher_comment,
+                'created_at' => $s->created_at->toISOString(),
+            ]);
+
+        return response()->json([
+            'data' => $submissions,
         ]);
     }
 

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../config/theme.dart';
+import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
+import '../../services/api_service.dart';
+import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
 
 class StudentGradesScreen extends StatefulWidget {
@@ -12,6 +16,9 @@ class StudentGradesScreen extends StatefulWidget {
 }
 
 class _StudentGradesScreenState extends State<StudentGradesScreen> {
+  int _expandedIndex = 0;
+  bool _isUploading = false;
+
   @override
   void initState() {
     super.initState();
@@ -20,163 +27,375 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     });
   }
 
+  static const List<Color> _cardColors = [
+    Color(0xFFE3F2FD), // JN - light blue
+    Color(0xFFE8F5E9), // MT - light green
+    Color(0xFFFFF3E0), // ON - light orange
+    Color(0xFFF3E5F5), // OSKI - light purple
+    Color(0xFFFCE4EC), // TEST - light pink
+    Color(0xFFE0F2F1), // YN - light teal
+  ];
+
+  static const List<Color> _cardTextColors = [
+    Color(0xFF1565C0), // JN
+    Color(0xFF2E7D32), // MT
+    Color(0xFFE65100), // ON
+    Color(0xFF7B1FA2), // OSKI
+    Color(0xFFC62828), // TEST
+    Color(0xFF00695C), // YN
+  ];
+
+  static const List<IconData> _cardIcons = [
+    Icons.assignment,
+    Icons.menu_book,
+    Icons.quiz,
+    Icons.school,
+    Icons.fact_check,
+    Icons.emoji_events,
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(
-        title: const Text('Baholar'),
-      ),
-      body: Consumer<StudentProvider>(
-        builder: (context, provider, _) {
-          if (provider.isLoading && provider.subjects == null) {
-            return const LoadingWidget();
-          }
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-          final subjects = provider.subjects;
-          if (subjects == null || subjects.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+    return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverAppBar(
+            title: Row(
+              children: [
+                const Icon(Icons.grade, color: Colors.white),
+                const SizedBox(width: 10),
+                Text(l.grades),
+              ],
+            ),
+            floating: true,
+            snap: true,
+          ),
+        ],
+        body: Consumer<StudentProvider>(
+          builder: (context, provider, _) {
+            if (provider.isLoading && provider.subjects == null) {
+              return const LoadingWidget();
+            }
+
+            final subjects = provider.subjects;
+            if (subjects == null || subjects.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.school_outlined, size: 64,
+                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                    const SizedBox(height: 16),
+                    Text(
+                      provider.error ?? l.get('no_subjects'),
+                      style: TextStyle(
+                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => provider.loadSubjects(),
+                      child: Text(l.reload),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return RefreshIndicator(
+              onRefresh: () => provider.loadSubjects(),
+              child: ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: subjects.length,
+                itemBuilder: (context, index) {
+                  final subject = subjects[index] as Map<String, dynamic>;
+                  return _buildSubjectAccordion(context, subject, index, isDark, l);
+                },
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubjectAccordion(
+    BuildContext context,
+    Map<String, dynamic> subject,
+    int index,
+    bool isDark,
+    AppLocalizations l,
+  ) {
+    final isExpanded = _expandedIndex == index;
+    final grades = subject['grades'] as Map<String, dynamic>? ?? {};
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(isDark ? 40 : 15),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _expandedIndex = isExpanded ? -1 : index;
+              });
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
                 children: [
-                  const Icon(Icons.school_outlined, size: 64, color: AppTheme.textSecondary),
-                  const SizedBox(height: 16),
-                  Text(
-                    provider.error ?? 'Fanlar topilmadi',
-                    style: const TextStyle(color: AppTheme.textSecondary),
+                  Expanded(
+                    child: Text(
+                      subject['subject_name']?.toString() ?? '',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: textColor,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => provider.loadSubjects(),
-                    child: const Text('Qayta yuklash'),
+                  const SizedBox(width: 8),
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.keyboard_arrow_down,
+                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                    ),
                   ),
                 ],
               ),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () => provider.loadSubjects(),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: subjects.length,
-              itemBuilder: (context, index) {
-                final subject = subjects[index] as Map<String, dynamic>;
-                return _SubjectGradeCard(subject: subject);
-              },
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _SubjectGradeCard extends StatelessWidget {
-  final Map<String, dynamic> subject;
-
-  const _SubjectGradeCard({required this.subject});
-
-  @override
-  Widget build(BuildContext context) {
-    final grades = subject['grades'] as Map<String, dynamic>? ?? {};
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        leading: CircleAvatar(
-          backgroundColor: AppTheme.primaryColor.withAlpha(25),
-          child: Text(
-            _getAverageGrade(grades),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor,
-              fontSize: 14,
             ),
           ),
-        ),
-        title: Text(
-          subject['subject_name']?.toString() ?? '',
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          subject['employee_name']?.toString() ?? '',
-          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        children: [
-          const Divider(),
-          if (grades['jn'] != null)
-            _GradeRow(label: 'JN (Amaliyot)', value: grades['jn']),
-          if (grades['mt'] != null)
-            _GradeRow(label: 'MT (Mustaqil ta\'lim)', value: grades['mt']),
-          if (grades['on'] != null)
-            _GradeRow(label: 'ON (Oraliq nazorat)', value: grades['on']),
-          if (grades['oski'] != null)
-            _GradeRow(label: 'OSKI', value: grades['oski']),
-          if (grades['test'] != null)
-            _GradeRow(label: 'Test', value: grades['test']),
-          if (grades['total'] != null) ...[
-            const Divider(),
-            _GradeRow(
-              label: 'Jami',
-              value: grades['total'],
-              isBold: true,
-            ),
-          ],
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: _buildExpandedContent(context, subject, grades, isDark, l),
+            crossFadeState: isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
+          ),
         ],
       ),
     );
   }
 
-  String _getAverageGrade(Map<String, dynamic> grades) {
-    if (grades['total'] != null) return grades['total'].toString();
-    return '-';
-  }
-}
+  Widget _buildExpandedContent(
+    BuildContext context,
+    Map<String, dynamic> subject,
+    Map<String, dynamic> grades,
+    bool isDark,
+    AppLocalizations l,
+  ) {
+    final davPercent = (subject['dav_percent'] is num)
+        ? (subject['dav_percent'] as num).toDouble()
+        : 0.0;
+    final attendancePercent = (100 - davPercent).clamp(0.0, 100.0);
+    final absentHours = subject['absent_hours'] ?? 0;
+    final totalHours = subject['auditorium_hours'] ?? 0;
+    final divColor = isDark ? AppTheme.darkDivider : AppTheme.dividerColor;
 
-class _GradeRow extends StatelessWidget {
-  final String label;
-  final dynamic value;
-  final bool isBold;
+    final gradeEntries = [
+      {'key': 'jn', 'label': 'JN', 'fullLabel': 'Joriy nazorat'},
+      {'key': 'mt', 'label': 'MT', 'fullLabel': 'Mustaqil ta\'lim'},
+      {'key': 'on', 'label': 'ON', 'fullLabel': 'Oraliq nazorat'},
+      {'key': 'oski', 'label': 'OSKI', 'fullLabel': 'OSKI'},
+      {'key': 'test', 'label': 'TEST', 'fullLabel': 'Test'},
+      {'key': 'total', 'label': 'YN', 'fullLabel': 'Yakuniy'},
+    ];
 
-  const _GradeRow({
-    required this.label,
-    required this.value,
-    this.isBold = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+      child: Column(
         children: [
+          Divider(color: divColor, height: 1),
+          const SizedBox(height: 12),
+
+          // Grade cards - 3 columns
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              childAspectRatio: 1.05,
+            ),
+            itemCount: gradeEntries.length,
+            itemBuilder: (context, i) {
+              final entry = gradeEntries[i];
+              final value = grades[entry['key']];
+              return _buildGradeCard(
+                label: entry['label'] as String,
+                value: value,
+                color: _cardColors[i],
+                textColor: _cardTextColors[i],
+                icon: _cardIcons[i],
+                isDark: isDark,
+              );
+            },
+          ),
+
+          const SizedBox(height: 12),
+
+          // Davomat
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkSurface : const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      l.get('attendance'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      '${attendancePercent.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: _getAttendanceColor(attendancePercent),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: attendancePercent / 100,
+                    backgroundColor: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      _getAttendanceColor(attendancePercent),
+                    ),
+                    minHeight: 6,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${l.get("absent_hours_label")}: $absentHours / $totalHours ${l.get("hours")}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isUploading ? null : () => _uploadMT(context, subject),
+                  icon: _isUploading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.upload_file, size: 18),
+                  label: Text(
+                    _isUploading ? l.get('uploading') : l.get('mt_upload'),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.primaryColor,
+                    side: const BorderSide(color: AppTheme.primaryColor),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.info_outline, size: 18),
+                  label: Text(l.get('details'), style: const TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGradeCard({
+    required String label,
+    required dynamic value,
+    required Color color,
+    required Color textColor,
+    required IconData icon,
+    required bool isDark,
+  }) {
+    final displayValue = value?.toString() ?? '-';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? color.withAlpha(30) : color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 20, color: textColor),
+          const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              color: isBold ? AppTheme.textPrimary : AppTheme.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: textColor,
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: _getColor(value).withAlpha(25),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              value?.toString() ?? '-',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: _getColor(value),
-              ),
+          const SizedBox(height: 2),
+          Text(
+            displayValue,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: textColor,
             ),
           ),
         ],
@@ -184,12 +403,55 @@ class _GradeRow extends StatelessWidget {
     );
   }
 
-  Color _getColor(dynamic val) {
-    if (val == null) return AppTheme.textSecondary;
-    final v = val is num ? val.toDouble() : double.tryParse(val.toString()) ?? 0;
-    if (v >= 86) return AppTheme.successColor;
-    if (v >= 71) return AppTheme.primaryColor;
-    if (v >= 56) return AppTheme.warningColor;
+  Color _getAttendanceColor(double percent) {
+    if (percent >= 85) return AppTheme.successColor;
+    if (percent >= 70) return AppTheme.warningColor;
     return AppTheme.errorColor;
+  }
+
+  Future<void> _uploadMT(BuildContext context, Map<String, dynamic> subject) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'zip', 'rar'],
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      if (file.bytes == null) return;
+
+      setState(() => _isUploading = true);
+
+      final apiService = ApiService();
+      final subjectId = subject['subject_id'];
+
+      await apiService.uploadFile(
+        '${ApiConfig.studentSubjects}/$subjectId/mt-upload',
+        file.bytes!,
+        file.name,
+      );
+
+      if (mounted) {
+        setState(() => _isUploading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).get('upload_success')),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    }
   }
 }

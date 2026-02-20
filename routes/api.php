@@ -36,6 +36,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/schedule', [StudentApiController::class, 'schedule']);
             Route::get('/subjects', [StudentApiController::class, 'subjects']);
             Route::get('/subjects/{subjectId}/grades', [StudentApiController::class, 'subjectGrades']);
+            Route::post('/subjects/{subjectId}/mt-upload', [StudentApiController::class, 'mtUpload']);
+            Route::get('/subjects/{subjectId}/mt-submissions', [StudentApiController::class, 'mtSubmissions']);
             Route::get('/pending-lessons', [StudentApiController::class, 'pendingLessons']);
             Route::get('/attendance', [StudentApiController::class, 'attendance']);
         });

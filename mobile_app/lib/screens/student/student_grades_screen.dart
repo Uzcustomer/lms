@@ -55,6 +55,18 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     Icons.emoji_events,
   ];
 
+  // Accent colors for each subject accordion icon
+  static const List<Color> _subjectAccentColors = [
+    Color(0xFF1565C0), // blue
+    Color(0xFF2E7D32), // green
+    Color(0xFFE65100), // orange
+    Color(0xFF7B1FA2), // purple
+    Color(0xFFC62828), // red
+    Color(0xFF00695C), // teal
+    Color(0xFFF9A825), // amber
+    Color(0xFF6A1B9A), // deep purple
+  ];
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
@@ -122,7 +134,9 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 itemCount: subjects.length,
                 itemBuilder: (context, index) {
                   final subject = subjects[index] as Map<String, dynamic>;
-                  return _buildSubjectAccordion(context, subject, index, isDark, l);
+                  final isFirst = index == 0;
+                  final isLast = index == subjects.length - 1;
+                  return _buildSubjectAccordion(context, subject, index, isDark, l, isFirst, isLast);
                 },
               ),
             );
@@ -137,24 +151,30 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     int index,
     bool isDark,
     AppLocalizations l,
+    bool isFirst,
+    bool isLast,
   ) {
     final isExpanded = _expandedIndex == index;
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
     final cardColor = isDark ? AppTheme.darkCard : Colors.white;
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final accentColor = _subjectAccentColors[index % _subjectAccentColors.length];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(isDark ? 40 : 15),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.vertical(
+          top: isFirst ? const Radius.circular(16) : Radius.zero,
+          bottom: isLast ? const Radius.circular(16) : Radius.zero,
+        ),
+        border: Border(
+          bottom: isLast
+              ? BorderSide.none
+              : BorderSide(
+                  color: isDark ? AppTheme.darkDivider : const Color(0xFFE8E8E8),
+                  width: 0.5,
+                ),
+        ),
       ),
       child: Column(
         children: [
@@ -164,11 +184,29 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 _expandedIndex = isExpanded ? -1 : index;
               });
             },
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.vertical(
+              top: isFirst ? const Radius.circular(16) : Radius.zero,
+              bottom: isLast && !isExpanded ? const Radius.circular(16) : Radius.zero,
+            ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: Row(
                 children: [
+                  // Big icon with bg color
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: accentColor.withAlpha(isDark ? 40 : 25),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.menu_book_rounded,
+                      size: 24,
+                      color: accentColor,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       subject['subject_name']?.toString() ?? '',
@@ -212,12 +250,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     bool isDark,
     AppLocalizations l,
   ) {
-    final davPercent = (subject['dav_percent'] is num)
-        ? (subject['dav_percent'] as num).toDouble()
-        : 0.0;
-    final attendancePercent = (100 - davPercent).clamp(0.0, 100.0);
-    final absentHours = subject['absent_hours'] ?? 0;
-    final totalHours = subject['auditorium_hours'] ?? 0;
     final divColor = isDark ? AppTheme.darkDivider : AppTheme.dividerColor;
 
     final gradeEntries = [
@@ -261,7 +293,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             },
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           // Davomat
           Container(
@@ -285,11 +317,11 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                       ),
                     ),
                     Text(
-                      '${attendancePercent.toStringAsFixed(1)}%',
+                      '${_getAttendancePercent(subject).toStringAsFixed(1)}%',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        color: _getAttendanceColor(attendancePercent),
+                        color: _getAttendanceColor(_getAttendancePercent(subject)),
                       ),
                     ),
                   ],
@@ -298,17 +330,17 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: attendancePercent / 100,
+                    value: _getAttendancePercent(subject) / 100,
                     backgroundColor: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      _getAttendanceColor(attendancePercent),
+                      _getAttendanceColor(_getAttendancePercent(subject)),
                     ),
                     minHeight: 6,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${l.get("absent_hours_label")}: $absentHours / $totalHours ${l.get("hours")}',
+                  '${l.get("absent_hours_label")}: ${subject['absent_hours'] ?? 0} / ${subject['auditorium_hours'] ?? 0} ${l.get("hours")}',
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
@@ -441,6 +473,19 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     );
   }
 
+  double _getAttendancePercent(Map<String, dynamic> subject) {
+    final davPercent = (subject['dav_percent'] is num)
+        ? (subject['dav_percent'] as num).toDouble()
+        : 0.0;
+    return (100 - davPercent).clamp(0.0, 100.0);
+  }
+
+  Color _getAttendanceColor(double percent) {
+    if (percent >= 85) return AppTheme.successColor;
+    if (percent >= 70) return AppTheme.warningColor;
+    return AppTheme.errorColor;
+  }
+
   bool _canUploadMT(Map<String, dynamic> subject) {
     final mt = subject['mt_submission'] as Map<String, dynamic>?;
     if (mt == null) return false;
@@ -528,12 +573,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
         ],
       ),
     );
-  }
-
-  Color _getAttendanceColor(double percent) {
-    if (percent >= 85) return AppTheme.successColor;
-    if (percent >= 70) return AppTheme.warningColor;
-    return AppTheme.errorColor;
   }
 
   Future<void> _uploadMT(BuildContext context, Map<String, dynamic> subject) async {

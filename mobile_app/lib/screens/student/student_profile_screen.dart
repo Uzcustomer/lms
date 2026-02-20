@@ -4,6 +4,7 @@ import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
 
 class StudentProfileScreen extends StatefulWidget {
@@ -24,10 +25,14 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text('Profil'),
+        title: Text(l.profile),
         centerTitle: true,
         leading: Navigator.canPop(context)
             ? IconButton(
@@ -61,11 +66,11 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(provider.error ?? 'Profil topilmadi'),
+                  Text(provider.error ?? l.profileNotFound),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => provider.loadProfile(),
-                    child: const Text('Qayta yuklash'),
+                    child: Text(l.reload),
                   ),
                 ],
               ),
@@ -79,11 +84,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
               child: Column(
                 children: [
-                  // Profile Card: Avatar + Info
                   _buildProfileCard(context, profile),
                   const SizedBox(height: 16),
-
-                  // Personal Info
                   _buildPersonalInfo(context, profile),
                 ],
               ),
@@ -95,21 +97,26 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   }
 
   Widget _buildProfileCard(BuildContext context, Map<String, dynamic> profile) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final fullName = profile['full_name']?.toString() ?? '';
     final studentId = profile['student_id_number']?.toString() ?? '';
     final faculty = profile['department_name']?.toString() ?? '';
     final major = profile['specialty_name']?.toString() ?? '';
     final rawImage = profile['image']?.toString();
     final photoUrl = _buildImageUrl(rawImage);
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
     return Card(
       elevation: 0,
+      color: cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
         child: Column(
           children: [
-            // Avatar
             Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -133,23 +140,19 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Full Name
             Text(
               fullName,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
+                    color: textColor,
                   ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
-
-            // Student Number
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withAlpha(20),
+                color: AppTheme.primaryColor.withAlpha(isDark ? 40 : 20),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -162,38 +165,29 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Faculty & Major
-            _buildInfoRow(Icons.account_balance, 'Fakultet', faculty),
+            _buildInfoRow(Icons.account_balance, l.faculty, faculty, subTextColor, textColor),
             const SizedBox(height: 8),
-            _buildInfoRow(Icons.school, 'Yo\'nalish', major),
+            _buildInfoRow(Icons.school, l.direction, major, subTextColor, textColor),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
+  Widget _buildInfoRow(IconData icon, String label, String value, Color subColor, Color textColor) {
     if (value.isEmpty) return const SizedBox.shrink();
     return Row(
       children: [
-        Icon(icon, size: 18, color: AppTheme.textSecondary),
+        Icon(icon, size: 18, color: subColor),
         const SizedBox(width: 8),
         Text(
           '$label: ',
-          style: const TextStyle(
-            fontSize: 13,
-            color: AppTheme.textSecondary,
-          ),
+          style: TextStyle(fontSize: 13, color: subColor),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
-            ),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -202,37 +196,43 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   }
 
   Widget _buildPersonalInfo(BuildContext context, Map<String, dynamic> profile) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final gender = profile['gender'];
     final province = profile['province_name']?.toString();
     final district = profile['district_name']?.toString();
     final educationType = profile['education_type_name']?.toString();
     final educationForm = profile['education_form_name']?.toString();
     final groupName = profile['group_name']?.toString();
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
 
     final items = <MapEntry<String, String>>[];
     if (groupName != null && groupName.isNotEmpty) {
-      items.add(MapEntry('Guruh', groupName));
+      items.add(MapEntry(l.group, groupName));
     }
     if (gender != null) {
-      items.add(MapEntry('Jinsi', gender == 11 ? 'Erkak' : 'Ayol'));
+      items.add(MapEntry(l.gender, gender == 11 ? l.male : l.female));
     }
     if (educationType != null && educationType.isNotEmpty) {
-      items.add(MapEntry('Ta\'lim shakli', educationType));
+      items.add(MapEntry(l.educationType, educationType));
     }
     if (educationForm != null && educationForm.isNotEmpty) {
-      items.add(MapEntry('Ta\'lim turi', educationForm));
+      items.add(MapEntry(l.educationForm, educationForm));
     }
     if (province != null && province.isNotEmpty) {
-      items.add(MapEntry('Viloyat', province));
+      items.add(MapEntry(l.province, province));
     }
     if (district != null && district.isNotEmpty) {
-      items.add(MapEntry('Tuman', district));
+      items.add(MapEntry(l.district, district));
     }
 
     if (items.isEmpty) return const SizedBox.shrink();
 
     return Card(
       elevation: 0,
+      color: cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -240,7 +240,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Shaxsiy ma\'lumotlar',
+              l.personalInfo,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: AppTheme.primaryColor,
@@ -256,18 +256,16 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                         width: 120,
                         child: Text(
                           item.key,
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: subTextColor, fontSize: 13),
                         ),
                       ),
                       Expanded(
                         child: Text(
                           item.value,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w500,
                             fontSize: 13,
+                            color: textColor,
                           ),
                         ),
                       ),
@@ -305,15 +303,18 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   }
 
   void _showLogoutDialog(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Chiqish'),
-        content: const Text('Haqiqatan ham chiqmoqchimisiz?'),
+        backgroundColor: isDark ? AppTheme.darkCard : Colors.white,
+        title: Text(l.logout),
+        content: Text(l.logoutConfirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Bekor qilish'),
+            child: Text(l.cancel),
           ),
           ElevatedButton(
             onPressed: () {
@@ -321,11 +322,10 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               context.read<AuthProvider>().logout();
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorColor),
-            child: const Text('Chiqish'),
+            child: Text(l.logout),
           ),
         ],
       ),
     );
   }
 }
-

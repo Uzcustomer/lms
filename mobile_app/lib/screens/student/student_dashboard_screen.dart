@@ -518,25 +518,29 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final isDk = Theme.of(context).brightness == Brightness.dark;
+    final unselectedBg = isDk ? AppTheme.darkSurface : Colors.grey[200];
+    final unselectedFg = isDk ? AppTheme.darkTextSecondary : Colors.grey[600];
+
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primaryColor : Colors.grey[200],
+            color: isSelected ? AppTheme.primaryColor : unselectedBg,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Column(
             children: [
-              Icon(icon, color: isSelected ? Colors.white : Colors.grey[600], size: 28),
+              Icon(icon, color: isSelected ? Colors.white : unselectedFg, size: 28),
               const SizedBox(height: 6),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : Colors.grey[600],
+                  color: isSelected ? Colors.white : unselectedFg,
                 ),
               ),
             ],
@@ -554,6 +558,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     SettingsProvider settings,
   ) {
     final isSelected = settings.languageCode == langCode;
+    final isDk = Theme.of(context).brightness == Brightness.dark;
+    final unselectedBg = isDk ? AppTheme.darkSurface : Colors.grey[200];
+    final unselectedBorder = isDk ? AppTheme.darkDivider : Colors.grey[300]!;
+    final unselectedCodeColor = isDk ? AppTheme.darkTextPrimary : Colors.grey[700];
+    final unselectedLabelColor = isDk ? AppTheme.darkTextSecondary : Colors.grey[500];
+
     return Expanded(
       child: GestureDetector(
         onTap: () {
@@ -563,9 +573,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primaryColor : Colors.grey[200],
+            color: isSelected ? AppTheme.primaryColor : unselectedBg,
             borderRadius: BorderRadius.circular(14),
-            border: isSelected ? null : Border.all(color: Colors.grey[300]!),
+            border: isSelected ? null : Border.all(color: unselectedBorder),
           ),
           child: Column(
             children: [
@@ -574,7 +584,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: isSelected ? Colors.white : Colors.grey[700],
+                  color: isSelected ? Colors.white : unselectedCodeColor,
                 ),
               ),
               const SizedBox(height: 2),
@@ -582,7 +592,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 label,
                 style: TextStyle(
                   fontSize: 11,
-                  color: isSelected ? Colors.white70 : Colors.grey[500],
+                  color: isSelected ? Colors.white70 : unselectedLabelColor,
                 ),
               ),
             ],

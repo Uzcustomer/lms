@@ -8,9 +8,13 @@ class StudentServicesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: bgColor,
       appBar: AppBar(
         title: Text(l.services),
         centerTitle: true,
@@ -28,15 +32,14 @@ class StudentServicesScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.miscellaneous_services_outlined,
-                size: 64, color: AppTheme.textSecondary),
+            Icon(Icons.miscellaneous_services_outlined, size: 64, color: subColor),
             const SizedBox(height: 16),
             Text(
               l.services,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
+                color: textColor,
               ),
             ),
           ],

@@ -19,7 +19,7 @@ class AppLocalizations {
         key;
   }
 
-  // Convenience getters for common strings
+  // Convenience getters
   String get appTitle => get('app_title');
   String get home => get('home');
   String get grades => get('grades');
@@ -71,6 +71,61 @@ class AppLocalizations {
   String get deadline => get('deadline');
   String get contractStudent => get('contract_student');
   String get grantStudent => get('grant_student');
+  String get attendance => get('attendance');
+  String get details => get('details');
+  String get uploading => get('uploading');
+  String get uploadSuccess => get('upload_success');
+  String get absentHoursLabel => get('absent_hours_label');
+  String get hours => get('hours');
+  String get noSubjects => get('no_subjects');
+  String get mtReupload => get('mt_reupload');
+  String get mtGraded => get('mt_graded');
+  String get mtUploaded => get('mt_uploaded');
+  String get mtOverdue => get('mt_overdue');
+  String get mtNotUploaded => get('mt_not_uploaded');
+  String get mtDeadline => get('mt_deadline');
+  String get mtRemaining => get('mt_remaining');
+  String get mtUpload => get('mt_upload');
+
+  // New getters
+  String get lmsSubtitle => get('lms_subtitle');
+  String get student => get('student');
+  String get teacher => get('teacher');
+  String get loginLabel => get('login_label');
+  String get loginHint => get('login_hint');
+  String get loginRequired => get('login_required');
+  String get password => get('password');
+  String get passwordHint => get('password_hint');
+  String get passwordRequired => get('password_required');
+  String get signIn => get('sign_in');
+  String get verification => get('verification');
+  String get telegramVerification => get('telegram_verification');
+  String get telegramCodeHint => get('telegram_code_hint');
+  String get verify => get('verify');
+  String get resendCode => get('resend_code');
+  String get resendIn => get('resend_in');
+  String get profileNotFound => get('profile_not_found');
+  String get scheduleNotFound => get('schedule_not_found');
+  String get noScheduleThisWeek => get('no_schedule_this_week');
+  String get noLessons => get('no_lessons');
+  String get today => get('today');
+  String get lessonUnit => get('lesson_unit');
+  String get practicalClasses => get('practical_classes');
+  String get lectures => get('lectures');
+  String get selfStudy => get('self_study');
+  String get average => get('average');
+  String get currentControl => get('current_control');
+  String get midtermControl => get('midterm_control');
+  String get finalGrade => get('final_grade');
+  String get totalGrades => get('total_grades');
+  String get students => get('students');
+  String get groups => get('groups');
+  String get groupsNotFound => get('groups_not_found');
+  String get studentsNotFound => get('students_not_found');
+  String get searchStudent => get('search_student');
+  String get workInfo => get('work_info');
+  String get department => get('department');
+  String get position => get('position');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
@@ -140,6 +195,44 @@ class AppLocalizations {
       'deadline': 'Muddat',
       'contract_student': 'Kontrakt',
       'grant_student': 'Grant',
+      'lms_subtitle': 'Ta\'lim boshqaruv tizimi',
+      'student': 'Talaba',
+      'teacher': 'O\'qituvchi',
+      'login_label': 'Login',
+      'login_hint': 'Student ID yoki login',
+      'login_required': 'Login kiriting',
+      'password': 'Parol',
+      'password_hint': 'Parolingizni kiriting',
+      'password_required': 'Parol kiriting',
+      'sign_in': 'Kirish',
+      'verification': 'Tasdiqlash',
+      'telegram_verification': 'Telegram tasdiqlash',
+      'telegram_code_hint': 'Telegram botga yuborilgan 6 xonali kodni kiriting',
+      'verify': 'Tasdiqlash',
+      'resend_code': 'Kodni qayta yuborish',
+      'resend_in': 'Qayta yuborish',
+      'profile_not_found': 'Profil topilmadi',
+      'schedule_not_found': 'Jadval topilmadi',
+      'no_schedule_this_week': 'Bu hafta uchun jadval topilmadi',
+      'no_lessons': 'Dars yo\'q',
+      'today': 'Bugun',
+      'lesson_unit': 'para',
+      'practical_classes': 'Amaliy mashg\'ulotlar',
+      'lectures': 'Ma\'ruzalar',
+      'self_study': 'Mustaqil ta\'lim',
+      'average': 'O\'rt',
+      'current_control': 'Joriy nazorat',
+      'midterm_control': 'Oraliq nazorat',
+      'final_grade': 'Yakuniy',
+      'total_grades': 'Jami baholar',
+      'students': 'Talabalar',
+      'groups': 'Guruhlar',
+      'groups_not_found': 'Guruhlar topilmadi',
+      'students_not_found': 'Talabalar topilmadi',
+      'search_student': 'Talaba qidirish...',
+      'work_info': 'Ish ma\'lumotlari',
+      'department': 'Kafedra',
+      'position': 'Lavozim',
     },
     'ru': {
       'app_title': 'Tashmedunitf Lms',
@@ -208,6 +301,44 @@ class AppLocalizations {
       'deadline': 'Срок',
       'contract_student': 'Контракт',
       'grant_student': 'Грант',
+      'lms_subtitle': 'Система управления обучением',
+      'student': 'Студент',
+      'teacher': 'Преподаватель',
+      'login_label': 'Логин',
+      'login_hint': 'ID студента или логин',
+      'login_required': 'Введите логин',
+      'password': 'Пароль',
+      'password_hint': 'Введите пароль',
+      'password_required': 'Введите пароль',
+      'sign_in': 'Войти',
+      'verification': 'Подтверждение',
+      'telegram_verification': 'Подтверждение через Telegram',
+      'telegram_code_hint': 'Введите 6-значный код из Telegram бота',
+      'verify': 'Подтвердить',
+      'resend_code': 'Отправить код повторно',
+      'resend_in': 'Повторная отправка',
+      'profile_not_found': 'Профиль не найден',
+      'schedule_not_found': 'Расписание не найдено',
+      'no_schedule_this_week': 'Расписание на эту неделю не найдено',
+      'no_lessons': 'Нет занятий',
+      'today': 'Сегодня',
+      'lesson_unit': 'пара',
+      'practical_classes': 'Практические занятия',
+      'lectures': 'Лекции',
+      'self_study': 'Самостоятельная работа',
+      'average': 'Ср.',
+      'current_control': 'Текущий контроль',
+      'midterm_control': 'Промежуточный контроль',
+      'final_grade': 'Итоговая',
+      'total_grades': 'Всего оценок',
+      'students': 'Студенты',
+      'groups': 'Группы',
+      'groups_not_found': 'Группы не найдены',
+      'students_not_found': 'Студенты не найдены',
+      'search_student': 'Поиск студента...',
+      'work_info': 'Рабочие данные',
+      'department': 'Кафедра',
+      'position': 'Должность',
     },
     'en': {
       'app_title': 'Tashmedunitf Lms',
@@ -276,6 +407,44 @@ class AppLocalizations {
       'deadline': 'Deadline',
       'contract_student': 'Contract',
       'grant_student': 'Grant',
+      'lms_subtitle': 'Learning Management System',
+      'student': 'Student',
+      'teacher': 'Teacher',
+      'login_label': 'Login',
+      'login_hint': 'Student ID or login',
+      'login_required': 'Enter login',
+      'password': 'Password',
+      'password_hint': 'Enter your password',
+      'password_required': 'Enter password',
+      'sign_in': 'Sign in',
+      'verification': 'Verification',
+      'telegram_verification': 'Telegram verification',
+      'telegram_code_hint': 'Enter the 6-digit code sent to your Telegram bot',
+      'verify': 'Verify',
+      'resend_code': 'Resend code',
+      'resend_in': 'Resend in',
+      'profile_not_found': 'Profile not found',
+      'schedule_not_found': 'Schedule not found',
+      'no_schedule_this_week': 'No schedule found for this week',
+      'no_lessons': 'No lessons',
+      'today': 'Today',
+      'lesson_unit': 'lesson',
+      'practical_classes': 'Practical classes',
+      'lectures': 'Lectures',
+      'self_study': 'Self-study',
+      'average': 'Avg',
+      'current_control': 'Current control',
+      'midterm_control': 'Midterm control',
+      'final_grade': 'Final',
+      'total_grades': 'Total grades',
+      'students': 'Students',
+      'groups': 'Groups',
+      'groups_not_found': 'No groups found',
+      'students_not_found': 'No students found',
+      'search_student': 'Search student...',
+      'work_info': 'Work info',
+      'department': 'Department',
+      'position': 'Position',
     },
   };
 

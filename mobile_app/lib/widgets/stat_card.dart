@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/theme.dart';
 
 class StatCard extends StatelessWidget {
   final String title;
@@ -16,7 +17,11 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? AppTheme.darkTextSecondary : Colors.grey[600];
+
     return Card(
+      color: isDark ? AppTheme.darkCard : Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -29,7 +34,7 @@ class StatCard extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: color.withAlpha(25),
+                    color: color.withAlpha(isDark ? 40 : 25),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: color, size: 22),
@@ -50,7 +55,7 @@ class StatCard extends StatelessWidget {
               title,
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey[600],
+                color: titleColor,
               ),
             ),
           ],

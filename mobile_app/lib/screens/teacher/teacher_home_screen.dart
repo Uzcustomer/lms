@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import 'teacher_dashboard_screen.dart';
 import 'teacher_students_screen.dart';
 import 'teacher_groups_screen.dart';
@@ -24,16 +25,18 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     TeacherProfileScreen(),
   ];
 
-  static const _navItems = [
-    _NavItem(Icons.dashboard_outlined, Icons.dashboard, 'Bosh sahifa'),
-    _NavItem(Icons.people_outline, Icons.people, 'Talabalar'),
-    _NavItem(Icons.groups_outlined, Icons.groups, 'Guruhlar'),
-    _NavItem(Icons.miscellaneous_services_outlined, Icons.miscellaneous_services, 'Xizmatlar'),
-    _NavItem(Icons.person_outline, Icons.person, 'Profil'),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+
+    final navItems = [
+      _NavItem(Icons.dashboard_outlined, Icons.dashboard, l.home),
+      _NavItem(Icons.people_outline, Icons.people, l.students),
+      _NavItem(Icons.groups_outlined, Icons.groups, l.groups),
+      _NavItem(Icons.miscellaneous_services_outlined, Icons.miscellaneous_services, l.services),
+      _NavItem(Icons.person_outline, Icons.person, l.profile),
+    ];
+
     return Scaffold(
       extendBody: true,
       body: _screens[_currentIndex],
@@ -57,8 +60,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(_navItems.length, (index) {
-                  final item = _navItems[index];
+                children: List.generate(navItems.length, (index) {
+                  final item = navItems[index];
                   final isActive = _currentIndex == index;
                   return Expanded(
                     child: GestureDetector(

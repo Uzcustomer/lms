@@ -117,10 +117,10 @@ class _StudentJournalScreenState extends State<StudentJournalScreen>
           indicatorWeight: 3,
           labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
           unselectedLabelStyle: const TextStyle(fontSize: 12),
-          tabs: const [
-            Tab(text: 'Amaliy mashg\'ulotlar'),
-            Tab(text: 'Ma\'ruzalar'),
-            Tab(text: 'Mustaqil ta\'lim'),
+          tabs: [
+            Tab(text: l.practicalClasses),
+            Tab(text: l.lectures),
+            Tab(text: l.selfStudy),
           ],
         ),
       ),
@@ -143,9 +143,9 @@ class _StudentJournalScreenState extends State<StudentJournalScreen>
               : TabBarView(
                   controller: _tabController,
                   children: [
-                    _JournalTable(grades: _amaliyGrades, isDark: isDark, label: 'JN'),
-                    _JournalTable(grades: _maruzaGrades, isDark: isDark, label: "Ma'ruza"),
-                    _JournalTable(grades: _mtGrades, isDark: isDark, label: 'MT'),
+                    _JournalTable(grades: _amaliyGrades, isDark: isDark, label: 'JN', noDataLabel: l.noData, averageLabel: l.average),
+                    _JournalTable(grades: _maruzaGrades, isDark: isDark, label: "Ma'ruza", noDataLabel: l.noData, averageLabel: l.average),
+                    _JournalTable(grades: _mtGrades, isDark: isDark, label: 'MT', noDataLabel: l.noData, averageLabel: l.average),
                   ],
                 ),
     );
@@ -156,11 +156,15 @@ class _JournalTable extends StatefulWidget {
   final List<Map<String, dynamic>> grades;
   final bool isDark;
   final String label;
+  final String noDataLabel;
+  final String averageLabel;
 
   const _JournalTable({
     required this.grades,
     required this.isDark,
     required this.label,
+    required this.noDataLabel,
+    required this.averageLabel,
   });
 
   @override
@@ -224,7 +228,7 @@ class _JournalTableState extends State<_JournalTable> {
                 color: widget.isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
             const SizedBox(height: 12),
             Text(
-              'Ma\'lumot topilmadi',
+              widget.noDataLabel,
               style: TextStyle(
                 color: widget.isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
               ),
@@ -307,7 +311,7 @@ class _JournalTableState extends State<_JournalTable> {
                       _headerCell('№', headerText),
                       ...widget.grades.map((g) =>
                           _headerCell(_formatDate(g['lesson_date']), headerText)),
-                      _headerCell("O'rt", headerText),
+                      _headerCell(widget.averageLabel, headerText),
                     ],
                   ),
                   // Data row

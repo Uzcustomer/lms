@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../providers/teacher_provider.dart';
 import '../../widgets/loading_widget.dart';
 
@@ -22,14 +23,17 @@ class _TeacherGroupsScreenState extends State<TeacherGroupsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
       appBar: AppBar(
         leading: const Padding(
           padding: EdgeInsets.all(12),
           child: Icon(Icons.account_balance, size: 28),
         ),
-        title: const Text('Guruhlar'),
+        title: Text(l.groups),
       ),
       body: Consumer<TeacherProvider>(
         builder: (context, provider, _) {
@@ -43,14 +47,14 @@ class _TeacherGroupsScreenState extends State<TeacherGroupsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.groups_outlined,
-                      size: 64, color: AppTheme.textSecondary),
+                  Icon(Icons.groups_outlined,
+                      size: 64, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
                   const SizedBox(height: 16),
-                  Text(provider.error ?? 'Guruhlar topilmadi'),
+                  Text(provider.error ?? l.groupsNotFound),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => provider.loadGroups(),
-                    child: const Text('Qayta yuklash'),
+                    child: Text(l.reload),
                   ),
                 ],
               ),

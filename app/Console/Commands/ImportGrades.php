@@ -58,15 +58,21 @@ class ImportGrades extends Command
 
         $today = Carbon::today();
 
-        // Agar bugungi baholar allaqachon yakunlangan (is_final=true) bo'lsa, import qilmaslik
-        $alreadyFinalized = StudentGrade::where('lesson_date', '>=', $today->copy()->startOfDay())
+        // Agar bugungi BARCHA baholar yakunlangan bo'lsa, import qilmaslik
+        // Faqat bitta is_final=true bor deb butun kunni o'tkazmaslik —
+        // BARCHA yozuvlar is_final=true bo'lgandagina o'tkazish
+        $hasUnfinalized = StudentGrade::where('lesson_date', '>=', $today->copy()->startOfDay())
             ->where('lesson_date', '<=', $today->copy()->endOfDay())
-            ->where('is_final', true)
+            ->where('is_final', false)
             ->exists();
 
-        if ($alreadyFinalized) {
-            $this->info("Live import: bugungi baholar allaqachon yakunlangan (is_final=true), o'tkazib yuborildi.");
-            Log::info("[LiveImport] Today's grades already finalized, skipping.");
+        $hasAnyGrades = StudentGrade::where('lesson_date', '>=', $today->copy()->startOfDay())
+            ->where('lesson_date', '<=', $today->copy()->endOfDay())
+            ->exists();
+
+        if ($hasAnyGrades && !$hasUnfinalized) {
+            $this->info("Live import: bugungi BARCHA baholar yakunlangan (is_final=true), o'tkazib yuborildi.");
+            Log::info("[LiveImport] Today's ALL grades finalized, skipping.");
             return;
         }
 
@@ -146,14 +152,15 @@ class ImportGrades extends Command
         foreach ($unfinishedDates as $dateStr) {
             $date = Carbon::parse($dateStr);
 
-            // Agar bu kunda is_final=true baholar allaqachon bo'lsa, o'tkazib yuborish
-            $alreadyFinalized = StudentGrade::where('lesson_date', '>=', $date->copy()->startOfDay())
+            // Faqat BARCHA yozuvlar is_final=true bo'lgandagina o'tkazish
+            // Bir nechta is_final=true (retake) bor, lekin boshqalar is_final=false bo'lsa — import qilish kerak
+            $hasUnfinalizedForDate = StudentGrade::where('lesson_date', '>=', $date->copy()->startOfDay())
                 ->where('lesson_date', '<=', $date->copy()->endOfDay())
-                ->where('is_final', true)
+                ->where('is_final', false)
                 ->exists();
 
-            if ($alreadyFinalized) {
-                $this->info("  {$date->toDateString()} — allaqachon yakunlangan, o'tkazib yuborildi.");
+            if (!$hasUnfinalizedForDate) {
+                $this->info("  {$date->toDateString()} — BARCHA yozuvlar yakunlangan, o'tkazib yuborildi.");
                 $totalDays--;
                 continue;
             }
@@ -430,19 +437,22 @@ class ImportGrades extends Command
             }
 
             // 5-QADAM: HEMIS da yo'q yozuvlarni (teacher_victim, lokal NB) to'g'ridan-to'g'ri tiklash
-            // Yangi yozuv yaratilmagan — eski yozuvni un-delete qilish
+            // Faqat 2-qadamda SOFT-DELETE bo'lgan yozuvlarni tiklash
+            // is_final=true bo'lib 2-qadamda o'chirilmagan yozuvlarga TEGMASLIK
             $undeleted = 0;
             foreach ($retakeBackup as $key => $retake) {
                 if (in_array($key, $restoredKeys)) {
                     continue; // 4-qadamda tiklangan, o'tkazib yuborish
                 }
-                StudentGrade::withTrashed()
+                $affected = StudentGrade::onlyTrashed()
                     ->where('id', $retake->id)
                     ->update([
                         'deleted_at' => null,
                         'is_final' => $isFinal,
                     ]);
-                $undeleted++;
+                if ($affected) {
+                    $undeleted++;
+                }
             }
 
             if ($retakeRestored > 0 || $undeleted > 0) {

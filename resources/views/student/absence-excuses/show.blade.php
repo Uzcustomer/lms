@@ -105,13 +105,80 @@
                                 </div>
                             </div>
                         @endif
+
+                        {{-- Qayta topshirish sanalari --}}
+                        @if($excuse->makeups->isNotEmpty())
+                            <div class="border-t pt-4 mt-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h4 class="text-sm font-medium text-gray-900">O'tkazib yuborilgan nazoratlar va qayta topshirish</h4>
+                                    @if($excuse->makeups->contains(fn($m) => !$m->makeup_date))
+                                        <a href="{{ route('student.absence-excuses.schedule-check', $excuse->id) }}"
+                                           class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                                            Sanalarni tanlash
+                                        </a>
+                                    @endif
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fan</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nazorat turi</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Asl sana</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Qayta topshirish</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Holat</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            @foreach($excuse->makeups as $makeup)
+                                                <tr>
+                                                    <td class="px-3 py-2 text-gray-900">{{ $makeup->subject_name }}</td>
+                                                    <td class="px-3 py-2">
+                                                        @php
+                                                            $typeColors = [
+                                                                'jn' => 'bg-blue-100 text-blue-800',
+                                                                'mt' => 'bg-purple-100 text-purple-800',
+                                                                'oski' => 'bg-orange-100 text-orange-800',
+                                                                'test' => 'bg-red-100 text-red-800',
+                                                            ];
+                                                        @endphp
+                                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full {{ $typeColors[$makeup->assessment_type] ?? 'bg-gray-100 text-gray-800' }}">
+                                                            {{ $makeup->assessment_type_label }}
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-3 py-2 text-gray-500">{{ $makeup->original_date->format('d.m.Y') }}</td>
+                                                    <td class="px-3 py-2">
+                                                        @if($makeup->makeup_date)
+                                                            <span class="font-medium text-indigo-600">{{ $makeup->makeup_date->format('d.m.Y') }}</span>
+                                                        @else
+                                                            <span class="text-amber-500 italic">Tanlanmagan</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="px-3 py-2">
+                                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-{{ $makeup->status_color }}-100 text-{{ $makeup->status_color }}-800">
+                                                            {{ $makeup->status_label }}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
                     </div>
 
-                    <div class="mt-6 pt-4 border-t">
+                    <div class="mt-6 pt-4 border-t flex items-center justify-between">
                         <a href="{{ route('student.absence-excuses.index') }}"
                            class="text-gray-600 hover:text-gray-800 text-sm">
                             &larr; Orqaga qaytish
                         </a>
+                        @if($excuse->makeups->isNotEmpty() && $excuse->makeups->contains(fn($m) => !$m->makeup_date))
+                            <a href="{{ route('student.absence-excuses.schedule-check', $excuse->id) }}"
+                               class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700 transition">
+                                Qayta topshirish sanalarini tanlash
+                            </a>
+                        @endif
                     </div>
                 </div>
             </div>

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../l10n/app_localizations.dart';
+import '../../providers/settings_provider.dart';
 import 'verify_2fa_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -63,8 +65,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.primaryDark;
+    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final divColor = isDark ? AppTheme.darkDivider : AppTheme.dividerColor;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: bgColor,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -91,14 +101,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   'TDTU LMS',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryDark,
+                        color: textColor,
                       ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Ta\'lim boshqaruv tizimi',
+                  l.lmsSubtitle,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.textSecondary,
+                        color: subTextColor,
                       ),
                 ),
                 const SizedBox(height: 32),
@@ -106,9 +116,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 // Tab selector
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: cardColor,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.dividerColor),
+                    border: Border.all(color: divColor),
                   ),
                   child: TabBar(
                     controller: _tabController,
@@ -117,12 +127,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       borderRadius: BorderRadius.circular(11),
                     ),
                     labelColor: Colors.white,
-                    unselectedLabelColor: AppTheme.textSecondary,
+                    unselectedLabelColor: subTextColor,
                     indicatorSize: TabBarIndicatorSize.tab,
                     dividerColor: Colors.transparent,
-                    tabs: const [
-                      Tab(text: 'Talaba'),
-                      Tab(text: 'O\'qituvchi'),
+                    tabs: [
+                      Tab(text: l.student),
+                      Tab(text: l.teacher),
                     ],
                     onTap: (_) {
                       _loginController.clear();
@@ -142,8 +152,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         controller: _loginController,
                         keyboardType: TextInputType.text,
                         decoration: InputDecoration(
-                          labelText: 'Login',
-                          hintText: 'Student ID yoki login',
+                          labelText: l.loginLabel,
+                          hintText: l.loginHint,
                           prefixIcon: const Icon(Icons.person_outline),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -151,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Login kiriting';
+                            return l.loginRequired;
                           }
                           return null;
                         },
@@ -161,8 +171,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         controller: _passwordController,
                         obscureText: _obscurePassword,
                         decoration: InputDecoration(
-                          labelText: 'Parol',
-                          hintText: 'Parolingizni kiriting',
+                          labelText: l.password,
+                          hintText: l.passwordHint,
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
                             icon: Icon(
@@ -182,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Parol kiriting';
+                            return l.passwordRequired;
                           }
                           return null;
                         },
@@ -243,7 +253,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                         color: Colors.white,
                                       ),
                                     )
-                                  : const Text('Kirish'),
+                                  : Text(l.signIn),
                             ),
                           );
                         },

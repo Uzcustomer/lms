@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../providers/teacher_provider.dart';
 import '../../widgets/loading_widget.dart';
 
@@ -30,14 +31,17 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
       appBar: AppBar(
         leading: const Padding(
           padding: EdgeInsets.all(12),
           child: Icon(Icons.account_balance, size: 28),
         ),
-        title: const Text('Talabalar'),
+        title: Text(l.students),
       ),
       body: Column(
         children: [
@@ -47,7 +51,7 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Talaba qidirish...',
+                hintText: l.searchStudent,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
@@ -81,10 +85,10 @@ class _TeacherStudentsScreenState extends State<TeacherStudentsScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.people_outline,
-                            size: 64, color: AppTheme.textSecondary),
+                        Icon(Icons.people_outline,
+                            size: 64, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
                         const SizedBox(height: 16),
-                        Text(provider.error ?? 'Talabalar topilmadi'),
+                        Text(provider.error ?? l.studentsNotFound),
                       ],
                     ),
                   );

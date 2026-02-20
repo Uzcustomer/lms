@@ -3,6 +3,7 @@ import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../l10n/app_localizations.dart';
 
 class Verify2faScreen extends StatefulWidget {
   final String login;
@@ -71,12 +72,20 @@ class _Verify2faScreenState extends State<Verify2faScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final pinFillColor = isDark ? AppTheme.darkCard : Colors.white;
+    final pinBorderColor = isDark ? AppTheme.darkDivider : AppTheme.dividerColor;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text('Tasdiqlash'),
+        title: Text(l.verification),
         backgroundColor: Colors.transparent,
-        foregroundColor: AppTheme.textPrimary,
+        foregroundColor: textColor,
         elevation: 0,
       ),
       body: SafeArea(
@@ -89,7 +98,7 @@ class _Verify2faScreenState extends State<Verify2faScreen> {
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withAlpha(25),
+                  color: AppTheme.primaryColor.withAlpha(isDark ? 40 : 25),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Icon(
@@ -100,17 +109,18 @@ class _Verify2faScreenState extends State<Verify2faScreen> {
               ),
               const SizedBox(height: 24),
               Text(
-                'Telegram tasdiqlash',
+                l.telegramVerification,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: textColor,
                     ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Telegram botga yuborilgan 6 xonali kodni kiriting',
+                l.telegramCodeHint,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textSecondary,
+                      color: subTextColor,
                     ),
               ),
               const SizedBox(height: 32),
@@ -127,11 +137,11 @@ class _Verify2faScreenState extends State<Verify2faScreen> {
                   borderRadius: BorderRadius.circular(12),
                   fieldHeight: 52,
                   fieldWidth: 46,
-                  activeFillColor: Colors.white,
-                  inactiveFillColor: Colors.white,
-                  selectedFillColor: Colors.white,
+                  activeFillColor: pinFillColor,
+                  inactiveFillColor: pinFillColor,
+                  selectedFillColor: pinFillColor,
                   activeColor: AppTheme.primaryColor,
-                  inactiveColor: AppTheme.dividerColor,
+                  inactiveColor: pinBorderColor,
                   selectedColor: AppTheme.primaryColor,
                 ),
                 enableActiveFill: true,
@@ -180,7 +190,7 @@ class _Verify2faScreenState extends State<Verify2faScreen> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text('Tasdiqlash'),
+                          : Text(l.verify),
                     ),
                   );
                 },
@@ -193,8 +203,8 @@ class _Verify2faScreenState extends State<Verify2faScreen> {
                 onPressed: _canResend ? _resend : null,
                 child: Text(
                   _canResend
-                      ? 'Kodni qayta yuborish'
-                      : 'Qayta yuborish ($_resendSeconds s)',
+                      ? l.resendCode
+                      : '${l.resendIn} ($_resendSeconds s)',
                 ),
               ),
             ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../providers/teacher_provider.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/loading_widget.dart';
@@ -23,14 +24,17 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
       appBar: AppBar(
         leading: const Padding(
           padding: EdgeInsets.all(12),
           child: Icon(Icons.account_balance, size: 28),
         ),
-        title: const Text('Tashmedunitf Lms'),
+        title: Text(l.appTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
@@ -50,13 +54,13 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 48, color: AppTheme.textSecondary),
+                  Icon(Icons.error_outline, size: 48, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
                   const SizedBox(height: 16),
-                  Text(provider.error ?? 'Ma\'lumot topilmadi'),
+                  Text(provider.error ?? l.noData),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => provider.loadDashboard(),
-                    child: const Text('Qayta yuklash'),
+                    child: Text(l.reload),
                   ),
                 ],
               ),
@@ -72,7 +76,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Assalomu alaykum!',
+                    l.greeting,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -82,7 +86,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                     Text(
                       data['teacher_name'].toString(),
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: AppTheme.textSecondary,
+                            color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                           ),
                     ),
                   ],
@@ -92,7 +96,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                     children: [
                       Expanded(
                         child: StatCard(
-                          title: 'Jami baholar',
+                          title: l.totalGrades,
                           value: (data['total_grades'] ?? 0).toString(),
                           icon: Icons.grade,
                           color: AppTheme.primaryColor,
@@ -101,7 +105,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: StatCard(
-                          title: 'Kutilayotgan',
+                          title: l.pending,
                           value: (data['pending_grades'] ?? 0).toString(),
                           icon: Icons.pending_actions,
                           color: AppTheme.warningColor,
@@ -114,7 +118,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                     children: [
                       Expanded(
                         child: StatCard(
-                          title: 'Guruhlar',
+                          title: l.groups,
                           value: (data['groups_count'] ?? 0).toString(),
                           icon: Icons.groups,
                           color: AppTheme.accentColor,
@@ -123,7 +127,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: StatCard(
-                          title: 'Talabalar',
+                          title: l.students,
                           value: (data['students_count'] ?? 0).toString(),
                           icon: Icons.people,
                           color: AppTheme.successColor,

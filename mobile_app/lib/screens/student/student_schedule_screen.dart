@@ -75,9 +75,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
       appBar: AppBar(
         title: Text(l.schedule),
         centerTitle: true,
@@ -113,10 +114,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.calendar_today_outlined,
-                      size: 64, color: AppTheme.textSecondary),
+                  Icon(Icons.calendar_today_outlined,
+                      size: 64, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
                   const SizedBox(height: 16),
-                  Text(provider.error ?? 'Jadval topilmadi'),
+                  Text(provider.error ?? l.scheduleNotFound),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => provider.loadSchedule(),
@@ -130,8 +131,21 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           final days = schedule['days'] as Map<String, dynamic>? ?? {};
 
           if (days.isEmpty) {
-            return const Center(
-              child: Text('Bu hafta uchun jadval topilmadi'),
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.calendar_today_outlined,
+                      size: 64, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                  const SizedBox(height: 16),
+                  Text(
+                    l.noScheduleThisWeek,
+                    style: TextStyle(
+                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             );
           }
 
@@ -163,6 +177,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     lessons: lessons,
                     cardColor: _dayCardColors[dayIndex % _dayCardColors.length],
                     headerColor: _dayHeaderColors[dayIndex % _dayHeaderColors.length],
+                    isDark: isDark,
+                    todayLabel: l.today,
+                    noLessonsLabel: l.noLessons,
+                    lessonUnitLabel: l.lessonUnit,
                   );
                 }),
               ],
@@ -181,6 +199,10 @@ class _DayScheduleCard extends StatelessWidget {
   final List<dynamic> lessons;
   final Color cardColor;
   final Color headerColor;
+  final bool isDark;
+  final String todayLabel;
+  final String noLessonsLabel;
+  final String lessonUnitLabel;
 
   const _DayScheduleCard({
     required this.dayName,
@@ -189,11 +211,18 @@ class _DayScheduleCard extends StatelessWidget {
     required this.lessons,
     required this.cardColor,
     required this.headerColor,
+    required this.isDark,
+    required this.todayLabel,
+    required this.noLessonsLabel,
+    required this.lessonUnitLabel,
   });
 
   @override
   Widget build(BuildContext context) {
     final isToday = _isToday(dayName);
+    final bodyBg = isDark ? AppTheme.darkCard : cardColor.withAlpha(80);
+    final secondaryText = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final primaryText = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -238,9 +267,9 @@ class _DayScheduleCard extends StatelessWidget {
                       color: headerColor,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text(
-                      'Today',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                    child: Text(
+                      todayLabel,
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -249,13 +278,13 @@ class _DayScheduleCard extends StatelessWidget {
           ),
           // Lessons
           Container(
-            color: cardColor.withAlpha(80),
+            color: bodyBg,
             child: lessons.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(16),
+                ? Padding(
+                    padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Dars yo\'q',
-                      style: TextStyle(color: AppTheme.textSecondary),
+                      noLessonsLabel,
+                      style: TextStyle(color: secondaryText),
                     ),
                   )
                 : Column(
@@ -286,7 +315,7 @@ class _DayScheduleCard extends StatelessWidget {
                                     ),
                                   ),
                                   Text(
-                                    'para',
+                                    lessonUnitLabel,
                                     style: TextStyle(
                                       fontSize: 9,
                                       color: headerColor.withAlpha(178),
@@ -305,13 +334,17 @@ class _DayScheduleCard extends StatelessWidget {
                                     l['subject_name']?.toString() ?? '',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: primaryText,
+                                    ),
                                   ),
                                   const SizedBox(height: 2),
                                   if (l['employee_name'] != null)
                                     Text(
                                       l['employee_name'].toString(),
-                                      style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                      style: TextStyle(fontSize: 11, color: secondaryText),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -319,23 +352,23 @@ class _DayScheduleCard extends StatelessWidget {
                                   Row(
                                     children: [
                                       if (l['auditorium_name'] != null) ...[
-                                        const Icon(Icons.room_outlined, size: 12, color: AppTheme.textSecondary),
+                                        Icon(Icons.room_outlined, size: 12, color: secondaryText),
                                         const SizedBox(width: 2),
                                         Flexible(
                                           child: Text(
                                             l['auditorium_name'].toString(),
-                                            style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                            style: TextStyle(fontSize: 11, color: secondaryText),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                       ],
                                       if (l['lesson_pair_start_time'] != null) ...[
                                         const SizedBox(width: 8),
-                                        const Icon(Icons.access_time, size: 12, color: AppTheme.textSecondary),
+                                        Icon(Icons.access_time, size: 12, color: secondaryText),
                                         const SizedBox(width: 2),
                                         Text(
                                           '${l['lesson_pair_start_time']} - ${l['lesson_pair_end_time'] ?? ''}',
-                                          style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                          style: TextStyle(fontSize: 11, color: secondaryText),
                                         ),
                                       ],
                                     ],

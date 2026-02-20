@@ -432,6 +432,10 @@ class StudentApiController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->where('training_type_code', 99)
                 ->whereNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhereNull('education_year_code');
+                }))
                 ->value('grade');
             if ($manualMt !== null) {
                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);

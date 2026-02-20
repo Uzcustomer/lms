@@ -302,8 +302,8 @@ class SendAttendanceGroupSummary extends Command
         // Kafedrani jami soat bo'yicha kamayish tartibida saralash
         $sortedDepts = $departmentStats;
         uasort($sortedDepts, function ($a, $b) {
-            $totalA = array_sum(array_column($a['subjects'], 'total'));
-            $totalB = array_sum(array_column($b['subjects'], 'total'));
+            $totalA = array_sum(array_column($a['subjects'], 'no_attendance')) + array_sum(array_column($a['subjects'], 'no_grades'));
+            $totalB = array_sum(array_column($b['subjects'], 'no_attendance')) + array_sum(array_column($b['subjects'], 'no_grades'));
             return $totalB <=> $totalA;
         });
 
@@ -312,7 +312,7 @@ class SendAttendanceGroupSummary extends Command
             // Kafedra jami yig'indisini hisoblash
             $deptTotalAtt = array_sum(array_column($dept['subjects'], 'no_attendance'));
             $deptTotalGrade = array_sum(array_column($dept['subjects'], 'no_grades'));
-            $deptTotal = array_sum(array_column($dept['subjects'], 'total'));
+            $deptTotal = $deptTotalAtt + $deptTotalGrade;
 
             // Kafedra sarlavha qatori (jami bilan)
             $deptTableRows[] = [
@@ -326,7 +326,7 @@ class SendAttendanceGroupSummary extends Command
             // Fanlarni jami soat bo'yicha kamayish tartibida saralash
             $subjects = $dept['subjects'];
             uasort($subjects, function ($a, $b) {
-                return $b['total'] <=> $a['total'];
+                return ($b['no_attendance'] + $b['no_grades']) <=> ($a['no_attendance'] + $a['no_grades']);
             });
 
             foreach ($subjects as $subjectName => $stats) {
@@ -336,7 +336,7 @@ class SendAttendanceGroupSummary extends Command
                     '   ' . TableImageGenerator::truncate($subjectName, 27),
                     $stats['no_attendance'],
                     $stats['no_grades'],
-                    $stats['total'],
+                    $stats['no_attendance'] + $stats['no_grades'],
                 ];
             }
         }

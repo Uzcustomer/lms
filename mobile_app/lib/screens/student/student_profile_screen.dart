@@ -283,6 +283,12 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   String? _buildImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) return null;
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      final imageHost = Uri.parse(imagePath).host;
+      final apiHost = Uri.parse(ApiConfig.baseUrl).host;
+      if (imageHost != apiHost) {
+        final encoded = Uri.encodeComponent(imagePath);
+        return '${ApiConfig.baseUrl}${ApiConfig.imageProxy}?url=$encoded';
+      }
       return imagePath;
     }
     final baseHost = Uri.parse(ApiConfig.baseUrl).origin;

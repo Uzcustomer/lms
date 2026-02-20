@@ -12,6 +12,7 @@ class ApiConfig {
   // Common
   static const String me = '/me';
   static const String logout = '/logout';
+  static const String imageProxy = '/image-proxy';
 
   // Student endpoints
   static const String studentDashboard = '/student/dashboard';

@@ -330,4 +330,37 @@ class AuthController extends Controller
             'telegram_verified' => $teacher->isTelegramVerified(),
         ]);
     }
+
+    /**
+     * Image proxy — fetch external image to avoid CORS on web.
+     */
+    public function imageProxy(Request $request)
+    {
+        $url = $request->query('url');
+        if (!$url || !filter_var($url, FILTER_VALIDATE_URL)) {
+            return response()->json(['error' => 'Invalid URL'], 400);
+        }
+
+        // Only allow image URLs from trusted HEMIS domains
+        $host = parse_url($url, PHP_URL_HOST);
+        $allowed = ['hemis.ttatf.uz', 'student.hemis.uz', 'hemis.uz'];
+        if (!in_array($host, $allowed)) {
+            return response()->json(['error' => 'Domain not allowed'], 403);
+        }
+
+        try {
+            $response = Http::timeout(10)->get($url);
+            if (!$response->successful()) {
+                return response()->json(['error' => 'Failed to fetch image'], 502);
+            }
+
+            $contentType = $response->header('Content-Type') ?? 'image/jpeg';
+
+            return response($response->body(), 200)
+                ->header('Content-Type', $contentType)
+                ->header('Cache-Control', 'public, max-age=86400');
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to fetch image'], 502);
+        }
+    }
 }

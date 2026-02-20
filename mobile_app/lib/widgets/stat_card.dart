@@ -22,13 +22,39 @@ class StatCard extends StatelessWidget {
 
     return Card(
       color: isDark ? AppTheme.darkCard : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          // Background pattern - large faded circle
+          Positioned(
+            right: -20,
+            top: -20,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withAlpha(isDark ? 20 : 15),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 10,
+            bottom: -10,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withAlpha(isDark ? 15 : 10),
+              ),
+            ),
+          ),
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   width: 40,
@@ -39,27 +65,27 @@ class StatCard extends StatelessWidget {
                   ),
                   child: Icon(icon, color: color, size: 22),
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: titleColor,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                color: titleColor,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

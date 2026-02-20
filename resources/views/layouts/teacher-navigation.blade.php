@@ -17,6 +17,10 @@
                         {{ __('Dashboard') }}
                     </x-nav-link>
                 </div>
+                @php
+                    $navActiveRole = session('active_role', auth()->guard('teacher')->user()->getRoleNames()->first() ?? '');
+                @endphp
+                @if($navActiveRole !== 'oqituvchi')
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('teacher.students')" :active="request()->routeIs('teacher.students')">
                         {{ __('Talabalar') }}
@@ -28,11 +32,13 @@
                         {{ __('Baholar') }}
                     </x-nav-link>
                 </div>
+                @endif
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
                         {{ __('Jurnal') }}
                     </x-nav-link>
                 </div>
+                @if($navActiveRole !== 'oqituvchi')
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <div class="flex items-center">
                         <x-dropdown align="right" width="48">
@@ -79,6 +85,7 @@
                         </x-dropdown>
                     </div>
                 </div>
+                @endif
                 @if(auth()->guard('teacher')->user()->hasRole(['registrator_ofisi']))
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <div class="flex items-center">
@@ -279,13 +286,16 @@
                 <x-responsive-nav-link :href="route('teacher.edit_credentials')">
                     {{ __('Login va Parol') }}
                 </x-responsive-nav-link>
+                @if($navActiveRole !== 'oqituvchi')
                 <x-responsive-nav-link :href="route('teacher.student-grades-week-teacher')"
                     :active="request()->routeIs('teacher.student-grades-week-teacher')">
                     {{ __('Baholar') }}
                 </x-responsive-nav-link>
+                @endif
                 <x-responsive-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
                     {{ __('Jurnal') }}
                 </x-responsive-nav-link>
+                @if($navActiveRole !== 'oqituvchi')
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('teacher.independent.index')"
                         :active="request()->routeIs('teacher.independent.index')">
@@ -318,6 +328,7 @@
                     </x-nav-link>
                 </div>
                 @endif
+                @endif {{-- end oqituvchi check --}}
 
                 @if(auth()->guard('teacher')->user()->hasRole(['registrator_ofisi']))
                 <div class="border-t border-gray-200 pt-2 mt-2">

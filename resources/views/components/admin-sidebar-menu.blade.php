@@ -85,7 +85,7 @@
         </a>
         @endif
 
-        @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi']))
+        @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi', 'oqituvchi']))
         <a href="{{ $r('admin.students.index', $hasActiveRole('registrator_ofisi') ? null : 'teacher.students') }}"
            class="sidebar-link {{ $isActive('admin.students.*', 'teacher.students') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -175,7 +175,7 @@
             </svg>
             YN kunini belgilash
         </a>
-        @elseif(!$hasActiveRole('oquv_bolimi'))
+        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         <div class="sidebar-section">Qo'shimcha</div>
 
@@ -298,7 +298,7 @@
         </a>
         @endif
 
-        @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi']))
+        @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi', 'oqituvchi']))
         <a href="{{ $r('admin.qaytnoma.index', 'teacher.qaytnoma.index') }}"
            class="sidebar-link {{ $isActive('admin.qaytnoma.*', 'teacher.qaytnoma.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

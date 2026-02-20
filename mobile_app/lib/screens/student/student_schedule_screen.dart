@@ -198,15 +198,21 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                       _focusedDay = focusedDay;
                     },
                     calendarBuilders: CalendarBuilders(
-                      // Custom builder for days with lessons - orange text
+                      // Orange bg + black text for days with lessons
                       defaultBuilder: (context, date, focusedDay) {
                         final hasLessons = _hasLessonsOnDate(date, scheduledWeekdays);
                         if (hasLessons) {
-                          return Center(
+                          return Container(
+                            margin: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFF9800),
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
                             child: Text(
                               '${date.day}',
                               style: const TextStyle(
-                                color: Color(0xFFFF9800),
+                                color: Colors.black,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -275,10 +281,39 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
                 const SizedBox(height: 16),
 
+                // Day name header
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppTheme.darkCard : AppTheme.primaryLight,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, size: 18, color: Colors.white),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${_weekdayToUzName[_selectedDay.weekday] ?? ''}, ${_selectedDay.day.toString().padLeft(2, '0')}.${_selectedDay.month.toString().padLeft(2, '0')}.${_selectedDay.year}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 // Lessons for selected day
                 if (selectedLessons.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.darkCard.withAlpha(120) : Colors.white,
+                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
+                    ),
                     child: Center(
                       child: Column(
                         children: [
@@ -301,11 +336,13 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   )
                 else
                   ...selectedLessons.asMap().entries.map((entry) {
+                    final index = entry.key;
                     final lesson = entry.value as Map<String, dynamic>;
+                    final isLast = index == selectedLessons.length - 1;
                     return _LessonCard(
                       lesson: lesson,
                       isDark: isDark,
-                      lessonUnitLabel: l.lessonUnit,
+                      isLast: isLast,
                     );
                   }),
               ],
@@ -320,64 +357,67 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 class _LessonCard extends StatelessWidget {
   final Map<String, dynamic> lesson;
   final bool isDark;
-  final String lessonUnitLabel;
+  final bool isLast;
 
   const _LessonCard({
     required this.lesson,
     required this.isDark,
-    required this.lessonUnitLabel,
+    this.isLast = false,
   });
+
+  IconData _getLessonIcon(String? trainingType) {
+    final type = (trainingType ?? '').toLowerCase();
+    if (type.contains("ma'ruza") || type.contains('maruza') || type.contains('lektsiya')) {
+      return Icons.menu_book_rounded;
+    } else if (type.contains('amaliyot') || type.contains('praktika')) {
+      return Icons.computer_rounded;
+    } else if (type.contains('seminar')) {
+      return Icons.groups_rounded;
+    } else if (type.contains('laborator')) {
+      return Icons.science_rounded;
+    }
+    return Icons.auto_stories_rounded;
+  }
 
   @override
   Widget build(BuildContext context) {
     final secondaryText = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
     final primaryText = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final accentColor = AppTheme.primaryColor;
+    final trainingType = lesson['training_type_name']?.toString();
+    final icon = _getLessonIcon(trainingType);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(isDark ? 25 : 8),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: isLast
+            ? const BorderRadius.vertical(bottom: Radius.circular(14))
+            : BorderRadius.zero,
+        border: Border(
+          bottom: isLast
+              ? BorderSide.none
+              : BorderSide(
+                  color: isDark ? AppTheme.darkDivider : const Color(0xFFEEEEEE),
+                  width: 0.5,
+                ),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Para number badge
+          // Big lesson icon
           Container(
-            width: 44,
-            height: 44,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: accentColor.withAlpha(isDark ? 40 : 20),
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFFFF9800).withAlpha(isDark ? 40 : 25),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  lesson['lesson_pair_code']?.toString() ?? '',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: accentColor,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  lessonUnitLabel,
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: accentColor.withAlpha(178),
-                  ),
-                ),
-              ],
+            child: Icon(
+              icon,
+              size: 28,
+              color: const Color(0xFFFF9800),
             ),
           ),
           const SizedBox(width: 12),
@@ -400,11 +440,19 @@ class _LessonCard extends StatelessWidget {
                 if (lesson['employee_name'] != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      lesson['employee_name'].toString(),
-                      style: TextStyle(fontSize: 12, color: secondaryText),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: Row(
+                      children: [
+                        Icon(Icons.person_outline, size: 13, color: secondaryText),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            lesson['employee_name'].toString(),
+                            style: TextStyle(fontSize: 12, color: secondaryText),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 Row(
@@ -434,8 +482,8 @@ class _LessonCard extends StatelessWidget {
               ],
             ),
           ),
-          // Training type
-          if (lesson['training_type_name'] != null)
+          // Training type badge
+          if (trainingType != null)
             Container(
               constraints: const BoxConstraints(maxWidth: 70),
               margin: const EdgeInsets.only(left: 6),
@@ -445,7 +493,7 @@ class _LessonCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                lesson['training_type_name'].toString(),
+                trainingType,
                 style: TextStyle(
                   fontSize: 10,
                   color: isDark ? const Color(0xFFFFB74D) : const Color(0xFFE65100),

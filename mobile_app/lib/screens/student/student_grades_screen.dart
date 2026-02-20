@@ -256,7 +256,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       child: Column(
         children: [
           Divider(color: divColor, height: 1),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
           // Grade cards - 3 columns
           GridView.builder(
@@ -264,9 +264,9 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              childAspectRatio: 1.05,
+              crossAxisSpacing: 6,
+              mainAxisSpacing: 6,
+              childAspectRatio: 1.2,
             ),
             itemCount: gradeEntries.length,
             itemBuilder: (context, i) {
@@ -283,7 +283,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             },
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
           // Davomat
           Container(

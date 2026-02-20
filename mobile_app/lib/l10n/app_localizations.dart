@@ -63,6 +63,7 @@ class AppLocalizations {
   String get academicInfo => get('academic_info');
   String get level => get('level');
   String get greeting => get('greeting');
+  String get services => get('services');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
@@ -124,6 +125,7 @@ class AppLocalizations {
       'mt_not_uploaded': 'Yuklanmagan',
       'mt_deadline': 'Muddat',
       'mt_remaining': 'Qolgan urinish',
+      'services': 'Xizmatlar',
     },
     'ru': {
       'app_title': 'ТДТУ LMS',
@@ -184,6 +186,7 @@ class AppLocalizations {
       'mt_not_uploaded': 'Не загружено',
       'mt_deadline': 'Срок',
       'mt_remaining': 'Осталось попыток',
+      'services': 'Услуги',
     },
     'en': {
       'app_title': 'TDTU LMS',
@@ -244,6 +247,7 @@ class AppLocalizations {
       'mt_not_uploaded': 'Not uploaded',
       'mt_deadline': 'Deadline',
       'mt_remaining': 'Remaining attempts',
+      'services': 'Services',
     },
   };
 

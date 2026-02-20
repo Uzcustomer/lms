@@ -76,11 +76,14 @@ class AcademicScheduleController extends Controller
 
     /**
      * Test markazi uchun: Yakuniy nazoratlar jadvali (faqat ko'rish)
+     * Filtrlari by default bugungi sanaga o'rnatiladi va avtomatik qidiriladi
      */
     public function testCenterView(Request $request)
     {
         $currentSemesters = Semester::where('current', true)->get();
         $currentEducationYear = $currentSemesters->first()?->education_year;
+
+        $today = now()->format('Y-m-d');
 
         $selectedEducationType = $request->get('education_type');
         $selectedDepartment = $request->get('department_id');
@@ -90,20 +93,18 @@ class AcademicScheduleController extends Controller
         $selectedGroup = $request->get('group_id');
         $selectedSubject = $request->get('subject_id');
         $selectedStatus = $request->get('status');
-        $dateFrom = $request->get('date_from');
-        $dateTo = $request->get('date_to');
+        $dateFrom = $request->get('date_from', $today);
+        $dateTo = $request->get('date_to', $today);
         $currentSemesterToggle = $request->get('current_semester', '1');
-        $isSearched = $request->has('searched');
+        // Har doim avtomatik qidirish (sahifa ochilganda ham)
+        $isSearched = true;
 
-        $scheduleData = collect();
-        if ($isSearched) {
-            $scheduleData = $this->loadScheduleData(
-                $currentSemesters, $selectedDepartment, $selectedSpecialty,
-                $selectedSemester, $selectedGroup, $selectedEducationType,
-                $selectedLevelCode, $selectedSubject, $selectedStatus,
-                $currentSemesterToggle, true, $dateFrom, $dateTo
-            );
-        }
+        $scheduleData = $this->loadScheduleData(
+            $currentSemesters, $selectedDepartment, $selectedSpecialty,
+            $selectedSemester, $selectedGroup, $selectedEducationType,
+            $selectedLevelCode, $selectedSubject, $selectedStatus,
+            $currentSemesterToggle, true, $dateFrom, $dateTo
+        );
 
         $routePrefix = $this->routePrefix();
 

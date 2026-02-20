@@ -173,6 +173,9 @@ class SendAttendanceFinalDailyReport extends Command
 
             $telegram->sendToUser($groupChatId, "✅ KECHAGI KUN YAKUNIY HISOBOT — {$formattedDate}\n\nBarcha o'qituvchilar davomat va baholarni kiritgan!\nJami darslar: {$totalSchedules}");
 
+            // Barcha darslar kiritilgan bo'lsa ham, o'chirilgan FISHlar haqida xabar yuborish
+            $this->sendDeletedSchedulesReport($telegram, $groupChatId, $reportDateStr, $formattedDate);
+
             return 0;
         }
 
@@ -233,6 +236,66 @@ class SendAttendanceFinalDailyReport extends Command
             }
         }
 
+        // O'chirilgan FISHlar haqida xabar yuborish
+        $this->sendDeletedSchedulesReport($telegram, $groupChatId, $reportDateStr, $formattedDate);
+
         return 0;
+    }
+
+    /**
+     * Kechagi kun uchun o'chirilgan (soft-deleted) FISHlar haqida xabar yuborish.
+     */
+    private function sendDeletedSchedulesReport(TelegramService $telegram, string $groupChatId, string $reportDateStr, string $formattedDate): void
+    {
+        try {
+            $deletedSchedules = DB::table('schedules')
+                ->whereNotNull('deleted_at')
+                ->whereRaw('DATE(lesson_date) = ?', [$reportDateStr])
+                ->select(
+                    'employee_name',
+                    'group_name',
+                    'subject_name',
+                    'training_type_name',
+                    'lesson_pair_code',
+                    'lesson_pair_start_time',
+                    'lesson_pair_end_time',
+                    'department_name',
+                    'created_at',
+                    'deleted_at'
+                )
+                ->orderBy('deleted_at', 'desc')
+                ->get();
+
+            if ($deletedSchedules->isEmpty()) {
+                $this->info("O'chirilgan FISHlar topilmadi ({$reportDateStr}).");
+                return;
+            }
+
+            $lines = ["⚠️ O'CHIRILGAN DARS JADVALLARI (FISH) — {$formattedDate}\n"];
+            $lines[] = "Jami: {$deletedSchedules->count()} ta FISH o'chirilgan\n";
+
+            foreach ($deletedSchedules as $i => $sch) {
+                $pairStart = $sch->lesson_pair_start_time ? substr($sch->lesson_pair_start_time, 0, 5) : '';
+                $pairEnd = $sch->lesson_pair_end_time ? substr($sch->lesson_pair_end_time, 0, 5) : '';
+                $pairTime = ($pairStart && $pairEnd) ? "{$pairStart}-{$pairEnd}" : "para: {$sch->lesson_pair_code}";
+                $deletedAt = Carbon::parse($sch->deleted_at)->format('d.m.Y H:i');
+
+                $lines[] = ($i + 1) . ". {$sch->employee_name}";
+                $lines[] = "   Guruh: {$sch->group_name}";
+                $lines[] = "   Fan: {$sch->subject_name}";
+                $lines[] = "   Tur: {$sch->training_type_name}, Vaqt: {$pairTime}";
+                $lines[] = "   Kafedra: {$sch->department_name}";
+                $lines[] = "   O'chirilgan: {$deletedAt}\n";
+            }
+
+            $message = implode("\n", $lines);
+
+            $telegram->sendToUser($groupChatId, $message);
+
+            $this->info("O'chirilgan FISHlar hisoboti yuborildi: {$deletedSchedules->count()} ta.");
+        } catch (\Throwable $e) {
+            Log::error("O'chirilgan FISHlar hisobotida xato: " . $e->getMessage());
+            $this->error("O'chirilgan FISHlar hisobotida xato: " . $e->getMessage());
+        }
     }
 }

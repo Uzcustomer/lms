@@ -108,6 +108,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/absence-report/data', [AbsenceReportController::class, 'data'])->name('absence_report.data');
         Route::get('/absence-report/detail', [AbsenceReportController::class, 'detail'])->name('absence_report.detail');
 
+        // Hujjat shablonlari
+        Route::prefix('document-templates')->name('document-templates.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'index'])->name('index');
+            Route::get('/create', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'create'])->name('create');
+            Route::post('/', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'store'])->name('store');
+            Route::get('/{documentTemplate}', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'show'])->name('show');
+            Route::get('/{documentTemplate}/edit', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'edit'])->name('edit');
+            Route::put('/{documentTemplate}', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'update'])->name('update');
+            Route::delete('/{documentTemplate}', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'destroy'])->name('destroy');
+            Route::get('/{documentTemplate}/download', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'download'])->name('download');
+            Route::post('/{documentTemplate}/activate', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'activate'])->name('activate');
+        });
+
         // Sababli dars qoldirish arizalari (Registrator ofisi)
         Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'index'])->name('index');

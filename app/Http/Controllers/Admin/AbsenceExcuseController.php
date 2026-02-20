@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AbsenceExcuse;
+use App\Models\DocumentTemplate;
+use App\Services\DocumentTemplateService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -68,48 +70,68 @@ class AbsenceExcuseController extends Controller
         }
 
         $user = Auth::user();
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name;
 
         try {
-            $verificationUrl = route('absence-excuse.verify', $excuse->verification_token);
-
-            // QR kod generatsiya
-            $qrCodeSvg = null;
-            $qrCodeBase64 = null;
-
-            if (class_exists(\BaconQrCode\Writer::class)) {
-                // 1-usul: BaconQrCode (local, SVG)
-                $renderer = new \BaconQrCode\Renderer\ImageRenderer(
-                    new \BaconQrCode\Renderer\RendererStyle\RendererStyle(200, 1),
-                    new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
-                );
-                $qrCodeSvg = (new \BaconQrCode\Writer($renderer))->writeString($verificationUrl);
-            } else {
-                // 2-usul: Online API orqali PNG
-                $apiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&format=png&data=' . urlencode($verificationUrl);
-                $pngData = @file_get_contents($apiUrl);
-                if ($pngData) {
-                    $qrCodeBase64 = base64_encode($pngData);
-                }
+            // Tasdiqlash uchun ma'lumotlarni oldindan o'rnatish
+            if ($excuse->isPending()) {
+                $excuse->forceFill([
+                    'status' => 'approved',
+                    'reviewed_by_name' => $reviewerName,
+                    'reviewed_at' => now(),
+                ]);
             }
 
-            // PDF generatsiya
-            $pdf = Pdf::loadView('pdf.absence-excuse-certificate', [
-                'excuse' => $excuse->isPending()
-                    ? tap($excuse)->forceFill(['status' => 'approved', 'reviewed_by_name' => $user->name ?? $user->full_name ?? $user->short_name, 'reviewed_at' => now()])
-                    : $excuse,
-                'qrCodeSvg' => $qrCodeSvg,
-                'qrCodeBase64' => $qrCodeBase64,
-                'verificationUrl' => $verificationUrl,
-            ]);
+            $verificationUrl = route('absence-excuse.verify', $excuse->verification_token);
 
-            $pdfPath = 'absence-excuses/approved/' . $excuse->verification_token . '.pdf';
-            Storage::disk('public')->put($pdfPath, $pdf->output());
+            // Word shablon mavjudligini tekshirish
+            $template = DocumentTemplate::getActiveByType('absence_excuse');
+
+            if ($template) {
+                // Word shablon orqali PDF generatsiya
+                $service = new DocumentTemplateService();
+                $qrPath = $service->generateQrImage($verificationUrl);
+                $pdfPath = $service->generateAbsenceExcusePdf($excuse, $reviewerName, $qrPath);
+
+                // QR vaqtinchalik faylni tozalash
+                if ($qrPath) {
+                    @unlink($qrPath);
+                }
+            } else {
+                // Blade shablon orqali (fallback)
+                $qrCodeSvg = null;
+                $qrCodeBase64 = null;
+
+                if (class_exists(\BaconQrCode\Writer::class)) {
+                    $renderer = new \BaconQrCode\Renderer\ImageRenderer(
+                        new \BaconQrCode\Renderer\RendererStyle\RendererStyle(200, 1),
+                        new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
+                    );
+                    $qrCodeSvg = (new \BaconQrCode\Writer($renderer))->writeString($verificationUrl);
+                } else {
+                    $apiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&format=png&data=' . urlencode($verificationUrl);
+                    $pngData = @file_get_contents($apiUrl);
+                    if ($pngData) {
+                        $qrCodeBase64 = base64_encode($pngData);
+                    }
+                }
+
+                $pdf = Pdf::loadView('pdf.absence-excuse-certificate', [
+                    'excuse' => $excuse,
+                    'qrCodeSvg' => $qrCodeSvg,
+                    'qrCodeBase64' => $qrCodeBase64,
+                    'verificationUrl' => $verificationUrl,
+                ]);
+
+                $pdfPath = 'absence-excuses/approved/' . $excuse->verification_token . '.pdf';
+                Storage::disk('public')->put($pdfPath, $pdf->output());
+            }
 
             // Faqat PDF muvaffaqiyatli bo'lgandan keyin status o'zgartiriladi
             $excuse->update([
                 'status' => 'approved',
                 'reviewed_by' => $user->id,
-                'reviewed_by_name' => $user->name ?? $user->full_name ?? $user->short_name,
+                'reviewed_by_name' => $reviewerName,
                 'reviewed_at' => $excuse->reviewed_at ?? now(),
                 'approved_pdf_path' => $pdfPath,
             ]);

@@ -43,6 +43,12 @@ Route::prefix('v1')->group(function () {
             Route::get('/subjects/{subjectId}/mt-submissions', [StudentApiController::class, 'mtSubmissions']);
             Route::get('/pending-lessons', [StudentApiController::class, 'pendingLessons']);
             Route::get('/attendance', [StudentApiController::class, 'attendance']);
+
+            // Absence excuses (sababli ariza)
+            Route::get('/absence-excuses', [StudentApiController::class, 'absenceExcuses']);
+            Route::get('/absence-excuses/reasons', [StudentApiController::class, 'absenceExcuseReasons']);
+            Route::post('/absence-excuses', [StudentApiController::class, 'storeAbsenceExcuse']);
+            Route::get('/absence-excuses/{id}', [StudentApiController::class, 'showAbsenceExcuse']);
         });
 
         // ── Teacher endpoints ─────────────────────────────

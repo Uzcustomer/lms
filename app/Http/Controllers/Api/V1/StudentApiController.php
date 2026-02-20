@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\AbsenceExcuse;
 use App\Models\Attendance;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
@@ -895,6 +896,167 @@ class StudentApiController extends Controller
         return response()->json([
             'data' => [
                 'attendance' => $attendanceData,
+            ],
+        ]);
+    }
+
+    /**
+     * Absence excuse reasons list
+     */
+    public function absenceExcuseReasons(): JsonResponse
+    {
+        $reasons = collect(AbsenceExcuse::REASONS)->map(fn($data, $key) => [
+            'key' => $key,
+            'label' => $data['label'],
+            'document' => $data['document'],
+            'max_days' => $data['max_days'],
+            'note' => $data['note'],
+        ])->values();
+
+        return response()->json(['data' => $reasons]);
+    }
+
+    /**
+     * List student's absence excuses
+     */
+    public function absenceExcuses(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        $excuses = AbsenceExcuse::byStudent($student->id)
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn($e) => [
+                'id' => $e->id,
+                'reason' => $e->reason,
+                'reason_label' => $e->reason_label,
+                'start_date' => $e->start_date->format('Y-m-d'),
+                'end_date' => $e->end_date->format('Y-m-d'),
+                'status' => $e->status,
+                'status_label' => $e->status_label,
+                'description' => $e->description,
+                'file_original_name' => $e->file_original_name,
+                'created_at' => $e->created_at->toISOString(),
+                'rejection_reason' => $e->rejection_reason,
+            ]);
+
+        return response()->json(['data' => $excuses]);
+    }
+
+    /**
+     * Store a new absence excuse
+     */
+    public function storeAbsenceExcuse(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        $reasonKeys = implode(',', array_keys(AbsenceExcuse::REASONS));
+
+        $request->validate([
+            'reason' => "required|in:{$reasonKeys}",
+            'start_date' => 'required|date|before_or_equal:end_date',
+            'end_date' => [
+                'required',
+                'date',
+                'after_or_equal:start_date',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($request->reason && $request->start_date && $value) {
+                        $reasonData = AbsenceExcuse::REASONS[$request->reason] ?? null;
+                        if ($reasonData && $reasonData['max_days']) {
+                            $start = Carbon::parse($request->start_date);
+                            $end = Carbon::parse($value);
+                            $days = $start->diffInDays($end) + 1;
+                            if ($days > $reasonData['max_days']) {
+                                $fail("Tanlangan sabab uchun maksimum {$reasonData['max_days']} kun ruxsat etiladi. Siz {$days} kun belgiladingiz.");
+                            }
+                        }
+                    }
+                },
+            ],
+            'description' => 'nullable|string|max:1000',
+            'file' => [
+                'required',
+                'file',
+                'max:10240',
+                function ($attribute, $value, $fail) {
+                    $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
+                    $clientExt = strtolower($value->getClientOriginalExtension());
+                    $guessedExt = $value->guessExtension();
+                    if (!in_array($clientExt, $allowedExtensions) && !in_array($guessedExt, $allowedExtensions)) {
+                        $fail('Faqat PDF, JPG, PNG, DOC, DOCX formatdagi fayllar qabul qilinadi.');
+                    }
+                },
+            ],
+        ], [
+            'reason.required' => 'Sababni tanlang',
+            'reason.in' => 'Noto\'g\'ri sabab tanlangan',
+            'start_date.required' => 'Boshlanish sanasini kiriting',
+            'end_date.required' => 'Tugash sanasini kiriting',
+            'start_date.before_or_equal' => 'Boshlanish sanasi tugash sanasidan keyin bo\'lmasligi kerak',
+            'end_date.after_or_equal' => 'Tugash sanasi boshlanish sanasidan oldin bo\'lmasligi kerak',
+            'file.required' => 'Hujjat yuklash majburiy',
+            'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
+        ]);
+
+        $file = $request->file('file');
+        $filePath = $file->store('absence-excuses/' . $student->hemis_id, 'public');
+
+        $excuse = AbsenceExcuse::create([
+            'student_id' => $student->id,
+            'student_hemis_id' => $student->hemis_id,
+            'student_full_name' => $student->full_name,
+            'group_name' => $student->group_name,
+            'department_name' => $student->department_name,
+            'reason' => $request->reason,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'description' => $request->description,
+            'file_path' => $filePath,
+            'file_original_name' => $file->getClientOriginalName(),
+            'status' => 'pending',
+        ]);
+
+        return response()->json([
+            'message' => 'Arizangiz muvaffaqiyatli yuborildi.',
+            'data' => [
+                'id' => $excuse->id,
+                'status' => $excuse->status,
+            ],
+        ], 201);
+    }
+
+    /**
+     * Show a single absence excuse
+     */
+    public function showAbsenceExcuse(Request $request, $id): JsonResponse
+    {
+        $student = $request->user();
+        $excuse = AbsenceExcuse::byStudent($student->id)->findOrFail($id);
+        $excuse->load('makeups');
+
+        return response()->json([
+            'data' => [
+                'id' => $excuse->id,
+                'reason' => $excuse->reason,
+                'reason_label' => $excuse->reason_label,
+                'start_date' => $excuse->start_date->format('Y-m-d'),
+                'end_date' => $excuse->end_date->format('Y-m-d'),
+                'status' => $excuse->status,
+                'status_label' => $excuse->status_label,
+                'description' => $excuse->description,
+                'file_original_name' => $excuse->file_original_name,
+                'created_at' => $excuse->created_at->toISOString(),
+                'rejection_reason' => $excuse->rejection_reason,
+                'reviewed_at' => $excuse->reviewed_at?->toISOString(),
+                'reviewed_by_name' => $excuse->reviewed_by_name,
+                'makeups' => $excuse->makeups->map(fn($m) => [
+                    'id' => $m->id,
+                    'subject_name' => $m->subject_name,
+                    'assessment_type' => $m->assessment_type,
+                    'original_date' => $m->original_date,
+                    'makeup_date' => $m->makeup_date,
+                    'status' => $m->status,
+                ]),
             ],
         ]);
     }

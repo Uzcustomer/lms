@@ -40,4 +40,37 @@ class StudentService {
   Future<Map<String, dynamic>> getPendingLessons() async {
     return await _api.get(ApiConfig.studentPendingLessons);
   }
+
+  Future<Map<String, dynamic>> getAbsenceExcuseReasons() async {
+    return await _api.get(ApiConfig.studentAbsenceExcuseReasons);
+  }
+
+  Future<Map<String, dynamic>> getAbsenceExcuses() async {
+    return await _api.get(ApiConfig.studentAbsenceExcuses);
+  }
+
+  Future<Map<String, dynamic>> storeAbsenceExcuse({
+    required String reason,
+    required String startDate,
+    required String endDate,
+    String? description,
+    required dynamic fileBytes,
+    required String fileName,
+  }) async {
+    return await _api.uploadFileWithFields(
+      ApiConfig.studentAbsenceExcuses,
+      fileBytes,
+      fileName,
+      fields: {
+        'reason': reason,
+        'start_date': startDate,
+        'end_date': endDate,
+        if (description != null && description.isNotEmpty) 'description': description,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> getAbsenceExcuse(int id) async {
+    return await _api.get('${ApiConfig.studentAbsenceExcuses}/$id');
+  }
 }

@@ -27,3 +27,6 @@ Schedule::command('teachers:send-reminders')->dailyAt('23:00');
 Schedule::command('teachers:send-group-summary')->dailyAt('14:00');
 Schedule::command('teachers:send-group-summary --detail')->dailyAt('18:00');
 Schedule::command('teachers:send-group-summary --detail')->dailyAt('22:00');
+
+// Ertasi kuni ertalab 09:00 da kechagi kunning yakuniy hisoboti (faqat o'qituvchilar kesimi)
+Schedule::command('teachers:send-final-daily-report')->dailyAt('09:00');

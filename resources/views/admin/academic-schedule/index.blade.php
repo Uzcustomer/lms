@@ -25,6 +25,19 @@
                     </div>
                 @endif
 
+                @if(session('status'))
+                    <div class="px-5 py-3 text-yellow-700 bg-yellow-50 border-b border-yellow-200" role="alert">
+                        <span>{{ session('status') }}</span>
+                    </div>
+                @endif
+
+                @if($errors->any())
+                    <div class="px-5 py-3 text-red-700 bg-red-50 border-b border-red-200" role="alert">
+                        <strong class="font-bold">Xato!</strong>
+                        <span>Ma'lumotlarni saqlashda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.</span>
+                    </div>
+                @endif
+
                 <!-- Filters -->
                 <div class="filter-container">
                     <!-- Row 1: Ta'lim turi, Fakultet, Yo'nalish, Sanadan, Sanagacha, Joriy semestr -->
@@ -194,14 +207,14 @@
                                                         <span class="na-label">N/A</span>
                                                     </label>
                                                 </div>
+                                                <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
+                                                <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
+                                                <input type="hidden" name="schedules[{{ $rowIndex }}][subject_name]" value="{{ $item['subject']->subject_name }}">
+                                                <input type="hidden" name="schedules[{{ $rowIndex }}][department_hemis_id]" value="{{ $item['group']->department_hemis_id }}">
+                                                <input type="hidden" name="schedules[{{ $rowIndex }}][specialty_hemis_id]" value="{{ $item['group']->specialty_hemis_id }}">
+                                                <input type="hidden" name="schedules[{{ $rowIndex }}][curriculum_hemis_id]" value="{{ $item['group']->curriculum_hemis_id }}">
+                                                <input type="hidden" name="schedules[{{ $rowIndex }}][semester_code]" value="{{ $item['subject']->semester_code }}">
                                             </td>
-                                            <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
-                                            <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
-                                            <input type="hidden" name="schedules[{{ $rowIndex }}][subject_name]" value="{{ $item['subject']->subject_name }}">
-                                            <input type="hidden" name="schedules[{{ $rowIndex }}][department_hemis_id]" value="{{ $item['group']->department_hemis_id }}">
-                                            <input type="hidden" name="schedules[{{ $rowIndex }}][specialty_hemis_id]" value="{{ $item['group']->specialty_hemis_id }}">
-                                            <input type="hidden" name="schedules[{{ $rowIndex }}][curriculum_hemis_id]" value="{{ $item['group']->curriculum_hemis_id }}">
-                                            <input type="hidden" name="schedules[{{ $rowIndex }}][semester_code]" value="{{ $item['subject']->semester_code }}">
                                         </tr>
                                     @endforeach
                                 @endforeach

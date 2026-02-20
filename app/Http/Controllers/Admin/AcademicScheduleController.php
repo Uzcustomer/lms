@@ -277,18 +277,24 @@ class AcademicScheduleController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'schedules' => 'required|array',
-            'schedules.*.group_hemis_id' => 'required|string',
-            'schedules.*.subject_id' => 'required|string',
-            'schedules.*.subject_name' => 'required|string',
-            'schedules.*.department_hemis_id' => 'required|string',
-            'schedules.*.specialty_hemis_id' => 'required|string',
-            'schedules.*.curriculum_hemis_id' => 'required|string',
-            'schedules.*.semester_code' => 'required|string',
-            'schedules.*.oski_date' => 'nullable|date',
-            'schedules.*.test_date' => 'nullable|date',
-        ]);
+        $schedules = $request->input('schedules');
+
+        if (!is_array($schedules) || empty($schedules)) {
+            return redirect()->back()->with('error', 'Saqlash uchun ma\'lumot topilmadi.');
+        }
+
+        // Faqat to'liq ma'lumotga ega elementlarni filtrlash
+        // (max_input_vars limiti tufayli ba'zi maydonlar tushib qolishi mumkin)
+        $validSchedules = [];
+        foreach ($schedules as $key => $schedule) {
+            if (!empty($schedule['group_hemis_id']) && !empty($schedule['subject_id']) && !empty($schedule['semester_code'])) {
+                $validSchedules[$key] = $schedule;
+            }
+        }
+
+        if (empty($validSchedules)) {
+            return redirect()->back()->with('error', 'Ma\'lumotlar to\'liq emas. Sahifani yangilab, qaytadan urinib ko\'ring.');
+        }
 
         $currentSemester = Semester::where('current', true)->first();
         $educationYear = $currentSemester?->education_year;
@@ -296,7 +302,7 @@ class AcademicScheduleController extends Controller
 
         DB::beginTransaction();
         try {
-            foreach ($request->schedules as $schedule) {
+            foreach ($validSchedules as $schedule) {
                 $oskiNa = !empty($schedule['oski_na']);
                 $testNa = !empty($schedule['test_na']);
                 $hasAnyData = !empty($schedule['oski_date']) || !empty($schedule['test_date']) || $oskiNa || $testNa;
@@ -309,26 +315,30 @@ class AcademicScheduleController extends Controller
                     continue;
                 }
 
-                ExamSchedule::updateOrCreate(
-                    [
-                        'group_hemis_id' => $schedule['group_hemis_id'],
-                        'subject_id' => $schedule['subject_id'],
-                        'semester_code' => $schedule['semester_code'],
-                    ],
-                    [
-                        'department_hemis_id' => $schedule['department_hemis_id'],
-                        'specialty_hemis_id' => $schedule['specialty_hemis_id'],
-                        'curriculum_hemis_id' => $schedule['curriculum_hemis_id'],
-                        'subject_name' => $schedule['subject_name'],
-                        'oski_date' => $schedule['oski_date'] ?: null,
-                        'oski_na' => $oskiNa,
-                        'test_date' => $schedule['test_date'] ?: null,
-                        'test_na' => $testNa,
-                        'education_year' => $educationYear,
-                        'updated_by' => $userId,
-                        'created_by' => $userId,
-                    ]
-                );
+                $record = ExamSchedule::firstOrNew([
+                    'group_hemis_id' => $schedule['group_hemis_id'],
+                    'subject_id' => $schedule['subject_id'],
+                    'semester_code' => $schedule['semester_code'],
+                ]);
+
+                $record->fill([
+                    'department_hemis_id' => $schedule['department_hemis_id'] ?? '',
+                    'specialty_hemis_id' => $schedule['specialty_hemis_id'] ?? '',
+                    'curriculum_hemis_id' => $schedule['curriculum_hemis_id'] ?? '',
+                    'subject_name' => $schedule['subject_name'] ?? '',
+                    'oski_date' => !empty($schedule['oski_date']) ? $schedule['oski_date'] : null,
+                    'oski_na' => $oskiNa,
+                    'test_date' => !empty($schedule['test_date']) ? $schedule['test_date'] : null,
+                    'test_na' => $testNa,
+                    'education_year' => $educationYear,
+                    'updated_by' => $userId,
+                ]);
+
+                if (!$record->exists) {
+                    $record->created_by = $userId;
+                }
+
+                $record->save();
             }
             DB::commit();
 

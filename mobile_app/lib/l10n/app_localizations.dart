@@ -64,10 +64,17 @@ class AppLocalizations {
   String get level => get('level');
   String get greeting => get('greeting');
   String get services => get('services');
+  String get tuitionFee => get('tuition_fee');
+  String get paymentForm => get('payment_form');
+  String get paid => get('paid');
+  String get remaining => get('remaining');
+  String get deadline => get('deadline');
+  String get contractStudent => get('contract_student');
+  String get grantStudent => get('grant_student');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
-      'app_title': 'TDTU LMS',
+      'app_title': 'Tashmedunitf Lms',
       'home': 'Bosh sahifa',
       'grades': 'Baholar',
       'schedule': 'Jadval',
@@ -126,9 +133,16 @@ class AppLocalizations {
       'mt_deadline': 'Muddat',
       'mt_remaining': 'Qolgan urinish',
       'services': 'Xizmatlar',
+      'tuition_fee': 'Kontrakt to\'lovi',
+      'payment_form': 'To\'lov shakli',
+      'paid': 'To\'langan',
+      'remaining': 'Qoldiq',
+      'deadline': 'Muddat',
+      'contract_student': 'Kontrakt',
+      'grant_student': 'Grant',
     },
     'ru': {
-      'app_title': 'ТДТУ LMS',
+      'app_title': 'Tashmedunitf Lms',
       'home': 'Главная',
       'grades': 'Оценки',
       'schedule': 'Расписание',
@@ -187,9 +201,16 @@ class AppLocalizations {
       'mt_deadline': 'Срок',
       'mt_remaining': 'Осталось попыток',
       'services': 'Услуги',
+      'tuition_fee': 'Оплата контракта',
+      'payment_form': 'Форма оплаты',
+      'paid': 'Оплачено',
+      'remaining': 'Остаток',
+      'deadline': 'Срок',
+      'contract_student': 'Контракт',
+      'grant_student': 'Грант',
     },
     'en': {
-      'app_title': 'TDTU LMS',
+      'app_title': 'Tashmedunitf Lms',
       'home': 'Home',
       'grades': 'Grades',
       'schedule': 'Schedule',
@@ -248,6 +269,13 @@ class AppLocalizations {
       'mt_deadline': 'Deadline',
       'mt_remaining': 'Remaining attempts',
       'services': 'Services',
+      'tuition_fee': 'Tuition Fee',
+      'payment_form': 'Payment form',
+      'paid': 'Paid',
+      'remaining': 'Remaining',
+      'deadline': 'Deadline',
+      'contract_student': 'Contract',
+      'grant_student': 'Grant',
     },
   };
 

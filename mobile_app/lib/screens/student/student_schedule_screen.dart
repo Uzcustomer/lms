@@ -138,7 +138,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           return RefreshIndicator(
             onRefresh: () => provider.loadSchedule(),
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
               children: [
                 if (schedule['week_label'] != null)
                   Padding(

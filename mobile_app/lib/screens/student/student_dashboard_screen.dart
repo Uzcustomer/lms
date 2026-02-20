@@ -145,58 +145,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
-                        if (data?['recent_grades'] != null) ...[
-                          Text(
-                            l.recentGrades,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                          ),
-                          const SizedBox(height: 12),
-                          ...((data!['recent_grades'] as List).map((grade) {
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: _gradeColor(grade['grade']),
-                                  child: Text(
-                                    (grade['grade'] ?? '-').toString(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                title: Text(
-                                  grade['subject_name']?.toString() ?? '',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: Text(
-                                  '${grade['training_type_name'] ?? ''} - ${grade['lesson_date'] ?? ''}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                trailing: grade['status'] == 'pending'
-                                    ? Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.warningColor.withAlpha(25),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          l.pending,
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: AppTheme.warningColor,
-                                          ),
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                            );
-                          })),
-                        ],
-                        const SizedBox(height: 16),
+                        _buildTuitionFeeSection(context, profile, l, isDark),
+                        const SizedBox(height: 100),
                       ],
                     ),
                   ),
@@ -366,19 +316,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   textAlign: TextAlign.center,
                 ),
               ],
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () {},
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: subTextColor,
-                  side: BorderSide(color: divColor),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                ),
-                child: Text(l.fillProfile, style: const TextStyle(fontSize: 13)),
-              ),
               const SizedBox(height: 16),
               Divider(height: 1, color: divColor),
               const SizedBox(height: 12),
@@ -692,6 +629,170 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       return '${parts[0][0]}${parts[1][0]}';
     }
     return name.isNotEmpty ? name[0] : '?';
+  }
+
+  Widget _buildTuitionFeeSection(
+    BuildContext context,
+    Map<String, dynamic>? profile,
+    AppLocalizations l,
+    bool isDark,
+  ) {
+    final paymentFormName = profile?['payment_form_name']?.toString() ?? '';
+    final isContract = paymentFormName.toLowerCase().contains('kontrakt') ||
+        paymentFormName.toLowerCase().contains('shartnoma') ||
+        (profile?['payment_form_code']?.toString() ?? '') == '12';
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l.tuitionFee,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(isDark ? 40 : 12),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Payment form badge
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isContract
+                          ? AppTheme.warningColor.withAlpha(25)
+                          : AppTheme.successColor.withAlpha(25),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isContract ? Icons.receipt_long : Icons.school,
+                          size: 14,
+                          color: isContract ? AppTheme.warningColor : AppTheme.successColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          paymentFormName.isNotEmpty
+                              ? paymentFormName
+                              : (isContract ? l.contractStudent : l.grantStudent),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isContract ? AppTheme.warningColor : AppTheme.successColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (isContract) ...[
+                const SizedBox(height: 16),
+                // Payment progress
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      l.paid,
+                      style: TextStyle(fontSize: 13, color: subTextColor),
+                    ),
+                    Text(
+                      '-- / -- so\'m',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: 0,
+                    backgroundColor: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
+                    valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.successColor),
+                    minHeight: 6,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Remaining & deadline
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(l.remaining, style: TextStyle(fontSize: 11, color: subTextColor)),
+                          const SizedBox(height: 2),
+                          Text(
+                            '-- so\'m',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.warningColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(l.deadline, style: TextStyle(fontSize: 11, color: subTextColor)),
+                          const SizedBox(height: 2),
+                          Text(
+                            '--',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const SizedBox(height: 12),
+                Text(
+                  paymentFormName.isNotEmpty ? paymentFormName : l.grantStudent,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Color _gradeColor(dynamic grade) {

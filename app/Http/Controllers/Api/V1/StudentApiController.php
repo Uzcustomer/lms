@@ -125,6 +125,8 @@ class StudentApiController extends Controller
                 'avg_gpa' => $student->avg_gpa,
                 'avg_grade' => $student->avg_grade,
                 'total_credit' => $student->total_credit ?? null,
+                'payment_form_code' => $student->payment_form_code,
+                'payment_form_name' => $student->payment_form_name,
             ],
         ]);
     }

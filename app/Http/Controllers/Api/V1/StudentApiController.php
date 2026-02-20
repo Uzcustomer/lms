@@ -35,12 +35,23 @@ class StudentApiController extends Controller
 
         $totalAbsent = Attendance::where('student_id', $student->id)->count();
 
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $debtSubjectsCount = StudentGrade::where('student_id', $student->id)
             ->whereIn('status', ['pending'])
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->orderBy('created_at', 'desc')
             ->take(10)
             ->get()
@@ -392,6 +403,13 @@ class StudentApiController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->where('training_type_code', 99)
                 ->whereNotNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                        });
+                }))
                 ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
                 ->get();
 
@@ -432,6 +450,10 @@ class StudentApiController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->where('training_type_code', 99)
                 ->whereNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhereNull('education_year_code');
+                }))
                 ->value('grade');
             if ($manualMt !== null) {
                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
@@ -443,6 +465,15 @@ class StudentApiController extends Controller
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->whereIn('training_type_code', [100, 101, 102])
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
+                                    $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
+                                }));
+                        });
+                }))
                 ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason')
                 ->get();
 
@@ -572,9 +603,16 @@ class StudentApiController extends Controller
         $student = $request->user();
         $semester = $student->semester_code;
 
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $grades = StudentGrade::where('student_id', $student->id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->orderBy('lesson_date', 'desc')
             ->get()
             ->map(fn($g) => [
@@ -608,8 +646,15 @@ class StudentApiController extends Controller
     {
         $student = $request->user();
 
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $pendingLessons = StudentGrade::where('student_id', $student->id)
             ->whereIn('status', ['pending', 'retake'])
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->orderBy('lesson_date')
             ->get()
             ->map(fn($g) => [

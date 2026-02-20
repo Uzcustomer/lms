@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\Group;
 use App\Models\Semester;
@@ -281,12 +282,32 @@ class TeacherApiController extends Controller
         $semester = Semester::findOrFail($request->semester_id);
         $subject = CurriculumSubject::findOrFail($request->subject_id);
 
+        // Education year code aniqlash
+        $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+        $scheduleEducationYear = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subject->subject_id)
+            ->where('semester_code', $semester->code)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('education_year_code')
+            ->orderBy('lesson_date', 'desc')
+            ->value('education_year_code');
+        if ($scheduleEducationYear) {
+            $educationYearCode = $scheduleEducationYear;
+        }
+
         $students = Student::where('group_id', $group->group_hemis_id)->get();
         $studentIds = $students->pluck('hemis_id');
 
         $grades = StudentGrade::whereIn('student_hemis_id', $studentIds)
             ->where('subject_id', $subject->subject_id)
             ->whereNotIn('training_type_code', config('app.training_type_code', [11, 99, 100, 101, 102]))
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->get();
 
         $gradesPerStudent = [];

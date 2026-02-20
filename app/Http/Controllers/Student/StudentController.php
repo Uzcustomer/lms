@@ -58,12 +58,23 @@ class StudentController extends Controller
 
         $totalAbsent = Attendance::where('student_id', $student->id)->count();
 
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $debtSubjectsCount = StudentGrade::where('student_id', $student->id)
             ->whereIn('status', ["pending"])
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->orderBy('created_at', 'desc')
             ->take(4)
             ->get();
@@ -516,13 +527,16 @@ class StudentController extends Controller
             }
 
             // Manual MT baho bo'lsa override
-            // No education_year_code filter: manual MT grades are unique per student/subject/semester
             $manualMt = DB::table('student_grades')
                 ->where('student_hemis_id', $studentHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->where('training_type_code', 99)
                 ->whereNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhereNull('education_year_code');
+                }))
                 ->value('grade');
             if ($manualMt !== null) {
                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
@@ -860,10 +874,16 @@ class StudentController extends Controller
         $student = Auth::user();
         $semester = $student->semester_code;
 
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $grades = StudentGrade::where('student_id', $student->id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
-//            ->where('training_type_code', "<>", 11)
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->orderBy('lesson_date', 'desc')
             ->get();
 
@@ -891,9 +911,16 @@ class StudentController extends Controller
             return $redirect;
         }
 
-        $pendingLessons = StudentGrade::where('student_id', auth()->id())
+        $student = Auth::guard('student')->user();
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
+        $pendingLessons = StudentGrade::where('student_id', $student->id)
             ->whereIn('status', ['pending', 'retake'])
-//            ->where('training_type_code', '<>', 11)
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->orderBy('lesson_date')
             ->get();
 

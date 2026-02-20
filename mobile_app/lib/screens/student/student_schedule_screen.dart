@@ -48,10 +48,24 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     });
   }
 
+  /// Normalize day key map for case-insensitive lookup
+  Map<String, dynamic> _normalizeDays(Map<String, dynamic> days) {
+    final normalized = <String, dynamic>{};
+    for (final entry in days.entries) {
+      // Capitalize first letter to match our _dayWeekday keys
+      final key = entry.key.isNotEmpty
+          ? entry.key[0].toUpperCase() + entry.key.substring(1).toLowerCase()
+          : entry.key;
+      normalized[key] = entry.value;
+    }
+    return normalized;
+  }
+
   /// Get the set of weekday numbers that have lessons
   Set<int> _getScheduledWeekdays(Map<String, dynamic> days) {
+    final normalized = _normalizeDays(days);
     final result = <int>{};
-    for (final entry in days.entries) {
+    for (final entry in normalized.entries) {
       final dayName = entry.key;
       final lessons = entry.value as List<dynamic>? ?? [];
       if (lessons.isNotEmpty) {
@@ -67,12 +81,26 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     return scheduledWeekdays.contains(date.weekday);
   }
 
-  /// Get lessons for a specific selected day
+  /// Get lessons for a specific selected day (by day name, case-insensitive)
   List<dynamic> _getLessonsForDay(DateTime date, Map<String, dynamic> days) {
     final uzName = _weekdayToUzName[date.weekday];
     if (uzName == null) return [];
-    final lessons = days[uzName] as List<dynamic>? ?? [];
+    final normalized = _normalizeDays(days);
+    final lessons = normalized[uzName] as List<dynamic>? ?? [];
     return lessons;
+  }
+
+  /// Get lessons for a specific date - tries date-keyed schedule first, then falls back to day names
+  List<dynamic> _getLessonsForDate(DateTime date, List<dynamic> dateSchedule, Map<String, dynamic> days) {
+    // Try exact date match from the schedule array
+    final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    for (final entry in dateSchedule) {
+      if (entry is Map<String, dynamic> && entry['date'] == dateStr) {
+        return entry['lessons'] as List<dynamic>? ?? [];
+      }
+    }
+    // Fallback to day name matching
+    return _getLessonsForDay(date, days);
   }
 
   @override
@@ -132,8 +160,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           }
 
           final days = schedule['days'] as Map<String, dynamic>? ?? {};
+          final dateSchedule = schedule['schedule'] as List<dynamic>? ?? [];
           final scheduledWeekdays = _getScheduledWeekdays(days);
-          final selectedLessons = _getLessonsForDay(_selectedDay, days);
+          final selectedLessons = _getLessonsForDate(_selectedDay, dateSchedule, days);
 
           return RefreshIndicator(
             onRefresh: () => provider.loadSchedule(),
@@ -144,15 +173,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 Container(
                   margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                   decoration: BoxDecoration(
-                    color: isDark ? AppTheme.darkCard : Colors.white,
+                    color: AppTheme.primaryColor,
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(isDark ? 30 : 10),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                   child: TableCalendar(
                     firstDay: DateTime.now().subtract(const Duration(days: 365)),
@@ -176,17 +198,16 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                       _focusedDay = focusedDay;
                     },
                     calendarBuilders: CalendarBuilders(
-                      // Orange marker for days that have lessons
-                      markerBuilder: (context, date, events) {
-                        if (_hasLessonsOnDate(date, scheduledWeekdays)) {
-                          return Positioned(
-                            bottom: 4,
-                            child: Container(
-                              width: 20,
-                              height: 3,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFF9800),
-                                borderRadius: BorderRadius.circular(2),
+                      // Custom builder for days with lessons - orange text
+                      defaultBuilder: (context, date, focusedDay) {
+                        final hasLessons = _hasLessonsOnDate(date, scheduledWeekdays);
+                        if (hasLessons) {
+                          return Center(
+                            child: Text(
+                              '${date.day}',
+                              style: const TextStyle(
+                                color: Color(0xFFFF9800),
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           );
@@ -197,56 +218,56 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     calendarStyle: CalendarStyle(
                       outsideDaysVisible: false,
                       todayDecoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withAlpha(40),
+                        color: Colors.white.withAlpha(40),
                         shape: BoxShape.circle,
                       ),
-                      todayTextStyle: TextStyle(
-                        color: isDark ? Colors.white : AppTheme.primaryColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      selectedDecoration: const BoxDecoration(
-                        color: AppTheme.primaryColor,
-                        shape: BoxShape.circle,
-                      ),
-                      selectedTextStyle: const TextStyle(
+                      todayTextStyle: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
-                      defaultTextStyle: TextStyle(
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                      selectedDecoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      selectedTextStyle: const TextStyle(
+                        color: AppTheme.primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      defaultTextStyle: const TextStyle(
+                        color: Colors.white,
                       ),
                       weekendTextStyle: TextStyle(
-                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                        color: Colors.white.withAlpha(150),
                       ),
                       cellMargin: const EdgeInsets.all(4),
                     ),
-                    headerStyle: HeaderStyle(
+                    headerStyle: const HeaderStyle(
                       formatButtonVisible: false,
                       titleCentered: true,
                       leftChevronIcon: Icon(
                         Icons.chevron_left,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                        color: Colors.white,
                       ),
                       rightChevronIcon: Icon(
                         Icons.chevron_right,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                        color: Colors.white,
                       ),
                       titleTextStyle: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                        color: Colors.white,
                       ),
                     ),
                     daysOfWeekStyle: DaysOfWeekStyle(
                       weekdayStyle: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                        color: Colors.white.withAlpha(180),
                       ),
                       weekendStyle: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                        color: Colors.white.withAlpha(130),
                       ),
                     ),
                   ),

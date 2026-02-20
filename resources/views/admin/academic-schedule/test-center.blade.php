@@ -108,16 +108,18 @@
                         <table class="schedule-table">
                             <thead>
                                 <tr>
-                                    <th style="width:44px;padding-left:16px;">#</th>
-                                    <th class="sortable" data-col="1">Guruh <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="2">Yo'nalish <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="3" style="width:100px;">Fan kodi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="4">Fan nomi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="5" style="width:70px;text-align:center;">Kurs <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="6" style="width:90px;text-align:center;">Semestr <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="7" style="width:110px;text-align:center;">Shakl <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="8" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="9" style="width:140px;text-align:center;">1-urinish <span class="sort-icon"></span></th>
+                                    <th rowspan="2" style="width:44px;padding-left:16px;">#</th>
+                                    <th rowspan="2" class="sortable" data-col="1">Guruh <span class="sort-icon"></span></th>
+                                    <th rowspan="2" class="sortable" data-col="2">Yo'nalish <span class="sort-icon"></span></th>
+                                    <th rowspan="2" class="sortable" data-col="3" style="width:100px;">Fan kodi <span class="sort-icon"></span></th>
+                                    <th rowspan="2" class="sortable" data-col="4">Fan nomi <span class="sort-icon"></span></th>
+                                    <th rowspan="2" class="sortable" data-col="5" style="width:70px;text-align:center;">Kurs <span class="sort-icon"></span></th>
+                                    <th rowspan="2" class="sortable" data-col="6" style="width:90px;text-align:center;">Semestr <span class="sort-icon"></span></th>
+                                    <th colspan="2" style="text-align:center;background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#1e40af;font-weight:700;border-bottom:1px solid #93c5fd;">1-urinish</th>
+                                </tr>
+                                <tr>
+                                    <th class="sortable" data-col="7" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="8" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -135,7 +137,6 @@
                                             <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
                                             <td data-sort-value="{{ $item['level_name'] }}" style="text-align:center;color:#1e293b;font-weight:500;">{{ $item['level_name'] }}</td>
                                             <td data-sort-value="{{ $item['semester_name'] }}" style="text-align:center;color:#64748b;font-size:12px;">{{ $item['semester_name'] }}</td>
-                                            <td data-sort-value="{{ $item['education_form_name'] }}" style="text-align:center;color:#64748b;font-size:12px;">{{ $item['education_form_name'] }}</td>
                                             <td data-sort-value="{{ $item['yn_type'] ?? '' }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['yn_type'] ?? null)
                                                     <span class="yn-type-badge yn-type-{{ strtolower($item['yn_type']) }}">{{ $item['yn_type'] }}</span>
@@ -430,6 +431,7 @@
         .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .schedule-table thead { position: sticky; top: 0; z-index: 10; }
         .schedule-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
+        .schedule-table thead tr:nth-child(2) th { border-bottom: 2px solid #cbd5e1; }
         .schedule-table th { padding: 14px 12px; text-align: left; font-weight: 600; font-size: 11.5px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
         .schedule-table th.sortable { cursor: pointer; user-select: none; transition: background 0.15s; }
         .schedule-table th.sortable:hover { background: rgba(43,94,167,0.1); }

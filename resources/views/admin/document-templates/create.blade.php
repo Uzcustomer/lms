@@ -57,7 +57,10 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Word fayl (.docx) *</label>
                 <input type="file" name="file" accept=".docx" required
                        class="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-300">
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Faqat .docx formatdagi fayllar. Placeholder'larni quyidagi ro'yxatdan foydalaning.</p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Faqat .docx formatdagi fayllar. Placeholder'larni quyidagi ro'yxatdan foydalaning.
+                    <a href="{{ route('admin.document-templates.download-sample') }}" class="text-blue-600 dark:text-blue-400 hover:underline font-medium">Namuna shablonni yuklab olish</a>
+                </p>
             </div>
 
             <div class="flex items-center">

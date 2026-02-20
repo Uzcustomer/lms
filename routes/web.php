@@ -112,6 +112,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('document-templates')->name('document-templates.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'create'])->name('create');
+            Route::get('/download-sample', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'downloadSample'])->name('download-sample');
             Route::post('/', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'store'])->name('store');
             Route::get('/{documentTemplate}', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'show'])->name('show');
             Route::get('/{documentTemplate}/edit', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'edit'])->name('edit');

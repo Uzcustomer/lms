@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/loading_widget.dart';
@@ -21,6 +22,19 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       provider.loadDashboard();
       provider.loadProfile();
     });
+  }
+
+  /// Build full image URL from the image field
+  String? _buildImageUrl(String? imagePath) {
+    if (imagePath == null || imagePath.isEmpty) return null;
+    // If already a full URL, return as-is
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    // Build URL from base (remove /api/v1 suffix for asset URLs)
+    final baseHost = Uri.parse(ApiConfig.baseUrl).origin;
+    final path = imagePath.startsWith('/') ? imagePath : '/$imagePath';
+    return '$baseHost$path';
   }
 
   @override
@@ -84,7 +98,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                             Expanded(
                               child: StatCard(
                                 title: 'GPA',
-                                value: (data?['gpa'] ?? profile?['gpa'] ?? 0).toString(),
+                                value: (data?['gpa'] ?? profile?['avg_gpa'] ?? 0).toString(),
                                 icon: Icons.trending_up,
                                 color: AppTheme.primaryColor,
                               ),
@@ -93,7 +107,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                             Expanded(
                               child: StatCard(
                                 title: 'O\'rtacha baho',
-                                value: (data?['avg_grade'] ?? 0).toString(),
+                                value: (data?['avg_grade'] ?? profile?['avg_grade'] ?? 0).toString(),
                                 icon: Icons.star_outline,
                                 color: AppTheme.accentColor,
                               ),
@@ -202,23 +216,27 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final studentId = profile?['student_id_number']?.toString() ?? '';
     final faculty = profile?['department_name']?.toString() ?? '';
     final specialty = profile?['specialty_name']?.toString() ?? '';
-    final photoUrl = profile?['photo']?.toString();
-    final course = profile?['course']?.toString() ?? profile?['level']?.toString() ?? '';
-    final gpa = (data?['gpa'] ?? profile?['gpa'] ?? '').toString();
-    final avgGrade = (data?['avg_grade'] ?? '').toString();
-    final enrollDate = profile?['enrollment_date']?.toString() ??
-        profile?['created_at']?.toString() ??
-        '';
+    final imageUrl = _buildImageUrl(profile?['image']?.toString());
+    final course = profile?['level_code']?.toString() ?? profile?['level_name']?.toString() ?? '';
+    final gpa = (data?['gpa'] ?? profile?['avg_gpa'] ?? '').toString();
+    final avgGrade = (data?['avg_grade'] ?? profile?['avg_grade'] ?? '').toString();
+    final yearOfEnter = profile?['year_of_enter']?.toString() ?? '';
+    final educationYear = profile?['education_year_name']?.toString() ?? '';
+    final semesterName = profile?['semester_name']?.toString() ?? '';
+
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+
+    // Header extends far enough to sit behind half of the white card
+    const headerBottomPadding = 200.0;
 
     return Stack(
-      clipBehavior: Clip.none,
       children: [
-        // Dark blue curved background
+        // Dark blue curved background — extends behind the card
         Container(
           width: double.infinity,
           padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 12,
-            bottom: 70,
+            top: statusBarHeight + 12,
+            bottom: headerBottomPadding,
           ),
           decoration: const BoxDecoration(
             color: AppTheme.primaryColor,
@@ -235,99 +253,113 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Icon(
-                      Icons.account_balance,
-                      color: Colors.white,
-                      size: 28,
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.account_balance,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'TDTU LMS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.settings, color: Colors.white, size: 24),
-                      onPressed: () {},
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
+                          onPressed: () {},
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.settings, color: Colors.white, size: 24),
+                          onPressed: () {},
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
+
+              // Profile photo centered in header
+              Stack(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(40),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.white.withAlpha(50),
+                      backgroundImage:
+                          imageUrl != null && imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
+                      child: imageUrl == null || imageUrl.isEmpty
+                          ? Text(
+                              _getInitials(fullName),
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                  // Camera icon overlay
+                  Positioned(
+                    bottom: 4,
+                    right: 4,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppTheme.primaryColor, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt,
+                        color: AppTheme.primaryColor,
+                        size: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
 
-        // Profile photo (overlapping header and white area)
-        Positioned(
-          top: MediaQuery.of(context).padding.top + 60,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: Stack(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(30),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: CircleAvatar(
-                    radius: 50,
-                    backgroundColor: AppTheme.primaryColor.withAlpha(30),
-                    backgroundImage:
-                        photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                    child: photoUrl == null || photoUrl.isEmpty
-                        ? Text(
-                            _getInitials(fullName),
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryColor,
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-                // Camera icon overlay
-                Positioned(
-                  bottom: 4,
-                  right: 4,
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // White card with student info + mini stats
+        // White card with student info + mini stats — overlaps the header
         Container(
           width: double.infinity,
           margin: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 155,
+            top: statusBarHeight + 210,
             left: 16,
             right: 16,
           ),
-          padding: const EdgeInsets.only(top: 20, bottom: 16, left: 16, right: 16),
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(15),
+                color: Colors.black.withAlpha(20),
                 blurRadius: 15,
                 offset: const Offset(0, 5),
               ),
@@ -348,14 +380,22 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const SizedBox(height: 4),
 
               // Student ID
-              Text(
-                studentId,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: AppTheme.textSecondary,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withAlpha(20),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  studentId,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.primaryColor,
+                  ),
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
 
               // Faculty (orange)
               if (faculty.isNotEmpty)
@@ -382,7 +422,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ],
               const SizedBox(height: 12),
 
-              // "Profil to'ldirish" button
+              // "Profilni to'ldirish" button
               OutlinedButton(
                 onPressed: () {},
                 style: OutlinedButton.styleFrom(
@@ -404,24 +444,27 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const Divider(height: 1, color: AppTheme.dividerColor),
               const SizedBox(height: 12),
 
-              // Mini stats row (4 columns)
+              // Mini stats row (5 columns): O'qishga kirgan yili, O'quv yili, Semestr, Kurs, GPA
               Row(
                 children: [
                   _buildMiniStat(
-                    'Ro\'yxat sanasi',
-                    enrollDate.isNotEmpty ? enrollDate : '-',
-                  ),
-                  _buildVerticalDivider(),
-                  _buildMiniStat('Kurs', course.isNotEmpty ? course : '-'),
-                  _buildVerticalDivider(),
-                  _buildMiniStat(
-                    'O\'rtacha',
-                    avgGrade.isNotEmpty && avgGrade != '0' ? avgGrade : '-',
+                    'Kirgan yili',
+                    yearOfEnter.isNotEmpty ? yearOfEnter : '-',
                   ),
                   _buildVerticalDivider(),
                   _buildMiniStat(
-                    'GPA',
-                    gpa.isNotEmpty && gpa != '0' ? gpa : '-',
+                    'O\'quv yili',
+                    educationYear.isNotEmpty ? educationYear : '-',
+                  ),
+                  _buildVerticalDivider(),
+                  _buildMiniStat(
+                    'Semestr',
+                    semesterName.isNotEmpty ? semesterName : '-',
+                  ),
+                  _buildVerticalDivider(),
+                  _buildMiniStat(
+                    'Kurs',
+                    course.isNotEmpty ? course : '-',
                   ),
                 ],
               ),
@@ -439,20 +482,24 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           Text(
             label,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               color: AppTheme.textSecondary,
             ),
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(
             value,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.bold,
               color: AppTheme.primaryColor,
             ),
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

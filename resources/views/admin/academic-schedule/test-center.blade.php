@@ -361,11 +361,11 @@
             // Scroll calendar for date filters
             var calFrom = new ScrollCalendar('date_from');
             var calTo = new ScrollCalendar('date_to');
-            @if(request()->get('date_from'))
-                calFrom.setValue('{{ request()->get("date_from") }}');
+            @if($dateFrom)
+                calFrom.setValue('{{ $dateFrom }}');
             @endif
-            @if(request()->get('date_to'))
-                calTo.setValue('{{ request()->get("date_to") }}');
+            @if($dateTo)
+                calTo.setValue('{{ $dateTo }}');
             @endif
 
             // Sort funksiyasi

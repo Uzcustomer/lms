@@ -111,12 +111,13 @@
                                     <th style="width:44px;padding-left:16px;">#</th>
                                     <th class="sortable" data-col="1">Guruh <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="2">Yo'nalish <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="3">Fan nomi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="4" style="width:70px;text-align:center;">Kredit <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="5" style="width:120px;text-align:center;">Dars boshlanish <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="6" style="width:120px;text-align:center;">Dars tugash <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="7" style="width:120px;text-align:center;">YN turi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="8" style="width:160px;text-align:center;">YN sanasi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="3" style="width:100px;">Fan kodi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="4">Fan nomi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="5" style="width:70px;text-align:center;">Kurs <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="6" style="width:90px;text-align:center;">Semestr <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="7" style="width:110px;text-align:center;">Shakl <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="8" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="9" style="width:140px;text-align:center;">1-urinish <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -130,49 +131,25 @@
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
                                             <td data-sort-value="{{ $item['specialty_name'] }}" style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
+                                            <td data-sort-value="{{ $item['subject_code'] }}" style="color:#64748b;font-size:12px;">{{ $item['subject_code'] }}</td>
                                             <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
-                                            <td data-sort-value="{{ $item['subject']->credit }}" style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
-                                            <td data-sort-value="{{ $item['lesson_start_date'] ? \Carbon\Carbon::parse($item['lesson_start_date'])->format('d.m.Y') : '' }}" style="text-align:center;padding:4px 8px;">
-                                                @if($item['lesson_start_date'])
-                                                    @php
-                                                        $lsDate = $item['lesson_start_date_carbon'];
-                                                        $lsBadge = 'badge-pending';
-                                                        if ($lsDate && $lsDate->format('Y-m-d') === $today) $lsBadge = 'badge-today';
-                                                        elseif ($lsDate && $lsDate->isPast()) $lsBadge = 'badge-passed';
-                                                    @endphp
-                                                    <span class="date-badge {{ $lsBadge }}">{{ $lsDate?->format('d.m.Y') }}</span>
-                                                @else
-                                                    <span style="color:#cbd5e1;">—</span>
-                                                @endif
-                                            </td>
-                                            <td data-sort-value="{{ $item['lesson_end_date'] ? \Carbon\Carbon::parse($item['lesson_end_date'])->format('d.m.Y') : '' }}" style="text-align:center;padding:4px 8px;">
-                                                @if($item['lesson_end_date'])
-                                                    @php
-                                                        $leDate = $item['lesson_end_date_carbon'];
-                                                        $leBadge = 'badge-pending';
-                                                        if ($leDate && $leDate->format('Y-m-d') === $today) $leBadge = 'badge-today';
-                                                        elseif ($leDate && $leDate->isPast()) $leBadge = 'badge-passed';
-                                                        elseif ($leDate && $leDate->diffInDays(now()) <= 3) $leBadge = 'badge-soon';
-                                                    @endphp
-                                                    <span class="date-badge {{ $leBadge }}">{{ $leDate?->format('d.m.Y') }}</span>
-                                                @else
-                                                    <span style="color:#cbd5e1;">—</span>
-                                                @endif
-                                            </td>
+                                            <td data-sort-value="{{ $item['level_name'] }}" style="text-align:center;color:#1e293b;font-weight:500;">{{ $item['level_name'] }}</td>
+                                            <td data-sort-value="{{ $item['semester_name'] }}" style="text-align:center;color:#64748b;font-size:12px;">{{ $item['semester_name'] }}</td>
+                                            <td data-sort-value="{{ $item['education_form_name'] }}" style="text-align:center;color:#64748b;font-size:12px;">{{ $item['education_form_name'] }}</td>
                                             <td data-sort-value="{{ $item['yn_type'] ?? '' }}" style="text-align:center;padding:4px 8px;">
-                                                @if($item['yn_type'])
+                                                @if($item['yn_type'] ?? null)
                                                     <span class="yn-type-badge yn-type-{{ strtolower($item['yn_type']) }}">{{ $item['yn_type'] }}</span>
                                                 @else
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
                                             </td>
-                                            <td data-sort-value="{{ $item['yn_na'] ? '' : ($item['yn_date'] ? \Carbon\Carbon::parse($item['yn_date'])->format('d.m.Y') : '') }}" style="text-align:center;padding:4px 8px;">
-                                                @if($item['yn_na'])
+                                            <td data-sort-value="{{ ($item['yn_na'] ?? false) ? '' : (($item['yn_date'] ?? null) ? \Carbon\Carbon::parse($item['yn_date'])->format('d.m.Y') : '') }}" style="text-align:center;padding:4px 8px;">
+                                                @if($item['yn_na'] ?? false)
                                                     <span class="na-badge">N/A</span>
-                                                @elseif($item['yn_date'])
+                                                @elseif($item['yn_date'] ?? null)
                                                     @php
-                                                        $ynDate = $item['yn_date_carbon'];
-                                                        $badgeClass = ($item['yn_type'] === 'Test') ? 'badge-pending-blue' : 'badge-pending';
+                                                        $ynDate = $item['yn_date_carbon'] ?? null;
+                                                        $badgeClass = (($item['yn_type'] ?? '') === 'Test') ? 'badge-pending-blue' : 'badge-pending';
                                                         if ($ynDate && $ynDate->format('Y-m-d') === $today) $badgeClass = 'badge-today';
                                                         elseif ($ynDate && $ynDate->isPast()) $badgeClass = 'badge-passed';
                                                         elseif ($ynDate && $ynDate->diffInDays(now()) <= 3) $badgeClass = 'badge-soon';

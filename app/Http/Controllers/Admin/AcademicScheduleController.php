@@ -107,7 +107,18 @@ class AcademicScheduleController extends Controller
             $currentSemesterToggle, true, $dateFrom, $dateTo, true
         );
 
-        // OSKI/Test ma'lumotlarini alohida qatorlarga ajratish (YN turi + YN sanasi)
+        // OSKI/Test ma'lumotlarini alohida qatorlarga ajratish (YN turi + 1-urinish sanasi)
+        // Qo'shimcha ustunlar uchun: semester -> kurs, curriculum -> shakl
+        $semesterMap = $currentSemesters->keyBy('code');
+        $curriculumHemisIds = collect();
+        foreach ($scheduleData as $groupHemisId => $items) {
+            foreach ($items as $item) {
+                $curriculumHemisIds->push($item['group']->curriculum_hemis_id);
+            }
+        }
+        $curriculumFormMap = Curriculum::whereIn('curricula_hemis_id', $curriculumHemisIds->unique())
+            ->pluck('education_form_name', 'curricula_hemis_id');
+
         $transformedData = collect();
         foreach ($scheduleData as $groupHemisId => $items) {
             foreach ($items as $item) {
@@ -116,10 +127,19 @@ class AcademicScheduleController extends Controller
                 $oskiNa = $item['oski_na'] ?? false;
                 $testNa = $item['test_na'] ?? false;
 
+                // Qo'shimcha ma'lumotlar
+                $sem = $semesterMap->get($item['subject']->semester_code);
+                $extraFields = [
+                    'subject_code' => $item['subject']->subject_code ?? '',
+                    'level_name' => $sem?->level_name ?? '',
+                    'semester_name' => $item['subject']->semester_name ?? ($sem?->name ?? ''),
+                    'education_form_name' => $curriculumFormMap->get($item['group']->curriculum_hemis_id) ?? '',
+                ];
+
                 // OSKI qatori: sana oraliqqa to'g'ri kelsa yoki N/A bo'lsa
                 $oskiInRange = $oskiDate && (!$dateFrom || $oskiDate >= $dateFrom) && (!$dateTo || $oskiDate <= $dateTo);
                 if ($oskiInRange || ($oskiNa && !$dateFrom && !$dateTo)) {
-                    $ynItem = $item;
+                    $ynItem = array_merge($item, $extraFields);
                     $ynItem['yn_type'] = 'OSKI';
                     $ynItem['yn_date'] = $oskiDate;
                     $ynItem['yn_date_carbon'] = $item['oski_date_carbon'] ?? null;
@@ -130,7 +150,7 @@ class AcademicScheduleController extends Controller
                 // Test qatori: sana oraliqqa to'g'ri kelsa yoki N/A bo'lsa
                 $testInRange = $testDate && (!$dateFrom || $testDate >= $dateFrom) && (!$dateTo || $testDate <= $dateTo);
                 if ($testInRange || ($testNa && !$dateFrom && !$dateTo)) {
-                    $ynItem = $item;
+                    $ynItem = array_merge($item, $extraFields);
                     $ynItem['yn_type'] = 'Test';
                     $ynItem['yn_date'] = $testDate;
                     $ynItem['yn_date_carbon'] = $item['test_date_carbon'] ?? null;

@@ -322,13 +322,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  _buildMiniStat(l.enrollmentYear, yearOfEnter.isNotEmpty ? yearOfEnter : '-', textColor, subTextColor),
+                  _buildMiniStat(l.enrollmentYear, yearOfEnter.isNotEmpty ? yearOfEnter : '-', subTextColor, const Color(0xFFFF9800)),
                   _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.educationYear, educationYear.isNotEmpty ? educationYear : '-', textColor, subTextColor),
+                  _buildMiniStat(l.educationYear, educationYear.isNotEmpty ? educationYear : '-', subTextColor, const Color(0xFFFF9800)),
                   _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.semester, semesterName.isNotEmpty ? semesterName : '-', textColor, subTextColor),
+                  _buildMiniStat(l.semester, semesterName.isNotEmpty ? semesterName : '-', subTextColor, const Color(0xFFFF9800)),
                   _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.course, course.isNotEmpty ? '$course-kurs' : '-', textColor, subTextColor),
+                  _buildMiniStat(l.course, course.isNotEmpty ? '$course-kurs' : '-', subTextColor, AppTheme.successColor),
                 ],
               ),
             ],
@@ -602,13 +602,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildMiniStat(String label, String value, Color textColor, Color subTextColor) {
+  Widget _buildMiniStat(String label, String value, Color labelColor, Color valueColor) {
     return Expanded(
       child: Column(
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 10, color: subTextColor),
+            style: TextStyle(fontSize: 10, color: labelColor),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -616,10 +616,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor,
+              color: valueColor,
             ),
             textAlign: TextAlign.center,
             maxLines: 1,

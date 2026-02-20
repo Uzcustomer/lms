@@ -14,11 +14,8 @@ class StudentHomeScreen extends StatefulWidget {
   State<StudentHomeScreen> createState() => _StudentHomeScreenState();
 }
 
-class _StudentHomeScreenState extends State<StudentHomeScreen>
-    with TickerProviderStateMixin {
+class _StudentHomeScreenState extends State<StudentHomeScreen> {
   int _currentIndex = 0;
-  late List<AnimationController> _animControllers;
-  late List<Animation<double>> _scaleAnimations;
 
   final _screens = const [
     StudentDashboardScreen(),
@@ -28,36 +25,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen>
     StudentProfileScreen(),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _animControllers = List.generate(
-      5,
-      (index) => AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 300),
-      ),
-    );
-    _scaleAnimations = _animControllers.map((controller) {
-      return Tween<double>(begin: 1.0, end: 1.15).animate(
-        CurvedAnimation(parent: controller, curve: Curves.easeOutBack),
-      );
-    }).toList();
-    _animControllers[0].forward();
-  }
-
-  @override
-  void dispose() {
-    for (final c in _animControllers) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
   void _onTabTapped(int index) {
     if (index == _currentIndex) return;
-    _animControllers[_currentIndex].reverse();
-    _animControllers[index].forward();
     setState(() {
       _currentIndex = index;
     });
@@ -105,8 +74,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen>
                     child: GestureDetector(
                       onTap: () => _onTabTapped(index),
                       behavior: HitTestBehavior.opaque,
-                      child: _AnimatedNavItem(
-                        animation: _scaleAnimations[index],
+                      child: _NavItemWidget(
                         isActive: isActive,
                         item: item,
                       ),
@@ -130,56 +98,46 @@ class _NavItem {
   const _NavItem(this.icon, this.activeIcon, this.label);
 }
 
-class _AnimatedNavItem extends AnimatedWidget {
+class _NavItemWidget extends StatelessWidget {
   final bool isActive;
   final _NavItem item;
 
-  const _AnimatedNavItem({
-    required Animation<double> animation,
+  const _NavItemWidget({
     required this.isActive,
     required this.item,
-  }) : super(listenable: animation);
+  });
 
   @override
   Widget build(BuildContext context) {
-    final anim = listenable as Animation<double>;
-    final elevate = isActive ? -4.0 * (anim.value - 1.0) / 0.15 : 0.0;
-
-    return Transform.translate(
-      offset: Offset(0, elevate),
-      child: Transform.scale(
-        scale: anim.value,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? Colors.white
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                isActive ? item.activeIcon : item.icon,
-                color: isActive ? Colors.black : Colors.white,
-                size: 22,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              item.label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                color: isActive ? Colors.white : Colors.white70,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isActive
+                ? Colors.white.withAlpha(20)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            isActive ? item.activeIcon : item.icon,
+            color: isActive ? const Color(0xFFFF9800) : Colors.white70,
+            size: 26,
+          ),
         ),
-      ),
+        const SizedBox(height: 2),
+        Text(
+          item.label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
+            color: isActive ? Colors.white : Colors.white70,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 }

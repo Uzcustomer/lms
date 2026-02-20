@@ -127,6 +127,31 @@ class AppLocalizations {
   String get department => get('department');
   String get position => get('position');
 
+  // Absence excuse
+  String get absenceExcuse => get('absence_excuse');
+  String get absenceExcuseTitle => get('absence_excuse_title');
+  String get absenceExcuseCreate => get('absence_excuse_create');
+  String get absenceExcuseReason => get('absence_excuse_reason');
+  String get absenceExcuseSelectReason => get('absence_excuse_select_reason');
+  String get absenceExcuseStartDate => get('absence_excuse_start_date');
+  String get absenceExcuseEndDate => get('absence_excuse_end_date');
+  String get absenceExcuseSelectDates => get('absence_excuse_select_dates');
+  String get absenceExcuseDescription => get('absence_excuse_description');
+  String get absenceExcuseFile => get('absence_excuse_file');
+  String get absenceExcuseSubmit => get('absence_excuse_submit');
+  String get absenceExcuseSuccess => get('absence_excuse_success');
+  String get absenceExcuseMyApplications => get('absence_excuse_my_applications');
+  String get absenceExcuseNoApplications => get('absence_excuse_no_applications');
+  String get absenceExcuseMaxDays => get('absence_excuse_max_days');
+  String get absenceExcuseRequiredDoc => get('absence_excuse_required_doc');
+  String get absenceExcuseSelectFile => get('absence_excuse_select_file');
+  String get absenceExcuseSelectedRange => get('absence_excuse_selected_range');
+  String get absenceExcuseAvailableDates => get('absence_excuse_available_dates');
+  String get statusPending => get('status_pending');
+  String get statusApproved => get('status_approved');
+  String get statusRejected => get('status_rejected');
+  String get days => get('days');
+
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
       'app_title': 'Tashmedunitf Lms',
@@ -233,6 +258,29 @@ class AppLocalizations {
       'work_info': 'Ish ma\'lumotlari',
       'department': 'Kafedra',
       'position': 'Lavozim',
+      'absence_excuse': 'Sababli ariza',
+      'absence_excuse_title': 'Sababli dars qoldirish arizasi',
+      'absence_excuse_create': 'Yangi ariza berish',
+      'absence_excuse_reason': 'Sabab',
+      'absence_excuse_select_reason': 'Sababni tanlang',
+      'absence_excuse_start_date': 'Boshlanish sanasi',
+      'absence_excuse_end_date': 'Tugash sanasi',
+      'absence_excuse_select_dates': 'Kalendardan sanalarni tanlang',
+      'absence_excuse_description': 'Izoh (ixtiyoriy)',
+      'absence_excuse_file': 'Hujjat',
+      'absence_excuse_submit': 'Ariza yuborish',
+      'absence_excuse_success': 'Arizangiz muvaffaqiyatli yuborildi',
+      'absence_excuse_my_applications': 'Mening arizalarim',
+      'absence_excuse_no_applications': 'Arizalar topilmadi',
+      'absence_excuse_max_days': 'Maksimum kunlar',
+      'absence_excuse_required_doc': 'Talab qilinadigan hujjat',
+      'absence_excuse_select_file': 'Fayl tanlash',
+      'absence_excuse_selected_range': 'Tanlangan davr',
+      'absence_excuse_available_dates': 'Mavjud sanalar',
+      'status_pending': 'Kutilmoqda',
+      'status_approved': 'Tasdiqlangan',
+      'status_rejected': 'Rad etilgan',
+      'days': 'kun',
     },
     'ru': {
       'app_title': 'Tashmedunitf Lms',
@@ -339,6 +387,29 @@ class AppLocalizations {
       'work_info': 'Рабочие данные',
       'department': 'Кафедра',
       'position': 'Должность',
+      'absence_excuse': 'Заявление об отсутствии',
+      'absence_excuse_title': 'Заявление о пропуске занятий',
+      'absence_excuse_create': 'Новое заявление',
+      'absence_excuse_reason': 'Причина',
+      'absence_excuse_select_reason': 'Выберите причину',
+      'absence_excuse_start_date': 'Дата начала',
+      'absence_excuse_end_date': 'Дата окончания',
+      'absence_excuse_select_dates': 'Выберите даты в календаре',
+      'absence_excuse_description': 'Комментарий (необязательно)',
+      'absence_excuse_file': 'Документ',
+      'absence_excuse_submit': 'Отправить заявление',
+      'absence_excuse_success': 'Заявление успешно отправлено',
+      'absence_excuse_my_applications': 'Мои заявления',
+      'absence_excuse_no_applications': 'Заявления не найдены',
+      'absence_excuse_max_days': 'Максимум дней',
+      'absence_excuse_required_doc': 'Требуемый документ',
+      'absence_excuse_select_file': 'Выбрать файл',
+      'absence_excuse_selected_range': 'Выбранный период',
+      'absence_excuse_available_dates': 'Доступные даты',
+      'status_pending': 'На рассмотрении',
+      'status_approved': 'Одобрено',
+      'status_rejected': 'Отклонено',
+      'days': 'дней',
     },
     'en': {
       'app_title': 'Tashmedunitf Lms',
@@ -445,6 +516,29 @@ class AppLocalizations {
       'work_info': 'Work info',
       'department': 'Department',
       'position': 'Position',
+      'absence_excuse': 'Absence excuse',
+      'absence_excuse_title': 'Absence excuse application',
+      'absence_excuse_create': 'New application',
+      'absence_excuse_reason': 'Reason',
+      'absence_excuse_select_reason': 'Select a reason',
+      'absence_excuse_start_date': 'Start date',
+      'absence_excuse_end_date': 'End date',
+      'absence_excuse_select_dates': 'Select dates on the calendar',
+      'absence_excuse_description': 'Description (optional)',
+      'absence_excuse_file': 'Document',
+      'absence_excuse_submit': 'Submit application',
+      'absence_excuse_success': 'Application submitted successfully',
+      'absence_excuse_my_applications': 'My applications',
+      'absence_excuse_no_applications': 'No applications found',
+      'absence_excuse_max_days': 'Maximum days',
+      'absence_excuse_required_doc': 'Required document',
+      'absence_excuse_select_file': 'Select file',
+      'absence_excuse_selected_range': 'Selected period',
+      'absence_excuse_available_dates': 'Available dates',
+      'status_pending': 'Pending',
+      'status_approved': 'Approved',
+      'status_rejected': 'Rejected',
+      'days': 'days',
     },
   };
 

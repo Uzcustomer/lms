@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
@@ -30,6 +31,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   String? _buildImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) return null;
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      // Web da tashqi domainlardan rasm yuklash CORS xatosi beradi
+      if (kIsWeb) {
+        final imageHost = Uri.parse(imagePath).host;
+        final apiHost = Uri.parse(ApiConfig.baseUrl).host;
+        if (imageHost != apiHost) return null;
+      }
       return imagePath;
     }
     final baseHost = Uri.parse(ApiConfig.baseUrl).origin;

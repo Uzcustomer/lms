@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\ScheduleImportService;
 use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
 use Carbon\Carbon;
@@ -11,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 class SendAttendanceFinalDailyReport extends Command
 {
-    protected $signature = 'teachers:send-final-daily-report {--chat-id= : Test uchun shaxsiy Telegram chat_id} {--date= : Hisobot sanasi (Y-m-d), standart: kecha}';
+    protected $signature = 'teachers:send-final-daily-report {--chat-id= : Test uchun shaxsiy Telegram chat_id} {--date= : Hisobot sanasi (Y-m-d), standart: kecha} {--skip-import : Jadval importini o\'tkazib yuborish}';
 
     protected $description = 'Kechagi kunning yakuniy davomat va baho hisobotini ertalab Telegram guruhga yuborish (faqat o\'qituvchilar kesimi)';
 
@@ -30,7 +31,14 @@ class SendAttendanceFinalDailyReport extends Command
 
         $this->info("Hisobot sanasi: {$reportDateStr} (yakuniy)");
 
-        // Jadvaldan kechagi kun ma'lumotlarini olish
+        // 1-QADAM: Kechagi kun jadvalini HEMIS'dan import qilib yangilash
+        if (!$this->option('skip-import')) {
+            $this->refreshSchedules($reportDate);
+        } else {
+            $this->info("Jadval importi o'tkazib yuborildi (--skip-import)");
+        }
+
+        // 2-QADAM: Jadvaldan kechagi kun ma'lumotlarini olish
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
             ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
@@ -173,9 +181,6 @@ class SendAttendanceFinalDailyReport extends Command
 
             $telegram->sendToUser($groupChatId, "✅ KECHAGI KUN YAKUNIY HISOBOT — {$formattedDate}\n\nBarcha o'qituvchilar davomat va baholarni kiritgan!\nJami darslar: {$totalSchedules}");
 
-            // Barcha darslar kiritilgan bo'lsa ham, o'chirilgan FISHlar haqida xabar yuborish
-            $this->sendDeletedSchedulesReport($telegram, $groupChatId, $reportDateStr, $formattedDate);
-
             return 0;
         }
 
@@ -236,66 +241,24 @@ class SendAttendanceFinalDailyReport extends Command
             }
         }
 
-        // O'chirilgan FISHlar haqida xabar yuborish
-        $this->sendDeletedSchedulesReport($telegram, $groupChatId, $reportDateStr, $formattedDate);
-
         return 0;
     }
 
     /**
-     * Kechagi kun uchun o'chirilgan (soft-deleted) FISHlar haqida xabar yuborish.
+     * Kechagi kun jadvalini HEMIS API'dan import qilib yangilash.
+     * importBetween() — yangi FISHlarni qo'shadi, HEMIS'da yo'qlarini soft-delete qiladi.
      */
-    private function sendDeletedSchedulesReport(TelegramService $telegram, string $groupChatId, string $reportDateStr, string $formattedDate): void
+    private function refreshSchedules(Carbon $reportDate): void
     {
+        $this->info("Jadval importi boshlandi: {$reportDate->toDateString()}...");
+
         try {
-            $deletedSchedules = DB::table('schedules')
-                ->whereNotNull('deleted_at')
-                ->whereRaw('DATE(lesson_date) = ?', [$reportDateStr])
-                ->select(
-                    'employee_name',
-                    'group_name',
-                    'subject_name',
-                    'training_type_name',
-                    'lesson_pair_code',
-                    'lesson_pair_start_time',
-                    'lesson_pair_end_time',
-                    'department_name',
-                    'created_at',
-                    'deleted_at'
-                )
-                ->orderBy('deleted_at', 'desc')
-                ->get();
-
-            if ($deletedSchedules->isEmpty()) {
-                $this->info("O'chirilgan FISHlar topilmadi ({$reportDateStr}).");
-                return;
-            }
-
-            $lines = ["⚠️ O'CHIRILGAN DARS JADVALLARI (FISH) — {$formattedDate}\n"];
-            $lines[] = "Jami: {$deletedSchedules->count()} ta FISH o'chirilgan\n";
-
-            foreach ($deletedSchedules as $i => $sch) {
-                $pairStart = $sch->lesson_pair_start_time ? substr($sch->lesson_pair_start_time, 0, 5) : '';
-                $pairEnd = $sch->lesson_pair_end_time ? substr($sch->lesson_pair_end_time, 0, 5) : '';
-                $pairTime = ($pairStart && $pairEnd) ? "{$pairStart}-{$pairEnd}" : "para: {$sch->lesson_pair_code}";
-                $deletedAt = Carbon::parse($sch->deleted_at)->format('d.m.Y H:i');
-
-                $lines[] = ($i + 1) . ". {$sch->employee_name}";
-                $lines[] = "   Guruh: {$sch->group_name}";
-                $lines[] = "   Fan: {$sch->subject_name}";
-                $lines[] = "   Tur: {$sch->training_type_name}, Vaqt: {$pairTime}";
-                $lines[] = "   Kafedra: {$sch->department_name}";
-                $lines[] = "   O'chirilgan: {$deletedAt}\n";
-            }
-
-            $message = implode("\n", $lines);
-
-            $telegram->sendToUser($groupChatId, $message);
-
-            $this->info("O'chirilgan FISHlar hisoboti yuborildi: {$deletedSchedules->count()} ta.");
+            $importService = app(ScheduleImportService::class);
+            $importService->importBetween($reportDate->copy()->startOfDay(), $reportDate->copy()->endOfDay());
+            $this->info("Jadval importi tugadi.");
         } catch (\Throwable $e) {
-            Log::error("O'chirilgan FISHlar hisobotida xato: " . $e->getMessage());
-            $this->error("O'chirilgan FISHlar hisobotida xato: " . $e->getMessage());
+            Log::error("Yakuniy hisobot: jadval import xatosi — " . $e->getMessage());
+            $this->error("Jadval importida xato: {$e->getMessage()} — mavjud ma'lumotlar bilan davom etiladi.");
         }
     }
 }

@@ -107,7 +107,7 @@
                     <div style="overflow-x:auto;">
                         <table class="schedule-table">
                             <thead>
-                                <tr>
+                                <tr class="header-row">
                                     <th style="width:44px;padding-left:16px;">#</th>
                                     <th class="sortable" data-col="1">Guruh <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="2">Yo'nalish <span class="sort-icon"></span></th>
@@ -118,6 +118,18 @@
                                     <th style="width:100px;text-align:center;">Urinish</th>
                                     <th class="sortable" data-col="8" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="9" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
+                                </tr>
+                                <tr class="filter-header-row">
+                                    <th></th>
+                                    <th><select class="col-filter" data-col="1"><option value="">Barchasi</option></select></th>
+                                    <th><select class="col-filter" data-col="2"><option value="">Barchasi</option></select></th>
+                                    <th><select class="col-filter" data-col="3"><option value="">Barchasi</option></select></th>
+                                    <th><select class="col-filter" data-col="4"><option value="">Barchasi</option></select></th>
+                                    <th><select class="col-filter" data-col="5"><option value="">Barchasi</option></select></th>
+                                    <th><select class="col-filter" data-col="6"><option value="">Barchasi</option></select></th>
+                                    <th></th>
+                                    <th><select class="col-filter" data-col="8"><option value="">Barchasi</option></select></th>
+                                    <th><select class="col-filter" data-col="9"><option value="">Barchasi</option></select></th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -338,7 +350,60 @@
 
             // Sort funksiyasi
             initTableSort();
+
+            // Ustun filtrlari
+            populateColumnFilters();
+            document.querySelectorAll('.col-filter').forEach(function(sel) {
+                sel.addEventListener('change', function() { applyColumnFilters(); });
+            });
         });
+
+        // Ustun filtrlarini to'ldirish
+        function populateColumnFilters() {
+            document.querySelectorAll('.col-filter').forEach(function(sel) {
+                var col = parseInt(sel.getAttribute('data-col'));
+                var values = {};
+                document.querySelectorAll('#schedule-tbody tr.data-row').forEach(function(row) {
+                    var cell = row.cells[col];
+                    if (!cell) return;
+                    var val = (cell.getAttribute('data-sort-value') || cell.textContent || '').trim();
+                    if (val && val !== '\u2014') values[val] = true;
+                });
+                var sorted = Object.keys(values).sort(function(a, b) { return a.localeCompare(b, 'uz'); });
+                sel.innerHTML = '<option value="">Barchasi</option>';
+                sorted.forEach(function(v) {
+                    var opt = document.createElement('option');
+                    opt.value = v;
+                    opt.textContent = v;
+                    sel.appendChild(opt);
+                });
+            });
+        }
+
+        function applyColumnFilters() {
+            var filters = {};
+            document.querySelectorAll('.col-filter').forEach(function(sel) {
+                var col = parseInt(sel.getAttribute('data-col'));
+                var val = sel.value;
+                if (val) filters[col] = val;
+            });
+            var idx = 0;
+            document.querySelectorAll('#schedule-tbody tr.data-row').forEach(function(row) {
+                var show = true;
+                for (var col in filters) {
+                    var cell = row.cells[parseInt(col)];
+                    if (!cell) { show = false; break; }
+                    var cellVal = (cell.getAttribute('data-sort-value') || cell.textContent || '').trim();
+                    if (cellVal !== filters[col]) { show = false; break; }
+                }
+                row.style.display = show ? '' : 'none';
+                if (show) {
+                    idx++;
+                    var numCell = row.querySelector('.row-num');
+                    if (numCell) numCell.textContent = idx;
+                }
+            });
+        }
 
         // Jadval ustunlarini bosganda sort
         var currentSortCol = -1;
@@ -429,7 +494,12 @@
 
         .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .schedule-table thead { position: sticky; top: 0; z-index: 10; }
-        .schedule-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
+        .schedule-table thead tr.header-row { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
+        .schedule-table thead tr.filter-header-row { background: #f0f4f8; }
+        .schedule-table thead tr.filter-header-row th { padding: 4px 6px; border-bottom: 2px solid #93c5fd; }
+        .col-filter { width: 100%; height: 26px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 11px; color: #334155; background: #fff; padding: 0 4px; cursor: pointer; outline: none; transition: all 0.2s; }
+        .col-filter:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .col-filter:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .attempt-badge { display: inline-flex; padding: 4px 10px; font-size: 11px; font-weight: 700; border-radius: 6px; line-height: 1.3; background: #f0f4f8; color: #475569; letter-spacing: 0.02em; }
         .schedule-table th { padding: 14px 12px; text-align: left; font-weight: 600; font-size: 11.5px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
         .schedule-table th.sortable { cursor: pointer; user-select: none; transition: background 0.15s; }

@@ -392,6 +392,13 @@ class ImportGrades extends Command
                 $this->info("Backed up {$retakeBackup->count()} retake grades for {$dateStart->toDateString()}");
             }
 
+            // 1b-QADAM: O'chirishdan OLDIN barcha aktiv yozuv ID larni saqlash
+            // Keyin 6-qadamda HEMIS da yo'q lokal baholarni tiklash uchun kerak
+            $activeIdsBeforeDelete = StudentGrade::where('lesson_date', '>=', $dateStart)
+                ->where('lesson_date', '<=', $dateEnd)
+                ->pluck('id')
+                ->toArray();
+
             // 2-QADAM: BARCHA eski yozuvlarni soft-delete (retake ham — HEMIS yangilanishi uchun)
             $query = StudentGrade::where('lesson_date', '>=', $dateStart)
                 ->where('lesson_date', '<=', $dateEnd);
@@ -458,6 +465,41 @@ class ImportGrades extends Command
             if ($retakeRestored > 0 || $undeleted > 0) {
                 $this->info("Retake grades: {$retakeRestored} restored to new records, {$undeleted} un-deleted for {$dateStart->toDateString()}");
                 Log::info("[ApplyGrades] Retake: {$retakeRestored} restored, {$undeleted} un-deleted for {$dateStart->toDateString()}");
+            }
+
+            // 6-QADAM: O'qituvchi tomonidan qo'yilgan lokal baholarni tiklash
+            // HEMIS da yo'q (yangi yozuv yaratilmagan) lekin 2-qadamda o'chirilgan baholarni qaytarish
+            $activeKeysAfterImport = StudentGrade::where('lesson_date', '>=', $dateStart)
+                ->where('lesson_date', '<=', $dateEnd)
+                ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code'])
+                ->map(fn ($g) => $g->student_hemis_id . '_' . $g->subject_id . '_' .
+                    Carbon::parse($g->lesson_date)->toDateString() . '_' . $g->lesson_pair_code)
+                ->flip()
+                ->toArray();
+
+            $orphanCandidates = StudentGrade::onlyTrashed()
+                ->whereIn('id', $activeIdsBeforeDelete)
+                ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code']);
+
+            $orphanIds = [];
+            foreach ($orphanCandidates as $orphan) {
+                $key = $orphan->student_hemis_id . '_' . $orphan->subject_id . '_' .
+                    Carbon::parse($orphan->lesson_date)->toDateString() . '_' . $orphan->lesson_pair_code;
+                if (!isset($activeKeysAfterImport[$key])) {
+                    $orphanIds[] = $orphan->id;
+                }
+            }
+
+            $restoredLocal = 0;
+            if (!empty($orphanIds)) {
+                $restoredLocal = StudentGrade::onlyTrashed()
+                    ->whereIn('id', $orphanIds)
+                    ->update(['deleted_at' => null, 'is_final' => $isFinal]);
+            }
+
+            if ($restoredLocal > 0) {
+                $this->info("Local grades: {$restoredLocal} restored (HEMIS da yo'q, o'qituvchi qo'ygan) for {$dateStart->toDateString()}");
+                Log::info("[ApplyGrades] Local grades: {$restoredLocal} restored for {$dateStart->toDateString()}");
             }
         });
 

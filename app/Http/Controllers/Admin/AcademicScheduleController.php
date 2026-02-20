@@ -77,6 +77,7 @@ class AcademicScheduleController extends Controller
     /**
      * Test markazi uchun: Yakuniy nazoratlar jadvali (faqat ko'rish)
      * Filtrlari by default bugungi sanaga o'rnatiladi va avtomatik qidiriladi
+     * OSKI/Test alohida ustun emas — YN turi va YN sanasi sifatida ko'rsatiladi
      */
     public function testCenterView(Request $request)
     {
@@ -96,15 +97,66 @@ class AcademicScheduleController extends Controller
         $dateFrom = $request->get('date_from', $today);
         $dateTo = $request->get('date_to', $today);
         $currentSemesterToggle = $request->get('current_semester', '1');
-        // Har doim avtomatik qidirish (sahifa ochilganda ham)
         $isSearched = true;
 
+        // Ma'lumotlarni yuklash (sana filtrini o'zimiz qo'llaymiz, loadScheduleData ga bermaymiz)
         $scheduleData = $this->loadScheduleData(
             $currentSemesters, $selectedDepartment, $selectedSpecialty,
             $selectedSemester, $selectedGroup, $selectedEducationType,
             $selectedLevelCode, $selectedSubject, $selectedStatus,
-            $currentSemesterToggle, true, $dateFrom, $dateTo
+            $currentSemesterToggle, true, null, null
         );
+
+        // OSKI/Test ma'lumotlarini alohida qatorlarga ajratish (YN turi + YN sanasi)
+        $transformedData = collect();
+        foreach ($scheduleData as $groupHemisId => $items) {
+            foreach ($items as $item) {
+                $hasOski = $item['oski_date'] || $item['oski_na'];
+                $hasTest = $item['test_date'] || $item['test_na'];
+
+                if ($hasOski) {
+                    $ynItem = $item;
+                    $ynItem['yn_type'] = 'OSKI';
+                    $ynItem['yn_date'] = $item['oski_date'];
+                    $ynItem['yn_date_carbon'] = $item['oski_date_carbon'] ?? null;
+                    $ynItem['yn_na'] = $item['oski_na'];
+                    $transformedData->push($ynItem);
+                }
+
+                if ($hasTest) {
+                    $ynItem = $item;
+                    $ynItem['yn_type'] = 'Test';
+                    $ynItem['yn_date'] = $item['test_date'];
+                    $ynItem['yn_date_carbon'] = $item['test_date_carbon'] ?? null;
+                    $ynItem['yn_na'] = $item['test_na'];
+                    $transformedData->push($ynItem);
+                }
+
+                if (!$hasOski && !$hasTest) {
+                    $ynItem = $item;
+                    $ynItem['yn_type'] = null;
+                    $ynItem['yn_date'] = null;
+                    $ynItem['yn_date_carbon'] = null;
+                    $ynItem['yn_na'] = false;
+                    $transformedData->push($ynItem);
+                }
+            }
+        }
+
+        // YN sanasi bo'yicha filtr (OSKI yoki Test sanasi)
+        if ($dateFrom || $dateTo) {
+            $transformedData = $transformedData->filter(function ($item) use ($dateFrom, $dateTo) {
+                $ynDate = $item['yn_date'];
+                if (!$ynDate) return false;
+
+                if ($dateFrom && $ynDate < $dateFrom) return false;
+                if ($dateTo && $ynDate > $dateTo) return false;
+
+                return true;
+            });
+        }
+
+        $scheduleData = $transformedData->groupBy(fn($item) => $item['group']->group_hemis_id);
 
         $routePrefix = $this->routePrefix();
 

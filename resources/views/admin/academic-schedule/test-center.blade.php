@@ -34,11 +34,11 @@
                             </select>
                         </div>
                         <div class="filter-item" style="min-width: 145px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Dars tugash (dan)</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> YN sanasi (dan)</label>
                             <input type="text" id="date_from" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
                         </div>
                         <div class="filter-item" style="min-width: 145px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Dars tugash (gacha)</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> YN sanasi (gacha)</label>
                             <input type="text" id="date_to" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
                         </div>
                         <div class="filter-item" style="min-width: 150px;">
@@ -100,7 +100,7 @@
                             @endif
                         </span>
                         <span style="font-size:12px;color:#64748b;">
-                            O'quv bo'limi tomonidan belgilangan OSKI va Test imtihon sanalari
+                            O'quv bo'limi tomonidan belgilangan yakuniy nazorat sanalari
                         </span>
                     </div>
 
@@ -115,8 +115,8 @@
                                     <th class="sortable" data-col="4" style="width:70px;text-align:center;">Kredit <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="5" style="width:120px;text-align:center;">Dars boshlanish <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="6" style="width:120px;text-align:center;">Dars tugash <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="7" style="width:160px;text-align:center;">OSKI sanasi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="8" style="width:160px;text-align:center;">Test sanasi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="7" style="width:120px;text-align:center;">YN turi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="8" style="width:160px;text-align:center;">YN sanasi <span class="sort-icon"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -159,34 +159,25 @@
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
                                             </td>
-                                            <td data-sort-value="{{ $item['oski_na'] ? '' : ($item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('d.m.Y') : '') }}" style="text-align:center;padding:4px 8px;">
-                                                @if($item['oski_na'])
-                                                    <span class="na-badge">N/A</span>
-                                                @elseif($item['oski_date'])
-                                                    @php
-                                                        $oskiDate = $item['oski_date_carbon'];
-                                                        $badgeClass = 'badge-pending';
-                                                        if ($oskiDate && $oskiDate->format('Y-m-d') === $today) $badgeClass = 'badge-today';
-                                                        elseif ($oskiDate && $oskiDate->isPast()) $badgeClass = 'badge-passed';
-                                                        elseif ($oskiDate && $oskiDate->diffInDays(now()) <= 3) $badgeClass = 'badge-soon';
-                                                    @endphp
-                                                    <span class="date-badge {{ $badgeClass }}">{{ $oskiDate?->format('d.m.Y') }}</span>
+                                            <td data-sort-value="{{ $item['yn_type'] ?? '' }}" style="text-align:center;padding:4px 8px;">
+                                                @if($item['yn_type'])
+                                                    <span class="yn-type-badge yn-type-{{ strtolower($item['yn_type']) }}">{{ $item['yn_type'] }}</span>
                                                 @else
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
                                             </td>
-                                            <td data-sort-value="{{ $item['test_na'] ? '' : ($item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('d.m.Y') : '') }}" style="text-align:center;padding:4px 8px;">
-                                                @if($item['test_na'])
+                                            <td data-sort-value="{{ $item['yn_na'] ? '' : ($item['yn_date'] ? \Carbon\Carbon::parse($item['yn_date'])->format('d.m.Y') : '') }}" style="text-align:center;padding:4px 8px;">
+                                                @if($item['yn_na'])
                                                     <span class="na-badge">N/A</span>
-                                                @elseif($item['test_date'])
+                                                @elseif($item['yn_date'])
                                                     @php
-                                                        $testDate = $item['test_date_carbon'];
-                                                        $badgeClass = 'badge-pending-blue';
-                                                        if ($testDate && $testDate->format('Y-m-d') === $today) $badgeClass = 'badge-today';
-                                                        elseif ($testDate && $testDate->isPast()) $badgeClass = 'badge-passed';
-                                                        elseif ($testDate && $testDate->diffInDays(now()) <= 3) $badgeClass = 'badge-soon';
+                                                        $ynDate = $item['yn_date_carbon'];
+                                                        $badgeClass = ($item['yn_type'] === 'Test') ? 'badge-pending-blue' : 'badge-pending';
+                                                        if ($ynDate && $ynDate->format('Y-m-d') === $today) $badgeClass = 'badge-today';
+                                                        elseif ($ynDate && $ynDate->isPast()) $badgeClass = 'badge-passed';
+                                                        elseif ($ynDate && $ynDate->diffInDays(now()) <= 3) $badgeClass = 'badge-soon';
                                                     @endphp
-                                                    <span class="date-badge {{ $badgeClass }}">{{ $testDate?->format('d.m.Y') }}</span>
+                                                    <span class="date-badge {{ $badgeClass }}">{{ $ynDate?->format('d.m.Y') }}</span>
                                                 @else
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
@@ -483,5 +474,9 @@
         .status-passed { background: #f1f5f9; color: #64748b; }
         .status-empty { background: #fef2f2; color: #dc2626; }
         .na-badge { display: inline-flex; padding: 4px 10px; font-size: 11px; font-weight: 700; border-radius: 6px; line-height: 1.3; background: #fef2f2; color: #dc2626; text-transform: uppercase; letter-spacing: 0.03em; }
+
+        .yn-type-badge { display: inline-flex; padding: 4px 12px; font-size: 11px; font-weight: 700; border-radius: 6px; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.03em; }
+        .yn-type-oski { background: #dcfce7; color: #166534; }
+        .yn-type-test { background: #dbeafe; color: #1e40af; }
     </style>
 </x-app-layout>

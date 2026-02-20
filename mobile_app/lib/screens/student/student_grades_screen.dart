@@ -69,7 +69,10 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => Navigator.pop(context),
               )
-            : null,
+            : const Padding(
+                padding: EdgeInsets.all(12),
+                child: Icon(Icons.account_balance, size: 28),
+              ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),

@@ -25,6 +25,10 @@ class _TeacherGroupsScreenState extends State<TeacherGroupsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
+        leading: const Padding(
+          padding: EdgeInsets.all(12),
+          child: Icon(Icons.account_balance, size: 28),
+        ),
         title: const Text('Guruhlar'),
       ),
       body: Consumer<TeacherProvider>(

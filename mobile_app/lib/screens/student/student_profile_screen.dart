@@ -27,21 +27,17 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.person, color: Colors.white, size: 22),
-            SizedBox(width: 8),
-            Text('Profil'),
-          ],
-        ),
+        title: const Text('Profil'),
         centerTitle: true,
         leading: Navigator.canPop(context)
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => Navigator.pop(context),
               )
-            : null,
+            : const Padding(
+                padding: EdgeInsets.all(12),
+                child: Icon(Icons.account_balance, size: 28),
+              ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),

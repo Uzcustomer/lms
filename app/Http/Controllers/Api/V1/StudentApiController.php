@@ -511,7 +511,6 @@ class StudentApiController extends Controller
                 $submission = $independent->submissionByStudent($student->id);
                 $grade = StudentGrade::where('student_id', $student->id)
                     ->where('independent_id', $independent->id)
-                    ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                     ->first();
 
                 $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($mtHour, $mtMinute, 0);

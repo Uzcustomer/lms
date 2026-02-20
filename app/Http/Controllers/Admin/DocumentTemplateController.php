@@ -141,6 +141,36 @@ class DocumentTemplateController extends Controller
         return response()->download($filePath, $documentTemplate->file_original_name);
     }
 
+    public function downloadSample(Request $request)
+    {
+        $type = $request->query('type', 'absence_excuse');
+
+        if (!array_key_exists($type, DocumentTemplate::TYPES)) {
+            abort(404, 'Noto\'g\'ri shablon turi');
+        }
+
+        // Avval storage'da mavjud faylni tekshirish
+        $samplePath = 'document-templates/namuna_sababli_ariza_shablon.docx';
+        if (Storage::disk('public')->exists($samplePath)) {
+            return response()->download(
+                Storage::disk('public')->path($samplePath),
+                'namuna_sababli_ariza_shablon.docx'
+            );
+        }
+
+        // Agar fayl yo'q bo'lsa, artisan orqali yaratish
+        \Artisan::call('template:create-sample');
+
+        if (Storage::disk('public')->exists($samplePath)) {
+            return response()->download(
+                Storage::disk('public')->path($samplePath),
+                'namuna_sababli_ariza_shablon.docx'
+            );
+        }
+
+        return back()->with('error', 'Namuna shablon yaratishda xatolik yuz berdi.');
+    }
+
     public function activate(DocumentTemplate $documentTemplate)
     {
         // Shu turdagi boshqa shablonlarni deaktivatsiya

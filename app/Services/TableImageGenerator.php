@@ -151,8 +151,8 @@ class TableImageGenerator
         $borderColor = imagecolorallocate($image, 226, 232, 240);
         $borderLight = imagecolorallocate($image, 237, 242, 247);
 
-        // Muammoli qatorlar — yumshoq qizil
-        $redRowBg = imagecolorallocate($image, 254, 242, 242);
+        // Muammoli qatorlar — oq fon (qizil accent bar bilan ajraladi)
+        $redRowBg = imagecolorallocate($image, 255, 255, 255);
         $redAccent = imagecolorallocate($image, 220, 38, 38);
 
         // Ha/Yo'q badge ranglari

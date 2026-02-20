@@ -522,6 +522,22 @@ class StudentController extends Controller
             $semester = Semester::findOrFail($request->semester);
             $subject = CurriculumSubject::findOrFail($request->subject);
 
+            // Education year code aniqlash (jurnal bilan bir xil mantiq)
+            $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
+            $educationYearCode = $curriculum?->education_year_code;
+            $scheduleEducationYear = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subject->subject_id)
+                ->where('semester_code', $semester->code)
+                ->whereNull('deleted_at')
+                ->whereNotNull('lesson_date')
+                ->whereNotNull('education_year_code')
+                ->orderBy('lesson_date', 'desc')
+                ->value('education_year_code');
+            if ($scheduleEducationYear) {
+                $educationYearCode = $scheduleEducationYear;
+            }
+
             $teacher = StudentGrade::where('subject_id', $subject->subject_id)
                 ->where('semester_code', $semester->code)
                 ->whereNotNull('employee_name')
@@ -574,6 +590,10 @@ class StudentController extends Controller
                     ->where('semester_code', $semester->code)
                     ->whereNotIn('training_type_code', config('app.training_type_code'))
                     ->whereBetween('lesson_date', [$startDate, $endDate])
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhereNull('education_year_code');
+                    }))
                     ->get();
                 $gradesPerStudent = [];
                 $gradesPerStudentPerPeriod = [];
@@ -643,6 +663,10 @@ class StudentController extends Controller
                     ->where('subject_id', $subject->subject_id)
                     ->where('training_type_code', 99)
                     ->where('semester_code', $semester->code)
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhereNull('education_year_code');
+                    }))
                     ->select(DB::raw('avg(grade) as grade'), 'student_hemis_id', 'lesson_date')
                     ->groupBy('student_hemis_id', 'lesson_date')
                     ->get();
@@ -657,6 +681,10 @@ class StudentController extends Controller
                     ->where('subject_id', $subject->subject_id)
                     ->where('training_type_code', 100)
                     ->where('semester_code', $semester->code)
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhereNull('education_year_code');
+                    }))
                     ->get();
                 $data = $this->studentGradeService->g_averageGradesPerStudentPerPeriod($grades);
                 $averageGradesPerStudentPerPeriod = $data[0];
@@ -668,6 +696,10 @@ class StudentController extends Controller
                     ->where('subject_id', $subject->subject_id)
                     ->where('training_type_code', 101)
                     ->where('semester_code', $semester->code)
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhereNull('education_year_code');
+                    }))
                     ->get();
                 $data = $this->studentGradeService->g_averageGradesPerStudentPerPeriod($grades);
                 $averageGradesPerStudentPerPeriod = $data[0];
@@ -680,6 +712,10 @@ class StudentController extends Controller
                     ->where('subject_id', $subject->subject_id)
                     ->where('training_type_code', 102)
                     ->where('semester_code', $semester->code)
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhereNull('education_year_code');
+                    }))
                     ->get();
                 $data = $this->studentGradeService->g_averageGradesPerStudentPerPeriod($grades);
                 $averageGradesPerStudentPerPeriod = $data[0];

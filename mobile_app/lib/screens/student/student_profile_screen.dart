@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../widgets/loading_widget.dart';
@@ -88,7 +89,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     final studentId = profile['student_id_number']?.toString() ?? '';
     final faculty = profile['department_name']?.toString() ?? '';
     final major = profile['specialty_name']?.toString() ?? '';
-    final photoUrl = profile['photo']?.toString();
+    final rawImage = profile['image']?.toString();
+    final photoUrl = _buildImageUrl(rawImage);
 
     return Card(
       elevation: 0,
@@ -403,6 +405,16 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         ),
       ),
     );
+  }
+
+  String? _buildImageUrl(String? imagePath) {
+    if (imagePath == null || imagePath.isEmpty) return null;
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    final baseHost = Uri.parse(ApiConfig.baseUrl).origin;
+    final path = imagePath.startsWith('/') ? imagePath : '/$imagePath';
+    return '$baseHost$path';
   }
 
   String _getInitials(String name) {

@@ -21,8 +21,6 @@ class ApiConfig {
   static const String studentSubjects = '/student/subjects';
   static const String studentAttendance = '/student/attendance';
   static const String studentPendingLessons = '/student/pending-lessons';
-  static const String studentAbsenceExcuses = '/student/absence-excuses';
-  static const String studentAbsenceExcuseReasons = '/student/absence-excuses/reasons';
 
   // Teacher endpoints
   static const String teacherDashboard = '/teacher/dashboard';

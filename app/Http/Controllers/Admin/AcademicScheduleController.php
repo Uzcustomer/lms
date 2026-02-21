@@ -178,7 +178,7 @@ class AcademicScheduleController extends Controller
         $quizCounts = [];
         if (!empty($groupHemisIds) && !empty($subjectIds)) {
             $quizRows = DB::table('hemis_quiz_results as hqr')
-                ->join('students as st', 'st.hemis_id', '=', 'hqr.student_id')
+                ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
                 ->whereIn('st.group_id', $groupHemisIds)
                 ->whereIn('hqr.fan_id', $subjectIds)
                 ->where('hqr.is_active', 1)
@@ -257,7 +257,7 @@ class AcademicScheduleController extends Controller
         $quizCounts = [];
         if (!empty($groupHemisIds) && !empty($subjectIds)) {
             $quizRows = DB::table('hemis_quiz_results as hqr')
-                ->join('students as st', 'st.hemis_id', '=', 'hqr.student_id')
+                ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
                 ->whereIn('st.group_id', $groupHemisIds)
                 ->whereIn('hqr.fan_id', $subjectIds)
                 ->where('hqr.is_active', 1)

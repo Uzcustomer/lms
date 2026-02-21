@@ -56,38 +56,17 @@
     // Foydalanuvchi to'liq ismi
     $userName = $user->name ?? ($user->full_name ?? $user->short_name ?? 'Foydalanuvchi');
 @endphp
-<!-- Mobile backdrop -->
-<div x-data x-show="$store.sidebar.open"
-     x-transition:enter="transition-opacity ease-linear duration-200"
-     x-transition:enter-start="opacity-0"
-     x-transition:enter-end="opacity-100"
-     x-transition:leave="transition-opacity ease-linear duration-200"
-     x-transition:leave-start="opacity-100"
-     x-transition:leave-end="opacity-0"
-     @click="$store.sidebar.open = false"
-     class="fixed inset-0 bg-black/50 z-40 md:hidden"
-     style="display: none;"></div>
-
 <aside x-data="sidebarTheme()" :data-theme="theme"
-       :class="$store.sidebar.open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
-       class="sidebar-themed w-64 flex flex-col fixed left-0 top-0 z-50 transition-transform duration-200 ease-in-out"
+       class="sidebar-themed w-64 flex flex-col fixed left-0 top-0 z-50"
        style="height: 100vh;">
     <!-- Logo Section -->
-    <div class="p-4 flex flex-col items-center flex-shrink-0 sidebar-logo-section relative">
-        <!-- Mobile close button -->
-        <button x-data @click="$store.sidebar.close()"
-                class="absolute top-3 right-3 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition md:hidden">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-        </button>
+    <div class="p-4 flex flex-col items-center flex-shrink-0 sidebar-logo-section">
         <img src="{{ asset('logo.png') }}" alt="Logo" class="w-16 h-16 rounded-full mb-2 sidebar-logo-img">
         <h1 class="sidebar-logo-text">LMS</h1>
     </div>
 
     <!-- Navigation Menu -->
-    <nav class="flex-1 py-3 px-3 overflow-y-auto sidebar-nav" x-data @click.self="$store.sidebar.close()"
-         @click="if($event.target.closest('a')) $store.sidebar.close()">
+    <nav class="flex-1 py-3 px-3 overflow-y-auto sidebar-nav">
         <a href="{{ $r('admin.dashboard', 'teacher.dashboard') }}"
            class="sidebar-link {{ $isActive('admin.dashboard', 'teacher.dashboard') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -916,19 +895,6 @@
     </style>
 
     <script>
-        // Alpine.js global store for sidebar toggle
-        document.addEventListener('alpine:init', () => {
-            Alpine.store('sidebar', {
-                open: false,
-                toggle() {
-                    this.open = !this.open;
-                },
-                close() {
-                    this.open = false;
-                }
-            });
-        });
-
         // Cascade submenu pozitsiyasini aniqlash - viewport ga sig'masa tepaga ochadi
         function positionSubmenu(el) {
             const btn = el.previousElementSibling;

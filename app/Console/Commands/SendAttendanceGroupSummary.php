@@ -135,7 +135,7 @@ class SendAttendanceGroupSummary extends Command
 
         // Baho (2-usul): student → group orqali tekshirish (zaxira)
         $gradeByKey = DB::table('student_grades as sg')
-            ->join('students as st', 'st.student_hemis_id', '=', 'sg.student_hemis_id')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('sg.employee_id', $employeeIds)
             ->whereIn('st.group_id', $groupHemisIds)

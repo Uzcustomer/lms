@@ -214,6 +214,29 @@ class ImportGrades extends Command
             $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
         }
 
+        // Global tozalash: 7 kunlik oynadan tashqaridagi barcha is_final=false duplikatlarni soft-delete qilish
+        // Migration (02-17) barcha eski recordlarni is_final=false qilib qo'ygan,
+        // backfill yangi is_final=true recordlarni yaratgan, lekin eskilari qolib ketgan
+        $globalCleaned = DB::update("
+            UPDATE student_grades sg
+            INNER JOIN student_grades g2
+                ON g2.student_id = sg.student_id
+                AND g2.subject_id = sg.subject_id
+                AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
+                AND g2.is_final = 1
+                AND g2.deleted_at IS NULL
+                AND g2.id != sg.id
+            SET sg.deleted_at = NOW()
+            WHERE sg.is_final = 0
+                AND sg.deleted_at IS NULL
+                AND DATE(sg.lesson_date) < CURDATE()
+        ");
+
+        if ($globalCleaned > 0) {
+            $this->info("Global cleanup: {$globalCleaned} ta eski is_final=false duplikat tozalandi.");
+            Log::info("[FinalImport] Global cleanup: {$globalCleaned} stale is_final=false duplicates removed.");
+        }
+
         $this->report['final-import'] = [
             'total_days' => $totalDays,
             'success_days' => $successDays,

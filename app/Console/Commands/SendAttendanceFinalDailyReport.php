@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\ScheduleImportService;
 use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
 use Carbon\Carbon;
@@ -15,7 +16,7 @@ class SendAttendanceFinalDailyReport extends Command
 
     protected $description = 'Kechagi kunning yakuniy davomat va baho hisobotini ertalab Telegram guruhga yuborish (faqat o\'qituvchilar kesimi)';
 
-    public function handle(TelegramService $telegram): int
+    public function handle(TelegramService $telegram, ScheduleImportService $importService): int
     {
         $reportDate = $this->option('date')
             ? Carbon::parse($this->option('date'))
@@ -30,7 +31,30 @@ class SendAttendanceFinalDailyReport extends Command
 
         $this->info("Hisobot sanasi: {$reportDateStr} (yakuniy)");
 
-        // Jadvaldan kechagi kun ma'lumotlarini olish
+        // 1-QADAM: Avval HEMIS dan jadval ma'lumotlarini yangilash
+        $this->info("HEMIS dan jadval yangilanmoqda ({$reportDateStr})...");
+        try {
+            $importService->importBetween($reportDate->copy()->startOfDay(), $reportDate->copy()->endOfDay());
+            $this->info("Jadval muvaffaqiyatli yangilandi.");
+        } catch (\Throwable $e) {
+            Log::warning('HEMIS sinxronlashda xato (hisobot davom etadi): ' . $e->getMessage());
+            $this->warn("HEMIS yangilashda xato: " . $e->getMessage());
+        }
+
+        // 1.5-QADAM: Davomat nazorati (attendance_controls) yangilash
+        $this->info("HEMIS dan davomat nazorati yangilanmoqda ({$reportDateStr})...");
+        try {
+            \Illuminate\Support\Facades\Artisan::call('import:attendance-controls', [
+                '--date' => $reportDateStr,
+                '--silent' => true,
+            ]);
+            $this->info("Davomat nazorati yangilandi.");
+        } catch (\Throwable $e) {
+            Log::warning('Davomat nazorati yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
+            $this->warn("Davomat nazorati yangilashda xato: " . $e->getMessage());
+        }
+
+        // 2-QADAM: Jadvaldan kechagi kun ma'lumotlarini olish
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
             ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')

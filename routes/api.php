@@ -60,6 +60,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/subjects', [TeacherApiController::class, 'subjects']);
             Route::get('/students/{studentId}/subjects/{subjectId}/grades', [TeacherApiController::class, 'studentGradeDetails']);
             Route::get('/group-student-grades', [TeacherApiController::class, 'groupStudentGrades']);
+
+            // Journal — full journal with 3 tabs (Ma'ruza, Amaliy, MT)
+            Route::get('/journal', [TeacherApiController::class, 'journal']);
+
+            // Grade saving
+            Route::post('/grades/lesson', [TeacherApiController::class, 'saveOpenedLessonGrade']);
+            Route::post('/grades/mt', [TeacherApiController::class, 'saveMtGrade']);
         });
     });
 });

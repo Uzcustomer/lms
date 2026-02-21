@@ -38,10 +38,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       items.add(_NavItem(Icons.people_outline, Icons.people, l.students, 'students'));
     }
 
-    // Guruhlar - for teacher role
-    if (activeRole == 'oqituvchi' || activeRole == 'kafedra_mudiri' || activeRole == 'fan_masuli') {
-      items.add(_NavItem(Icons.groups_outlined, Icons.groups, l.groups, 'groups'));
-    }
+    // Guruhlar - for all roles (teacher's groups)
+    items.add(_NavItem(Icons.groups_outlined, Icons.groups, l.groups, 'groups'));
 
     // Profile always last
     items.add(_NavItem(Icons.person_outline, Icons.person, l.profile, 'profile'));

@@ -18,15 +18,15 @@ use App\Models\MarkingSystemScore;
 
 class ImportGrades extends Command
 {
-    protected string $baseUrl;
-    protected string $token;
+    protected string $baseUrl = '';
+    protected string $token = '';
     protected array $report = [];
 
     public function __construct()
     {
         parent::__construct();
-        $this->baseUrl = config('services.hemis.base_url');
-        $this->token = config('services.hemis.token');
+        $this->baseUrl = config('services.hemis.base_url') ?? '';
+        $this->token = config('services.hemis.token') ?? '';
     }
 
     protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)}';
@@ -80,7 +80,8 @@ class ImportGrades extends Command
         $to = Carbon::now()->timestamp;
 
         // 1-qadam: Baholarni API dan tortib olish (xotiraga)
-        $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
+        // $today ni filtrlash uchun beramiz — HEMIS boshqa kunlik recordlarni ham qaytaradi
+        $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to, $today);
 
         if ($gradeItems === false) {
             $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
@@ -215,8 +216,8 @@ class ImportGrades extends Command
 
                 $this->info("  {$date->toDateString()} — API dan tortilmoqda...");
 
-                // Baholar
-                $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
+                // Baholar — $date ni berib, boshqa kunlik recordlarni fetch paytida filtrlaymiz
+                $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to, $date);
 
                 if ($gradeItems === false) {
                     $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
@@ -320,8 +321,8 @@ class ImportGrades extends Command
 
             $this->info("--- {$date->toDateString()} ---");
 
-            // Baholar
-            $gradeItems = $this->fetchAllPages('student-grade-list', $dayFrom, $dayTo);
+            // Baholar — $date ni berib, boshqa kunlik recordlarni fetch paytida filtrlaymiz
+            $gradeItems = $this->fetchAllPages('student-grade-list', $dayFrom, $dayTo, $date);
 
             if ($gradeItems === false) {
                 $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
@@ -365,13 +366,14 @@ class ImportGrades extends Command
     // =========================================================================
     private string $lastFetchError = '';
 
-    private function fetchAllPages(string $endpoint, int $from, int $to): array|false
+    private function fetchAllPages(string $endpoint, int $from, int $to, ?Carbon $filterDate = null): array|false
     {
         $allItems = [];
         $currentPage = 1;
         $totalPages = 1;
         $maxRetries = 3;
         $this->lastFetchError = '';
+        $skippedByFilter = 0;
 
         do {
             $queryParams = [
@@ -392,6 +394,18 @@ class ImportGrades extends Command
 
                     if ($response->successful()) {
                         $data = $response->json()['data']['items'] ?? [];
+
+                        // Agar filterDate berilgan bo'lsa, boshqa kunlik recordlarni DARHOL tashlash
+                        // HEMIS API noto'g'ri filter qiladi: ~8257 ta boshqa kunlik record qaytaradi
+                        // Ularni xotiraga yig'maslik uchun shu yerda filtrlaymiz
+                        if ($filterDate && $endpoint === 'student-grade-list') {
+                            $beforeCount = count($data);
+                            $data = array_filter($data, function ($item) use ($filterDate) {
+                                return Carbon::createFromTimestamp($item['lesson_date'])->isSameDay($filterDate);
+                            });
+                            $skippedByFilter += $beforeCount - count($data);
+                        }
+
                         $allItems = array_merge($allItems, $data);
                         $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
                         $this->info("Fetched {$endpoint} page {$currentPage}/{$totalPages}");
@@ -426,6 +440,11 @@ class ImportGrades extends Command
             $currentPage++;
         } while ($currentPage <= $totalPages);
 
+        if ($skippedByFilter > 0) {
+            $this->warn("Filtered out {$skippedByFilter} records with wrong date during fetch");
+            Log::warning("[Fetch] Filtered out {$skippedByFilter} records with wrong lesson_date for {$filterDate->toDateString()}");
+        }
+
         $this->info("Total {$endpoint} items fetched: " . count($allItems));
         return $allItems;
     }
@@ -442,7 +461,8 @@ class ImportGrades extends Command
         $skippedCount = 0;
         $softDeletedCount = 0;
 
-        // Faqat kutilgan sanaga mos yozuvlarni filtrlash
+        // Xavfsizlik filtri — fetchAllPages allaqachon filtrlaganligiga qaramasdan
+        // ikkinchi marta tekshiramiz (agar fetchAllPages filterDate siz chaqirilgan bo'lsa)
         $filteredItems = array_filter($gradeItems, function ($item) use ($date, &$skippedCount) {
             $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
             if (!$lessonDate->isSameDay($date)) {
@@ -452,12 +472,86 @@ class ImportGrades extends Command
             return true;
         });
 
+        // API javobini bo'shatish — endi faqat filteredItems kerak
+        unset($gradeItems);
+
         if ($skippedCount > 0) {
             $this->warn("Skipped {$skippedCount} records with mismatched lesson_date (expected {$date->toDateString()})");
             Log::warning("[ApplyGrades] Skipped {$skippedCount} records with lesson_date != {$date->toDateString()}");
         }
 
-        DB::transaction(function () use ($filteredItems, $dateStart, $dateEnd, $isFinal, &$gradeCount, &$softDeletedCount) {
+        // ===== TRANSACTION TASHQARISIDA: Studentlar va deadline-larni oldindan yuklash =====
+        // Bu N+1 query muammosini hal qiladi (8685 ta SELECT o'rniga 1 ta)
+        $hemisIds = array_unique(array_column(array_values($filteredItems), '_student'));
+        $studentsMap = Student::whereIn('hemis_id', $hemisIds)->get()->keyBy('hemis_id');
+        $deadlinesMap = Deadline::all()->keyBy('level_code');
+
+        // ===== INSERT QATORLARINI OLDINDAN TAYYORLASH (transaction tashqarisida) =====
+        // Bu xotirani tejaydi: Eloquent model yaratish + LogsActivity o'rniga oddiy array
+        $insertRows = [];
+        $now = Carbon::now();
+
+        foreach ($filteredItems as $item) {
+            $student = $studentsMap->get($item['_student']);
+            if (!$student) continue;
+
+            $gradeValue = $item['grade'];
+            $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
+
+            $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+            $studentMinLimit = $markingScore ? $markingScore->minimum_limit : 0;
+
+            $isLowGrade = ($student->level_code == 16 && $gradeValue < 3) ||
+                ($student->level_code != 16 && $gradeValue < $studentMinLimit);
+
+            $status = $isLowGrade ? 'pending' : 'recorded';
+            $reason = $isLowGrade ? 'low_grade' : null;
+            $deadline = null;
+            if ($isLowGrade) {
+                $dl = $deadlinesMap->get($student->level_code);
+                $deadline = $dl
+                    ? $lessonDate->copy()->addDays($dl->deadline_days)->endOfDay()
+                    : $lessonDate->copy()->addWeek()->endOfDay();
+            }
+
+            $insertRows[] = [
+                'hemis_id' => $item['id'],
+                'student_id' => $student->id,
+                'student_hemis_id' => $item['_student'],
+                'semester_code' => $item['semester']['code'],
+                'semester_name' => $item['semester']['name'],
+                'education_year_code' => $item['educationYear']['code'] ?? null,
+                'education_year_name' => $item['educationYear']['name'] ?? null,
+                'subject_schedule_id' => $item['_subject_schedule'],
+                'subject_id' => $item['subject']['id'],
+                'subject_name' => $item['subject']['name'],
+                'subject_code' => $item['subject']['code'],
+                'training_type_code' => $item['trainingType']['code'],
+                'training_type_name' => $item['trainingType']['name'],
+                'employee_id' => $item['employee']['id'],
+                'employee_name' => $item['employee']['name'],
+                'lesson_pair_code' => $item['lessonPair']['code'],
+                'lesson_pair_name' => $item['lessonPair']['name'],
+                'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                'grade' => $gradeValue,
+                'lesson_date' => $lessonDate,
+                'created_at_api' => Carbon::createFromTimestamp($item['created_at']),
+                'reason' => $reason,
+                'deadline' => $deadline,
+                'status' => $status,
+                'is_final' => $isFinal,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        $gradeCount = count($insertRows);
+
+        // Xotirani bo'shatish — filteredItems va studentsMap endi kerak emas
+        unset($filteredItems, $studentsMap, $deadlinesMap, $hemisIds);
+
+        DB::transaction(function () use ($insertRows, $dateStart, $dateEnd, $isFinal, &$softDeletedCount) {
             // 1-QADAM: Retake ma'lumotlarni xotiraga saqlash (o'chirishdan oldin)
             $retakeBackup = StudentGrade::where('lesson_date', '>=', $dateStart)
                 ->where('lesson_date', '<=', $dateEnd)
@@ -493,10 +587,11 @@ class ImportGrades extends Command
             $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
             Log::info("[ApplyGrades] Soft deleted {$softDeletedCount} grades for {$dateStart->toDateString()}");
 
-            // 3-QADAM: HEMIS dan yangi yozuvlarni yaratish (to'liq yangi ma'lumot)
-            foreach ($filteredItems as $item) {
-                $this->processGrade($item, $isFinal);
-                $gradeCount++;
+            // 3-QADAM: HEMIS dan yangi yozuvlarni BULK INSERT qilish (200 tadan)
+            // DB::table() ishlatish — Eloquent events (LogsActivity) ni o'tkazib yuboradi
+            // Bu xotira va vaqtni ~50x tejaydi (8685 ta create() o'rniga ~44 ta bulk insert)
+            foreach (array_chunk($insertRows, 200) as $chunk) {
+                DB::table('student_grades')->insert($chunk);
             }
 
             // 4-QADAM: Saqlangan retake ma'lumotlarni yangi yozuvlarga qayta qo'yish

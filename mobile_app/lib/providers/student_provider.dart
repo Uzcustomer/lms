@@ -125,6 +125,16 @@ class StudentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<Map<String, dynamic>> saveTelegram(String telegramUsername) async {
+    final response = await _service.saveTelegram(telegramUsername);
+    return response;
+  }
+
+  Future<Map<String, dynamic>> checkTelegramVerification() async {
+    final response = await _service.checkTelegramVerification();
+    return response;
+  }
+
   void clearData() {
     _dashboard = null;
     _profile = null;

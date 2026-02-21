@@ -40,4 +40,16 @@ class StudentService {
   Future<Map<String, dynamic>> getPendingLessons() async {
     return await _api.get(ApiConfig.studentPendingLessons);
   }
+
+  Future<Map<String, dynamic>> saveTelegram(String telegramUsername) async {
+    return await _api.post(
+      ApiConfig.studentSaveTelegram,
+      {'telegram_username': telegramUsername},
+      auth: true,
+    );
+  }
+
+  Future<Map<String, dynamic>> checkTelegramVerification() async {
+    return await _api.get(ApiConfig.studentCheckTelegram);
+  }
 }

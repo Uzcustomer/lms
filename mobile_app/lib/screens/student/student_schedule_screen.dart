@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:table_calendar/table_calendar.dart';
 import '../../config/theme.dart';
 import '../../providers/student_provider.dart';
 import '../../l10n/app_localizations.dart';
@@ -14,21 +13,6 @@ class StudentScheduleScreen extends StatefulWidget {
 }
 
 class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
-  DateTime _focusedDay = DateTime.now();
-  DateTime _selectedDay = DateTime.now();
-  CalendarFormat _calendarFormat = CalendarFormat.week;
-
-  // Uzbek day name -> weekday number
-  static const Map<String, int> _dayWeekday = {
-    'Dushanba': DateTime.monday,
-    'Seshanba': DateTime.tuesday,
-    'Chorshanba': DateTime.wednesday,
-    'Payshanba': DateTime.thursday,
-    'Juma': DateTime.friday,
-    'Shanba': DateTime.saturday,
-    'Yakshanba': DateTime.sunday,
-  };
-
   // Reverse: weekday number -> Uzbek day name
   static const Map<int, String> _weekdayToUzName = {
     DateTime.monday: 'Dushanba',
@@ -48,57 +32,74 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     });
   }
 
-  /// Normalize day key map for case-insensitive lookup
-  Map<String, dynamic> _normalizeDays(Map<String, dynamic> days) {
-    final normalized = <String, dynamic>{};
-    for (final entry in days.entries) {
-      final key = entry.key.isNotEmpty
-          ? entry.key[0].toUpperCase() + entry.key.substring(1).toLowerCase()
-          : entry.key;
-      normalized[key] = entry.value;
-    }
-    return normalized;
-  }
+  /// Parse the selected week's start/end dates from API response
+  List<DateTime> _getWeekDaysFromApi(Map<String, dynamic> schedule) {
+    final weeks = schedule['weeks'] as List<dynamic>? ?? [];
+    final selectedWeekId = schedule['selected_week_id'];
 
-  /// Get the set of weekday numbers that have lessons
-  Set<int> _getScheduledWeekdays(Map<String, dynamic> days) {
-    final normalized = _normalizeDays(days);
-    final result = <int>{};
-    for (final entry in normalized.entries) {
-      final dayName = entry.key;
-      final lessons = entry.value as List<dynamic>? ?? [];
-      if (lessons.isNotEmpty) {
-        final weekday = _dayWeekday[dayName];
-        if (weekday != null) result.add(weekday);
+    // Find selected week
+    Map<String, dynamic>? selectedWeek;
+    for (final w in weeks) {
+      if (w is Map<String, dynamic> && w['id'] == selectedWeekId) {
+        selectedWeek = w;
+        break;
       }
     }
-    return result;
+
+    if (selectedWeek != null) {
+      final startDate = DateTime.tryParse(selectedWeek['start_date']?.toString() ?? '');
+      final endDate = DateTime.tryParse(selectedWeek['end_date']?.toString() ?? '');
+      if (startDate != null && endDate != null) {
+        final days = <DateTime>[];
+        var current = startDate;
+        while (!current.isAfter(endDate)) {
+          days.add(current);
+          current = current.add(const Duration(days: 1));
+        }
+        return days;
+      }
+    }
+
+    // Fallback: generate Mon-Sat of current week
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    return List.generate(6, (i) => monday.add(Duration(days: i)));
   }
 
-  /// Check if a given date falls on a scheduled weekday
-  bool _hasLessonsOnDate(DateTime date, Set<int> scheduledWeekdays) {
-    return scheduledWeekdays.contains(date.weekday);
-  }
-
-  /// Get lessons for a specific date - tries date-keyed schedule first, then falls back to day names
+  /// Get lessons for a specific date from the schedule array
   List<dynamic> _getLessonsForDate(DateTime date, List<dynamic> dateSchedule, Map<String, dynamic> days) {
     final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+    // Try exact date match from the schedule array
     for (final entry in dateSchedule) {
       if (entry is Map<String, dynamic> && entry['date'] == dateStr) {
         return entry['lessons'] as List<dynamic>? ?? [];
       }
     }
-    // Fallback to day name matching
+
+    // Fallback to day name matching from the days map
     final uzName = _weekdayToUzName[date.weekday];
     if (uzName == null) return [];
-    final normalized = _normalizeDays(days);
-    return normalized[uzName] as List<dynamic>? ?? [];
+    // Normalize keys
+    for (final entry in days.entries) {
+      final key = entry.key.isNotEmpty
+          ? entry.key[0].toUpperCase() + entry.key.substring(1).toLowerCase()
+          : entry.key;
+      if (key == uzName) {
+        return entry.value as List<dynamic>? ?? [];
+      }
+    }
+    return [];
   }
 
-  /// Get all days of the week for the selected day
-  List<DateTime> _getWeekDays(DateTime date) {
-    final monday = date.subtract(Duration(days: date.weekday - 1));
-    return List.generate(6, (i) => monday.add(Duration(days: i))); // Mon-Sat
+  /// Find the index of current week in weeks list
+  int _findCurrentWeekIndex(List<dynamic> weeks, dynamic selectedWeekId) {
+    for (int i = 0; i < weeks.length; i++) {
+      if (weeks[i] is Map<String, dynamic> && weeks[i]['id'] == selectedWeekId) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   @override
@@ -155,145 +156,33 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
           final days = schedule['days'] as Map<String, dynamic>? ?? {};
           final dateSchedule = schedule['schedule'] as List<dynamic>? ?? [];
-          final scheduledWeekdays = _getScheduledWeekdays(days);
-          final weekDays = _getWeekDays(_selectedDay);
+          final weeks = schedule['weeks'] as List<dynamic>? ?? [];
+          final selectedWeekId = schedule['selected_week_id'];
+          final weekLabel = schedule['week_label']?.toString() ?? '';
+          final weekDays = _getWeekDaysFromApi(schedule);
+          final currentWeekIndex = _findCurrentWeekIndex(weeks, selectedWeekId);
 
           return RefreshIndicator(
             onRefresh: () => provider.loadSchedule(),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
               children: [
-                // Calendar (compact week view)
-                Container(
-                  margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: TableCalendar(
-                    firstDay: DateTime.now().subtract(const Duration(days: 365)),
-                    lastDay: DateTime.now().add(const Duration(days: 365)),
-                    focusedDay: _focusedDay,
-                    calendarFormat: _calendarFormat,
-                    startingDayOfWeek: StartingDayOfWeek.monday,
-                    selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                    onDaySelected: (selectedDay, focusedDay) {
-                      setState(() {
-                        _selectedDay = selectedDay;
-                        _focusedDay = focusedDay;
-                      });
-                    },
-                    onFormatChanged: (format) {
-                      setState(() {
-                        _calendarFormat = format;
-                      });
-                    },
-                    onPageChanged: (focusedDay) {
-                      _focusedDay = focusedDay;
-                    },
-                    calendarBuilders: CalendarBuilders(
-                      defaultBuilder: (context, date, focusedDay) {
-                        final hasLessons = _hasLessonsOnDate(date, scheduledWeekdays);
-                        if (hasLessons) {
-                          return Container(
-                            margin: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFFF9800),
-                              shape: BoxShape.circle,
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              '${date.day}',
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          );
-                        }
-                        return null;
-                      },
-                    ),
-                    calendarStyle: CalendarStyle(
-                      outsideDaysVisible: false,
-                      todayDecoration: BoxDecoration(
-                        color: Colors.white.withAlpha(40),
-                        shape: BoxShape.circle,
-                      ),
-                      todayTextStyle: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      selectedDecoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      selectedTextStyle: const TextStyle(
-                        color: AppTheme.primaryColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      defaultTextStyle: const TextStyle(
-                        color: Colors.white,
-                      ),
-                      weekendTextStyle: TextStyle(
-                        color: Colors.white.withAlpha(150),
-                      ),
-                      cellMargin: const EdgeInsets.all(4),
-                    ),
-                    headerStyle: const HeaderStyle(
-                      formatButtonVisible: false,
-                      titleCentered: true,
-                      leftChevronIcon: Icon(
-                        Icons.chevron_left,
-                        color: Colors.white,
-                      ),
-                      rightChevronIcon: Icon(
-                        Icons.chevron_right,
-                        color: Colors.white,
-                      ),
-                      titleTextStyle: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                    daysOfWeekStyle: DaysOfWeekStyle(
-                      weekdayStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withAlpha(180),
-                      ),
-                      weekendStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withAlpha(130),
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Week label
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    schedule['week_label']?.toString() ?? '',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-                    ),
-                  ),
+                // Week navigation
+                _buildWeekNavigator(
+                  context,
+                  weeks: weeks,
+                  currentIndex: currentWeekIndex,
+                  weekLabel: weekLabel,
+                  isDark: isDark,
+                  provider: provider,
                 ),
 
                 const SizedBox(height: 8),
 
-                // All days of the week
+                // All days of the week with lessons
                 ...weekDays.map((day) {
                   final dayLessons = _getLessonsForDate(day, dateSchedule, days);
-                  final isToday = isSameDay(day, DateTime.now());
-                  final isSelected = isSameDay(day, _selectedDay);
+                  final isToday = _isSameDay(day, DateTime.now());
                   final dayName = _weekdayToUzName[day.weekday] ?? '';
                   final dateStr = '${day.day.toString().padLeft(2, '0')}.${day.month.toString().padLeft(2, '0')}';
 
@@ -303,15 +192,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     dateStr: dateStr,
                     lessons: dayLessons,
                     isToday: isToday,
-                    isSelected: isSelected,
                     isDark: isDark,
                     l: l,
-                    onTap: () {
-                      setState(() {
-                        _selectedDay = day;
-                        _focusedDay = day;
-                      });
-                    },
                   );
                 }),
               ],
@@ -322,116 +204,184 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     );
   }
 
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  Widget _buildWeekNavigator(
+    BuildContext context, {
+    required List<dynamic> weeks,
+    required int currentIndex,
+    required String weekLabel,
+    required bool isDark,
+    required StudentProvider provider,
+  }) {
+    final canGoPrev = currentIndex > 0;
+    final canGoNext = currentIndex < weeks.length - 1;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          // Previous week
+          IconButton(
+            icon: Icon(
+              Icons.chevron_left,
+              color: canGoPrev ? Colors.white : Colors.white.withAlpha(60),
+            ),
+            onPressed: canGoPrev
+                ? () {
+                    final prevWeek = weeks[currentIndex - 1] as Map<String, dynamic>;
+                    provider.loadSchedule(weekId: prevWeek['id']?.toString());
+                  }
+                : null,
+          ),
+
+          // Week label
+          Expanded(
+            child: Column(
+              children: [
+                const Icon(Icons.calendar_today, color: Colors.white, size: 18),
+                const SizedBox(height: 4),
+                Text(
+                  weekLabel,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+
+          // Next week
+          IconButton(
+            icon: Icon(
+              Icons.chevron_right,
+              color: canGoNext ? Colors.white : Colors.white.withAlpha(60),
+            ),
+            onPressed: canGoNext
+                ? () {
+                    final nextWeek = weeks[currentIndex + 1] as Map<String, dynamic>;
+                    provider.loadSchedule(weekId: nextWeek['id']?.toString());
+                  }
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDaySection(
     BuildContext context, {
     required String dayName,
     required String dateStr,
     required List<dynamic> lessons,
     required bool isToday,
-    required bool isSelected,
     required bool isDark,
     required AppLocalizations l,
-    required VoidCallback onTap,
   }) {
     final headerColor = isToday
         ? const Color(0xFFFF9800)
-        : isSelected
-            ? AppTheme.primaryColor
-            : (isDark ? AppTheme.darkCard : AppTheme.primaryLight);
+        : (isDark ? AppTheme.darkCard : AppTheme.primaryLight);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: isToday
-              ? Border.all(color: const Color(0xFFFF9800), width: 1.5)
-              : null,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            // Day header
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: headerColor,
-              child: Row(
-                children: [
-                  Icon(
-                    isToday ? Icons.today : Icons.calendar_today,
-                    size: 16,
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: isToday
+            ? Border.all(color: const Color(0xFFFF9800), width: 1.5)
+            : null,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Day header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: headerColor,
+            child: Row(
+              children: [
+                Icon(
+                  isToday ? Icons.today : Icons.calendar_today,
+                  size: 16,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '$dayName, $dateStr',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
+                ),
+                if (isToday) ...[
                   const SizedBox(width: 8),
-                  Text(
-                    '$dayName, $dateStr',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(40),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ),
-                  if (isToday) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(40),
-                        borderRadius: BorderRadius.circular(8),
+                    child: Text(
+                      l.today,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
-                      child: Text(
-                        l.today,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
-                  Text(
-                    '${lessons.length} ${l.lessonUnit}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white.withAlpha(200),
                     ),
                   ),
                 ],
-              ),
-            ),
-
-            // Lessons
-            if (lessons.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                color: isDark ? AppTheme.darkCard.withAlpha(120) : Colors.white,
-                child: Center(
-                  child: Text(
-                    l.noLessons,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-                    ),
+                const Spacer(),
+                Text(
+                  '${lessons.length} ${l.lessonUnit}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white.withAlpha(200),
                   ),
                 ),
-              )
-            else
-              ...lessons.asMap().entries.map((entry) {
-                final index = entry.key;
-                final lesson = entry.value as Map<String, dynamic>;
-                final isLast = index == lessons.length - 1;
-                return _LessonCard(
-                  lesson: lesson,
-                  isDark: isDark,
-                  isLast: isLast,
-                );
-              }),
-          ],
-        ),
+              ],
+            ),
+          ),
+
+          // Lessons
+          if (lessons.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              color: isDark ? AppTheme.darkCard.withAlpha(120) : Colors.white,
+              child: Center(
+                child: Text(
+                  l.noLessons,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                  ),
+                ),
+              ),
+            )
+          else
+            ...lessons.asMap().entries.map((entry) {
+              final index = entry.key;
+              final lesson = entry.value as Map<String, dynamic>;
+              final isLast = index == lessons.length - 1;
+              return _LessonCard(
+                lesson: lesson,
+                isDark: isDark,
+                isLast: isLast,
+              );
+            }),
+        ],
       ),
     );
   }
@@ -485,7 +435,7 @@ class _LessonCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Big lesson icon
+          // Lesson icon
           Container(
             width: 44,
             height: 44,

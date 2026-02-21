@@ -1096,7 +1096,7 @@
                                                             $daySababli = false;
                                                             foreach ($dayAbsences as $pairCode => $absData) {
                                                                 $attForPair = $dayAttData[$pairCode] ?? null;
-                                                                if ($attForPair && ((int) ($attForPair['absent_on'] ?? 0)) > 0) {
+                                                                if ($attForPair && ((int) ($attForPair['absent_on'] ?? 0)) > 0 && ((int) ($attForPair['absent_off'] ?? 0)) == 0) {
                                                                     $daySababli = true;
                                                                     break;
                                                                 }
@@ -1332,7 +1332,7 @@
                                                             {{-- NB + retake baho — admin o'chira oladi --}}
                                                             @php
                                                                 $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
-                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
+                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0 && ((int) ($absAttData['absent_off'] ?? 0)) == 0;
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             @endphp
                                                             <div class="split-cell cursor-pointer hover:bg-red-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'chirish"
@@ -1345,7 +1345,7 @@
                                                             {{-- NB + retake baho — admin emas, faqat ko'rish --}}
                                                             @php
                                                                 $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
-                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
+                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0 && ((int) ($absAttData['absent_off'] ?? 0)) == 0;
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             @endphp
                                                             <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
@@ -1363,7 +1363,7 @@
                                                     @elseif($isAbsent)
                                                         @php
                                                             $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
-                                                            $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
+                                                            $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0 && ((int) ($absAttData['absent_off'] ?? 0)) == 0;
                                                             $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                         @endphp
                                                         @if($showRatingInput)

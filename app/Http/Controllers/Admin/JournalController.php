@@ -605,13 +605,14 @@ class JournalController extends Controller
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
             ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on', 'absent_off')
             ->get();
 
         $jbAttendance = [];
         foreach ($jbAttendanceRaw as $row) {
             $jbAttendance[$row->student_hemis_id][$row->lesson_date][$row->lesson_pair_code] = [
-                'absent_on' => $row->absent_on
+                'absent_on' => $row->absent_on,
+                'absent_off' => $row->absent_off,
             ];
         }
 
@@ -624,13 +625,14 @@ class JournalController extends Controller
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'absent_on', 'absent_off')
             ->get();
 
         $mtAttendance = [];
         foreach ($mtAttendanceRaw as $row) {
             $mtAttendance[$row->student_hemis_id][$row->lesson_date][$row->lesson_pair_code] = [
-                'absent_on' => $row->absent_on
+                'absent_on' => $row->absent_on,
+                'absent_off' => $row->absent_off,
             ];
         }
 
@@ -1220,7 +1222,7 @@ class JournalController extends Controller
                             $subjectId,
                             $lessonDate->format('Y-m-d'),
                             $item['lessonPair']['code'],
-                            $newAbsentOn > 0
+                            $newAbsentOn > 0 && $newAbsentOff == 0
                         );
                         if ($recalculated) {
                             $retakeRecalculated++;
@@ -2017,7 +2019,7 @@ class JournalController extends Controller
             // - low_grade (60 dan past, otrabotka): 80%
             // - no reason (baho qo'yilmagan, talaba kelgan): 100%
             if ($studentGrade->reason === 'absent') {
-                $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
+                $isExcused = $attendance && ((int) $attendance->absent_on) > 0 && ((int) ($attendance->absent_off ?? 0)) == 0;
                 $percentage = $isExcused ? 1.0 : 0.8;
             } elseif ($studentGrade->reason === 'low_grade') {
                 $percentage = 0.8;
@@ -2047,7 +2049,7 @@ class JournalController extends Controller
             // Determine display info for frontend diagonal cell
             $isAbsentReason = $studentGrade->reason === 'absent';
             $originalGrade = $studentGrade->grade;
-            $isExcusedForDisplay = $isAbsentReason && $attendance && ((int) $attendance->absent_on) > 0;
+            $isExcusedForDisplay = $isAbsentReason && $attendance && ((int) $attendance->absent_on) > 0 && ((int) ($attendance->absent_off ?? 0)) == 0;
 
             return response()->json([
                 'success' => true,
@@ -2114,7 +2116,7 @@ class JournalController extends Controller
                     ->whereDate('lesson_date', $studentGrade->lesson_date)
                     ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
                     ->first();
-                $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
+                $isExcused = $attendance && ((int) $attendance->absent_on) > 0 && ((int) ($attendance->absent_off ?? 0)) == 0;
             }
 
             // Retake bahoni o'chirish va oldingi holatni tiklash

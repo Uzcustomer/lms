@@ -7,11 +7,20 @@ use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\Department;
 use App\Models\ExamSchedule;
+use App\Models\Attendance;
 use App\Models\Group;
+use App\Models\MarkingSystemScore;
+use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Specialty;
+use App\Models\Student;
+use App\Models\Teacher;
+use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\IOFactory;
+use PhpOffice\PhpWord\SimpleType\Jc;
 
 class AcademicScheduleController extends Controller
 {
@@ -638,5 +647,318 @@ class AcademicScheduleController extends Controller
             'educationTypes', 'departments', 'specialties',
             'levels', 'semesters', 'groups', 'subjects'
         ));
+    }
+
+    /**
+     * Test markazi: YN oldi qaydnoma Word hujjat yaratish
+     * YnSubmission'ga bog'liq emas — to'g'ridan-to'g'ri subject_id orqali ishlaydi
+     */
+    public function generateYnOldiWord(Request $request)
+    {
+        $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.group_hemis_id' => 'required|string',
+            'items.*.semester_code' => 'required|string',
+            'items.*.subject_id' => 'required|string',
+        ]);
+
+        $items = $request->items;
+        $files = [];
+        $tempDir = storage_path('app/public/yn_oldi_qaydnoma');
+
+        if (!file_exists($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        foreach ($items as $itemData) {
+            $group = Group::where('group_hemis_id', $itemData['group_hemis_id'])->first();
+            if (!$group) continue;
+
+            $semesterCode = $itemData['semester_code'];
+            $subjectId = $itemData['subject_id'];
+
+            $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('code', $semesterCode)
+                ->first();
+
+            $department = Department::where('department_hemis_id', $group->department_hemis_id)
+                ->where('structure_type_code', 11)
+                ->first();
+
+            $specialty = Specialty::where('specialty_hemis_id', $group->specialty_hemis_id)->first();
+
+            $subject = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->first();
+
+            if (!$subject) continue;
+
+            $currentDate = now();
+            $lessonCount = Schedule::where('subject_id', $subject->subject_id)
+                ->where('group_id', $group->group_hemis_id)
+                ->whereNotIn('training_type_code', config('app.training_type_code'))
+                ->where('lesson_date', '<=', $currentDate)
+                ->distinct('lesson_date')
+                ->count();
+
+            if ($lessonCount == 0) $lessonCount = 1;
+
+            $students = Student::selectRaw('
+                students.full_name as student_name,
+                students.student_id_number as student_id,
+                students.hemis_id as hemis_id,
+                ROUND(
+                    (SELECT sum(inner_table.average_grade) / ' . $lessonCount . '
+                    FROM (
+                        SELECT lesson_date, AVG(COALESCE(
+                            CASE
+                                WHEN status = "retake" AND (reason = "absent" OR reason = "teacher_victim")
+                                THEN retake_grade
+                                WHEN status = "retake" AND reason = "low_grade"
+                                THEN retake_grade
+                                WHEN status = "pending" AND reason = "absent"
+                                THEN grade
+                                ELSE grade
+                            END, 0)) AS average_grade
+                        FROM student_grades
+                        WHERE student_grades.student_hemis_id = students.hemis_id
+                        AND student_grades.subject_id = ' . $subject->subject_id . '
+                        AND student_grades.training_type_code NOT IN (' . implode(',', config('app.training_type_code')) . ')
+                        GROUP BY student_grades.lesson_date
+                    ) AS inner_table)
+                ) as jn,
+                ROUND(
+                    (SELECT avg(student_grades.grade) as average_grade
+                    FROM student_grades
+                    WHERE student_grades.student_hemis_id = students.hemis_id
+                    AND student_grades.subject_id = ' . $subject->subject_id . '
+                    AND student_grades.training_type_code = 99
+                    GROUP BY student_grades.student_hemis_id)
+                ) as mt
+            ')
+                ->where('students.group_id', $group->group_hemis_id)
+                ->groupBy('students.id')
+                ->orderBy('students.full_name')
+                ->get();
+
+            // O'qituvchilarni olish
+            $studentIds = Student::where('group_id', $group->group_hemis_id)
+                ->groupBy('hemis_id')
+                ->pluck('hemis_id');
+
+            $maruzaTeacher = DB::table('student_grades as s')
+                ->leftJoin('teachers as t', 't.hemis_id', '=', 's.employee_id')
+                ->select(DB::raw('GROUP_CONCAT(DISTINCT t.full_name SEPARATOR ", ") AS full_names'))
+                ->where('s.subject_id', $subject->subject_id)
+                ->where('s.training_type_code', 11)
+                ->whereIn('s.student_hemis_id', $studentIds)
+                ->groupBy('s.employee_id')
+                ->first();
+
+            $otherTeachers = DB::table('student_grades as s')
+                ->leftJoin('teachers as t', 't.hemis_id', '=', 's.employee_id')
+                ->select(DB::raw('GROUP_CONCAT(DISTINCT t.full_name SEPARATOR ", ") AS full_names'))
+                ->where('s.subject_id', $subject->subject_id)
+                ->where('s.training_type_code', '!=', 11)
+                ->whereIn('s.student_hemis_id', $studentIds)
+                ->groupBy('s.employee_id')
+                ->get();
+
+            $otherTeacherText = '';
+            foreach ($otherTeachers as $t) {
+                $otherTeacherText .= $t->full_names . ', ';
+            }
+            $otherTeacherText = rtrim($otherTeacherText, ', ');
+
+            // Word hujjat yaratish
+            $phpWord = new PhpWord();
+            $phpWord->setDefaultFontName('Times New Roman');
+            $phpWord->setDefaultFontSize(12);
+
+            $section = $phpWord->addSection([
+                'orientation' => 'landscape',
+                'marginTop' => 600,
+                'marginBottom' => 600,
+                'marginLeft' => 800,
+                'marginRight' => 600,
+            ]);
+
+            $section->addText(
+                '12-shakl',
+                ['bold' => true, 'size' => 11],
+                ['alignment' => Jc::END, 'spaceAfter' => 100]
+            );
+
+            $section->addText(
+                'YAKUNIY NAZORAT OLDIDAN QAYDNOMA',
+                ['bold' => true, 'size' => 14],
+                ['alignment' => Jc::CENTER, 'spaceAfter' => 200]
+            );
+
+            $infoStyle = ['size' => 11];
+            $infoBold = ['bold' => true, 'size' => 11];
+            $infoParaStyle = ['spaceAfter' => 40];
+
+            $textRun = $section->addTextRun($infoParaStyle);
+            $textRun->addText('Fakultet: ', $infoBold);
+            $textRun->addText($department->name ?? '-', $infoStyle);
+
+            $textRun = $section->addTextRun($infoParaStyle);
+            $textRun->addText('Kurs: ', $infoBold);
+            $textRun->addText($semester->level_name ?? '-', $infoStyle);
+            $textRun->addText('     Semestr: ', $infoBold);
+            $textRun->addText($semester->name ?? '-', $infoStyle);
+            $textRun->addText('     Guruh: ', $infoBold);
+            $textRun->addText($group->name ?? '-', $infoStyle);
+
+            $textRun = $section->addTextRun($infoParaStyle);
+            $textRun->addText('Fan: ', $infoBold);
+            $textRun->addText($subject->subject_name ?? '-', $infoStyle);
+
+            $textRun = $section->addTextRun($infoParaStyle);
+            $textRun->addText("Ma'ruzachi: ", $infoBold);
+            $textRun->addText($maruzaTeacher->full_names ?? '-', $infoStyle);
+
+            $textRun = $section->addTextRun($infoParaStyle);
+            $textRun->addText("Amaliyot o'qituvchilari: ", $infoBold);
+            $textRun->addText($otherTeacherText ?: '-', $infoStyle);
+
+            $textRun = $section->addTextRun(['spaceAfter' => 150]);
+            $textRun->addText('Soatlar soni: ', $infoBold);
+            $textRun->addText($subject->total_acload ?? '-', $infoStyle);
+
+            $section->addText(
+                'Sana: ' . now()->format('d.m.Y'),
+                $infoStyle,
+                ['alignment' => Jc::END, 'spaceAfter' => 150]
+            );
+
+            // Jadval
+            $tableStyle = [
+                'borderSize' => 6,
+                'borderColor' => '000000',
+                'cellMargin' => 40,
+            ];
+            $tableName = 'YnOldiTable_' . $group->id . '_' . $semesterCode . '_' . $subject->subject_id;
+            $phpWord->addTableStyle($tableName, $tableStyle);
+            $table = $section->addTable($tableName);
+
+            $headerFont = ['bold' => true, 'size' => 10];
+            $cellFont = ['size' => 10];
+            $cellFontRed = ['size' => 10, 'color' => 'FF0000'];
+            $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
+            $cellCenter = ['alignment' => Jc::CENTER];
+            $cellLeft = ['alignment' => Jc::START];
+
+            $headerRow = $table->addRow(400);
+            $headerRow->addCell(600, $headerBg)->addText('№', $headerFont, $cellCenter);
+            $headerRow->addCell(4500, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
+            $headerRow->addCell(1800, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
+            $headerRow->addCell(1200, $headerBg)->addText('JN', $headerFont, $cellCenter);
+            $headerRow->addCell(1200, $headerBg)->addText("O'N", $headerFont, $cellCenter);
+            $headerRow->addCell(1500, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
+            $headerRow->addCell(2000, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
+
+            $rowNum = 1;
+            foreach ($students as $student) {
+                $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+
+                $qoldirgan = (int) Attendance::where('group_id', $group->group_hemis_id)
+                    ->where('subject_id', $subject->subject_id)
+                    ->where('student_hemis_id', $student->hemis_id)
+                    ->sum('absent_off');
+
+                $totalAcload = $subject->total_acload ?: 1;
+                $qoldiq = round($qoldirgan * 100 / $totalAcload, 2);
+
+                $holat = 'Ruxsat';
+                $jnFailed = false;
+                $mtFailed = false;
+                $davomatFailed = false;
+
+                if ($student->jn < $markingScore->effectiveLimit('jn')) {
+                    $jnFailed = true;
+                    $holat = 'X';
+                }
+                if ($student->mt < $markingScore->effectiveLimit('mt')) {
+                    $mtFailed = true;
+                    $holat = 'X';
+                }
+                if ($qoldiq > 25) {
+                    $davomatFailed = true;
+                    $holat = 'X';
+                }
+
+                $dataRow = $table->addRow();
+                $dataRow->addCell(600)->addText($rowNum, $cellFont, $cellCenter);
+                $dataRow->addCell(4500)->addText($student->student_name, $cellFont, $cellLeft);
+                $dataRow->addCell(1800)->addText($student->student_id, $cellFont, $cellCenter);
+
+                $jnCell = $dataRow->addCell(1200);
+                $jnCell->addText($student->jn ?? '0', $jnFailed ? $cellFontRed : $cellFont, $cellCenter);
+
+                $mtCell = $dataRow->addCell(1200);
+                $mtCell->addText($student->mt ?? '0', $mtFailed ? $cellFontRed : $cellFont, $cellCenter);
+
+                $davomatCell = $dataRow->addCell(1500);
+                $davomatCell->addText(
+                    ($qoldiq != 0 ? $qoldiq . '%' : '0%'),
+                    $davomatFailed ? $cellFontRed : $cellFont,
+                    $cellCenter
+                );
+
+                $holatCell = $dataRow->addCell(2000);
+                $holatCell->addText($holat, $holat === 'X' ? $cellFontRed : $cellFont, $cellCenter);
+
+                $rowNum++;
+            }
+
+            // Imzolar
+            $section->addTextBreak(1);
+
+            $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('department_hemis_id', $department->department_hemis_id ?? ''))
+                ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
+                ->first();
+
+            $signTable = $section->addTable();
+            $signRow = $signTable->addRow();
+            $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
+            $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($maruzaTeacher->full_names ?? ''), ['size' => 11]);
+
+            $fileName = 'YN_oldi_qaydnoma_' . str_replace(' ', '_', $group->name) . '_' . str_replace(' ', '_', $subject->subject_name) . '.docx';
+            $tempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_' . $fileName;
+
+            $objWriter = IOFactory::createWriter($phpWord, 'Word2007');
+            $objWriter->save($tempPath);
+
+            $files[] = [
+                'path' => $tempPath,
+                'name' => $fileName,
+            ];
+        }
+
+        if (count($files) === 0) {
+            return response()->json(['error' => 'Hech qanday ma\'lumot topilmadi'], 404);
+        }
+
+        if (count($files) === 1) {
+            return response()->download($files[0]['path'], $files[0]['name'])->deleteFileAfterSend(true);
+        }
+
+        $zipPath = $tempDir . '/' . time() . '_yn_oldi_qaydnomalar.zip';
+        $zip = new \ZipArchive();
+        $zip->open($zipPath, \ZipArchive::CREATE);
+
+        foreach ($files as $file) {
+            $zip->addFile($file['path'], $file['name']);
+        }
+        $zip->close();
+
+        foreach ($files as $file) {
+            @unlink($file['path']);
+        }
+
+        return response()->download($zipPath, 'YN_oldi_qaydnomalar_' . now()->format('d_m_Y') . '.zip')->deleteFileAfterSend(true);
     }
 }

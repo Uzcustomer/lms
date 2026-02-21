@@ -15,12 +15,12 @@ class StudentHomeScreen extends StatefulWidget {
 }
 
 class _StudentHomeScreenState extends State<StudentHomeScreen> {
-  int _currentIndex = 0;
+  int _currentIndex = 2; // Home (center) is default
 
   final _screens = const [
-    StudentDashboardScreen(),
     StudentGradesScreen(),
     StudentScheduleScreen(),
+    StudentDashboardScreen(),
     StudentServicesScreen(),
     StudentProfileScreen(),
   ];
@@ -37,9 +37,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     final l = AppLocalizations.of(context);
 
     final navItems = [
-      _NavItem(Icons.dashboard_outlined, Icons.dashboard, l.home),
       _NavItem(Icons.grade_outlined, Icons.grade, l.grades),
       _NavItem(Icons.calendar_today_outlined, Icons.calendar_today, l.schedule),
+      _NavItem(Icons.dashboard_outlined, Icons.dashboard, l.home),
       _NavItem(Icons.miscellaneous_services_outlined, Icons.miscellaneous_services, l.services),
       _NavItem(Icons.person_outline, Icons.person, l.profile),
     ];

@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../l10n/app_localizations.dart';
+import '../../services/api_service.dart';
 import '../../widgets/loading_widget.dart';
 
 class StudentProfileScreen extends StatefulWidget {
@@ -15,12 +18,97 @@ class StudentProfileScreen extends StatefulWidget {
 }
 
 class _StudentProfileScreenState extends State<StudentProfileScreen> {
+  final _telegramController = TextEditingController();
+  String? _verificationCode;
+  String? _botUsername;
+  String? _botLink;
+  bool _isSavingTelegram = false;
+  bool _isCheckingVerification = false;
+  Timer? _verificationTimer;
+  String? _telegramError;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StudentProvider>().loadProfile();
     });
+  }
+
+  @override
+  void dispose() {
+    _verificationTimer?.cancel();
+    _telegramController.dispose();
+    super.dispose();
+  }
+
+  void _startVerificationPolling() {
+    _verificationTimer?.cancel();
+    _verificationTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (!mounted) {
+        _verificationTimer?.cancel();
+        return;
+      }
+      try {
+        setState(() => _isCheckingVerification = true);
+        final provider = context.read<StudentProvider>();
+        final result = await provider.checkTelegramVerification();
+        if (!mounted) return;
+        if (result['verified'] == true) {
+          _verificationTimer?.cancel();
+          setState(() {
+            _verificationCode = null;
+            _isCheckingVerification = false;
+          });
+          await provider.loadProfile();
+        } else {
+          setState(() => _isCheckingVerification = false);
+        }
+      } catch (_) {
+        if (mounted) setState(() => _isCheckingVerification = false);
+      }
+    });
+  }
+
+  Future<void> _saveTelegram() async {
+    final username = _telegramController.text.trim();
+    if (username.isEmpty) return;
+
+    final formatted = username.startsWith('@') ? username : '@$username';
+    if (!RegExp(r'^@[a-zA-Z0-9_]{5,32}$').hasMatch(formatted)) {
+      setState(() => _telegramError = 'Username @username formatida bo\'lishi kerak (kamida 5 belgi)');
+      return;
+    }
+
+    setState(() {
+      _isSavingTelegram = true;
+      _telegramError = null;
+    });
+
+    try {
+      final provider = context.read<StudentProvider>();
+      final result = await provider.saveTelegram(formatted);
+      if (!mounted) return;
+      setState(() {
+        _verificationCode = result['verification_code']?.toString();
+        _botUsername = result['bot_username']?.toString();
+        _botLink = result['bot_link']?.toString();
+        _isSavingTelegram = false;
+      });
+      _startVerificationPolling();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _telegramError = e.message;
+        _isSavingTelegram = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _telegramError = 'Xatolik yuz berdi';
+        _isSavingTelegram = false;
+      });
+    }
   }
 
   @override
@@ -86,6 +174,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 children: [
                   _buildProfileCard(context, profile),
                   const SizedBox(height: 16),
+                  _buildTelegramCard(context, profile),
+                  const SizedBox(height: 16),
                   _buildPersonalInfo(context, profile),
                 ],
               ),
@@ -93,6 +183,338 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildTelegramCard(BuildContext context, Map<String, dynamic> profile) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final telegramVerified = profile['telegram_verified'] == true;
+    final telegramUsername = profile['telegram_username']?.toString() ?? '';
+    final telegramDaysLeft = profile['telegram_days_left'];
+
+    // Already verified - show success badge
+    if (telegramVerified && telegramUsername.isNotEmpty) {
+      return Card(
+        elevation: 0,
+        color: cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppTheme.successColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.telegram, color: AppTheme.successColor, size: 28),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l.telegramVerified,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: AppTheme.successColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      telegramUsername,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.verified, color: AppTheme.successColor, size: 24),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Not verified - show registration flow
+    return Card(
+      elevation: 0,
+      color: cardColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: const Color(0xFF0088CC),
+            child: Row(
+              children: [
+                const Icon(Icons.telegram, color: Colors.white, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  l.connectTelegram,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.white,
+                  ),
+                ),
+                const Spacer(),
+                if (telegramDaysLeft != null && telegramDaysLeft > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(40),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '$telegramDaysLeft ${l.telegramDaysLeft}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _verificationCode != null
+                ? _buildVerificationStep(context)
+                : _buildUsernameStep(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUsernameStep(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l.telegramUsername,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _telegramController,
+          decoration: InputDecoration(
+            hintText: l.telegramUsernameHint,
+            prefixIcon: const Icon(Icons.alternate_email, size: 20),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: isDark ? AppTheme.darkDivider : Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: isDark ? AppTheme.darkDivider : Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF0088CC), width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            filled: true,
+            fillColor: isDark ? AppTheme.darkSurface : Colors.grey[50],
+          ),
+          style: const TextStyle(fontSize: 14),
+        ),
+        if (_telegramError != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _telegramError!,
+            style: const TextStyle(color: AppTheme.errorColor, fontSize: 12),
+          ),
+        ],
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isSavingTelegram ? null : _saveTelegram,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0088CC),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: _isSavingTelegram
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : Text(l.telegramSave, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVerificationStep(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l.telegramVerificationCode,
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor),
+        ),
+        const SizedBox(height: 8),
+
+        // Code display
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.darkSurface : const Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF0088CC).withAlpha(50)),
+          ),
+          child: Column(
+            children: [
+              SelectableText(
+                _verificationCode!,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 6,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: _verificationCode!));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Kod nusxalandi'),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.copy, size: 14, color: subTextColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Nusxalash',
+                      style: TextStyle(fontSize: 12, color: subTextColor),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+        Text(
+          l.telegramSendCodeToBot,
+          style: TextStyle(fontSize: 13, color: subTextColor),
+        ),
+        const SizedBox(height: 12),
+
+        // Open bot button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _botLink != null
+                ? () {
+                    // Open Telegram bot link - use url_launcher or just show the link
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Telegram botga o\'ting: $_botLink'),
+                        duration: const Duration(seconds: 5),
+                        action: SnackBarAction(
+                          label: 'OK',
+                          onPressed: () {},
+                        ),
+                      ),
+                    );
+                  }
+                : null,
+            icon: const Icon(Icons.telegram, size: 20),
+            label: Text(
+              _botUsername != null && _botUsername!.isNotEmpty
+                  ? '${l.telegramOpenBot} (@$_botUsername)'
+                  : l.telegramOpenBot,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0088CC),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Checking status
+        if (_isCheckingVerification)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0088CC)),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                l.telegramChecking,
+                style: TextStyle(fontSize: 12, color: subTextColor),
+              ),
+            ],
+          ),
+
+        // Back button to re-enter username
+        const SizedBox(height: 8),
+        Center(
+          child: TextButton(
+            onPressed: () {
+              _verificationTimer?.cancel();
+              setState(() {
+                _verificationCode = null;
+                _botUsername = null;
+                _botLink = null;
+              });
+            },
+            child: Text(
+              'Username o\'zgartirish',
+              style: TextStyle(fontSize: 12, color: subTextColor),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

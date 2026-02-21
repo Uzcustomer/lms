@@ -214,60 +214,72 @@ class ImportAttendanceControls extends Command
         $dateStart = $date->copy()->startOfDay();
         $dateEnd = $date->copy()->endOfDay();
         $dateStr = $dateStart->toDateString();
+        $now = now();
 
-        $written = 0;
         $softDeletedCount = 0;
 
-        DB::transaction(function () use ($items, $dateStart, $dateEnd, $dateStr, $isFinal, &$written, &$softDeletedCount) {
-            // Soft delete faqat FINAL import da — live import da qilmaslik!
-            // Sabab: HEMIS API kun davomida to'liq ma'lumot qaytarmasligi mumkin,
-            // oldingi importda kiritilgan yozuvlarni yo'qotib qo'yadi.
-            if ($isFinal) {
-                $softDeletedCount = AttendanceControl::where('lesson_date', '>=', $dateStart)
-                    ->where('lesson_date', '<=', $dateEnd)
-                    ->delete();
-                $this->info("Soft deleted {$softDeletedCount} old records for {$dateStr}");
-            }
+        // Soft delete faqat FINAL import da — live import da qilmaslik!
+        // Sabab: HEMIS API kun davomida to'liq ma'lumot qaytarmasligi mumkin,
+        // oldingi importda kiritilgan yozuvlarni yo'qotib qo'yadi.
+        // Tranzaksiyadan TASHQARIDA — tez bajariladi va lockni ushlab turmasligi kerak
+        if ($isFinal) {
+            $softDeletedCount = AttendanceControl::where('lesson_date', '>=', $dateStart)
+                ->where('lesson_date', '<=', $dateEnd)
+                ->delete();
+            $this->info("Soft deleted {$softDeletedCount} old records for {$dateStr}");
+        }
 
-            // Yangi yozuvlarni kiritish (soft-deleted bo'lsa restore qilib yangilaydi)
-            foreach ($items as $item) {
-                $lessonDate = isset($item['lesson_date']) ? date('Y-m-d H:i:s', $item['lesson_date']) : null;
+        // Upsert uchun ma'lumotlarni tayyorlash
+        $upsertRows = [];
+        foreach ($items as $item) {
+            $lessonDate = isset($item['lesson_date']) ? date('Y-m-d H:i:s', $item['lesson_date']) : null;
 
-                $values = [
-                    'subject_schedule_id' => $item['_subject_schedule'] ?? null,
-                    'subject_id' => $item['subject']['id'] ?? null,
-                    'subject_code' => $item['subject']['code'] ?? null,
-                    'subject_name' => $item['subject']['name'] ?? null,
-                    'employee_id' => $item['employee']['id'] ?? null,
-                    'employee_name' => $item['employee']['name'] ?? null,
-                    'education_year_code' => $item['educationYear']['code'] ?? null,
-                    'education_year_name' => $item['educationYear']['name'] ?? null,
-                    'semester_code' => $item['semester']['code'] ?? null,
-                    'semester_name' => $item['semester']['name'] ?? null,
-                    'group_id' => $item['group']['id'] ?? null,
-                    'group_name' => $item['group']['name'] ?? null,
-                    'education_lang_code' => $item['group']['educationLang']['code'] ?? null,
-                    'education_lang_name' => $item['group']['educationLang']['name'] ?? null,
-                    'training_type_code' => $item['trainingType']['code'] ?? null,
-                    'training_type_name' => $item['trainingType']['name'] ?? null,
-                    'lesson_pair_code' => $item['lessonPair']['code'] ?? null,
-                    'lesson_pair_name' => $item['lessonPair']['name'] ?? null,
-                    'lesson_pair_start_time' => $item['lessonPair']['start_time'] ?? null,
-                    'lesson_pair_end_time' => $item['lessonPair']['end_time'] ?? null,
-                    'lesson_date' => $lessonDate,
-                    'load' => $item['load'] ?? 2,
-                    'is_final' => $isFinal,
-                    'deleted_at' => null,
-                ];
+            $upsertRows[] = [
+                'hemis_id' => $item['id'],
+                'subject_schedule_id' => $item['_subject_schedule'] ?? null,
+                'subject_id' => $item['subject']['id'] ?? null,
+                'subject_code' => $item['subject']['code'] ?? null,
+                'subject_name' => $item['subject']['name'] ?? null,
+                'employee_id' => $item['employee']['id'] ?? null,
+                'employee_name' => $item['employee']['name'] ?? null,
+                'education_year_code' => $item['educationYear']['code'] ?? null,
+                'education_year_name' => $item['educationYear']['name'] ?? null,
+                'semester_code' => $item['semester']['code'] ?? null,
+                'semester_name' => $item['semester']['name'] ?? null,
+                'group_id' => $item['group']['id'] ?? null,
+                'group_name' => $item['group']['name'] ?? null,
+                'education_lang_code' => $item['group']['educationLang']['code'] ?? null,
+                'education_lang_name' => $item['group']['educationLang']['name'] ?? null,
+                'training_type_code' => $item['trainingType']['code'] ?? null,
+                'training_type_name' => $item['trainingType']['name'] ?? null,
+                'lesson_pair_code' => $item['lessonPair']['code'] ?? null,
+                'lesson_pair_name' => $item['lessonPair']['name'] ?? null,
+                'lesson_pair_start_time' => $item['lessonPair']['start_time'] ?? null,
+                'lesson_pair_end_time' => $item['lessonPair']['end_time'] ?? null,
+                'lesson_date' => $lessonDate,
+                'load' => $item['load'] ?? 2,
+                'is_final' => $isFinal,
+                'deleted_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
 
-                AttendanceControl::withTrashed()->updateOrCreate(
-                    ['hemis_id' => $item['id']],
-                    $values
-                );
-                $written++;
-            }
-        });
+        // Bulk upsert — 200 tadan chunk qilib, har biri alohida tranzaksiya
+        // updateOrCreate loop o'rniga ~50x tez, lock vaqti minimal
+        $updateColumns = [
+            'subject_schedule_id', 'subject_id', 'subject_code', 'subject_name',
+            'employee_id', 'employee_name', 'education_year_code', 'education_year_name',
+            'semester_code', 'semester_name', 'group_id', 'group_name',
+            'education_lang_code', 'education_lang_name', 'training_type_code', 'training_type_name',
+            'lesson_pair_code', 'lesson_pair_name', 'lesson_pair_start_time', 'lesson_pair_end_time',
+            'lesson_date', 'load', 'is_final', 'deleted_at', 'updated_at',
+        ];
 
-        $this->info("Written {$written} records for {$dateStr} (is_final=" . ($isFinal ? 'true' : 'false') . ")");
+        foreach (array_chunk($upsertRows, 200) as $chunk) {
+            DB::table('attendance_controls')->upsert($chunk, ['hemis_id'], $updateColumns);
+        }
+
+        $this->info("Written " . count($upsertRows) . " records for {$dateStr} (is_final=" . ($isFinal ? 'true' : 'false') . ")");
     }
 }

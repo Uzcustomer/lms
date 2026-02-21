@@ -92,17 +92,41 @@ class ImportGrades extends Command
                 'failed_pages' => ["API xato ({$errorDetail})"],
             ];
         } else {
-            // 2-qadam: Muvaffaqiyatli — soft delete + yangi yozish
-            $this->applyGrades($gradeItems, $today, false);
-            $this->report['student-grade-list'] = [
-                'total_days' => 1,
-                'success_days' => 1,
-                'failed_pages' => [],
-            ];
+            try {
+                // 2-qadam: Muvaffaqiyatli — soft delete + yangi yozish
+                $this->applyGrades($gradeItems, $today, false);
+                $this->report['student-grade-list'] = [
+                    'total_days' => 1,
+                    'success_days' => 1,
+                    'failed_pages' => [],
+                ];
+            } catch (\Throwable $e) {
+                $this->error("applyGrades EXCEPTION: {$e->getMessage()}");
+                Log::error("[LiveImport] applyGrades exception: {$e->getMessage()}", [
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                $this->report['student-grade-list'] = [
+                    'total_days' => 1,
+                    'success_days' => 0,
+                    'failed_pages' => ["Exception: " . substr($e->getMessage(), 0, 100)],
+                ];
+            }
         }
 
         // Davomatni alohida import qilish (eski logika — attendance uchun soft delete kerak emas)
-        $this->importAttendance($from, $to, $today);
+        try {
+            $this->importAttendance($from, $to, $today);
+        } catch (\Throwable $e) {
+            $this->error("importAttendance EXCEPTION: {$e->getMessage()}");
+            Log::error("[LiveImport] importAttendance exception: {$e->getMessage()}", [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            $this->report['attendance-list'] = [
+                'total_days' => 1,
+                'success_days' => 0,
+                'failed_pages' => ["Exception: " . substr($e->getMessage(), 0, 100)],
+            ];
+        }
 
         $this->sendTelegramReport();
         Log::info('[LiveImport] Completed at ' . Carbon::now());
@@ -152,89 +176,103 @@ class ImportGrades extends Command
         foreach ($unfinishedDates as $dateStr) {
             $date = Carbon::parse($dateStr);
 
-            $dateStartOfDay = $date->copy()->startOfDay();
-            $dateEndOfDay = $date->copy()->endOfDay();
+            try {
+                $dateStartOfDay = $date->copy()->startOfDay();
+                $dateEndOfDay = $date->copy()->endOfDay();
 
-            // Faqat BARCHA yozuvlar is_final=true bo'lgandagina o'tkazish
-            $hasUnfinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
-                ->where('lesson_date', '<=', $dateEndOfDay)
-                ->where('is_final', false)
-                ->exists();
-
-            if (!$hasUnfinalizedForDate) {
-                $this->info("  {$date->toDateString()} — BARCHA yozuvlar yakunlangan, o'tkazib yuborildi.");
-                $totalDays--;
-                continue;
-            }
-
-            // Agar shu kun uchun is_final=true yozuvlar ALLAQACHON mavjud bo'lsa,
-            // is_final=false qoldiqlarni tozalab, API ni qayta chaqirmaslik
-            $hasFinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
-                ->where('lesson_date', '<=', $dateEndOfDay)
-                ->where('is_final', true)
-                ->exists();
-
-            if ($hasFinalizedForDate) {
-                $cleaned = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                // Faqat BARCHA yozuvlar is_final=true bo'lgandagina o'tkazish
+                $hasUnfinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
                     ->where('lesson_date', '<=', $dateEndOfDay)
                     ->where('is_final', false)
-                    ->delete();
-                $this->info("  {$date->toDateString()} — is_final=true allaqachon mavjud, {$cleaned} ta is_final=false qoldiq tozalandi.");
-                Log::info("[FinalImport] {$date->toDateString()} — cleaned {$cleaned} leftover is_final=false records (is_final=true already exists).");
-                $successDays++;
-                continue;
-            }
+                    ->exists();
 
-            $from = $date->copy()->startOfDay()->timestamp;
-            $to = $date->copy()->endOfDay()->timestamp;
-
-            $this->info("  {$date->toDateString()} — API dan tortilmoqda...");
-
-            // Baholar
-            $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
-
-            if ($gradeItems === false) {
-                $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
-                $this->error("  {$date->toDateString()} — API xato ({$errorDetail}), keyingi kunga o'tiladi.");
-                $failedDays[] = "{$date->toDateString()} ({$errorDetail})";
-                continue;
-            }
-
-            $this->applyGrades($gradeItems, $date, true);
-
-            // Attendance
-            $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
-            if ($attendanceItems !== false) {
-                foreach ($attendanceItems as $item) {
-                    $this->processAttendance($item, true);
+                if (!$hasUnfinalizedForDate) {
+                    $this->info("  {$date->toDateString()} — BARCHA yozuvlar yakunlangan, o'tkazib yuborildi.");
+                    $totalDays--;
+                    continue;
                 }
-            }
 
-            $successDays++;
-            $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
+                // Agar shu kun uchun is_final=true yozuvlar ALLAQACHON mavjud bo'lsa,
+                // is_final=false qoldiqlarni tozalab, API ni qayta chaqirmaslik
+                $hasFinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                    ->where('lesson_date', '<=', $dateEndOfDay)
+                    ->where('is_final', true)
+                    ->exists();
+
+                if ($hasFinalizedForDate) {
+                    $cleaned = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                        ->where('lesson_date', '<=', $dateEndOfDay)
+                        ->where('is_final', false)
+                        ->delete();
+                    $this->info("  {$date->toDateString()} — is_final=true allaqachon mavjud, {$cleaned} ta is_final=false qoldiq tozalandi.");
+                    Log::info("[FinalImport] {$date->toDateString()} — cleaned {$cleaned} leftover is_final=false records (is_final=true already exists).");
+                    $successDays++;
+                    continue;
+                }
+
+                $from = $date->copy()->startOfDay()->timestamp;
+                $to = $date->copy()->endOfDay()->timestamp;
+
+                $this->info("  {$date->toDateString()} — API dan tortilmoqda...");
+
+                // Baholar
+                $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
+
+                if ($gradeItems === false) {
+                    $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
+                    $this->error("  {$date->toDateString()} — API xato ({$errorDetail}), keyingi kunga o'tiladi.");
+                    $failedDays[] = "{$date->toDateString()} ({$errorDetail})";
+                    continue;
+                }
+
+                $this->applyGrades($gradeItems, $date, true);
+
+                // Attendance
+                $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
+                if ($attendanceItems !== false) {
+                    foreach ($attendanceItems as $item) {
+                        $this->processAttendance($item, true);
+                    }
+                }
+
+                $successDays++;
+                $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
+            } catch (\Throwable $e) {
+                $errorMsg = $e->getMessage();
+                $this->error("  {$date->toDateString()} — EXCEPTION: {$errorMsg}");
+                Log::error("[FinalImport] {$date->toDateString()} exception: {$errorMsg}", [
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                $failedDays[] = "{$date->toDateString()} (Exception: " . substr($errorMsg, 0, 100) . ")";
+            }
         }
 
         // Global tozalash: 7 kunlik oynadan tashqaridagi barcha is_final=false duplikatlarni soft-delete qilish
         // Migration (02-17) barcha eski recordlarni is_final=false qilib qo'ygan,
         // backfill yangi is_final=true recordlarni yaratgan, lekin eskilari qolib ketgan
-        $globalCleaned = DB::update("
-            UPDATE student_grades sg
-            INNER JOIN student_grades g2
-                ON g2.student_id = sg.student_id
-                AND g2.subject_id = sg.subject_id
-                AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
-                AND g2.is_final = 1
-                AND g2.deleted_at IS NULL
-                AND g2.id != sg.id
-            SET sg.deleted_at = NOW()
-            WHERE sg.is_final = 0
-                AND sg.deleted_at IS NULL
-                AND DATE(sg.lesson_date) < CURDATE()
-        ");
+        try {
+            $globalCleaned = DB::update("
+                UPDATE student_grades sg
+                INNER JOIN student_grades g2
+                    ON g2.student_id = sg.student_id
+                    AND g2.subject_id = sg.subject_id
+                    AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
+                    AND g2.is_final = 1
+                    AND g2.deleted_at IS NULL
+                    AND g2.id != sg.id
+                SET sg.deleted_at = NOW()
+                WHERE sg.is_final = 0
+                    AND sg.deleted_at IS NULL
+                    AND DATE(sg.lesson_date) < CURDATE()
+            ");
 
-        if ($globalCleaned > 0) {
-            $this->info("Global cleanup: {$globalCleaned} ta eski is_final=false duplikat tozalandi.");
-            Log::info("[FinalImport] Global cleanup: {$globalCleaned} stale is_final=false duplicates removed.");
+            if ($globalCleaned > 0) {
+                $this->info("Global cleanup: {$globalCleaned} ta eski is_final=false duplikat tozalandi.");
+                Log::info("[FinalImport] Global cleanup: {$globalCleaned} stale is_final=false duplicates removed.");
+            }
+        } catch (\Throwable $e) {
+            Log::error("[FinalImport] Global cleanup exception: {$e->getMessage()}");
+            $failedDays[] = "Global cleanup (Exception: " . substr($e->getMessage(), 0, 100) . ")";
         }
 
         $this->report['final-import'] = [

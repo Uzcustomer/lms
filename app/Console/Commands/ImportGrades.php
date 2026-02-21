@@ -10,6 +10,7 @@ use App\Models\StudentGrade;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Console\Command;
+use App\Services\ImportProgressReporter;
 use App\Services\TelegramService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -306,6 +307,7 @@ class ImportGrades extends Command
 
     private function fetchAllPages(string $endpoint, int $from, int $to): array|false
     {
+        $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
         $allItems = [];
         $currentPage = 1;
         $totalPages = 1;
@@ -334,6 +336,9 @@ class ImportGrades extends Command
                         $allItems = array_merge($allItems, $data);
                         $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
                         $this->info("Fetched {$endpoint} page {$currentPage}/{$totalPages}");
+                        if ($reporter) {
+                            $reporter->updateProgress($currentPage, $totalPages);
+                        }
                         $pageSuccess = true;
                         sleep(2);
                     } else {

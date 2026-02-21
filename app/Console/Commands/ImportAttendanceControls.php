@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\AttendanceControl;
+use App\Services\ImportProgressReporter;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -141,6 +142,7 @@ class ImportAttendanceControls extends Command
     // =========================================================================
     private function fetchAllPages(string $token, ?int $from = null, ?int $to = null): array|false
     {
+        $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
         $allItems = [];
         $page = 1;
         $pageSize = 200;
@@ -174,6 +176,9 @@ class ImportAttendanceControls extends Command
                         $totalPages = $json['data']['pagination']['pageCount'] ?? 1;
                         $allItems = array_merge($allItems, $items);
                         $this->info("Fetched page {$page}/{$totalPages} (" . count($items) . " items)");
+                        if ($reporter) {
+                            $reporter->updateProgress($page, $totalPages);
+                        }
                         $pageSuccess = true;
                         sleep(1);
                     } else {

@@ -80,8 +80,18 @@ class SendAttendanceFinalDailyReport extends Command
         $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
         $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
+        $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
 
-        $attendanceSet = DB::table('attendance_controls')
+        // Davomat (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $attendanceByScheduleId = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->where('load', '>', 0)
+            ->pluck('subject_schedule_id')
+            ->flip();
+
+        // Davomat (2-usul): atribut kalitlari orqali tekshirish (zaxira)
+        $attendanceByKey = DB::table('attendance_controls')
             ->whereNull('deleted_at')
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
@@ -123,6 +133,10 @@ class SendAttendanceFinalDailyReport extends Command
             $gradeKey = $sch->employee_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                       . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
 
+            // Davomat: schedule_hemis_id orqali yoki atribut kaliti orqali tekshirish
+            $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
+                   || isset($attendanceByKey[$attKey]);
+
             if (!isset($grouped[$key])) {
                 $semCode = max((int) ($sch->semester_code ?? 1), 1);
                 $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
@@ -139,7 +153,7 @@ class SendAttendanceFinalDailyReport extends Command
                     'training_type' => $sch->training_type_name,
                     'lesson_pair_time' => $pairTime,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
-                    'has_attendance' => isset($attendanceSet[$attKey]),
+                    'has_attendance' => $hasAtt,
                     'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
                     'lesson_date' => $sch->lesson_date_str,
                     'kurs' => (int) ($sch->level_code ?? ceil($semCode / 2)),

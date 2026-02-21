@@ -636,8 +636,13 @@ class JournalController extends Controller
         }
 
         // Get students basic info
+        // Chetlashgan talabalar: joriy semestrda bo'lsa — ko'rsatiladi (qizil), oldingi semestrlarda — chiqariladi
         $students = DB::table('students')
             ->where('group_id', $group->group_hemis_id)
+            ->where(function ($query) use ($semesterCode) {
+                $query->where('student_status_code', '!=', '60')
+                      ->orWhere('semester_code', $semesterCode);
+            })
             ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
             ->orderBy('full_name')
             ->get();

@@ -716,6 +716,30 @@ class TeacherApiController extends Controller
             // Silently handle
         }
 
+        // ==================== MT GRADE HISTORY ====================
+
+        $mtGradeHistory = [];
+        try {
+            $mtGradeHistoryRaw = DB::table('mt_grade_history')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->orderBy('attempt_number')
+                ->get();
+
+            foreach ($mtGradeHistoryRaw as $h) {
+                $mtGradeHistory[$h->student_hemis_id][] = [
+                    'attempt' => $h->attempt_number,
+                    'grade' => round($h->grade),
+                    'has_file' => !empty($h->file_path),
+                ];
+            }
+        } catch (\Exception $e) {
+            // Silently handle
+        }
+
+        $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
+
         // ==================== LESSON OPENINGS ====================
 
         $activeOpenedDates = [];
@@ -762,7 +786,8 @@ class TeacherApiController extends Controller
             $mtGrades, $mtColumns, $mtPairsPerDay,
             $lectureAttendance, $lectureColumns,
             $otherGrades, $attendanceData,
-            $manualMtGrades, $mtSubmissions,
+            $manualMtGrades, $manualMtGradesRaw, $mtSubmissions,
+            $mtGradeHistory, $mtMaxResubmissions,
             $minimumLimit
         ) {
             $hemis = $student->hemis_id;
@@ -827,10 +852,27 @@ class TeacherApiController extends Controller
                 ];
             }
 
-            // Manual MT grade
+            // Manual MT grade + regrade logic
             $mtManualGrade = $manualMtGrades[$hemis] ?? null;
             $hasSubmission = isset($mtSubmissions[$hemis]);
             $mtLocked = $mtManualGrade !== null && $mtManualGrade >= $minimumLimit;
+
+            // Can regrade: student resubmitted after low grade
+            $canRegrade = false;
+            $waitingResubmit = false;
+            if ($mtManualGrade !== null && $mtManualGrade < $minimumLimit && $hasSubmission) {
+                $gradeRow = $manualMtGradesRaw[$hemis] ?? null;
+                $sub = $mtSubmissions[$hemis];
+                if ($gradeRow) {
+                    $gradeTime = $gradeRow->updated_at ?? $gradeRow->created_at;
+                    if ($gradeTime && ($sub->submitted_at ?? null)) {
+                        $hasResubmitted = Carbon::parse($sub->submitted_at)->gt(Carbon::parse($gradeTime));
+                        $attemptCount = count($mtGradeHistory[$hemis] ?? []) + 1;
+                        $canRegrade = $hasResubmitted && $attemptCount <= $mtMaxResubmissions;
+                        $waitingResubmit = !$hasResubmitted && $attemptCount <= $mtMaxResubmissions;
+                    }
+                }
+            }
 
             // Other grades
             $other = $otherGrades[$hemis] ?? ['on' => null, 'oski' => null, 'test' => null];
@@ -846,6 +888,9 @@ class TeacherApiController extends Controller
                 'mt_manual_grade' => $mtManualGrade !== null ? round($mtManualGrade) : null,
                 'mt_has_submission' => $hasSubmission,
                 'mt_locked' => $mtLocked,
+                'mt_can_regrade' => $canRegrade,
+                'mt_waiting_resubmit' => $waitingResubmit,
+                'mt_history' => $mtGradeHistory[$hemis] ?? [],
                 'lecture' => $lectData,
                 'on' => $other['on'],
                 'oski' => $other['oski'],
@@ -1298,6 +1343,7 @@ class TeacherApiController extends Controller
             'message' => 'Baho saqlandi.',
             'locked' => true,
             'can_regrade' => false,
+            'waiting_resubmit' => $grade < $minimumLimit && ($newAttempt ?? 1) <= $maxResubmissions,
             'grade' => $grade,
             'attempt' => $newAttempt ?? 1,
             'max_attempts' => $maxResubmissions,

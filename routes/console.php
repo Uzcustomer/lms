@@ -13,11 +13,6 @@ Artisan::command('inspire', function () {
 Schedule::command('student:import-data --mode=final')->dailyAt('00:30');
 Schedule::command('student:import-data --mode=final')->dailyAt('04:00');
 
-// Baholar: LIVE import — kun davomida HEMIS dan bugungi baholarni sinxronlash
-// Har soatda :30 da (09:30, 10:30, ..., 21:30) — hisobot va reminder vaqtlariga to'g'ri kelmaydi
-// Bu yo'q edi, shuning uchun 22:00 hisobot baholarni "qo'yilmagan" deb ko'rsatardi
-Schedule::command('student:import-data --mode=live')->hourlyAt(30)->between('09:00', '21:59');
-
 // Davomat nazorati: kechasi 02:00 da FINAL import (kechagi va yakunlanmagan kunlarni is_final=true qiladi)
 Schedule::command('import:attendance-controls --mode=final')->dailyAt('02:00');
 Schedule::command('command:independent-auto-create')->dailyAt('06:00');

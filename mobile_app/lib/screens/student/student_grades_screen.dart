@@ -267,17 +267,17 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       child: Column(
         children: [
           Divider(color: divColor, height: 1),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
-          // Grade cards - 3 columns
+          // Grade cards - 3 columns (compact)
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              crossAxisSpacing: 6,
-              mainAxisSpacing: 6,
-              childAspectRatio: 1.2,
+              crossAxisSpacing: 5,
+              mainAxisSpacing: 5,
+              childAspectRatio: 1.6,
             ),
             itemCount: gradeEntries.length,
             itemBuilder: (context, i) {
@@ -288,80 +288,24 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 value: value,
                 color: _cardColors[i],
                 textColor: _cardTextColors[i],
-                icon: _cardIcons[i],
                 isDark: isDark,
               );
             },
           ),
 
-          // Davomat
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkSurface : const Color(0xFFF5F5F5),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      l.get('attendance'),
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      '${_getAttendancePercent(subject).toStringAsFixed(1)}%',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: _getAttendanceColor(_getAttendancePercent(subject)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: _getAttendancePercent(subject) / 100,
-                    backgroundColor: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      _getAttendanceColor(_getAttendancePercent(subject)),
-                    ),
-                    minHeight: 6,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${l.get("absent_hours_label")}: ${subject['absent_hours'] ?? 0} / ${subject['auditorium_hours'] ?? 0} ${l.get("hours")}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 6),
 
-          const SizedBox(height: 12),
-
-          // MT submission info
+          // MT submission info (moved up)
           if (subject['mt_submission'] != null) ...[
             _buildMtInfo(context, subject['mt_submission'] as Map<String, dynamic>, isDark, l),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
           ],
 
           // Buttons
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child: ElevatedButton.icon(
                   onPressed: _canUploadMT(subject) && !_isUploading
                       ? () => _uploadMT(context, subject)
                       : null,
@@ -369,7 +313,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
                       : Icon(
                           _hasMtSubmission(subject) ? Icons.refresh : Icons.upload_file,
@@ -383,9 +327,9 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                             : l.get('mt_upload'),
                     style: const TextStyle(fontSize: 13),
                   ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.primaryColor,
-                    side: const BorderSide(color: AppTheme.primaryColor),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E7D32),
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -425,6 +369,63 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               ),
             ],
           ),
+
+          const SizedBox(height: 8),
+
+          // Davomat (moved to bottom)
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkSurface : const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      l.get('attendance'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      '${_getAttendancePercent(subject).toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: _getAttendanceColor(_getAttendancePercent(subject)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: _getAttendancePercent(subject) / 100,
+                    backgroundColor: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      _getAttendanceColor(_getAttendancePercent(subject)),
+                    ),
+                    minHeight: 6,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${l.get("absent_hours_label")}: ${subject['absent_hours'] ?? 0} / ${subject['auditorium_hours'] ?? 0} ${l.get("hours")}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -435,7 +436,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     required dynamic value,
     required Color color,
     required Color textColor,
-    required IconData icon,
     required bool isDark,
   }) {
     final displayValue = value?.toString() ?? '-';
@@ -443,26 +443,24 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? color.withAlpha(30) : color,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 20, color: textColor),
-          const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: FontWeight.w600,
               color: textColor,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 1),
           Text(
             displayValue,
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 17,
               fontWeight: FontWeight.bold,
               color: textColor,
             ),

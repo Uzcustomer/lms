@@ -102,6 +102,7 @@ class SendAttendanceGroupSummary extends Command
         $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
         $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
+        $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
 
         // Davomat: attendance_controls jadvalidan (web hisobot bilan bir xil)
         $attendanceSet = DB::table('attendance_controls')
@@ -114,18 +115,26 @@ class SendAttendanceGroupSummary extends Command
             ->pluck('ck')
             ->flip();
 
-        // Baho: student_grades + students JOIN — guruh bo'yicha tekshirish
-        // student_grades da group_id yo'q, shuning uchun students orqali olamiz
-        $gradeSet = DB::table('student_grades as sg')
-            ->join('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
+        // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $gradeByScheduleId = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->whereNotNull('grade')
+            ->where('grade', '>', 0)
+            ->pluck('subject_schedule_id')
+            ->unique()
+            ->flip();
+
+        // Baho (2-usul): student → group orqali tekshirish (zaxira)
+        $gradeByKey = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
             ->whereIn('sg.employee_id', $employeeIds)
-            ->whereIn('sg.subject_id', $subjectIds)
-            ->whereIn('s.group_id', $groupHemisIds)
+            ->whereIn('st.group_id', $groupHemisIds)
             ->whereRaw('DATE(sg.lesson_date) = ?', [$todayStr])
             ->whereNotNull('sg.grade')
             ->where('sg.grade', '>', 0)
-            ->whereNull('sg.deleted_at')
-            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', s.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code) as gk"))
+            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -151,7 +160,7 @@ class SendAttendanceGroupSummary extends Command
             $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                     . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
             $gradeKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
-                      . '|' . $sch->training_type_code;
+                      . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
 
             if (!isset($grouped[$key])) {
                 $semCode = max((int) ($sch->semester_code ?? 1), 1);
@@ -171,7 +180,7 @@ class SendAttendanceGroupSummary extends Command
                     'lesson_pair_time' => $pairTime,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
                     'has_attendance' => isset($attendanceSet[$attKey]),
-                    'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
+                    'has_grades' => $skipGradeCheck ? null : (isset($gradeByScheduleId[$sch->schedule_hemis_id]) || isset($gradeByKey[$gradeKey])),
                     'lesson_date' => $sch->lesson_date_str,
                     'kurs' => (int) ($sch->level_code ?? ceil($semCode / 2)),
                     'employee_id' => $sch->employee_id,
@@ -182,7 +191,7 @@ class SendAttendanceGroupSummary extends Command
 
         // 5-QADAM: Faqat kamida biri yo'q (any_missing) filtrini qo'llash
         $filtered = array_filter($grouped, function ($r) {
-            return !$r['has_attendance'] || !$r['has_grades'];
+            return !$r['has_attendance'] || $r['has_grades'] === false;
         });
 
         $totalSchedules = count($grouped);

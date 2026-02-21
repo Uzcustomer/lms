@@ -59,6 +59,7 @@ class SendTeacherReminders extends Command
                   ->orWhereNull('sem.id');
             })
             ->select(
+                'sch.schedule_hemis_id',
                 'sch.employee_id',
                 'sch.subject_id',
                 'sch.subject_name',
@@ -82,6 +83,7 @@ class SendTeacherReminders extends Command
         $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
         $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
+        $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
 
         // Davomat: attendance_controls jadvalidan (hisobot bilan bir xil)
         $attendanceSet = DB::table('attendance_controls')
@@ -94,17 +96,26 @@ class SendTeacherReminders extends Command
             ->pluck('ck')
             ->flip();
 
-        // Baho: student_grades + students JOIN — guruh bo'yicha tekshirish
-        $gradeSet = DB::table('student_grades as sg')
-            ->join('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
+        // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $gradeByScheduleId = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->whereNotNull('grade')
+            ->where('grade', '>', 0)
+            ->pluck('subject_schedule_id')
+            ->unique()
+            ->flip();
+
+        // Baho (2-usul): student → group orqali tekshirish (zaxira)
+        $gradeByKey = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
             ->whereIn('sg.employee_id', $employeeIds)
-            ->whereIn('sg.subject_id', $subjectIds)
-            ->whereIn('s.group_id', $groupHemisIds)
+            ->whereIn('st.group_id', $groupHemisIds)
             ->whereRaw('DATE(sg.lesson_date) = ?', [$today])
             ->whereNotNull('sg.grade')
             ->where('sg.grade', '>', 0)
-            ->whereNull('sg.deleted_at')
-            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', s.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code) as gk"))
+            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -142,9 +153,10 @@ class SendTeacherReminders extends Command
                 // — bu turlarga baho qo'yilmaydi, shuning uchun tekshirilmaydi
                 if (!in_array($trainingTypeCode, $gradeExcludedTypes)) {
                     $gradeKey = $schedule->employee_id . '|' . $schedule->group_id . '|' . $schedule->subject_id . '|' . $schedule->lesson_date_str
-                              . '|' . $schedule->training_type_code;
+                              . '|' . $schedule->training_type_code . '|' . $schedule->lesson_pair_code;
 
-                    if (!isset($gradeSet[$gradeKey])) {
+                    $hasGrade = isset($gradeByScheduleId[$schedule->schedule_hemis_id]) || isset($gradeByKey[$gradeKey]);
+                    if (!$hasGrade) {
                         $missingGrades[] = $schedule;
                     }
                 }

@@ -34,10 +34,10 @@
             </div>
         </div>
     @endif
-    <div class="py-12">
-        <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-            <div class="overflow-hidden bg-white shadow-sm dark:bg-gray-800 sm:rounded-lg">
-                <div class="p-6 text-gray-900 dark:text-gray-100">
+    <div class="py-4 sm:py-8 md:py-12">
+        <div class="mx-auto max-w-7xl px-2 sm:px-6 lg:px-8">
+            <div class="overflow-hidden bg-white shadow-sm dark:bg-gray-800 rounded-lg sm:rounded-lg">
+                <div class="p-4 sm:p-6 text-gray-900 dark:text-gray-100">
                     {{ __("Tizimga kirish muvafaqiyatli amalga oshirildi!") }}
                 </div>
             </div>

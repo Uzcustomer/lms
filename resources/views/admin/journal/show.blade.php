@@ -66,6 +66,7 @@
             flex: 1;
             min-width: 0;
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .journal-sidebar {
             width: 280px;
@@ -78,6 +79,35 @@
             top: 0;
             max-height: calc(100vh - 80px);
             overflow-y: auto;
+        }
+        /* Mobile: sidebar becomes full-width collapsible panel below content */
+        @media (max-width: 768px) {
+            .journal-layout {
+                flex-direction: column;
+            }
+            .journal-sidebar {
+                width: 100% !important;
+                position: relative;
+                max-height: none;
+                border-left: none;
+                border-top: 2px solid #e2e8f0;
+                border-radius: 0 0 8px 8px;
+            }
+            .journal-sidebar .sidebar-header {
+                border-radius: 0;
+                cursor: pointer;
+            }
+            .journal-sidebar .sidebar-mobile-toggle {
+                display: inline-flex !important;
+            }
+            .journal-sidebar .sidebar-collapsible {
+                overflow: hidden;
+                transition: max-height 0.3s ease, opacity 0.2s ease;
+            }
+            .journal-sidebar.collapsed .sidebar-collapsible {
+                max-height: 0 !important;
+                opacity: 0 !important;
+            }
         }
         .sidebar-header {
             background: #374151;
@@ -591,24 +621,14 @@
             max-height: 0;
             opacity: 0;
         }
-        /* Mobile layout - JS tomonidan .mobile-layout class qo'shiladi */
-        .journal-layout.mobile-layout {
-            flex-direction: column;
-        }
-        .journal-layout.mobile-layout .journal-sidebar {
-            width: 100% !important;
-            position: relative;
-            max-height: none;
-            border-left: none;
-            border-top: 2px solid #e2e8f0;
-            border-radius: 0 0 8px 8px;
-        }
-        .journal-layout.mobile-layout .sidebar-header {
-            border-radius: 0;
-        }
+        /* Mobile layout - endi @media query orqali boshqariladi (yuqoridagi .journal-sidebar qismida) */
 
         /* ===== MOBILE RESPONSIVE STYLES (768px dan past) ===== */
         @media (max-width: 768px) {
+            .journal-page-wrapper {
+                padding-top: 8px !important;
+            }
+
             /* Tabs: smaller on mobile */
             .tab-container {
                 padding: 6px 4px 0 4px;
@@ -751,7 +771,7 @@
         $isRegistrator = is_active_registrator();
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
-        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="max-w-full mx-auto px-2 sm:px-4 md:px-6 lg:px-8">
             <!-- Nazad tugma -->
             <div class="mb-2">
                 <a href="javascript:void(0)" onclick="window.history.back()" style="display: inline-flex; align-items: center; gap: 6px; color: #1e40af; font-size: 14px; font-weight: 500; text-decoration: none;">
@@ -2698,8 +2718,10 @@
             document.body.appendChild(overlay);
         }
 
-        // Sidebar toggle - ResizeObserver bilan konteyner kengligini kuzatadi
+        // Sidebar toggle - media query orqali mobile mode aniqlaydi
         var sidebarMobileMode = false;
+        var mobileQuery = window.matchMedia('(max-width: 768px)');
+
         function toggleMobileSidebar() {
             if (!sidebarMobileMode) return;
             var sb = document.getElementById('journalSidebar');
@@ -2707,43 +2729,25 @@
             if (!sb.classList.contains('collapsed')) sb.dataset.userOpened = '1';
             else delete sb.dataset.userOpened;
         }
-        function applySidebarMode(containerWidth) {
-            var layout = document.querySelector('.journal-layout');
+
+        function applySidebarMode(isMobile) {
             var sb = document.getElementById('journalSidebar');
-            var btn = document.getElementById('sidebarToggleBtn');
-            var header = document.querySelector('.sidebar-header');
-            if (!layout || !sb || !btn || !header) return;
-            var isMobile = containerWidth < 768;
+            if (!sb) return;
             if (isMobile && !sidebarMobileMode) {
                 sidebarMobileMode = true;
-                layout.classList.add('mobile-layout');
-                btn.style.display = 'inline-flex';
-                header.style.cursor = 'pointer';
                 sb.classList.add('collapsed');
             } else if (!isMobile && sidebarMobileMode) {
                 sidebarMobileMode = false;
-                layout.classList.remove('mobile-layout');
-                btn.style.display = 'none';
-                header.style.cursor = 'default';
                 sb.classList.remove('collapsed');
                 delete sb.dataset.userOpened;
             }
         }
-        // ResizeObserver - konteynerning haqiqiy kengligini kuzatadi
-        (function() {
-            var layout = document.querySelector('.journal-layout');
-            if (!layout) return;
-            applySidebarMode(layout.offsetWidth);
-            if (typeof ResizeObserver !== 'undefined') {
-                new ResizeObserver(function(entries) {
-                    applySidebarMode(entries[0].contentRect.width);
-                }).observe(layout);
-            } else {
-                window.addEventListener('resize', function() {
-                    applySidebarMode(layout.offsetWidth);
-                });
-            }
-        })();
+
+        // Initialize and listen for changes
+        applySidebarMode(mobileQuery.matches);
+        mobileQuery.addEventListener('change', function(e) {
+            applySidebarMode(e.matches);
+        });
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));

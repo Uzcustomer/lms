@@ -31,19 +31,26 @@
             <x-admin-sidebar-menu />
 
             <!-- Main Content -->
-            <div class="flex-1 overflow-x-hidden overflow-y-auto md:ml-64">
+            <div class="flex-1 overflow-x-hidden overflow-y-auto ml-0 md:ml-64 transition-[margin] duration-200">
                 <!-- Mobile Top Bar -->
-                <div class="sticky top-0 z-30 flex items-center bg-white dark:bg-gray-800 shadow px-4 py-3 md:hidden">
-                    <button x-data @click="$store.sidebar.toggle()"
-                            class="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-                        </svg>
-                    </button>
-                    <span class="ml-3 text-lg font-semibold text-gray-800 dark:text-gray-200">LMS</span>
+                <div x-data class="sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-800 shadow px-3 py-2.5 md:hidden">
+                    <div class="flex items-center">
+                        <button @click="$store.sidebar.toggle()"
+                                class="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none active:bg-gray-200 transition">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                            </svg>
+                        </button>
+                        <span class="ml-2 text-base font-semibold text-gray-800 dark:text-gray-200">LMS</span>
+                    </div>
+                    @isset($header)
+                        <div class="text-sm font-medium text-gray-600 dark:text-gray-300 truncate max-w-[50vw]">
+                            {{ $header }}
+                        </div>
+                    @endisset
                 </div>
 
-                <!-- Page Heading -->
+                <!-- Page Heading (desktop only) -->
                 @isset($header)
                     <header class="bg-white dark:bg-gray-800 shadow hidden md:block">
                         <div class="max-w-screen-xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
@@ -55,13 +62,13 @@
                 {{-- Impersonatsiya banneri --}}
                 @if(session('impersonating'))
                     <div class="bg-red-600 text-white">
-                        <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between">
-                            <span class="text-sm font-medium">
-                                Siz hozir <strong>{{ session('impersonated_name') }}</strong> sifatida kirgansiz (Superadmin rejimi)
+                        <div class="max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 py-2 flex items-center justify-between flex-wrap gap-2">
+                            <span class="text-xs sm:text-sm font-medium">
+                                Siz hozir <strong>{{ session('impersonated_name') }}</strong> sifatida kirgansiz
                             </span>
                             <form action="{{ route('impersonate.stop') }}" method="POST" class="inline">
                                 @csrf
-                                <button type="submit" class="ml-4 px-3 py-1 bg-white text-red-600 text-xs font-bold rounded hover:bg-red-50 transition">
+                                <button type="submit" class="px-3 py-1 bg-white text-red-600 text-xs font-bold rounded hover:bg-red-50 transition">
                                     Orqaga qaytish
                                 </button>
                             </form>
@@ -70,7 +77,7 @@
                 @endif
 
                 <!-- Page Content -->
-                <main class="p-3 sm:p-6">
+                <main class="p-2 sm:p-4 md:p-6">
                     {{ $slot }}
                 </main>
             </div>

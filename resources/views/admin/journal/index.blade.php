@@ -159,7 +159,7 @@
                 </form>
 
                 <!-- Table -->
-                <div style="max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: auto;">
+                <div style="max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch;">
                     @if($journals->isEmpty())
                         <div style="padding: 60px 20px; text-align: center;">
                             <svg style="width: 48px; height: 48px; margin: 0 auto 12px; color: #cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -425,6 +425,26 @@
         .filter-row:last-child { margin-bottom: 0; }
         .filter-item { }
 
+        /* ===== MOBILE RESPONSIVE ===== */
+        @media (max-width: 640px) {
+            .filter-container {
+                padding: 10px 10px 8px;
+            }
+            .filter-row {
+                gap: 6px;
+            }
+            .filter-item {
+                min-width: 0 !important;
+                flex: 1 1 calc(50% - 6px) !important;
+            }
+            .filter-item[style*="min-width: 280px"],
+            .filter-item[style*="min-width: 240px"],
+            .filter-item[style*="min-width: 220px"],
+            .filter-item[style*="min-width: 200px"] {
+                flex: 1 1 100% !important;
+            }
+        }
+
         /* ===== Filter Labels ===== */
         .filter-label {
             display: flex;
@@ -654,6 +674,54 @@
             max-width: 260px;
             white-space: normal;
             word-break: break-word;
+        }
+
+        /* ===== TABLE MOBILE STYLES ===== */
+        @media (max-width: 768px) {
+            .journal-table {
+                font-size: 11px;
+            }
+            .journal-table th {
+                padding: 10px 6px;
+                font-size: 10px;
+            }
+            .journal-table td {
+                padding: 8px 6px;
+            }
+            .badge {
+                padding: 2px 6px;
+                font-size: 10px;
+            }
+            .badge-amber {
+                max-width: 160px;
+            }
+            .text-cell {
+                font-size: 11px;
+            }
+            .text-cyan {
+                max-width: 150px;
+            }
+            .text-subject {
+                max-width: 160px;
+                font-size: 11px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .journal-table th {
+                padding: 8px 4px;
+                font-size: 9px;
+            }
+            .journal-table td {
+                padding: 6px 4px;
+            }
+            .badge {
+                padding: 1px 4px;
+                font-size: 9px;
+            }
+            .td-num {
+                font-size: 11px;
+            }
         }
     </style>
 </x-app-layout>

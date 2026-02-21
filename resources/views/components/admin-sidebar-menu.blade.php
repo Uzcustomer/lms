@@ -66,12 +66,13 @@
      x-transition:leave-end="opacity-0"
      @click="$store.sidebar.open = false"
      class="fixed inset-0 bg-black/50 z-40 md:hidden"
+     x-effect="document.body.classList.toggle('sidebar-open-noscroll', $store.sidebar.open)"
      style="display: none;"></div>
 
 <aside x-data="sidebarTheme()" :data-theme="theme"
        :class="$store.sidebar.open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
        class="sidebar-themed w-64 flex flex-col fixed left-0 top-0 z-50 transition-transform duration-200 ease-in-out"
-       style="height: 100vh;">
+       style="height: 100vh; height: 100dvh;">
     <!-- Logo Section -->
     <div class="p-4 flex flex-col items-center flex-shrink-0 sidebar-logo-section relative">
         <!-- Mobile close button -->
@@ -870,6 +871,31 @@
         }
         .sidebar-themed[data-theme="yorug"] .sidebar-check-icon {
             color: #3b82f6;
+        }
+
+        /* ===== BODY SCROLL LOCK when sidebar open on mobile ===== */
+        @media (max-width: 767px) {
+            body.sidebar-open-noscroll {
+                overflow: hidden;
+                position: fixed;
+                width: 100%;
+            }
+        }
+
+        /* ===== MOBILE DROPDOWN POSITIONING ===== */
+        @media (max-width: 767px) {
+            .sidebar-dropdown {
+                left: 12px !important;
+                right: 12px !important;
+                width: auto !important;
+            }
+            .sidebar-submenu {
+                position: fixed !important;
+                left: 12px !important;
+                right: 12px !important;
+                width: auto !important;
+                bottom: auto !important;
+            }
         }
 
         /* ===== BASE STYLES (shared) ===== */

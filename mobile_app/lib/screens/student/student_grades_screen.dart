@@ -288,6 +288,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 value: value,
                 color: _cardColors[i],
                 textColor: _cardTextColors[i],
+                icon: _cardIcons[i],
                 isDark: isDark,
               );
             },
@@ -436,6 +437,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     required dynamic value,
     required Color color,
     required Color textColor,
+    required IconData icon,
     required bool isDark,
   }) {
     final displayValue = value?.toString() ?? '-';
@@ -448,6 +450,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          Icon(icon, size: 16, color: textColor),
           Text(
             label,
             style: TextStyle(
@@ -456,7 +459,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               color: textColor,
             ),
           ),
-          const SizedBox(height: 1),
           Text(
             displayValue,
             style: TextStyle(

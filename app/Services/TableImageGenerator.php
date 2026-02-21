@@ -148,11 +148,11 @@ class TableImageGenerator
         // Qatorlar
         $evenRowBg = imagecolorallocate($image, 255, 255, 255);
         $oddRowBg = imagecolorallocate($image, 245, 247, 251);
-        $borderColor = imagecolorallocate($image, 226, 232, 240);
-        $borderLight = imagecolorallocate($image, 237, 242, 247);
+        $borderColor = imagecolorallocate($image, 0, 0, 0);
+        $borderLight = imagecolorallocate($image, 0, 0, 0);
 
-        // Muammoli qatorlar — yumshoq qizil
-        $redRowBg = imagecolorallocate($image, 254, 242, 242);
+        // Muammoli qatorlar — oq fon
+        $redRowBg = imagecolorallocate($image, 255, 255, 255);
         $redAccent = imagecolorallocate($image, 220, 38, 38);
 
         // Ha/Yo'q badge ranglari

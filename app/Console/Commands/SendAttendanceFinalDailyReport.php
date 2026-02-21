@@ -154,7 +154,7 @@ class SendAttendanceFinalDailyReport extends Command
                     'lesson_pair_time' => $pairTime,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
                     'has_attendance' => $hasAtt,
-                    'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
+                    'has_grades' => $skipGradeCheck ? null : isset($gradeSet[$gradeKey]),
                     'lesson_date' => $sch->lesson_date_str,
                     'kurs' => (int) ($sch->level_code ?? ceil($semCode / 2)),
                     'employee_id' => $sch->employee_id,
@@ -164,7 +164,7 @@ class SendAttendanceFinalDailyReport extends Command
 
         // Faqat kamida biri yo'q bo'lganlarni filtrlash
         $filtered = array_filter($grouped, function ($r) {
-            return !$r['has_attendance'] || !$r['has_grades'];
+            return !$r['has_attendance'] || $r['has_grades'] === false;
         });
 
         $totalSchedules = count($grouped);

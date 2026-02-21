@@ -648,7 +648,7 @@ class ReportController extends Controller
             $acLoad = $hasAC ? $acRecords[$sch->schedule_hemis_id]->load : null;
             // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
             $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
-            $hasGrade = $skipGradeCheck || isset($gradeRecords[$sch->schedule_hemis_id]);
+            $hasGrade = $skipGradeCheck ? null : isset($gradeRecords[$sch->schedule_hemis_id]);
 
             $rows[] = [
                 'schedule_hemis_id' => $sch->schedule_hemis_id,
@@ -660,7 +660,7 @@ class ReportController extends Controller
                 'lesson_date' => $sch->lesson_date,
                 'ac_exists' => $hasAC ? 'HA' : 'YO\'Q',
                 'ac_load' => $acLoad,
-                'has_grade' => $hasGrade ? 'HA' : 'YO\'Q',
+                'has_grade' => $hasGrade === null ? '-' : ($hasGrade ? 'HA' : 'YO\'Q'),
             ];
         }
 
@@ -929,7 +929,7 @@ class ReportController extends Controller
                     'lesson_date' => $sch->lesson_date_str,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
                     'has_attendance' => $hasAtt,
-                    'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
+                    'has_grades' => $skipGradeCheck ? null : isset($gradeSet[$gradeKey]),
                 ];
             }
         }
@@ -940,11 +940,11 @@ class ReportController extends Controller
         if ($request->filled('status_filter')) {
             $results = array_values(array_filter($results, function ($r) use ($request) {
                 return match ($request->status_filter) {
-                    'any_missing' => !$r['has_attendance'] || !$r['has_grades'],
+                    'any_missing' => !$r['has_attendance'] || $r['has_grades'] === false,
                     'attendance_missing' => !$r['has_attendance'],
-                    'grade_missing' => !$r['has_grades'],
-                    'both_missing' => !$r['has_attendance'] && !$r['has_grades'],
-                    'all_done' => $r['has_attendance'] && $r['has_grades'],
+                    'grade_missing' => $r['has_grades'] === false,
+                    'both_missing' => !$r['has_attendance'] && $r['has_grades'] === false,
+                    'all_done' => $r['has_attendance'] && $r['has_grades'] !== false,
                     default => true,
                 };
             }));
@@ -1024,7 +1024,7 @@ class ReportController extends Controller
             $sheet->setCellValue([11, $row], $r['lesson_pair_time'] ?? '');
             $sheet->setCellValue([12, $row], $r['student_count']);
             $sheet->setCellValue([13, $row], $r['has_attendance'] ? 'Ha' : "Yo'q");
-            $sheet->setCellValue([14, $row], $r['has_grades'] ? 'Ha' : "Yo'q");
+            $sheet->setCellValue([14, $row], $r['has_grades'] === null ? '-' : ($r['has_grades'] ? 'Ha' : "Yo'q"));
             $sheet->setCellValue([15, $row], $r['lesson_date']);
         }
 

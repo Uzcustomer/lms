@@ -180,7 +180,7 @@ class SendAttendanceGroupSummary extends Command
                     'lesson_pair_time' => $pairTime,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
                     'has_attendance' => $hasAtt,
-                    'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
+                    'has_grades' => $skipGradeCheck ? null : isset($gradeSet[$gradeKey]),
                     'lesson_date' => $sch->lesson_date_str,
                     'kurs' => (int) ($sch->level_code ?? ceil($semCode / 2)),
                     'employee_id' => $sch->employee_id,
@@ -191,7 +191,7 @@ class SendAttendanceGroupSummary extends Command
 
         // 5-QADAM: Faqat kamida biri yo'q (any_missing) filtrini qo'llash
         $filtered = array_filter($grouped, function ($r) {
-            return !$r['has_attendance'] || !$r['has_grades'];
+            return !$r['has_attendance'] || $r['has_grades'] === false;
         });
 
         $totalSchedules = count($grouped);
@@ -268,7 +268,7 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName]['teachers_att'][$r['employee_id']] = true;
                 $departmentStats[$deptKey]['subjects'][$normalizedSubject]['no_attendance'] += $hours;
             }
-            if (!$r['has_grades']) {
+            if ($r['has_grades'] === false) {
                 $totalMissingGrades += $hours;
                 $teachersWithIssues[$r['employee_id']] = true;
                 $teachersMissingGrade[$r['employee_id']] = true;

@@ -118,6 +118,8 @@
                                     <th style="width:100px;text-align:center;">Urinish</th>
                                     <th class="sortable" data-col="8" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="9" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="10" style="width:80px;text-align:center;">Talabalar <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
@@ -130,6 +132,8 @@
                                     <th></th>
                                     <th><select class="col-filter" data-col="8"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="9"><option value="">Barchasi</option></select></th>
+                                    <th></th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -170,6 +174,15 @@
                                                 @else
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
+                                            </td>
+                                            <td data-sort-value="{{ $item['student_count'] ?? 0 }}" style="text-align:center;font-weight:600;color:#475569;">{{ $item['student_count'] ?? 0 }}</td>
+                                            <td data-sort-value="{{ $item['quiz_count'] ?? 0 }}" style="text-align:center;">
+                                                @php
+                                                    $sc = $item['student_count'] ?? 0;
+                                                    $qc = $item['quiz_count'] ?? 0;
+                                                    $qcClass = $qc == 0 ? 'quiz-count-zero' : ($qc >= $sc ? 'quiz-count-full' : 'quiz-count-partial');
+                                                @endphp
+                                                <span class="{{ $qcClass }}">{{ $qc }}/{{ $sc }}</span>
                                             </td>
                                         </tr>
                                     @endforeach
@@ -526,5 +539,9 @@
         .yn-type-badge { display: inline-flex; padding: 4px 12px; font-size: 11px; font-weight: 700; border-radius: 6px; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.03em; }
         .yn-type-oski { background: #dcfce7; color: #166534; }
         .yn-type-test { background: #dbeafe; color: #1e40af; }
+
+        .quiz-count-zero { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .quiz-count-partial { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+        .quiz-count-full { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
     </style>
 </x-app-layout>

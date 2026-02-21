@@ -233,6 +233,7 @@ class AppLocalizations {
       'work_info': 'Ish ma\'lumotlari',
       'department': 'Kafedra',
       'position': 'Lavozim',
+      'phone': 'Telefon',
     },
     'ru': {
       'app_title': 'Tashmedunitf Lms',
@@ -339,6 +340,7 @@ class AppLocalizations {
       'work_info': 'Рабочие данные',
       'department': 'Кафедра',
       'position': 'Должность',
+      'phone': 'Телефон',
     },
     'en': {
       'app_title': 'Tashmedunitf Lms',
@@ -445,6 +447,7 @@ class AppLocalizations {
       'work_info': 'Work info',
       'department': 'Department',
       'position': 'Position',
+      'phone': 'Phone',
     },
   };
 

@@ -98,8 +98,13 @@ class StudentApiController extends Controller
                 'student_id_number' => $student->student_id_number,
                 'image' => $student->image,
                 'birth_date' => $student->birth_date?->format('Y-m-d'),
-                'phone' => $student->other['phone'] ?? '',
+                'phone' => $student->phone ?? '',
+                'hemis_phone' => $student->other['phone'] ?? '',
                 'email' => $student->other['email'] ?? '',
+                'telegram_username' => $student->telegram_username ?? '',
+                'telegram_verified' => $student->isTelegramVerified(),
+                'telegram_days_left' => $student->telegramDaysLeft(),
+                'profile_complete' => $student->isProfileComplete(),
                 'gender' => $student->gender,
                 'group_name' => $student->group_name,
                 'department_name' => $student->department_name,
@@ -896,6 +901,74 @@ class StudentApiController extends Controller
             'data' => [
                 'attendance' => $attendanceData,
             ],
+        ]);
+    }
+
+    /**
+     * Save phone number for profile completion
+     */
+    public function savePhone(Request $request): JsonResponse
+    {
+        $request->validate([
+            'phone' => ['required', 'string', 'regex:/^\+\d{7,15}$/'],
+        ], [
+            'phone.regex' => 'Telefon raqami noto\'g\'ri formatda. Masalan: +998901234567',
+        ]);
+
+        $student = $request->user();
+        $student->phone = $request->phone;
+        $student->save();
+
+        $days = (int) Setting::get('telegram_deadline_days', 19);
+
+        return response()->json([
+            'message' => "Telefon raqami saqlandi. Telegram hisobingizni {$days} kun ichida tasdiqlang.",
+            'profile_complete' => $student->isProfileComplete(),
+            'telegram_days_left' => $student->telegramDaysLeft(),
+        ]);
+    }
+
+    /**
+     * Save telegram username and generate verification code
+     */
+    public function saveTelegram(Request $request): JsonResponse
+    {
+        $request->validate([
+            'telegram_username' => ['required', 'string', 'regex:/^@[a-zA-Z0-9_]{5,32}$/'],
+        ], [
+            'telegram_username.regex' => 'Telegram username @username formatida bo\'lishi kerak (kamida 5 belgi).',
+        ]);
+
+        $student = $request->user();
+        $student->telegram_username = $request->telegram_username;
+
+        $code = strtoupper(\Illuminate\Support\Str::random(6));
+        $student->telegram_verification_code = $code;
+        $student->telegram_verified_at = null;
+        $student->telegram_chat_id = null;
+        $student->save();
+
+        $botUsername = config('services.telegram.bot_username', '');
+
+        return response()->json([
+            'message' => 'Telegram username saqlandi. Endi botga tasdiqlash kodini yuboring.',
+            'verification_code' => $code,
+            'bot_username' => $botUsername,
+            'bot_link' => $botUsername ? "https://t.me/{$botUsername}?start={$code}" : null,
+        ]);
+    }
+
+    /**
+     * Check telegram verification status
+     */
+    public function checkTelegramVerification(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        return response()->json([
+            'verified' => $student->isTelegramVerified(),
+            'telegram_username' => $student->telegram_username,
+            'telegram_days_left' => $student->telegramDaysLeft(),
         ]);
     }
 }

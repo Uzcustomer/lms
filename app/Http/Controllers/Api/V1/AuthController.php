@@ -310,6 +310,8 @@ class AuthController extends Controller
             'must_change_password' => (bool) $student->must_change_password,
             'profile_complete' => $student->isProfileComplete(),
             'telegram_verified' => $student->isTelegramVerified(),
+            'telegram_days_left' => $student->telegramDaysLeft(),
+            'bot_username' => config('services.telegram.bot_username', ''),
         ]);
     }
 

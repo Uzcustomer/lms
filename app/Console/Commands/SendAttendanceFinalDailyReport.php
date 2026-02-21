@@ -54,6 +54,18 @@ class SendAttendanceFinalDailyReport extends Command
             $this->warn("Davomat nazorati yangilashda xato: " . $e->getMessage());
         }
 
+        // 1.6-QADAM: Baholarni HEMIS dan yangilash (student_grades)
+        $this->info("HEMIS dan baholar yangilanmoqda ({$reportDateStr})...");
+        try {
+            \Illuminate\Support\Facades\Artisan::call('student:import-data', [
+                '--mode' => 'final',
+            ]);
+            $this->info("Baholar yangilandi.");
+        } catch (\Throwable $e) {
+            Log::warning('Baholar yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
+            $this->warn("Baholar yangilashda xato: " . $e->getMessage());
+        }
+
         // 2-QADAM: Jadvaldan kechagi kun ma'lumotlarini olish
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')

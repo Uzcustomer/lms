@@ -4,6 +4,7 @@ import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/teacher_provider.dart';
 import '../../widgets/loading_widget.dart';
+import 'teacher_group_detail_screen.dart';
 
 class TeacherGroupsScreen extends StatefulWidget {
   const TeacherGroupsScreen({super.key});
@@ -116,7 +117,19 @@ class _TeacherGroupsScreenState extends State<TeacherGroupsScreen> {
                       ],
                     ),
                     onTap: () {
-                      // Navigate to group detail
+                      final groupId = group['id'] is int
+                          ? group['id'] as int
+                          : int.tryParse(group['id'].toString()) ?? 0;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TeacherGroupDetailScreen(
+                            groupId: groupId,
+                            groupName: group['name']?.toString() ?? '',
+                            departmentName: group['department_name']?.toString(),
+                          ),
+                        ),
+                      );
                     },
                   ),
                 );

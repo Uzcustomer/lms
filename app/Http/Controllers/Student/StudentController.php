@@ -917,13 +917,38 @@ class StudentController extends Controller
         $hour = (int) ($timeParts[0] ?? 17);
         $minute = (int) ($timeParts[1] ?? 0);
 
+        // Joriy o'quv yili kodini aniqlash
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $independents = Independent::where('group_hemis_id', $student->group_id)
             ->orderBy('deadline', 'asc')
             ->get()
-            ->map(function ($independent) use ($student, $hour, $minute, $mtMaxResubmissions) {
+            ->map(function ($independent) use ($student, $hour, $minute, $mtMaxResubmissions, $educationYearCode) {
                 $submission = $independent->submissionByStudent($student->id);
+
+                // O'quv yili kodini schedule dan aniqlash (getSubjects bilan bir xil mantiq)
+                $indEducationYearCode = $educationYearCode;
+                $resolvedSubjectId = CurriculumSubject::where('curriculum_subject_hemis_id', $independent->subject_hemis_id)
+                    ->value('subject_id');
+                if ($resolvedSubjectId) {
+                    $scheduleEducationYear = DB::table('schedules')
+                        ->where('group_id', $student->group_id)
+                        ->where('subject_id', $resolvedSubjectId)
+                        ->where('semester_code', $independent->semester_code)
+                        ->whereNull('deleted_at')
+                        ->whereNotNull('lesson_date')
+                        ->whereNotNull('education_year_code')
+                        ->orderBy('lesson_date', 'desc')
+                        ->value('education_year_code');
+                    if ($scheduleEducationYear) {
+                        $indEducationYearCode = $scheduleEducationYear;
+                    }
+                }
+
                 $grade = StudentGrade::where('student_id', $student->id)
                     ->where('independent_id', $independent->id)
+                    ->when($indEducationYearCode !== null, fn($q) => $q->where('education_year_code', $indEducationYearCode))
                     ->first();
 
                 $gradeHistory = IndependentGradeHistory::where('independent_id', $independent->id)
@@ -989,14 +1014,27 @@ class StudentController extends Controller
             ->where('group_hemis_id', $student->group_id)
             ->firstOrFail();
 
-        // DEBUG: barcha tekshiruvlarni log qilish
-        $debugInfo = [
-            'student_id' => $student->id,
-            'student_hemis_id' => $student->hemis_id,
-            'independent_id' => $independent->id,
-            'subject_hemis_id' => $independent->subject_hemis_id,
-            'semester_code' => $independent->semester_code,
-        ];
+        // Joriy o'quv yili kodini aniqlash (getSubjects bilan bir xil mantiq)
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
+        $resolvedSubjectId = CurriculumSubject::where('curriculum_subject_hemis_id', $independent->subject_hemis_id)
+            ->value('subject_id');
+
+        if ($resolvedSubjectId) {
+            $scheduleEducationYear = DB::table('schedules')
+                ->where('group_id', $student->group_id)
+                ->where('subject_id', $resolvedSubjectId)
+                ->where('semester_code', $independent->semester_code)
+                ->whereNull('deleted_at')
+                ->whereNotNull('lesson_date')
+                ->whereNotNull('education_year_code')
+                ->orderBy('lesson_date', 'desc')
+                ->value('education_year_code');
+            if ($scheduleEducationYear) {
+                $educationYearCode = $scheduleEducationYear;
+            }
+        }
 
         // YN ga yuborilganligini tekshirish — qulflangan bo'lsa fayl yuklash mumkin emas
         $ynLocked = StudentGrade::where('student_hemis_id', $student->hemis_id)
@@ -1005,38 +1043,19 @@ class StudentController extends Controller
             ->where('is_yn_locked', true)
             ->exists();
 
-        $debugInfo['yn_locked'] = $ynLocked;
-
         if ($ynLocked) {
-            \Log::warning('MT Upload BLOCKED (YN locked)', $debugInfo);
-            return back()->with('error', 'YN ga yuborilgan. Fayl yuklash mumkin emas. [DEBUG: independent_id=' . $independent->id . ', subject=' . $independent->subject_hemis_id . ']');
+            return back()->with('error', 'YN ga yuborilgan. Fayl yuklash mumkin emas.');
         }
 
-        // Check if grade is locked (>= minimum_limit)
+        // Check if grade is locked (>= minimum_limit) — faqat joriy o'quv yili bahosini tekshirish
         $existingGrade = StudentGrade::where('student_id', $student->id)
             ->where('independent_id', $independent->id)
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->first();
 
-        // DEBUG: Barcha student_grades yozuvlarini tekshirish (education_year_code bilan)
-        $allGradesForIndependent = StudentGrade::where('student_id', $student->id)
-            ->where('independent_id', $independent->id)
-            ->get(['id', 'grade', 'education_year_code', 'subject_id', 'independent_id', 'training_type_code']);
-
         $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
-
-        $debugInfo['min_limit'] = $studentMinLimit;
-        $debugInfo['existing_grade'] = $existingGrade ? [
-            'id' => $existingGrade->id,
-            'grade' => $existingGrade->grade,
-            'education_year_code' => $existingGrade->education_year_code ?? 'NULL',
-            'training_type_code' => $existingGrade->training_type_code ?? 'NULL',
-        ] : null;
-        $debugInfo['all_grades_count'] = $allGradesForIndependent->count();
-        $debugInfo['all_grades'] = $allGradesForIndependent->toArray();
-
         if ($existingGrade && $existingGrade->grade >= $studentMinLimit) {
-            \Log::warning('MT Upload BLOCKED (grade locked)', $debugInfo);
-            return back()->with('error', 'Baho ' . $studentMinLimit . ' va undan yuqori — qayta yuklash mumkin emas. [DEBUG: grade=' . $existingGrade->grade . ', education_year=' . ($existingGrade->education_year_code ?? 'NULL') . ', grade_id=' . $existingGrade->id . ', independent_id=' . $independent->id . ']');
+            return back()->with('error', 'Baho ' . $studentMinLimit . ' va undan yuqori — qayta yuklash mumkin emas.');
         }
 
         // Check deadline using configured time from settings
@@ -1046,14 +1065,8 @@ class StudentController extends Controller
         $minute = (int) ($timeParts[1] ?? 0);
 
         $deadlineTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
-        $debugInfo['deadline'] = $independent->deadline;
-        $debugInfo['deadline_time'] = $deadlineTime->toDateTimeString();
-        $debugInfo['now'] = Carbon::now()->toDateTimeString();
-        $debugInfo['is_overdue'] = Carbon::now()->gt($deadlineTime);
-
         if (Carbon::now()->gt($deadlineTime)) {
-            \Log::warning('MT Upload BLOCKED (deadline)', $debugInfo);
-            return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ') [DEBUG: now=' . Carbon::now()->toDateTimeString() . ']');
+            return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ')');
         }
 
         // Check resubmission limit
@@ -1062,8 +1075,6 @@ class StudentController extends Controller
             ->first();
 
         $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
-        $debugInfo['has_existing_submission'] = (bool) $existing;
-        $debugInfo['max_resubmissions'] = $mtMaxResubmissions;
 
         if ($existing && $existingGrade && $existingGrade->grade < $studentMinLimit) {
             // Use mt_grade_history count for accurate resubmission tracking
@@ -1073,15 +1084,10 @@ class StudentController extends Controller
                 ->where('semester_code', $independent->semester_code)
                 ->count();
             $remainingAttempts = $mtMaxResubmissions - $mtHistoryCount;
-            $debugInfo['mt_history_count'] = $mtHistoryCount;
-            $debugInfo['remaining_attempts'] = $remainingAttempts;
             if ($remainingAttempts <= 0) {
-                \Log::warning('MT Upload BLOCKED (resubmission limit)', $debugInfo);
                 return back()->with('error', 'Qayta yuklash imkoniyati tugagan (maksimum ' . $mtMaxResubmissions . ' marta).');
             }
         }
-
-        \Log::info('MT Upload PASSED all checks', $debugInfo);
 
         $allowedExtensions = ['zip', 'doc', 'docx', 'ppt', 'pptx', 'pdf'];
 

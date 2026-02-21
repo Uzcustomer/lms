@@ -989,6 +989,15 @@ class StudentController extends Controller
             ->where('group_hemis_id', $student->group_id)
             ->firstOrFail();
 
+        // DEBUG: barcha tekshiruvlarni log qilish
+        $debugInfo = [
+            'student_id' => $student->id,
+            'student_hemis_id' => $student->hemis_id,
+            'independent_id' => $independent->id,
+            'subject_hemis_id' => $independent->subject_hemis_id,
+            'semester_code' => $independent->semester_code,
+        ];
+
         // YN ga yuborilganligini tekshirish — qulflangan bo'lsa fayl yuklash mumkin emas
         $ynLocked = StudentGrade::where('student_hemis_id', $student->hemis_id)
             ->where('subject_id', $independent->subject_hemis_id)
@@ -996,8 +1005,11 @@ class StudentController extends Controller
             ->where('is_yn_locked', true)
             ->exists();
 
+        $debugInfo['yn_locked'] = $ynLocked;
+
         if ($ynLocked) {
-            return back()->with('error', 'YN ga yuborilgan. Fayl yuklash mumkin emas.');
+            \Log::warning('MT Upload BLOCKED (YN locked)', $debugInfo);
+            return back()->with('error', 'YN ga yuborilgan. Fayl yuklash mumkin emas. [DEBUG: independent_id=' . $independent->id . ', subject=' . $independent->subject_hemis_id . ']');
         }
 
         // Check if grade is locked (>= minimum_limit)
@@ -1005,9 +1017,26 @@ class StudentController extends Controller
             ->where('independent_id', $independent->id)
             ->first();
 
+        // DEBUG: Barcha student_grades yozuvlarini tekshirish (education_year_code bilan)
+        $allGradesForIndependent = StudentGrade::where('student_id', $student->id)
+            ->where('independent_id', $independent->id)
+            ->get(['id', 'grade', 'education_year_code', 'subject_id', 'independent_id', 'training_type_code']);
+
         $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+
+        $debugInfo['min_limit'] = $studentMinLimit;
+        $debugInfo['existing_grade'] = $existingGrade ? [
+            'id' => $existingGrade->id,
+            'grade' => $existingGrade->grade,
+            'education_year_code' => $existingGrade->education_year_code ?? 'NULL',
+            'training_type_code' => $existingGrade->training_type_code ?? 'NULL',
+        ] : null;
+        $debugInfo['all_grades_count'] = $allGradesForIndependent->count();
+        $debugInfo['all_grades'] = $allGradesForIndependent->toArray();
+
         if ($existingGrade && $existingGrade->grade >= $studentMinLimit) {
-            return back()->with('error', 'Baho ' . $studentMinLimit . ' va undan yuqori — qayta yuklash mumkin emas.');
+            \Log::warning('MT Upload BLOCKED (grade locked)', $debugInfo);
+            return back()->with('error', 'Baho ' . $studentMinLimit . ' va undan yuqori — qayta yuklash mumkin emas. [DEBUG: grade=' . $existingGrade->grade . ', education_year=' . ($existingGrade->education_year_code ?? 'NULL') . ', grade_id=' . $existingGrade->id . ', independent_id=' . $independent->id . ']');
         }
 
         // Check deadline using configured time from settings
@@ -1017,8 +1046,14 @@ class StudentController extends Controller
         $minute = (int) ($timeParts[1] ?? 0);
 
         $deadlineTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
+        $debugInfo['deadline'] = $independent->deadline;
+        $debugInfo['deadline_time'] = $deadlineTime->toDateTimeString();
+        $debugInfo['now'] = Carbon::now()->toDateTimeString();
+        $debugInfo['is_overdue'] = Carbon::now()->gt($deadlineTime);
+
         if (Carbon::now()->gt($deadlineTime)) {
-            return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ')');
+            \Log::warning('MT Upload BLOCKED (deadline)', $debugInfo);
+            return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ') [DEBUG: now=' . Carbon::now()->toDateTimeString() . ']');
         }
 
         // Check resubmission limit
@@ -1027,6 +1062,8 @@ class StudentController extends Controller
             ->first();
 
         $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
+        $debugInfo['has_existing_submission'] = (bool) $existing;
+        $debugInfo['max_resubmissions'] = $mtMaxResubmissions;
 
         if ($existing && $existingGrade && $existingGrade->grade < $studentMinLimit) {
             // Use mt_grade_history count for accurate resubmission tracking
@@ -1036,10 +1073,15 @@ class StudentController extends Controller
                 ->where('semester_code', $independent->semester_code)
                 ->count();
             $remainingAttempts = $mtMaxResubmissions - $mtHistoryCount;
+            $debugInfo['mt_history_count'] = $mtHistoryCount;
+            $debugInfo['remaining_attempts'] = $remainingAttempts;
             if ($remainingAttempts <= 0) {
+                \Log::warning('MT Upload BLOCKED (resubmission limit)', $debugInfo);
                 return back()->with('error', 'Qayta yuklash imkoniyati tugagan (maksimum ' . $mtMaxResubmissions . ' marta).');
             }
         }
+
+        \Log::info('MT Upload PASSED all checks', $debugInfo);
 
         $allowedExtensions = ['zip', 'doc', 'docx', 'ppt', 'pptx', 'pdf'];
 

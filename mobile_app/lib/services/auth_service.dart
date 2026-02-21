@@ -40,13 +40,15 @@ class AuthService {
     return response;
   }
 
-  Future<Map<String, dynamic>> verify2fa(String guard, String login, String code) async {
+  Future<Map<String, dynamic>> verify2fa(String guard, int userId, String code) async {
     final endpoint = guard == 'student'
         ? ApiConfig.studentVerify2fa
         : ApiConfig.teacherVerify2fa;
 
+    final idKey = guard == 'student' ? 'student_id' : 'teacher_id';
+
     final response = await _api.post(endpoint, {
-      'login': login,
+      idKey: userId,
       'code': code,
     });
 
@@ -57,16 +59,30 @@ class AuthService {
     return response;
   }
 
-  Future<Map<String, dynamic>> resend2fa(String guard, String login) async {
+  Future<Map<String, dynamic>> resend2fa(String guard, int userId) async {
     final endpoint = guard == 'student'
         ? ApiConfig.studentResend2fa
         : ApiConfig.teacherResend2fa;
 
-    return await _api.post(endpoint, {'login': login});
+    final idKey = guard == 'student' ? 'student_id' : 'teacher_id';
+
+    return await _api.post(endpoint, {idKey: userId});
   }
 
   Future<Map<String, dynamic>> getMe() async {
     return await _api.get(ApiConfig.me);
+  }
+
+  Future<Map<String, dynamic>> savePhone(String phone) async {
+    return await _api.post(ApiConfig.studentSavePhone, {'phone': phone}, auth: true);
+  }
+
+  Future<Map<String, dynamic>> saveTelegram(String username) async {
+    return await _api.post(ApiConfig.studentSaveTelegram, {'telegram_username': username}, auth: true);
+  }
+
+  Future<Map<String, dynamic>> checkTelegramVerification() async {
+    return await _api.get(ApiConfig.studentCheckTelegram);
   }
 
   Future<void> logout() async {

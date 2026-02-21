@@ -40,7 +40,7 @@ class TelegramWebhookController extends Controller
                 return $this->verifyCode($chatId, $code, $username);
             }
 
-            $this->sendMessage($chatId, "Assalomu alaykum! Tasdiqlash kodingizni yuboring yoki saytdagi havolani bosing.");
+            $this->sendMessage($chatId, "Assalomu alaykum! \xF0\x9F\x91\x8B\n\nBu TDTU LMS tizimi uchun tasdiqlash botidir.\n\nTasdiqlash kodingizni yuboring yoki saytdagi/ilovadagi havolani bosing.");
             return response()->json(['ok' => true]);
         }
 

@@ -43,6 +43,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/subjects/{subjectId}/mt-submissions', [StudentApiController::class, 'mtSubmissions']);
             Route::get('/pending-lessons', [StudentApiController::class, 'pendingLessons']);
             Route::get('/attendance', [StudentApiController::class, 'attendance']);
+
+            // Profile completion
+            Route::post('/complete-profile/phone', [StudentApiController::class, 'savePhone']);
+            Route::post('/complete-profile/telegram', [StudentApiController::class, 'saveTelegram']);
+            Route::get('/complete-profile/telegram/check', [StudentApiController::class, 'checkTelegramVerification']);
         });
 
         // ── Teacher endpoints ─────────────────────────────

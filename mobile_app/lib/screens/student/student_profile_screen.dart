@@ -204,11 +204,20 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     final educationType = profile['education_type_name']?.toString();
     final educationForm = profile['education_form_name']?.toString();
     final groupName = profile['group_name']?.toString();
+    final phone = profile['phone']?.toString();
+    final telegramUsername = profile['telegram_username']?.toString();
+    final telegramVerified = profile['telegram_verified'] == true;
     final cardColor = isDark ? AppTheme.darkCard : Colors.white;
     final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
 
     final items = <MapEntry<String, String>>[];
+    if (phone != null && phone.isNotEmpty) {
+      items.add(MapEntry(l.get('phone'), phone));
+    }
+    if (telegramUsername != null && telegramUsername.isNotEmpty) {
+      items.add(MapEntry('Telegram', '$telegramUsername${telegramVerified ? ' \u2705' : ''}'));
+    }
     if (groupName != null && groupName.isNotEmpty) {
       items.add(MapEntry(l.group, groupName));
     }

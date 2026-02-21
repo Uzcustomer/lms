@@ -180,7 +180,7 @@ class SendAttendanceFinalDailyReport extends Command
                     'has_attendance' => $hasAtt,
                     'has_grades' => $skipGradeCheck ? null : isset($gradeSet[$gradeKey]),
                     'lesson_date' => $sch->lesson_date_str,
-                    'kurs' => (int) ($sch->level_code ?? ceil($semCode / 2)),
+                    'kurs' => $sch->level_code ? ((int) $sch->level_code % 10) : (int) ceil($semCode / 2),
                     'employee_id' => $sch->employee_id,
                 ];
             }

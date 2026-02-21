@@ -31,10 +31,20 @@
             <x-admin-sidebar-menu />
 
             <!-- Main Content -->
-            <div class="flex-1 overflow-x-hidden overflow-y-auto" style="margin-left: 256px;">
+            <div class="flex-1 overflow-x-hidden overflow-y-auto sidebar-main-content">
+                <!-- Mobile Top Bar -->
+                <div class="mobile-top-bar" x-data>
+                    <button @click="$store.sidebar.toggle()" class="hamburger-btn">
+                        <svg style="width: 24px; height: 24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <span style="margin-left: 12px; font-size: 1.125rem; font-weight: 600; color: #1f2937;">LMS</span>
+                </div>
+
                 <!-- Page Heading -->
                 @isset($header)
-                    <header class="bg-white dark:bg-gray-800 shadow">
+                    <header class="bg-white dark:bg-gray-800 shadow desktop-only-header">
                         <div class="max-w-screen-xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                             {{ $header }}
                         </div>
@@ -59,7 +69,7 @@
                 @endif
 
                 <!-- Page Content -->
-                <main class="p-6">
+                <main class="p-3 sm:p-6">
                     {{ $slot }}
                 </main>
             </div>

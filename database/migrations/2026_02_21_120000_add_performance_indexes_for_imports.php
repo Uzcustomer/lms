@@ -1,46 +1,71 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
  * Lock wait timeout xatosini hal qilish uchun muhim indekslar.
  *
- * Muammo: Import jarayonida lesson_date bo'yicha range query va
- * deleted_at bo'yicha onlyTrashed() querylari indekssiz ishlaydi,
- * bu full table scan va uzoq lock vaqtiga olib keladi.
+ * ALGORITHM=INPLACE, LOCK=NONE — jadvalni lock qilmasdan online index yaratadi.
+ * Bu production serverda 504 timeout muammosini oldini oladi.
  */
 return new class extends Migration {
     public function up(): void
     {
-        Schema::table('student_grades', function (Blueprint $table) {
-            // Import da lesson_date range query uchun (soft-delete, backup, restore)
-            $table->index('lesson_date', 'idx_sg_lesson_date');
-            // onlyTrashed() querylari uchun
-            $table->index('deleted_at', 'idx_sg_deleted_at');
-            // Retake restore: student + subject + lesson_date composite
-            $table->index(
-                ['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code'],
-                'idx_sg_retake_lookup'
-            );
-        });
+        // Har bir indexni alohida va LOCK=NONE bilan yaratish
+        // Agar index allaqachon mavjud bo'lsa, o'tkazib yuborish
 
-        Schema::table('attendance_controls', function (Blueprint $table) {
-            // onlyTrashed() / withTrashed() querylari uchun
-            $table->index('deleted_at', 'idx_ac_deleted_at');
-        });
+        $indexes = [
+            [
+                'table' => 'student_grades',
+                'name' => 'idx_sg_lesson_date',
+                'sql' => 'ALTER TABLE student_grades ADD INDEX idx_sg_lesson_date (lesson_date) ALGORITHM=INPLACE, LOCK=NONE',
+            ],
+            [
+                'table' => 'student_grades',
+                'name' => 'idx_sg_deleted_at',
+                'sql' => 'ALTER TABLE student_grades ADD INDEX idx_sg_deleted_at (deleted_at) ALGORITHM=INPLACE, LOCK=NONE',
+            ],
+            [
+                'table' => 'student_grades',
+                'name' => 'idx_sg_retake_lookup',
+                'sql' => 'ALTER TABLE student_grades ADD INDEX idx_sg_retake_lookup (student_hemis_id, subject_id, lesson_date, lesson_pair_code) ALGORITHM=INPLACE, LOCK=NONE',
+            ],
+            [
+                'table' => 'attendance_controls',
+                'name' => 'idx_ac_deleted_at',
+                'sql' => 'ALTER TABLE attendance_controls ADD INDEX idx_ac_deleted_at (deleted_at) ALGORITHM=INPLACE, LOCK=NONE',
+            ],
+        ];
+
+        foreach ($indexes as $index) {
+            try {
+                // Index allaqachon mavjudmi tekshirish
+                $exists = DB::select("SHOW INDEX FROM {$index['table']} WHERE Key_name = ?", [$index['name']]);
+                if (!empty($exists)) {
+                    Log::info("[Migration] Index {$index['name']} already exists, skipping.");
+                    continue;
+                }
+
+                DB::statement($index['sql']);
+                Log::info("[Migration] Created index {$index['name']} successfully.");
+            } catch (\Throwable $e) {
+                Log::warning("[Migration] Index {$index['name']} failed: {$e->getMessage()}");
+            }
+        }
     }
 
     public function down(): void
     {
-        Schema::table('student_grades', function (Blueprint $table) {
+        Schema::table('student_grades', function ($table) {
             $table->dropIndex('idx_sg_lesson_date');
             $table->dropIndex('idx_sg_deleted_at');
             $table->dropIndex('idx_sg_retake_lookup');
         });
 
-        Schema::table('attendance_controls', function (Blueprint $table) {
+        Schema::table('attendance_controls', function ($table) {
             $table->dropIndex('idx_ac_deleted_at');
         });
     }

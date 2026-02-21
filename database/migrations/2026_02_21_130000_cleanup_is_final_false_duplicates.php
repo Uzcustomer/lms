@@ -7,54 +7,71 @@ use Illuminate\Support\Facades\Log;
 /**
  * Bir martalik tozalash migratsiyasi (faqat joriy semestr: 2026-01-26 dan keyin):
  *
- * 1-QADAM: Dublikatlarni tozalash — bir xil (student_id, subject_id, lesson_date) uchun
- *          is_final=true mavjud bo'lsa, is_final=false yozuvni soft-delete qilish
+ * 1-QADAM: Dublikatlarni tozalash — batch bo'lib (kuniga alohida)
+ * 2-QADAM: Qolgan is_final=false ni is_final=true ga — batch bo'lib (5000 tadan)
  *
- * 2-QADAM: Qolgan is_final=false yozuvlarni is_final=true ga o'zgartirish
- *          (bugundan oldingi — ular tarixiy, qayta import qilinmaydi)
- *
- * Eslatma: O'tgan semestr yozuvlariga (2026-01-26 dan oldingi) tegmaslik —
- * ular is_final=false bo'lib qoladi, lekin live/final import ularga tegmaydi.
+ * Batched approach — serverni lock qilmaydi, timeout bermaydi.
  */
 return new class extends Migration {
-    // Joriy semestr boshlanish sanasi
     private const SEMESTER_START = '2026-01-26';
+    private const BATCH_SIZE = 5000;
 
     public function up(): void
     {
         $semesterStart = self::SEMESTER_START;
-        $today = \Carbon\Carbon::today();
+        $today = \Carbon\Carbon::today()->toDateString();
 
-        // 1-QADAM: Dublikatlarni tozalash (faqat joriy semestr ichida)
-        // is_final=true mavjud bo'lganda is_final=false ni soft-delete
-        $cleaned = DB::update("
-            UPDATE student_grades sg
-            INNER JOIN student_grades g2
-                ON g2.student_id = sg.student_id
-                AND g2.subject_id = sg.subject_id
-                AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
-                AND g2.is_final = 1
-                AND g2.deleted_at IS NULL
-                AND g2.id != sg.id
-            SET sg.deleted_at = NOW()
-            WHERE sg.is_final = 0
-                AND sg.deleted_at IS NULL
-                AND DATE(sg.lesson_date) >= ?
-                AND DATE(sg.lesson_date) < ?
-        ", [$semesterStart, $today->toDateString()]);
-
-        Log::info("[Cleanup] Step 1: Soft-deleted {$cleaned} duplicate is_final=false records (>= {$semesterStart})");
-
-        // 2-QADAM: Qolgan is_final=false yozuvlarni is_final=true ga o'zgartirish
-        // Faqat joriy semestr ichida, bugundan oldingi
-        $updated = DB::table('student_grades')
-            ->whereNull('deleted_at')
+        // 1-QADAM: Dublikatlarni kunma-kun tozalash
+        // Bitta katta UPDATE o'rniga — har kunni alohida, qisqa tranzaksiya bilan
+        $totalCleaned = 0;
+        $dates = DB::table('student_grades')
+            ->selectRaw('DATE(lesson_date) as grade_date')
             ->where('is_final', false)
-            ->where('lesson_date', '>=', $semesterStart)
-            ->where('lesson_date', '<', $today)
-            ->update(['is_final' => true]);
+            ->whereNull('deleted_at')
+            ->whereRaw('DATE(lesson_date) >= ?', [$semesterStart])
+            ->whereRaw('DATE(lesson_date) < ?', [$today])
+            ->distinct()
+            ->pluck('grade_date');
 
-        Log::info("[Cleanup] Step 2: Updated {$updated} records to is_final=true (>= {$semesterStart})");
+        foreach ($dates as $date) {
+            try {
+                $cleaned = DB::update("
+                    UPDATE student_grades sg
+                    INNER JOIN student_grades g2
+                        ON g2.student_id = sg.student_id
+                        AND g2.subject_id = sg.subject_id
+                        AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
+                        AND g2.is_final = 1
+                        AND g2.deleted_at IS NULL
+                        AND g2.id != sg.id
+                    SET sg.deleted_at = NOW()
+                    WHERE sg.is_final = 0
+                        AND sg.deleted_at IS NULL
+                        AND DATE(sg.lesson_date) = ?
+                ", [$date]);
+                $totalCleaned += $cleaned;
+            } catch (\Throwable $e) {
+                Log::warning("[Cleanup] Date {$date} failed: {$e->getMessage()}");
+            }
+        }
+
+        Log::info("[Cleanup] Step 1: Soft-deleted {$totalCleaned} duplicate is_final=false records");
+
+        // 2-QADAM: Qolgan is_final=false ni batch bo'lib is_final=true ga o'zgartirish
+        $totalUpdated = 0;
+        do {
+            $updated = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->where('is_final', false)
+                ->where('lesson_date', '>=', $semesterStart)
+                ->where('lesson_date', '<', $today)
+                ->limit(self::BATCH_SIZE)
+                ->update(['is_final' => true]);
+
+            $totalUpdated += $updated;
+        } while ($updated > 0);
+
+        Log::info("[Cleanup] Step 2: Updated {$totalUpdated} records to is_final=true");
     }
 
     public function down(): void

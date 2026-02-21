@@ -1441,7 +1441,7 @@ class JournalController extends Controller
                             'reason' => $reason,
                             'deadline' => $deadline,
                             'status' => $status,
-                            'is_final' => false,
+                            'is_final' => true,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);

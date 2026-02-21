@@ -14,10 +14,10 @@ class StudentService {
     return await _api.get(ApiConfig.studentProfile);
   }
 
-  Future<Map<String, dynamic>> getSchedule({String? semesterCode, String? week}) async {
+  Future<Map<String, dynamic>> getSchedule({String? semesterId, String? weekId}) async {
     final params = <String, String>{};
-    if (semesterCode != null) params['semester_code'] = semesterCode;
-    if (week != null) params['week'] = week;
+    if (semesterId != null) params['semester_id'] = semesterId;
+    if (weekId != null) params['week_id'] = weekId;
     return await _api.get(ApiConfig.studentSchedule, queryParams: params);
   }
 

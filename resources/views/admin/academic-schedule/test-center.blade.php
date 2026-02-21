@@ -154,7 +154,7 @@
                                     @foreach($items as $item)
                                         <tr class="data-row" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}">
                                             <td style="text-align:center;">
-                                                <input type="checkbox" class="tc-row-checkbox" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" onchange="tcUpdateSelection()" style="accent-color:#2b5ea7;width:16px;height:16px;cursor:pointer;">
+                                                <input type="checkbox" class="tc-row-checkbox" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" onchange="tcUpdateSelection()" style="accent-color:#2b5ea7;width:16px;height:16px;cursor:pointer;">
                                             </td>
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
@@ -568,40 +568,44 @@
         }
 
         // Checkbox boshqaruvi
-        function tcToggleSelectAll(el) {
-            var checked = el.checked;
+        function getVisibleCheckboxes() {
+            var result = [];
             document.querySelectorAll('.tc-row-checkbox').forEach(function(cb) {
                 var row = cb.closest('tr');
                 if (row && row.style.display !== 'none') {
-                    cb.checked = checked;
+                    result.push(cb);
                 }
             });
-            document.getElementById('tc-select-all-header').checked = checked;
+            return result;
+        }
+
+        function tcToggleSelectAll(el) {
+            var checked = el.checked;
+            getVisibleCheckboxes().forEach(function(cb) {
+                cb.checked = checked;
+            });
             tcUpdateSelection();
         }
 
         function tcUpdateSelection() {
-            var count = document.querySelectorAll('.tc-row-checkbox:checked').length;
-            var total = document.querySelectorAll('.tc-row-checkbox').length;
+            var visible = getVisibleCheckboxes();
+            var checkedCount = visible.filter(function(cb) { return cb.checked; }).length;
             var btn = document.getElementById('btn-yn-oldi-word');
-            if (btn) btn.disabled = count === 0;
-            var allChecked = count === total && total > 0;
-            document.getElementById('tc-select-all-header').checked = allChecked;
+            if (btn) btn.disabled = checkedCount === 0;
+            var headerCb = document.getElementById('tc-select-all-header');
+            if (headerCb) headerCb.checked = checkedCount > 0 && checkedCount === visible.length;
         }
 
-        var ynOldiWordUrl = '{{ route($routePrefix . ".yn-qaytnoma.generate-yn-oldi-word") }}';
+        var ynOldiWordUrl = '{{ route($routePrefix . ".academic-schedule.test-center.generate-yn-oldi-word") }}';
 
         function tcGenerateYnOldiWord() {
-            var seen = {};
             var selected = [];
             document.querySelectorAll('.tc-row-checkbox:checked').forEach(function(cb) {
-                var gid = cb.getAttribute('data-group-hemis-id');
-                var sem = cb.getAttribute('data-semester-code');
-                var key = gid + '|' + sem;
-                if (!seen[key]) {
-                    seen[key] = true;
-                    selected.push({ group_hemis_id: gid, semester_code: String(sem) });
-                }
+                selected.push({
+                    group_hemis_id: cb.getAttribute('data-group-hemis-id'),
+                    semester_code: String(cb.getAttribute('data-semester-code')),
+                    subject_id: cb.getAttribute('data-subject-id')
+                });
             });
 
             if (selected.length === 0) {
@@ -624,7 +628,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 },
-                body: JSON.stringify({ groups: selected })
+                body: JSON.stringify({ items: selected })
             })
             .then(function(response) {
                 if (!response.ok) {

@@ -81,10 +81,16 @@
                         </div>
                         <div class="filter-item" style="min-width: 120px;">
                             <label class="filter-label">&nbsp;</label>
-                            <button type="button" class="btn-calc" onclick="applyFilter()">
-                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                Qidirish
-                            </button>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <button type="button" class="btn-refresh" id="btn-refresh-quiz" onclick="refreshQuizCounts()">
+                                    <svg class="refresh-icon" style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    <span id="refresh-label">Yangilash</span>
+                                </button>
+                                <button type="button" class="btn-calc" onclick="applyFilter()">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                    Qidirish
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -118,6 +124,8 @@
                                     <th style="width:100px;text-align:center;">Urinish</th>
                                     <th class="sortable" data-col="8" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="9" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="10" style="width:80px;text-align:center;">Talabalar <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
@@ -130,6 +138,8 @@
                                     <th></th>
                                     <th><select class="col-filter" data-col="8"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="9"><option value="">Barchasi</option></select></th>
+                                    <th></th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -139,7 +149,7 @@
                                 @endphp
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
-                                        <tr class="data-row">
+                                        <tr class="data-row" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}">
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
                                             <td data-sort-value="{{ $item['specialty_name'] }}" style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
@@ -170,6 +180,15 @@
                                                 @else
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
+                                            </td>
+                                            <td class="td-student-count" data-sort-value="{{ $item['student_count'] ?? 0 }}" style="text-align:center;font-weight:600;color:#475569;">{{ $item['student_count'] ?? 0 }}</td>
+                                            <td class="td-quiz-count" data-sort-value="{{ $item['quiz_count'] ?? 0 }}" style="text-align:center;">
+                                                @php
+                                                    $sc = $item['student_count'] ?? 0;
+                                                    $qc = $item['quiz_count'] ?? 0;
+                                                    $qcClass = $qc == 0 ? 'quiz-count-zero' : ($qc >= $sc ? 'quiz-count-full' : 'quiz-count-partial');
+                                                @endphp
+                                                <span class="{{ $qcClass }}">{{ $qc }}/{{ $sc }}</span>
                                             </td>
                                         </tr>
                                     @endforeach
@@ -295,6 +314,78 @@
                 isUpdatingFilters = false;
             }).fail(function() {
                 isUpdatingFilters = false;
+            });
+        }
+
+        var refreshQuizUrl = '{{ route($routePrefix . ".academic-schedule.test-center.refresh-quiz-counts") }}';
+
+        function refreshQuizCounts() {
+            var rows = document.querySelectorAll('#schedule-tbody tr.data-row');
+            if (!rows.length) return;
+
+            var btn = document.getElementById('btn-refresh-quiz');
+            var icon = btn.querySelector('.refresh-icon');
+            var label = document.getElementById('refresh-label');
+            btn.disabled = true;
+            icon.classList.add('spinning');
+            label.textContent = 'Yangilanmoqda...';
+
+            // Collect unique group+subject+yn_type combinations
+            var seen = {};
+            var items = [];
+            rows.forEach(function(row) {
+                var gid = row.getAttribute('data-group-id');
+                var sid = row.getAttribute('data-subject-id');
+                var yn = row.getAttribute('data-yn-type');
+                var key = gid + '|' + sid + '|' + yn;
+                if (!seen[key]) {
+                    seen[key] = true;
+                    items.push({ group_id: gid, subject_id: sid, yn_type: yn });
+                }
+            });
+
+            $.ajax({
+                url: refreshQuizUrl,
+                method: 'POST',
+                data: JSON.stringify({ items: items }),
+                contentType: 'application/json',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
+                success: function(data) {
+                    // Build lookup
+                    var lookup = {};
+                    (data.counts || []).forEach(function(c) {
+                        lookup[c.group_id + '|' + c.subject_id + '|' + c.yn_type] = c;
+                    });
+
+                    // Update each row
+                    rows.forEach(function(row) {
+                        var key = row.getAttribute('data-group-id') + '|' + row.getAttribute('data-subject-id') + '|' + row.getAttribute('data-yn-type');
+                        var info = lookup[key];
+                        if (!info) return;
+
+                        var scCell = row.querySelector('.td-student-count');
+                        var qcCell = row.querySelector('.td-quiz-count');
+                        if (scCell) {
+                            scCell.textContent = info.student_count;
+                            scCell.setAttribute('data-sort-value', info.student_count);
+                        }
+                        if (qcCell) {
+                            var cls = info.quiz_count == 0 ? 'quiz-count-zero' : (info.quiz_count >= info.student_count ? 'quiz-count-full' : 'quiz-count-partial');
+                            qcCell.innerHTML = '<span class="' + cls + '">' + info.quiz_count + '/' + info.student_count + '</span>';
+                            qcCell.setAttribute('data-sort-value', info.quiz_count);
+                        }
+                    });
+
+                    label.textContent = 'Yangilash';
+                    icon.classList.remove('spinning');
+                    btn.disabled = false;
+                },
+                error: function() {
+                    label.textContent = 'Yangilash';
+                    icon.classList.remove('spinning');
+                    btn.disabled = false;
+                    alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
+                }
             });
         }
 
@@ -489,6 +580,12 @@
         .toggle-label { font-size: 12px; font-weight: 600; color: #64748b; white-space: nowrap; }
         .toggle-switch.active .toggle-label { color: #1e3a5f; }
 
+        .btn-refresh { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; background: linear-gradient(135deg, #0891b2, #06b6d4); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(8,145,178,0.3); height: 36px; white-space: nowrap; }
+        .btn-refresh:hover { background: linear-gradient(135deg, #0e7490, #0891b2); box-shadow: 0 4px 12px rgba(8,145,178,0.4); transform: translateY(-1px); }
+        .btn-refresh:disabled { cursor: not-allowed; opacity: 0.5; }
+        .btn-refresh .refresh-icon.spinning { animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
 
@@ -526,5 +623,9 @@
         .yn-type-badge { display: inline-flex; padding: 4px 12px; font-size: 11px; font-weight: 700; border-radius: 6px; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.03em; }
         .yn-type-oski { background: #dcfce7; color: #166534; }
         .yn-type-test { background: #dbeafe; color: #1e40af; }
+
+        .quiz-count-zero { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .quiz-count-partial { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+        .quiz-count-full { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
     </style>
 </x-app-layout>

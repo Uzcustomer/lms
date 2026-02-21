@@ -130,7 +130,7 @@ class AcademicScheduleController extends Controller
                 // Qo'shimcha ma'lumotlar
                 $sem = $semesterMap->get($item['subject']->semester_code);
                 $extraFields = [
-                    'subject_code' => $item['subject']->subject_code ?? '',
+                    'subject_code' => $item['subject']->subject_id ?? '',
                     'level_name' => $sem?->level_name ?? '',
                     'semester_name' => $item['subject']->semester_name ?? ($sem?->name ?? ''),
                     'education_form_name' => $curriculumFormMap->get($item['group']->curriculum_hemis_id) ?? '',
@@ -160,6 +160,52 @@ class AcademicScheduleController extends Controller
             }
         }
 
+        // Guruh talabalar sonini hisoblash
+        $groupHemisIds = $transformedData->pluck('group')->pluck('group_hemis_id')->unique()->toArray();
+        $studentCounts = DB::table('students')
+            ->whereIn('group_id', $groupHemisIds)
+            ->where('student_status_code', 11)
+            ->groupBy('group_id')
+            ->select('group_id', DB::raw('COUNT(*) as cnt'))
+            ->pluck('cnt', 'group_id');
+
+        // Quiz natijalarini hisoblash (guruh + fan + yn_turi bo'yicha nechta talaba topshirgan)
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+        $subjectIds = $transformedData->pluck('subject')->pluck('subject_id')->unique()->toArray();
+
+        $quizCounts = [];
+        if (!empty($groupHemisIds) && !empty($subjectIds)) {
+            $quizRows = DB::table('hemis_quiz_results as hqr')
+                ->join('students as st', 'st.hemis_id', '=', 'hqr.student_id')
+                ->whereIn('st.group_id', $groupHemisIds)
+                ->whereIn('hqr.fan_id', $subjectIds)
+                ->where('hqr.is_active', 1)
+                ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
+                ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                ->get();
+
+            foreach ($quizRows as $row) {
+                if (in_array($row->quiz_type, $testTypes)) {
+                    $key = $row->group_id . '|' . $row->fan_id . '|Test';
+                } elseif (in_array($row->quiz_type, $oskiTypes)) {
+                    $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
+                } else {
+                    continue;
+                }
+                $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
+            }
+        }
+
+        // Ma'lumotlarga qo'shish
+        $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts) {
+            $item['student_count'] = $studentCounts[$item['group']->group_hemis_id] ?? 0;
+            $quizKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['yn_type'] ?? '');
+            $item['quiz_count'] = $quizCounts[$quizKey] ?? 0;
+            return $item;
+        });
+
         $scheduleData = $transformedData->groupBy(fn($item) => $item['group']->group_hemis_id);
 
         $routePrefix = $this->routePrefix();
@@ -181,6 +227,71 @@ class AcademicScheduleController extends Controller
             'currentEducationYear',
             'routePrefix',
         ));
+    }
+
+    /**
+     * AJAX: Quiz natijalarini yangilash (topshirgan talabalar sonini qayta hisoblash)
+     */
+    public function refreshQuizCounts(Request $request)
+    {
+        $items = $request->input('items', []);
+        if (empty($items)) {
+            return response()->json(['counts' => []]);
+        }
+
+        $groupHemisIds = collect($items)->pluck('group_id')->unique()->toArray();
+        $subjectIds = collect($items)->pluck('subject_id')->unique()->toArray();
+
+        // Talabalar soni
+        $studentCounts = DB::table('students')
+            ->whereIn('group_id', $groupHemisIds)
+            ->where('student_status_code', 11)
+            ->groupBy('group_id')
+            ->select('group_id', DB::raw('COUNT(*) as cnt'))
+            ->pluck('cnt', 'group_id');
+
+        // Quiz natijalar soni
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+        $quizCounts = [];
+        if (!empty($groupHemisIds) && !empty($subjectIds)) {
+            $quizRows = DB::table('hemis_quiz_results as hqr')
+                ->join('students as st', 'st.hemis_id', '=', 'hqr.student_id')
+                ->whereIn('st.group_id', $groupHemisIds)
+                ->whereIn('hqr.fan_id', $subjectIds)
+                ->where('hqr.is_active', 1)
+                ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
+                ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                ->get();
+
+            foreach ($quizRows as $row) {
+                if (in_array($row->quiz_type, $testTypes)) {
+                    $key = $row->group_id . '|' . $row->fan_id . '|Test';
+                } elseif (in_array($row->quiz_type, $oskiTypes)) {
+                    $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
+                } else {
+                    continue;
+                }
+                $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
+            }
+        }
+
+        $result = [];
+        foreach ($items as $item) {
+            $key = $item['group_id'] . '|' . $item['subject_id'] . '|' . $item['yn_type'];
+            $sc = $studentCounts[$item['group_id']] ?? 0;
+            $qc = $quizCounts[$key] ?? 0;
+            $result[] = [
+                'group_id' => $item['group_id'],
+                'subject_id' => $item['subject_id'],
+                'yn_type' => $item['yn_type'],
+                'student_count' => $sc,
+                'quiz_count' => $qc,
+            ];
+        }
+
+        return response()->json(['counts' => $result]);
     }
 
     /**

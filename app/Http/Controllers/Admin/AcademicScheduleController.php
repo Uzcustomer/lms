@@ -662,6 +662,8 @@ class AcademicScheduleController extends Controller
             'items.*.subject_id' => 'required|string',
         ]);
 
+        try {
+
         $items = $request->items;
         $files = [];
         $tempDir = storage_path('app/public/yn_oldi_qaydnoma');
@@ -960,5 +962,12 @@ class AcademicScheduleController extends Controller
         }
 
         return response()->download($zipPath, 'YN_oldi_qaydnomalar_' . now()->format('d_m_Y') . '.zip')->deleteFileAfterSend(true);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Xatolik: ' . $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ], 500);
+        }
     }
 }

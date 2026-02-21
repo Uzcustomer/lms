@@ -613,6 +613,9 @@
                 return;
             }
 
+            console.log('YN oldi word - URL:', ynOldiWordUrl);
+            console.log('YN oldi word - Data:', JSON.stringify(selected, null, 2));
+
             var btn = document.getElementById('btn-yn-oldi-word');
             var originalHTML = btn.innerHTML;
             btn.disabled = true;
@@ -626,20 +629,32 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 },
                 body: JSON.stringify({ items: selected })
             })
             .then(function(response) {
+                console.log('YN oldi word - Status:', response.status, 'Content-Type:', response.headers.get('content-type'));
                 if (!response.ok) {
                     return response.text().then(function(text) {
+                        console.error('YN oldi word - Error response:', text.substring(0, 500));
                         try {
                             var json = JSON.parse(text);
                             throw new Error(json.error || json.message || 'Xatolik yuz berdi');
                         } catch(e) {
-                            if (e.message && e.message !== 'Xatolik yuz berdi') throw e;
-                            throw new Error('Server xatoligi: ' + response.status);
+                            if (e instanceof SyntaxError) {
+                                throw new Error('Server xatoligi: ' + response.status + ' (console da batafsil)');
+                            }
+                            throw e;
                         }
+                    });
+                }
+                var contentType = response.headers.get('content-type') || '';
+                if (contentType.indexOf('application/json') !== -1) {
+                    return response.json().then(function(json) {
+                        throw new Error(json.error || json.message || 'Kutilmagan javob');
                     });
                 }
                 var disposition = response.headers.get('Content-Disposition');
@@ -651,7 +666,7 @@
                 return response.blob().then(function(blob) { return { blob: blob, filename: filename }; });
             })
             .then(function(data) {
-                if (!data.blob) return;
+                if (!data || !data.blob) return;
                 var url = window.URL.createObjectURL(data.blob);
                 var a = document.createElement('a');
                 a.href = url;
@@ -662,6 +677,7 @@
                 a.remove();
             })
             .catch(function(err) {
+                console.error('YN oldi word - Catch:', err);
                 alert(err.message);
             })
             .finally(function() {

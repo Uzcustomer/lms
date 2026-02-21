@@ -490,9 +490,16 @@ class StudentApiController extends Controller
             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
 
             $total = null;
-            $gradeComponents = array_filter([$jnAverage, $mtAverage, $otherGrades['on'], $otherGrades['oski'], $otherGrades['test']], fn($v) => $v !== null && $v > 0);
-            if (!empty($gradeComponents)) {
-                $total = (int) round(array_sum($gradeComponents) / count($gradeComponents));
+            $allComponents = [$jnAverage, $mtAverage, $otherGrades['on'], $otherGrades['oski'], $otherGrades['test']];
+            $allPresent = true;
+            foreach ($allComponents as $comp) {
+                if ($comp === null || $comp <= 0) {
+                    $allPresent = false;
+                    break;
+                }
+            }
+            if ($allPresent) {
+                $total = (int) round(array_sum($allComponents) / count($allComponents));
             }
 
             // MT submission data

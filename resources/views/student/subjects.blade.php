@@ -433,8 +433,15 @@
                                     </div>
                                     <div class="g-item">
                                         @php
-                                            $gradeComponents = array_filter([$jn, $subject['mt_average'], $subject['on'], $subject['oski'], $subject['test']], fn($val) => $val !== null && $val > 0);
-                                            $yn = !empty($gradeComponents) ? (int) round(array_sum($gradeComponents) / count($gradeComponents)) : null;
+                                            $allComps = [$jn, $subject['mt_average'], $subject['on'], $subject['oski'], $subject['test']];
+                                            $yn = null;
+                                            $allPresent = true;
+                                            foreach ($allComps as $comp) {
+                                                if ($comp === null || $comp <= 0) { $allPresent = false; break; }
+                                            }
+                                            if ($allPresent) {
+                                                $yn = (int) round(array_sum($allComps) / count($allComps));
+                                            }
                                         @endphp
                                         <div class="g-label">YN</div>
                                         <div class="g-value {{ $gradeClass($yn, $yn === null) }}">{{ $yn !== null ? $yn : '-' }}</div>

@@ -98,37 +98,49 @@
                 <!-- Results -->
                 @if($scheduleData->count() > 0)
                 <div>
-                    <div style="padding:10px 20px;background:#f0f4f8;border-bottom:1px solid #dbe4ef;display:flex;align-items:center;gap:12px;">
-                        <span style="background:#2b5ea7;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;font-weight:700;">
-                            Imtihon jadvali
-                            @if($currentEducationYear)
-                                ({{ $currentEducationYear }})
-                            @endif
-                        </span>
-                        <span style="font-size:12px;color:#64748b;">
-                            O'quv bo'limi tomonidan belgilangan yakuniy nazorat sanalari
-                        </span>
+                    <!-- Action Bar -->
+                    <div class="tc-action-bar">
+                        <div class="tc-action-left">
+                            <label class="tc-select-all-label">
+                                <input type="checkbox" id="tc-select-all" onchange="tcToggleSelectAll(this)">
+                                <span>Barchasini tanlash</span>
+                            </label>
+                            <span id="tc-selection-info" class="tc-sel-info">
+                                <span id="tc-selected-count">0</span> ta tanlangan
+                            </span>
+                        </div>
+                        <div class="tc-action-right">
+                            <button type="button" id="btn-yn-oldi-word" class="btn-yn-oldi-word" onclick="tcGenerateYnOldiWord()" disabled>
+                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                YN oldi word
+                            </button>
+                        </div>
                     </div>
 
                     <div style="overflow-x:auto;">
                         <table class="schedule-table">
                             <thead>
                                 <tr class="header-row">
+                                    <th style="width:40px;text-align:center;">
+                                        <input type="checkbox" id="tc-select-all-header" onchange="tcToggleSelectAll(this)" style="accent-color:#2b5ea7;width:16px;height:16px;cursor:pointer;">
+                                    </th>
                                     <th style="width:44px;padding-left:16px;">#</th>
-                                    <th class="sortable" data-col="1">Guruh <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="2">Yo'nalish <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="3" style="width:100px;">Fan kodi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="4">Fan nomi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="5" style="width:70px;text-align:center;">Kurs <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="6" style="width:90px;text-align:center;">Semestr <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="2">Guruh <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="3">Yo'nalish <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="4" style="width:100px;">Fan kodi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="5">Fan nomi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="6" style="width:70px;text-align:center;">Kurs <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="7" style="width:90px;text-align:center;">Semestr <span class="sort-icon"></span></th>
                                     <th style="width:100px;text-align:center;">Urinish</th>
-                                    <th class="sortable" data-col="8" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="9" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="10" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="9" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="10" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
-                                    <th><select class="col-filter" data-col="1"><option value="">Barchasi</option></select></th>
+                                    <th></th>
                                     <th><select class="col-filter" data-col="2"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="3"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="4"><option value="">Barchasi</option></select></th>
@@ -137,8 +149,9 @@
                                     <th><select class="col-filter" data-col="7"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="8"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="9"><option value="">Barchasi</option></select></th>
+                                    <th><select class="col-filter" data-col="10"><option value="">Barchasi</option></select></th>
                                     <th>
-                                        <select class="col-filter color-filter" data-col="10" data-filter-type="color">
+                                        <select class="col-filter color-filter" data-col="11" data-filter-type="color">
                                             <option value="">Barchasi</option>
                                             <option value="green" data-color="#16a34a">Yashil</option>
                                             <option value="yellow" data-color="#d97706">Sariq</option>
@@ -154,7 +167,10 @@
                                 @endphp
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
-                                        <tr class="data-row" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}">
+                                        <tr class="data-row" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}">
+                                            <td style="text-align:center;">
+                                                <input type="checkbox" class="tc-row-checkbox" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" onchange="tcUpdateSelection()" style="accent-color:#2b5ea7;width:16px;height:16px;cursor:pointer;">
+                                            </td>
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
                                             <td data-sort-value="{{ $item['specialty_name'] }}" style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
@@ -565,6 +581,97 @@
                 if (numCell) numCell.textContent = i + 1;
             });
         }
+
+        // Checkbox boshqaruvi
+        function tcToggleSelectAll(el) {
+            var checked = el.checked;
+            document.querySelectorAll('.tc-row-checkbox').forEach(function(cb) {
+                var row = cb.closest('tr');
+                if (row && row.style.display !== 'none') {
+                    cb.checked = checked;
+                }
+            });
+            document.getElementById('tc-select-all').checked = checked;
+            document.getElementById('tc-select-all-header').checked = checked;
+            tcUpdateSelection();
+        }
+
+        function tcUpdateSelection() {
+            var count = document.querySelectorAll('.tc-row-checkbox:checked').length;
+            var total = document.querySelectorAll('.tc-row-checkbox').length;
+            document.getElementById('tc-selected-count').textContent = count;
+            document.getElementById('btn-yn-oldi-word').disabled = count === 0;
+            var allChecked = count === total && total > 0;
+            document.getElementById('tc-select-all').checked = allChecked;
+            document.getElementById('tc-select-all-header').checked = allChecked;
+        }
+
+        var ynOldiWordUrl = '{{ route($routePrefix . ".yn-qaytnoma.generate-yn-oldi-word") }}';
+
+        function tcGenerateYnOldiWord() {
+            var seen = {};
+            var selected = [];
+            document.querySelectorAll('.tc-row-checkbox:checked').forEach(function(cb) {
+                var gid = cb.getAttribute('data-group-hemis-id');
+                var sem = cb.getAttribute('data-semester-code');
+                var key = gid + '|' + sem;
+                if (!seen[key]) {
+                    seen[key] = true;
+                    selected.push({ group_hemis_id: gid, semester_code: String(sem) });
+                }
+            });
+
+            if (selected.length === 0) {
+                alert('Kamida bitta guruhni tanlang');
+                return;
+            }
+
+            var btn = document.getElementById('btn-yn-oldi-word');
+            var originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML =
+                '<svg class="animate-spin" style="height:14px;width:14px;display:inline-block;margin-right:4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">' +
+                '<circle style="opacity:0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+                '<path style="opacity:0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>' +
+                '</svg> Yuklanmoqda...';
+
+            fetch(ynOldiWordUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/octet-stream',
+                },
+                body: JSON.stringify({ groups: selected })
+            })
+            .then(function(response) {
+                if (!response.ok) throw new Error('Xatolik yuz berdi');
+                var disposition = response.headers.get('Content-Disposition');
+                var filename = 'yn_oldi_qaydnoma.docx';
+                if (disposition) {
+                    var match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                    if (match && match[1]) filename = match[1].replace(/['"]/g, '');
+                }
+                return response.blob().then(function(blob) { return { blob: blob, filename: filename }; });
+            })
+            .then(function(data) {
+                var url = window.URL.createObjectURL(data.blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = data.filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            })
+            .catch(function(err) {
+                alert('Xatolik: ' + err.message);
+            })
+            .finally(function() {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            });
+        }
     </script>
 
     <style>
@@ -605,6 +712,16 @@
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
+
+        .tc-action-bar { padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .tc-action-left { display: flex; align-items: center; gap: 12px; }
+        .tc-action-right { display: flex; align-items: center; gap: 8px; }
+        .tc-select-all-label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; font-weight: 600; color: #475569; user-select: none; }
+        .tc-select-all-label input[type="checkbox"] { accent-color: #2b5ea7; width: 16px; height: 16px; cursor: pointer; }
+        .tc-sel-info { font-size: 12px; color: #94a3b8; font-weight: 500; }
+        .btn-yn-oldi-word { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(37,99,235,0.3); white-space: nowrap; }
+        .btn-yn-oldi-word:hover:not(:disabled) { background: linear-gradient(135deg, #1d4ed8, #2563eb); box-shadow: 0 4px 12px rgba(37,99,235,0.4); transform: translateY(-1px); }
+        .btn-yn-oldi-word:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .schedule-table thead { position: sticky; top: 0; z-index: 10; }

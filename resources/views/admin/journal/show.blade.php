@@ -65,6 +65,8 @@
             display: flex;
             gap: 0;
             align-items: flex-start;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .journal-main-content {
             flex: 1;

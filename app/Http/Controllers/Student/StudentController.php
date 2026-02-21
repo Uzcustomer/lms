@@ -945,6 +945,13 @@ class StudentController extends Controller
                 $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
                 $gradeLocked = $grade && $grade->grade >= $studentMinLimit;
 
+                // YN ga yuborilganligini tekshirish
+                $ynLocked = StudentGrade::where('student_hemis_id', $student->hemis_id)
+                    ->where('subject_id', $independent->subject_hemis_id)
+                    ->where('semester_code', $independent->semester_code)
+                    ->where('is_yn_locked', true)
+                    ->exists();
+
                 return [
                     'id' => $independent->id,
                     'subject_name' => $independent->subject_name,
@@ -955,10 +962,11 @@ class StudentController extends Controller
                     'submission' => $submission,
                     'grade' => $grade?->grade,
                     'grade_locked' => $gradeLocked,
+                    'yn_locked' => $ynLocked,
                     'grade_history' => $gradeHistory,
                     'submission_count' => $submissionCount,
                     'remaining_attempts' => $remainingAttempts,
-                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < $studentMinLimit && $remainingAttempts > 0 && !$isOverdue,
+                    'can_resubmit' => !$gradeLocked && !$ynLocked && $submission && $grade && $grade->grade < $studentMinLimit && $remainingAttempts > 0 && !$isOverdue,
                     'status' => $independent->status,
                     'file_path' => $independent->file_path,
                     'file_original_name' => $independent->file_original_name,

@@ -11,19 +11,19 @@
                 <div class="p-6 bg-white border-b border-gray-200">
 
                     @if (session('success'))
-                        <div class="mb-4 px-4 py-2 bg-green-100 border border-green-400 text-green-700 rounded">
+                        <div id="flash-message" class="mb-4 px-4 py-3 bg-green-100 border border-green-400 text-green-700 rounded font-semibold">
                             {{ session('success') }}
                         </div>
                     @endif
 
                     @if (session('error'))
-                        <div class="mb-4 px-4 py-2 bg-red-100 border border-red-400 text-red-700 rounded">
+                        <div id="flash-message" class="mb-4 px-4 py-3 bg-red-100 border border-red-400 text-red-700 rounded font-semibold">
                             {{ session('error') }}
                         </div>
                     @endif
 
                     @if ($errors->any())
-                        <div class="mb-4 px-4 py-2 bg-red-100 border border-red-400 text-red-700 rounded">
+                        <div id="flash-message" class="mb-4 px-4 py-3 bg-red-100 border border-red-400 text-red-700 rounded font-semibold">
                             <ul class="list-disc list-inside">
                                 @foreach ($errors->all() as $error)
                                     <li>{{ $error }}</li>
@@ -33,7 +33,7 @@
                     @endif
 
                     {{-- Compression overlay --}}
-                    <div id="compress-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; display:none; align-items:center; justify-content:center;">
+                    <div id="compress-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
                         <div style="background:white; border-radius:12px; padding:24px 32px; text-align:center; max-width:360px;">
                             <div style="margin-bottom:12px;">
                                 <svg class="animate-spin inline h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -139,6 +139,18 @@
                                                             {{ $item['submission']->submitted_at->format('d.m.Y H:i') }}
                                                         </div>
                                                     @endif
+                                                @elseif($item['yn_locked'])
+                                                    {{-- YN ga yuborilgan: fayl yuklash bloklangan --}}
+                                                    @if($item['submission'])
+                                                        <a href="{{ asset('storage/' . $item['submission']->file_path) }}" target="_blank"
+                                                           class="text-blue-500 hover:text-blue-700 text-xs underline">
+                                                            {{ $item['submission']->file_original_name }}
+                                                        </a>
+                                                        <div class="text-xs text-gray-400 mt-1">
+                                                            {{ $item['submission']->submitted_at->format('d.m.Y H:i') }}
+                                                        </div>
+                                                    @endif
+                                                    <p class="text-xs text-orange-500 mt-1">YN ga yuborilgan — fayl yuklash mumkin emas</p>
                                                 @elseif($item['submission'])
                                                     <div class="flex items-center space-x-2">
                                                         <a href="{{ asset('storage/' . $item['submission']->file_path) }}" target="_blank"
@@ -203,6 +215,12 @@
     </div>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Xato yoki muvaffaqiyat xabari bo'lsa, sahifani tepaga scroll qilish
+        var flashMessage = document.getElementById('flash-message');
+        if (flashMessage) {
+            flashMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
         var COMPRESS_THRESHOLD = 2 * 1024 * 1024; // 2MB dan katta fayllarni siqish
         var MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB maksimal hajm
 

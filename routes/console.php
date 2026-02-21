@@ -8,6 +8,11 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote')->hourly();
 
+// Baholar: kechasi 00:30 da FINAL import (kechagi va yakunlanmagan kunlarni is_final=true qiladi)
+// 04:00 da takroriy — agar 00:30 dagi crash bo'lsa, qayta urinadi
+Schedule::command('student:import-data --mode=final')->dailyAt('00:30');
+Schedule::command('student:import-data --mode=final')->dailyAt('04:00');
+
 // Davomat nazorati: kechasi 02:00 da FINAL import (kechagi va yakunlanmagan kunlarni is_final=true qiladi)
 Schedule::command('import:attendance-controls --mode=final')->dailyAt('02:00');
 Schedule::command('command:independent-auto-create')->dailyAt('06:00');

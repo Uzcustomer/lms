@@ -90,6 +90,12 @@
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                                     Qidirish
                                 </button>
+                                <button type="button" id="btn-yn-oldi-word" class="btn-yn-oldi-word" onclick="tcGenerateYnOldiWord()" disabled>
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    YN oldi word
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -98,27 +104,6 @@
                 <!-- Results -->
                 @if($scheduleData->count() > 0)
                 <div>
-                    <!-- Action Bar -->
-                    <div class="tc-action-bar">
-                        <div class="tc-action-left">
-                            <label class="tc-select-all-label">
-                                <input type="checkbox" id="tc-select-all" onchange="tcToggleSelectAll(this)">
-                                <span>Barchasini tanlash</span>
-                            </label>
-                            <span id="tc-selection-info" class="tc-sel-info">
-                                <span id="tc-selected-count">0</span> ta tanlangan
-                            </span>
-                        </div>
-                        <div class="tc-action-right">
-                            <button type="button" id="btn-yn-oldi-word" class="btn-yn-oldi-word" onclick="tcGenerateYnOldiWord()" disabled>
-                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                                YN oldi word
-                            </button>
-                        </div>
-                    </div>
-
                     <div style="overflow-x:auto;">
                         <table class="schedule-table">
                             <thead>
@@ -591,7 +576,6 @@
                     cb.checked = checked;
                 }
             });
-            document.getElementById('tc-select-all').checked = checked;
             document.getElementById('tc-select-all-header').checked = checked;
             tcUpdateSelection();
         }
@@ -599,10 +583,9 @@
         function tcUpdateSelection() {
             var count = document.querySelectorAll('.tc-row-checkbox:checked').length;
             var total = document.querySelectorAll('.tc-row-checkbox').length;
-            document.getElementById('tc-selected-count').textContent = count;
-            document.getElementById('btn-yn-oldi-word').disabled = count === 0;
+            var btn = document.getElementById('btn-yn-oldi-word');
+            if (btn) btn.disabled = count === 0;
             var allChecked = count === total && total > 0;
-            document.getElementById('tc-select-all').checked = allChecked;
             document.getElementById('tc-select-all-header').checked = allChecked;
         }
 
@@ -640,12 +623,21 @@
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Accept': 'application/octet-stream',
                 },
                 body: JSON.stringify({ groups: selected })
             })
             .then(function(response) {
-                if (!response.ok) throw new Error('Xatolik yuz berdi');
+                if (!response.ok) {
+                    return response.text().then(function(text) {
+                        try {
+                            var json = JSON.parse(text);
+                            throw new Error(json.error || json.message || 'Xatolik yuz berdi');
+                        } catch(e) {
+                            if (e.message && e.message !== 'Xatolik yuz berdi') throw e;
+                            throw new Error('Server xatoligi: ' + response.status);
+                        }
+                    });
+                }
                 var disposition = response.headers.get('Content-Disposition');
                 var filename = 'yn_oldi_qaydnoma.docx';
                 if (disposition) {
@@ -655,6 +647,7 @@
                 return response.blob().then(function(blob) { return { blob: blob, filename: filename }; });
             })
             .then(function(data) {
+                if (!data.blob) return;
                 var url = window.URL.createObjectURL(data.blob);
                 var a = document.createElement('a');
                 a.href = url;
@@ -665,7 +658,7 @@
                 a.remove();
             })
             .catch(function(err) {
-                alert('Xatolik: ' + err.message);
+                alert(err.message);
             })
             .finally(function() {
                 btn.innerHTML = originalHTML;
@@ -713,13 +706,7 @@
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
 
-        .tc-action-bar { padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-        .tc-action-left { display: flex; align-items: center; gap: 12px; }
-        .tc-action-right { display: flex; align-items: center; gap: 8px; }
-        .tc-select-all-label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; font-weight: 600; color: #475569; user-select: none; }
-        .tc-select-all-label input[type="checkbox"] { accent-color: #2b5ea7; width: 16px; height: 16px; cursor: pointer; }
-        .tc-sel-info { font-size: 12px; color: #94a3b8; font-weight: 500; }
-        .btn-yn-oldi-word { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(37,99,235,0.3); white-space: nowrap; }
+        .btn-yn-oldi-word { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(37,99,235,0.3); white-space: nowrap; height: 36px; }
         .btn-yn-oldi-word:hover:not(:disabled) { background: linear-gradient(135deg, #1d4ed8, #2563eb); box-shadow: 0 4px 12px rgba(37,99,235,0.4); transform: translateY(-1px); }
         .btn-yn-oldi-word:disabled { opacity: 0.5; cursor: not-allowed; }
 

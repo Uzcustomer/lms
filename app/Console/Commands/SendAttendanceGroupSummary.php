@@ -98,13 +98,22 @@ class SendAttendanceGroupSummary extends Command
             return 0;
         }
 
-        // 3-QADAM: Davomat va baho tekshirish (web hisobot bilan bir xil logika)
+        // 3-QADAM: Davomat va baho tekshirish
         $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
         $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
+        $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
 
-        // Davomat: attendance_controls jadvalidan (web hisobot bilan bir xil)
-        $attendanceSet = DB::table('attendance_controls')
+        // Davomat (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $attendanceByScheduleId = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->where('load', '>', 0)
+            ->pluck('subject_schedule_id')
+            ->flip();
+
+        // Davomat (2-usul): atribut kalitlari orqali tekshirish (zaxira)
+        $attendanceByKey = DB::table('attendance_controls')
             ->whereNull('deleted_at')
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
@@ -143,11 +152,15 @@ class SendAttendanceGroupSummary extends Command
             $pairEnd = $sch->lesson_pair_end_time ? substr($sch->lesson_pair_end_time, 0, 5) : '';
             $pairTime = ($pairStart && $pairEnd) ? ($pairStart . '-' . $pairEnd) : '-';
 
-            // Davomat va baho tekshirish uchun atribut kalitlari
+            // Davomat va baho tekshirish uchun kalitlar
             $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                     . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
             $gradeKey = $sch->employee_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                       . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+
+            // Davomat: schedule_hemis_id orqali yoki atribut kaliti orqali tekshirish
+            $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
+                   || isset($attendanceByKey[$attKey]);
 
             if (!isset($grouped[$key])) {
                 $semCode = max((int) ($sch->semester_code ?? 1), 1);
@@ -166,8 +179,8 @@ class SendAttendanceGroupSummary extends Command
                     'training_type' => $sch->training_type_name,
                     'lesson_pair_time' => $pairTime,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
-                    'has_attendance' => isset($attendanceSet[$attKey]),
-                    'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
+                    'has_attendance' => $hasAtt,
+                    'has_grades' => $skipGradeCheck ? null : isset($gradeSet[$gradeKey]),
                     'lesson_date' => $sch->lesson_date_str,
                     'kurs' => (int) ($sch->level_code ?? ceil($semCode / 2)),
                     'employee_id' => $sch->employee_id,
@@ -178,7 +191,7 @@ class SendAttendanceGroupSummary extends Command
 
         // 5-QADAM: Faqat kamida biri yo'q (any_missing) filtrini qo'llash
         $filtered = array_filter($grouped, function ($r) {
-            return !$r['has_attendance'] || !$r['has_grades'];
+            return !$r['has_attendance'] || $r['has_grades'] === false;
         });
 
         $totalSchedules = count($grouped);
@@ -255,7 +268,7 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName]['teachers_att'][$r['employee_id']] = true;
                 $departmentStats[$deptKey]['subjects'][$normalizedSubject]['no_attendance'] += $hours;
             }
-            if (!$r['has_grades']) {
+            if ($r['has_grades'] === false) {
                 $totalMissingGrades += $hours;
                 $teachersWithIssues[$r['employee_id']] = true;
                 $teachersMissingGrade[$r['employee_id']] = true;

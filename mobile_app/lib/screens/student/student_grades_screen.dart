@@ -269,29 +269,46 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           Divider(color: divColor, height: 1),
           const SizedBox(height: 8),
 
-          // Grade cards - 3 columns (compact)
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 5,
-              mainAxisSpacing: 5,
-              childAspectRatio: 2.0,
-            ),
-            itemCount: gradeEntries.length,
-            itemBuilder: (context, i) {
+          // Grade cards - 2 rows of 3
+          Row(
+            children: List.generate(3, (i) {
               final entry = gradeEntries[i];
               final value = grades[entry['key']];
-              return _buildGradeCard(
-                label: entry['label'] as String,
-                value: value,
-                color: _cardColors[i],
-                textColor: _cardTextColors[i],
-                icon: _cardIcons[i],
-                isDark: isDark,
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: i < 2 ? 5 : 0),
+                  child: _buildGradeCard(
+                    label: entry['label'] as String,
+                    value: value,
+                    color: _cardColors[i],
+                    textColor: _cardTextColors[i],
+                    icon: _cardIcons[i],
+                    isDark: isDark,
+                  ),
+                ),
               );
-            },
+            }),
+          ),
+          const SizedBox(height: 5),
+          Row(
+            children: List.generate(3, (i) {
+              final idx = i + 3;
+              final entry = gradeEntries[idx];
+              final value = grades[entry['key']];
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: i < 2 ? 5 : 0),
+                  child: _buildGradeCard(
+                    label: entry['label'] as String,
+                    value: value,
+                    color: _cardColors[idx],
+                    textColor: _cardTextColors[idx],
+                    icon: _cardIcons[idx],
+                    isDark: isDark,
+                  ),
+                ),
+              );
+            }),
           ),
 
           const SizedBox(height: 6),
@@ -443,12 +460,13 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     final displayValue = value?.toString() ?? '-';
 
     return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         color: isDark ? color.withAlpha(30) : color,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 16, color: textColor),
           Text(

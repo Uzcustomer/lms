@@ -123,14 +123,26 @@ class SendAttendanceGroupSummary extends Command
             ->pluck('ck')
             ->flip();
 
-        // Baho: student_grades jadvalidan (web hisobot bilan bir xil)
-        $gradeSet = DB::table('student_grades')
-            ->whereIn('employee_id', $employeeIds)
-            ->whereIn('subject_id', $subjectIds)
-            ->whereRaw('DATE(lesson_date) = ?', [$todayStr])
+        // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $gradeByScheduleId = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
             ->whereNotNull('grade')
             ->where('grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as gk"))
+            ->pluck('subject_schedule_id')
+            ->unique()
+            ->flip();
+
+        // Baho (2-usul): student → group orqali tekshirish (zaxira)
+        $gradeByKey = DB::table('student_grades as sg')
+            ->join('students as st', 'st.student_hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
+            ->whereIn('sg.employee_id', $employeeIds)
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereRaw('DATE(sg.lesson_date) = ?', [$todayStr])
+            ->whereNotNull('sg.grade')
+            ->where('sg.grade', '>', 0)
+            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -155,7 +167,7 @@ class SendAttendanceGroupSummary extends Command
             // Davomat va baho tekshirish uchun kalitlar
             $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                     . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
-            $gradeKey = $sch->employee_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+            $gradeKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                       . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
 
             // Davomat: schedule_hemis_id orqali yoki atribut kaliti orqali tekshirish
@@ -180,7 +192,7 @@ class SendAttendanceGroupSummary extends Command
                     'lesson_pair_time' => $pairTime,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
                     'has_attendance' => $hasAtt,
-                    'has_grades' => $skipGradeCheck ? null : isset($gradeSet[$gradeKey]),
+                    'has_grades' => $skipGradeCheck ? null : (isset($gradeByScheduleId[$sch->schedule_hemis_id]) || isset($gradeByKey[$gradeKey])),
                     'lesson_date' => $sch->lesson_date_str,
                     'kurs' => $sch->level_code ? ((int) $sch->level_code % 10) : (int) ceil($semCode / 2),
                     'employee_id' => $sch->employee_id,

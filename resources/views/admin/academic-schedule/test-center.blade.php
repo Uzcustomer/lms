@@ -124,8 +124,7 @@
                                     <th style="width:100px;text-align:center;">Urinish</th>
                                     <th class="sortable" data-col="8" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="9" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="10" style="width:80px;text-align:center;">Talabalar <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="10" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
@@ -138,7 +137,6 @@
                                     <th></th>
                                     <th><select class="col-filter" data-col="8"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="9"><option value="">Barchasi</option></select></th>
-                                    <th></th>
                                     <th></th>
                                 </tr>
                             </thead>
@@ -181,7 +179,6 @@
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
                                             </td>
-                                            <td class="td-student-count" data-sort-value="{{ $item['student_count'] ?? 0 }}" style="text-align:center;font-weight:600;color:#475569;">{{ $item['student_count'] ?? 0 }}</td>
                                             <td class="td-quiz-count" data-sort-value="{{ $item['quiz_count'] ?? 0 }}" style="text-align:center;">
                                                 @php
                                                     $sc = $item['student_count'] ?? 0;
@@ -363,12 +360,7 @@
                         var info = lookup[key];
                         if (!info) return;
 
-                        var scCell = row.querySelector('.td-student-count');
                         var qcCell = row.querySelector('.td-quiz-count');
-                        if (scCell) {
-                            scCell.textContent = info.student_count;
-                            scCell.setAttribute('data-sort-value', info.student_count);
-                        }
                         if (qcCell) {
                             var cls = info.quiz_count == 0 ? 'quiz-count-zero' : (info.quiz_count >= info.student_count ? 'quiz-count-full' : 'quiz-count-partial');
                             qcCell.innerHTML = '<span class="' + cls + '">' + info.quiz_count + '/' + info.student_count + '</span>';

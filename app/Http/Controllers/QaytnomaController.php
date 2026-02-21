@@ -255,7 +255,7 @@ class QaytnomaController extends Controller
             if ($other_teacher_text == "") {
                 $other_teacher_text = "!!!";
             }
-            $dekan = Teacher::whereHas('deanFaculties', fn ($q) => $q->where('department_hemis_id', $deportment->department_hemis_id))
+            $dekan = Teacher::whereHas('deanFaculties', fn ($q) => $q->where('dean_faculties.department_hemis_id', $deportment->department_hemis_id))
                 ->whereHas('roles', fn ($q) => $q->where('name', ProjectRole::DEAN->value))
                 ->first()->full_name ?? "";
             $data = [

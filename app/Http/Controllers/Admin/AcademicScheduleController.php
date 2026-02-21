@@ -919,7 +919,7 @@ class AcademicScheduleController extends Controller
             // Imzolar
             $section->addTextBreak(1);
 
-            $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('department_hemis_id', $department->department_hemis_id ?? ''))
+            $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $department->department_hemis_id ?? ''))
                 ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
                 ->first();
 

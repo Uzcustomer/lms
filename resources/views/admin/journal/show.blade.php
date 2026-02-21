@@ -1,5 +1,9 @@
 <x-app-layout>
     <style>
+        .tab-content {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
         .journal-table {
             border: 1px solid #cbd5e1;
             width: auto;

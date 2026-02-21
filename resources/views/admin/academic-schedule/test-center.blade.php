@@ -454,6 +454,7 @@
         // Ustun filtrlarini to'ldirish
         function populateColumnFilters() {
             document.querySelectorAll('.col-filter').forEach(function(sel) {
+                if (sel.getAttribute('data-filter-type') === 'color') return;
                 var col = parseInt(sel.getAttribute('data-col'));
                 var values = {};
                 document.querySelectorAll('#schedule-tbody tr.data-row').forEach(function(row) {

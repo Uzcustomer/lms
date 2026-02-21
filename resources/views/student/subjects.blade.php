@@ -422,22 +422,16 @@
                                         <div class="g-value {{ $gradeClass($v, $v === null) }}">{{ $v !== null ? $v : '-' }}</div>
                                     </div>
                                     <div class="g-item">
-                                        @php $v = $subject['oski']; @endphp
                                         <div class="g-label">OSKI</div>
-                                        <div class="g-value {{ $gradeClass($v, $v === null) }}">{{ $v !== null ? $v : '-' }}</div>
+                                        <div class="g-value g-none">-</div>
                                     </div>
                                     <div class="g-item">
-                                        @php $v = $subject['test']; @endphp
                                         <div class="g-label">Test</div>
-                                        <div class="g-value {{ $gradeClass($v, $v === null) }}">{{ $v !== null ? $v : '-' }}</div>
+                                        <div class="g-value g-none">-</div>
                                     </div>
                                     <div class="g-item">
-                                        @php
-                                            $gradeComponents = array_filter([$jn, $subject['mt_average'], $subject['on'], $subject['oski'], $subject['test']], fn($val) => $val !== null && $val > 0);
-                                            $yn = !empty($gradeComponents) ? (int) round(array_sum($gradeComponents) / count($gradeComponents)) : null;
-                                        @endphp
                                         <div class="g-label">YN</div>
-                                        <div class="g-value {{ $gradeClass($yn, $yn === null) }}">{{ $yn !== null ? $yn : '-' }}</div>
+                                        <div class="g-value g-none">-</div>
                                     </div>
                                 </div>
 

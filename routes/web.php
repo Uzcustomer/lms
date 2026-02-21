@@ -31,6 +31,7 @@ use App\Http\Controllers\Admin\LectureScheduleController;
 use App\Http\Controllers\Admin\TimetableViewController;
 use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\Admin\AcademicScheduleController;
+use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\MoodleImportController;
 
 
@@ -428,6 +429,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari
     Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
+        // Server debug & monitoring
+        Route::get('/server-debug', [ServerDebugController::class, 'index'])->name('server-debug');
+        Route::get('/server-debug/ping', [ServerDebugController::class, 'ping'])->name('server-debug.ping');
+        Route::post('/server-debug/clear-logs', [ServerDebugController::class, 'clearLogs'])->name('server-debug.clear-logs');
         // Old routes — redirect to unified settings
         Route::get('/password-settings', fn () => redirect()->route('admin.settings', ['tab' => 'password']))->name('password-settings.index');
         Route::post('/password-settings', [SettingsController::class, 'updatePassword'])->name('password-settings.update');

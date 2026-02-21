@@ -173,24 +173,24 @@ class AcademicScheduleController extends Controller
         $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
 
-        $subjectNames = $transformedData->pluck('subject')->map(fn($s) => $s->subject_name)->unique()->toArray();
+        $subjectIds = $transformedData->pluck('subject')->pluck('subject_id')->unique()->toArray();
 
         $quizCounts = [];
-        if (!empty($groupHemisIds) && !empty($subjectNames)) {
+        if (!empty($groupHemisIds) && !empty($subjectIds)) {
             $quizRows = DB::table('hemis_quiz_results as hqr')
                 ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
                 ->whereIn('st.group_id', $groupHemisIds)
-                ->whereIn('hqr.fan_name', $subjectNames)
+                ->whereIn('hqr.fan_id', $subjectIds)
                 ->where('hqr.is_active', 1)
-                ->groupBy('st.group_id', 'hqr.fan_name', 'hqr.quiz_type')
-                ->select('st.group_id', 'hqr.fan_name', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
+                ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
                 ->get();
 
             foreach ($quizRows as $row) {
                 if (in_array($row->quiz_type, $testTypes)) {
-                    $key = $row->group_id . '|' . $row->fan_name . '|Test';
+                    $key = $row->group_id . '|' . $row->fan_id . '|Test';
                 } elseif (in_array($row->quiz_type, $oskiTypes)) {
-                    $key = $row->group_id . '|' . $row->fan_name . '|OSKI';
+                    $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
                 } else {
                     continue;
                 }
@@ -201,7 +201,7 @@ class AcademicScheduleController extends Controller
         // Ma'lumotlarga qo'shish
         $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts) {
             $item['student_count'] = $studentCounts[$item['group']->group_hemis_id] ?? 0;
-            $quizKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_name ?? '') . '|' . ($item['yn_type'] ?? '');
+            $quizKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['yn_type'] ?? '');
             $item['quiz_count'] = $quizCounts[$quizKey] ?? 0;
             return $item;
         });
@@ -242,11 +242,6 @@ class AcademicScheduleController extends Controller
         $groupHemisIds = collect($items)->pluck('group_id')->unique()->toArray();
         $subjectIds = collect($items)->pluck('subject_id')->unique()->toArray();
 
-        // subject_id -> subject_name mapping (HEMIS ID dan fan nomiga)
-        $subjectNameMap = CurriculumSubject::whereIn('subject_id', $subjectIds)
-            ->pluck('subject_name', 'subject_id');
-        $subjectNames = $subjectNameMap->values()->unique()->toArray();
-
         // Talabalar soni
         $studentCounts = DB::table('students')
             ->whereIn('group_id', $groupHemisIds)
@@ -255,26 +250,26 @@ class AcademicScheduleController extends Controller
             ->select('group_id', DB::raw('COUNT(*) as cnt'))
             ->pluck('cnt', 'group_id');
 
-        // Quiz natijalar soni (fan_name orqali moslashtirish)
+        // Quiz natijalar soni
         $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
 
         $quizCounts = [];
-        if (!empty($groupHemisIds) && !empty($subjectNames)) {
+        if (!empty($groupHemisIds) && !empty($subjectIds)) {
             $quizRows = DB::table('hemis_quiz_results as hqr')
                 ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
                 ->whereIn('st.group_id', $groupHemisIds)
-                ->whereIn('hqr.fan_name', $subjectNames)
+                ->whereIn('hqr.fan_id', $subjectIds)
                 ->where('hqr.is_active', 1)
-                ->groupBy('st.group_id', 'hqr.fan_name', 'hqr.quiz_type')
-                ->select('st.group_id', 'hqr.fan_name', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
+                ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
                 ->get();
 
             foreach ($quizRows as $row) {
                 if (in_array($row->quiz_type, $testTypes)) {
-                    $key = $row->group_id . '|' . $row->fan_name . '|Test';
+                    $key = $row->group_id . '|' . $row->fan_id . '|Test';
                 } elseif (in_array($row->quiz_type, $oskiTypes)) {
-                    $key = $row->group_id . '|' . $row->fan_name . '|OSKI';
+                    $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
                 } else {
                     continue;
                 }
@@ -284,8 +279,7 @@ class AcademicScheduleController extends Controller
 
         $result = [];
         foreach ($items as $item) {
-            $subjectName = $subjectNameMap[$item['subject_id']] ?? '';
-            $key = $item['group_id'] . '|' . $subjectName . '|' . $item['yn_type'];
+            $key = $item['group_id'] . '|' . $item['subject_id'] . '|' . $item['yn_type'];
             $sc = $studentCounts[$item['group_id']] ?? 0;
             $qc = $quizCounts[$key] ?? 0;
             $result[] = [

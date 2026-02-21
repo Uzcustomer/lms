@@ -134,10 +134,17 @@
                                     <th><select class="col-filter" data-col="4"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="5"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="6"><option value="">Barchasi</option></select></th>
-                                    <th></th>
+                                    <th><select class="col-filter" data-col="7"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="8"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="9"><option value="">Barchasi</option></select></th>
-                                    <th></th>
+                                    <th>
+                                        <select class="col-filter color-filter" data-col="10" data-filter-type="color">
+                                            <option value="">Barchasi</option>
+                                            <option value="green" data-color="#16a34a">Yashil</option>
+                                            <option value="yellow" data-color="#d97706">Sariq</option>
+                                            <option value="red" data-color="#dc2626">Qizil</option>
+                                        </select>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -155,7 +162,7 @@
                                             <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
                                             <td data-sort-value="{{ $item['level_name'] }}" style="text-align:center;color:#1e293b;font-weight:500;">{{ $item['level_name'] }}</td>
                                             <td data-sort-value="{{ $item['semester_name'] }}" style="text-align:center;color:#64748b;font-size:12px;">{{ $item['semester_name'] }}</td>
-                                            <td style="text-align:center;padding:4px 8px;"><span class="attempt-badge">1-urinish</span></td>
+                                            <td data-sort-value="1-urinish" style="text-align:center;padding:4px 8px;"><span class="attempt-badge">1-urinish</span></td>
                                             <td data-sort-value="{{ $item['yn_type'] ?? '' }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['yn_type'] ?? null)
                                                     <span class="yn-type-badge yn-type-{{ strtolower($item['yn_type']) }}">{{ $item['yn_type'] }}</span>
@@ -179,12 +186,13 @@
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
                                             </td>
-                                            <td class="td-quiz-count" data-sort-value="{{ $item['quiz_count'] ?? 0 }}" style="text-align:center;">
-                                                @php
-                                                    $sc = $item['student_count'] ?? 0;
-                                                    $qc = $item['quiz_count'] ?? 0;
-                                                    $qcClass = $qc == 0 ? 'quiz-count-zero' : ($qc >= $sc ? 'quiz-count-full' : 'quiz-count-partial');
-                                                @endphp
+                                            @php
+                                                $sc = $item['student_count'] ?? 0;
+                                                $qc = $item['quiz_count'] ?? 0;
+                                                $qcClass = $qc == 0 ? 'quiz-count-zero' : ($qc >= $sc ? 'quiz-count-full' : 'quiz-count-partial');
+                                                $qcColor = $qc == 0 ? 'red' : ($qc >= $sc ? 'green' : 'yellow');
+                                            @endphp
+                                            <td class="td-quiz-count" data-sort-value="{{ $qc }}" data-color="{{ $qcColor }}" style="text-align:center;">
                                                 <span class="{{ $qcClass }}">{{ $qc }}/{{ $sc }}</span>
                                             </td>
                                         </tr>
@@ -363,8 +371,10 @@
                         var qcCell = row.querySelector('.td-quiz-count');
                         if (qcCell) {
                             var cls = info.quiz_count == 0 ? 'quiz-count-zero' : (info.quiz_count >= info.student_count ? 'quiz-count-full' : 'quiz-count-partial');
+                            var clr = info.quiz_count == 0 ? 'red' : (info.quiz_count >= info.student_count ? 'green' : 'yellow');
                             qcCell.innerHTML = '<span class="' + cls + '">' + info.quiz_count + '/' + info.student_count + '</span>';
                             qcCell.setAttribute('data-sort-value', info.quiz_count);
+                            qcCell.setAttribute('data-color', clr);
                         }
                     });
 
@@ -465,10 +475,16 @@
 
         function applyColumnFilters() {
             var filters = {};
+            var colorFilters = {};
             document.querySelectorAll('.col-filter').forEach(function(sel) {
                 var col = parseInt(sel.getAttribute('data-col'));
                 var val = sel.value;
-                if (val) filters[col] = val;
+                if (!val) return;
+                if (sel.getAttribute('data-filter-type') === 'color') {
+                    colorFilters[col] = val;
+                } else {
+                    filters[col] = val;
+                }
             });
             var idx = 0;
             document.querySelectorAll('#schedule-tbody tr.data-row').forEach(function(row) {
@@ -478,6 +494,14 @@
                     if (!cell) { show = false; break; }
                     var cellVal = (cell.getAttribute('data-sort-value') || cell.textContent || '').trim();
                     if (cellVal !== filters[col]) { show = false; break; }
+                }
+                if (show) {
+                    for (var col in colorFilters) {
+                        var cell = row.cells[parseInt(col)];
+                        if (!cell) { show = false; break; }
+                        var cellColor = cell.getAttribute('data-color') || '';
+                        if (cellColor !== colorFilters[col]) { show = false; break; }
+                    }
                 }
                 row.style.display = show ? '' : 'none';
                 if (show) {
@@ -619,5 +643,9 @@
         .quiz-count-zero { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
         .quiz-count-partial { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
         .quiz-count-full { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+        .color-filter option[value="green"] { color: #16a34a; font-weight: 600; }
+        .color-filter option[value="yellow"] { color: #d97706; font-weight: 600; }
+        .color-filter option[value="red"] { color: #dc2626; font-weight: 600; }
     </style>
 </x-app-layout>

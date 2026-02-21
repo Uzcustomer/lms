@@ -91,13 +91,17 @@ class SendAttendanceFinalDailyReport extends Command
             ->pluck('ck')
             ->flip();
 
-        $gradeSet = DB::table('student_grades')
-            ->whereIn('employee_id', $employeeIds)
-            ->whereIn('subject_id', $subjectIds)
-            ->whereRaw('DATE(lesson_date) = ?', [$reportDateStr])
-            ->whereNotNull('grade')
-            ->where('grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as gk"))
+        // Baho: student_grades + students JOIN — guruh bo'yicha tekshirish
+        $gradeSet = DB::table('student_grades as sg')
+            ->join('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereIn('sg.employee_id', $employeeIds)
+            ->whereIn('sg.subject_id', $subjectIds)
+            ->whereIn('s.group_id', $groupHemisIds)
+            ->whereRaw('DATE(sg.lesson_date) = ?', [$reportDateStr])
+            ->whereNotNull('sg.grade')
+            ->where('sg.grade', '>', 0)
+            ->whereNull('sg.deleted_at')
+            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', s.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -120,8 +124,8 @@ class SendAttendanceFinalDailyReport extends Command
 
             $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                     . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
-            $gradeKey = $sch->employee_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
-                      . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+            $gradeKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+                      . '|' . $sch->training_type_code;
 
             if (!isset($grouped[$key])) {
                 $semCode = max((int) ($sch->semester_code ?? 1), 1);

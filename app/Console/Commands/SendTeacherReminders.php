@@ -94,14 +94,17 @@ class SendTeacherReminders extends Command
             ->pluck('ck')
             ->flip();
 
-        // Baho: student_grades jadvalidan (hisobot bilan bir xil)
-        $gradeSet = DB::table('student_grades')
-            ->whereIn('employee_id', $employeeIds)
-            ->whereIn('subject_id', $subjectIds)
-            ->whereRaw('DATE(lesson_date) = ?', [$today])
-            ->whereNotNull('grade')
-            ->where('grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as gk"))
+        // Baho: student_grades + students JOIN — guruh bo'yicha tekshirish
+        $gradeSet = DB::table('student_grades as sg')
+            ->join('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereIn('sg.employee_id', $employeeIds)
+            ->whereIn('sg.subject_id', $subjectIds)
+            ->whereIn('s.group_id', $groupHemisIds)
+            ->whereRaw('DATE(sg.lesson_date) = ?', [$today])
+            ->whereNotNull('sg.grade')
+            ->where('sg.grade', '>', 0)
+            ->whereNull('sg.deleted_at')
+            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', s.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -138,8 +141,8 @@ class SendTeacherReminders extends Command
                 // Ma'ruza (11), Mustaqil ta'lim (99), Oraliq nazorat (100), Oski (101), Yakuniy test (102)
                 // — bu turlarga baho qo'yilmaydi, shuning uchun tekshirilmaydi
                 if (!in_array($trainingTypeCode, $gradeExcludedTypes)) {
-                    $gradeKey = $schedule->employee_id . '|' . $schedule->subject_id . '|' . $schedule->lesson_date_str
-                              . '|' . $schedule->training_type_code . '|' . $schedule->lesson_pair_code;
+                    $gradeKey = $schedule->employee_id . '|' . $schedule->group_id . '|' . $schedule->subject_id . '|' . $schedule->lesson_date_str
+                              . '|' . $schedule->training_type_code;
 
                     if (!isset($gradeSet[$gradeKey])) {
                         $missingGrades[] = $schedule;

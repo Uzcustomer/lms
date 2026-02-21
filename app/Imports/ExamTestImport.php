@@ -169,6 +169,7 @@ class ExamTestImport implements ToCollection, WithHeadingRow, WithValidation
                                     'status' => 'recorded',
                                     'grade' => isset($row['grade']) ? round($row['grade']) : "",
                                     'deadline' => now(),
+                                    'is_final' => true,
                                 ]
                             );
                             $test_ids[] = $exam_test->id;

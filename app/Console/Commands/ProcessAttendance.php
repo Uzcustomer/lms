@@ -73,6 +73,7 @@ class ProcessAttendance extends Command
                     'reason' => 'absent',
                     'deadline' => Carbon::now()->addWeek(),
                     'status' => 'pending',
+                    'is_final' => true,
                 ]);
 
                 $this->info('StudentGrade created for student ID: ' . $attendance->student_id);

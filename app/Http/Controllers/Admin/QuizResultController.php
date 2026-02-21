@@ -1171,6 +1171,7 @@ class QuizResultController extends Controller
                 'grade' => round($result->grade),
                 'deadline' => now(),
                 'quiz_result_id' => $result->id,
+                'is_final' => true,
             ]);
 
             $successCount++;

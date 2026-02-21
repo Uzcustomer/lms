@@ -277,7 +277,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               crossAxisCount: 3,
               crossAxisSpacing: 5,
               mainAxisSpacing: 5,
-              childAspectRatio: 1.6,
+              childAspectRatio: 2.0,
             ),
             itemCount: gradeEntries.length,
             itemBuilder: (context, i) {

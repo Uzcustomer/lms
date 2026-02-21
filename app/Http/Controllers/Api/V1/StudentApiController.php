@@ -7,14 +7,20 @@ use App\Models\Attendance;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumWeek;
+use App\Models\Independent;
+use App\Models\IndependentGradeHistory;
+use App\Models\IndependentSubmission;
+use App\Models\MarkingSystemScore;
 use App\Models\Schedule;
 use App\Models\Semester;
+use App\Models\Setting;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class StudentApiController extends Controller
 {
@@ -29,12 +35,17 @@ class StudentApiController extends Controller
 
         $totalAbsent = Attendance::where('student_id', $student->id)->count();
 
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $debtSubjectsCount = StudentGrade::where('student_id', $student->id)
             ->whereIn('status', ['pending'])
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('created_at', 'desc')
             ->take(10)
             ->get()
@@ -48,10 +59,14 @@ class StudentApiController extends Controller
             ]);
 
         return response()->json([
-            'avg_gpa' => (float) $avgGpa,
-            'total_absent' => $totalAbsent,
-            'debt_subjects_count' => $debtSubjectsCount,
-            'recent_grades' => $recentGrades,
+            'data' => [
+                'student_name' => $student->full_name,
+                'gpa' => (float) $avgGpa,
+                'avg_grade' => $student->avg_grade ?? 0,
+                'debt_subjects' => $debtSubjectsCount,
+                'total_absences' => $totalAbsent,
+                'recent_grades' => $recentGrades,
+            ],
         ]);
     }
 
@@ -62,24 +77,56 @@ class StudentApiController extends Controller
     {
         $student = $request->user();
 
+        // Calculate course number from semester name (e.g. "8-semestr" -> kurs 4)
+        $course = null;
+        if ($student->semester_name && preg_match('/(\d+)/', $student->semester_name, $matches)) {
+            $semNum = (int) $matches[1];
+            $course = (int) ceil($semNum / 2);
+        }
+        if (!$course && $student->year_of_enter) {
+            $enterYear = (int) $student->year_of_enter;
+            $currentMonth = (int) date('m');
+            $currentYear = (int) date('Y');
+            $course = $currentMonth >= 9
+                ? $currentYear - $enterYear + 1
+                : $currentYear - $enterYear;
+        }
+
         return response()->json([
-            'full_name' => $student->full_name,
-            'student_id_number' => $student->student_id_number,
-            'image' => $student->image,
-            'birth_date' => $student->birth_date?->format('Y-m-d'),
-            'phone' => $student->other['phone'] ?? '',
-            'email' => $student->other['email'] ?? '',
-            'gender' => $student->gender_name,
-            'faculty' => $student->department_name,
-            'specialty' => $student->specialty_name,
-            'group' => $student->group_name,
-            'level' => $student->level_name,
-            'education_type' => $student->education_type_name,
-            'province' => $student->province_name,
-            'district' => $student->district_name,
-            'semester' => $student->semester_name,
-            'avg_gpa' => $student->avg_gpa,
-            'avg_grade' => $student->avg_grade,
+            'data' => [
+                'full_name' => $student->full_name,
+                'student_id_number' => $student->student_id_number,
+                'image' => $student->image,
+                'birth_date' => $student->birth_date?->format('Y-m-d'),
+                'phone' => $student->phone ?? '',
+                'hemis_phone' => $student->other['phone'] ?? '',
+                'email' => $student->other['email'] ?? '',
+                'telegram_username' => $student->telegram_username ?? '',
+                'telegram_verified' => $student->isTelegramVerified(),
+                'telegram_days_left' => $student->telegramDaysLeft(),
+                'profile_complete' => $student->isProfileComplete(),
+                'gender' => $student->gender,
+                'group_name' => $student->group_name,
+                'department_name' => $student->department_name,
+                'specialty_name' => $student->specialty_name,
+                'level_code' => $student->level_code,
+                'level_name' => $student->level_name,
+                'course' => $course,
+                'education_type_name' => $student->education_type_name,
+                'education_form_name' => $student->education_form_name ?? null,
+                'education_year_code' => $student->education_year_code,
+                'education_year_name' => $student->education_year_name,
+                'year_of_enter' => $student->year_of_enter,
+                'semester_code' => $student->semester_code,
+                'semester_name' => $student->semester_name,
+                'province_name' => $student->province_name,
+                'district_name' => $student->district_name,
+                'avg_gpa' => $student->avg_gpa,
+                'avg_grade' => $student->avg_grade,
+                'total_credit' => $student->total_credit ?? null,
+                'payment_form_code' => $student->payment_form_code,
+                'payment_form_name' => $student->payment_form_name,
+            ],
         ]);
     }
 
@@ -152,12 +199,13 @@ class StudentApiController extends Controller
                         'subject_name' => $l->subject_name,
                         'subject_id' => $l->subject_id,
                         'employee_name' => $l->employee_name,
-                        'auditorium' => $l->auditorium_name ?? '',
-                        'start_time' => $l->lesson_pair_start_time,
-                        'end_time' => $l->lesson_pair_end_time,
-                        'training_type' => $l->training_type_name,
+                        'auditorium_name' => $l->auditorium_name ?? '',
+                        'lesson_pair_code' => $l->lesson_pair_code ?? null,
+                        'lesson_pair_start_time' => $l->lesson_pair_start_time,
+                        'lesson_pair_end_time' => $l->lesson_pair_end_time,
+                        'training_type_name' => $l->training_type_name,
                     ])
-                    ->sortBy('start_time')
+                    ->sortBy('lesson_pair_start_time')
                     ->values();
 
                 return [
@@ -169,12 +217,27 @@ class StudentApiController extends Controller
             ->sortKeys()
             ->values();
 
+        // Build days map keyed by day_name for mobile app
+        $days = [];
+        foreach ($groupedSchedule as $day) {
+            $days[$day['day_name']] = $day['lessons'];
+        }
+
+        $weekLabel = null;
+        if ($selectedWeek) {
+            $weekLabel = Carbon::parse($selectedWeek['start_date'])->format('d.m') . ' - ' . Carbon::parse($selectedWeek['end_date'])->format('d.m.Y');
+        }
+
         return response()->json([
-            'semesters' => $semesters,
-            'selected_semester_id' => $selectedSemesterId,
-            'weeks' => $weeks,
-            'selected_week_id' => $selectedWeekId,
-            'schedule' => $groupedSchedule,
+            'data' => [
+                'semesters' => $semesters,
+                'selected_semester_id' => $selectedSemesterId,
+                'weeks' => $weeks,
+                'selected_week_id' => $selectedWeekId,
+                'week_label' => $weekLabel,
+                'days' => $days,
+                'schedule' => $groupedSchedule,
+            ],
         ]);
     }
 
@@ -213,9 +276,38 @@ class StudentApiController extends Controller
             ->where('semester_code', $semesterCode)
             ->get();
 
+        // MT (Independent) data
+        $allIndependents = Independent::where('group_hemis_id', $groupHemisId)->get();
+        $independentsByHemisId = $allIndependents->groupBy('subject_hemis_id');
+        $indHemisIds = $allIndependents->pluck('subject_hemis_id')->unique()->filter()->toArray();
+        $hemisToSubjectId = [];
+        if (!empty($indHemisIds)) {
+            $hemisToSubjectId = CurriculumSubject::whereIn('curriculum_subject_hemis_id', $indHemisIds)
+                ->pluck('subject_id', 'curriculum_subject_hemis_id')->toArray();
+        }
+        $independentsBySubjectId = collect();
+        foreach ($allIndependents as $ind) {
+            $resolvedSubjectId = $hemisToSubjectId[$ind->subject_hemis_id] ?? null;
+            if ($resolvedSubjectId) {
+                if (!$independentsBySubjectId->has($resolvedSubjectId)) {
+                    $independentsBySubjectId[$resolvedSubjectId] = collect();
+                }
+                $independentsBySubjectId[$resolvedSubjectId]->push($ind);
+            }
+        }
+        $independentsByName = $allIndependents->groupBy('subject_name');
+
+        $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
+        $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
+        $timeParts = explode(':', $mtDeadlineTime);
+        $mtHour = (int) ($timeParts[0] ?? 17);
+        $mtMinute = (int) ($timeParts[1] ?? 0);
+
         $subjects = $curriculumSubjects->map(function ($cs) use (
             $semesterCode, $studentHemisId, $groupHemisId, $educationYearCode,
-            $excludedTrainingCodes, $gradingCutoffDate, $getEffectiveGrade
+            $excludedTrainingCodes, $gradingCutoffDate, $getEffectiveGrade,
+            $student, $independentsByHemisId, $independentsBySubjectId, $independentsByName,
+            $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime
         ) {
             $subjectId = $cs->subject_id;
 
@@ -256,11 +348,13 @@ class StudentApiController extends Controller
                 ->whereNotIn('training_type_code', $excludedTrainingCodes)
                 ->whereNotNull('lesson_date')
                 ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $subjectEducationYearCode)
-                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode);
+                    if ($minScheduleDate !== null) {
+                        $q2->orWhere(function ($q3) use ($minScheduleDate) {
                             $q3->whereNull('education_year_code')
-                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                                ->where('lesson_date', '>=', $minScheduleDate);
                         });
+                    }
                 }))
                 ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
                 ->get();
@@ -312,6 +406,7 @@ class StudentApiController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->where('training_type_code', 99)
                 ->whereNotNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
                 ->get();
 
@@ -352,6 +447,7 @@ class StudentApiController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->where('training_type_code', 99)
                 ->whereNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->value('grade');
             if ($manualMt !== null) {
                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
@@ -363,6 +459,7 @@ class StudentApiController extends Controller
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->whereIn('training_type_code', [100, 101, 102])
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason')
                 ->get();
 
@@ -402,24 +499,86 @@ class StudentApiController extends Controller
             }
             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
 
+            $total = null;
+            $gradeComponents = array_filter([$jnAverage, $mtAverage, $otherGrades['on'], $otherGrades['oski'], $otherGrades['test']], fn($v) => $v !== null && $v > 0);
+            if (!empty($gradeComponents)) {
+                $total = (int) round(array_sum($gradeComponents) / count($gradeComponents));
+            }
+
+            // MT submission data
+            $mtData = null;
+            $subjectIndependents = $independentsByHemisId->get($cs->curriculum_subject_hemis_id)
+                ?? $independentsBySubjectId->get($cs->subject_id)
+                ?? $independentsByName->get($cs->subject_name);
+
+            if ($subjectIndependents && $subjectIndependents->count() > 0) {
+                $independent = $subjectIndependents->sortByDesc('deadline')->first();
+                $submission = $independent->submissionByStudent($student->id);
+                $grade = StudentGrade::where('student_id', $student->id)
+                    ->where('independent_id', $independent->id)
+                    ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                    ->first();
+
+                $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($mtHour, $mtMinute, 0);
+                $isOverdue = Carbon::now()->gt($deadlineDateTime);
+                $submissionCount = $submission?->submission_count ?? 0;
+
+                $mtHistoryCount = DB::table('mt_grade_history')
+                    ->where('student_hemis_id', $student->hemis_id)
+                    ->where('subject_id', $independent->subject_hemis_id)
+                    ->where('semester_code', $independent->semester_code)
+                    ->count();
+                $remainingAttempts = max(0, $mtMaxResubmissions - $mtHistoryCount);
+
+                try {
+                    $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+                } catch (\Exception $e) {
+                    $studentMinLimit = 56;
+                }
+                $gradeLocked = $grade && $grade->grade >= $studentMinLimit;
+
+                $canSubmit = !$isOverdue && !$gradeLocked;
+                if ($submission && $grade && $grade->grade < $studentMinLimit) {
+                    $canSubmit = $canSubmit && $remainingAttempts > 0;
+                }
+
+                $mtData = [
+                    'independent_id' => $independent->id,
+                    'deadline' => Carbon::parse($independent->deadline)->format('d.m.Y'),
+                    'deadline_time' => $mtDeadlineTime,
+                    'is_overdue' => $isOverdue,
+                    'has_submission' => (bool) $submission,
+                    'file_name' => $submission?->file_original_name,
+                    'grade' => $grade?->grade,
+                    'grade_locked' => $gradeLocked,
+                    'submission_count' => $submissionCount,
+                    'remaining_attempts' => $remainingAttempts,
+                    'can_submit' => $canSubmit,
+                ];
+            }
+
             return [
-                'name' => $cs->subject_name,
+                'subject_name' => $cs->subject_name,
                 'credit' => $cs->credit,
                 'subject_id' => $subjectId,
-                'jn_average' => $jnAverage,
-                'mt_average' => $mtAverage,
-                'on' => $otherGrades['on'],
-                'oski' => $otherGrades['oski'],
-                'test' => $otherGrades['test'],
+                'employee_name' => null,
+                'grades' => [
+                    'jn' => $jnAverage > 0 ? $jnAverage : null,
+                    'mt' => $mtAverage > 0 ? $mtAverage : null,
+                    'on' => $otherGrades['on'],
+                    'oski' => $otherGrades['oski'],
+                    'test' => $otherGrades['test'],
+                    'total' => $total,
+                ],
                 'dav_percent' => $davomatPercent,
                 'absent_hours' => $absentOff,
                 'auditorium_hours' => $auditoriumHours,
+                'mt_submission' => $mtData,
             ];
         });
 
         return response()->json([
-            'semester' => $student->semester_name,
-            'subjects' => $subjects->values(),
+            'data' => $subjects->values(),
         ]);
     }
 
@@ -431,9 +590,13 @@ class StudentApiController extends Controller
         $student = $request->user();
         $semester = $student->semester_code;
 
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $grades = StudentGrade::where('student_id', $student->id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('lesson_date', 'desc')
             ->get()
             ->map(fn($g) => [
@@ -453,8 +616,10 @@ class StudentApiController extends Controller
             ]);
 
         return response()->json([
-            'subject_id' => $subjectId,
-            'grades' => $grades,
+            'data' => [
+                'subject_id' => $subjectId,
+                'grades' => $grades,
+            ],
         ]);
     }
 
@@ -465,8 +630,12 @@ class StudentApiController extends Controller
     {
         $student = $request->user();
 
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $pendingLessons = StudentGrade::where('student_id', $student->id)
             ->whereIn('status', ['pending', 'retake'])
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('lesson_date')
             ->get()
             ->map(fn($g) => [
@@ -483,7 +652,223 @@ class StudentApiController extends Controller
             ]);
 
         return response()->json([
-            'pending_lessons' => $pendingLessons,
+            'data' => $pendingLessons,
+        ]);
+    }
+
+    /**
+     * Upload MT (Mustaqil ta'lim) file — uses existing Independent system
+     */
+    public function mtUpload(Request $request, $subjectId): JsonResponse
+    {
+        $allowedExtensions = ['zip', 'doc', 'docx', 'ppt', 'pptx', 'pdf'];
+
+        $request->validate([
+            'file' => [
+                'required', 'file', 'max:10240',
+                function ($attribute, $value, $fail) use ($allowedExtensions) {
+                    $ext = strtolower($value->getClientOriginalExtension());
+                    if (!in_array($ext, $allowedExtensions)) {
+                        $fail('Faqat zip, doc, docx, ppt, pptx, pdf formatlar qabul qilinadi.');
+                    }
+                },
+            ],
+        ]);
+
+        $student = $request->user();
+
+        // Find Independent record for this subject
+        $cs = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
+            ->where('semester_code', $student->semester_code)
+            ->where('subject_id', $subjectId)
+            ->first();
+
+        if (!$cs) {
+            return response()->json(['message' => 'Fan topilmadi.'], 404);
+        }
+
+        $independent = Independent::where('group_hemis_id', $student->group_id)
+            ->where(function ($q) use ($cs) {
+                $q->where('subject_hemis_id', $cs->curriculum_subject_hemis_id)
+                  ->orWhere('subject_name', $cs->subject_name);
+            })
+            ->orderBy('deadline', 'desc')
+            ->first();
+
+        if (!$independent) {
+            return response()->json(['message' => 'MT topshiriq topilmadi.'], 404);
+        }
+
+        // YN lock check
+        $ynLocked = StudentGrade::where('student_hemis_id', $student->hemis_id)
+            ->where('subject_id', $independent->subject_hemis_id)
+            ->where('semester_code', $independent->semester_code)
+            ->where('is_yn_locked', true)
+            ->exists();
+
+        if ($ynLocked) {
+            return response()->json(['message' => 'YN ga yuborilgan. Fayl yuklash mumkin emas.'], 422);
+        }
+
+        // Grade lock check
+        $existingGrade = StudentGrade::where('student_id', $student->id)
+            ->where('independent_id', $independent->id)
+            ->first();
+
+        try {
+            $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+        } catch (\Exception $e) {
+            $studentMinLimit = 56;
+        }
+
+        if ($existingGrade && $existingGrade->grade >= $studentMinLimit) {
+            return response()->json(['message' => 'Baho ' . $studentMinLimit . ' va undan yuqori — qayta yuklash mumkin emas.'], 422);
+        }
+
+        // Deadline check
+        $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
+        $timeParts = explode(':', $mtDeadlineTime);
+        $hour = (int) ($timeParts[0] ?? 17);
+        $minute = (int) ($timeParts[1] ?? 0);
+        $deadlineTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
+
+        if (Carbon::now()->gt($deadlineTime)) {
+            return response()->json(['message' => 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ')'], 422);
+        }
+
+        // Resubmission check
+        $existing = IndependentSubmission::where('independent_id', $independent->id)
+            ->where('student_id', $student->id)
+            ->first();
+
+        $mtMaxResubmissions = (int) Setting::get('mt_max_resubmissions', 3);
+
+        if ($existing && $existingGrade && $existingGrade->grade < $studentMinLimit) {
+            $mtHistoryCount = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $student->hemis_id)
+                ->where('subject_id', $independent->subject_hemis_id)
+                ->where('semester_code', $independent->semester_code)
+                ->count();
+            if ($mtHistoryCount >= $mtMaxResubmissions) {
+                return response()->json(['message' => 'Qayta yuklash imkoniyati tugagan (maksimum ' . $mtMaxResubmissions . ' marta).'], 422);
+            }
+        }
+
+        $file = $request->file('file');
+        $filePath = $file->store('independent-submissions/' . $student->hemis_id, 'public');
+
+        // Archive old grade on resubmission
+        if ($existingGrade && $existingGrade->grade < $studentMinLimit && $existing) {
+            $attemptCount = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $student->hemis_id)
+                ->where('subject_id', $independent->subject_hemis_id)
+                ->where('semester_code', $independent->semester_code)
+                ->count();
+
+            DB::table('mt_grade_history')->insert([
+                'student_hemis_id' => $student->hemis_id,
+                'subject_id' => $existingGrade->subject_id,
+                'semester_code' => $independent->semester_code,
+                'attempt_number' => $attemptCount + 1,
+                'grade' => $existingGrade->grade,
+                'file_path' => $existing->file_path,
+                'file_original_name' => $existing->file_original_name,
+                'graded_by' => $existingGrade->employee_name ?? 'Admin',
+                'graded_at' => $existingGrade->updated_at ?? $existingGrade->created_at,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            DB::table('student_grades')->where('id', $existingGrade->id)->delete();
+        } elseif ($existing && $existing->file_path && !$existingGrade) {
+            Storage::disk('public')->delete($existing->file_path);
+        }
+
+        $newCount = $existing ? $existing->submission_count + 1 : 1;
+
+        $submission = IndependentSubmission::updateOrCreate([
+            'independent_id' => $independent->id,
+            'student_id' => $student->id,
+        ], [
+            'student_hemis_id' => $student->hemis_id,
+            'file_path' => $filePath,
+            'file_original_name' => $file->getClientOriginalName(),
+            'submitted_at' => now(),
+            'submission_count' => $newCount,
+            'viewed_at' => null,
+        ]);
+
+        return response()->json([
+            'message' => 'Fayl muvaffaqiyatli yuklandi.',
+            'data' => [
+                'id' => $submission->id,
+                'file_name' => $submission->file_original_name,
+                'submission_count' => $submission->submission_count,
+            ],
+        ]);
+    }
+
+    /**
+     * Get MT submissions for a subject
+     */
+    public function mtSubmissions(Request $request, $subjectId): JsonResponse
+    {
+        $student = $request->user();
+
+        $cs = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
+            ->where('semester_code', $student->semester_code)
+            ->where('subject_id', $subjectId)
+            ->first();
+
+        if (!$cs) {
+            return response()->json(['data' => []]);
+        }
+
+        $independent = Independent::where('group_hemis_id', $student->group_id)
+            ->where(function ($q) use ($cs) {
+                $q->where('subject_hemis_id', $cs->curriculum_subject_hemis_id)
+                  ->orWhere('subject_name', $cs->subject_name);
+            })
+            ->orderBy('deadline', 'desc')
+            ->first();
+
+        if (!$independent) {
+            return response()->json(['data' => []]);
+        }
+
+        $submission = IndependentSubmission::where('independent_id', $independent->id)
+            ->where('student_id', $student->id)
+            ->first();
+
+        $grade = StudentGrade::where('student_id', $student->id)
+            ->where('independent_id', $independent->id)
+            ->first();
+
+        $gradeHistory = [];
+        try {
+            $gradeHistory = IndependentGradeHistory::where('independent_id', $independent->id)
+                ->where('student_id', $student->id)
+                ->orderBy('submission_number')
+                ->get()
+                ->map(fn($h) => [
+                    'submission_number' => $h->submission_number,
+                    'grade' => $h->grade,
+                    'graded_at' => $h->created_at?->toISOString(),
+                ]);
+        } catch (\Exception $e) {}
+
+        return response()->json([
+            'data' => [
+                'independent_id' => $independent->id,
+                'subject_name' => $independent->subject_name,
+                'deadline' => $independent->deadline,
+                'has_submission' => (bool) $submission,
+                'file_name' => $submission?->file_original_name,
+                'submitted_at' => $submission?->submitted_at?->toISOString(),
+                'submission_count' => $submission?->submission_count ?? 0,
+                'grade' => $grade?->grade,
+                'grade_history' => $gradeHistory,
+            ],
         ]);
     }
 
@@ -513,7 +898,77 @@ class StudentApiController extends Controller
             ]);
 
         return response()->json([
-            'attendance' => $attendanceData,
+            'data' => [
+                'attendance' => $attendanceData,
+            ],
+        ]);
+    }
+
+    /**
+     * Save phone number for profile completion
+     */
+    public function savePhone(Request $request): JsonResponse
+    {
+        $request->validate([
+            'phone' => ['required', 'string', 'regex:/^\+\d{7,15}$/'],
+        ], [
+            'phone.regex' => 'Telefon raqami noto\'g\'ri formatda. Masalan: +998901234567',
+        ]);
+
+        $student = $request->user();
+        $student->phone = $request->phone;
+        $student->save();
+
+        $days = (int) Setting::get('telegram_deadline_days', 19);
+
+        return response()->json([
+            'message' => "Telefon raqami saqlandi. Telegram hisobingizni {$days} kun ichida tasdiqlang.",
+            'profile_complete' => $student->isProfileComplete(),
+            'telegram_days_left' => $student->telegramDaysLeft(),
+        ]);
+    }
+
+    /**
+     * Save telegram username and generate verification code
+     */
+    public function saveTelegram(Request $request): JsonResponse
+    {
+        $request->validate([
+            'telegram_username' => ['required', 'string', 'regex:/^@[a-zA-Z0-9_]{5,32}$/'],
+        ], [
+            'telegram_username.regex' => 'Telegram username @username formatida bo\'lishi kerak (kamida 5 belgi).',
+        ]);
+
+        $student = $request->user();
+        $student->telegram_username = $request->telegram_username;
+
+        $code = strtoupper(\Illuminate\Support\Str::random(6));
+        $student->telegram_verification_code = $code;
+        $student->telegram_verified_at = null;
+        $student->telegram_chat_id = null;
+        $student->save();
+
+        $botUsername = config('services.telegram.bot_username', '');
+
+        return response()->json([
+            'message' => 'Telegram username saqlandi. Endi botga tasdiqlash kodini yuboring.',
+            'verification_code' => $code,
+            'bot_username' => $botUsername,
+            'bot_link' => $botUsername ? "https://t.me/{$botUsername}?start={$code}" : null,
+        ]);
+    }
+
+    /**
+     * Check telegram verification status
+     */
+    public function checkTelegramVerification(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        return response()->json([
+            'verified' => $student->isTelegramVerified(),
+            'telegram_username' => $student->telegram_username,
+            'telegram_days_left' => $student->telegramDaysLeft(),
         ]);
     }
 }

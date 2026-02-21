@@ -18,8 +18,8 @@ use App\Models\MarkingSystemScore;
 
 class ImportGrades extends Command
 {
-    protected string $baseUrl = '';
-    protected string $token = '';
+    protected ?string $baseUrl;
+    protected ?string $token;
     protected array $report = [];
 
     public function __construct()

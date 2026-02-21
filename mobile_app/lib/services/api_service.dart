@@ -1,28 +1,59 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 
 class ApiService {
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   static const String _tokenKey = 'auth_token';
   static const String _guardKey = 'auth_guard';
 
+  // Web da shared_preferences, mobile da flutter_secure_storage ishlatamiz
+  Future<String?> _read(String key) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(key);
+    }
+    return await _secureStorage.read(key: key);
+  }
+
+  Future<void> _write(String key, String value) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, value);
+    } else {
+      await _secureStorage.write(key: key, value: value);
+    }
+  }
+
+  Future<void> _deleteAll() async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_tokenKey);
+      await prefs.remove(_guardKey);
+    } else {
+      await _secureStorage.deleteAll();
+    }
+  }
+
   Future<String?> getToken() async {
-    return await _storage.read(key: _tokenKey);
+    return await _read(_tokenKey);
   }
 
   Future<String?> getGuard() async {
-    return await _storage.read(key: _guardKey);
+    return await _read(_guardKey);
   }
 
   Future<void> saveToken(String token, String guard) async {
-    await _storage.write(key: _tokenKey, value: token);
-    await _storage.write(key: _guardKey, value: guard);
+    await _write(_tokenKey, token);
+    await _write(_guardKey, guard);
   }
 
   Future<void> clearToken() async {
-    await _storage.deleteAll();
+    await _deleteAll();
   }
 
   Future<bool> isLoggedIn() async {
@@ -72,6 +103,27 @@ class ApiService {
       headers: _headers(token),
     );
 
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> uploadFile(String endpoint, Uint8List fileBytes, String fileName) async {
+    final token = await getToken();
+    final uri = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+    final request = http.MultipartRequest('POST', uri);
+
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Accept'] = 'application/json';
+    }
+
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      fileBytes,
+      filename: fileName,
+    ));
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
     return _handleResponse(response);
   }
 

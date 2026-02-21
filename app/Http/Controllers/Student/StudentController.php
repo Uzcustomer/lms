@@ -58,12 +58,17 @@ class StudentController extends Controller
 
         $totalAbsent = Attendance::where('student_id', $student->id)->count();
 
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $debtSubjectsCount = StudentGrade::where('student_id', $student->id)
             ->whereIn('status', ["pending"])
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('created_at', 'desc')
             ->take(4)
             ->get();
@@ -361,11 +366,13 @@ class StudentController extends Controller
                 ->whereNotIn('training_type_code', $excludedTrainingCodes)
                 ->whereNotNull('lesson_date')
                 ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $subjectEducationYearCode)
-                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode);
+                    if ($minScheduleDate !== null) {
+                        $q2->orWhere(function ($q3) use ($minScheduleDate) {
                             $q3->whereNull('education_year_code')
-                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                                ->where('lesson_date', '>=', $minScheduleDate);
                         });
+                    }
                 }))
                 ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
                 ->get();
@@ -451,13 +458,7 @@ class StudentController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->where('training_type_code', 99)
                 ->whereNotNull('lesson_date')
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $subjectEducationYearCode)
-                        ->orWhere(function ($q3) use ($minScheduleDate) {
-                            $q3->whereNull('education_year_code')
-                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
-                        });
-                }))
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
                 ->get();
 
@@ -516,13 +517,13 @@ class StudentController extends Controller
             }
 
             // Manual MT baho bo'lsa override
-            // No education_year_code filter: manual MT grades are unique per student/subject/semester
             $manualMt = DB::table('student_grades')
                 ->where('student_hemis_id', $studentHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->where('training_type_code', 99)
                 ->whereNull('lesson_date')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->value('grade');
             if ($manualMt !== null) {
                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
@@ -534,15 +535,7 @@ class StudentController extends Controller
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->whereIn('training_type_code', [100, 101, 102])
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $subjectEducationYearCode)
-                        ->orWhere(function ($q3) use ($minScheduleDate) {
-                            $q3->whereNull('education_year_code')
-                                ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
-                                    $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-                                }));
-                        });
-                }))
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason')
                 ->get();
 
@@ -592,11 +585,13 @@ class StudentController extends Controller
                 ->whereNotIn('training_type_code', [100, 101, 102])
                 ->whereNotNull('lesson_date')
                 ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $subjectEducationYearCode)
-                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode);
+                    if ($minScheduleDate !== null) {
+                        $q2->orWhere(function ($q3) use ($minScheduleDate) {
                             $q3->whereNull('education_year_code')
-                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                                ->where('lesson_date', '>=', $minScheduleDate);
                         });
+                    }
                 }))
                 ->select('lesson_date', 'training_type_code', 'training_type_name', 'lesson_pair_name',
                     'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_name',
@@ -747,6 +742,7 @@ class StudentController extends Controller
 
                 $grade = StudentGrade::where('student_id', $student->id)
                     ->where('independent_id', $independent->id)
+                    ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                     ->first();
 
                 $gradeHistory = collect();
@@ -860,10 +856,13 @@ class StudentController extends Controller
         $student = Auth::user();
         $semester = $student->semester_code;
 
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $grades = StudentGrade::where('student_id', $student->id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
-//            ->where('training_type_code', "<>", 11)
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('lesson_date', 'desc')
             ->get();
 
@@ -891,9 +890,13 @@ class StudentController extends Controller
             return $redirect;
         }
 
-        $pendingLessons = StudentGrade::where('student_id', auth()->id())
+        $student = Auth::guard('student')->user();
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
+        $pendingLessons = StudentGrade::where('student_id', $student->id)
             ->whereIn('status', ['pending', 'retake'])
-//            ->where('training_type_code', '<>', 11)
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('lesson_date')
             ->get();
 
@@ -942,6 +945,13 @@ class StudentController extends Controller
                 $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
                 $gradeLocked = $grade && $grade->grade >= $studentMinLimit;
 
+                // YN ga yuborilganligini tekshirish
+                $ynLocked = StudentGrade::where('student_hemis_id', $student->hemis_id)
+                    ->where('subject_id', $independent->subject_hemis_id)
+                    ->where('semester_code', $independent->semester_code)
+                    ->where('is_yn_locked', true)
+                    ->exists();
+
                 return [
                     'id' => $independent->id,
                     'subject_name' => $independent->subject_name,
@@ -952,10 +962,11 @@ class StudentController extends Controller
                     'submission' => $submission,
                     'grade' => $grade?->grade,
                     'grade_locked' => $gradeLocked,
+                    'yn_locked' => $ynLocked,
                     'grade_history' => $gradeHistory,
                     'submission_count' => $submissionCount,
                     'remaining_attempts' => $remainingAttempts,
-                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < $studentMinLimit && $remainingAttempts > 0 && !$isOverdue,
+                    'can_resubmit' => !$gradeLocked && !$ynLocked && $submission && $grade && $grade->grade < $studentMinLimit && $remainingAttempts > 0 && !$isOverdue,
                     'status' => $independent->status,
                     'file_path' => $independent->file_path,
                     'file_original_name' => $independent->file_original_name,

@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 
 class SendAttendanceGroupSummary extends Command
 {
-    protected $signature = 'teachers:send-group-summary {--chat-id= : Test uchun shaxsiy Telegram chat_id}';
+    protected $signature = 'teachers:send-group-summary {--chat-id= : Test uchun shaxsiy Telegram chat_id} {--detail : O\'qituvchilar kesimi batafsil jadvalini ham yuborish}';
 
     protected $description = 'Davomat olmagan yoki baho qo\'ymagan o\'qituvchilar haqida Telegram guruhga jadval ko\'rinishida hisobot yuborish';
 
@@ -23,7 +23,9 @@ class SendAttendanceGroupSummary extends Command
         $todayStr = $today->format('Y-m-d');
         $now = Carbon::now();
 
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
+        // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi (ma'ruza va h.k.)
+        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         $this->info("Bugungi sana: {$todayStr}");
 
@@ -53,6 +55,7 @@ class SendAttendanceGroupSummary extends Command
         // 2-QADAM: Jadvaldan ma'lumot olish (web hisobot bilan bir xil logika)
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
+            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
             ->leftJoin('semesters as sem', function ($join) {
                 $join->on('sem.code', '=', 'sch.semester_code')
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
@@ -61,6 +64,7 @@ class SendAttendanceGroupSummary extends Command
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->whereRaw('DATE(sch.lesson_date) = ?', [$todayStr])
+            ->whereRaw('LOWER(c.education_type_name) LIKE ?', ['%bakalavr%'])
             ->where(function ($q) {
                 $q->where('sem.current', true)
                   ->orWhereNull('sem.id');
@@ -71,6 +75,7 @@ class SendAttendanceGroupSummary extends Command
                 'sch.employee_name',
                 'sch.faculty_name',
                 'g.specialty_name',
+                'sem.level_code',
                 'sem.level_name',
                 'sch.semester_code',
                 'sch.semester_name',
@@ -146,6 +151,8 @@ class SendAttendanceGroupSummary extends Command
 
             if (!isset($grouped[$key])) {
                 $semCode = max((int) ($sch->semester_code ?? 1), 1);
+                // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
+                $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
 
                 $grouped[$key] = [
                     'employee_name' => $sch->employee_name,
@@ -160,9 +167,9 @@ class SendAttendanceGroupSummary extends Command
                     'lesson_pair_time' => $pairTime,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
                     'has_attendance' => isset($attendanceSet[$attKey]),
-                    'has_grades' => isset($gradeSet[$gradeKey]),
+                    'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
                     'lesson_date' => $sch->lesson_date_str,
-                    'kurs' => (int) ceil($semCode / 2),
+                    'kurs' => (int) ($sch->level_code ?? ceil($semCode / 2)),
                     'employee_id' => $sch->employee_id,
                     'academic_hours' => $this->calculateAcademicHours($sch->lesson_pair_start_time, $sch->lesson_pair_end_time),
                 ];
@@ -222,21 +229,22 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName] = ['total' => 0, 'no_attendance' => 0, 'no_grades' => 0, 'teachers' => []];
             }
 
-            // Kafedra ichida fan bo'yicha guruhlash
-            $deptKey = $deptName . '||' . $facultyName;
+            // Kafedra ichida fan bo'yicha guruhlash (faqat kafedra nomi bo'yicha)
+            // Fan nomini normalizatsiya qilish: (a), (b), (c) kabi qo'shimchalarni olib tashlash
+            $normalizedSubject = $this->normalizeSubjectName($subjectName);
+            $deptKey = $deptName;
             if (!isset($departmentStats[$deptKey])) {
                 $departmentStats[$deptKey] = [
                     'department_name' => $deptName,
-                    'faculty_name' => $facultyName,
                     'subjects' => [],
                 ];
             }
-            if (!isset($departmentStats[$deptKey]['subjects'][$subjectName])) {
-                $departmentStats[$deptKey]['subjects'][$subjectName] = ['no_attendance' => 0, 'no_grades' => 0, 'total' => 0];
+            if (!isset($departmentStats[$deptKey]['subjects'][$normalizedSubject])) {
+                $departmentStats[$deptKey]['subjects'][$normalizedSubject] = ['no_attendance' => 0, 'no_grades' => 0, 'total' => 0];
             }
 
             $facultyStats[$facultyName]['total'] += $hours;
-            $departmentStats[$deptKey]['subjects'][$subjectName]['total'] += $hours;
+            $departmentStats[$deptKey]['subjects'][$normalizedSubject]['total'] += $hours;
 
             if (!$r['has_attendance']) {
                 $totalMissingAttendance += $hours;
@@ -245,7 +253,7 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName]['no_attendance'] += $hours;
                 $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
                 $facultyStats[$facultyName]['teachers_att'][$r['employee_id']] = true;
-                $departmentStats[$deptKey]['subjects'][$subjectName]['no_attendance'] += $hours;
+                $departmentStats[$deptKey]['subjects'][$normalizedSubject]['no_attendance'] += $hours;
             }
             if (!$r['has_grades']) {
                 $totalMissingGrades += $hours;
@@ -254,7 +262,7 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName]['no_grades'] += $hours;
                 $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
                 $facultyStats[$facultyName]['teachers_grade'][$r['employee_id']] = true;
-                $departmentStats[$deptKey]['subjects'][$subjectName]['no_grades'] += $hours;
+                $departmentStats[$deptKey]['subjects'][$normalizedSubject]['no_grades'] += $hours;
             }
         }
 
@@ -294,8 +302,8 @@ class SendAttendanceGroupSummary extends Command
         // Kafedrani jami soat bo'yicha kamayish tartibida saralash
         $sortedDepts = $departmentStats;
         uasort($sortedDepts, function ($a, $b) {
-            $totalA = array_sum(array_column($a['subjects'], 'total'));
-            $totalB = array_sum(array_column($b['subjects'], 'total'));
+            $totalA = array_sum(array_column($a['subjects'], 'no_attendance')) + array_sum(array_column($a['subjects'], 'no_grades'));
+            $totalB = array_sum(array_column($b['subjects'], 'no_attendance')) + array_sum(array_column($b['subjects'], 'no_grades'));
             return $totalB <=> $totalA;
         });
 
@@ -304,7 +312,7 @@ class SendAttendanceGroupSummary extends Command
             // Kafedra jami yig'indisini hisoblash
             $deptTotalAtt = array_sum(array_column($dept['subjects'], 'no_attendance'));
             $deptTotalGrade = array_sum(array_column($dept['subjects'], 'no_grades'));
-            $deptTotal = array_sum(array_column($dept['subjects'], 'total'));
+            $deptTotal = $deptTotalAtt + $deptTotalGrade;
 
             // Kafedra sarlavha qatori (jami bilan)
             $deptTableRows[] = [
@@ -318,7 +326,7 @@ class SendAttendanceGroupSummary extends Command
             // Fanlarni jami soat bo'yicha kamayish tartibida saralash
             $subjects = $dept['subjects'];
             uasort($subjects, function ($a, $b) {
-                return $b['total'] <=> $a['total'];
+                return ($b['no_attendance'] + $b['no_grades']) <=> ($a['no_attendance'] + $a['no_grades']);
             });
 
             foreach ($subjects as $subjectName => $stats) {
@@ -328,25 +336,30 @@ class SendAttendanceGroupSummary extends Command
                     '   ' . TableImageGenerator::truncate($subjectName, 27),
                     $stats['no_attendance'],
                     $stats['no_grades'],
-                    $stats['total'],
+                    $stats['no_attendance'] + $stats['no_grades'],
                 ];
             }
         }
 
         $generator = new TableImageGenerator();
 
-        // Kafedra kesimi rasmi
+        // Kafedra kesimi rasmi (ixcham rejimda - bitta rasmga sig'dirish uchun)
         $deptHeaders = ['#', 'KAFEDRA / FAN', 'DAV. YO\'Q', 'BAHO YO\'Q', 'JAMI SOAT'];
-        $deptImages = $generator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$now->format('H:i')} {$todayStr} (Kafedralar: {$deptNum})");
+        $formattedDate = Carbon::parse($todayStr)->format('d.m.Y');
+        $compactGenerator = (new TableImageGenerator())->compact();
+        $deptImages = $compactGenerator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (Kafedralar: {$deptNum})");
 
-        // Batafsil jadval rasmi
-        $headers = [
-            '#', 'XODIM FISH', 'FAKULTET', "YO'NALISH", 'KURS', 'SEM',
-            'KAFEDRA', 'FAN', 'GURUH', "MASHG'ULOT TURI",
-            'VAQT', 'T.SONI', 'DAVOMAT', 'BAHO', 'SANA',
-        ];
+        // Batafsil jadval rasmi (faqat --detail flag bilan)
+        $detailImages = [];
+        if ($this->option('detail')) {
+            $headers = [
+                '#', 'XODIM FISH', 'FAKULTET', "YO'NALISH", 'KURS', 'SEM',
+                'KAFEDRA', 'FAN', 'GURUH', "MASHG'ULOT TURI",
+                'VAQT', 'T.SONI', 'DAVOMAT', 'BAHO', 'SANA',
+            ];
 
-        $detailImages = $generator->generate($headers, $tableRows, "KUNLIK HISOBOT - {$now->format('H:i')} {$todayStr} (Kamida biri yo'q: " . count($results) . ")");
+            $detailImages = $generator->generate($headers, $tableRows, "O'QITUVCHILAR KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (Kamida biri yo'q: " . count($results) . ")");
+        }
 
         $tempFiles = [];
 
@@ -393,22 +406,20 @@ class SendAttendanceGroupSummary extends Command
 
     private function buildSummaryText(string $today, Carbon $now, int $totalLessons, array $teachersWithIssues, int $missingAttendance, int $missingGrades, int $uniqueAttTeachers = 0, int $uniqueGradeTeachers = 0, array $facultyStats = []): string
     {
+        $formattedDate = Carbon::parse($today)->format('d.m.Y');
+
         $lines = [];
-        $lines[] = "📊 KUNLIK HISOBOT — {$now->format('H:i')} {$today}";
+        $lines[] = "📊 DAVOMAT OLMAGANLAR VA BAHO QO'YMAGANLAR KUNLIK HISOBOTI — {$formattedDate} yil {$now->format('H:i')} soat";
         $lines[] = str_repeat('─', 30);
-        $lines[] = "";
-        $lines[] = "📋 Jami darslar: {$totalLessons}";
-        $lines[] = "👨‍🏫 Muammoli o'qituvchilar: " . count($teachersWithIssues);
-        $lines[] = "";
 
         if ($missingAttendance > 0) {
-            $lines[] = "❌ Davomat olinmagan: {$missingAttendance} soat ({$uniqueAttTeachers} o'qituvchi)";
+            $lines[] = "📝 Davomat olinmagan: {$uniqueAttTeachers} o'qituvchi";
         } else {
             $lines[] = "✅ Barcha darslar uchun davomat olingan";
         }
 
         if ($missingGrades > 0) {
-            $lines[] = "❌ Baho qo'yilmagan: {$missingGrades} soat ({$uniqueGradeTeachers} o'qituvchi)";
+            $lines[] = "💯 Baho qo'yilmagan: {$uniqueGradeTeachers} o'qituvchi";
         } else {
             $lines[] = "✅ Barcha darslar uchun baho qo'yilgan";
         }
@@ -428,11 +439,10 @@ class SendAttendanceGroupSummary extends Command
             $num = 0;
             foreach ($facultyStats as $fname => $fdata) {
                 $num++;
-                $teacherCount = count($fdata['teachers']);
                 $attTeachers = count($fdata['teachers_att'] ?? []);
                 $gradeTeachers = count($fdata['teachers_grade'] ?? []);
-                $lines[] = "{$num}. {$fname}";
-                $lines[] = "   ❌ Dav: {$fdata['no_attendance']} soat ({$attTeachers}) | ❌ Baho: {$fdata['no_grades']} soat ({$gradeTeachers}) | 👨‍🏫 {$teacherCount}";
+                $lines[] = "<b>{$num}. {$fname}: Jami: {$fdata['total']} soat</b>";
+                $lines[] = "   📝 Davomat: {$fdata['no_attendance']} soat (👩‍🏫 {$attTeachers}) | 📕 Baho: {$fdata['no_grades']} soat (👩‍🏫 {$gradeTeachers})";
             }
         }
 
@@ -446,6 +456,16 @@ class SendAttendanceGroupSummary extends Command
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Fan nomidan (a), (b), (c) kabi qo'shimchalarni olib tashlash.
+     * Masalan: "Ichki kasalliklar propedevtikasi (a)" -> "Ichki kasalliklar propedevtikasi"
+     */
+    private function normalizeSubjectName(string $name): string
+    {
+        // Oxiridagi (a), (b), ... (z), (1), (2), ... kabi qo'shimchalarni olib tashlash
+        return trim(preg_replace('/\s*\([a-zA-Zа-яА-ЯёЁ0-9]\)\s*$/', '', $name));
     }
 
     private function calculateAcademicHours(?string $startTime, ?string $endTime): int

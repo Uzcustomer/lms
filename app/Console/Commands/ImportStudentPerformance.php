@@ -25,8 +25,8 @@ class ImportStudentPerformance extends Command
      */
     protected $description = 'Import student performance from Hemis API';
 
-    protected string $baseUrl = '';
-    protected string $token = '';
+    protected ?string $baseUrl;
+    protected ?string $token;
 
     public function __construct()
     {

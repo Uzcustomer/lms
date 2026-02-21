@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/teacher_provider.dart';
 import '../../widgets/loading_widget.dart';
@@ -23,10 +24,17 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
       appBar: AppBar(
-        title: const Text('Profil'),
+        leading: const Padding(
+          padding: EdgeInsets.all(12),
+          child: Icon(Icons.account_balance, size: 28),
+        ),
+        title: Text(l.profile),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -46,11 +54,11 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(provider.error ?? 'Profil topilmadi'),
+                  Text(provider.error ?? l.profileNotFound),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => provider.loadProfile(),
-                    child: const Text('Qayta yuklash'),
+                    child: Text(l.reload),
                   ),
                 ],
               ),
@@ -81,6 +89,7 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
                     profile['full_name']?.toString() ?? '',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
+                          color: isDark ? AppTheme.darkTextPrimary : null,
                         ),
                     textAlign: TextAlign.center,
                   ),
@@ -88,7 +97,7 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
                   Text(
                     profile['employee_id_number']?.toString() ?? '',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppTheme.textSecondary,
+                          color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                         ),
                   ),
                   const SizedBox(height: 24),
@@ -100,16 +109,16 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Ish ma\'lumotlari',
+                            l.workInfo,
                             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.bold,
                                   color: AppTheme.primaryColor,
                                 ),
                           ),
                           const Divider(),
-                          _ProfileRow('Kafedra', profile['department']),
-                          _ProfileRow('Lavozim', profile['staff_position']),
-                          _ProfileRow('Login', profile['login']),
+                          _ProfileRow(l.department, profile['department'], isDark: isDark),
+                          _ProfileRow(l.position, profile['staff_position'], isDark: isDark),
+                          _ProfileRow(l.loginLabel, profile['login'], isDark: isDark),
                         ],
                       ),
                     ),
@@ -132,15 +141,17 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
   }
 
   void _showLogoutDialog(BuildContext context) {
+    final l = AppLocalizations.of(context);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Chiqish'),
-        content: const Text('Haqiqatan ham chiqmoqchimisiz?'),
+        title: Text(l.logout),
+        content: Text(l.logoutConfirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Bekor qilish'),
+            child: Text(l.cancel),
           ),
           ElevatedButton(
             onPressed: () {
@@ -148,7 +159,7 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
               context.read<AuthProvider>().logout();
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorColor),
-            child: const Text('Chiqish'),
+            child: Text(l.logout),
           ),
         ],
       ),
@@ -159,8 +170,9 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
 class _ProfileRow extends StatelessWidget {
   final String label;
   final dynamic value;
+  final bool isDark;
 
-  const _ProfileRow(this.label, this.value);
+  const _ProfileRow(this.label, this.value, {this.isDark = false});
 
   @override
   Widget build(BuildContext context) {
@@ -174,13 +186,20 @@ class _ProfileRow extends StatelessWidget {
             width: 100,
             child: Text(
               label,
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              style: TextStyle(
+                color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                fontSize: 13,
+              ),
             ),
           ),
           Expanded(
             child: Text(
               value.toString(),
-              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+                color: isDark ? AppTheme.darkTextPrimary : null,
+              ),
             ),
           ),
         ],

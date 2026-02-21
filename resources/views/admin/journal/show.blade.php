@@ -727,6 +727,37 @@
             .mb-2 a {
                 font-size: 12px !important;
             }
+
+            /* MT manual grade table: name smaller, data columns proper width */
+            #content-mustaqil .student-name-cell,
+            #content-mustaqil .journal-table td:nth-child(2) {
+                font-size: 9px !important;
+                min-width: 90px !important;
+                max-width: 110px;
+            }
+            #content-mustaqil .journal-table th[style*="min-width: 180px"] {
+                min-width: 90px !important;
+                font-size: 9px;
+            }
+            #content-mustaqil .journal-table th[style*="width: 80px"] {
+                min-width: 60px !important;
+                width: 60px !important;
+            }
+            #content-mustaqil .journal-table th[style*="width: 140px"] {
+                min-width: 70px !important;
+                width: 70px !important;
+            }
+            #content-mustaqil .journal-table th[style*="min-width: 150px"] {
+                min-width: 80px !important;
+            }
+            #content-mustaqil .journal-table th[style*="width: 160px"] {
+                min-width: 100px !important;
+                width: 100px !important;
+            }
+            #content-mustaqil .journal-table th[style*="width: 110px"] {
+                min-width: 80px !important;
+                width: 80px !important;
+            }
         }
 
         /* Extra-small phones */

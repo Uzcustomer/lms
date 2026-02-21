@@ -45,11 +45,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
   List<DateTime> _getWeekDaysFromApi(Map<String, dynamic> schedule) {
     final weeks = schedule['weeks'] as List<dynamic>? ?? [];
-    final selectedWeekId = schedule['selected_week_id'];
+    final selectedWeekId = schedule['selected_week_id']?.toString();
 
     Map<String, dynamic>? selectedWeek;
     for (final w in weeks) {
-      if (w is Map<String, dynamic> && w['id'] == selectedWeekId) {
+      if (w is Map<String, dynamic> && w['id']?.toString() == selectedWeekId) {
         selectedWeek = w;
         break;
       }
@@ -97,8 +97,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   }
 
   int _findCurrentWeekIndex(List<dynamic> weeks, dynamic selectedWeekId) {
+    final selectedStr = selectedWeekId?.toString();
     for (int i = 0; i < weeks.length; i++) {
-      if (weeks[i] is Map<String, dynamic> && weeks[i]['id'] == selectedWeekId) {
+      if (weeks[i] is Map<String, dynamic> && weeks[i]['id']?.toString() == selectedStr) {
         return i;
       }
     }
@@ -275,8 +276,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     required bool isDark,
     required StudentProvider provider,
   }) {
-    final canGoPrev = currentIndex > 0;
-    final canGoNext = currentIndex < weeks.length - 1;
+    final isLoading = provider.isLoading;
+    final canGoPrev = !isLoading && currentIndex > 0;
+    final canGoNext = !isLoading && currentIndex >= 0 && currentIndex < weeks.length - 1;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -299,10 +301,23 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 : null,
           ),
           Expanded(
-            child: Text(
-              weekLabel,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
-              textAlign: TextAlign.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (isLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: SizedBox(
+                      width: 14, height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    ),
+                  ),
+                Text(
+                  weekLabel,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
           IconButton(

@@ -474,7 +474,7 @@ class _LessonCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : Colors.white,
         border: isLast
-            ? Border.none
+            ? null
             : Border(
                 bottom: BorderSide(
                   color: isDark ? AppTheme.darkDivider : const Color(0xFFEEEEEE),

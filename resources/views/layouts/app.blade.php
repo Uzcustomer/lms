@@ -31,21 +31,10 @@
             <x-admin-sidebar-menu />
 
             <!-- Main Content -->
-            <div class="flex-1 overflow-x-hidden overflow-y-auto md:ml-64">
-                <!-- Mobile Top Bar -->
-                <div class="sticky top-0 z-30 flex items-center bg-white dark:bg-gray-800 shadow px-4 py-3 md:hidden">
-                    <button x-data @click="$store.sidebar.toggle()"
-                            class="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-                        </svg>
-                    </button>
-                    <span class="ml-3 text-lg font-semibold text-gray-800 dark:text-gray-200">LMS</span>
-                </div>
-
+            <div class="flex-1 overflow-x-hidden overflow-y-auto" style="margin-left: 256px;">
                 <!-- Page Heading -->
                 @isset($header)
-                    <header class="bg-white dark:bg-gray-800 shadow hidden md:block">
+                    <header class="bg-white dark:bg-gray-800 shadow">
                         <div class="max-w-screen-xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                             {{ $header }}
                         </div>
@@ -70,7 +59,7 @@
                 @endif
 
                 <!-- Page Content -->
-                <main class="p-3 sm:p-6">
+                <main class="p-6">
                     {{ $slot }}
                 </main>
             </div>
@@ -84,12 +73,12 @@
 
     {{-- DEBUG: Console log - account switching debug --}}
     <script>
-        console.group('%c LMS DEBUG: Admin Layout', 'color: #e74c3c; font-weight: bold; font-size: 14px;');
+        console.group('%c🔍 LMS DEBUG: Admin Layout', 'color: #e74c3c; font-weight: bold; font-size: 14px;');
         console.log('%cLayout:', 'font-weight:bold', 'app.blade.php (Admin)');
         console.log('%cURL:', 'font-weight:bold', window.location.href);
-        console.log('%cGuard (server):', 'font-weight:bold', '{{ auth()->guard("web")->check() ? "web (id=" . auth()->guard("web")->id() . " " . (auth()->guard("web")->user()->name ?? "?") . ")" : "web" }}');
-        console.log('%cTeacher guard:', 'font-weight:bold', '{{ auth()->guard("teacher")->check() ? "teacher (id=" . auth()->guard("teacher")->id() . ")" : "teacher" }}');
-        console.log('%cStudent guard:', 'font-weight:bold', '{{ auth()->guard("student")->check() ? "student (id=" . auth()->guard("student")->id() . ")" : "student" }}');
+        console.log('%cGuard (server):', 'font-weight:bold', '{{ auth()->guard("web")->check() ? "web ✅ (id=" . auth()->guard("web")->id() . " " . (auth()->guard("web")->user()->name ?? "?") . ")" : "web ❌" }}');
+        console.log('%cTeacher guard:', 'font-weight:bold', '{{ auth()->guard("teacher")->check() ? "teacher ✅ (id=" . auth()->guard("teacher")->id() . ")" : "teacher ❌" }}');
+        console.log('%cStudent guard:', 'font-weight:bold', '{{ auth()->guard("student")->check() ? "student ✅ (id=" . auth()->guard("student")->id() . ")" : "student ❌" }}');
         console.log('%cauth()->user():', 'font-weight:bold', '{{ auth()->user() ? "id=" . auth()->user()->id . " name=" . auth()->user()->name : "NULL" }}');
         console.log('%csession.impersonating:', 'font-weight:bold', {{ session('impersonating') ? 'true' : 'false' }});
         console.log('%csession.impersonated_name:', 'font-weight:bold', '{{ session("impersonated_name", "NULL") }}');
@@ -97,9 +86,9 @@
         console.log('%csession.active_role:', 'font-weight:bold', '{{ session("active_role", "NULL") }}');
         console.log('%csession_id:', 'font-weight:bold', '{{ session()->getId() }}');
         @if(session('impersonating'))
-            console.warn('%c IMPERSONATION BANNER KO\'RINMOQDA!', 'color: red; font-size: 16px; font-weight: bold;');
+            console.warn('%c⚠️ IMPERSONATION BANNER KO\'RINMOQDA!', 'color: red; font-size: 16px; font-weight: bold;');
         @else
-            console.log('%c Impersonation banner yo\'q (to\'g\'ri)', 'color: green;');
+            console.log('%c✅ Impersonation banner yo\'q (to\'g\'ri)', 'color: green;');
         @endif
         console.groupEnd();
     </script>

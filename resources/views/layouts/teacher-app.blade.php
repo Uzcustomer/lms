@@ -15,7 +15,7 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet"/>
     <link href="https://cdn.datatables.net/1.10.21/css/jquery.dataTables.min.css" rel="stylesheet">
 
-    {{-- Alpine.js Livewire v3 orqali yuklanadi (@livewireScripts), CDN kerak emas --}}
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"/>
@@ -29,24 +29,10 @@
         <x-admin-sidebar-menu />
 
         <!-- Main Content -->
-        <div class="flex-1 overflow-x-hidden overflow-y-auto md:ml-64">
-            <!-- Mobile Top Bar -->
-            <div class="sticky top-0 z-30 flex items-center bg-white dark:bg-gray-800 shadow px-4 py-3 md:hidden">
-                <button x-data @click="$store.sidebar.toggle()"
-                        class="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-                    </svg>
-                </button>
-                <span class="ml-3 text-lg font-semibold text-gray-800 dark:text-gray-200">LMS</span>
-                <div class="ml-auto text-sm text-gray-500 dark:text-gray-400">
-                    {{ Auth::guard('teacher')->user()->short_name ?? '' }}
-                </div>
-            </div>
-
-            <!-- Page Heading (desktop) -->
+        <div class="flex-1 overflow-x-hidden overflow-y-auto" style="margin-left: 256px;">
+            <!-- Page Heading -->
             @isset($header)
-                <header class="bg-white dark:bg-gray-800 shadow hidden md:block">
+                <header class="bg-white dark:bg-gray-800 shadow">
                     <div class="max-w-screen-xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                         {{ $header }}
                     </div>
@@ -62,8 +48,8 @@
                     @php
                         $daysLeft = $authTeacher->telegramDaysLeft();
                     @endphp
-                    <div class="max-w-screen-xl mx-auto px-3 sm:px-6 lg:px-8 mt-3">
-                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 py-3 rounded-lg border gap-3
+                    <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
+                        <div class="flex items-center justify-between px-4 py-3 rounded-lg border
                             {{ $daysLeft <= 2 ? 'bg-red-50 border-red-200' : ($daysLeft <= 4 ? 'bg-yellow-50 border-yellow-200' : 'bg-blue-50 border-blue-200') }}">
                             <div class="flex items-center">
                                 <svg class="w-5 h-5 mr-2 flex-shrink-0 {{ $daysLeft <= 2 ? 'text-red-500' : ($daysLeft <= 4 ? 'text-yellow-500' : 'text-blue-500') }}" fill="currentColor" viewBox="0 0 24 24">
@@ -88,7 +74,7 @@
                                 </div>
                             </div>
                             <a href="{{ route('teacher.complete-profile') }}"
-                               class="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-lg transition flex-shrink-0 w-full sm:w-auto justify-center
+                               class="ml-3 inline-flex items-center px-5 py-2.5 text-sm font-semibold rounded-lg transition flex-shrink-0
                                {{ $daysLeft <= 2 ? 'bg-red-600 text-white hover:bg-red-700' : ($daysLeft <= 4 ? 'bg-yellow-600 text-white hover:bg-yellow-700' : 'bg-blue-600 text-white hover:bg-blue-700') }}">
                                 <svg class="w-5 h-5 mr-1.5" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
@@ -118,7 +104,7 @@
             @endif
 
             <!-- Page Content -->
-            <main class="p-3 sm:p-6">
+            <main class="p-6">
                 {{ $slot }}
             </main>
         </div>
@@ -131,12 +117,12 @@
 
     {{-- DEBUG: Console log - account switching debug --}}
     <script>
-        console.group('%c LMS DEBUG: Teacher Layout', 'color: #2ecc71; font-weight: bold; font-size: 14px;');
+        console.group('%c🔍 LMS DEBUG: Teacher Layout', 'color: #2ecc71; font-weight: bold; font-size: 14px;');
         console.log('%cLayout:', 'font-weight:bold', 'teacher-app.blade.php (Teacher)');
         console.log('%cURL:', 'font-weight:bold', window.location.href);
-        console.log('%cGuard (server):', 'font-weight:bold', '{{ auth()->guard("web")->check() ? "web (id=" . auth()->guard("web")->id() . ")" : "web" }}');
-        console.log('%cTeacher guard:', 'font-weight:bold', '{{ auth()->guard("teacher")->check() ? "teacher (id=" . auth()->guard("teacher")->id() . " " . (auth()->guard("teacher")->user()->full_name ?? "?") . ")" : "teacher" }}');
-        console.log('%cStudent guard:', 'font-weight:bold', '{{ auth()->guard("student")->check() ? "student (id=" . auth()->guard("student")->id() . ")" : "student" }}');
+        console.log('%cGuard (server):', 'font-weight:bold', '{{ auth()->guard("web")->check() ? "web ✅ (id=" . auth()->guard("web")->id() . ")" : "web ❌" }}');
+        console.log('%cTeacher guard:', 'font-weight:bold', '{{ auth()->guard("teacher")->check() ? "teacher ✅ (id=" . auth()->guard("teacher")->id() . " " . (auth()->guard("teacher")->user()->full_name ?? "?") . ")" : "teacher ❌" }}');
+        console.log('%cStudent guard:', 'font-weight:bold', '{{ auth()->guard("student")->check() ? "student ✅ (id=" . auth()->guard("student")->id() . ")" : "student ❌" }}');
         console.log('%cauth()->user():', 'font-weight:bold', '{{ auth()->user() ? "id=" . auth()->user()->id : "NULL" }}');
         console.log('%csession.impersonating:', 'font-weight:bold', {{ session('impersonating') ? 'true' : 'false' }});
         console.log('%csession.impersonated_name:', 'font-weight:bold', '{{ session("impersonated_name", "NULL") }}');
@@ -144,7 +130,7 @@
         console.log('%csession.active_role:', 'font-weight:bold', '{{ session("active_role", "NULL") }}');
         console.log('%csession_id:', 'font-weight:bold', '{{ session()->getId() }}');
         @if(session('impersonating'))
-            console.log('%c Impersonation mode AKTIV — banner ko\'rinmoqda', 'color: orange; font-weight: bold;');
+            console.log('%c📍 Impersonation mode AKTIV — banner ko\'rinmoqda', 'color: orange; font-weight: bold;');
         @endif
         console.groupEnd();
     </script>

@@ -52,6 +52,19 @@ class SendAttendanceGroupSummary extends Command
             $this->warn("Davomat nazorati yangilashda xato: " . $e->getMessage());
         }
 
+        // 1.7-QADAM: Bugungi baholarni HEMIS dan yangilash
+        // Bu yo'q edi — shuning uchun hisobot baholar "qo'yilmagan" deb ko'rsatardi
+        $this->info("HEMIS dan bugungi baholar yangilanmoqda...");
+        try {
+            \Illuminate\Support\Facades\Artisan::call('student:import-data', [
+                '--mode' => 'live',
+            ]);
+            $this->info("Baholar yangilandi.");
+        } catch (\Throwable $e) {
+            Log::warning('Baho yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
+            $this->warn("Baho yangilashda xato: " . $e->getMessage());
+        }
+
         // 2-QADAM: Jadvaldan ma'lumot olish (web hisobot bilan bir xil logika)
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')

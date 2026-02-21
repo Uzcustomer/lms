@@ -664,7 +664,9 @@ class YnQaytnomaController extends Controller
                 $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
                 $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($maruzaTeacher->full_names ?? ''), ['size' => 11]);
 
-                $fileName = 'YN_oldi_qaydnoma_' . str_replace(' ', '_', $group->name) . '_' . str_replace(' ', '_', $subject->subject_name) . '.docx';
+                $groupName = str_replace(['/', '\\', ' '], '_', $group->name);
+                $subjectName = str_replace(['/', '\\', ' '], '_', $subject->subject_name);
+                $fileName = 'YN_oldi_qaydnoma_' . $groupName . '_' . $subjectName . '.docx';
                 $tempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_' . $fileName;
 
                 $objWriter = IOFactory::createWriter($phpWord, 'Word2007');

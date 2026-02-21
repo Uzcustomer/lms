@@ -381,6 +381,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-subjects', [YnQaytnomaController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/get-groups', [YnQaytnomaController::class, 'getFilterGroups'])->name('get-groups');
             Route::post('/generate-ruxsatnoma', [YnQaytnomaController::class, 'generateRuxsatnoma'])->name('generate-ruxsatnoma');
+            Route::post('/generate-yn-oldi-word', [YnQaytnomaController::class, 'generateYnOldiWord'])->name('generate-yn-oldi-word');
         });
 
         // Ma'ruza jadvalini joylashtirish
@@ -675,6 +676,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/get-subjects', [YnQaytnomaController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/get-groups', [YnQaytnomaController::class, 'getFilterGroups'])->name('get-groups');
             Route::post('/generate-ruxsatnoma', [YnQaytnomaController::class, 'generateRuxsatnoma'])->name('generate-ruxsatnoma');
+            Route::post('/generate-yn-oldi-word', [YnQaytnomaController::class, 'generateYnOldiWord'])->name('generate-yn-oldi-word');
         });
 
         // Ma'ruza jadvalini joylashtirish

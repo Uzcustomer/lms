@@ -44,9 +44,27 @@ class ImportProgressReporter
             'status' => 'running',
             'start' => Carbon::now()->format('H:i:s'),
             'end' => null,
+            'context' => '',
             'page' => 0,
             'total' => 0,
         ];
+        $this->forceUpdate();
+    }
+
+    /**
+     * Bosqich kontekstini o'rnatish (masalan: "2/7 kun (2026-02-15)")
+     * Kontekst o'zgarganda sahifa progressi resetlanadi
+     */
+    public function setStepContext(string $context): void
+    {
+        if (empty($this->steps)) {
+            return;
+        }
+
+        $lastIdx = count($this->steps) - 1;
+        $this->steps[$lastIdx]['context'] = $context;
+        $this->steps[$lastIdx]['page'] = 0;
+        $this->steps[$lastIdx]['total'] = 0;
         $this->forceUpdate();
     }
 
@@ -121,15 +139,17 @@ class ImportProgressReporter
 
         foreach ($this->steps as $step) {
             $lines[] = '';
+
+            $contextInfo = !empty($step['context']) ? " [{$step['context']}]" : '';
             $pageInfo = '';
             if ($step['total'] > 0) {
                 $pageInfo = " {$step['page']}/{$step['total']} sahifa";
             }
 
             if ($step['status'] === 'running') {
-                $lines[] = "⏳ {$step['running_label']}...{$pageInfo} ({$step['start']})";
+                $lines[] = "⏳ {$step['running_label']}...{$contextInfo}{$pageInfo} ({$step['start']})";
             } elseif ($step['status'] === 'done') {
-                $lines[] = "✅ {$step['done_label']}.{$pageInfo} ({$step['start']} → {$step['end']})";
+                $lines[] = "✅ {$step['done_label']}.{$contextInfo}{$pageInfo} ({$step['start']} → {$step['end']})";
             } elseif ($step['status'] === 'failed') {
                 $error = !empty($step['error']) ? ": {$step['error']}" : '';
                 $lines[] = "❌ {$step['running_label']} xato{$error} ({$step['start']} → {$step['end']})";

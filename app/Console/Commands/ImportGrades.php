@@ -54,6 +54,8 @@ class ImportGrades extends Command
     // =========================================================================
     private function handleLiveImport()
     {
+        $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
+
         $this->info('Starting LIVE import...');
         Log::info('[LiveImport] Starting live import at ' . Carbon::now());
 
@@ -81,6 +83,9 @@ class ImportGrades extends Command
         $to = Carbon::now()->timestamp;
 
         // 1-qadam: Baholarni API dan tortib olish (xotiraga)
+        if ($reporter) {
+            $reporter->setStepContext('baholar API...');
+        }
         $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
 
         if ($gradeItems === false) {
@@ -94,6 +99,9 @@ class ImportGrades extends Command
             ];
         } else {
             // 2-qadam: Muvaffaqiyatli — soft delete + yangi yozish
+            if ($reporter) {
+                $reporter->setStepContext('bazaga yozilmoqda ' . count($gradeItems) . ' ta yozuv...');
+            }
             $this->applyGrades($gradeItems, $today, false);
             $this->report['student-grade-list'] = [
                 'total_days' => 1,
@@ -103,6 +111,9 @@ class ImportGrades extends Command
         }
 
         // Davomatni alohida import qilish (eski logika — attendance uchun soft delete kerak emas)
+        if ($reporter) {
+            $reporter->setStepContext('davomat API...');
+        }
         $this->importAttendance($from, $to, $today);
 
         $this->sendTelegramReport();
@@ -116,6 +127,8 @@ class ImportGrades extends Command
     // =========================================================================
     private function handleFinalImport()
     {
+        $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
+
         $this->info('Starting FINAL import...');
         Log::info('[FinalImport] Starting at ' . Carbon::now());
 
@@ -146,15 +159,21 @@ class ImportGrades extends Command
         $totalDays = $unfinishedDates->count();
         $successDays = 0;
         $failedDays = [];
+        $dayNum = 0;
 
         $this->info("Yakunlanmagan kunlar: {$totalDays} ta ({$unfinishedDates->first()} — {$unfinishedDates->last()})");
         Log::info("[FinalImport] Found {$totalDays} unfinished days");
 
         foreach ($unfinishedDates as $dateStr) {
+            $dayNum++;
             $date = Carbon::parse($dateStr);
 
             $dateStartOfDay = $date->copy()->startOfDay();
             $dateEndOfDay = $date->copy()->endOfDay();
+
+            if ($reporter) {
+                $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr})");
+            }
 
             // Faqat BARCHA yozuvlar is_final=true bo'lgandagina o'tkazish
             $hasUnfinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
@@ -192,6 +211,9 @@ class ImportGrades extends Command
             $this->info("  {$date->toDateString()} — API dan tortilmoqda...");
 
             // Baholar
+            if ($reporter) {
+                $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), baholar API...");
+            }
             $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
 
             if ($gradeItems === false) {
@@ -201,11 +223,20 @@ class ImportGrades extends Command
                 continue;
             }
 
+            if ($reporter) {
+                $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), bazaga yozilmoqda " . count($gradeItems) . " ta yozuv...");
+            }
             $this->applyGrades($gradeItems, $date, true);
 
             // Attendance
+            if ($reporter) {
+                $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat API...");
+            }
             $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
             if ($attendanceItems !== false) {
+                if ($reporter) {
+                    $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat yozilmoqda...");
+                }
                 foreach ($attendanceItems as $item) {
                     $this->processAttendance($item, true);
                 }

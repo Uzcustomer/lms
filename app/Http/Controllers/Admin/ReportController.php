@@ -4035,7 +4035,7 @@ class ReportController extends Controller
         $sheet->setTitle('5 ga davogar');
 
         $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            'Fan', "O'rtacha baho", 'Dars sanasi'];
+            'Fan', 'Joriy bahosi', 'Dars sanasi'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -4104,7 +4104,7 @@ class ReportController extends Controller
         $sheet->setTitle('5 ga davogar toliq');
 
         $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            'Fan', 'Dars turi', "O'rtacha baho", 'Dars sanasi', 'Holat'];
+            'Fan', 'Dars turi', 'Joriy bahosi', 'Dars sanasi', 'Holat'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }

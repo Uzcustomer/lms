@@ -168,7 +168,7 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="grade">O'rtacha baho <span class="sort-icon active">&#9650;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="grade">Joriy bahosi <span class="sort-icon active">&#9650;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="lesson_date">Dars sanasi <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;">Jurnal</th>
                                     </tr>

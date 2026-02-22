@@ -3901,6 +3901,9 @@ class ReportController extends Controller
                             $lowDayCount++;
                             $lowDays[] = [
                                 'subject_name' => $subjectData['subject_name'],
+                                'subject_id' => $subjectData['subject_id'],
+                                'semester_code' => $subjectData['semester_code'],
+                                'group_id' => $subjectData['group_id'],
                                 'lesson_type' => $dayData['lesson_type'],
                                 'date' => $dayData['date'],
                                 'grade' => $dayAvg,
@@ -3938,30 +3941,37 @@ class ReportController extends Controller
                 ->get()
                 ->keyBy('hemis_id');
 
+            // Har bir kun alohida qator bo'lsin (flat format)
             $finalResults = [];
             foreach ($studentResults as $hemisId => $result) {
                 $st = $studentInfo[$hemisId] ?? null;
                 if (!$st) continue;
 
-                $finalResults[] = [
-                    'hemis_id' => $hemisId,
-                    'full_name' => $st->full_name ?? 'Noma\'lum',
-                    'student_id_number' => $st->student_id_number ?? '-',
-                    'department_name' => $st->department_name ?? '-',
-                    'specialty_name' => $st->specialty_name ?? '-',
-                    'level_name' => $st->level_name ?? '-',
-                    'semester_name' => $st->semester_name ?? '-',
-                    'group_name' => $st->group_name ?? '-',
-                    'group_id' => $st->group_id ?? '',
-                    'low_day_count' => $result['low_day_count'],
-                    'total_days' => $result['total_days'],
-                    'low_days' => $result['low_days'],
-                ];
+                foreach ($result['low_days'] as $day) {
+                    $finalResults[] = [
+                        'hemis_id' => $hemisId,
+                        'full_name' => $st->full_name ?? 'Noma\'lum',
+                        'student_id_number' => $st->student_id_number ?? '-',
+                        'department_name' => $st->department_name ?? '-',
+                        'specialty_name' => $st->specialty_name ?? '-',
+                        'level_name' => $st->level_name ?? '-',
+                        'semester_name' => $st->semester_name ?? '-',
+                        'group_name' => $st->group_name ?? '-',
+                        'group_id' => $st->group_id ?? '',
+                        'subject_name' => $day['subject_name'],
+                        'subject_id' => $day['subject_id'],
+                        'semester_code' => $day['semester_code'],
+                        'grade' => $day['grade'],
+                        'lesson_date' => $day['date'],
+                        'lesson_type' => $day['lesson_type'],
+                        'absent' => $day['absent'],
+                    ];
+                }
             }
 
             // Saralash
-            $sortColumn = $request->get('sort', 'low_day_count');
-            $sortDirection = $request->get('direction', 'desc');
+            $sortColumn = $request->get('sort', 'grade');
+            $sortDirection = $request->get('direction', 'asc');
 
             usort($finalResults, function ($a, $b) use ($sortColumn, $sortDirection) {
                 $valA = $a[$sortColumn] ?? '';
@@ -4013,7 +4023,7 @@ class ReportController extends Controller
         $sheet->setTitle('5 ga davogar');
 
         $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            "< {$scoreLimit} kunlar soni", 'Jami kunlar'];
+            'Fan', "O'rtacha baho", 'Dars sanasi'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -4024,7 +4034,11 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+
+        $redFill = [
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFF0F0']],
+        ];
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -4036,18 +4050,23 @@ class ReportController extends Controller
             $sheet->setCellValue([6, $row], $r['level_name']);
             $sheet->setCellValue([7, $row], $r['semester_name']);
             $sheet->setCellValue([8, $row], $r['group_name']);
-            $sheet->setCellValue([9, $row], $r['low_day_count']);
-            $sheet->setCellValue([10, $row], $r['total_days']);
+            $sheet->setCellValue([9, $row], $r['subject_name']);
+            $sheet->setCellValue([10, $row], $r['grade']);
+            $sheet->setCellValue([11, $row], $r['lesson_date']);
+
+            if ($r['grade'] < $scoreLimit) {
+                $sheet->getStyle("J{$row}")->applyFromArray($redFill);
+            }
         }
 
-        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 15, 12];
+        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 25, 12, 14];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:J{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }
@@ -4064,7 +4083,7 @@ class ReportController extends Controller
     }
 
     /**
-     * 5 ga da'vogar - Excel (to'liq: har bir kun alohida qator)
+     * 5 ga da'vogar - Excel (to'liq)
      */
     private function exportTopStudentsFullExcel(array $data, int $scoreLimit)
     {
@@ -4072,8 +4091,8 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('5 ga davogar toliq');
 
-        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh',
-            'Fan', 'Dars turi', 'Kun', 'Baho', 'Holat'];
+        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
+            'Fan', 'Dars turi', "O'rtacha baho", 'Dars sanasi', 'Holat'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -4084,46 +4103,41 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:L1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
 
-        $rowNum = 2;
-        $idx = 1;
         $redFill = [
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFF0F0']],
         ];
 
-        foreach ($data as $student) {
-            foreach ($student['low_days'] as $day) {
-                $sheet->setCellValue([1, $rowNum], $idx);
-                $sheet->setCellValue([2, $rowNum], $student['full_name']);
-                $sheet->setCellValueExplicit([3, $rowNum], $student['student_id_number'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValue([4, $rowNum], $student['department_name']);
-                $sheet->setCellValue([5, $rowNum], $student['specialty_name']);
-                $sheet->setCellValue([6, $rowNum], $student['level_name']);
-                $sheet->setCellValue([7, $rowNum], $student['group_name']);
-                $sheet->setCellValue([8, $rowNum], $day['subject_name']);
-                $sheet->setCellValue([9, $rowNum], $day['lesson_type']);
-                $sheet->setCellValue([10, $rowNum], $day['date']);
-                $sheet->setCellValue([11, $rowNum], $day['grade']);
-                $sheet->setCellValue([12, $rowNum], $day['absent'] ? 'Sababsiz' : ($day['grade'] < $scoreLimit ? "< {$scoreLimit}" : ''));
+        foreach ($data as $i => $r) {
+            $row = $i + 2;
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $r['full_name']);
+            $sheet->setCellValueExplicit([3, $row], $r['student_id_number'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $sheet->setCellValue([4, $row], $r['department_name']);
+            $sheet->setCellValue([5, $row], $r['specialty_name']);
+            $sheet->setCellValue([6, $row], $r['level_name']);
+            $sheet->setCellValue([7, $row], $r['semester_name']);
+            $sheet->setCellValue([8, $row], $r['group_name']);
+            $sheet->setCellValue([9, $row], $r['subject_name']);
+            $sheet->setCellValue([10, $row], $r['lesson_type']);
+            $sheet->setCellValue([11, $row], $r['grade']);
+            $sheet->setCellValue([12, $row], $r['lesson_date']);
+            $sheet->setCellValue([13, $row], $r['absent'] ? 'Sababsiz' : ($r['grade'] < $scoreLimit ? "< {$scoreLimit}" : ''));
 
-                if ($day['grade'] < $scoreLimit) {
-                    $sheet->getStyle("K{$rowNum}")->applyFromArray($redFill);
-                }
-
-                $rowNum++;
-                $idx++;
+            if ($r['grade'] < $scoreLimit) {
+                $sheet->getStyle("K{$row}")->applyFromArray($redFill);
             }
         }
 
-        $widths = [5, 30, 15, 25, 30, 8, 15, 25, 10, 12, 8, 12];
+        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 25, 10, 12, 14, 12];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
-        $lastRow = $rowNum - 1;
+        $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:L{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

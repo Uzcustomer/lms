@@ -3012,7 +3012,7 @@ class ReportController extends Controller
                     'subject_id' => $data['subject_id'],
                     'subject_name' => $data['subject_name'],
                     'semester_code' => $data['semester_code'],
-                    'group_id' => $data['group_id'],
+                    'group_id' => $groupDbIdMap[$data['group_id']] ?? $data['group_id'],
                     'jb' => round($jbAvg),
                     'mt' => round($mtAvg),
                     'on' => $hasOn ? round($onAvg) : null,
@@ -3746,8 +3746,10 @@ class ReportController extends Controller
                 ->get();
 
             $groupCurriculumMap = [];
+            $groupDbIdMap = [];
             foreach ($groupsData as $g) {
                 $groupCurriculumMap[$g->group_hemis_id] = $g->curriculum_hemis_id;
+                $groupDbIdMap[$g->group_hemis_id] = $g->id;
             }
 
             $vedomosts = DB::table('vedomosts')
@@ -3974,7 +3976,7 @@ class ReportController extends Controller
                         'level_name' => $st->level_name ?? '-',
                         'semester_name' => $st->semester_name ?? '-',
                         'group_name' => $st->group_name ?? '-',
-                        'group_id' => $st->group_id ?? '',
+                        'group_id' => $groupDbIdMap[$st->group_id] ?? '',
                         'subject_name' => $day['subject_name'],
                         'subject_id' => $day['subject_id'],
                         'semester_code' => $day['semester_code'],

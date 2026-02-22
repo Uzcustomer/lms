@@ -55,6 +55,10 @@ class ImportGrades extends Command
     private function handleLiveImport()
     {
         $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
+        if ($reporter) {
+            $reporter->start();
+            $reporter->startStep('Baholar import qilinmoqda', 'Baholar import qilindi');
+        }
 
         $this->info('Starting LIVE import...');
         Log::info('[LiveImport] Starting live import at ' . Carbon::now());
@@ -98,6 +102,9 @@ class ImportGrades extends Command
                 'success_days' => 0,
                 'failed_pages' => ["API xato ({$errorDetail})"],
             ];
+            if ($reporter) {
+                $reporter->failStep($errorDetail);
+            }
         } else {
             try {
                 // 2-qadam: Muvaffaqiyatli — soft delete + yangi yozish
@@ -110,6 +117,9 @@ class ImportGrades extends Command
                     'success_days' => 1,
                     'failed_pages' => [],
                 ];
+                if ($reporter) {
+                    $reporter->completeStep();
+                }
             } catch (\Throwable $e) {
                 $this->error("applyGrades EXCEPTION: {$e->getMessage()}");
                 Log::error("[LiveImport] applyGrades exception: {$e->getMessage()}", [
@@ -120,15 +130,22 @@ class ImportGrades extends Command
                     'success_days' => 0,
                     'failed_pages' => ["Exception: " . substr($e->getMessage(), 0, 100)],
                 ];
+                if ($reporter) {
+                    $reporter->failStep(substr($e->getMessage(), 0, 100));
+                }
             }
         }
 
         // Davomatni alohida import qilish (eski logika — attendance uchun soft delete kerak emas)
         if ($reporter) {
+            $reporter->startStep('Davomat import qilinmoqda', 'Davomat import qilindi');
             $reporter->setStepContext('davomat API...');
         }
         try {
             $this->importAttendance($from, $to, $today);
+            if ($reporter) {
+                $reporter->completeStep();
+            }
         } catch (\Throwable $e) {
             $this->error("importAttendance EXCEPTION: {$e->getMessage()}");
             Log::error("[LiveImport] importAttendance exception: {$e->getMessage()}", [
@@ -139,6 +156,9 @@ class ImportGrades extends Command
                 'success_days' => 0,
                 'failed_pages' => ["Exception: " . substr($e->getMessage(), 0, 100)],
             ];
+            if ($reporter) {
+                $reporter->failStep(substr($e->getMessage(), 0, 100));
+            }
         }
 
         $this->sendTelegramReport();
@@ -153,6 +173,10 @@ class ImportGrades extends Command
     private function handleFinalImport()
     {
         $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
+        if ($reporter) {
+            $reporter->start();
+            $reporter->startStep('Final import bajarilmoqda', 'Final import bajarildi');
+        }
 
         $this->info('Starting FINAL import...');
         Log::info('[FinalImport] Starting at ' . Carbon::now());
@@ -324,6 +348,14 @@ class ImportGrades extends Command
             'success_days' => $successDays,
             'failed_pages' => $failedDays,
         ];
+
+        if ($reporter) {
+            if (empty($failedDays)) {
+                $reporter->completeStep();
+            } else {
+                $reporter->failStep("{$successDays}/{$totalDays} kun, " . count($failedDays) . " ta xato");
+            }
+        }
 
         $this->sendTelegramReport();
         Log::info("[FinalImport] Completed at " . Carbon::now() . ": {$successDays}/{$totalDays} days finalized.");

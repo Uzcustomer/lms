@@ -3988,8 +3988,8 @@ class ReportController extends Controller
             }
 
             // Saralash
-            $sortColumn = $request->get('sort', 'grade');
-            $sortDirection = $request->get('direction', 'asc');
+            $sortColumn = $request->get('sort', 'lesson_date');
+            $sortDirection = $request->get('direction', 'desc');
             // lesson_date bo'yicha saralashda raw (yyyy-mm-dd) qiymatdan foydalanamiz
             $actualSortColumn = $sortColumn === 'lesson_date' ? 'lesson_date_raw' : $sortColumn;
 

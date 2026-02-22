@@ -90,9 +90,6 @@ class AcademicScheduleController extends Controller
      */
     public function testCenterView(Request $request)
     {
-        $currentSemesters = Semester::where('current', true)->get();
-        $currentEducationYear = $currentSemesters->first()?->education_year;
-
         $today = now()->format('Y-m-d');
 
         $selectedEducationType = $request->get('education_type');
@@ -107,6 +104,12 @@ class AcademicScheduleController extends Controller
         $dateTo = $request->get('date_to', $today);
         $currentSemesterToggle = $request->get('current_semester', '1');
         $isSearched = true;
+        $routePrefix = $this->routePrefix();
+
+        try {
+
+        $currentSemesters = Semester::where('current', true)->get();
+        $currentEducationYear = $currentSemesters->first()?->education_year;
 
         // Ma'lumotlarni yuklash (YN sanasi bo'yicha filtr)
         $scheduleData = $this->loadScheduleData(
@@ -186,24 +189,28 @@ class AcademicScheduleController extends Controller
 
         $quizCounts = [];
         if (!empty($groupHemisIds) && !empty($subjectIds)) {
-            $quizRows = DB::table('hemis_quiz_results as hqr')
-                ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
-                ->whereIn('st.group_id', $groupHemisIds)
-                ->whereIn('hqr.fan_id', $subjectIds)
-                ->where('hqr.is_active', 1)
-                ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
-                ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
-                ->get();
+            try {
+                $quizRows = DB::table('hemis_quiz_results as hqr')
+                    ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
+                    ->whereIn('st.group_id', $groupHemisIds)
+                    ->whereIn('hqr.fan_id', $subjectIds)
+                    ->where('hqr.is_active', 1)
+                    ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
+                    ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                    ->get();
 
-            foreach ($quizRows as $row) {
-                if (in_array($row->quiz_type, $testTypes)) {
-                    $key = $row->group_id . '|' . $row->fan_id . '|Test';
-                } elseif (in_array($row->quiz_type, $oskiTypes)) {
-                    $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
-                } else {
-                    continue;
+                foreach ($quizRows as $row) {
+                    if (in_array($row->quiz_type, $testTypes)) {
+                        $key = $row->group_id . '|' . $row->fan_id . '|Test';
+                    } elseif (in_array($row->quiz_type, $oskiTypes)) {
+                        $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
+                    } else {
+                        continue;
+                    }
+                    $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
                 }
-                $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('testCenterView: hemis_quiz_results so\'rovi xatolik berdi: ' . $e->getMessage());
             }
         }
 
@@ -217,7 +224,14 @@ class AcademicScheduleController extends Controller
 
         $scheduleData = $transformedData->groupBy(fn($item) => $item['group']->group_hemis_id);
 
-        $routePrefix = $this->routePrefix();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('testCenterView xatolik: ' . $e->getMessage(), [
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            $scheduleData = collect();
+            $currentEducationYear = null;
+        }
 
         return view('admin.academic-schedule.test-center', compact(
             'scheduleData',
@@ -265,24 +279,28 @@ class AcademicScheduleController extends Controller
 
         $quizCounts = [];
         if (!empty($groupHemisIds) && !empty($subjectIds)) {
-            $quizRows = DB::table('hemis_quiz_results as hqr')
-                ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
-                ->whereIn('st.group_id', $groupHemisIds)
-                ->whereIn('hqr.fan_id', $subjectIds)
-                ->where('hqr.is_active', 1)
-                ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
-                ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
-                ->get();
+            try {
+                $quizRows = DB::table('hemis_quiz_results as hqr')
+                    ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
+                    ->whereIn('st.group_id', $groupHemisIds)
+                    ->whereIn('hqr.fan_id', $subjectIds)
+                    ->where('hqr.is_active', 1)
+                    ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
+                    ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                    ->get();
 
-            foreach ($quizRows as $row) {
-                if (in_array($row->quiz_type, $testTypes)) {
-                    $key = $row->group_id . '|' . $row->fan_id . '|Test';
-                } elseif (in_array($row->quiz_type, $oskiTypes)) {
-                    $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
-                } else {
-                    continue;
+                foreach ($quizRows as $row) {
+                    if (in_array($row->quiz_type, $testTypes)) {
+                        $key = $row->group_id . '|' . $row->fan_id . '|Test';
+                    } elseif (in_array($row->quiz_type, $oskiTypes)) {
+                        $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
+                    } else {
+                        continue;
+                    }
+                    $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
                 }
-                $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('refreshQuizCounts: hemis_quiz_results so\'rovi xatolik berdi: ' . $e->getMessage());
             }
         }
 

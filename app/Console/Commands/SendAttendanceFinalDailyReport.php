@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\ImportProgressReporter;
 use App\Services\ScheduleImportService;
 use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
@@ -31,40 +32,65 @@ class SendAttendanceFinalDailyReport extends Command
 
         $this->info("Hisobot sanasi: {$reportDateStr} (yakuniy)");
 
+        // Progress reporter: bitta Telegram xabar yuborib, har bosqichda yangilab turadi
+        $progressChatId = $this->option('chat-id') ?: config('services.telegram.attendance_group_id');
+        $reporter = new ImportProgressReporter($telegram, $progressChatId, "{$reportDateStr} (yakuniy)");
+
+        if ($progressChatId) {
+            $reporter->start();
+            app()->instance(ImportProgressReporter::class, $reporter);
+        }
+
         // 1-QADAM: Avval HEMIS dan jadval ma'lumotlarini yangilash
+        $reporter->startStep('HEMIS dan jadval yangilanmoqda', 'Jadval muvaffaqiyatli yangilandi');
         $this->info("HEMIS dan jadval yangilanmoqda ({$reportDateStr})...");
         try {
-            $importService->importBetween($reportDate->copy()->startOfDay(), $reportDate->copy()->endOfDay());
+            $importService->importBetween(
+                $reportDate->copy()->startOfDay(),
+                $reportDate->copy()->endOfDay(),
+                fn(int $page, int $total) => $reporter->updateProgress($page, $total)
+            );
+            $reporter->completeStep();
             $this->info("Jadval muvaffaqiyatli yangilandi.");
         } catch (\Throwable $e) {
+            $reporter->failStep($e->getMessage());
             Log::warning('HEMIS sinxronlashda xato (hisobot davom etadi): ' . $e->getMessage());
             $this->warn("HEMIS yangilashda xato: " . $e->getMessage());
         }
 
         // 1.5-QADAM: Davomat nazorati (attendance_controls) yangilash
+        $reporter->startStep('HEMIS dan davomat nazorati yangilanmoqda', 'Davomat nazorati muvaffaqiyatli yangilandi');
         $this->info("HEMIS dan davomat nazorati yangilanmoqda ({$reportDateStr})...");
         try {
             \Illuminate\Support\Facades\Artisan::call('import:attendance-controls', [
                 '--date' => $reportDateStr,
                 '--silent' => true,
             ]);
+            $reporter->completeStep();
             $this->info("Davomat nazorati yangilandi.");
         } catch (\Throwable $e) {
+            $reporter->failStep($e->getMessage());
             Log::warning('Davomat nazorati yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
             $this->warn("Davomat nazorati yangilashda xato: " . $e->getMessage());
         }
 
         // 1.6-QADAM: Baholarni HEMIS dan yangilash (student_grades)
+        $reporter->startStep('HEMIS dan baholar yangilanmoqda', 'Baholar muvaffaqiyatli yangilandi');
         $this->info("HEMIS dan baholar yangilanmoqda ({$reportDateStr})...");
         try {
             \Illuminate\Support\Facades\Artisan::call('student:import-data', [
                 '--mode' => 'final',
             ]);
+            $reporter->completeStep();
             $this->info("Baholar yangilandi.");
         } catch (\Throwable $e) {
+            $reporter->failStep($e->getMessage());
             Log::warning('Baholar yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
             $this->warn("Baholar yangilashda xato: " . $e->getMessage());
         }
+
+        // Progress reporter ni tozalash
+        app()->forgetInstance(ImportProgressReporter::class);
 
         // 2-QADAM: Jadvaldan kechagi kun ma'lumotlarini olish
         $schedules = DB::table('schedules as sch')

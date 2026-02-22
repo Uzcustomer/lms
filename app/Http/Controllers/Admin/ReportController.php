@@ -3801,15 +3801,20 @@ class ReportController extends Controller
             $studentGroupMap = $students->pluck('group_id', 'hemis_id')->toArray();
 
             // 3-QADAM: student_grades dan baholarni olish
-            // Joriy o'quv yili bo'lsa, o'tgan yilgi ma'lumotlar tushmasligi uchun
-            // joriy o'quv yilining eng kichik dars sanasidan filtrlash
+            // Joriy semestr bo'lsa, faqat joriy semestr dars sanalaridan filtrlash
             $minScheduleDate = null;
             if ($isCurrentSemester) {
-                $minScheduleDate = DB::table('schedules')
-                    ->where('education_year_current', true)
-                    ->whereNull('deleted_at')
-                    ->whereNotNull('lesson_date')
-                    ->min('lesson_date');
+                $minScheduleDate = DB::table('schedules as sch2')
+                    ->join('groups as gr2', 'gr2.group_hemis_id', '=', 'sch2.group_id')
+                    ->join('semesters as sem2', function ($join) {
+                        $join->on('sem2.code', '=', 'sch2.semester_code')
+                            ->on('sem2.curriculum_hemis_id', '=', 'gr2.curriculum_hemis_id');
+                    })
+                    ->where('sem2.current', true)
+                    ->where('sch2.education_year_current', true)
+                    ->whereNull('sch2.deleted_at')
+                    ->whereNotNull('sch2.lesson_date')
+                    ->min('sch2.lesson_date');
             }
 
             // Har bir talaba, fan, kun, dars turi bo'yicha
@@ -3974,7 +3979,8 @@ class ReportController extends Controller
                         'subject_id' => $day['subject_id'],
                         'semester_code' => $day['semester_code'],
                         'grade' => $day['grade'],
-                        'lesson_date' => $day['date'],
+                        'lesson_date' => \Carbon\Carbon::parse($day['date'])->format('d.m.Y'),
+                        'lesson_date_raw' => $day['date'],
                         'lesson_type' => $day['lesson_type'],
                         'absent' => $day['absent'],
                     ];
@@ -3984,10 +3990,12 @@ class ReportController extends Controller
             // Saralash
             $sortColumn = $request->get('sort', 'grade');
             $sortDirection = $request->get('direction', 'asc');
+            // lesson_date bo'yicha saralashda raw (yyyy-mm-dd) qiymatdan foydalanamiz
+            $actualSortColumn = $sortColumn === 'lesson_date' ? 'lesson_date_raw' : $sortColumn;
 
-            usort($finalResults, function ($a, $b) use ($sortColumn, $sortDirection) {
-                $valA = $a[$sortColumn] ?? '';
-                $valB = $b[$sortColumn] ?? '';
+            usort($finalResults, function ($a, $b) use ($actualSortColumn, $sortDirection) {
+                $valA = $a[$actualSortColumn] ?? '';
+                $valB = $b[$actualSortColumn] ?? '';
                 $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
                 return $sortDirection === 'desc' ? -$cmp : $cmp;
             });

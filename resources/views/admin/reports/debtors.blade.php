@@ -314,8 +314,9 @@
 
             $('#modal-title').text(r.full_name + ' - Qarzdorliklar (' + r.debt_count + ' ta fan)');
 
+            var journalBase = '{{ url("/admin/journal/show") }}';
             var html = '<table class="detail-table">';
-            html += '<thead><tr><th>#</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th></tr></thead>';
+            html += '<thead><tr><th>#</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
             html += '<tbody>';
 
             if (r.debts && r.debts.length) {
@@ -338,6 +339,8 @@
                         html += '<span class="reason-badge">' + esc(reasons[ri]) + '</span>';
                     }
                     html += '</td>';
+                    var jUrl = journalBase + '/' + encodeURIComponent(debt.group_id) + '/' + encodeURIComponent(debt.subject_id) + '/' + encodeURIComponent(debt.semester_code);
+                    html += '<td style="text-align:center;"><a href="' + jUrl + '" target="_blank" class="journal-link-modal">Jurnal</a></td>';
                     html += '</tr>';
                 }
             }
@@ -539,5 +542,7 @@
         .cell-pass { color: #16a34a; font-weight: 600; }
 
         .reason-badge { display: inline-block; padding: 2px 8px; margin: 2px 3px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+        .journal-link-modal { display: inline-block; padding: 3px 10px; background: #eff6ff; color: #2b5ea7; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
+        .journal-link-modal:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
     </style>
 </x-app-layout>

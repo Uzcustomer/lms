@@ -286,7 +286,11 @@ class ImportGrades extends Command
                         $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat yozilmoqda...");
                     }
                     foreach ($attendanceItems as $item) {
-                        $this->processAttendance($item, true);
+                        try {
+                            $this->processAttendance($item, true);
+                        } catch (\Throwable $e) {
+                            Log::warning("[FinalImport] Attendance item failed: " . substr($e->getMessage(), 0, 100));
+                        }
                     }
                 }
 
@@ -404,7 +408,11 @@ class ImportGrades extends Command
             $attendanceItems = $this->fetchAllPages('attendance-list', $dayFrom, $dayTo);
             if ($attendanceItems !== false) {
                 foreach ($attendanceItems as $item) {
-                    $this->processAttendance($item, true);
+                    try {
+                        $this->processAttendance($item, true);
+                    } catch (\Throwable $e) {
+                        Log::warning("[Backfill] Attendance item failed: " . substr($e->getMessage(), 0, 100));
+                    }
                 }
             }
 
@@ -787,14 +795,20 @@ class ImportGrades extends Command
             return;
         }
 
+        $failedItems = 0;
         foreach ($attendanceItems as $item) {
-            $this->processAttendance($item);
+            try {
+                $this->processAttendance($item);
+            } catch (\Throwable $e) {
+                $failedItems++;
+                Log::warning("[importAttendance] Item failed: " . substr($e->getMessage(), 0, 100));
+            }
         }
 
         $this->report['attendance-list'] = [
             'total_days' => 1,
-            'success_days' => 1,
-            'failed_pages' => [],
+            'success_days' => $failedItems === 0 ? 1 : 0,
+            'failed_pages' => $failedItems > 0 ? ["{$failedItems} ta yozuv xato"] : [],
         ];
     }
 
@@ -860,41 +874,43 @@ class ImportGrades extends Command
         $student = Student::where('hemis_id', $item['student']['id'])->first();
 
         if ($student && ($item['absent_off'] > 0 || $item['absent_on'] > 0)) {
-            Attendance::updateOrCreate(
-                [
-                    'hemis_id' => $item['id'],
-                ],
-                [
-                    'subject_schedule_id' => $item['_subject_schedule'],
-                    'student_id' => $student->id,
-                    'student_hemis_id' => $item['student']['id'],
-                    'student_name' => $item['student']['name'],
-                    'employee_id' => $item['employee']['id'],
-                    'employee_name' => $item['employee']['name'],
-                    'subject_id' => $item['subject']['id'],
-                    'subject_name' => $item['subject']['name'],
-                    'subject_code' => $item['subject']['code'],
-                    'education_year_code' => $item['educationYear']['code'],
-                    'education_year_name' => $item['educationYear']['name'],
-                    'education_year_current' => $item['educationYear']['current'],
-                    'semester_code' => $item['semester']['code'],
-                    'semester_name' => $item['semester']['name'],
-                    'group_id' => $item['group']['id'],
-                    'group_name' => $item['group']['name'],
-                    'education_lang_code' => $item['group']['educationLang']['code'],
-                    'education_lang_name' => $item['group']['educationLang']['name'],
-                    'training_type_code' => $item['trainingType']['code'],
-                    'training_type_name' => $item['trainingType']['name'],
-                    'lesson_pair_code' => $item['lessonPair']['code'],
-                    'lesson_pair_name' => $item['lessonPair']['name'],
-                    'lesson_pair_start_time' => $item['lessonPair']['start_time'],
-                    'lesson_pair_end_time' => $item['lessonPair']['end_time'],
-                    'absent_on' => $item['absent_on'],
-                    'absent_off' => $item['absent_off'],
-                    'lesson_date' => Carbon::createFromTimestamp($item['lesson_date']),
-                    'status' => 'absent',
-                ]
-            );
+            $this->retryOnLockTimeout(function () use ($item, $student) {
+                Attendance::updateOrCreate(
+                    [
+                        'hemis_id' => $item['id'],
+                    ],
+                    [
+                        'subject_schedule_id' => $item['_subject_schedule'],
+                        'student_id' => $student->id,
+                        'student_hemis_id' => $item['student']['id'],
+                        'student_name' => $item['student']['name'],
+                        'employee_id' => $item['employee']['id'],
+                        'employee_name' => $item['employee']['name'],
+                        'subject_id' => $item['subject']['id'],
+                        'subject_name' => $item['subject']['name'],
+                        'subject_code' => $item['subject']['code'],
+                        'education_year_code' => $item['educationYear']['code'],
+                        'education_year_name' => $item['educationYear']['name'],
+                        'education_year_current' => $item['educationYear']['current'],
+                        'semester_code' => $item['semester']['code'],
+                        'semester_name' => $item['semester']['name'],
+                        'group_id' => $item['group']['id'],
+                        'group_name' => $item['group']['name'],
+                        'education_lang_code' => $item['group']['educationLang']['code'],
+                        'education_lang_name' => $item['group']['educationLang']['name'],
+                        'training_type_code' => $item['trainingType']['code'],
+                        'training_type_name' => $item['trainingType']['name'],
+                        'lesson_pair_code' => $item['lessonPair']['code'],
+                        'lesson_pair_name' => $item['lessonPair']['name'],
+                        'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                        'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                        'absent_on' => $item['absent_on'],
+                        'absent_off' => $item['absent_off'],
+                        'lesson_date' => Carbon::createFromTimestamp($item['lesson_date']),
+                        'status' => 'absent',
+                    ]
+                );
+            });
 
             $this->processGradeForAbsence($item, $student, $isFinal);
         }
@@ -916,34 +932,36 @@ class ImportGrades extends Command
         ])->first();
 
         if (!$existingGrade) {
-            StudentGrade::create([
-                'hemis_id' => 111,
-                'student_id' => $student->id,
-                'student_hemis_id' => $student->hemis_id,
-                'semester_code' => $item['semester']['code'],
-                'semester_name' => $item['semester']['name'],
-                'education_year_code' => $item['educationYear']['code'] ?? null,
-                'education_year_name' => $item['educationYear']['name'] ?? null,
-                'subject_schedule_id' => $item['_subject_schedule'],
-                'subject_id' => $item['subject']['id'],
-                'subject_name' => $item['subject']['name'],
-                'subject_code' => $item['subject']['code'],
-                'training_type_code' => $item['trainingType']['code'],
-                'training_type_name' => $item['trainingType']['name'],
-                'employee_id' => $item['employee']['id'],
-                'employee_name' => $item['employee']['name'],
-                'lesson_pair_code' => $item['lessonPair']['code'],
-                'lesson_pair_name' => $item['lessonPair']['name'],
-                'lesson_pair_start_time' => $item['lessonPair']['start_time'],
-                'lesson_pair_end_time' => $item['lessonPair']['end_time'],
-                'grade' => null,
-                'lesson_date' => $lessonDate,
-                'created_at_api' => Carbon::now(),
-                'reason' => 'absent',
-                'deadline' => $this->getDeadline($student->level_code, $lessonDate),
-                'status' => 'pending',
-                'is_final' => $isFinal,
-            ]);
+            $this->retryOnLockTimeout(function () use ($item, $student, $lessonDate, $isFinal) {
+                StudentGrade::create([
+                    'hemis_id' => 111,
+                    'student_id' => $student->id,
+                    'student_hemis_id' => $student->hemis_id,
+                    'semester_code' => $item['semester']['code'],
+                    'semester_name' => $item['semester']['name'],
+                    'education_year_code' => $item['educationYear']['code'] ?? null,
+                    'education_year_name' => $item['educationYear']['name'] ?? null,
+                    'subject_schedule_id' => $item['_subject_schedule'],
+                    'subject_id' => $item['subject']['id'],
+                    'subject_name' => $item['subject']['name'],
+                    'subject_code' => $item['subject']['code'],
+                    'training_type_code' => $item['trainingType']['code'],
+                    'training_type_name' => $item['trainingType']['name'],
+                    'employee_id' => $item['employee']['id'],
+                    'employee_name' => $item['employee']['name'],
+                    'lesson_pair_code' => $item['lessonPair']['code'],
+                    'lesson_pair_name' => $item['lessonPair']['name'],
+                    'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                    'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                    'grade' => null,
+                    'lesson_date' => $lessonDate,
+                    'created_at_api' => Carbon::now(),
+                    'reason' => 'absent',
+                    'deadline' => $this->getDeadline($student->level_code, $lessonDate),
+                    'status' => 'pending',
+                    'is_final' => $isFinal,
+                ]);
+            });
         }
     }
 

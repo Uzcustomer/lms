@@ -248,28 +248,39 @@ class ImportGrades extends Command
             }
         }
 
-        // Global tozalash: 7 kunlik oynadan tashqaridagi barcha is_final=false duplikatlarni soft-delete qilish
-        // Migration (02-17) barcha eski recordlarni is_final=false qilib qo'ygan,
-        // backfill yangi is_final=true recordlarni yaratgan, lekin eskilari qolib ketgan
+        // Global tozalash: eski is_final=false duplikatlarni kunlik batch qilib soft-delete qilish
+        // Katta self-join o'rniga kunlik bo'lib tozalash — lock vaqtini qisqartiradi
         try {
-            $globalCleaned = DB::update("
-                UPDATE student_grades sg
-                INNER JOIN student_grades g2
-                    ON g2.student_id = sg.student_id
-                    AND g2.subject_id = sg.subject_id
-                    AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
-                    AND g2.is_final = 1
-                    AND g2.deleted_at IS NULL
-                    AND g2.id != sg.id
-                SET sg.deleted_at = NOW()
-                WHERE sg.is_final = 0
-                    AND sg.deleted_at IS NULL
-                    AND DATE(sg.lesson_date) < CURDATE()
-            ");
+            $globalCleaned = 0;
+            $staleDates = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->where('is_final', false)
+                ->whereRaw('DATE(lesson_date) < CURDATE()')
+                ->selectRaw('DATE(lesson_date) as grade_date')
+                ->distinct()
+                ->pluck('grade_date');
+
+            foreach ($staleDates as $staleDate) {
+                $cleaned = DB::update("
+                    UPDATE student_grades sg
+                    INNER JOIN student_grades g2
+                        ON g2.student_id = sg.student_id
+                        AND g2.subject_id = sg.subject_id
+                        AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
+                        AND g2.is_final = 1
+                        AND g2.deleted_at IS NULL
+                        AND g2.id != sg.id
+                    SET sg.deleted_at = NOW()
+                    WHERE sg.is_final = 0
+                        AND sg.deleted_at IS NULL
+                        AND DATE(sg.lesson_date) = ?
+                ", [$staleDate]);
+                $globalCleaned += $cleaned;
+            }
 
             if ($globalCleaned > 0) {
-                $this->info("Global cleanup: {$globalCleaned} ta eski is_final=false duplikat tozalandi.");
-                Log::info("[FinalImport] Global cleanup: {$globalCleaned} stale is_final=false duplicates removed.");
+                $this->info("Global cleanup: {$globalCleaned} ta eski is_final=false duplikat tozalandi ({$staleDates->count()} kun).");
+                Log::info("[FinalImport] Global cleanup: {$globalCleaned} stale is_final=false duplicates removed across {$staleDates->count()} days.");
             }
         } catch (\Throwable $e) {
             Log::error("[FinalImport] Global cleanup exception: {$e->getMessage()}");
@@ -575,24 +586,25 @@ class ImportGrades extends Command
             ->toArray();
 
         // ====================================================================
-        // 2-3 QADAM: Soft-delete + Bulk insert — QISQA tranzaksiya
+        // 2-QADAM: Soft-delete — tranzaksiyadan TASHQARIDA (lock vaqtini qisqartirish)
+        // Lock wait timeout oldini olish: delete va insert ni alohida bajarish
         // ====================================================================
-        DB::transaction(function () use ($insertRows, $dateStart, $dateEnd, $isFinal, &$softDeletedCount) {
-            // 2-QADAM: BARCHA eski yozuvlarni soft-delete
-            $query = StudentGrade::where('lesson_date', '>=', $dateStart)
-                ->where('lesson_date', '<=', $dateEnd);
+        $query = StudentGrade::where('lesson_date', '>=', $dateStart)
+            ->where('lesson_date', '<=', $dateEnd);
 
-            if ($isFinal) {
-                $softDeletedCount = $query->delete();
-            } else {
-                $softDeletedCount = $query->where('is_final', false)->delete();
-            }
+        if ($isFinal) {
+            $softDeletedCount = $this->retryOnLockTimeout(fn () => (clone $query)->delete());
+        } else {
+            $softDeletedCount = $this->retryOnLockTimeout(fn () => (clone $query)->where('is_final', false)->delete());
+        }
 
-            // 3-QADAM: HEMIS dan yangi yozuvlarni BULK INSERT (200 tadan)
-            foreach (array_chunk($insertRows, 200) as $chunk) {
-                DB::table('student_grades')->insert($chunk);
-            }
-        });
+        // ====================================================================
+        // 3-QADAM: HEMIS dan yangi yozuvlarni BULK INSERT (200 tadan, har biri alohida)
+        // Har bir chunk o'z implicit tranzaksiyasida — lock vaqti minimal
+        // ====================================================================
+        foreach (array_chunk($insertRows, 200) as $chunk) {
+            $this->retryOnLockTimeout(fn () => DB::table('student_grades')->insert($chunk));
+        }
 
         $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
         Log::info("[ApplyGrades] Soft deleted {$softDeletedCount} grades for {$dateStart->toDateString()}");
@@ -604,21 +616,23 @@ class ImportGrades extends Command
         $retakeRestored = 0;
         $restoredKeys = [];
         foreach ($retakeBackup as $key => $retake) {
-            $updated = StudentGrade::where('student_hemis_id', $retake->student_hemis_id)
-                ->where('subject_id', $retake->subject_id)
-                ->whereDate('lesson_date', $retake->lesson_date)
-                ->where('lesson_pair_code', $retake->lesson_pair_code)
-                ->whereNull('deleted_at')
-                ->whereNull('retake_grade')
-                ->update([
-                    'retake_grade' => $retake->retake_grade,
-                    'status' => 'retake',
-                    'retake_graded_at' => $retake->retake_graded_at,
-                    'retake_by' => $retake->retake_by,
-                    'retake_file_path' => $retake->retake_file_path,
-                    'graded_by_user_id' => $retake->graded_by_user_id,
-                    'is_final' => $isFinal,
-                ]);
+            $updated = $this->retryOnLockTimeout(fn () =>
+                StudentGrade::where('student_hemis_id', $retake->student_hemis_id)
+                    ->where('subject_id', $retake->subject_id)
+                    ->whereDate('lesson_date', $retake->lesson_date)
+                    ->where('lesson_pair_code', $retake->lesson_pair_code)
+                    ->whereNull('deleted_at')
+                    ->whereNull('retake_grade')
+                    ->update([
+                        'retake_grade' => $retake->retake_grade,
+                        'status' => 'retake',
+                        'retake_graded_at' => $retake->retake_graded_at,
+                        'retake_by' => $retake->retake_by,
+                        'retake_file_path' => $retake->retake_file_path,
+                        'graded_by_user_id' => $retake->graded_by_user_id,
+                        'is_final' => $isFinal,
+                    ])
+            );
             if ($updated) {
                 $retakeRestored++;
                 $restoredKeys[] = $key;
@@ -882,6 +896,35 @@ class ImportGrades extends Command
             return $lessonDate->copy()->addDays($deadline->deadline_days)->endOfDay();
         }
         return $lessonDate->copy()->addWeek()->endOfDay();
+    }
+
+    // =========================================================================
+    // Lock wait timeout bo'lganda qayta urinish (3 marta, oraliq bilan)
+    // MySQL Error 1205: Lock wait timeout exceeded
+    // =========================================================================
+    private function retryOnLockTimeout(callable $callback, int $maxRetries = 3): mixed
+    {
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                return $callback();
+            } catch (\Illuminate\Database\QueryException $e) {
+                // MySQL error 1205 = Lock wait timeout exceeded
+                if ($e->getCode() == 1205 || str_contains($e->getMessage(), 'Lock wait timeout')) {
+                    $waitSeconds = $attempt * 2; // 2s, 4s, 6s
+                    $this->warn("Lock wait timeout (urinish {$attempt}/{$maxRetries}), {$waitSeconds}s kutilmoqda...");
+                    Log::warning("[ImportGrades] Lock wait timeout attempt {$attempt}/{$maxRetries}, waiting {$waitSeconds}s");
+                    sleep($waitSeconds);
+
+                    if ($attempt === $maxRetries) {
+                        throw $e;
+                    }
+                } else {
+                    throw $e;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function sendTelegramReport()

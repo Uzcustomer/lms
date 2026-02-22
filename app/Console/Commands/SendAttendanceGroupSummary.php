@@ -30,6 +30,12 @@ class SendAttendanceGroupSummary extends Command
 
         $this->info("Bugungi sana: {$todayStr}");
 
+        // Yakshanba kuni hisobot yuborilmaydi
+        if ($today->isSunday()) {
+            $this->info('Yakshanba kuni — hisobot yuborilmaydi.');
+            return 0;
+        }
+
         // Progress reporter: bitta Telegram xabar yuborib, har bosqichda yangilab turadi
         $progressChatId = $this->option('chat-id') ?: config('services.telegram.attendance_group_id');
         $reporter = new ImportProgressReporter($telegram, $progressChatId, $todayStr);

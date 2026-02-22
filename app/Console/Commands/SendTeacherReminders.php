@@ -28,6 +28,12 @@ class SendTeacherReminders extends Command
 
         $this->info("Bugungi sana: {$today}");
 
+        // Yakshanba kuni eslatma yuborilmaydi
+        if (Carbon::today()->isSunday()) {
+            $this->info('Yakshanba kuni — eslatma yuborilmaydi.');
+            return 0;
+        }
+
         // 1-QADAM: Davomat nazoratini yangilash (guruh hisoboti bilan bir xil)
         $this->info("HEMIS dan bugungi davomat nazorati yangilanmoqda...");
         try {

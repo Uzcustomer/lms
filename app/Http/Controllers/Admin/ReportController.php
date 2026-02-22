@@ -3801,6 +3801,17 @@ class ReportController extends Controller
             $studentGroupMap = $students->pluck('group_id', 'hemis_id')->toArray();
 
             // 3-QADAM: student_grades dan baholarni olish
+            // Joriy o'quv yili bo'lsa, o'tgan yilgi ma'lumotlar tushmasligi uchun
+            // joriy o'quv yilining eng kichik dars sanasidan filtrlash
+            $minScheduleDate = null;
+            if ($isCurrentSemester) {
+                $minScheduleDate = DB::table('schedules')
+                    ->where('education_year_current', true)
+                    ->whereNull('deleted_at')
+                    ->whereNotNull('lesson_date')
+                    ->min('lesson_date');
+            }
+
             // Har bir talaba, fan, kun, dars turi bo'yicha
             $allGrades = [];
 
@@ -3810,6 +3821,7 @@ class ReportController extends Controller
                     ->whereIn('subject_id', $validSubjectIds)
                     ->whereIn('semester_code', $validSemesterCodes)
                     ->whereNotNull('lesson_date')
+                    ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
                     ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
                         'training_type_code', 'grade', 'lesson_date', 'reason')
                     ->get();
@@ -4023,7 +4035,7 @@ class ReportController extends Controller
         $sheet->setTitle('5 ga davogar');
 
         $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            'Fan', "O'rtacha baho", 'Dars sanasi'];
+            'Fan', 'Joriy bahosi', 'Dars sanasi'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -4092,7 +4104,7 @@ class ReportController extends Controller
         $sheet->setTitle('5 ga davogar toliq');
 
         $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            'Fan', 'Dars turi', "O'rtacha baho", 'Dars sanasi', 'Holat'];
+            'Fan', 'Dars turi', 'Joriy bahosi', 'Dars sanasi', 'Holat'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }

@@ -90,6 +90,13 @@ class AcademicScheduleController extends Controller
      */
     public function testCenterView(Request $request)
     {
+        \Illuminate\Support\Facades\Log::info('testCenterView: metod boshlandi', [
+            'url' => $request->fullUrl(),
+            'guard' => auth()->getDefaultDriver(),
+            'user_id' => auth()->id(),
+            'user_class' => auth()->user() ? get_class(auth()->user()) : 'null',
+        ]);
+
         $today = now()->format('Y-m-d');
 
         $selectedEducationType = $request->get('education_type');
@@ -233,23 +240,31 @@ class AcademicScheduleController extends Controller
             $currentEducationYear = null;
         }
 
-        return view('admin.academic-schedule.test-center', compact(
-            'scheduleData',
-            'selectedEducationType',
-            'selectedDepartment',
-            'selectedSpecialty',
-            'selectedLevelCode',
-            'selectedSemester',
-            'selectedGroup',
-            'selectedSubject',
-            'selectedStatus',
-            'dateFrom',
-            'dateTo',
-            'currentSemesterToggle',
-            'isSearched',
-            'currentEducationYear',
-            'routePrefix',
-        ));
+        try {
+            return view('admin.academic-schedule.test-center', compact(
+                'scheduleData',
+                'selectedEducationType',
+                'selectedDepartment',
+                'selectedSpecialty',
+                'selectedLevelCode',
+                'selectedSemester',
+                'selectedGroup',
+                'selectedSubject',
+                'selectedStatus',
+                'dateFrom',
+                'dateTo',
+                'currentSemesterToggle',
+                'isSearched',
+                'currentEducationYear',
+                'routePrefix',
+            ))->render();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('testCenterView VIEW RENDER xatolik: ' . $e->getMessage(), [
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return back()->with('error', 'Sahifani yuklashda xatolik yuz berdi: ' . $e->getMessage());
+        }
     }
 
     /**

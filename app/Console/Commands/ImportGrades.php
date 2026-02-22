@@ -172,11 +172,9 @@ class ImportGrades extends Command
     // =========================================================================
     private function handleFinalImport()
     {
+        // Reporter faqat mustaqil chaqirilganda boshlanadi,
+        // SendAttendanceFinalDailyReport dan chaqirilganda reporter allaqachon boshqarilmoqda
         $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
-        if ($reporter) {
-            $reporter->start();
-            $reporter->startStep('Final import bajarilmoqda', 'Final import bajarildi');
-        }
 
         $this->info('Starting FINAL import...');
         Log::info('[FinalImport] Starting at ' . Carbon::now());
@@ -323,6 +321,8 @@ class ImportGrades extends Command
                         ON g2.student_id = sg.student_id
                         AND g2.subject_id = sg.subject_id
                         AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
+                        AND g2.lesson_pair_code = sg.lesson_pair_code
+                        AND g2.training_type_code = sg.training_type_code
                         AND g2.is_final = 1
                         AND g2.deleted_at IS NULL
                         AND g2.id != sg.id
@@ -348,14 +348,6 @@ class ImportGrades extends Command
             'success_days' => $successDays,
             'failed_pages' => $failedDays,
         ];
-
-        if ($reporter) {
-            if (empty($failedDays)) {
-                $reporter->completeStep();
-            } else {
-                $reporter->failStep("{$successDays}/{$totalDays} kun, " . count($failedDays) . " ta xato");
-            }
-        }
 
         $this->sendTelegramReport();
         Log::info("[FinalImport] Completed at " . Carbon::now() . ": {$successDays}/{$totalDays} days finalized.");
@@ -654,25 +646,26 @@ class ImportGrades extends Command
             ->toArray();
 
         // ====================================================================
-        // 2-QADAM: Soft-delete — tranzaksiyadan TASHQARIDA (lock vaqtini qisqartirish)
-        // Lock wait timeout oldini olish: delete va insert ni alohida bajarish
+        // 2-3 QADAM: Soft-delete + Bulk insert — TRANZAKSIYA ICHIDA
+        // Agar insert xato bersa, soft-delete ROLLBACK qilinadi (ma'lumot yo'qolmaydi)
+        // retryOnLockTimeout butun tranzaksiyani qayta urinadi
         // ====================================================================
-        $query = StudentGrade::where('lesson_date', '>=', $dateStart)
-            ->where('lesson_date', '<=', $dateEnd);
+        $this->retryOnLockTimeout(function () use ($insertRows, $dateStart, $dateEnd, $isFinal, &$softDeletedCount) {
+            DB::transaction(function () use ($insertRows, $dateStart, $dateEnd, $isFinal, &$softDeletedCount) {
+                $query = StudentGrade::where('lesson_date', '>=', $dateStart)
+                    ->where('lesson_date', '<=', $dateEnd);
 
-        if ($isFinal) {
-            $softDeletedCount = $this->retryOnLockTimeout(fn () => (clone $query)->delete());
-        } else {
-            $softDeletedCount = $this->retryOnLockTimeout(fn () => (clone $query)->where('is_final', false)->delete());
-        }
+                if ($isFinal) {
+                    $softDeletedCount = $query->delete();
+                } else {
+                    $softDeletedCount = (clone $query)->where('is_final', false)->delete();
+                }
 
-        // ====================================================================
-        // 3-QADAM: HEMIS dan yangi yozuvlarni BULK INSERT (200 tadan, har biri alohida)
-        // Har bir chunk o'z implicit tranzaksiyasida — lock vaqti minimal
-        // ====================================================================
-        foreach (array_chunk($insertRows, 200) as $chunk) {
-            $this->retryOnLockTimeout(fn () => DB::table('student_grades')->insert($chunk));
-        }
+                foreach (array_chunk($insertRows, 200) as $chunk) {
+                    DB::table('student_grades')->insert($chunk);
+                }
+            });
+        });
 
         $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
         Log::info("[ApplyGrades] Soft deleted {$softDeletedCount} grades for {$dateStart->toDateString()}");

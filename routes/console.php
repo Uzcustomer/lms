@@ -36,6 +36,5 @@ Schedule::command('teachers:send-group-summary --detail')->dailyAt('22:00');
 // Ertasi kuni ertalab 09:00 da kechagi kunning yakuniy hisoboti (faqat o'qituvchilar kesimi)
 Schedule::command('teachers:send-final-daily-report')->dailyAt('09:00');
 
-// 5 ga da'vogarlar — 90 dan past baho olsa Telegram guruhga xabar (har kuni 20:00 va 23:30)
-Schedule::command('five-candidates:send-low-grades')->dailyAt('20:00');
-Schedule::command('five-candidates:send-low-grades')->dailyAt('23:30');
+// 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
+// baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)

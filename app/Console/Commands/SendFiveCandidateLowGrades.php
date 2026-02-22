@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -15,7 +16,7 @@ class SendFiveCandidateLowGrades extends Command
         {--chat-id= : Test uchun shaxsiy Telegram chat_id}
         {--score-limit=90 : Minimal baho chegarasi}';
 
-    protected $description = '5 ga da\'vogar talabalar 90 dan past baho olsa Telegram guruhga xabar yuborish';
+    protected $description = '5 ga da\'vogar talabalar 90 dan past baho olsa Telegram guruhga jadval rasm yuborish';
 
     public function handle(TelegramService $telegram): int
     {
@@ -137,49 +138,68 @@ class SendFiveCandidateLowGrades extends Command
             return 0;
         }
 
-        // Guruh bo'yicha guruhlash
-        $byGroup = [];
-        foreach ($lowGrades as $row) {
-            $byGroup[$row['group_name']][] = $row;
-        }
-        ksort($byGroup);
+        // Guruh bo'yicha saralash
+        usort($lowGrades, function ($a, $b) {
+            $cmp = strcasecmp($a['group_name'], $b['group_name']);
+            if ($cmp !== 0) return $cmp;
+            return strcasecmp($a['full_name'], $b['full_name']);
+        });
 
-        $date = Carbon::parse($dateStr)->format('d.m.Y');
-        $lines = [];
-        $lines[] = "<b>⚠️ 5 ga da'vogarlar — {$scoreLimit} dan past baholar</b>";
-        $lines[] = "<b>📅 Sana: {$date}</b>";
-        $lines[] = "";
-
+        // Jadval qatorlarini tayyorlash (guruh sarlavha qatorlari bilan)
+        $tableRows = [];
+        $currentGroup = null;
         $num = 0;
-        foreach ($byGroup as $groupName => $rows) {
-            $lines[] = "<b>📚 {$groupName}</b>";
 
-            foreach ($rows as $row) {
-                $num++;
-                $gradeText = $row['absent'] ? 'NB (sababsiz)' : $row['grade'];
-                $lines[] = "{$num}. <b>{$row['full_name']}</b>";
-                $lines[] = "   📖 {$row['subject_name']} ({$row['training_type']})";
-                $lines[] = "   📊 Baho: <b>{$gradeText}</b>";
+        foreach ($lowGrades as $row) {
+            if ($row['group_name'] !== $currentGroup) {
+                $currentGroup = $row['group_name'];
             }
-            $lines[] = "";
+
+            $num++;
+            $gradeText = $row['absent'] ? 'NB' : (string) $row['grade'];
+
+            $tableRows[] = [
+                $num,
+                TableImageGenerator::truncate($row['full_name'], 24),
+                $row['group_name'] ?? '-',
+                TableImageGenerator::truncate($row['subject_name'], 24),
+                TableImageGenerator::truncate($row['training_type'], 14),
+                $gradeText,
+            ];
         }
 
-        $lines[] = "<b>Jami: {$num} ta past baho</b>";
+        $formattedDate = Carbon::parse($dateStr)->format('d.m.Y');
+        $headers = ['#', 'TALABA FISH', 'GURUH', 'FAN', "MASHG'ULOT TURI", 'BAHO'];
+        $title = "5 GA DA'VOGARLAR — {$scoreLimit} DAN PAST BAHOLAR — {$formattedDate} (Jami: {$num})";
 
-        $message = implode("\n", $lines);
+        $generator = (new TableImageGenerator())->compact();
+        $images = $generator->generate($headers, $tableRows, $title);
 
-        // Telegram xabar 4096 belgidan oshmasligi kerak
-        $chunks = mb_str_split($message, 4000);
+        $tempFiles = [];
 
-        foreach ($chunks as $i => $chunk) {
-            $telegram->sendToUser($chatId, $chunk);
-            if ($i < count($chunks) - 1) {
-                usleep(500000); // 0.5s kutish
+        try {
+            foreach ($images as $index => $imagePath) {
+                $tempFiles[] = $imagePath;
+                $caption = "5 ga da'vogarlar — {$scoreLimit} dan past baholar — {$formattedDate}";
+                if (count($images) > 1) {
+                    $caption .= ' (' . ($index + 1) . '/' . count($images) . '-sahifa)';
+                }
+                $telegram->sendPhoto($chatId, $imagePath, $caption);
+            }
+
+            $this->info("Telegram guruhga {$num} ta past baho haqida jadval rasm yuborildi.");
+            Log::info("5 ga da'vogarlar past baholar: {$num} ta, sana: {$dateStr}");
+        } catch (\Throwable $e) {
+            Log::error("5 ga da'vogarlar Telegram yuborishda xato: " . $e->getMessage());
+            $this->error('Xato: ' . $e->getMessage());
+            return 1;
+        } finally {
+            foreach ($tempFiles as $file) {
+                if (file_exists($file)) {
+                    @unlink($file);
+                }
             }
         }
-
-        $this->info("Telegram guruhga {$num} ta past baho haqida xabar yuborildi.");
-        Log::info("5 ga da'vogarlar past baholar: {$num} ta, sana: {$dateStr}");
 
         return 0;
     }

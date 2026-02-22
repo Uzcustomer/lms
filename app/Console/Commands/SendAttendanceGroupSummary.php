@@ -90,6 +90,22 @@ class SendAttendanceGroupSummary extends Command
         // Progress reporter ni tozalash
         app()->forgetInstance(ImportProgressReporter::class);
 
+        // 1.7-QADAM: 5 ga da'vogarlar past baholar hisoboti (dekanat guruhiga)
+        $fiveCandidateChatId = config('services.telegram.five_candidate_group_id');
+        if ($fiveCandidateChatId) {
+            $this->info("5 ga da'vogarlar past baholar hisoboti yuborilmoqda...");
+            try {
+                \Illuminate\Support\Facades\Artisan::call('five-candidates:send-low-grades', [
+                    '--date' => $todayStr,
+                    '--chat-id' => $fiveCandidateChatId,
+                ]);
+                $this->info("5 ga da'vogarlar hisoboti yuborildi.");
+            } catch (\Throwable $e) {
+                Log::warning("5 ga da'vogarlar hisoboti xato (davom etadi): " . $e->getMessage());
+                $this->warn("5 ga da'vogarlar hisoboti xato: " . $e->getMessage());
+            }
+        }
+
         // 2-QADAM: Jadvaldan ma'lumot olish (web hisobot bilan bir xil logika)
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')

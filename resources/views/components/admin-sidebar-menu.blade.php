@@ -56,17 +56,38 @@
     // Foydalanuvchi to'liq ismi
     $userName = $user->name ?? ($user->full_name ?? $user->short_name ?? 'Foydalanuvchi');
 @endphp
+<!-- Mobile backdrop -->
+<div x-data x-show="$store.sidebar.open"
+     x-transition:enter="transition-opacity ease-linear duration-200"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="transition-opacity ease-linear duration-200"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0"
+     @click="$store.sidebar.open = false"
+     class="sidebar-backdrop"
+     style="display: none;"></div>
+
 <aside x-data="sidebarTheme()" :data-theme="theme"
+       :class="$store.sidebar.open ? 'sidebar-open' : ''"
        class="sidebar-themed w-64 flex flex-col fixed left-0 top-0 z-50"
        style="height: 100vh;">
     <!-- Logo Section -->
-    <div class="p-4 flex flex-col items-center flex-shrink-0 sidebar-logo-section">
+    <div class="p-4 flex flex-col items-center flex-shrink-0 sidebar-logo-section" style="position: relative;">
+        <!-- Mobile close button -->
+        <button x-data @click="$store.sidebar.close()"
+                class="sidebar-close-btn">
+            <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
         <img src="{{ asset('logo.png') }}" alt="Logo" class="w-16 h-16 rounded-full mb-2 sidebar-logo-img">
         <h1 class="sidebar-logo-text">LMS</h1>
     </div>
 
     <!-- Navigation Menu -->
-    <nav class="flex-1 py-3 px-3 overflow-y-auto sidebar-nav">
+    <nav class="flex-1 py-3 px-3 overflow-y-auto sidebar-nav"
+         x-data @click="if($event.target.closest('a')) { if(window.innerWidth < 768) $store.sidebar.close() }">
         <a href="{{ $r('admin.dashboard', 'teacher.dashboard') }}"
            class="sidebar-link {{ $isActive('admin.dashboard', 'teacher.dashboard') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -892,9 +913,110 @@
             background: none;
             border: none;
         }
+
+        /* ===== RESPONSIVE SIDEBAR ===== */
+        .sidebar-themed {
+            transform: translateX(-100%);
+            transition: transform 0.2s ease-in-out;
+        }
+        .sidebar-themed.sidebar-open {
+            transform: translateX(0);
+        }
+        .sidebar-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 40;
+        }
+        .sidebar-close-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            padding: 6px;
+            border-radius: 8px;
+            color: rgba(255,255,255,0.6);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .sidebar-close-btn:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-close-btn {
+            color: #9ca3af;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-close-btn:hover {
+            color: #111827;
+            background: #f3f4f6;
+        }
+        .mobile-top-bar {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 12px 16px;
+        }
+        .mobile-top-bar .hamburger-btn {
+            padding: 8px;
+            border-radius: 8px;
+            color: #4b5563;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+        .mobile-top-bar .hamburger-btn:hover {
+            background: #f3f4f6;
+        }
+
+        /* Desktop (>=768px): sidebar always visible */
+        @media (min-width: 768px) {
+            .sidebar-themed {
+                transform: translateX(0) !important;
+            }
+            .sidebar-main-content {
+                margin-left: 256px;
+            }
+            .mobile-top-bar {
+                display: none !important;
+            }
+            .sidebar-backdrop {
+                display: none !important;
+            }
+            .sidebar-close-btn {
+                display: none !important;
+            }
+        }
+
+        /* Mobile (<768px): no margin, full width */
+        @media (max-width: 767px) {
+            .sidebar-main-content {
+                margin-left: 0 !important;
+            }
+            .desktop-only-header {
+                display: none !important;
+            }
+        }
     </style>
 
     <script>
+        // Alpine.js global store for sidebar toggle
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('sidebar', {
+                open: false,
+                toggle() {
+                    this.open = !this.open;
+                },
+                close() {
+                    this.open = false;
+                }
+            });
+        });
+
         // Cascade submenu pozitsiyasini aniqlash - viewport ga sig'masa tepaga ochadi
         function positionSubmenu(el) {
             const btn = el.previousElementSibling;

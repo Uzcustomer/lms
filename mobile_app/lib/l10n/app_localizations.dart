@@ -104,6 +104,17 @@ class AppLocalizations {
   String get verify => get('verify');
   String get resendCode => get('resend_code');
   String get resendIn => get('resend_in');
+  String get telegramNotConnected => get('telegram_not_connected');
+  String get connectTelegram => get('connect_telegram');
+  String get telegramUsername => get('telegram_username');
+  String get telegramUsernameHint => get('telegram_username_hint');
+  String get telegramSave => get('telegram_save');
+  String get telegramVerificationCode => get('telegram_verification_code');
+  String get telegramSendCodeToBot => get('telegram_send_code_to_bot');
+  String get telegramOpenBot => get('telegram_open_bot');
+  String get telegramVerified => get('telegram_verified');
+  String get telegramChecking => get('telegram_checking');
+  String get telegramDaysLeft => get('telegram_days_left');
   String get profileNotFound => get('profile_not_found');
   String get scheduleNotFound => get('schedule_not_found');
   String get noScheduleThisWeek => get('no_schedule_this_week');
@@ -211,6 +222,17 @@ class AppLocalizations {
       'verify': 'Tasdiqlash',
       'resend_code': 'Kodni qayta yuborish',
       'resend_in': 'Qayta yuborish',
+      'telegram_not_connected': 'Telegram ulangan emas',
+      'connect_telegram': 'Telegram ulash',
+      'telegram_username': 'Telegram username',
+      'telegram_username_hint': '@username',
+      'telegram_save': 'Saqlash',
+      'telegram_verification_code': 'Tasdiqlash kodi',
+      'telegram_send_code_to_bot': 'Ushbu kodni Telegram botga yuboring',
+      'telegram_open_bot': 'Botni ochish',
+      'telegram_verified': 'Telegram tasdiqlangan',
+      'telegram_checking': 'Tekshirilmoqda...',
+      'telegram_days_left': 'kun qoldi',
       'profile_not_found': 'Profil topilmadi',
       'schedule_not_found': 'Jadval topilmadi',
       'no_schedule_this_week': 'Bu hafta uchun jadval topilmadi',
@@ -233,6 +255,7 @@ class AppLocalizations {
       'work_info': 'Ish ma\'lumotlari',
       'department': 'Kafedra',
       'position': 'Lavozim',
+      'phone': 'Telefon',
     },
     'ru': {
       'app_title': 'Tashmedunitf Lms',
@@ -317,6 +340,17 @@ class AppLocalizations {
       'verify': 'Подтвердить',
       'resend_code': 'Отправить код повторно',
       'resend_in': 'Повторная отправка',
+      'telegram_not_connected': 'Telegram не подключён',
+      'connect_telegram': 'Подключить Telegram',
+      'telegram_username': 'Telegram username',
+      'telegram_username_hint': '@username',
+      'telegram_save': 'Сохранить',
+      'telegram_verification_code': 'Код подтверждения',
+      'telegram_send_code_to_bot': 'Отправьте этот код Telegram боту',
+      'telegram_open_bot': 'Открыть бота',
+      'telegram_verified': 'Telegram подтверждён',
+      'telegram_checking': 'Проверка...',
+      'telegram_days_left': 'дней осталось',
       'profile_not_found': 'Профиль не найден',
       'schedule_not_found': 'Расписание не найдено',
       'no_schedule_this_week': 'Расписание на эту неделю не найдено',
@@ -339,6 +373,7 @@ class AppLocalizations {
       'work_info': 'Рабочие данные',
       'department': 'Кафедра',
       'position': 'Должность',
+      'phone': 'Телефон',
     },
     'en': {
       'app_title': 'Tashmedunitf Lms',
@@ -423,6 +458,17 @@ class AppLocalizations {
       'verify': 'Verify',
       'resend_code': 'Resend code',
       'resend_in': 'Resend in',
+      'telegram_not_connected': 'Telegram not connected',
+      'connect_telegram': 'Connect Telegram',
+      'telegram_username': 'Telegram username',
+      'telegram_username_hint': '@username',
+      'telegram_save': 'Save',
+      'telegram_verification_code': 'Verification code',
+      'telegram_send_code_to_bot': 'Send this code to the Telegram bot',
+      'telegram_open_bot': 'Open bot',
+      'telegram_verified': 'Telegram verified',
+      'telegram_checking': 'Checking...',
+      'telegram_days_left': 'days left',
       'profile_not_found': 'Profile not found',
       'schedule_not_found': 'Schedule not found',
       'no_schedule_this_week': 'No schedule found for this week',
@@ -445,6 +491,7 @@ class AppLocalizations {
       'work_info': 'Work info',
       'department': 'Department',
       'position': 'Position',
+      'phone': 'Phone',
     },
   };
 

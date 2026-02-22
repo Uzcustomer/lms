@@ -135,6 +135,14 @@ return [
             'level' => 'debug',
         ],
 
+        'connection_debug' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/connection_debug.log'),
+            'level' => 'debug',
+            'days' => 7,
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

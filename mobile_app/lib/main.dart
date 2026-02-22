@@ -14,6 +14,7 @@ import 'providers/settings_provider.dart';
 import 'l10n/app_localizations.dart';
 import 'screens/common/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/complete_profile_screen.dart';
 import 'screens/student/student_home_screen.dart';
 import 'screens/teacher/teacher_home_screen.dart';
 
@@ -83,6 +84,8 @@ class LmsApp extends StatelessWidget {
                       return const TeacherHomeScreen();
                     }
                     return const StudentHomeScreen();
+                  case AuthState.profileIncomplete:
+                    return const CompleteProfileScreen();
                   case AuthState.loading:
                   case AuthState.unauthenticated:
                   case AuthState.error:

@@ -21,6 +21,9 @@ class ApiConfig {
   static const String studentSubjects = '/student/subjects';
   static const String studentAttendance = '/student/attendance';
   static const String studentPendingLessons = '/student/pending-lessons';
+  static const String studentSavePhone = '/student/complete-profile/phone';
+  static const String studentSaveTelegram = '/student/complete-profile/telegram';
+  static const String studentCheckTelegram = '/student/complete-profile/telegram/check';
 
   // Teacher endpoints
   static const String teacherDashboard = '/teacher/dashboard';

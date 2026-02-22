@@ -58,15 +58,15 @@ class StudentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadSchedule({String? semesterCode, String? week}) async {
+  Future<void> loadSchedule({String? semesterId, String? weekId}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       final response = await _service.getSchedule(
-        semesterCode: semesterCode,
-        week: week,
+        semesterId: semesterId,
+        weekId: weekId,
       );
       _schedule = response['data'] as Map<String, dynamic>?;
     } on ApiException catch (e) {
@@ -123,6 +123,16 @@ class StudentProvider extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> saveTelegram(String telegramUsername) async {
+    final response = await _service.saveTelegram(telegramUsername);
+    return response;
+  }
+
+  Future<Map<String, dynamic>> checkTelegramVerification() async {
+    final response = await _service.checkTelegramVerification();
+    return response;
   }
 
   void clearData() {

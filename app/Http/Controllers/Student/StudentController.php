@@ -917,13 +917,38 @@ class StudentController extends Controller
         $hour = (int) ($timeParts[0] ?? 17);
         $minute = (int) ($timeParts[1] ?? 0);
 
+        // Joriy o'quv yili kodini aniqlash
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
         $independents = Independent::where('group_hemis_id', $student->group_id)
             ->orderBy('deadline', 'asc')
             ->get()
-            ->map(function ($independent) use ($student, $hour, $minute, $mtMaxResubmissions) {
+            ->map(function ($independent) use ($student, $hour, $minute, $mtMaxResubmissions, $educationYearCode) {
                 $submission = $independent->submissionByStudent($student->id);
+
+                // O'quv yili kodini schedule dan aniqlash (getSubjects bilan bir xil mantiq)
+                $indEducationYearCode = $educationYearCode;
+                $resolvedSubjectId = CurriculumSubject::where('curriculum_subject_hemis_id', $independent->subject_hemis_id)
+                    ->value('subject_id');
+                if ($resolvedSubjectId) {
+                    $scheduleEducationYear = DB::table('schedules')
+                        ->where('group_id', $student->group_id)
+                        ->where('subject_id', $resolvedSubjectId)
+                        ->where('semester_code', $independent->semester_code)
+                        ->whereNull('deleted_at')
+                        ->whereNotNull('lesson_date')
+                        ->whereNotNull('education_year_code')
+                        ->orderBy('lesson_date', 'desc')
+                        ->value('education_year_code');
+                    if ($scheduleEducationYear) {
+                        $indEducationYearCode = $scheduleEducationYear;
+                    }
+                }
+
                 $grade = StudentGrade::where('student_id', $student->id)
                     ->where('independent_id', $independent->id)
+                    ->when($indEducationYearCode !== null, fn($q) => $q->where('education_year_code', $indEducationYearCode))
                     ->first();
 
                 $gradeHistory = IndependentGradeHistory::where('independent_id', $independent->id)
@@ -945,6 +970,13 @@ class StudentController extends Controller
                 $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
                 $gradeLocked = $grade && $grade->grade >= $studentMinLimit;
 
+                // YN ga yuborilganligini tekshirish
+                $ynLocked = StudentGrade::where('student_hemis_id', $student->hemis_id)
+                    ->where('subject_id', $independent->subject_hemis_id)
+                    ->where('semester_code', $independent->semester_code)
+                    ->where('is_yn_locked', true)
+                    ->exists();
+
                 return [
                     'id' => $independent->id,
                     'subject_name' => $independent->subject_name,
@@ -955,10 +987,11 @@ class StudentController extends Controller
                     'submission' => $submission,
                     'grade' => $grade?->grade,
                     'grade_locked' => $gradeLocked,
+                    'yn_locked' => $ynLocked,
                     'grade_history' => $gradeHistory,
                     'submission_count' => $submissionCount,
                     'remaining_attempts' => $remainingAttempts,
-                    'can_resubmit' => !$gradeLocked && $submission && $grade && $grade->grade < $studentMinLimit && $remainingAttempts > 0 && !$isOverdue,
+                    'can_resubmit' => !$gradeLocked && !$ynLocked && $submission && $grade && $grade->grade < $studentMinLimit && $remainingAttempts > 0 && !$isOverdue,
                     'status' => $independent->status,
                     'file_path' => $independent->file_path,
                     'file_original_name' => $independent->file_original_name,
@@ -981,6 +1014,28 @@ class StudentController extends Controller
             ->where('group_hemis_id', $student->group_id)
             ->firstOrFail();
 
+        // Joriy o'quv yili kodini aniqlash (getSubjects bilan bir xil mantiq)
+        $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
+        $educationYearCode = $curriculum?->education_year_code;
+
+        $resolvedSubjectId = CurriculumSubject::where('curriculum_subject_hemis_id', $independent->subject_hemis_id)
+            ->value('subject_id');
+
+        if ($resolvedSubjectId) {
+            $scheduleEducationYear = DB::table('schedules')
+                ->where('group_id', $student->group_id)
+                ->where('subject_id', $resolvedSubjectId)
+                ->where('semester_code', $independent->semester_code)
+                ->whereNull('deleted_at')
+                ->whereNotNull('lesson_date')
+                ->whereNotNull('education_year_code')
+                ->orderBy('lesson_date', 'desc')
+                ->value('education_year_code');
+            if ($scheduleEducationYear) {
+                $educationYearCode = $scheduleEducationYear;
+            }
+        }
+
         // YN ga yuborilganligini tekshirish — qulflangan bo'lsa fayl yuklash mumkin emas
         $ynLocked = StudentGrade::where('student_hemis_id', $student->hemis_id)
             ->where('subject_id', $independent->subject_hemis_id)
@@ -992,9 +1047,10 @@ class StudentController extends Controller
             return back()->with('error', 'YN ga yuborilgan. Fayl yuklash mumkin emas.');
         }
 
-        // Check if grade is locked (>= minimum_limit)
+        // Check if grade is locked (>= minimum_limit) — faqat joriy o'quv yili bahosini tekshirish
         $existingGrade = StudentGrade::where('student_id', $student->id)
             ->where('independent_id', $independent->id)
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->first();
 
         $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;

@@ -1,5 +1,9 @@
 <x-app-layout>
     <style>
+        .tab-content {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
         .journal-table {
             border: 1px solid #cbd5e1;
             width: auto;
@@ -61,6 +65,8 @@
             display: flex;
             gap: 0;
             align-items: flex-start;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .journal-main-content {
             flex: 1;
@@ -721,6 +727,37 @@
             .mb-2 a {
                 font-size: 12px !important;
             }
+
+            /* MT manual grade table: name smaller, data columns proper width */
+            #content-mustaqil .student-name-cell,
+            #content-mustaqil .journal-table td:nth-child(2) {
+                font-size: 9px !important;
+                min-width: 90px !important;
+                max-width: 110px;
+            }
+            #content-mustaqil .journal-table th[style*="min-width: 180px"] {
+                min-width: 90px !important;
+                font-size: 9px;
+            }
+            #content-mustaqil .journal-table th[style*="width: 80px"] {
+                min-width: 60px !important;
+                width: 60px !important;
+            }
+            #content-mustaqil .journal-table th[style*="width: 140px"] {
+                min-width: 70px !important;
+                width: 70px !important;
+            }
+            #content-mustaqil .journal-table th[style*="min-width: 150px"] {
+                min-width: 80px !important;
+            }
+            #content-mustaqil .journal-table th[style*="width: 160px"] {
+                min-width: 100px !important;
+                width: 100px !important;
+            }
+            #content-mustaqil .journal-table th[style*="width: 110px"] {
+                min-width: 80px !important;
+                width: 80px !important;
+            }
         }
 
         /* Extra-small phones */
@@ -829,7 +866,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             @forelse($lectureLessonDates as $idx => $date)
                                                 @php
                                                     $scheduledPairs = $lecturePairsByDate[$date] ?? [];
@@ -884,7 +921,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             @forelse($lectureColumns as $idx => $col)
                                                 @php
                                                     $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null;
@@ -1065,7 +1102,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             @forelse($jbLessonDates as $idx => $date)
                                                 @php
                                                     $dayGrades = $studentJbGrades[$date] ?? [];
@@ -1246,7 +1283,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($jbColumns as $colIndex => $col)
                                                 @php
@@ -1588,7 +1625,7 @@
                                         @endphp
                                         <tr id="mt-row-{{ $student->hemis_id }}" {!! $rowBg ? 'style="background:' . $rowBg . '"' : '' !!}>
                                             <td class="px-2 py-1 text-center" style="color: #111827;">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase student-name-cell" style="font-size: 12px; color: #111827;">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase student-name-cell" style="font-size: 12px; {{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
                                                 @if($hasFile)
                                                     <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
@@ -1751,7 +1788,7 @@
                                             @endphp
                                             <tr>
                                                 <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                                <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
+                                                <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                                 @foreach($mtLessonDates as $idx => $date)
                                                     @php
                                                         $dayGrades = $studentMtGrades[$date] ?? [];
@@ -1839,7 +1876,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 text-gray-900 uppercase text-xs student-name-cell">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($mtColumns as $colIndex => $col)
                                                 @php

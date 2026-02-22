@@ -31,6 +31,7 @@ use App\Http\Controllers\Admin\LectureScheduleController;
 use App\Http\Controllers\Admin\TimetableViewController;
 use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\Admin\AcademicScheduleController;
+use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\MoodleImportController;
 
 
@@ -380,6 +381,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-subjects', [YnQaytnomaController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/get-groups', [YnQaytnomaController::class, 'getFilterGroups'])->name('get-groups');
             Route::post('/generate-ruxsatnoma', [YnQaytnomaController::class, 'generateRuxsatnoma'])->name('generate-ruxsatnoma');
+            Route::post('/generate-yn-oldi-word', [YnQaytnomaController::class, 'generateYnOldiWord'])->name('generate-yn-oldi-word');
         });
 
         // Ma'ruza jadvalini joylashtirish
@@ -415,6 +417,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
             Route::get('/get-filter-options', [AcademicScheduleController::class, 'getFilterOptions'])->name('get-filter-options');
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
+            Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
+            Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
         });
 
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
@@ -427,6 +431,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari
     Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
+        // Server debug & monitoring
+        Route::get('/server-debug', [ServerDebugController::class, 'index'])->name('server-debug');
+        Route::get('/server-debug/ping', [ServerDebugController::class, 'ping'])->name('server-debug.ping');
+        Route::post('/server-debug/clear-logs', [ServerDebugController::class, 'clearLogs'])->name('server-debug.clear-logs');
         // Old routes — redirect to unified settings
         Route::get('/password-settings', fn () => redirect()->route('admin.settings', ['tab' => 'password']))->name('password-settings.index');
         Route::post('/password-settings', [SettingsController::class, 'updatePassword'])->name('password-settings.update');
@@ -669,6 +677,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/get-subjects', [YnQaytnomaController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/get-groups', [YnQaytnomaController::class, 'getFilterGroups'])->name('get-groups');
             Route::post('/generate-ruxsatnoma', [YnQaytnomaController::class, 'generateRuxsatnoma'])->name('generate-ruxsatnoma');
+            Route::post('/generate-yn-oldi-word', [YnQaytnomaController::class, 'generateYnOldiWord'])->name('generate-yn-oldi-word');
         });
 
         // Ma'ruza jadvalini joylashtirish
@@ -709,6 +718,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
             Route::get('/get-filter-options', [AcademicScheduleController::class, 'getFilterOptions'])->name('get-filter-options');
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
+            Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
+            Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
         });
     });
 });

@@ -86,7 +86,8 @@ class ImportGrades extends Command
         if ($reporter) {
             $reporter->setStepContext('baholar API...');
         }
-        $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
+        // $today ni filtrlash uchun beramiz — HEMIS boshqa kunlik recordlarni ham qaytaradi
+        $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to, $today);
 
         if ($gradeItems === false) {
             $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
@@ -98,23 +99,47 @@ class ImportGrades extends Command
                 'failed_pages' => ["API xato ({$errorDetail})"],
             ];
         } else {
-            // 2-qadam: Muvaffaqiyatli — soft delete + yangi yozish
-            if ($reporter) {
-                $reporter->setStepContext('bazaga yozilmoqda ' . count($gradeItems) . ' ta yozuv...');
+            try {
+                // 2-qadam: Muvaffaqiyatli — soft delete + yangi yozish
+                if ($reporter) {
+                    $reporter->setStepContext('bazaga yozilmoqda ' . count($gradeItems) . ' ta yozuv...');
+                }
+                $this->applyGrades($gradeItems, $today, false);
+                $this->report['student-grade-list'] = [
+                    'total_days' => 1,
+                    'success_days' => 1,
+                    'failed_pages' => [],
+                ];
+            } catch (\Throwable $e) {
+                $this->error("applyGrades EXCEPTION: {$e->getMessage()}");
+                Log::error("[LiveImport] applyGrades exception: {$e->getMessage()}", [
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                $this->report['student-grade-list'] = [
+                    'total_days' => 1,
+                    'success_days' => 0,
+                    'failed_pages' => ["Exception: " . substr($e->getMessage(), 0, 100)],
+                ];
             }
-            $this->applyGrades($gradeItems, $today, false);
-            $this->report['student-grade-list'] = [
-                'total_days' => 1,
-                'success_days' => 1,
-                'failed_pages' => [],
-            ];
         }
 
         // Davomatni alohida import qilish (eski logika — attendance uchun soft delete kerak emas)
         if ($reporter) {
             $reporter->setStepContext('davomat API...');
         }
-        $this->importAttendance($from, $to, $today);
+        try {
+            $this->importAttendance($from, $to, $today);
+        } catch (\Throwable $e) {
+            $this->error("importAttendance EXCEPTION: {$e->getMessage()}");
+            Log::error("[LiveImport] importAttendance exception: {$e->getMessage()}", [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            $this->report['attendance-list'] = [
+                'total_days' => 1,
+                'success_days' => 0,
+                'failed_pages' => ["Exception: " . substr($e->getMessage(), 0, 100)],
+            ];
+        }
 
         $this->sendTelegramReport();
         Log::info('[LiveImport] Completed at ' . Carbon::now());
@@ -168,82 +193,119 @@ class ImportGrades extends Command
             $dayNum++;
             $date = Carbon::parse($dateStr);
 
-            $dateStartOfDay = $date->copy()->startOfDay();
-            $dateEndOfDay = $date->copy()->endOfDay();
+            try {
+                $dateStartOfDay = $date->copy()->startOfDay();
+                $dateEndOfDay = $date->copy()->endOfDay();
 
-            if ($reporter) {
-                $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr})");
-            }
+                if ($reporter) {
+                    $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr})");
+                }
 
-            // Faqat BARCHA yozuvlar is_final=true bo'lgandagina o'tkazish
-            $hasUnfinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
-                ->where('lesson_date', '<=', $dateEndOfDay)
-                ->where('is_final', false)
-                ->exists();
-
-            if (!$hasUnfinalizedForDate) {
-                $this->info("  {$date->toDateString()} — BARCHA yozuvlar yakunlangan, o'tkazib yuborildi.");
-                $totalDays--;
-                continue;
-            }
-
-            // Agar shu kun uchun is_final=true yozuvlar ALLAQACHON mavjud bo'lsa,
-            // is_final=false qoldiqlarni tozalab, API ni qayta chaqirmaslik
-            $hasFinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
-                ->where('lesson_date', '<=', $dateEndOfDay)
-                ->where('is_final', true)
-                ->exists();
-
-            if ($hasFinalizedForDate) {
-                $cleaned = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                // Faqat BARCHA yozuvlar is_final=true bo'lgandagina o'tkazish
+                $hasUnfinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
                     ->where('lesson_date', '<=', $dateEndOfDay)
                     ->where('is_final', false)
-                    ->delete();
-                $this->info("  {$date->toDateString()} — is_final=true allaqachon mavjud, {$cleaned} ta is_final=false qoldiq tozalandi.");
-                Log::info("[FinalImport] {$date->toDateString()} — cleaned {$cleaned} leftover is_final=false records (is_final=true already exists).");
-                $successDays++;
-                continue;
-            }
+                    ->exists();
 
-            $from = $date->copy()->startOfDay()->timestamp;
-            $to = $date->copy()->endOfDay()->timestamp;
+                if (!$hasUnfinalizedForDate) {
+                    $this->info("  {$date->toDateString()} — BARCHA yozuvlar yakunlangan, o'tkazib yuborildi.");
+                    $totalDays--;
+                    continue;
+                }
 
-            $this->info("  {$date->toDateString()} — API dan tortilmoqda...");
+                // Agar shu kun uchun is_final=true yozuvlar ALLAQACHON mavjud bo'lsa,
+                // is_final=false qoldiqlarni tozalab, API ni qayta chaqirmaslik
+                $hasFinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                    ->where('lesson_date', '<=', $dateEndOfDay)
+                    ->where('is_final', true)
+                    ->exists();
 
-            // Baholar
-            if ($reporter) {
-                $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), baholar API...");
-            }
-            $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to);
+                if ($hasFinalizedForDate) {
+                    $cleaned = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                        ->where('lesson_date', '<=', $dateEndOfDay)
+                        ->where('is_final', false)
+                        ->delete();
+                    $this->info("  {$date->toDateString()} — is_final=true allaqachon mavjud, {$cleaned} ta is_final=false qoldiq tozalandi.");
+                    Log::info("[FinalImport] {$date->toDateString()} — cleaned {$cleaned} leftover is_final=false records (is_final=true already exists).");
+                    $successDays++;
+                    continue;
+                }
 
-            if ($gradeItems === false) {
-                $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
-                $this->error("  {$date->toDateString()} — API xato ({$errorDetail}), keyingi kunga o'tiladi.");
-                $failedDays[] = "{$date->toDateString()} ({$errorDetail})";
-                continue;
-            }
+                $from = $date->copy()->startOfDay()->timestamp;
+                $to = $date->copy()->endOfDay()->timestamp;
 
-            if ($reporter) {
-                $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), bazaga yozilmoqda " . count($gradeItems) . " ta yozuv...");
-            }
-            $this->applyGrades($gradeItems, $date, true);
+                $this->info("  {$date->toDateString()} — API dan tortilmoqda...");
 
-            // Attendance
-            if ($reporter) {
-                $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat API...");
-            }
-            $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
-            if ($attendanceItems !== false) {
+                // Baholar — $date ni berib, boshqa kunlik recordlarni fetch paytida filtrlaymiz
                 if ($reporter) {
-                    $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat yozilmoqda...");
+                    $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), baholar API...");
                 }
-                foreach ($attendanceItems as $item) {
-                    $this->processAttendance($item, true);
-                }
-            }
+                $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to, $date);
 
-            $successDays++;
-            $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
+                if ($gradeItems === false) {
+                    $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
+                    $this->error("  {$date->toDateString()} — API xato ({$errorDetail}), keyingi kunga o'tiladi.");
+                    $failedDays[] = "{$date->toDateString()} ({$errorDetail})";
+                    continue;
+                }
+
+                if ($reporter) {
+                    $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), bazaga yozilmoqda " . count($gradeItems) . " ta yozuv...");
+                }
+                $this->applyGrades($gradeItems, $date, true);
+
+                // Attendance
+                if ($reporter) {
+                    $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat API...");
+                }
+                $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
+                if ($attendanceItems !== false) {
+                    if ($reporter) {
+                        $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat yozilmoqda...");
+                    }
+                    foreach ($attendanceItems as $item) {
+                        $this->processAttendance($item, true);
+                    }
+                }
+
+                $successDays++;
+                $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
+            } catch (\Throwable $e) {
+                $errorMsg = $e->getMessage();
+                $this->error("  {$date->toDateString()} — EXCEPTION: {$errorMsg}");
+                Log::error("[FinalImport] {$date->toDateString()} exception: {$errorMsg}", [
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                $failedDays[] = "{$date->toDateString()} (Exception: " . substr($errorMsg, 0, 100) . ")";
+            }
+        }
+
+        // Global tozalash: 7 kunlik oynadan tashqaridagi barcha is_final=false duplikatlarni soft-delete qilish
+        // Migration (02-17) barcha eski recordlarni is_final=false qilib qo'ygan,
+        // backfill yangi is_final=true recordlarni yaratgan, lekin eskilari qolib ketgan
+        try {
+            $globalCleaned = DB::update("
+                UPDATE student_grades sg
+                INNER JOIN student_grades g2
+                    ON g2.student_id = sg.student_id
+                    AND g2.subject_id = sg.subject_id
+                    AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
+                    AND g2.is_final = 1
+                    AND g2.deleted_at IS NULL
+                    AND g2.id != sg.id
+                SET sg.deleted_at = NOW()
+                WHERE sg.is_final = 0
+                    AND sg.deleted_at IS NULL
+                    AND DATE(sg.lesson_date) < CURDATE()
+            ");
+
+            if ($globalCleaned > 0) {
+                $this->info("Global cleanup: {$globalCleaned} ta eski is_final=false duplikat tozalandi.");
+                Log::info("[FinalImport] Global cleanup: {$globalCleaned} stale is_final=false duplicates removed.");
+            }
+        } catch (\Throwable $e) {
+            Log::error("[FinalImport] Global cleanup exception: {$e->getMessage()}");
+            $failedDays[] = "Global cleanup (Exception: " . substr($e->getMessage(), 0, 100) . ")";
         }
 
         $this->report['final-import'] = [
@@ -291,8 +353,8 @@ class ImportGrades extends Command
 
             $this->info("--- {$date->toDateString()} ---");
 
-            // Baholar
-            $gradeItems = $this->fetchAllPages('student-grade-list', $dayFrom, $dayTo);
+            // Baholar — $date ni berib, boshqa kunlik recordlarni fetch paytida filtrlaymiz
+            $gradeItems = $this->fetchAllPages('student-grade-list', $dayFrom, $dayTo, $date);
 
             if ($gradeItems === false) {
                 $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
@@ -336,7 +398,7 @@ class ImportGrades extends Command
     // =========================================================================
     private string $lastFetchError = '';
 
-    private function fetchAllPages(string $endpoint, int $from, int $to): array|false
+    private function fetchAllPages(string $endpoint, int $from, int $to, ?Carbon $filterDate = null): array|false
     {
         $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
         $allItems = [];
@@ -344,6 +406,7 @@ class ImportGrades extends Command
         $totalPages = 1;
         $maxRetries = 3;
         $this->lastFetchError = '';
+        $skippedByFilter = 0;
 
         do {
             $queryParams = [
@@ -364,6 +427,18 @@ class ImportGrades extends Command
 
                     if ($response->successful()) {
                         $data = $response->json()['data']['items'] ?? [];
+
+                        // Agar filterDate berilgan bo'lsa, boshqa kunlik recordlarni DARHOL tashlash
+                        // HEMIS API noto'g'ri filter qiladi: ~8257 ta boshqa kunlik record qaytaradi
+                        // Ularni xotiraga yig'maslik uchun shu yerda filtrlaymiz
+                        if ($filterDate && $endpoint === 'student-grade-list') {
+                            $beforeCount = count($data);
+                            $data = array_filter($data, function ($item) use ($filterDate) {
+                                return Carbon::createFromTimestamp($item['lesson_date'])->isSameDay($filterDate);
+                            });
+                            $skippedByFilter += $beforeCount - count($data);
+                        }
+
                         $allItems = array_merge($allItems, $data);
                         $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
                         $this->info("Fetched {$endpoint} page {$currentPage}/{$totalPages}");
@@ -401,6 +476,11 @@ class ImportGrades extends Command
             $currentPage++;
         } while ($currentPage <= $totalPages);
 
+        if ($skippedByFilter > 0) {
+            $this->warn("Filtered out {$skippedByFilter} records with wrong date during fetch");
+            Log::warning("[Fetch] Filtered out {$skippedByFilter} records with wrong lesson_date for {$filterDate->toDateString()}");
+        }
+
         $this->info("Total {$endpoint} items fetched: " . count($allItems));
         return $allItems;
     }
@@ -417,7 +497,8 @@ class ImportGrades extends Command
         $skippedCount = 0;
         $softDeletedCount = 0;
 
-        // Faqat kutilgan sanaga mos yozuvlarni filtrlash
+        // Xavfsizlik filtri — fetchAllPages allaqachon filtrlaganligiga qaramasdan
+        // ikkinchi marta tekshiramiz (agar fetchAllPages filterDate siz chaqirilgan bo'lsa)
         $filteredItems = array_filter($gradeItems, function ($item) use ($date, &$skippedCount) {
             $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
             if (!$lessonDate->isSameDay($date)) {
@@ -427,35 +508,113 @@ class ImportGrades extends Command
             return true;
         });
 
+        // API javobini bo'shatish — endi faqat filteredItems kerak
+        unset($gradeItems);
+
         if ($skippedCount > 0) {
             $this->warn("Skipped {$skippedCount} records with mismatched lesson_date (expected {$date->toDateString()})");
             Log::warning("[ApplyGrades] Skipped {$skippedCount} records with lesson_date != {$date->toDateString()}");
         }
 
-        DB::transaction(function () use ($filteredItems, $dateStart, $dateEnd, $isFinal, &$gradeCount, &$softDeletedCount) {
-            // 1-QADAM: Retake ma'lumotlarni xotiraga saqlash (o'chirishdan oldin)
-            $retakeBackup = StudentGrade::where('lesson_date', '>=', $dateStart)
-                ->where('lesson_date', '<=', $dateEnd)
-                ->whereNotNull('retake_grade')
-                ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code',
-                        'retake_grade', 'retake_graded_at', 'retake_by', 'retake_file_path', 'graded_by_user_id'])
-                ->keyBy(function ($item) {
-                    return $item->student_hemis_id . '_' . $item->subject_id . '_' .
-                           $item->lesson_date . '_' . $item->lesson_pair_code;
-                });
+        // ===== TRANSACTION TASHQARISIDA: Studentlar va deadline-larni oldindan yuklash =====
+        // Bu N+1 query muammosini hal qiladi (8685 ta SELECT o'rniga 1 ta)
+        $hemisIds = array_unique(array_column(array_values($filteredItems), '_student'));
+        $studentsMap = Student::whereIn('hemis_id', $hemisIds)->get()->keyBy('hemis_id');
+        $deadlinesMap = Deadline::all()->keyBy('level_code');
 
-            if ($retakeBackup->isNotEmpty()) {
-                $this->info("Backed up {$retakeBackup->count()} retake grades for {$dateStart->toDateString()}");
+        // ===== INSERT QATORLARINI OLDINDAN TAYYORLASH (transaction tashqarisida) =====
+        // Bu xotirani tejaydi: Eloquent model yaratish + LogsActivity o'rniga oddiy array
+        $insertRows = [];
+        $now = Carbon::now();
+
+        foreach ($filteredItems as $item) {
+            $student = $studentsMap->get($item['_student']);
+            if (!$student) continue;
+
+            $gradeValue = $item['grade'];
+            $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
+
+            $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+            $studentMinLimit = $markingScore ? $markingScore->minimum_limit : 0;
+
+            $isLowGrade = ($student->level_code == 16 && $gradeValue < 3) ||
+                ($student->level_code != 16 && $gradeValue < $studentMinLimit);
+
+            $status = $isLowGrade ? 'pending' : 'recorded';
+            $reason = $isLowGrade ? 'low_grade' : null;
+            $deadline = null;
+            if ($isLowGrade) {
+                $dl = $deadlinesMap->get($student->level_code);
+                $deadline = $dl
+                    ? $lessonDate->copy()->addDays($dl->deadline_days)->endOfDay()
+                    : $lessonDate->copy()->addWeek()->endOfDay();
             }
 
-            // 1b-QADAM: O'chirishdan OLDIN barcha aktiv yozuv ID larni saqlash
-            // Keyin 6-qadamda HEMIS da yo'q lokal baholarni tiklash uchun kerak
-            $activeIdsBeforeDelete = StudentGrade::where('lesson_date', '>=', $dateStart)
-                ->where('lesson_date', '<=', $dateEnd)
-                ->pluck('id')
-                ->toArray();
+            $insertRows[] = [
+                'hemis_id' => $item['id'],
+                'student_id' => $student->id,
+                'student_hemis_id' => $item['_student'],
+                'semester_code' => $item['semester']['code'],
+                'semester_name' => $item['semester']['name'],
+                'education_year_code' => $item['educationYear']['code'] ?? null,
+                'education_year_name' => $item['educationYear']['name'] ?? null,
+                'subject_schedule_id' => $item['_subject_schedule'],
+                'subject_id' => $item['subject']['id'],
+                'subject_name' => $item['subject']['name'],
+                'subject_code' => $item['subject']['code'],
+                'training_type_code' => $item['trainingType']['code'],
+                'training_type_name' => $item['trainingType']['name'],
+                'employee_id' => $item['employee']['id'],
+                'employee_name' => $item['employee']['name'],
+                'lesson_pair_code' => $item['lessonPair']['code'],
+                'lesson_pair_name' => $item['lessonPair']['name'],
+                'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                'grade' => $gradeValue,
+                'lesson_date' => $lessonDate,
+                'created_at_api' => Carbon::createFromTimestamp($item['created_at']),
+                'reason' => $reason,
+                'deadline' => $deadline,
+                'status' => $status,
+                'is_final' => $isFinal,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
 
-            // 2-QADAM: BARCHA eski yozuvlarni soft-delete (retake ham — HEMIS yangilanishi uchun)
+        $gradeCount = count($insertRows);
+
+        // Xotirani bo'shatish — filteredItems va studentsMap endi kerak emas
+        unset($filteredItems, $studentsMap, $deadlinesMap, $hemisIds);
+
+        // ====================================================================
+        // 1-QADAM: Read-only — tranzaksiyadan OLDIN (lock ushlamasligi uchun)
+        // ====================================================================
+        $retakeBackup = StudentGrade::where('lesson_date', '>=', $dateStart)
+            ->where('lesson_date', '<=', $dateEnd)
+            ->whereNotNull('retake_grade')
+            ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code',
+                    'retake_grade', 'retake_graded_at', 'retake_by', 'retake_file_path', 'graded_by_user_id'])
+            ->keyBy(function ($item) {
+                return $item->student_hemis_id . '_' . $item->subject_id . '_' .
+                       $item->lesson_date . '_' . $item->lesson_pair_code;
+            });
+
+        if ($retakeBackup->isNotEmpty()) {
+            $this->info("Backed up {$retakeBackup->count()} retake grades for {$dateStart->toDateString()}");
+        }
+
+        // 1b-QADAM: O'chirishdan OLDIN barcha aktiv yozuv ID larni saqlash
+        $activeIdsBeforeDelete = StudentGrade::where('lesson_date', '>=', $dateStart)
+            ->where('lesson_date', '<=', $dateEnd)
+            ->pluck('id')
+            ->toArray();
+
+        // ====================================================================
+        // 2-3 QADAM: Soft-delete + Bulk insert — QISQA tranzaksiya
+        // ====================================================================
+        DB::transaction(function () use ($insertRows, $dateStart, $dateEnd, $isFinal, &$softDeletedCount) {
+            // 2-QADAM: BARCHA eski yozuvlarni soft-delete
             $query = StudentGrade::where('lesson_date', '>=', $dateStart)
                 ->where('lesson_date', '<=', $dateEnd);
 
@@ -465,113 +624,107 @@ class ImportGrades extends Command
                 $softDeletedCount = $query->where('is_final', false)->delete();
             }
 
-            $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
-            Log::info("[ApplyGrades] Soft deleted {$softDeletedCount} grades for {$dateStart->toDateString()}");
-
-            // 3-QADAM: HEMIS dan yangi yozuvlarni yaratish (to'liq yangi ma'lumot)
-            foreach ($filteredItems as $item) {
-                $this->processGrade($item, $isFinal);
-                $gradeCount++;
-            }
-
-            // 4-QADAM: Saqlangan retake ma'lumotlarni yangi yozuvlarga qayta qo'yish
-            $retakeRestored = 0;
-            $restoredKeys = [];
-            foreach ($retakeBackup as $key => $retake) {
-                $updated = StudentGrade::where('student_hemis_id', $retake->student_hemis_id)
-                    ->where('subject_id', $retake->subject_id)
-                    ->whereDate('lesson_date', $retake->lesson_date)
-                    ->where('lesson_pair_code', $retake->lesson_pair_code)
-                    ->whereNull('deleted_at')
-                    ->whereNull('retake_grade')
-                    ->update([
-                        'retake_grade' => $retake->retake_grade,
-                        'status' => 'retake',
-                        'retake_graded_at' => $retake->retake_graded_at,
-                        'retake_by' => $retake->retake_by,
-                        'retake_file_path' => $retake->retake_file_path,
-                        'graded_by_user_id' => $retake->graded_by_user_id,
-                        'is_final' => $isFinal,
-                    ]);
-                if ($updated) {
-                    $retakeRestored++;
-                    $restoredKeys[] = $key;
-                }
-            }
-
-            // 5-QADAM: HEMIS da yo'q yozuvlarni (teacher_victim, lokal NB) to'g'ridan-to'g'ri tiklash
-            // Faqat 2-qadamda SOFT-DELETE bo'lgan yozuvlarni tiklash
-            // is_final=true bo'lib 2-qadamda o'chirilmagan yozuvlarga TEGMASLIK
-            $undeleted = 0;
-            foreach ($retakeBackup as $key => $retake) {
-                if (in_array($key, $restoredKeys)) {
-                    continue; // 4-qadamda tiklangan, o'tkazib yuborish
-                }
-                $affected = StudentGrade::onlyTrashed()
-                    ->where('id', $retake->id)
-                    ->update([
-                        'deleted_at' => null,
-                        'is_final' => $isFinal,
-                    ]);
-                if ($affected) {
-                    $undeleted++;
-                }
-            }
-
-            if ($retakeRestored > 0 || $undeleted > 0) {
-                $this->info("Retake grades: {$retakeRestored} restored to new records, {$undeleted} un-deleted for {$dateStart->toDateString()}");
-                Log::info("[ApplyGrades] Retake: {$retakeRestored} restored, {$undeleted} un-deleted for {$dateStart->toDateString()}");
-            }
-
-            // 6-QADAM: O'qituvchi tomonidan qo'yilgan lokal baholarni tiklash
-            // HEMIS da yo'q (yangi yozuv yaratilmagan) lekin 2-qadamda o'chirilgan baholarni qaytarish
-            $activeKeysAfterImport = StudentGrade::where('lesson_date', '>=', $dateStart)
-                ->where('lesson_date', '<=', $dateEnd)
-                ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code'])
-                ->map(fn ($g) => $g->student_hemis_id . '_' . $g->subject_id . '_' .
-                    Carbon::parse($g->lesson_date)->toDateString() . '_' . $g->lesson_pair_code)
-                ->flip()
-                ->toArray();
-
-            $orphanCandidates = StudentGrade::onlyTrashed()
-                ->whereIn('id', $activeIdsBeforeDelete)
-                ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code']);
-
-            $orphanIds = [];
-            foreach ($orphanCandidates as $orphan) {
-                $key = $orphan->student_hemis_id . '_' . $orphan->subject_id . '_' .
-                    Carbon::parse($orphan->lesson_date)->toDateString() . '_' . $orphan->lesson_pair_code;
-                if (!isset($activeKeysAfterImport[$key])) {
-                    $orphanIds[] = $orphan->id;
-                }
-            }
-
-            $restoredLocal = 0;
-            if (!empty($orphanIds)) {
-                $restoredLocal = StudentGrade::onlyTrashed()
-                    ->whereIn('id', $orphanIds)
-                    ->update(['deleted_at' => null, 'is_final' => $isFinal]);
-            }
-
-            if ($restoredLocal > 0) {
-                $this->info("Local grades: {$restoredLocal} restored (HEMIS da yo'q, o'qituvchi qo'ygan) for {$dateStart->toDateString()}");
-                Log::info("[ApplyGrades] Local grades: {$restoredLocal} restored for {$dateStart->toDateString()}");
-            }
-
-            // 7-QADAM: Xavfsizlik tozalash — final importdan keyin is_final=false qoldiqlar qolmasligi kerak
-            // Agar step 6 (orphan restoration) eski is_final=false yozuvlarni qayta tiklagan bo'lsa,
-            // ularni shu yerda tozalab tashlash
-            if ($isFinal) {
-                $leftoverCount = StudentGrade::where('lesson_date', '>=', $dateStart)
-                    ->where('lesson_date', '<=', $dateEnd)
-                    ->where('is_final', false)
-                    ->delete();
-                if ($leftoverCount > 0) {
-                    $this->warn("Safety cleanup: {$leftoverCount} ta is_final=false qoldiq tozalandi ({$dateStart->toDateString()})");
-                    Log::warning("[ApplyGrades] Safety cleanup: {$leftoverCount} is_final=false leftovers soft-deleted for {$dateStart->toDateString()}");
-                }
+            // 3-QADAM: HEMIS dan yangi yozuvlarni BULK INSERT (200 tadan)
+            foreach (array_chunk($insertRows, 200) as $chunk) {
+                DB::table('student_grades')->insert($chunk);
             }
         });
+
+        $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
+        Log::info("[ApplyGrades] Soft deleted {$softDeletedCount} grades for {$dateStart->toDateString()}");
+
+        // ====================================================================
+        // 4-QADAM: Retake ma'lumotlarni batch qayta qo'yish (tranzaksiyadan tashqarida)
+        // N+1 loop o'rniga — batch update
+        // ====================================================================
+        $retakeRestored = 0;
+        $restoredKeys = [];
+        foreach ($retakeBackup as $key => $retake) {
+            $updated = StudentGrade::where('student_hemis_id', $retake->student_hemis_id)
+                ->where('subject_id', $retake->subject_id)
+                ->whereDate('lesson_date', $retake->lesson_date)
+                ->where('lesson_pair_code', $retake->lesson_pair_code)
+                ->whereNull('deleted_at')
+                ->whereNull('retake_grade')
+                ->update([
+                    'retake_grade' => $retake->retake_grade,
+                    'status' => 'retake',
+                    'retake_graded_at' => $retake->retake_graded_at,
+                    'retake_by' => $retake->retake_by,
+                    'retake_file_path' => $retake->retake_file_path,
+                    'graded_by_user_id' => $retake->graded_by_user_id,
+                    'is_final' => $isFinal,
+                ]);
+            if ($updated) {
+                $retakeRestored++;
+                $restoredKeys[] = $key;
+            }
+        }
+
+        // 5-QADAM: HEMIS da yo'q retake yozuvlarni batch tiklash
+        $unrestored = $retakeBackup->keys()->diff($restoredKeys)->toArray();
+        $undeleted = 0;
+        if (!empty($unrestored)) {
+            $unrestoredIds = $retakeBackup->only($unrestored)->pluck('id')->toArray();
+            if (!empty($unrestoredIds)) {
+                $undeleted = StudentGrade::onlyTrashed()
+                    ->whereIn('id', $unrestoredIds)
+                    ->update(['deleted_at' => null, 'is_final' => $isFinal]);
+            }
+        }
+
+        if ($retakeRestored > 0 || $undeleted > 0) {
+            $this->info("Retake grades: {$retakeRestored} restored to new records, {$undeleted} un-deleted for {$dateStart->toDateString()}");
+            Log::info("[ApplyGrades] Retake: {$retakeRestored} restored, {$undeleted} un-deleted for {$dateStart->toDateString()}");
+        }
+
+        // ====================================================================
+        // 6-QADAM: Lokal baholarni tiklash (tranzaksiyadan tashqarida)
+        // ====================================================================
+        $activeKeysAfterImport = StudentGrade::where('lesson_date', '>=', $dateStart)
+            ->where('lesson_date', '<=', $dateEnd)
+            ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code'])
+            ->map(fn ($g) => $g->student_hemis_id . '_' . $g->subject_id . '_' .
+                Carbon::parse($g->lesson_date)->toDateString() . '_' . $g->lesson_pair_code)
+            ->flip()
+            ->toArray();
+
+        $orphanCandidates = StudentGrade::onlyTrashed()
+            ->whereIn('id', $activeIdsBeforeDelete)
+            ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code']);
+
+        $orphanIds = [];
+        foreach ($orphanCandidates as $orphan) {
+            $key = $orphan->student_hemis_id . '_' . $orphan->subject_id . '_' .
+                Carbon::parse($orphan->lesson_date)->toDateString() . '_' . $orphan->lesson_pair_code;
+            if (!isset($activeKeysAfterImport[$key])) {
+                $orphanIds[] = $orphan->id;
+            }
+        }
+
+        $restoredLocal = 0;
+        if (!empty($orphanIds)) {
+            $restoredLocal = StudentGrade::onlyTrashed()
+                ->whereIn('id', $orphanIds)
+                ->update(['deleted_at' => null, 'is_final' => $isFinal]);
+        }
+
+        if ($restoredLocal > 0) {
+            $this->info("Local grades: {$restoredLocal} restored (HEMIS da yo'q, o'qituvchi qo'ygan) for {$dateStart->toDateString()}");
+            Log::info("[ApplyGrades] Local grades: {$restoredLocal} restored for {$dateStart->toDateString()}");
+        }
+
+        // 7-QADAM: Xavfsizlik tozalash
+        if ($isFinal) {
+            $leftoverCount = StudentGrade::where('lesson_date', '>=', $dateStart)
+                ->where('lesson_date', '<=', $dateEnd)
+                ->where('is_final', false)
+                ->delete();
+            if ($leftoverCount > 0) {
+                $this->warn("Safety cleanup: {$leftoverCount} ta is_final=false qoldiq tozalandi ({$dateStart->toDateString()})");
+                Log::warning("[ApplyGrades] Safety cleanup: {$leftoverCount} is_final=false leftovers soft-deleted for {$dateStart->toDateString()}");
+            }
+        }
 
         $this->info("Written {$gradeCount} grades (is_final=" . ($isFinal ? 'true' : 'false') . ")");
         Log::info("[ApplyGrades] Written {$gradeCount} grades for {$dateStart->toDateString()}, is_final=" . ($isFinal ? 'true' : 'false'));

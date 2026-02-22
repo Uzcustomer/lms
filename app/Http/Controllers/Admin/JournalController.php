@@ -15,6 +15,7 @@ use App\Models\Setting;
 use App\Models\Specialty;
 use App\Jobs\ImportSchedulesPartiallyJob;
 use App\Services\ActivityLogService;
+use App\Services\HemisService;
 use App\Services\ScheduleImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -635,9 +636,14 @@ class JournalController extends Controller
         }
 
         // Get students basic info
+        // Chetlashgan talabalar: joriy semestrda bo'lsa — ko'rsatiladi (qizil), oldingi semestrlarda — chiqariladi
         $students = DB::table('students')
             ->where('group_id', $group->group_hemis_id)
-            ->select('id', 'hemis_id', 'full_name', 'student_id_number')
+            ->where(function ($query) use ($semesterCode) {
+                $query->where('student_status_code', '!=', '60')
+                      ->orWhere('semester_code', $semesterCode);
+            })
+            ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
             ->orderBy('full_name')
             ->get();
 
@@ -1090,6 +1096,10 @@ class JournalController extends Controller
                 ], 502);
             }
 
+            // Talabalar ro'yxatini sinxronlash (davomat va baholardan OLDIN)
+            $hemisService = app(HemisService::class);
+            $studentResult = $hemisService->importStudentsForGroup((int) $data['group_id']);
+
             // Attendance (sababli/sababsiz) sinxronizatsiyasi
             $attendanceResult = $this->syncAttendanceForGroupSubject((int) $data['group_id'], (int) $data['subject_id']);
 
@@ -1097,6 +1107,12 @@ class JournalController extends Controller
             $gradeResult = $this->syncGradesForGroupSubject((int) $data['group_id'], (int) $data['subject_id']);
 
             $message = "Jadval yangilandi. {$result['count']} ta yozuv sinxronlandi.";
+            if ($studentResult['imported'] > 0) {
+                $message .= " Talabalar: {$studentResult['imported']} ta sinxronlandi.";
+            }
+            if ($studentResult['deactivated'] > 0) {
+                $message .= " {$studentResult['deactivated']} ta talaba chetlashgan deb belgilandi.";
+            }
             if ($attendanceResult['synced'] > 0) {
                 $message .= " Davomat: {$attendanceResult['synced']} ta yangilandi.";
             }
@@ -1441,7 +1457,7 @@ class JournalController extends Controller
                             'reason' => $reason,
                             'deadline' => $deadline,
                             'status' => $status,
-                            'is_final' => false,
+                            'is_final' => true,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);

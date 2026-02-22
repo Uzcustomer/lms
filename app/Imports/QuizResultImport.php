@@ -123,6 +123,7 @@ class QuizResultImport implements ToCollection, WithHeadingRow, WithValidation
                 'grade' => round($grade),
                 'deadline' => now(),
                 'quiz_result_id' => $quizResult?->id,
+                'is_final' => true,
             ]);
 
             $this->successCount++;

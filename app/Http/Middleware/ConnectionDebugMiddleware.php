@@ -31,7 +31,11 @@ class ConnectionDebugMiddleware
 
         // Agar DB ulanish muammo bo'lsa — darhol log yozamiz
         if (!$dbStatus['connected']) {
-            Log::channel('connection_debug')->error('DATABASE ULANISH YO\'QOLDI', $debugInfo);
+            try {
+                Log::channel('connection_debug')->error('DATABASE ULANISH YO\'QOLDI', $debugInfo);
+            } catch (\Throwable $e) {
+                // Log yozish xatosi asosiy javobni buzmasligi kerak
+            }
         }
 
         // Requestni davom ettiramiz
@@ -46,7 +50,11 @@ class ConnectionDebugMiddleware
                 'file' => $e->getFile() . ':' . $e->getLine(),
             ];
 
-            Log::channel('connection_debug')->error('REQUEST XATOLIK BILAN TUGADI', $debugInfo);
+            try {
+                Log::channel('connection_debug')->error('REQUEST XATOLIK BILAN TUGADI', $debugInfo);
+            } catch (\Throwable $logEx) {
+                // Log yozish xatosi asosiy xatoni yutib yubormasligi kerak
+            }
             throw $e;
         }
 
@@ -55,21 +63,26 @@ class ConnectionDebugMiddleware
         $debugInfo['status_code'] = $response->getStatusCode();
 
         // 2. Sekin requestlarni log qilish (3 sekunddan oshsa)
-        if ($duration > 3000) {
-            $debugInfo['query_count'] = count(DB::getQueryLog());
-            Log::channel('connection_debug')->warning('SEKIN REQUEST ANIQLANDI', $debugInfo);
-        }
+        // try-catch: log yozish xatosi asosiy javobni buzmaydi
+        try {
+            if ($duration > 3000) {
+                $debugInfo['query_count'] = count(DB::getQueryLog());
+                Log::channel('connection_debug')->warning('SEKIN REQUEST ANIQLANDI', $debugInfo);
+            }
 
-        // 3. Server xatolik (5xx) bo'lsa log qilish
-        if ($response->getStatusCode() >= 500) {
-            Log::channel('connection_debug')->error('SERVER XATOLIK (5xx)', $debugInfo);
-        }
+            // 3. Server xatolik (5xx) bo'lsa log qilish
+            if ($response->getStatusCode() >= 500) {
+                Log::channel('connection_debug')->error('SERVER XATOLIK (5xx)', $debugInfo);
+            }
 
-        // 4. 419 (CSRF/Session expired) bo'lsa log qilish — bu ko'pincha "ulanish uzildi" deb ko'rinadi
-        if ($response->getStatusCode() === 419) {
-            $debugInfo['session_id'] = session()->getId();
-            $debugInfo['session_driver'] = config('session.driver');
-            Log::channel('connection_debug')->warning('SESSION/CSRF MUDDATI TUGADI (419)', $debugInfo);
+            // 4. 419 (CSRF/Session expired) bo'lsa log qilish — bu ko'pincha "ulanish uzildi" deb ko'rinadi
+            if ($response->getStatusCode() === 419) {
+                $debugInfo['session_id'] = session()->getId();
+                $debugInfo['session_driver'] = config('session.driver');
+                Log::channel('connection_debug')->warning('SESSION/CSRF MUDDATI TUGADI (419)', $debugInfo);
+            }
+        } catch (\Throwable $e) {
+            // Log yozish xatosi asosiy javobni buzmasligi kerak
         }
 
         return $response;

@@ -386,6 +386,9 @@ class YnQaytnomaController extends Controller
             mkdir($tempDir, 0755, true);
         }
 
+        // Step 1: Collect all data and group by subject_id
+        $subjectGroups = []; // subject_id => [ 'subject' => ..., 'entries' => [ ['group' => ..., 'students' => ..., ...], ... ] ]
+
         foreach ($selectedGroups as $groupData) {
             $group = Group::where('group_hemis_id', $groupData['group_hemis_id'])->first();
             if (!$group) continue;
@@ -462,7 +465,7 @@ class YnQaytnomaController extends Controller
                     ->orderBy('students.full_name')
                     ->get();
 
-                // Get teachers for this subject
+                // Get teachers for this subject and group
                 $studentIds = Student::where('group_id', $group->group_hemis_id)
                     ->groupBy('hemis_id')
                     ->pluck('hemis_id');
@@ -485,116 +488,200 @@ class YnQaytnomaController extends Controller
                     ->groupBy('s.employee_id')
                     ->get();
 
-                $otherTeacherText = '';
+                $otherTeacherNames = [];
                 foreach ($otherTeachers as $t) {
-                    $otherTeacherText .= $t->full_names . ', ';
+                    foreach (explode(', ', $t->full_names) as $name) {
+                        $name = trim($name);
+                        if ($name && !in_array($name, $otherTeacherNames)) {
+                            $otherTeacherNames[] = $name;
+                        }
+                    }
                 }
-                $otherTeacherText = rtrim($otherTeacherText, ', ');
 
-                // Build Word document
-                $phpWord = new PhpWord();
-                $phpWord->setDefaultFontName('Times New Roman');
-                $phpWord->setDefaultFontSize(12);
+                $maruzaTeacherNames = [];
+                if ($maruzaTeacher && $maruzaTeacher->full_names) {
+                    foreach (explode(', ', $maruzaTeacher->full_names) as $name) {
+                        $name = trim($name);
+                        if ($name && !in_array($name, $maruzaTeacherNames)) {
+                            $maruzaTeacherNames[] = $name;
+                        }
+                    }
+                }
 
-                $section = $phpWord->addSection([
-                    'orientation' => 'landscape',
-                    'marginTop' => 600,
-                    'marginBottom' => 600,
-                    'marginLeft' => 800,
-                    'marginRight' => 600,
-                ]);
+                $subjectKey = $subject->subject_id;
+                if (!isset($subjectGroups[$subjectKey])) {
+                    $subjectGroups[$subjectKey] = [
+                        'subject' => $subject,
+                        'semester' => $semester,
+                        'department' => $department,
+                        'specialty' => $specialty,
+                        'groupNames' => [],
+                        'allMaruzaTeachers' => [],
+                        'allOtherTeachers' => [],
+                        'entries' => [],
+                    ];
+                }
 
-                // Header - 12-shakl
-                $section->addText(
-                    '12-shakl',
-                    ['bold' => true, 'size' => 11],
-                    ['alignment' => Jc::END, 'spaceAfter' => 100]
-                );
+                // Accumulate group names
+                if ($group->name && !in_array($group->name, $subjectGroups[$subjectKey]['groupNames'])) {
+                    $subjectGroups[$subjectKey]['groupNames'][] = $group->name;
+                }
 
-                // Title
-                $section->addText(
-                    'YAKUNIY NAZORAT OLDIDAN QAYDNOMA',
-                    ['bold' => true, 'size' => 14],
-                    ['alignment' => Jc::CENTER, 'spaceAfter' => 200]
-                );
+                // Accumulate lecture teachers
+                foreach ($maruzaTeacherNames as $name) {
+                    if (!in_array($name, $subjectGroups[$subjectKey]['allMaruzaTeachers'])) {
+                        $subjectGroups[$subjectKey]['allMaruzaTeachers'][] = $name;
+                    }
+                }
 
-                // Info section
-                $infoStyle = ['size' => 11];
-                $infoBold = ['bold' => true, 'size' => 11];
-                $infoParaStyle = ['spaceAfter' => 40];
+                // Accumulate practical teachers
+                foreach ($otherTeacherNames as $name) {
+                    if (!in_array($name, $subjectGroups[$subjectKey]['allOtherTeachers'])) {
+                        $subjectGroups[$subjectKey]['allOtherTeachers'][] = $name;
+                    }
+                }
 
-                $textRun = $section->addTextRun($infoParaStyle);
-                $textRun->addText('Fakultet: ', $infoBold);
-                $textRun->addText($department->name ?? '-', $infoStyle);
-
-                $textRun = $section->addTextRun($infoParaStyle);
-                $textRun->addText('Kurs: ', $infoBold);
-                $textRun->addText($semester->level_name ?? '-', $infoStyle);
-                $textRun->addText('     Semestr: ', $infoBold);
-                $textRun->addText($semester->name ?? '-', $infoStyle);
-                $textRun->addText('     Guruh: ', $infoBold);
-                $textRun->addText($group->name ?? '-', $infoStyle);
-
-                $textRun = $section->addTextRun($infoParaStyle);
-                $textRun->addText('Fan: ', $infoBold);
-                $textRun->addText($subject->subject_name ?? '-', $infoStyle);
-
-                $textRun = $section->addTextRun($infoParaStyle);
-                $textRun->addText("Ma'ruzachi: ", $infoBold);
-                $textRun->addText($maruzaTeacher->full_names ?? '-', $infoStyle);
-
-                $textRun = $section->addTextRun($infoParaStyle);
-                $textRun->addText("Amaliyot o'qituvchilari: ", $infoBold);
-                $textRun->addText($otherTeacherText ?: '-', $infoStyle);
-
-                $textRun = $section->addTextRun(['spaceAfter' => 150]);
-                $textRun->addText('Soatlar soni: ', $infoBold);
-                $textRun->addText($subject->total_acload ?? '-', $infoStyle);
-
-                $section->addText(
-                    'Sana: ' . now()->format('d.m.Y'),
-                    $infoStyle,
-                    ['alignment' => Jc::END, 'spaceAfter' => 150]
-                );
-
-                // Table
-                $tableStyle = [
-                    'borderSize' => 6,
-                    'borderColor' => '000000',
-                    'cellMargin' => 40,
+                $subjectGroups[$subjectKey]['entries'][] = [
+                    'group' => $group,
+                    'semester' => $semester,
+                    'department' => $department,
+                    'students' => $students,
+                    'subject' => $subject,
                 ];
-                $tableName = 'YnOldiTable_' . $group->id . '_' . $semesterCode . '_' . $subject->subject_id;
-                $phpWord->addTableStyle($tableName, $tableStyle);
-                $table = $section->addTable($tableName);
+            }
+        }
 
-                $headerFont = ['bold' => true, 'size' => 10];
-                $cellFont = ['size' => 10];
-                $cellFontRed = ['size' => 10, 'color' => 'FF0000'];
-                $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
-                $cellCenter = ['alignment' => Jc::CENTER];
-                $cellLeft = ['alignment' => Jc::START];
+        // Step 2: Generate one Word document per subject
+        foreach ($subjectGroups as $subjectKey => $subjectData) {
+            $subject = $subjectData['subject'];
+            $semester = $subjectData['semester'];
+            $department = $subjectData['department'];
+            $groupNames = $subjectData['groupNames'];
+            $allMaruzaText = implode(', ', $subjectData['allMaruzaTeachers']) ?: '-';
+            $allOtherText = implode(', ', $subjectData['allOtherTeachers']) ?: '-';
 
-                // Header row
-                $headerRow = $table->addRow(400);
-                $headerRow->addCell(600, $headerBg)->addText('№', $headerFont, $cellCenter);
-                $headerRow->addCell(4500, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
-                $headerRow->addCell(1800, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
-                $headerRow->addCell(1200, $headerBg)->addText('JN', $headerFont, $cellCenter);
-                $headerRow->addCell(1200, $headerBg)->addText("O'N", $headerFont, $cellCenter);
-                $headerRow->addCell(1500, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
-                $headerRow->addCell(2000, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
+            // Build Word document
+            $phpWord = new PhpWord();
+            $phpWord->setDefaultFontName('Times New Roman');
+            $phpWord->setDefaultFontSize(12);
 
-                // Data rows
-                $rowNum = 1;
-                foreach ($students as $student) {
+            $section = $phpWord->addSection([
+                'orientation' => 'landscape',
+                'marginTop' => 600,
+                'marginBottom' => 600,
+                'marginLeft' => 800,
+                'marginRight' => 600,
+            ]);
+
+            // Header - 12-shakl
+            $section->addText(
+                '12-shakl',
+                ['bold' => true, 'size' => 11],
+                ['alignment' => Jc::END, 'spaceAfter' => 100]
+            );
+
+            // Title
+            $section->addText(
+                'YAKUNIY NAZORAT OLDIDAN QAYDNOMA',
+                ['bold' => true, 'size' => 14],
+                ['alignment' => Jc::CENTER, 'spaceAfter' => 200]
+            );
+
+            // Info section
+            $infoStyle = ['size' => 11];
+            $infoBold = ['bold' => true, 'size' => 11];
+            $infoParaStyle = ['spaceAfter' => 40];
+
+            $textRun = $section->addTextRun($infoParaStyle);
+            $textRun->addText('Fakultet: ', $infoBold);
+            $textRun->addText($department->name ?? '-', $infoStyle);
+
+            $textRun = $section->addTextRun($infoParaStyle);
+            $textRun->addText('Kurs: ', $infoBold);
+            $textRun->addText($semester->level_name ?? '-', $infoStyle);
+            $textRun->addText('     Semestr: ', $infoBold);
+            $textRun->addText($semester->name ?? '-', $infoStyle);
+            $textRun->addText('     Guruh: ', $infoBold);
+            $textRun->addText(implode(', ', $groupNames) ?: '-', $infoStyle);
+
+            $textRun = $section->addTextRun($infoParaStyle);
+            $textRun->addText('Fan: ', $infoBold);
+            $textRun->addText($subject->subject_name ?? '-', $infoStyle);
+
+            $textRun = $section->addTextRun($infoParaStyle);
+            $textRun->addText("Ma'ruzachi: ", $infoBold);
+            $textRun->addText($allMaruzaText, $infoStyle);
+
+            $textRun = $section->addTextRun($infoParaStyle);
+            $textRun->addText("Amaliyot o'qituvchilari: ", $infoBold);
+            $textRun->addText($allOtherText, $infoStyle);
+
+            $textRun = $section->addTextRun(['spaceAfter' => 150]);
+            $textRun->addText('Soatlar soni: ', $infoBold);
+            $textRun->addText($subject->total_acload ?? '-', $infoStyle);
+
+            $section->addText(
+                'Sana: ' . now()->format('d.m.Y'),
+                $infoStyle,
+                ['alignment' => Jc::END, 'spaceAfter' => 150]
+            );
+
+            // Table
+            $tableStyle = [
+                'borderSize' => 6,
+                'borderColor' => '000000',
+                'cellMargin' => 40,
+            ];
+            $tableName = 'YnOldiTable_' . $subjectKey;
+            $phpWord->addTableStyle($tableName, $tableStyle);
+            $table = $section->addTable($tableName);
+
+            $headerFont = ['bold' => true, 'size' => 10];
+            $cellFont = ['size' => 10];
+            $cellFontRed = ['size' => 10, 'color' => 'FF0000'];
+            $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
+            $groupSeparatorBg = ['bgColor' => 'E2EFDA', 'valign' => 'center', 'gridSpan' => 7];
+            $cellCenter = ['alignment' => Jc::CENTER];
+            $cellLeft = ['alignment' => Jc::START];
+
+            // Header row
+            $headerRow = $table->addRow(400);
+            $headerRow->addCell(600, $headerBg)->addText('№', $headerFont, $cellCenter);
+            $headerRow->addCell(4500, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
+            $headerRow->addCell(1800, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
+            $headerRow->addCell(1200, $headerBg)->addText('JN', $headerFont, $cellCenter);
+            $headerRow->addCell(1200, $headerBg)->addText("O'N", $headerFont, $cellCenter);
+            $headerRow->addCell(1500, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
+            $headerRow->addCell(2000, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
+
+            // Data rows - iterate through all groups for this subject
+            $rowNum = 1;
+            $multipleGroups = count($subjectData['entries']) > 1;
+
+            foreach ($subjectData['entries'] as $entry) {
+                $entryGroup = $entry['group'];
+                $entryStudents = $entry['students'];
+                $entrySubject = $entry['subject'];
+
+                // Add group separator row if multiple groups
+                if ($multipleGroups) {
+                    $separatorRow = $table->addRow(350);
+                    $separatorRow->addCell(12800, $groupSeparatorBg)->addText(
+                        $entryGroup->name,
+                        ['bold' => true, 'size' => 10, 'color' => '1F4E20'],
+                        $cellCenter
+                    );
+                }
+
+                foreach ($entryStudents as $student) {
                     $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
 
-                    $qoldirgan = (int) Attendance::where('group_id', $group->group_hemis_id)
-                        ->where('subject_id', $subject->subject_id)
+                    $qoldirgan = (int) Attendance::where('group_id', $entryGroup->group_hemis_id)
+                        ->where('subject_id', $entrySubject->subject_id)
                         ->where('student_hemis_id', $student->hemis_id)
                         ->sum('absent_off');
 
-                    $totalAcload = $subject->total_acload ?: 1;
+                    $totalAcload = $entrySubject->total_acload ?: 1;
                     $qoldiq = round($qoldirgan * 100 / $totalAcload, 2);
 
                     $holat = 'Ruxsat';
@@ -650,33 +737,33 @@ class YnQaytnomaController extends Controller
 
                     $rowNum++;
                 }
-
-                // Signatures
-                $section->addTextBreak(1);
-
-                $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $department->department_hemis_id ?? ''))
-                    ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
-                    ->first();
-
-                $signTable = $section->addTable();
-
-                $signRow = $signTable->addRow();
-                $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
-                $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($maruzaTeacher->full_names ?? ''), ['size' => 11]);
-
-                $groupName = str_replace(['/', '\\', ' '], '_', $group->name);
-                $subjectName = str_replace(['/', '\\', ' '], '_', $subject->subject_name);
-                $fileName = 'YN_oldi_qaydnoma_' . $groupName . '_' . $subjectName . '.docx';
-                $tempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_' . $fileName;
-
-                $objWriter = IOFactory::createWriter($phpWord, 'Word2007');
-                $objWriter->save($tempPath);
-
-                $files[] = [
-                    'path' => $tempPath,
-                    'name' => $fileName,
-                ];
             }
+
+            // Signatures
+            $section->addTextBreak(1);
+
+            $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $department->department_hemis_id ?? ''))
+                ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
+                ->first();
+
+            $signTable = $section->addTable();
+
+            $signRow = $signTable->addRow();
+            $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
+            $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($allMaruzaText), ['size' => 11]);
+
+            $groupNamesStr = str_replace(['/', '\\', ' '], '_', implode('_', $groupNames));
+            $subjectNameStr = str_replace(['/', '\\', ' '], '_', $subject->subject_name);
+            $fileName = 'YN_oldi_qaydnoma_' . $groupNamesStr . '_' . $subjectNameStr . '.docx';
+            $tempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_' . $fileName;
+
+            $objWriter = IOFactory::createWriter($phpWord, 'Word2007');
+            $objWriter->save($tempPath);
+
+            $files[] = [
+                'path' => $tempPath,
+                'name' => $fileName,
+            ];
         }
 
         if (count($files) === 0) {

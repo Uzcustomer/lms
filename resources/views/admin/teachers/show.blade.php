@@ -458,13 +458,8 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', function () {
-            var dekanCheckbox = document.querySelector('input[value="dekan"]');
-            var dept = document.getElementById('department-section');
-            if (dept && dekanCheckbox) {
-                dept.style.display = dekanCheckbox.checked ? 'block' : 'none';
-            }
-        });
+        // Server-side Blade template handles initial display state via $isDekanChecked
+        // toggleRole() handles runtime changes when user clicks checkboxes
     </script>
 
     <style>

@@ -35,7 +35,6 @@ class _TeacherJournalScreenState extends State<TeacherJournalScreen>
   String? _error;
 
   // Data from API
-  Map<String, dynamic> _data = {};
   List<Map<String, dynamic>> _students = [];
   List<Map<String, dynamic>> _amaliyColumns = [];
   List<Map<String, dynamic>> _mtColumns = [];
@@ -83,7 +82,6 @@ class _TeacherJournalScreenState extends State<TeacherJournalScreen>
       final groupMap = groupRaw is Map ? Map<String, dynamic>.from(groupRaw) : <String, dynamic>{};
 
       setState(() {
-        _data = data;
         _students = studentsRaw.map((e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{}).toList();
         _amaliyColumns = _parseColumns(columns['amaliy']);
         _mtColumns = _parseColumns(columns['mt']);
@@ -117,11 +115,19 @@ class _TeacherJournalScreenState extends State<TeacherJournalScreen>
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
       appBar: AppBar(
-        title: Text(
-          widget.subjectName,
-          style: const TextStyle(fontSize: 14),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        title: Column(
+          children: [
+            Text(
+              widget.subjectName,
+              style: const TextStyle(fontSize: 14),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              widget.groupName,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400),
+            ),
+          ],
         ),
         centerTitle: true,
         bottom: TabBar(
@@ -133,8 +139,8 @@ class _TeacherJournalScreenState extends State<TeacherJournalScreen>
           labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           unselectedLabelStyle: const TextStyle(fontSize: 12),
           tabs: [
-            Tab(text: l.lectures),
             Tab(text: l.practicalClasses),
+            Tab(text: l.lectures),
             Tab(text: l.selfStudy),
           ],
         ),
@@ -146,12 +152,6 @@ class _TeacherJournalScreenState extends State<TeacherJournalScreen>
               : TabBarView(
                   controller: _tabController,
                   children: [
-                    _LectureTab(
-                      students: _students,
-                      columns: _lectureColumns,
-                      isDark: isDark,
-                      l: l,
-                    ),
                     _AmaliyTab(
                       students: _students,
                       columns: _amaliyColumns,
@@ -164,6 +164,12 @@ class _TeacherJournalScreenState extends State<TeacherJournalScreen>
                       isDark: isDark,
                       l: l,
                       onGradeSaved: _loadData,
+                    ),
+                    _LectureTab(
+                      students: _students,
+                      columns: _lectureColumns,
+                      isDark: isDark,
+                      l: l,
                     ),
                     _MtTab(
                       students: _students,
@@ -203,10 +209,13 @@ class _TeacherJournalScreenState extends State<TeacherJournalScreen>
 
 // ==================== SHARED TABLE HELPERS ====================
 
-const double _numberW = 36;
-const double _nameW = 140;
+const double _numberW = 40;
+const double _nameW = 180;
 const double _frozenW = _numberW + _nameW;
-const double _colW = 56;
+const double _dateColW = 68;
+const double _summaryColW = 60;
+const double _rowH = 44;
+const double _headerH = 52;
 
 String _formatDate(String date) {
   if (date.length >= 10) {
@@ -223,266 +232,199 @@ Color _gradeColor(num val) {
   return AppTheme.textSecondary;
 }
 
-Widget _buildFrozenHeader(bool isDark) {
-  final headerBg = isDark ? AppTheme.darkSurface : AppTheme.primaryColor;
-  final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
-  return Container(
-    height: 48,
-    decoration: BoxDecoration(
-      color: headerBg,
-      border: Border(
-        bottom: BorderSide(color: borderColor),
-        right: BorderSide(color: borderColor),
-      ),
-    ),
-    child: Row(
-      children: [
-        SizedBox(
-          width: _numberW,
-          child: const Center(
-            child: Text('№', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
-          ),
-        ),
-        Container(width: 0.5, color: Colors.white24),
-        const Expanded(
-          child: Center(
-            child: Text('F.I.Sh', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
-          ),
-        ),
-      ],
-    ),
-  );
+String _formatGrade(dynamic val) {
+  if (val == null) return '-';
+  if (val is num) {
+    return val % 1 == 0 ? val.toInt().toString() : val.toStringAsFixed(1);
+  }
+  return val.toString();
 }
 
-Widget _buildFrozenRow(int index, Map<String, dynamic> student, bool isDark) {
-  final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
-  final cellBg = isDark
-      ? (index % 2 == 0 ? AppTheme.darkCard : AppTheme.darkSurface)
-      : (index % 2 == 0 ? Colors.white : const Color(0xFFFAFAFA));
-  final cellTextColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+// ==================== SYNCED TABLE WIDGET ====================
 
-  return Container(
-    height: 40,
-    decoration: BoxDecoration(
-      color: cellBg,
-      border: Border(
-        bottom: BorderSide(color: borderColor, width: 0.5),
-        right: BorderSide(color: borderColor),
-      ),
-    ),
-    child: Row(
-      children: [
-        SizedBox(
-          width: _numberW,
-          child: Center(
-            child: Text('${index + 1}', style: TextStyle(fontSize: 11, color: cellTextColor)),
-          ),
-        ),
-        Container(width: 0.5, color: borderColor),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Text(
-              student['full_name']?.toString() ?? '',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: cellTextColor),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-// ==================== LECTURE TAB ====================
-
-class _LectureTab extends StatefulWidget {
+class _SyncedTable extends StatefulWidget {
   final List<Map<String, dynamic>> students;
-  final List<Map<String, dynamic>> columns;
   final bool isDark;
-  final AppLocalizations l;
+  final Widget Function(bool isDark) headerBuilder;
+  final Widget Function(int index, Map<String, dynamic> student, bool isDark) rowBuilder;
+  final double scrollableWidth;
 
-  const _LectureTab({
+  const _SyncedTable({
     required this.students,
-    required this.columns,
     required this.isDark,
-    required this.l,
+    required this.headerBuilder,
+    required this.rowBuilder,
+    required this.scrollableWidth,
   });
 
   @override
-  State<_LectureTab> createState() => _LectureTabState();
+  State<_SyncedTable> createState() => _SyncedTableState();
 }
 
-class _LectureTabState extends State<_LectureTab> with AutomaticKeepAliveClientMixin {
-  final ScrollController _horizontalController = ScrollController();
-  final ScrollController _verticalController = ScrollController();
-  final ScrollController _frozenVerticalController = ScrollController();
-
-  @override
-  bool get wantKeepAlive => true;
+class _SyncedTableState extends State<_SyncedTable> {
+  final ScrollController _frozenVertical = ScrollController();
+  final ScrollController _dataVertical = ScrollController();
+  final ScrollController _horizontal = ScrollController();
+  bool _syncingFrozen = false;
+  bool _syncingData = false;
 
   @override
   void initState() {
     super.initState();
-    _syncScroll();
+    _frozenVertical.addListener(_onFrozenScroll);
+    _dataVertical.addListener(_onDataScroll);
   }
 
-  void _syncScroll() {
-    _verticalController.addListener(() {
-      if (_frozenVerticalController.hasClients &&
-          _frozenVerticalController.offset != _verticalController.offset) {
-        _frozenVerticalController.jumpTo(_verticalController.offset);
-      }
-    });
-    _frozenVerticalController.addListener(() {
-      if (_verticalController.hasClients &&
-          _verticalController.offset != _frozenVerticalController.offset) {
-        _verticalController.jumpTo(_frozenVerticalController.offset);
-      }
-    });
+  void _onFrozenScroll() {
+    if (_syncingFrozen) return;
+    _syncingData = true;
+    if (_dataVertical.hasClients) {
+      _dataVertical.jumpTo(_frozenVertical.offset);
+    }
+    _syncingData = false;
+  }
+
+  void _onDataScroll() {
+    if (_syncingData) return;
+    _syncingFrozen = true;
+    if (_frozenVertical.hasClients) {
+      _frozenVertical.jumpTo(_dataVertical.offset);
+    }
+    _syncingFrozen = false;
   }
 
   @override
   void dispose() {
-    _horizontalController.dispose();
-    _verticalController.dispose();
-    _frozenVerticalController.dispose();
+    _frozenVertical.removeListener(_onFrozenScroll);
+    _dataVertical.removeListener(_onDataScroll);
+    _frozenVertical.dispose();
+    _dataVertical.dispose();
+    _horizontal.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     final isDark = widget.isDark;
-
-    if (widget.students.isEmpty) {
-      return Center(child: Text(widget.l.noData));
-    }
-    if (widget.columns.isEmpty) {
-      return Center(child: Text(widget.l.noData));
-    }
-
-    final headerBg = isDark ? AppTheme.darkSurface : AppTheme.primaryColor;
     final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
+    final headerBg = isDark ? AppTheme.darkSurface : AppTheme.primaryColor;
 
     return Row(
       children: [
-        // Frozen columns
+        // Frozen left columns (№ + Name)
         SizedBox(
           width: _frozenW,
           child: Column(
             children: [
-              _buildFrozenHeader(isDark),
-              Expanded(
-                child: ListView.builder(
-                  controller: _frozenVerticalController,
-                  itemCount: widget.students.length,
-                  itemBuilder: (_, i) => _buildFrozenRow(i, widget.students[i], isDark),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Scrollable columns
-        Expanded(
-          child: Column(
-            children: [
-              // Header
-              SizedBox(
-                height: 48,
-                child: SingleChildScrollView(
-                  controller: _horizontalController,
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: widget.columns.map((col) {
-                      return Container(
-                        width: _colW,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: headerBg,
-                          border: Border(
-                            bottom: BorderSide(color: borderColor),
-                            right: BorderSide(color: borderColor.withAlpha(80)),
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _formatDate(col['date']?.toString() ?? ''),
-                              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.white),
-                            ),
-                            Text(
-                              col['pair']?.toString() ?? '',
-                              style: const TextStyle(fontSize: 8, color: Colors.white70),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
+              // Frozen header
+              Container(
+                height: _headerH,
+                decoration: BoxDecoration(
+                  color: headerBg,
+                  border: Border(
+                    bottom: BorderSide(color: borderColor),
+                    right: BorderSide(color: borderColor),
                   ),
                 ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: _numberW,
+                      child: const Center(
+                        child: Text('№',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ),
+                    ),
+                    Container(width: 0.5, color: Colors.white24),
+                    const Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Text('F.I.Sh',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              // Data rows
+              // Frozen rows
               Expanded(
                 child: ListView.builder(
-                  controller: _verticalController,
+                  controller: _frozenVertical,
                   itemCount: widget.students.length,
                   itemBuilder: (_, i) {
                     final student = widget.students[i];
-                    final lectureData = (student['lecture'] as List<dynamic>?) ?? [];
                     final cellBg = isDark
                         ? (i % 2 == 0 ? AppTheme.darkCard : AppTheme.darkSurface)
-                        : (i % 2 == 0 ? Colors.white : const Color(0xFFFAFAFA));
+                        : (i % 2 == 0 ? Colors.white : const Color(0xFFF8F9FA));
+                    final cellTextColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
 
-                    return SizedBox(
-                      height: 40,
-                      child: SingleChildScrollView(
-                        controller: ScrollController(
-                          initialScrollOffset: _horizontalController.hasClients
-                              ? _horizontalController.offset
-                              : 0,
+                    return Container(
+                      height: _rowH,
+                      decoration: BoxDecoration(
+                        color: cellBg,
+                        border: Border(
+                          bottom: BorderSide(color: borderColor, width: 0.5),
+                          right: BorderSide(color: borderColor),
                         ),
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: List.generate(widget.columns.length, (ci) {
-                            final att = ci < lectureData.length ? lectureData[ci] : null;
-                            final status = att?['status']?.toString();
-                            final isAbsent = status == 'NB';
-
-                            return Container(
-                              width: _colW,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: isAbsent
-                                    ? AppTheme.errorColor.withAlpha(isDark ? 40 : 20)
-                                    : cellBg,
-                                border: Border(
-                                  bottom: BorderSide(color: borderColor, width: 0.5),
-                                  right: BorderSide(color: borderColor.withAlpha(80)),
-                                ),
-                              ),
-                              alignment: Alignment.center,
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: _numberW,
+                            child: Center(
+                              child: Text('${i + 1}',
+                                  style: TextStyle(fontSize: 12, color: cellTextColor, fontWeight: FontWeight.w500)),
+                            ),
+                          ),
+                          Container(width: 0.5, color: borderColor),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
                               child: Text(
-                                status ?? '',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isAbsent
-                                      ? AppTheme.errorColor
-                                      : (status == '+' ? AppTheme.successColor : (isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary)),
-                                ),
+                                student['full_name']?.toString() ?? '',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: cellTextColor),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            );
-                          }),
-                        ),
+                            ),
+                          ),
+                        ],
                       ),
                     );
                   },
                 ),
               ),
             ],
+          ),
+        ),
+        // Scrollable right area (horizontal + vertical)
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _horizontal,
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: widget.scrollableWidth,
+              child: Column(
+                children: [
+                  // Scrollable header
+                  SizedBox(
+                    height: _headerH,
+                    child: widget.headerBuilder(isDark),
+                  ),
+                  // Scrollable data rows
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _dataVertical,
+                      itemCount: widget.students.length,
+                      itemBuilder: (_, i) => SizedBox(
+                        height: _rowH,
+                        child: widget.rowBuilder(i, widget.students[i], isDark),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
@@ -524,44 +466,18 @@ class _AmaliyTab extends StatefulWidget {
 }
 
 class _AmaliyTabState extends State<_AmaliyTab> with AutomaticKeepAliveClientMixin {
-  final ScrollController _horizontalController = ScrollController();
-  final ScrollController _verticalController = ScrollController();
-  final ScrollController _frozenVerticalController = ScrollController();
-
   @override
   bool get wantKeepAlive => true;
 
-  @override
-  void initState() {
-    super.initState();
-    _syncScroll();
-  }
-
-  void _syncScroll() {
-    _verticalController.addListener(() {
-      if (_frozenVerticalController.hasClients &&
-          _frozenVerticalController.offset != _verticalController.offset) {
-        _frozenVerticalController.jumpTo(_verticalController.offset);
-      }
-    });
-    _frozenVerticalController.addListener(() {
-      if (_verticalController.hasClients &&
-          _verticalController.offset != _frozenVerticalController.offset) {
-        _verticalController.jumpTo(_frozenVerticalController.offset);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _horizontalController.dispose();
-    _verticalController.dispose();
-    _frozenVerticalController.dispose();
-    super.dispose();
-  }
+  // Summary column labels: JB O'rt, ON, OSKI, Test, NB
+  static const _summaryLabels = ['JB %', 'ON', 'OSKI', 'Test', 'NB'];
 
   bool _isDateOpened(String date) {
     return widget.activeOpenedDates.contains(date);
+  }
+
+  double get _totalScrollableWidth {
+    return widget.columns.length * _dateColW + _summaryLabels.length * _summaryColW;
   }
 
   Future<void> _showGradeDialog(Map<String, dynamic> student, Map<String, dynamic> col) async {
@@ -656,227 +572,355 @@ class _AmaliyTabState extends State<_AmaliyTab> with AutomaticKeepAliveClientMix
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final isDark = widget.isDark;
-
-    if (widget.students.isEmpty) {
-      return Center(child: Text(widget.l.noData));
-    }
-    if (widget.columns.isEmpty) {
+    if (widget.students.isEmpty || widget.columns.isEmpty) {
       return Center(child: Text(widget.l.noData));
     }
 
+    return _SyncedTable(
+      students: widget.students,
+      isDark: widget.isDark,
+      scrollableWidth: _totalScrollableWidth,
+      headerBuilder: (isDark) => _buildHeader(isDark),
+      rowBuilder: (i, student, isDark) => _buildRow(i, student, isDark),
+    );
+  }
+
+  Widget _buildHeader(bool isDark) {
     final headerBg = isDark ? AppTheme.darkSurface : AppTheme.primaryColor;
     final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
-
-    // Add avg column at the end
-    final colCount = widget.columns.length + 1;
+    final accentBg = isDark ? AppTheme.accentColor.withAlpha(80) : AppTheme.accentColor;
 
     return Row(
       children: [
-        SizedBox(
-          width: _frozenW,
-          child: Column(
-            children: [
-              _buildFrozenHeader(isDark),
-              Expanded(
-                child: ListView.builder(
-                  controller: _frozenVerticalController,
-                  itemCount: widget.students.length,
-                  itemBuilder: (_, i) => _buildFrozenRow(i, widget.students[i], isDark),
+        // Date columns
+        ...widget.columns.map((col) {
+          final date = col['date']?.toString() ?? '';
+          final isOpened = _isDateOpened(date);
+          return Container(
+            width: _dateColW,
+            height: _headerH,
+            decoration: BoxDecoration(
+              color: isOpened
+                  ? (isDark ? AppTheme.successColor.withAlpha(60) : AppTheme.successColor.withAlpha(180))
+                  : headerBg,
+              border: Border(
+                bottom: BorderSide(color: borderColor),
+                right: BorderSide(color: borderColor.withAlpha(80)),
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _formatDate(date),
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  col['pair']?.toString() ?? '',
+                  style: const TextStyle(fontSize: 9, color: Colors.white70),
+                ),
+                if (isOpened)
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                  ),
+              ],
+            ),
+          );
+        }),
+        // Summary columns
+        ..._summaryLabels.map((label) {
+          return Container(
+            width: _summaryColW,
+            height: _headerH,
+            decoration: BoxDecoration(
+              color: accentBg,
+              border: Border(
+                bottom: BorderSide(color: borderColor),
+                right: BorderSide(color: borderColor.withAlpha(80)),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildRow(int index, Map<String, dynamic> student, bool isDark) {
+    final amaliyData = (student['amaliy'] as List<dynamic>?) ?? [];
+    final avg = student['amaliy_avg'];
+    final on_ = student['on'];
+    final oski = student['oski'];
+    final test = student['test'];
+    final absentCount = student['absent_count'];
+    final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
+    final cellBg = isDark
+        ? (index % 2 == 0 ? AppTheme.darkCard : AppTheme.darkSurface)
+        : (index % 2 == 0 ? Colors.white : const Color(0xFFF8F9FA));
+    final cellTextColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+
+    return Row(
+      children: [
+        // Date columns
+        ...List.generate(widget.columns.length, (ci) {
+          final item = ci < amaliyData.length ? amaliyData[ci] : null;
+          final grade = item?['grade'];
+          final hasGrade = item?['has_grade'] == true;
+          final isAbsent = item?['is_absent'] == true;
+          final isRetake = item?['is_retake'] == true;
+          final date = widget.columns[ci]['date']?.toString() ?? '';
+          final isOpened = _isDateOpened(date);
+          final canInput = isOpened && !hasGrade && !isAbsent;
+
+          String display = '';
+          Color? textColor;
+          if (hasGrade && grade != null) {
+            display = _formatGrade(grade);
+            textColor = _gradeColor(grade is num ? grade : 0);
+          } else if (isAbsent) {
+            display = 'NB';
+            textColor = AppTheme.errorColor;
+          }
+
+          return GestureDetector(
+            onTap: canInput ? () => _showGradeDialog(student, widget.columns[ci]) : null,
+            child: Container(
+              width: _dateColW,
+              height: _rowH,
+              decoration: BoxDecoration(
+                color: canInput
+                    ? (isDark ? AppTheme.successColor.withAlpha(15) : AppTheme.successColor.withAlpha(8))
+                    : cellBg,
+                border: Border(
+                  bottom: BorderSide(color: borderColor, width: 0.5),
+                  right: BorderSide(color: borderColor.withAlpha(80)),
                 ),
               ),
-            ],
+              alignment: Alignment.center,
+              child: hasGrade || isAbsent
+                  ? Text(
+                      display,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: textColor ?? cellTextColor,
+                        decoration: isRetake ? TextDecoration.underline : null,
+                      ),
+                    )
+                  : canInput
+                      ? Icon(Icons.add_circle_outline, size: 16, color: AppTheme.successColor.withAlpha(150))
+                      : null,
+            ),
+          );
+        }),
+        // Summary cells: JB %, ON, OSKI, Test, NB
+        _buildSummaryCell(avg, cellBg, cellTextColor, borderColor, isGrade: true),
+        _buildSummaryCell(on_, cellBg, cellTextColor, borderColor, isGrade: true),
+        _buildSummaryCell(oski, cellBg, cellTextColor, borderColor, isGrade: true),
+        _buildSummaryCell(test, cellBg, cellTextColor, borderColor, isGrade: true),
+        _buildSummaryCell(absentCount, cellBg, cellTextColor, borderColor, isGrade: false),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCell(dynamic value, Color cellBg, Color cellTextColor, Color borderColor, {bool isGrade = true}) {
+    final display = _formatGrade(value);
+    Color textColor = cellTextColor;
+    if (isGrade && value is num && value > 0) {
+      textColor = _gradeColor(value);
+    } else if (!isGrade && value is num && value > 0) {
+      textColor = AppTheme.errorColor;
+    }
+
+    return Container(
+      width: _summaryColW,
+      height: _rowH,
+      decoration: BoxDecoration(
+        color: cellBg,
+        border: Border(
+          bottom: BorderSide(color: borderColor, width: 0.5),
+          right: BorderSide(color: borderColor.withAlpha(80)),
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        display,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: textColor,
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== LECTURE TAB ====================
+
+class _LectureTab extends StatefulWidget {
+  final List<Map<String, dynamic>> students;
+  final List<Map<String, dynamic>> columns;
+  final bool isDark;
+  final AppLocalizations l;
+
+  const _LectureTab({
+    required this.students,
+    required this.columns,
+    required this.isDark,
+    required this.l,
+  });
+
+  @override
+  State<_LectureTab> createState() => _LectureTabState();
+}
+
+class _LectureTabState extends State<_LectureTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  // Summary: NB soni
+  double get _totalScrollableWidth {
+    return widget.columns.length * _dateColW + _summaryColW;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    if (widget.students.isEmpty || widget.columns.isEmpty) {
+      return Center(child: Text(widget.l.noData));
+    }
+
+    return _SyncedTable(
+      students: widget.students,
+      isDark: widget.isDark,
+      scrollableWidth: _totalScrollableWidth,
+      headerBuilder: (isDark) => _buildHeader(isDark),
+      rowBuilder: (i, student, isDark) => _buildRow(i, student, isDark),
+    );
+  }
+
+  Widget _buildHeader(bool isDark) {
+    final headerBg = isDark ? AppTheme.darkSurface : AppTheme.primaryColor;
+    final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
+    final accentBg = isDark ? AppTheme.accentColor.withAlpha(80) : AppTheme.accentColor;
+
+    return Row(
+      children: [
+        ...widget.columns.map((col) {
+          return Container(
+            width: _dateColW,
+            height: _headerH,
+            decoration: BoxDecoration(
+              color: headerBg,
+              border: Border(
+                bottom: BorderSide(color: borderColor),
+                right: BorderSide(color: borderColor.withAlpha(80)),
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _formatDate(col['date']?.toString() ?? ''),
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  col['pair']?.toString() ?? '',
+                  style: const TextStyle(fontSize: 9, color: Colors.white70),
+                ),
+              ],
+            ),
+          );
+        }),
+        // NB column
+        Container(
+          width: _summaryColW,
+          height: _headerH,
+          decoration: BoxDecoration(
+            color: accentBg,
+            border: Border(
+              bottom: BorderSide(color: borderColor),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: const Text(
+            'NB',
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
           ),
         ),
-        Expanded(
-          child: Column(
-            children: [
-              // Header
-              SizedBox(
-                height: 48,
-                child: SingleChildScrollView(
-                  controller: _horizontalController,
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      ...widget.columns.map((col) {
-                        final date = col['date']?.toString() ?? '';
-                        final isOpened = _isDateOpened(date);
-                        return Container(
-                          width: _colW,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: isOpened
-                                ? (isDark ? AppTheme.successColor.withAlpha(60) : AppTheme.successColor.withAlpha(180))
-                                : headerBg,
-                            border: Border(
-                              bottom: BorderSide(color: borderColor),
-                              right: BorderSide(color: borderColor.withAlpha(80)),
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                _formatDate(date),
-                                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.white),
-                              ),
-                              Text(
-                                col['pair']?.toString() ?? '',
-                                style: const TextStyle(fontSize: 8, color: Colors.white70),
-                              ),
-                              if (isOpened)
-                                Container(
-                                  margin: const EdgeInsets.only(top: 1),
-                                  width: 6,
-                                  height: 6,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-                      }),
-                      // Avg column header
-                      Container(
-                        width: _colW,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: isDark ? AppTheme.accentColor.withAlpha(80) : AppTheme.accentColor,
-                          border: Border(
-                            bottom: BorderSide(color: borderColor),
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          widget.l.average,
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+      ],
+    );
+  }
+
+  Widget _buildRow(int index, Map<String, dynamic> student, bool isDark) {
+    final lectureData = (student['lecture'] as List<dynamic>?) ?? [];
+    final absentCount = student['absent_count'];
+    final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
+    final cellBg = isDark
+        ? (index % 2 == 0 ? AppTheme.darkCard : AppTheme.darkSurface)
+        : (index % 2 == 0 ? Colors.white : const Color(0xFFF8F9FA));
+    final cellTextColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+
+    return Row(
+      children: [
+        ...List.generate(widget.columns.length, (ci) {
+          final att = ci < lectureData.length ? lectureData[ci] : null;
+          final status = att?['status']?.toString();
+          final isAbsent = status == 'NB';
+
+          return Container(
+            width: _dateColW,
+            height: _rowH,
+            decoration: BoxDecoration(
+              color: isAbsent
+                  ? AppTheme.errorColor.withAlpha(isDark ? 40 : 20)
+                  : cellBg,
+              border: Border(
+                bottom: BorderSide(color: borderColor, width: 0.5),
+                right: BorderSide(color: borderColor.withAlpha(80)),
               ),
-              // Data
-              Expanded(
-                child: ListView.builder(
-                  controller: _verticalController,
-                  itemCount: widget.students.length,
-                  itemBuilder: (_, i) {
-                    final student = widget.students[i];
-                    final amaliyData = (student['amaliy'] as List<dynamic>?) ?? [];
-                    final avg = student['amaliy_avg'];
-                    final cellBg = isDark
-                        ? (i % 2 == 0 ? AppTheme.darkCard : AppTheme.darkSurface)
-                        : (i % 2 == 0 ? Colors.white : const Color(0xFFFAFAFA));
-                    final cellTextColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-
-                    return SizedBox(
-                      height: 40,
-                      child: SingleChildScrollView(
-                        controller: ScrollController(
-                          initialScrollOffset: _horizontalController.hasClients
-                              ? _horizontalController.offset
-                              : 0,
-                        ),
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            ...List.generate(widget.columns.length, (ci) {
-                              final item = ci < amaliyData.length ? amaliyData[ci] : null;
-                              final grade = item?['grade'];
-                              final hasGrade = item?['has_grade'] == true;
-                              final isAbsent = item?['is_absent'] == true;
-                              final isRetake = item?['is_retake'] == true;
-                              final date = widget.columns[ci]['date']?.toString() ?? '';
-                              final isOpened = _isDateOpened(date);
-                              final canInput = isOpened && !hasGrade && !isAbsent;
-
-                              String display = '';
-                              Color? textColor;
-                              if (hasGrade && grade != null) {
-                                display = grade is num
-                                    ? (grade % 1 == 0 ? grade.toInt().toString() : grade.toStringAsFixed(1))
-                                    : grade.toString();
-                                textColor = _gradeColor(grade is num ? grade : 0);
-                              } else if (isAbsent) {
-                                display = 'NB';
-                                textColor = AppTheme.errorColor;
-                              }
-
-                              return GestureDetector(
-                                onTap: canInput
-                                    ? () => _showGradeDialog(student, widget.columns[ci])
-                                    : null,
-                                child: Container(
-                                  width: _colW,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: canInput
-                                        ? (isDark
-                                            ? AppTheme.successColor.withAlpha(15)
-                                            : AppTheme.successColor.withAlpha(8))
-                                        : cellBg,
-                                    border: Border(
-                                      bottom: BorderSide(color: borderColor, width: 0.5),
-                                      right: BorderSide(color: borderColor.withAlpha(80)),
-                                    ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: hasGrade || isAbsent
-                                      ? Text(
-                                          display,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: textColor ?? cellTextColor,
-                                            decoration: isRetake ? TextDecoration.underline : null,
-                                          ),
-                                        )
-                                      : canInput
-                                          ? Icon(Icons.add_circle_outline,
-                                              size: 16,
-                                              color: AppTheme.successColor.withAlpha(150))
-                                          : null,
-                                ),
-                              );
-                            }),
-                            // Avg cell
-                            Container(
-                              width: _colW,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: cellBg,
-                                border: Border(
-                                  bottom: BorderSide(color: borderColor, width: 0.5),
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                avg != null
-                                    ? (avg is num
-                                        ? (avg % 1 == 0
-                                            ? avg.toInt().toString()
-                                            : (avg as num).toStringAsFixed(1))
-                                        : avg.toString())
-                                    : '-',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: avg != null && avg is num ? _gradeColor(avg) : cellTextColor,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              status ?? '',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isAbsent
+                    ? AppTheme.errorColor
+                    : (status == '+' ? AppTheme.successColor : (isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary)),
               ),
-            ],
+            ),
+          );
+        }),
+        // NB count cell
+        Container(
+          width: _summaryColW,
+          height: _rowH,
+          decoration: BoxDecoration(
+            color: cellBg,
+            border: Border(
+              bottom: BorderSide(color: borderColor, width: 0.5),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            absentCount != null && absentCount != 0 ? absentCount.toString() : '-',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: absentCount is num && absentCount > 0 ? AppTheme.errorColor : cellTextColor,
+            ),
           ),
         ),
       ],
@@ -1054,7 +1098,7 @@ class _MtTabState extends State<_MtTab> with AutomaticKeepAliveClientMixin {
           statusColor = AppTheme.textSecondary;
           statusIcon = Icons.hourglass_empty;
         } else if (mtGrade != null) {
-          statusText = '${widget.l.get('grade_saved')}';
+          statusText = widget.l.get('grade_saved');
           statusColor = AppTheme.warningColor;
           statusIcon = Icons.edit;
         } else if (hasSubmission) {

@@ -12,15 +12,56 @@
                 <!-- Filters -->
                 <div class="filter-container">
                     <div class="filter-row">
-                        <div class="filter-item" style="min-width: 180px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Talaba ID</label>
+                        <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
+                            <select id="education_type" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($educationTypes as $type)
+                                    <option value="{{ $type->education_type_code }}">{{ $type->education_type_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
+                            <select id="faculty" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($faculties as $faculty)
+                                    <option value="{{ $faculty->id }}">{{ $faculty->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
+                            <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="max-width:110px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="max-width:130px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Semestr</label>
+                            <select id="semester" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
+                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-item" style="max-width:150px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#6366f1;"></span> O'quv yili</label>
+                            <select id="education_year" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($educationYears as $ey)
+                                    <option value="{{ $ey->code }}" {{ ($currentEducationYear ?? '') == $ey->code ? 'selected' : '' }}>{{ $ey->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item" style="max-width:180px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#ec4899;"></span> Talaba ID</label>
                             <input type="text" id="student_id" placeholder="Talaba HEMIS ID" class="filter-input">
                         </div>
-                        <div class="filter-item" style="min-width: 180px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> O'quv yili</label>
-                            <input type="text" id="education_year" placeholder="O'quv yili kodi" class="filter-input">
-                        </div>
-                        <div class="filter-item" style="min-width: 90px;">
+                        <div class="filter-item" style="max-width:90px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
                             <select id="per_page" class="select2" style="width: 100%;">
                                 @foreach([10, 25, 50, 100] as $ps)
@@ -28,12 +69,18 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 120px;">
+                        <div class="filter-item filter-buttons">
                             <label class="filter-label">&nbsp;</label>
-                            <button type="button" id="btn-search" class="btn-calc" onclick="loadContracts(1)">
-                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                Qidirish
-                            </button>
+                            <div style="display:flex;gap:6px;">
+                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    Excel
+                                </button>
+                                <button type="button" id="btn-search" class="btn-calc" onclick="loadContracts(1)">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                    Hisoblash
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -42,8 +89,8 @@
                 <div id="result-area">
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        <p style="color:#64748b;font-size:15px;font-weight:600;">Kontraktlarni ko'rish uchun "Qidirish" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Filtrlarni tanlashingiz mumkin</p>
+                        <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Kontraktlar ro'yxatini ko'rish uchun</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
@@ -51,10 +98,11 @@
                         <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
                     </div>
                     <div id="table-area" style="display:none;">
-                        <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:12px;">
+                        <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                             <span id="total-badge" class="badge" style="background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                            <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
                         </div>
-                        <div style="max-height:calc(100vh - 300px);overflow-y:auto;overflow-x:auto;">
+                        <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
                             <table class="contract-table">
                                 <thead>
                                     <tr>
@@ -84,8 +132,17 @@
 
     <script>
         let currentPage = 1;
+        let allItems = [];
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
+        function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
+        function fuzzyMatcher(params, data) {
+            if ($.trim(params.term) === '') return data;
+            if (typeof data.text === 'undefined') return null;
+            if (stripSpecialChars(data.text).indexOf(stripSpecialChars(params.term)) > -1) return $.extend({}, data, true);
+            if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) return $.extend({}, data, true);
+            return null;
+        }
 
         function formatTimestamp(ts) {
             if (!ts) return '-';
@@ -93,19 +150,31 @@
             return d.toLocaleDateString('uz-UZ') + ' ' + d.toLocaleTimeString('uz-UZ', {hour:'2-digit', minute:'2-digit'});
         }
 
-        function loadContracts(page) {
-            currentPage = page || 1;
-            var params = {
+        function getFilters() {
+            return {
                 page: currentPage,
                 limit: $('#per_page').val() || 50,
                 _student: $('#student_id').val() || '',
-                _education_year: $('#education_year').val() || ''
+                _education_year: $('#education_year').val() || '',
+                _education_type: $('#education_type').val() || '',
+                _department: $('#faculty').val() || '',
+                _specialty: $('#specialty').val() || '',
+                _group: $('#group').val() || '',
+                _level: $('#level_code').val() || '',
+                _semester: $('#semester').val() || ''
             };
+        }
+
+        function loadContracts(page) {
+            currentPage = page || 1;
+            var params = getFilters();
+            params.page = currentPage;
 
             $('#empty-state').hide();
             $('#table-area').hide();
             $('#loading-state').show();
             $('#btn-search').prop('disabled', true).css('opacity', '0.6');
+            var startTime = performance.now();
 
             $.ajax({
                 url: '{{ route("admin.contracts.data") }}',
@@ -113,22 +182,28 @@
                 data: params,
                 timeout: 60000,
                 success: function(res) {
+                    var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
                     $('#loading-state').hide();
                     $('#btn-search').prop('disabled', false).css('opacity', '1');
 
                     if (!res.success || !res.data || !res.data.items || res.data.items.length === 0) {
                         $('#empty-state').show().find('p:first').text("Kontrakt topilmadi");
                         $('#table-area').hide();
+                        $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
+                        allItems = [];
                         return;
                     }
 
                     var items = res.data.items;
                     var pagination = res.data.pagination;
+                    allItems = items;
 
                     $('#total-badge').text('Jami: ' + (pagination.totalCount || items.length) + ' ta kontrakt');
+                    $('#time-badge').text(elapsed + ' soniyada yuklandi');
                     renderTable(items);
                     renderPagination(pagination);
                     $('#table-area').show();
+                    $('#btn-excel').prop('disabled', false).css('opacity', '1');
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
@@ -140,16 +215,18 @@
                         msg += ' (HTTP ' + xhr.status + ')';
                     }
                     $('#empty-state').show().find('p:first').text(msg);
+                    allItems = [];
                 }
             });
         }
 
         function renderTable(items) {
             var html = '';
+            var limit = parseInt($('#per_page').val()) || 50;
             for (var i = 0; i < items.length; i++) {
                 var item = items[i];
                 html += '<tr>';
-                html += '<td class="td-num">' + (i + 1 + ((currentPage - 1) * ($('#per_page').val() || 50))) + '</td>';
+                html += '<td class="td-num">' + (i + 1 + ((currentPage - 1) * limit)) + '</td>';
                 html += '<td style="color:#64748b;">' + esc(String(item.id)) + '</td>';
                 html += '<td><span class="badge badge-indigo">' + esc(String(item._student)) + '</span></td>';
                 html += '<td><span class="text-cell" style="font-weight:600;color:#0f172a;">' + esc(item.key) + '</span></td>';
@@ -191,41 +268,92 @@
             $('#pagination-area').html(html);
         }
 
+        function downloadExcel() {
+            if (allItems.length === 0) return;
+            var csv = '\uFEFF#,ID,Talaba ID,Kalit,O\'quv yili,Yaratilgan,Yangilangan\n';
+            for (var i = 0; i < allItems.length; i++) {
+                var item = allItems[i];
+                csv += (i+1) + ',' + (item.id||'') + ',' + (item._student||'') + ',"' + (item.key||'').replace(/"/g,'""') + '",' + (item._education_year||'') + ',' + formatTimestamp(item.created_at) + ',' + formatTimestamp(item.updated_at) + '\n';
+            }
+            var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+            var link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'kontraktlar_' + new Date().toISOString().slice(0,10) + '.csv';
+            link.click();
+        }
+
         $(document).ready(function() {
             $('.select2').each(function() {
-                $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text() });
+                $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher })
+                .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
 
             // Enter tugmasini bosib qidirish
-            $('#student_id, #education_year').on('keypress', function(e) {
+            $('#student_id').on('keypress', function(e) {
                 if (e.which === 13) loadContracts(1);
             });
+
+            // Cascading filter functions
+            function fp() {
+                return {
+                    education_type: $('#education_type').val() || '',
+                    faculty_id: $('#faculty').val() || '',
+                    specialty_id: $('#specialty').val() || '',
+                    level_code: $('#level_code').val() || ''
+                };
+            }
+            function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }
+            function pd(url, p, el, cb) { $.get(url, p, function(d) { $.each(d, function(k,v){ $(el).append('<option value="'+k+'">'+v+'</option>'); }); if(cb) cb(); }); }
+            function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
+
+            function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
+            function rSem() { rd('#semester'); pd('{{ route("admin.journal.get-semesters") }}', { level_code: $('#level_code').val() || '' }, '#semester'); }
+            function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
+
+            $('#education_type').change(function() { rSpec(); rGrp(); });
+            $('#faculty').change(function() { rSpec(); rGrp(); });
+            $('#specialty').change(function() { rGrp(); });
+            $('#level_code').change(function() { rSem(); rGrp(); });
+            $('#semester').change(function() { rGrp(); });
+
+            // Boshlang'ich yuklash
+            pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
+            pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
+            pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester');
+            pd('{{ route("admin.journal.get-groups") }}', fp(), '#group');
         });
     </script>
 
     <style>
-        .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; }
-        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; }
+        .filter-container { padding: 12px 16px 10px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; }
+        .filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 8px; }
         .filter-row:last-child { margin-bottom: 0; }
-        .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
-        .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+        .filter-item { flex: 1; min-width: 130px; }
+        .filter-buttons { flex: 0 0 auto; min-width: auto !important; }
+        .filter-label { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
+        .fl-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 
         .filter-input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 0.8rem; font-weight: 500; color: #1e293b; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; box-sizing: border-box; }
         .filter-input:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
         .filter-input:focus { outline: none; border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.2); }
         .filter-input::placeholder { color: #94a3b8; }
 
-        .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; white-space: nowrap; }
-        .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
+        .btn-calc { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(43,94,167,0.3); height: 36px; white-space: nowrap; }
+        .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); transform: translateY(-1px); }
+        .btn-excel { display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(22,163,74,0.3); height: 36px; white-space: nowrap; }
+        .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); transform: translateY(-1px); }
+        .btn-excel:disabled { cursor: not-allowed; opacity: 0.5; }
 
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
         .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
         .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
-        .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; padding-right: 52px; color: #1e293b; font-size: 0.8rem; font-weight: 500; }
-        .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 22px; background: transparent; border-left: none; right: 0; }
-        .select2-dropdown { font-size: 0.8rem; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+        .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 8px; padding-right: 48px; color: #1e293b; font-size: 0.78rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 20px; background: transparent; border-left: none; right: 0; }
+        .select2-container--classic .select2-selection--single .select2-selection__clear { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 15px; font-weight: bold; color: #94a3b8; cursor: pointer; padding: 2px 5px; z-index: 2; background: #fff; border-radius: 50%; line-height: 1; transition: all 0.15s; }
+        .select2-container--classic .select2-selection--single .select2-selection__clear:hover { color: #fff; background: #ef4444; }
+        .select2-dropdown { font-size: 0.78rem; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
         .select2-container--classic .select2-results__option--highlighted { background-color: #2b5ea7; }
 
         .contract-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }

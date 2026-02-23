@@ -617,6 +617,12 @@ class HemisService
                 ], array_filter([
                     '_student' => $params['_student'] ?? null,
                     '_education_year' => $params['_education_year'] ?? null,
+                    '_education_type' => $params['_education_type'] ?? null,
+                    '_department' => $params['_department'] ?? null,
+                    '_specialty' => $params['_specialty'] ?? null,
+                    '_group' => $params['_group'] ?? null,
+                    '_level' => $params['_level'] ?? null,
+                    '_semester' => $params['_semester'] ?? null,
                 ])));
 
             if (!$response->successful()) {

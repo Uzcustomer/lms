@@ -705,6 +705,9 @@ class AcademicScheduleController extends Controller
             mkdir($tempDir, 0755, true);
         }
 
+        // Step 1: Collect all data and group by subject_id
+        $subjectGroups = [];
+
         foreach ($items as $itemData) {
             $group = Group::where('group_hemis_id', $itemData['group_hemis_id'])->first();
             if (!$group) continue;
@@ -800,11 +803,76 @@ class AcademicScheduleController extends Controller
                 ->groupBy('s.employee_id')
                 ->get();
 
-            $otherTeacherText = '';
+            $otherTeacherNames = [];
             foreach ($otherTeachers as $t) {
-                $otherTeacherText .= $t->full_names . ', ';
+                foreach (explode(', ', $t->full_names) as $name) {
+                    $name = trim($name);
+                    if ($name && !in_array($name, $otherTeacherNames)) {
+                        $otherTeacherNames[] = $name;
+                    }
+                }
             }
-            $otherTeacherText = rtrim($otherTeacherText, ', ');
+
+            $maruzaTeacherNames = [];
+            if ($maruzaTeacher && $maruzaTeacher->full_names) {
+                foreach (explode(', ', $maruzaTeacher->full_names) as $name) {
+                    $name = trim($name);
+                    if ($name && !in_array($name, $maruzaTeacherNames)) {
+                        $maruzaTeacherNames[] = $name;
+                    }
+                }
+            }
+
+            $subjectKey = $subject->subject_id;
+            if (!isset($subjectGroups[$subjectKey])) {
+                $subjectGroups[$subjectKey] = [
+                    'subject' => $subject,
+                    'semester' => $semester,
+                    'department' => $department,
+                    'specialty' => $specialty,
+                    'groupNames' => [],
+                    'allMaruzaTeachers' => [],
+                    'allOtherTeachers' => [],
+                    'entries' => [],
+                ];
+            }
+
+            // Guruh nomlarini yig'ish
+            if ($group->name && !in_array($group->name, $subjectGroups[$subjectKey]['groupNames'])) {
+                $subjectGroups[$subjectKey]['groupNames'][] = $group->name;
+            }
+
+            // Ma'ruzachi o'qituvchilarni yig'ish
+            foreach ($maruzaTeacherNames as $name) {
+                if (!in_array($name, $subjectGroups[$subjectKey]['allMaruzaTeachers'])) {
+                    $subjectGroups[$subjectKey]['allMaruzaTeachers'][] = $name;
+                }
+            }
+
+            // Amaliyot o'qituvchilarni yig'ish
+            foreach ($otherTeacherNames as $name) {
+                if (!in_array($name, $subjectGroups[$subjectKey]['allOtherTeachers'])) {
+                    $subjectGroups[$subjectKey]['allOtherTeachers'][] = $name;
+                }
+            }
+
+            $subjectGroups[$subjectKey]['entries'][] = [
+                'group' => $group,
+                'semester' => $semester,
+                'department' => $department,
+                'students' => $students,
+                'subject' => $subject,
+            ];
+        }
+
+        // Step 2: Har bir fan uchun bitta Word hujjat yaratish
+        foreach ($subjectGroups as $subjectKey => $subjectData) {
+            $subject = $subjectData['subject'];
+            $semester = $subjectData['semester'];
+            $department = $subjectData['department'];
+            $groupNames = $subjectData['groupNames'];
+            $allMaruzaText = implode(', ', $subjectData['allMaruzaTeachers']) ?: '-';
+            $allOtherText = implode(', ', $subjectData['allOtherTeachers']) ?: '-';
 
             // Word hujjat yaratish
             $phpWord = new PhpWord();
@@ -845,7 +913,7 @@ class AcademicScheduleController extends Controller
             $textRun->addText('     Semestr: ', $infoBold);
             $textRun->addText($semester->name ?? '-', $infoStyle);
             $textRun->addText('     Guruh: ', $infoBold);
-            $textRun->addText($group->name ?? '-', $infoStyle);
+            $textRun->addText(implode(', ', $groupNames) ?: '-', $infoStyle);
 
             $textRun = $section->addTextRun($infoParaStyle);
             $textRun->addText('Fan: ', $infoBold);
@@ -853,11 +921,11 @@ class AcademicScheduleController extends Controller
 
             $textRun = $section->addTextRun($infoParaStyle);
             $textRun->addText("Ma'ruzachi: ", $infoBold);
-            $textRun->addText($maruzaTeacher->full_names ?? '-', $infoStyle);
+            $textRun->addText($allMaruzaText, $infoStyle);
 
             $textRun = $section->addTextRun($infoParaStyle);
             $textRun->addText("Amaliyot o'qituvchilari: ", $infoBold);
-            $textRun->addText($otherTeacherText ?: '-', $infoStyle);
+            $textRun->addText($allOtherText, $infoStyle);
 
             $textRun = $section->addTextRun(['spaceAfter' => 150]);
             $textRun->addText('Soatlar soni: ', $infoBold);
@@ -875,7 +943,7 @@ class AcademicScheduleController extends Controller
                 'borderColor' => '000000',
                 'cellMargin' => 40,
             ];
-            $tableName = 'YnOldiTable_' . $group->id . '_' . $semesterCode . '_' . $subject->subject_id;
+            $tableName = 'YnOldiTable_' . $subjectKey;
             $phpWord->addTableStyle($tableName, $tableStyle);
             $table = $section->addTable($tableName);
 
@@ -883,6 +951,7 @@ class AcademicScheduleController extends Controller
             $cellFont = ['size' => 10];
             $cellFontRed = ['size' => 10, 'color' => 'FF0000'];
             $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
+            $groupSeparatorBg = ['bgColor' => 'E2EFDA', 'valign' => 'center', 'gridSpan' => 7];
             $cellCenter = ['alignment' => Jc::CENTER];
             $cellLeft = ['alignment' => Jc::START];
 
@@ -895,58 +964,77 @@ class AcademicScheduleController extends Controller
             $headerRow->addCell(1500, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
             $headerRow->addCell(2000, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
 
+            // Talabalar ro'yxati - barcha guruhlar uchun davom etadi
             $rowNum = 1;
-            foreach ($students as $student) {
-                $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+            $multipleGroups = count($subjectData['entries']) > 1;
 
-                $qoldirgan = (int) Attendance::where('group_id', $group->group_hemis_id)
-                    ->where('subject_id', $subject->subject_id)
-                    ->where('student_hemis_id', $student->hemis_id)
-                    ->sum('absent_off');
+            foreach ($subjectData['entries'] as $entry) {
+                $entryGroup = $entry['group'];
+                $entryStudents = $entry['students'];
+                $entrySubject = $entry['subject'];
 
-                $totalAcload = $subject->total_acload ?: 1;
-                $qoldiq = round($qoldirgan * 100 / $totalAcload, 2);
-
-                $holat = 'Ruxsat';
-                $jnFailed = false;
-                $mtFailed = false;
-                $davomatFailed = false;
-
-                if ($student->jn < $markingScore->effectiveLimit('jn')) {
-                    $jnFailed = true;
-                    $holat = 'X';
-                }
-                if ($student->mt < $markingScore->effectiveLimit('mt')) {
-                    $mtFailed = true;
-                    $holat = 'X';
-                }
-                if ($qoldiq > 25) {
-                    $davomatFailed = true;
-                    $holat = 'X';
+                // Bir nechta guruh bo'lsa, guruh nomi bilan ajratuvchi qator qo'shish
+                if ($multipleGroups) {
+                    $separatorRow = $table->addRow(350);
+                    $separatorRow->addCell(12800, $groupSeparatorBg)->addText(
+                        $entryGroup->name,
+                        ['bold' => true, 'size' => 10, 'color' => '1F4E20'],
+                        $cellCenter
+                    );
                 }
 
-                $dataRow = $table->addRow();
-                $dataRow->addCell(600)->addText($rowNum, $cellFont, $cellCenter);
-                $dataRow->addCell(4500)->addText($student->student_name, $cellFont, $cellLeft);
-                $dataRow->addCell(1800)->addText($student->student_id, $cellFont, $cellCenter);
+                foreach ($entryStudents as $student) {
+                    $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
 
-                $jnCell = $dataRow->addCell(1200);
-                $jnCell->addText($student->jn ?? '0', $jnFailed ? $cellFontRed : $cellFont, $cellCenter);
+                    $qoldirgan = (int) Attendance::where('group_id', $entryGroup->group_hemis_id)
+                        ->where('subject_id', $entrySubject->subject_id)
+                        ->where('student_hemis_id', $student->hemis_id)
+                        ->sum('absent_off');
 
-                $mtCell = $dataRow->addCell(1200);
-                $mtCell->addText($student->mt ?? '0', $mtFailed ? $cellFontRed : $cellFont, $cellCenter);
+                    $totalAcload = $entrySubject->total_acload ?: 1;
+                    $qoldiq = round($qoldirgan * 100 / $totalAcload, 2);
 
-                $davomatCell = $dataRow->addCell(1500);
-                $davomatCell->addText(
-                    ($qoldiq != 0 ? $qoldiq . '%' : '0%'),
-                    $davomatFailed ? $cellFontRed : $cellFont,
-                    $cellCenter
-                );
+                    $holat = 'Ruxsat';
+                    $jnFailed = false;
+                    $mtFailed = false;
+                    $davomatFailed = false;
 
-                $holatCell = $dataRow->addCell(2000);
-                $holatCell->addText($holat, $holat === 'X' ? $cellFontRed : $cellFont, $cellCenter);
+                    if ($student->jn < $markingScore->effectiveLimit('jn')) {
+                        $jnFailed = true;
+                        $holat = 'X';
+                    }
+                    if ($student->mt < $markingScore->effectiveLimit('mt')) {
+                        $mtFailed = true;
+                        $holat = 'X';
+                    }
+                    if ($qoldiq > 25) {
+                        $davomatFailed = true;
+                        $holat = 'X';
+                    }
 
-                $rowNum++;
+                    $dataRow = $table->addRow();
+                    $dataRow->addCell(600)->addText($rowNum, $cellFont, $cellCenter);
+                    $dataRow->addCell(4500)->addText($student->student_name, $cellFont, $cellLeft);
+                    $dataRow->addCell(1800)->addText($student->student_id, $cellFont, $cellCenter);
+
+                    $jnCell = $dataRow->addCell(1200);
+                    $jnCell->addText($student->jn ?? '0', $jnFailed ? $cellFontRed : $cellFont, $cellCenter);
+
+                    $mtCell = $dataRow->addCell(1200);
+                    $mtCell->addText($student->mt ?? '0', $mtFailed ? $cellFontRed : $cellFont, $cellCenter);
+
+                    $davomatCell = $dataRow->addCell(1500);
+                    $davomatCell->addText(
+                        ($qoldiq != 0 ? $qoldiq . '%' : '0%'),
+                        $davomatFailed ? $cellFontRed : $cellFont,
+                        $cellCenter
+                    );
+
+                    $holatCell = $dataRow->addCell(2000);
+                    $holatCell->addText($holat, $holat === 'X' ? $cellFontRed : $cellFont, $cellCenter);
+
+                    $rowNum++;
+                }
             }
 
             // Imzolar
@@ -959,11 +1047,11 @@ class AcademicScheduleController extends Controller
             $signTable = $section->addTable();
             $signRow = $signTable->addRow();
             $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
-            $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($maruzaTeacher->full_names ?? ''), ['size' => 11]);
+            $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($allMaruzaText), ['size' => 11]);
 
-            $groupName = str_replace(['/', '\\', ' '], '_', $group->name);
-            $subjectName = str_replace(['/', '\\', ' '], '_', $subject->subject_name);
-            $fileName = 'YN_oldi_qaydnoma_' . $groupName . '_' . $subjectName . '.docx';
+            $groupNamesStr = str_replace(['/', '\\', ' '], '_', implode('_', $groupNames));
+            $subjectNameStr = str_replace(['/', '\\', ' '], '_', $subject->subject_name);
+            $fileName = 'YN_oldi_qaydnoma_' . $groupNamesStr . '_' . $subjectNameStr . '.docx';
             $tempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_' . $fileName;
 
             $objWriter = IOFactory::createWriter($phpWord, 'Word2007');

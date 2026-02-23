@@ -2101,9 +2101,20 @@
                     subject_id: currentSubjectId
                 })
             })
-            .then(r => r.json().then(data => ({ ok: r.ok, status: r.status, data })))
+            .then(r => {
+                const contentType = r.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    return r.json().then(data => ({ ok: r.ok, status: r.status, data }));
+                }
+                // JSON emas (HTML xato sahifasi) — text sifatida o'qish
+                return r.text().then(html => {
+                    console.error('[SYNC-DEBUG] Server HTML javob qaytardi (JSON emas):', r.status, html.substring(0, 500));
+                    return { ok: false, status: r.status, data: { message: 'Server Error (HTTP ' + r.status + '). Loglarni tekshiring.' } };
+                });
+            })
             .then(({ ok, status, data }) => {
                 icon.style.animation = '';
+                console.log('[SYNC-DEBUG] Response:', { ok, status, data });
                 if (ok && data.success) {
                     text.textContent = data.message || 'Yangilandi!';
                     btn.style.background = '#d1fae5';
@@ -2117,16 +2128,18 @@
                     btn.style.borderColor = '#fcd34d';
                     setTimeout(() => resetBtn(), 10000);
                 } else {
-                    text.textContent = data.message || 'Xatolik';
+                    console.error('[SYNC-DEBUG] Xatolik:', data.message);
+                    text.textContent = data.message || 'Xatolik (HTTP ' + status + ')';
                     btn.style.background = '#fee2e2';
                     btn.style.color = '#991b1b';
                     btn.style.borderColor = '#fca5a5';
-                    setTimeout(() => resetBtn(), 10000);
+                    setTimeout(() => resetBtn(), 15000);
                 }
             })
-            .catch(() => {
+            .catch((err) => {
                 icon.style.animation = '';
-                text.textContent = 'Tarmoq xatoligi';
+                console.error('[SYNC-DEBUG] Fetch xatolik:', err);
+                text.textContent = 'Tarmoq xatoligi: ' + err.message;
                 btn.style.background = '#fee2e2';
                 btn.style.color = '#991b1b';
                 setTimeout(() => resetBtn(), 10000);

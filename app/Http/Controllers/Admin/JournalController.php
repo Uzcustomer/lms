@@ -246,6 +246,8 @@ class JournalController extends Controller
 
     public function show(Request $request, $groupId, $subjectId, $semesterCode)
     {
+        try {
+        $showStartTime = microtime(true);
         $group = Group::find($groupId);
         if (!$group) {
             abort(404, "Guruh topilmadi (ID: {$groupId})");
@@ -1055,6 +1057,19 @@ class JournalController extends Controller
             'canSubmitYn',
             'levelDeadline'
         ));
+        } catch (\Throwable $e) {
+            Log::error('[SHOW-DEBUG] === journal.show XATOLIK ===', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => collect($e->getTrace())->take(10)->map(fn($t) => ($t['file'] ?? '?') . ':' . ($t['line'] ?? '?') . ' ' . ($t['class'] ?? '') . ($t['type'] ?? '') . ($t['function'] ?? ''))->toArray(),
+                'groupId' => $groupId,
+                'subjectId' => $subjectId,
+                'semesterCode' => $semesterCode,
+                'elapsed' => round(microtime(true) - $showStartTime, 2) . 's',
+                'memory' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB',
+            ]);
+            throw $e; // Xatoni qayta tashlash (foydalanuvchiga ko'rsatish uchun)
+        }
     }
 
     /**
@@ -1062,6 +1077,14 @@ class JournalController extends Controller
      */
     public function syncSchedule(Request $request)
     {
+        $startTime = microtime(true);
+        Log::info('[SYNC-DEBUG] === syncSchedule BOSHLANDI ===', [
+            'group_id' => $request->group_id,
+            'subject_id' => $request->subject_id,
+            'user' => auth()->user()?->name ?? 'unknown',
+            'memory' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB',
+        ]);
+
         $data = $request->validate([
             'group_id' => 'required',
             'subject_id' => 'required',
@@ -1080,8 +1103,15 @@ class JournalController extends Controller
         $userName = auth()->user()?->name ?? auth()->guard('teacher')->user()?->name ?? 'Noma\'lum';
 
         try {
+            Log::info('[SYNC-DEBUG] 1/4 Jadval sinxronlash boshlanmoqda...');
             $service = app(ScheduleImportService::class);
             $result = $service->importForGroupSubject((int) $data['group_id'], (int) $data['subject_id']);
+            Log::info('[SYNC-DEBUG] 1/4 Jadval tayyor', [
+                'count' => $result['count'],
+                'failed' => $result['failed'] ?? false,
+                'elapsed' => round(microtime(true) - $startTime, 2) . 's',
+                'memory' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB',
+            ]);
 
             Cache::put($cacheKey, now()->addMinutes(5)->timestamp, 300);
 
@@ -1097,14 +1127,32 @@ class JournalController extends Controller
             }
 
             // Talabalar ro'yxatini sinxronlash (davomat va baholardan OLDIN)
+            Log::info('[SYNC-DEBUG] 2/4 Talabalar sinxronlash boshlanmoqda...');
             $hemisService = app(HemisService::class);
             $studentResult = $hemisService->importStudentsForGroup((int) $data['group_id']);
+            Log::info('[SYNC-DEBUG] 2/4 Talabalar tayyor', [
+                'imported' => $studentResult['imported'],
+                'deactivated' => $studentResult['deactivated'],
+                'elapsed' => round(microtime(true) - $startTime, 2) . 's',
+            ]);
 
             // Attendance (sababli/sababsiz) sinxronizatsiyasi
+            Log::info('[SYNC-DEBUG] 3/4 Davomat sinxronlash boshlanmoqda...');
             $attendanceResult = $this->syncAttendanceForGroupSubject((int) $data['group_id'], (int) $data['subject_id']);
+            Log::info('[SYNC-DEBUG] 3/4 Davomat tayyor', [
+                'synced' => $attendanceResult['synced'],
+                'elapsed' => round(microtime(true) - $startTime, 2) . 's',
+            ]);
 
             // Baholar sinxronizatsiyasi (HEMIS dan grade larni yangilash)
+            Log::info('[SYNC-DEBUG] 4/4 Baholar sinxronlash boshlanmoqda...');
             $gradeResult = $this->syncGradesForGroupSubject((int) $data['group_id'], (int) $data['subject_id']);
+            Log::info('[SYNC-DEBUG] 4/4 Baholar tayyor', [
+                'synced' => $gradeResult['synced'],
+                'created' => $gradeResult['created'],
+                'elapsed' => round(microtime(true) - $startTime, 2) . 's',
+                'memory' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB',
+            ]);
 
             $message = "Jadval yangilandi. {$result['count']} ta yozuv sinxronlandi.";
             if ($studentResult['imported'] > 0) {
@@ -1123,11 +1171,23 @@ class JournalController extends Controller
                 $message .= " Baholar: {$gradeResult['synced']} ta yangilandi, {$gradeResult['created']} ta yangi qo'shildi.";
             }
 
+            Log::info('[SYNC-DEBUG] === syncSchedule MUVAFFAQIYATLI TUGADI ===', [
+                'total_elapsed' => round(microtime(true) - $startTime, 2) . 's',
+                'message' => $message,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => $message,
             ]);
         } catch (\Throwable $e) {
+            Log::error('[SYNC-DEBUG] === syncSchedule XATOLIK ===', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => collect($e->getTrace())->take(5)->map(fn($t) => ($t['file'] ?? '?') . ':' . ($t['line'] ?? '?') . ' ' . ($t['class'] ?? '') . ($t['type'] ?? '') . ($t['function'] ?? ''))->toArray(),
+                'total_elapsed' => round(microtime(true) - $startTime, 2) . 's',
+                'memory' => round(memory_get_usage(true) / 1024 / 1024, 2) . 'MB',
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Sinxronizatsiyada xatolik: ' . $e->getMessage(),

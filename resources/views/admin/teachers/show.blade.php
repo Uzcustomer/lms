@@ -458,8 +458,19 @@
             try {
                 var dekanCheckbox = document.querySelector('input[value="dekan"]');
                 var dept = document.getElementById('department-section');
+                console.log('toggleRole DEBUG:', {
+                    clickedValue: checkbox.value,
+                    clickedChecked: checkbox.checked,
+                    deptFound: !!dept,
+                    dekanFound: !!dekanCheckbox,
+                    dekanChecked: dekanCheckbox ? dekanCheckbox.checked : 'N/A',
+                    deptCurrentDisplay: dept ? dept.style.display : 'N/A'
+                });
                 if (dept && dekanCheckbox) {
                     dept.style.display = dekanCheckbox.checked ? 'block' : 'none';
+                    console.log('toggleRole: set display to', dept.style.display);
+                } else {
+                    console.warn('toggleRole: dept or dekanCheckbox NOT FOUND!');
                 }
             } catch (e) {
                 console.error('toggleRole dept error:', e);

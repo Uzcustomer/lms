@@ -33,6 +33,7 @@ class _TeacherGroupDetailScreenState extends State<TeacherGroupDetailScreen> {
   List<Map<String, dynamic>> _subjects = [];
   int? _selectedSemesterId;
   String? _selectedSemesterCode;
+  String? _selectedSemesterName;
 
   @override
   void initState() {
@@ -66,6 +67,7 @@ class _TeacherGroupDetailScreenState extends State<TeacherGroupDetailScreen> {
             ? current['id']
             : int.tryParse(current['id'].toString());
         _selectedSemesterCode = current['code']?.toString();
+        _selectedSemesterName = current['name']?.toString();
         _loadSubjects();
       }
 
@@ -136,50 +138,34 @@ class _TeacherGroupDetailScreenState extends State<TeacherGroupDetailScreen> {
                 )
               : Column(
                   children: [
-                    // Semester chips
-                    if (_semesters.isNotEmpty)
+                    // Current semester info
+                    if (_selectedSemesterName != null)
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withAlpha(isDark ? 30 : 15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           child: Row(
-                            children: _semesters.map((s) {
-                              final id = s['id'] is int
-                                  ? s['id'] as int
-                                  : int.tryParse(s['id'].toString()) ?? 0;
-                              final isSelected = id == _selectedSemesterId;
-                              final name = s['name']?.toString() ?? '${l.semester} $id';
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: ChoiceChip(
-                                  label: Text(
-                                    name,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                      color: isSelected ? Colors.white : null,
-                                    ),
-                                  ),
-                                  selected: isSelected,
-                                  selectedColor: AppTheme.primaryColor,
-                                  onSelected: (_) {
-                                    if (!isSelected) {
-                                      setState(() {
-                                        _selectedSemesterId = id;
-                                        _selectedSemesterCode = s['code']?.toString();
-                                      });
-                                      _loadSubjects();
-                                    }
-                                  },
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.calendar_today, size: 14, color: AppTheme.primaryColor),
+                              const SizedBox(width: 6),
+                              Text(
+                                _selectedSemesterName!,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primaryColor,
                                 ),
-                              );
-                            }).toList(),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-
-                    const SizedBox(height: 4),
 
                     // Subjects list
                     Expanded(

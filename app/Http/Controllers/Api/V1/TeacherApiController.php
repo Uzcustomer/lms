@@ -145,16 +145,20 @@ class TeacherApiController extends Controller
         $teacher = $request->user();
 
         if ($teacher->hasRole('dekan')) {
-            $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)->get();
+            $groups = Group::whereIn('department_hemis_id', $teacher->dean_faculty_ids)
+                ->where('active', true)
+                ->get();
         } else {
-            $groups = $teacher->groups;
-            if ($groups->count() < 1) {
-                $groupIds = StudentGrade::where('employee_id', $teacher->hemis_id)
-                    ->join('students', 'student_grades.student_hemis_id', '=', 'students.hemis_id')
-                    ->groupBy('students.group_id')
-                    ->pluck('students.group_id');
+            $assignments = $this->getTeacherSubjectAssignments($teacher->hemis_id);
+            $groupIds = $assignments['group_ids'];
 
-                $groups = Group::whereIn('group_hemis_id', $groupIds)->get();
+            if (!empty($groupIds)) {
+                $groups = Group::whereIn('group_hemis_id', $groupIds)
+                    ->where('active', true)
+                    ->orderBy('name')
+                    ->get();
+            } else {
+                $groups = collect();
             }
         }
 
@@ -206,20 +210,17 @@ class TeacherApiController extends Controller
 
         $semester = Semester::findOrFail($request->semester_id);
 
-        if ($teacher->hasRole('dekan') || $teacher->groups->contains($group)) {
+        if ($teacher->hasRole('dekan')) {
             $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('semester_code', $semester->code)
                 ->get(['id', 'subject_name', 'subject_id', 'credit']);
         } else {
-            $subjectIds = StudentGrade::join('students', 'student_grades.student_hemis_id', '=', 'students.hemis_id')
-                ->where('student_grades.employee_id', $teacher->hemis_id)
-                ->where('student_grades.semester_code', $semester->code)
-                ->groupBy('student_grades.subject_id')
-                ->pluck('student_grades.subject_id');
+            $assignments = $this->getTeacherSubjectAssignments($teacher->hemis_id);
+            $teacherSubjectIds = $assignments['subject_ids'];
 
             $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('semester_code', $semester->code)
-                ->whereIn('subject_id', $subjectIds)
+                ->whereIn('subject_id', $teacherSubjectIds)
                 ->get(['id', 'subject_name', 'subject_id', 'credit']);
         }
 
@@ -1368,5 +1369,92 @@ class TeacherApiController extends Controller
             'attempt' => $newAttempt ?? 1,
             'max_attempts' => $maxResubmissions,
         ]);
+    }
+
+    /**
+     * O'qituvchining biriktirilgan fan va guruhlarini aniqlash.
+     * Web LMS JournalController bilan bir xil logika.
+     */
+    private function getTeacherSubjectAssignments(int $employeeHemisId): array
+    {
+        // 1-manba: curriculum_subject_teachers
+        $records = CurriculumSubjectTeacher::where('employee_id', $employeeHemisId)->get();
+
+        $subjectIds = $records->pluck('subject_id')->unique()->filter()->values()->toArray();
+        $groupIds = $records->pluck('group_id')->unique()->filter()->values()->toArray();
+
+        // 2-manba: dars jadvalidan aniqlash
+        $scheduleAssignments = $this->getTeacherScheduleAssignments($employeeHemisId);
+
+        // Ikki manbani birlashtirish
+        $subjectIds = array_values(array_unique(array_merge($subjectIds, $scheduleAssignments['subject_ids'])));
+        $groupIds = array_values(array_unique(array_merge($groupIds, $scheduleAssignments['group_ids'])));
+
+        return [
+            'subject_ids' => $subjectIds,
+            'group_ids' => $groupIds,
+        ];
+    }
+
+    /**
+     * Dars jadvalidan o'qituvchining fan-guruh biriktirishlarini aniqlash.
+     * Har bir fan+guruh uchun eng ko'p dars o'tgan o'qituvchi "egasi" hisoblanadi.
+     */
+    private function getTeacherScheduleAssignments(int $employeeHemisId): array
+    {
+        $teacherCombos = DB::table('schedules')
+            ->where('employee_id', $employeeHemisId)
+            ->where('education_year_current', true)
+            ->whereNull('deleted_at')
+            ->select('subject_id', 'group_id')
+            ->groupBy('subject_id', 'group_id')
+            ->get();
+
+        if ($teacherCombos->isEmpty()) {
+            return ['subject_ids' => [], 'group_ids' => []];
+        }
+
+        $comboSubjectIds = $teacherCombos->pluck('subject_id')->unique()->toArray();
+        $comboGroupIds = $teacherCombos->pluck('group_id')->unique()->toArray();
+
+        $allStats = DB::table('schedules')
+            ->where('education_year_current', true)
+            ->whereNull('deleted_at')
+            ->whereIn('subject_id', $comboSubjectIds)
+            ->whereIn('group_id', $comboGroupIds)
+            ->select('subject_id', 'group_id', 'employee_id')
+            ->selectRaw('COUNT(*) as lesson_count')
+            ->selectRaw('MAX(lesson_date) as last_lesson')
+            ->groupBy('subject_id', 'group_id', 'employee_id')
+            ->get();
+
+        $statsByCombo = $allStats->groupBy(fn($item) => $item->subject_id . '-' . $item->group_id);
+
+        $subjectIds = [];
+        $groupIds = [];
+        $comboKeys = $teacherCombos->map(fn($c) => $c->subject_id . '-' . $c->group_id)->toArray();
+
+        foreach ($statsByCombo as $key => $teachers) {
+            if (!in_array($key, $comboKeys)) {
+                continue;
+            }
+
+            $primary = $teachers->sort(function ($a, $b) {
+                if ($a->lesson_count !== $b->lesson_count) {
+                    return $b->lesson_count - $a->lesson_count;
+                }
+                return strcmp($b->last_lesson ?? '', $a->last_lesson ?? '');
+            })->first();
+
+            if ($primary && $primary->employee_id == $employeeHemisId) {
+                $subjectIds[] = $primary->subject_id;
+                $groupIds[] = $primary->group_id;
+            }
+        }
+
+        return [
+            'subject_ids' => array_values(array_unique(array_filter($subjectIds))),
+            'group_ids' => array_values(array_unique(array_filter($groupIds))),
+        ];
     }
 }

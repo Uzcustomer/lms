@@ -70,23 +70,30 @@ class _TeacherJournalScreenState extends State<TeacherJournalScreen>
         subjectId: widget.subjectId,
         semesterCode: widget.semesterCode,
       );
-      final data = response['data'] as Map<String, dynamic>? ?? {};
+      final data = response['data'] is Map ? Map<String, dynamic>.from(response['data'] as Map) : <String, dynamic>{};
 
-      final columns = data['columns'] as Map<String, dynamic>? ?? {};
-      final studentsRaw = (data['students'] as List<dynamic>?) ?? [];
+      final columnsRaw = data['columns'];
+      final columns = columnsRaw is Map ? Map<String, dynamic>.from(columnsRaw) : <String, dynamic>{};
+      final studentsRaw = (data['students'] is List) ? (data['students'] as List<dynamic>) : <dynamic>[];
+
+      final openingsRaw = data['lesson_openings'];
+      final openings = openingsRaw is Map ? Map<String, dynamic>.from(openingsRaw) : <String, dynamic>{};
+
+      final groupRaw = data['group'];
+      final groupMap = groupRaw is Map ? Map<String, dynamic>.from(groupRaw) : <String, dynamic>{};
 
       setState(() {
         _data = data;
-        _students = studentsRaw.cast<Map<String, dynamic>>();
+        _students = studentsRaw.map((e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{}).toList();
         _amaliyColumns = _parseColumns(columns['amaliy']);
         _mtColumns = _parseColumns(columns['mt']);
         _lectureColumns = _parseColumns(columns['lecture']);
-        _activeOpenedDates = ((data['active_opened_dates'] as List<dynamic>?) ?? [])
-            .map((e) => e.toString())
-            .toList();
-        _lessonOpenings = data['lesson_openings'] as Map<String, dynamic>? ?? {};
-        _groupHemisId = data['group']?['group_hemis_id']?.toString() ?? '';
-        _minimumLimit = data['minimum_limit'] as int? ?? 60;
+        _activeOpenedDates = (data['active_opened_dates'] is List)
+            ? (data['active_opened_dates'] as List<dynamic>).map((e) => e.toString()).toList()
+            : <String>[];
+        _lessonOpenings = openings;
+        _groupHemisId = groupMap['group_hemis_id']?.toString() ?? '';
+        _minimumLimit = (data['minimum_limit'] is int) ? data['minimum_limit'] as int : 60;
         _isLoading = false;
       });
     } catch (e) {
@@ -98,8 +105,8 @@ class _TeacherJournalScreenState extends State<TeacherJournalScreen>
   }
 
   List<Map<String, dynamic>> _parseColumns(dynamic raw) {
-    if (raw == null) return [];
-    return (raw as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    if (raw == null || raw is! List) return [];
+    return raw.map((e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{}).toList();
   }
 
   @override

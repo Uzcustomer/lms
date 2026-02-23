@@ -24,6 +24,10 @@ class TeacherService {
     return await _api.get(ApiConfig.teacherGroups);
   }
 
+  Future<Map<String, dynamic>> getActiveSubjects() async {
+    return await _api.get(ApiConfig.teacherActiveSubjects);
+  }
+
   Future<Map<String, dynamic>> getSemesters({required int groupId}) async {
     return await _api.get(ApiConfig.teacherSemesters, queryParams: {
       'group_id': groupId.toString(),

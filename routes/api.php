@@ -61,6 +61,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/students/{studentId}/subjects/{subjectId}/grades', [TeacherApiController::class, 'studentGradeDetails']);
             Route::get('/group-student-grades', [TeacherApiController::class, 'groupStudentGrades']);
 
+            // Active subjects list (journal index for mobile)
+            Route::get('/active-subjects', [TeacherApiController::class, 'activeSubjects']);
+
             // Journal — full journal with 3 tabs (Ma'ruza, Amaliy, MT)
             Route::get('/journal', [TeacherApiController::class, 'journal']);
 

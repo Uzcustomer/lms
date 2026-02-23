@@ -377,7 +377,8 @@ class AcademicScheduleController extends Controller
         if ($curriculumIds->isEmpty()) return collect();
 
         // Fanlar
-        $subjectQuery = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds);
+        $subjectQuery = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds)
+            ->where('is_active', true);
         if ($semesterCodes->isNotEmpty()) {
             $subjectQuery->whereIn('semester_code', $semesterCodes);
         }
@@ -666,7 +667,8 @@ class AcademicScheduleController extends Controller
             ->get(['group_hemis_id', 'name']);
 
         // 7. Fanlar (barcha filtrlar)
-        $subjectQuery = CurriculumSubject::whereIn('curricula_hemis_id', $allCurrIds);
+        $subjectQuery = CurriculumSubject::whereIn('curricula_hemis_id', $allCurrIds)
+            ->where('is_active', true);
         if ($semesterCode) {
             $subjectQuery->where('semester_code', $semesterCode);
         } elseif ($levelCode) {

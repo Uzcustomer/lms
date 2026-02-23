@@ -300,7 +300,7 @@ class StudentController extends Controller
 
         $curriculumSubjects = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
             ->where('semester_code', $semesterCode)
-            ->where('at_semester', true)
+            ->where('is_active', true)
             ->get();
 
         // Helper: effective grade (aynan jurnal mantiqidan)

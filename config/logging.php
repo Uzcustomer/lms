@@ -62,6 +62,7 @@ return [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
+            'permission' => 0666,
             'replace_placeholders' => true,
         ],
 
@@ -70,6 +71,7 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
+            'permission' => 0666,
             'replace_placeholders' => true,
         ],
 
@@ -131,6 +133,14 @@ return [
             'driver' => 'single',
             'path' => storage_path('logs/import_schedule.log'),
             'level' => 'debug',
+        ],
+
+        'connection_debug' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/connection_debug.log'),
+            'level' => 'debug',
+            'days' => 7,
+            'replace_placeholders' => true,
         ],
 
         'student_auth' => [

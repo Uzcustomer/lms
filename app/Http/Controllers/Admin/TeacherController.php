@@ -65,14 +65,20 @@ class TeacherController extends Controller
 
     public function show(Teacher $teacher)
     {
-        $departments = Department::where('structure_type_code', 11)->get();
+        $departments = Department::where('structure_type_code', '11')
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
         $roles = ProjectRole::staffRoles();
         return view('admin.teachers.show', compact('teacher', 'departments', 'roles'));
     }
 
     public function edit(Teacher $teacher)
     {
-        $departments = Department::where('structure_type_code', 11)->get();
+        $departments = Department::where('structure_type_code', '11')
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
         $roles = ProjectRole::staffRoles();
         return view('admin.teachers.edit', compact('teacher', 'departments', 'roles'));
     }

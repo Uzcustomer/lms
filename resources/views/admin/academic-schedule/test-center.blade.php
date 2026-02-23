@@ -81,10 +81,22 @@
                         </div>
                         <div class="filter-item" style="min-width: 120px;">
                             <label class="filter-label">&nbsp;</label>
-                            <button type="button" class="btn-calc" onclick="applyFilter()">
-                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                Qidirish
-                            </button>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <button type="button" class="btn-refresh" id="btn-refresh-quiz" onclick="refreshQuizCounts()">
+                                    <svg class="refresh-icon" style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    <span id="refresh-label">Yangilash</span>
+                                </button>
+                                <button type="button" class="btn-calc" onclick="applyFilter()">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                    Qidirish
+                                </button>
+                                <button type="button" id="btn-yn-oldi-word" class="btn-yn-oldi-word" onclick="tcGenerateYnOldiWord()" disabled>
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    YN oldi word
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -92,44 +104,45 @@
                 <!-- Results -->
                 @if($scheduleData->count() > 0)
                 <div>
-                    <div style="padding:10px 20px;background:#f0f4f8;border-bottom:1px solid #dbe4ef;display:flex;align-items:center;gap:12px;">
-                        <span style="background:#2b5ea7;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;font-weight:700;">
-                            Imtihon jadvali
-                            @if($currentEducationYear)
-                                ({{ $currentEducationYear }})
-                            @endif
-                        </span>
-                        <span style="font-size:12px;color:#64748b;">
-                            O'quv bo'limi tomonidan belgilangan yakuniy nazorat sanalari
-                        </span>
-                    </div>
-
                     <div style="overflow-x:auto;">
                         <table class="schedule-table">
                             <thead>
                                 <tr class="header-row">
+                                    <th style="width:40px;text-align:center;">
+                                        <input type="checkbox" id="tc-select-all-header" onchange="tcToggleSelectAll(this)" style="accent-color:#2b5ea7;width:16px;height:16px;cursor:pointer;">
+                                    </th>
                                     <th style="width:44px;padding-left:16px;">#</th>
-                                    <th class="sortable" data-col="1">Guruh <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="2">Yo'nalish <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="3" style="width:100px;">Fan kodi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="4">Fan nomi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="5" style="width:70px;text-align:center;">Kurs <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="6" style="width:90px;text-align:center;">Semestr <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="2">Guruh <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="3">Yo'nalish <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="4" style="width:100px;">Fan kodi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="5">Fan nomi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="6" style="width:70px;text-align:center;">Kurs <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="7" style="width:90px;text-align:center;">Semestr <span class="sort-icon"></span></th>
                                     <th style="width:100px;text-align:center;">Urinish</th>
-                                    <th class="sortable" data-col="8" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
-                                    <th class="sortable" data-col="9" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="9" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="10" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
-                                    <th><select class="col-filter" data-col="1"><option value="">Barchasi</option></select></th>
+                                    <th></th>
                                     <th><select class="col-filter" data-col="2"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="3"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="4"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="5"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="6"><option value="">Barchasi</option></select></th>
-                                    <th></th>
+                                    <th><select class="col-filter" data-col="7"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="8"><option value="">Barchasi</option></select></th>
                                     <th><select class="col-filter" data-col="9"><option value="">Barchasi</option></select></th>
+                                    <th><select class="col-filter" data-col="10"><option value="">Barchasi</option></select></th>
+                                    <th>
+                                        <select class="col-filter color-filter" data-col="11" data-filter-type="color">
+                                            <option value="">Barchasi</option>
+                                            <option value="green" data-color="#16a34a">Yashil</option>
+                                            <option value="yellow" data-color="#d97706">Sariq</option>
+                                            <option value="red" data-color="#dc2626">Qizil</option>
+                                        </select>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -139,7 +152,10 @@
                                 @endphp
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
-                                        <tr class="data-row">
+                                        <tr class="data-row" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}">
+                                            <td style="text-align:center;">
+                                                <input type="checkbox" class="tc-row-checkbox" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" onchange="tcUpdateSelection()" style="accent-color:#2b5ea7;width:16px;height:16px;cursor:pointer;">
+                                            </td>
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
                                             <td data-sort-value="{{ $item['specialty_name'] }}" style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
@@ -147,7 +163,7 @@
                                             <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
                                             <td data-sort-value="{{ $item['level_name'] }}" style="text-align:center;color:#1e293b;font-weight:500;">{{ $item['level_name'] }}</td>
                                             <td data-sort-value="{{ $item['semester_name'] }}" style="text-align:center;color:#64748b;font-size:12px;">{{ $item['semester_name'] }}</td>
-                                            <td style="text-align:center;padding:4px 8px;"><span class="attempt-badge">1-urinish</span></td>
+                                            <td data-sort-value="1-urinish" style="text-align:center;padding:4px 8px;"><span class="attempt-badge">1-urinish</span></td>
                                             <td data-sort-value="{{ $item['yn_type'] ?? '' }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['yn_type'] ?? null)
                                                     <span class="yn-type-badge yn-type-{{ strtolower($item['yn_type']) }}">{{ $item['yn_type'] }}</span>
@@ -170,6 +186,15 @@
                                                 @else
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
+                                            </td>
+                                            @php
+                                                $sc = $item['student_count'] ?? 0;
+                                                $qc = $item['quiz_count'] ?? 0;
+                                                $qcClass = $qc == 0 ? 'quiz-count-zero' : ($qc >= $sc ? 'quiz-count-full' : 'quiz-count-partial');
+                                                $qcColor = $qc == 0 ? 'red' : ($qc >= $sc ? 'green' : 'yellow');
+                                            @endphp
+                                            <td class="td-quiz-count" data-sort-value="{{ $qc }}" data-color="{{ $qcColor }}" style="text-align:center;">
+                                                <span class="{{ $qcClass }}">{{ $qc }}/{{ $sc }}</span>
                                             </td>
                                         </tr>
                                     @endforeach
@@ -298,6 +323,75 @@
             });
         }
 
+        var refreshQuizUrl = '{{ route($routePrefix . ".academic-schedule.test-center.refresh-quiz-counts") }}';
+
+        function refreshQuizCounts() {
+            var rows = document.querySelectorAll('#schedule-tbody tr.data-row');
+            if (!rows.length) return;
+
+            var btn = document.getElementById('btn-refresh-quiz');
+            var icon = btn.querySelector('.refresh-icon');
+            var label = document.getElementById('refresh-label');
+            btn.disabled = true;
+            icon.classList.add('spinning');
+            label.textContent = 'Yangilanmoqda...';
+
+            // Collect unique group+subject+yn_type combinations
+            var seen = {};
+            var items = [];
+            rows.forEach(function(row) {
+                var gid = row.getAttribute('data-group-id');
+                var sid = row.getAttribute('data-subject-id');
+                var yn = row.getAttribute('data-yn-type');
+                var key = gid + '|' + sid + '|' + yn;
+                if (!seen[key]) {
+                    seen[key] = true;
+                    items.push({ group_id: gid, subject_id: sid, yn_type: yn });
+                }
+            });
+
+            $.ajax({
+                url: refreshQuizUrl,
+                method: 'POST',
+                data: JSON.stringify({ items: items }),
+                contentType: 'application/json',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
+                success: function(data) {
+                    // Build lookup
+                    var lookup = {};
+                    (data.counts || []).forEach(function(c) {
+                        lookup[c.group_id + '|' + c.subject_id + '|' + c.yn_type] = c;
+                    });
+
+                    // Update each row
+                    rows.forEach(function(row) {
+                        var key = row.getAttribute('data-group-id') + '|' + row.getAttribute('data-subject-id') + '|' + row.getAttribute('data-yn-type');
+                        var info = lookup[key];
+                        if (!info) return;
+
+                        var qcCell = row.querySelector('.td-quiz-count');
+                        if (qcCell) {
+                            var cls = info.quiz_count == 0 ? 'quiz-count-zero' : (info.quiz_count >= info.student_count ? 'quiz-count-full' : 'quiz-count-partial');
+                            var clr = info.quiz_count == 0 ? 'red' : (info.quiz_count >= info.student_count ? 'green' : 'yellow');
+                            qcCell.innerHTML = '<span class="' + cls + '">' + info.quiz_count + '/' + info.student_count + '</span>';
+                            qcCell.setAttribute('data-sort-value', info.quiz_count);
+                            qcCell.setAttribute('data-color', clr);
+                        }
+                    });
+
+                    label.textContent = 'Yangilash';
+                    icon.classList.remove('spinning');
+                    btn.disabled = false;
+                },
+                error: function() {
+                    label.textContent = 'Yangilash';
+                    icon.classList.remove('spinning');
+                    btn.disabled = false;
+                    alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
+                }
+            });
+        }
+
         function applyFilter() {
             var url = new URL(window.location.href.split('?')[0]);
             url.searchParams.set('searched', '1');
@@ -361,6 +455,7 @@
         // Ustun filtrlarini to'ldirish
         function populateColumnFilters() {
             document.querySelectorAll('.col-filter').forEach(function(sel) {
+                if (sel.getAttribute('data-filter-type') === 'color') return;
                 var col = parseInt(sel.getAttribute('data-col'));
                 var values = {};
                 document.querySelectorAll('#schedule-tbody tr.data-row').forEach(function(row) {
@@ -382,10 +477,16 @@
 
         function applyColumnFilters() {
             var filters = {};
+            var colorFilters = {};
             document.querySelectorAll('.col-filter').forEach(function(sel) {
                 var col = parseInt(sel.getAttribute('data-col'));
                 var val = sel.value;
-                if (val) filters[col] = val;
+                if (!val) return;
+                if (sel.getAttribute('data-filter-type') === 'color') {
+                    colorFilters[col] = val;
+                } else {
+                    filters[col] = val;
+                }
             });
             var idx = 0;
             document.querySelectorAll('#schedule-tbody tr.data-row').forEach(function(row) {
@@ -395,6 +496,14 @@
                     if (!cell) { show = false; break; }
                     var cellVal = (cell.getAttribute('data-sort-value') || cell.textContent || '').trim();
                     if (cellVal !== filters[col]) { show = false; break; }
+                }
+                if (show) {
+                    for (var col in colorFilters) {
+                        var cell = row.cells[parseInt(col)];
+                        if (!cell) { show = false; break; }
+                        var cellColor = cell.getAttribute('data-color') || '';
+                        if (cellColor !== colorFilters[col]) { show = false; break; }
+                    }
                 }
                 row.style.display = show ? '' : 'none';
                 if (show) {
@@ -457,6 +566,125 @@
                 if (numCell) numCell.textContent = i + 1;
             });
         }
+
+        // Checkbox boshqaruvi
+        function getVisibleCheckboxes() {
+            var result = [];
+            document.querySelectorAll('.tc-row-checkbox').forEach(function(cb) {
+                var row = cb.closest('tr');
+                if (row && row.style.display !== 'none') {
+                    result.push(cb);
+                }
+            });
+            return result;
+        }
+
+        function tcToggleSelectAll(el) {
+            var checked = el.checked;
+            getVisibleCheckboxes().forEach(function(cb) {
+                cb.checked = checked;
+            });
+            tcUpdateSelection();
+        }
+
+        function tcUpdateSelection() {
+            var visible = getVisibleCheckboxes();
+            var checkedCount = visible.filter(function(cb) { return cb.checked; }).length;
+            var btn = document.getElementById('btn-yn-oldi-word');
+            if (btn) btn.disabled = checkedCount === 0;
+            var headerCb = document.getElementById('tc-select-all-header');
+            if (headerCb) headerCb.checked = checkedCount > 0 && checkedCount === visible.length;
+        }
+
+        var ynOldiWordUrl = '{{ route($routePrefix . ".academic-schedule.test-center.generate-yn-oldi-word") }}';
+
+        function tcGenerateYnOldiWord() {
+            var selected = [];
+            document.querySelectorAll('.tc-row-checkbox:checked').forEach(function(cb) {
+                selected.push({
+                    group_hemis_id: cb.getAttribute('data-group-hemis-id'),
+                    semester_code: String(cb.getAttribute('data-semester-code')),
+                    subject_id: cb.getAttribute('data-subject-id')
+                });
+            });
+
+            if (selected.length === 0) {
+                alert('Kamida bitta guruhni tanlang');
+                return;
+            }
+
+            console.log('YN oldi word - URL:', ynOldiWordUrl);
+            console.log('YN oldi word - Data:', JSON.stringify(selected, null, 2));
+
+            var btn = document.getElementById('btn-yn-oldi-word');
+            var originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML =
+                '<svg class="animate-spin" style="height:14px;width:14px;display:inline-block;margin-right:4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">' +
+                '<circle style="opacity:0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+                '<path style="opacity:0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>' +
+                '</svg> Yuklanmoqda...';
+
+            fetch(ynOldiWordUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                body: JSON.stringify({ items: selected })
+            })
+            .then(function(response) {
+                console.log('YN oldi word - Status:', response.status, 'Content-Type:', response.headers.get('content-type'));
+                if (!response.ok) {
+                    return response.text().then(function(text) {
+                        console.error('YN oldi word - Error response:', text.substring(0, 500));
+                        try {
+                            var json = JSON.parse(text);
+                            throw new Error(json.error || json.message || 'Xatolik yuz berdi');
+                        } catch(e) {
+                            if (e instanceof SyntaxError) {
+                                throw new Error('Server xatoligi: ' + response.status + ' (console da batafsil)');
+                            }
+                            throw e;
+                        }
+                    });
+                }
+                var contentType = response.headers.get('content-type') || '';
+                if (contentType.indexOf('application/json') !== -1) {
+                    return response.json().then(function(json) {
+                        throw new Error(json.error || json.message || 'Kutilmagan javob');
+                    });
+                }
+                var disposition = response.headers.get('Content-Disposition');
+                var filename = 'yn_oldi_qaydnoma.docx';
+                if (disposition) {
+                    var match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                    if (match && match[1]) filename = match[1].replace(/['"]/g, '');
+                }
+                return response.blob().then(function(blob) { return { blob: blob, filename: filename }; });
+            })
+            .then(function(data) {
+                if (!data || !data.blob) return;
+                var url = window.URL.createObjectURL(data.blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = data.filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            })
+            .catch(function(err) {
+                console.error('YN oldi word - Catch:', err);
+                alert(err.message);
+            })
+            .finally(function() {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            });
+        }
     </script>
 
     <style>
@@ -489,8 +717,18 @@
         .toggle-label { font-size: 12px; font-weight: 600; color: #64748b; white-space: nowrap; }
         .toggle-switch.active .toggle-label { color: #1e3a5f; }
 
+        .btn-refresh { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; background: linear-gradient(135deg, #0891b2, #06b6d4); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(8,145,178,0.3); height: 36px; white-space: nowrap; }
+        .btn-refresh:hover { background: linear-gradient(135deg, #0e7490, #0891b2); box-shadow: 0 4px 12px rgba(8,145,178,0.4); transform: translateY(-1px); }
+        .btn-refresh:disabled { cursor: not-allowed; opacity: 0.5; }
+        .btn-refresh .refresh-icon.spinning { animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
+
+        .btn-yn-oldi-word { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(37,99,235,0.3); white-space: nowrap; height: 36px; }
+        .btn-yn-oldi-word:hover:not(:disabled) { background: linear-gradient(135deg, #1d4ed8, #2563eb); box-shadow: 0 4px 12px rgba(37,99,235,0.4); transform: translateY(-1px); }
+        .btn-yn-oldi-word:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .schedule-table thead { position: sticky; top: 0; z-index: 10; }
@@ -526,5 +764,13 @@
         .yn-type-badge { display: inline-flex; padding: 4px 12px; font-size: 11px; font-weight: 700; border-radius: 6px; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.03em; }
         .yn-type-oski { background: #dcfce7; color: #166534; }
         .yn-type-test { background: #dbeafe; color: #1e40af; }
+
+        .quiz-count-zero { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .quiz-count-partial { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+        .quiz-count-full { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+        .color-filter option[value="green"] { color: #16a34a; font-weight: 600; }
+        .color-filter option[value="yellow"] { color: #d97706; font-weight: 600; }
+        .color-filter option[value="red"] { color: #dc2626; font-weight: 600; }
     </style>
 </x-app-layout>

@@ -24,6 +24,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'force.student.contact' => \App\Http\Middleware\ForceStudentContact::class,
         ]);
 
+        // Server ulanish debug middleware — har bir requestda DB va server holatini tekshiradi
+        $middleware->append(\App\Http\Middleware\ConnectionDebugMiddleware::class);
+
         $middleware->validateCsrfTokens(except: [
             'telegram/webhook/*',
             'moodle/import',
@@ -33,8 +36,10 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (Schedule $schedule) {
         $schedule->call(function () {
-            Log::info('✅ Scheduler is running at ' . now());
+            Log::info('Scheduler is running at ' . now());
         })->everyMinute();
+        // Server ulanish health-check — har 5 daqiqada logga yozadi
+        $schedule->command('server:health-check --log')->everyFiveMinutes();
         $schedule->command('import:curricula')->weekly();
         $schedule->command('import:curriculum-subjects')->weekly();
         $schedule->command('import:groups')->weekly();
@@ -45,7 +50,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:curriculum-subject-teachers')->dailyAt('22:00');
 
         // Live import — har 30 daqiqada bugungi baholarni yangilaydi (faqat 8:30 — 00:00)
-        $schedule->command('student:import-data --mode=live')->everyThirtyMinutes()->between('8:30', '23:59')->withoutOverlapping(60);
+        // VAQTINCHA O'CHIRILGAN: import muammosi hal bo'lguncha to'xtatildi (2026-02-23)
+        // $schedule->command('student:import-data --mode=live')->everyThirtyMinutes()->between('8:30', '23:59')->withoutOverlapping(60);
         // Final import — har kuni 00:30 da kechagi kunni yakunlaydi
         $schedule->command('student:import-data --mode=final')->dailyAt('00:30')->withoutOverlapping(60);
         $schedule->command('import:teachers')->cron('0 0 */2 * *'); // Every 2 days at midnight

@@ -20,6 +20,8 @@ class AuthProvider extends ChangeNotifier {
   String? _botUsername;
   String? _verificationCode;
   String? _botLink;
+  List<String> _roles = [];
+  String? _activeRole;
 
   AuthProvider(this._authService, this._apiService);
 
@@ -35,6 +37,46 @@ class AuthProvider extends ChangeNotifier {
   String? get botUsername => _botUsername;
   String? get verificationCode => _verificationCode;
   String? get botLink => _botLink;
+  List<String> get roles => _roles;
+  String? get activeRole => _activeRole;
+
+  static const Map<String, String> roleLabels = {
+    'superadmin': 'Superadmin',
+    'admin': 'Admin',
+    'kichik_admin': 'Kichik admin',
+    'inspeksiya': 'Inspeksiya',
+    'oquv_prorektori': "O'quv prorektori",
+    'registrator_ofisi': 'Registrator ofisi',
+    'oquv_bolimi': "O'quv bo'limi",
+    'buxgalteriya': 'Buxgalteriya',
+    'manaviyat': "Ma'naviyat",
+    'tyutor': 'Tyutor',
+    'dekan': 'Dekan',
+    'kafedra_mudiri': 'Kafedra mudiri',
+    'fan_masuli': "Fan mas'uli",
+    'oqituvchi': "O'qituvchi",
+    'test_markazi': 'Test markazi',
+    'talaba': 'Talaba',
+  };
+
+  String get activeRoleLabel => roleLabels[_activeRole] ?? _activeRole ?? '';
+
+  void setActiveRole(String role) {
+    if (_roles.contains(role)) {
+      _activeRole = role;
+      notifyListeners();
+    }
+  }
+
+  void _parseRoles(Map<String, dynamic> response) {
+    final rolesData = response['roles'];
+    if (rolesData is List) {
+      _roles = rolesData.map((e) => e.toString()).toList();
+      if (_roles.isNotEmpty && (_activeRole == null || !_roles.contains(_activeRole))) {
+        _activeRole = _roles.first;
+      }
+    }
+  }
 
   Future<void> checkAuth() async {
     final isLoggedIn = await _apiService.isLoggedIn();
@@ -43,6 +85,7 @@ class AuthProvider extends ChangeNotifier {
         final response = await _authService.getMe();
         _user = response['user'] as Map<String, dynamic>?;
         _guard = await _apiService.getGuard();
+        _parseRoles(response);
         _state = AuthState.authenticated;
       } catch (_) {
         await _apiService.clearToken();
@@ -121,6 +164,7 @@ class AuthProvider extends ChangeNotifier {
 
       _user = response['user'] as Map<String, dynamic>?;
       _guard = 'teacher';
+      _parseRoles(response);
       _state = AuthState.authenticated;
       notifyListeners();
       return true;
@@ -242,6 +286,8 @@ class AuthProvider extends ChangeNotifier {
     _telegramVerified = false;
     _verificationCode = null;
     _botLink = null;
+    _roles = [];
+    _activeRole = null;
     _state = AuthState.unauthenticated;
     notifyListeners();
   }

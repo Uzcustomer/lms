@@ -163,10 +163,14 @@
                                         <th class="th-num">#</th>
                                         <th><a href="#" class="sort-link" data-sort="full_name">Talaba FISH <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="department_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="low_day_count">Past kunlar <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="total_days">Jami kunlar <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;width:90px;">Batafsil</th>
+                                        <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="grade">Joriy bahosi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="lesson_date">Dars sanasi <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th style="text-align:center;">Jurnal</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -179,26 +183,14 @@
         </div>
     </div>
 
-    <!-- Detail Modal -->
-    <div id="detail-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal()">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modal-title" style="margin:0;font-size:16px;font-weight:700;color:#0f172a;"></h3>
-                <button onclick="closeModal()" class="modal-close">&times;</button>
-            </div>
-            <div id="modal-body" class="modal-body"></div>
-        </div>
-    </div>
-
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        let currentSort = 'low_day_count';
+        let currentSort = 'lesson_date';
         let currentDirection = 'desc';
         let currentPage = 1;
-        let reportData = [];
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
@@ -263,9 +255,8 @@
                         return;
                     }
 
-                    reportData = res.data;
                     var scoreLimit = $('#score_limit').val() || 90;
-                    $('#total-badge').text('Jami: ' + res.total + ' ta talaba (< ' + scoreLimit + ' ball)');
+                    $('#total-badge').text('Jami: ' + res.total + ' ta (< ' + scoreLimit + ' ball)');
                     $('#time-badge').text(elapsed + ' soniyada hisoblandi');
                     renderTable(res.data);
                     renderPagination(res);
@@ -287,68 +278,37 @@
             });
         }
 
+        function gradeClass(val, minLimit) {
+            minLimit = minLimit || 60;
+            if (val < minLimit) return 'badge-grade-red';
+            if (val < 75) return 'badge-grade-yellow';
+            return 'badge-grade-green';
+        }
+
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
         function renderTable(data) {
             var html = '';
+            var journalBase = '{{ url("/admin/journal/show") }}';
             var scoreLimit = parseInt($('#score_limit').val()) || 90;
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
-                var percent = r.total_days > 0 ? Math.round((r.low_day_count / r.total_days) * 100) : 0;
+                var journalUrl = journalBase + '/' + encodeURIComponent(r.group_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code);
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
-                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
-                html += '<span style="font-size:11px;color:#94a3b8;display:block;">' + esc(r.student_id_number) + '</span></td>';
+                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
+                html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
+                html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
+                html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
-                html += '<td style="text-align:center;"><span class="badge badge-warning">' + r.low_day_count + ' kun</span> <span style="font-size:11px;color:#94a3b8;">(' + percent + '%)</span></td>';
-                html += '<td style="text-align:center;"><span class="badge badge-violet">' + r.total_days + ' kun</span></td>';
-                html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(' + i + ')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Batafsil</button></td>';
+                html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
+                html += '<td><span class="badge ' + gradeClass(r.grade, scoreLimit) + '">' + r.grade + '</span></td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + esc(r.lesson_date) + '</td>';
+                html += '<td style="text-align:center;"><a href="' + journalUrl + '" target="_blank" class="journal-link">Ko\'rish</a></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
-        }
-
-        function showDetail(idx) {
-            var r = reportData[idx];
-            if (!r) return;
-
-            var scoreLimit = parseInt($('#score_limit').val()) || 90;
-            $('#modal-title').text(r.full_name + ' - < ' + scoreLimit + ' ball olgan kunlar (' + r.low_day_count + ' ta)');
-
-            var html = '<table class="detail-table">';
-            html += '<thead><tr><th>#</th><th>Fan</th><th>Dars turi</th><th>Kun</th><th>Baho</th><th>Holat</th></tr></thead>';
-            html += '<tbody>';
-
-            if (r.low_days && r.low_days.length) {
-                for (var d = 0; d < r.low_days.length; d++) {
-                    var day = r.low_days[d];
-                    var statusClass = day.grade < scoreLimit ? 'cell-fail' : 'cell-pass';
-                    var statusText = day.absent ? 'Sababsiz' : (day.grade < scoreLimit ? '< ' + scoreLimit : '');
-                    html += '<tr>';
-                    html += '<td>' + (d + 1) + '</td>';
-                    html += '<td style="font-weight:600;color:#0f172a;min-width:160px;text-align:left;">' + esc(day.subject_name) + '</td>';
-                    html += '<td><span class="badge badge-lesson-type badge-lt-' + day.lesson_type.toLowerCase() + '">' + esc(day.lesson_type) + '</span></td>';
-                    html += '<td style="white-space:nowrap;">' + esc(day.date) + '</td>';
-                    html += '<td class="' + statusClass + '" style="font-weight:700;font-size:14px;">' + day.grade + '</td>';
-                    html += '<td>';
-                    if (day.absent) {
-                        html += '<span class="reason-badge">Sababsiz</span>';
-                    } else if (day.grade < scoreLimit) {
-                        html += '<span class="reason-badge reason-low">< ' + scoreLimit + '</span>';
-                    }
-                    html += '</td>';
-                    html += '</tr>';
-                }
-            }
-
-            html += '</tbody></table>';
-            $('#modal-body').html(html);
-            $('#detail-modal').fadeIn(150);
-        }
-
-        function closeModal() {
-            $('#detail-modal').fadeOut(150);
         }
 
         function toggleExcelMenu() {
@@ -387,10 +347,6 @@
                 html += '<button class="pg-btn" onclick="loadReport(' + (res.current_page + 1) + ')">Keyingi &raquo;</button>';
             $('#pagination-area').html(html);
         }
-
-        $(document).keydown(function(e) {
-            if (e.keyCode === 27) closeModal();
-        });
 
         $(document).ready(function() {
             // Sort links
@@ -501,47 +457,22 @@
 
         .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
+        .badge-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #99f6e4; white-space: nowrap; }
         .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
-        .badge-warning { background: linear-gradient(135deg, #d97706, #f59e0b); color: #fff; border: none; padding: 4px 14px; font-size: 13px; font-weight: 800; border-radius: 8px; min-width: 36px; display: inline-block; text-align: center; }
+        .badge-grade-red { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
+        .badge-grade-yellow { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
+        .badge-grade-green { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
 
         .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
-
-        .btn-detail { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; color: #2b5ea7; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
-        .btn-detail:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
+        .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
+        .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; max-width: 260px; white-space: normal; word-break: break-word; }
+        .journal-link { display: inline-block; padding: 3px 10px; background: #eff6ff; color: #2b5ea7; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11.5px; font-weight: 600; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
+        .journal-link:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #fefce8; border-color: #f59e0b; color: #d97706; }
         .pg-active { background: linear-gradient(135deg, #d97706, #f59e0b) !important; color: #fff !important; border-color: #d97706 !important; }
 
-        /* Modal */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-        .modal-content { background: #fff; border-radius: 16px; width: 95%; max-width: 900px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.2); }
-        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #fefce8, #fef9c3); border-radius: 16px 16px 0 0; }
-        .modal-close { width: 32px; height: 32px; border-radius: 8px; border: none; background: #fee2e2; color: #dc2626; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
-        .modal-close:hover { background: #dc2626; color: #fff; }
-        .modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
-
-        .detail-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .detail-table thead tr { background: #f8fafc; }
-        .detail-table th { padding: 10px 12px; text-align: left; font-weight: 700; font-size: 11px; color: #475569; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
-        .detail-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; text-align: center; }
-        .detail-table td:first-child { text-align: center; font-weight: 700; color: #64748b; width: 40px; }
-        .detail-table td:nth-child(2) { text-align: left; }
-        .detail-table tbody tr:hover { background: #fefce8; }
-
-        .cell-fail { background: #fef2f2; color: #dc2626; font-weight: 700; }
-        .cell-pass { color: #16a34a; font-weight: 600; }
-
-        .reason-badge { display: inline-block; padding: 2px 8px; margin: 2px 3px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-        .reason-low { background: #fef9c3; color: #d97706; border-color: #fde68a; }
-
-        /* Lesson type badges */
-        .badge-lesson-type { padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.03em; }
-        .badge-lt-jn { background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
-        .badge-lt-mt { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
-        .badge-lt-on { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-        .badge-lt-oski { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
-        .badge-lt-test { background: #fce7f3; color: #9d174d; border: 1px solid #fbcfe8; }
     </style>
 </x-app-layout>

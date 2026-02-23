@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Services\ImportProgressReporter;
+use App\Services\ScheduleImportService;
 use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
 use Carbon\Carbon;
@@ -15,7 +17,7 @@ class SendAttendanceFinalDailyReport extends Command
 
     protected $description = 'Kechagi kunning yakuniy davomat va baho hisobotini ertalab Telegram guruhga yuborish (faqat o\'qituvchilar kesimi)';
 
-    public function handle(TelegramService $telegram): int
+    public function handle(TelegramService $telegram, ScheduleImportService $importService): int
     {
         $reportDate = $this->option('date')
             ? Carbon::parse($this->option('date'))
@@ -30,7 +32,67 @@ class SendAttendanceFinalDailyReport extends Command
 
         $this->info("Hisobot sanasi: {$reportDateStr} (yakuniy)");
 
-        // Jadvaldan kechagi kun ma'lumotlarini olish
+        // Progress reporter: bitta Telegram xabar yuborib, har bosqichda yangilab turadi
+        $progressChatId = $this->option('chat-id') ?: config('services.telegram.attendance_group_id');
+        $reporter = new ImportProgressReporter($telegram, $progressChatId, "{$reportDateStr} (yakuniy)");
+
+        if ($progressChatId) {
+            $reporter->start();
+            app()->instance(ImportProgressReporter::class, $reporter);
+        }
+
+        // 1-QADAM: Avval HEMIS dan jadval ma'lumotlarini yangilash
+        $reporter->startStep('HEMIS dan jadval yangilanmoqda', 'Jadval muvaffaqiyatli yangilandi');
+        $this->info("HEMIS dan jadval yangilanmoqda ({$reportDateStr})...");
+        try {
+            $importService->importBetween(
+                $reportDate->copy()->startOfDay(),
+                $reportDate->copy()->endOfDay(),
+                fn(int $page, int $total) => $reporter->updateProgress($page, $total)
+            );
+            $reporter->completeStep();
+            $this->info("Jadval muvaffaqiyatli yangilandi.");
+        } catch (\Throwable $e) {
+            $reporter->failStep($e->getMessage());
+            Log::warning('HEMIS sinxronlashda xato (hisobot davom etadi): ' . $e->getMessage());
+            $this->warn("HEMIS yangilashda xato: " . $e->getMessage());
+        }
+
+        // 1.5-QADAM: Davomat nazorati (attendance_controls) yangilash
+        $reporter->startStep('HEMIS dan davomat nazorati yangilanmoqda', 'Davomat nazorati muvaffaqiyatli yangilandi');
+        $this->info("HEMIS dan davomat nazorati yangilanmoqda ({$reportDateStr})...");
+        try {
+            \Illuminate\Support\Facades\Artisan::call('import:attendance-controls', [
+                '--date' => $reportDateStr,
+                '--silent' => true,
+            ]);
+            $reporter->completeStep();
+            $this->info("Davomat nazorati yangilandi.");
+        } catch (\Throwable $e) {
+            $reporter->failStep($e->getMessage());
+            Log::warning('Davomat nazorati yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
+            $this->warn("Davomat nazorati yangilashda xato: " . $e->getMessage());
+        }
+
+        // 1.6-QADAM: Baholarni HEMIS dan yangilash (student_grades)
+        $reporter->startStep('HEMIS dan baholar yangilanmoqda', 'Baholar muvaffaqiyatli yangilandi');
+        $this->info("HEMIS dan baholar yangilanmoqda ({$reportDateStr})...");
+        try {
+            \Illuminate\Support\Facades\Artisan::call('student:import-data', [
+                '--mode' => 'final',
+            ]);
+            $reporter->completeStep();
+            $this->info("Baholar yangilandi.");
+        } catch (\Throwable $e) {
+            $reporter->failStep($e->getMessage());
+            Log::warning('Baholar yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
+            $this->warn("Baholar yangilashda xato: " . $e->getMessage());
+        }
+
+        // Progress reporter ni tozalash
+        app()->forgetInstance(ImportProgressReporter::class);
+
+        // 2-QADAM: Jadvaldan kechagi kun ma'lumotlarini olish
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
             ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
@@ -80,8 +142,18 @@ class SendAttendanceFinalDailyReport extends Command
         $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
         $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
+        $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
 
-        $attendanceSet = DB::table('attendance_controls')
+        // Davomat (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $attendanceByScheduleId = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->where('load', '>', 0)
+            ->pluck('subject_schedule_id')
+            ->flip();
+
+        // Davomat (2-usul): atribut kalitlari orqali tekshirish (zaxira)
+        $attendanceByKey = DB::table('attendance_controls')
             ->whereNull('deleted_at')
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
@@ -91,13 +163,26 @@ class SendAttendanceFinalDailyReport extends Command
             ->pluck('ck')
             ->flip();
 
-        $gradeSet = DB::table('student_grades')
-            ->whereIn('employee_id', $employeeIds)
-            ->whereIn('subject_id', $subjectIds)
-            ->whereRaw('DATE(lesson_date) = ?', [$reportDateStr])
+        // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $gradeByScheduleId = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
             ->whereNotNull('grade')
             ->where('grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as gk"))
+            ->pluck('subject_schedule_id')
+            ->unique()
+            ->flip();
+
+        // Baho (2-usul): student → group orqali tekshirish (zaxira)
+        $gradeByKey = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
+            ->whereIn('sg.employee_id', $employeeIds)
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereRaw('DATE(sg.lesson_date) = ?', [$reportDateStr])
+            ->whereNotNull('sg.grade')
+            ->where('sg.grade', '>', 0)
+            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -120,8 +205,12 @@ class SendAttendanceFinalDailyReport extends Command
 
             $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                     . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
-            $gradeKey = $sch->employee_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+            $gradeKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                       . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+
+            // Davomat: schedule_hemis_id orqali yoki atribut kaliti orqali tekshirish
+            $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
+                   || isset($attendanceByKey[$attKey]);
 
             if (!isset($grouped[$key])) {
                 $semCode = max((int) ($sch->semester_code ?? 1), 1);
@@ -139,10 +228,10 @@ class SendAttendanceFinalDailyReport extends Command
                     'training_type' => $sch->training_type_name,
                     'lesson_pair_time' => $pairTime,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
-                    'has_attendance' => isset($attendanceSet[$attKey]),
-                    'has_grades' => $skipGradeCheck || isset($gradeSet[$gradeKey]),
+                    'has_attendance' => $hasAtt,
+                    'has_grades' => $skipGradeCheck ? null : (isset($gradeByScheduleId[$sch->schedule_hemis_id]) || isset($gradeByKey[$gradeKey])),
                     'lesson_date' => $sch->lesson_date_str,
-                    'kurs' => (int) ($sch->level_code ?? ceil($semCode / 2)),
+                    'kurs' => $sch->level_code ? ((int) $sch->level_code % 10) : (int) ceil($semCode / 2),
                     'employee_id' => $sch->employee_id,
                 ];
             }
@@ -150,7 +239,7 @@ class SendAttendanceFinalDailyReport extends Command
 
         // Faqat kamida biri yo'q bo'lganlarni filtrlash
         $filtered = array_filter($grouped, function ($r) {
-            return !$r['has_attendance'] || !$r['has_grades'];
+            return !$r['has_attendance'] || $r['has_grades'] === false;
         });
 
         $totalSchedules = count($grouped);

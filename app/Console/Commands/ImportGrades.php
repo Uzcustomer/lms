@@ -10,6 +10,7 @@ use App\Models\StudentGrade;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Console\Command;
+use App\Services\ImportProgressReporter;
 use App\Services\TelegramService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -53,6 +54,12 @@ class ImportGrades extends Command
     // =========================================================================
     private function handleLiveImport()
     {
+        $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
+        if ($reporter) {
+            $reporter->start();
+            $reporter->startStep('Baholar import qilinmoqda', 'Baholar import qilindi');
+        }
+
         $this->info('Starting LIVE import...');
         Log::info('[LiveImport] Starting live import at ' . Carbon::now());
 
@@ -80,6 +87,9 @@ class ImportGrades extends Command
         $to = Carbon::now()->timestamp;
 
         // 1-qadam: Baholarni API dan tortib olish (xotiraga)
+        if ($reporter) {
+            $reporter->setStepContext('baholar API...');
+        }
         // $today ni filtrlash uchun beramiz — HEMIS boshqa kunlik recordlarni ham qaytaradi
         $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to, $today);
 
@@ -92,15 +102,24 @@ class ImportGrades extends Command
                 'success_days' => 0,
                 'failed_pages' => ["API xato ({$errorDetail})"],
             ];
+            if ($reporter) {
+                $reporter->failStep($errorDetail);
+            }
         } else {
             try {
                 // 2-qadam: Muvaffaqiyatli — soft delete + yangi yozish
+                if ($reporter) {
+                    $reporter->setStepContext('bazaga yozilmoqda ' . count($gradeItems) . ' ta yozuv...');
+                }
                 $this->applyGrades($gradeItems, $today, false);
                 $this->report['student-grade-list'] = [
                     'total_days' => 1,
                     'success_days' => 1,
                     'failed_pages' => [],
                 ];
+                if ($reporter) {
+                    $reporter->completeStep();
+                }
             } catch (\Throwable $e) {
                 $this->error("applyGrades EXCEPTION: {$e->getMessage()}");
                 Log::error("[LiveImport] applyGrades exception: {$e->getMessage()}", [
@@ -111,12 +130,22 @@ class ImportGrades extends Command
                     'success_days' => 0,
                     'failed_pages' => ["Exception: " . substr($e->getMessage(), 0, 100)],
                 ];
+                if ($reporter) {
+                    $reporter->failStep(substr($e->getMessage(), 0, 100));
+                }
             }
         }
 
         // Davomatni alohida import qilish (eski logika — attendance uchun soft delete kerak emas)
+        if ($reporter) {
+            $reporter->startStep('Davomat import qilinmoqda', 'Davomat import qilindi');
+            $reporter->setStepContext('davomat API...');
+        }
         try {
             $this->importAttendance($from, $to, $today);
+            if ($reporter) {
+                $reporter->completeStep();
+            }
         } catch (\Throwable $e) {
             $this->error("importAttendance EXCEPTION: {$e->getMessage()}");
             Log::error("[LiveImport] importAttendance exception: {$e->getMessage()}", [
@@ -127,6 +156,9 @@ class ImportGrades extends Command
                 'success_days' => 0,
                 'failed_pages' => ["Exception: " . substr($e->getMessage(), 0, 100)],
             ];
+            if ($reporter) {
+                $reporter->failStep(substr($e->getMessage(), 0, 100));
+            }
         }
 
         $this->sendTelegramReport();
@@ -140,6 +172,10 @@ class ImportGrades extends Command
     // =========================================================================
     private function handleFinalImport()
     {
+        // Reporter faqat mustaqil chaqirilganda boshlanadi,
+        // SendAttendanceFinalDailyReport dan chaqirilganda reporter allaqachon boshqarilmoqda
+        $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
+
         $this->info('Starting FINAL import...');
         Log::info('[FinalImport] Starting at ' . Carbon::now());
 
@@ -170,16 +206,22 @@ class ImportGrades extends Command
         $totalDays = $unfinishedDates->count();
         $successDays = 0;
         $failedDays = [];
+        $dayNum = 0;
 
         $this->info("Yakunlanmagan kunlar: {$totalDays} ta ({$unfinishedDates->first()} — {$unfinishedDates->last()})");
         Log::info("[FinalImport] Found {$totalDays} unfinished days");
 
         foreach ($unfinishedDates as $dateStr) {
+            $dayNum++;
             $date = Carbon::parse($dateStr);
 
             try {
                 $dateStartOfDay = $date->copy()->startOfDay();
                 $dateEndOfDay = $date->copy()->endOfDay();
+
+                if ($reporter) {
+                    $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr})");
+                }
 
                 // Faqat BARCHA yozuvlar is_final=true bo'lgandagina o'tkazish
                 $hasUnfinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
@@ -201,12 +243,34 @@ class ImportGrades extends Command
                     ->exists();
 
                 if ($hasFinalizedForDate) {
-                    $cleaned = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                    // Faqat is_final=true dublikati bor bo'lgan is_final=false yozuvlarni soft delete
+                    // Lokal qo'yilgan (HEMIS da yo'q) baholarni SAQLAB QOLISH
+                    $cleaned = DB::update("
+                        UPDATE student_grades sg
+                        INNER JOIN student_grades g2
+                            ON g2.student_id = sg.student_id
+                            AND g2.subject_id = sg.subject_id
+                            AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
+                            AND g2.lesson_pair_code = sg.lesson_pair_code
+                            AND g2.training_type_code = sg.training_type_code
+                            AND g2.is_final = 1
+                            AND g2.deleted_at IS NULL
+                            AND g2.id != sg.id
+                        SET sg.deleted_at = NOW()
+                        WHERE sg.is_final = 0
+                            AND sg.deleted_at IS NULL
+                            AND DATE(sg.lesson_date) = ?
+                    ", [$dateStr]);
+
+                    // Qolgan is_final=false yozuvlarni (lokal/qo'lda kiritilgan) is_final=true qilish
+                    $upgraded = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
                         ->where('lesson_date', '<=', $dateEndOfDay)
                         ->where('is_final', false)
-                        ->delete();
-                    $this->info("  {$date->toDateString()} — is_final=true allaqachon mavjud, {$cleaned} ta is_final=false qoldiq tozalandi.");
-                    Log::info("[FinalImport] {$date->toDateString()} — cleaned {$cleaned} leftover is_final=false records (is_final=true already exists).");
+                        ->whereNull('deleted_at')
+                        ->update(['is_final' => true]);
+
+                    $this->info("  {$date->toDateString()} — is_final=true mavjud, {$cleaned} ta dublikat tozalandi, {$upgraded} ta lokal baho yakunlandi.");
+                    Log::info("[FinalImport] {$date->toDateString()} — cleaned {$cleaned} duplicate is_final=false, upgraded {$upgraded} unique local records.");
                     $successDays++;
                     continue;
                 }
@@ -217,6 +281,9 @@ class ImportGrades extends Command
                 $this->info("  {$date->toDateString()} — API dan tortilmoqda...");
 
                 // Baholar — $date ni berib, boshqa kunlik recordlarni fetch paytida filtrlaymiz
+                if ($reporter) {
+                    $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), baholar API...");
+                }
                 $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to, $date);
 
                 if ($gradeItems === false) {
@@ -226,13 +293,43 @@ class ImportGrades extends Command
                     continue;
                 }
 
+                // XAVFSIZLIK: API 0 ta baho qaytarsa, mavjud yozuvlarni o'chirmaslik
+                if (empty($gradeItems)) {
+                    $this->warn("  {$date->toDateString()} — API 0 ta baho qaytardi, mavjud yozuvlar saqlanadi.");
+                    Log::warning("[FinalImport] {$date->toDateString()} — API returned 0 grades, preserving existing records.");
+                    // Mavjud is_final=false yozuvlarni is_final=true ga o'zgartirish
+                    $upgraded = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                        ->where('lesson_date', '<=', $dateEndOfDay)
+                        ->where('is_final', false)
+                        ->whereNull('deleted_at')
+                        ->update(['is_final' => true]);
+                    if ($upgraded > 0) {
+                        $this->info("  {$upgraded} ta mavjud yozuv is_final=true qilindi.");
+                    }
+                    $successDays++;
+                    continue;
+                }
+
+                if ($reporter) {
+                    $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), bazaga yozilmoqda " . count($gradeItems) . " ta yozuv...");
+                }
                 $this->applyGrades($gradeItems, $date, true);
 
                 // Attendance
+                if ($reporter) {
+                    $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat API...");
+                }
                 $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
                 if ($attendanceItems !== false) {
+                    if ($reporter) {
+                        $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat yozilmoqda...");
+                    }
                     foreach ($attendanceItems as $item) {
-                        $this->processAttendance($item, true);
+                        try {
+                            $this->processAttendance($item, true);
+                        } catch (\Throwable $e) {
+                            Log::warning("[FinalImport] Attendance item failed: " . substr($e->getMessage(), 0, 100));
+                        }
                     }
                 }
 
@@ -248,28 +345,41 @@ class ImportGrades extends Command
             }
         }
 
-        // Global tozalash: 7 kunlik oynadan tashqaridagi barcha is_final=false duplikatlarni soft-delete qilish
-        // Migration (02-17) barcha eski recordlarni is_final=false qilib qo'ygan,
-        // backfill yangi is_final=true recordlarni yaratgan, lekin eskilari qolib ketgan
+        // Global tozalash: eski is_final=false duplikatlarni kunlik batch qilib soft-delete qilish
+        // Katta self-join o'rniga kunlik bo'lib tozalash — lock vaqtini qisqartiradi
         try {
-            $globalCleaned = DB::update("
-                UPDATE student_grades sg
-                INNER JOIN student_grades g2
-                    ON g2.student_id = sg.student_id
-                    AND g2.subject_id = sg.subject_id
-                    AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
-                    AND g2.is_final = 1
-                    AND g2.deleted_at IS NULL
-                    AND g2.id != sg.id
-                SET sg.deleted_at = NOW()
-                WHERE sg.is_final = 0
-                    AND sg.deleted_at IS NULL
-                    AND DATE(sg.lesson_date) < CURDATE()
-            ");
+            $globalCleaned = 0;
+            $staleDates = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->where('is_final', false)
+                ->whereRaw('DATE(lesson_date) < CURDATE()')
+                ->selectRaw('DATE(lesson_date) as grade_date')
+                ->distinct()
+                ->pluck('grade_date');
+
+            foreach ($staleDates as $staleDate) {
+                $cleaned = DB::update("
+                    UPDATE student_grades sg
+                    INNER JOIN student_grades g2
+                        ON g2.student_id = sg.student_id
+                        AND g2.subject_id = sg.subject_id
+                        AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
+                        AND g2.lesson_pair_code = sg.lesson_pair_code
+                        AND g2.training_type_code = sg.training_type_code
+                        AND g2.is_final = 1
+                        AND g2.deleted_at IS NULL
+                        AND g2.id != sg.id
+                    SET sg.deleted_at = NOW()
+                    WHERE sg.is_final = 0
+                        AND sg.deleted_at IS NULL
+                        AND DATE(sg.lesson_date) = ?
+                ", [$staleDate]);
+                $globalCleaned += $cleaned;
+            }
 
             if ($globalCleaned > 0) {
-                $this->info("Global cleanup: {$globalCleaned} ta eski is_final=false duplikat tozalandi.");
-                Log::info("[FinalImport] Global cleanup: {$globalCleaned} stale is_final=false duplicates removed.");
+                $this->info("Global cleanup: {$globalCleaned} ta eski is_final=false duplikat tozalandi ({$staleDates->count()} kun).");
+                Log::info("[FinalImport] Global cleanup: {$globalCleaned} stale is_final=false duplicates removed across {$staleDates->count()} days.");
             }
         } catch (\Throwable $e) {
             Log::error("[FinalImport] Global cleanup exception: {$e->getMessage()}");
@@ -337,7 +447,11 @@ class ImportGrades extends Command
             $attendanceItems = $this->fetchAllPages('attendance-list', $dayFrom, $dayTo);
             if ($attendanceItems !== false) {
                 foreach ($attendanceItems as $item) {
-                    $this->processAttendance($item, true);
+                    try {
+                        $this->processAttendance($item, true);
+                    } catch (\Throwable $e) {
+                        Log::warning("[Backfill] Attendance item failed: " . substr($e->getMessage(), 0, 100));
+                    }
                 }
             }
 
@@ -368,6 +482,7 @@ class ImportGrades extends Command
 
     private function fetchAllPages(string $endpoint, int $from, int $to, ?Carbon $filterDate = null): array|false
     {
+        $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
         $allItems = [];
         $currentPage = 1;
         $totalPages = 1;
@@ -409,6 +524,9 @@ class ImportGrades extends Command
                         $allItems = array_merge($allItems, $data);
                         $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
                         $this->info("Fetched {$endpoint} page {$currentPage}/{$totalPages}");
+                        if ($reporter) {
+                            $reporter->updateProgress($currentPage, $totalPages);
+                        }
                         $pageSuccess = true;
                         sleep(2);
                     } else {
@@ -552,6 +670,26 @@ class ImportGrades extends Command
         unset($filteredItems, $studentsMap, $deadlinesMap, $hemisIds);
 
         // ====================================================================
+        // XAVFSIZLIK: Agar yangi yozuvlar bo'sh bo'lsa, mavjud yozuvlarni o'chirmaslik
+        // API 0 ta baho qaytarsa yoki barcha studentlar topilmasa — eski baholar saqlanadi
+        // ====================================================================
+        if ($gradeCount === 0) {
+            $this->warn("applyGrades: 0 ta yozuv tayyorlandi ({$date->toDateString()}), mavjud yozuvlar saqlanadi.");
+            Log::warning("[ApplyGrades] 0 insert rows for {$date->toDateString()}, skipping delete to preserve existing data.");
+            if ($isFinal) {
+                $upgraded = StudentGrade::where('lesson_date', '>=', $dateStart)
+                    ->where('lesson_date', '<=', $dateEnd)
+                    ->where('is_final', false)
+                    ->whereNull('deleted_at')
+                    ->update(['is_final' => true]);
+                if ($upgraded > 0) {
+                    $this->info("  {$upgraded} ta mavjud yozuv is_final=true qilindi.");
+                }
+            }
+            return;
+        }
+
+        // ====================================================================
         // 1-QADAM: Read-only — tranzaksiyadan OLDIN (lock ushlamasligi uchun)
         // ====================================================================
         $retakeBackup = StudentGrade::where('lesson_date', '>=', $dateStart)
@@ -575,23 +713,25 @@ class ImportGrades extends Command
             ->toArray();
 
         // ====================================================================
-        // 2-3 QADAM: Soft-delete + Bulk insert — QISQA tranzaksiya
+        // 2-3 QADAM: Soft-delete + Bulk insert — TRANZAKSIYA ICHIDA
+        // Agar insert xato bersa, soft-delete ROLLBACK qilinadi (ma'lumot yo'qolmaydi)
+        // retryOnLockTimeout butun tranzaksiyani qayta urinadi
         // ====================================================================
-        DB::transaction(function () use ($insertRows, $dateStart, $dateEnd, $isFinal, &$softDeletedCount) {
-            // 2-QADAM: BARCHA eski yozuvlarni soft-delete
-            $query = StudentGrade::where('lesson_date', '>=', $dateStart)
-                ->where('lesson_date', '<=', $dateEnd);
+        $this->retryOnLockTimeout(function () use ($insertRows, $dateStart, $dateEnd, $isFinal, &$softDeletedCount) {
+            DB::transaction(function () use ($insertRows, $dateStart, $dateEnd, $isFinal, &$softDeletedCount) {
+                $query = StudentGrade::where('lesson_date', '>=', $dateStart)
+                    ->where('lesson_date', '<=', $dateEnd);
 
-            if ($isFinal) {
-                $softDeletedCount = $query->delete();
-            } else {
-                $softDeletedCount = $query->where('is_final', false)->delete();
-            }
+                if ($isFinal) {
+                    $softDeletedCount = $query->delete();
+                } else {
+                    $softDeletedCount = (clone $query)->where('is_final', false)->delete();
+                }
 
-            // 3-QADAM: HEMIS dan yangi yozuvlarni BULK INSERT (200 tadan)
-            foreach (array_chunk($insertRows, 200) as $chunk) {
-                DB::table('student_grades')->insert($chunk);
-            }
+                foreach (array_chunk($insertRows, 200) as $chunk) {
+                    DB::table('student_grades')->insert($chunk);
+                }
+            });
         });
 
         $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
@@ -604,21 +744,23 @@ class ImportGrades extends Command
         $retakeRestored = 0;
         $restoredKeys = [];
         foreach ($retakeBackup as $key => $retake) {
-            $updated = StudentGrade::where('student_hemis_id', $retake->student_hemis_id)
-                ->where('subject_id', $retake->subject_id)
-                ->whereDate('lesson_date', $retake->lesson_date)
-                ->where('lesson_pair_code', $retake->lesson_pair_code)
-                ->whereNull('deleted_at')
-                ->whereNull('retake_grade')
-                ->update([
-                    'retake_grade' => $retake->retake_grade,
-                    'status' => 'retake',
-                    'retake_graded_at' => $retake->retake_graded_at,
-                    'retake_by' => $retake->retake_by,
-                    'retake_file_path' => $retake->retake_file_path,
-                    'graded_by_user_id' => $retake->graded_by_user_id,
-                    'is_final' => $isFinal,
-                ]);
+            $updated = $this->retryOnLockTimeout(fn () =>
+                StudentGrade::where('student_hemis_id', $retake->student_hemis_id)
+                    ->where('subject_id', $retake->subject_id)
+                    ->whereDate('lesson_date', $retake->lesson_date)
+                    ->where('lesson_pair_code', $retake->lesson_pair_code)
+                    ->whereNull('deleted_at')
+                    ->whereNull('retake_grade')
+                    ->update([
+                        'retake_grade' => $retake->retake_grade,
+                        'status' => 'retake',
+                        'retake_graded_at' => $retake->retake_graded_at,
+                        'retake_by' => $retake->retake_by,
+                        'retake_file_path' => $retake->retake_file_path,
+                        'graded_by_user_id' => $retake->graded_by_user_id,
+                        'is_final' => $isFinal,
+                    ])
+            );
             if ($updated) {
                 $retakeRestored++;
                 $restoredKeys[] = $key;
@@ -712,14 +854,20 @@ class ImportGrades extends Command
             return;
         }
 
+        $failedItems = 0;
         foreach ($attendanceItems as $item) {
-            $this->processAttendance($item);
+            try {
+                $this->processAttendance($item);
+            } catch (\Throwable $e) {
+                $failedItems++;
+                Log::warning("[importAttendance] Item failed: " . substr($e->getMessage(), 0, 100));
+            }
         }
 
         $this->report['attendance-list'] = [
             'total_days' => 1,
-            'success_days' => 1,
-            'failed_pages' => [],
+            'success_days' => $failedItems === 0 ? 1 : 0,
+            'failed_pages' => $failedItems > 0 ? ["{$failedItems} ta yozuv xato"] : [],
         ];
     }
 
@@ -785,41 +933,43 @@ class ImportGrades extends Command
         $student = Student::where('hemis_id', $item['student']['id'])->first();
 
         if ($student && ($item['absent_off'] > 0 || $item['absent_on'] > 0)) {
-            Attendance::updateOrCreate(
-                [
-                    'hemis_id' => $item['id'],
-                ],
-                [
-                    'subject_schedule_id' => $item['_subject_schedule'],
-                    'student_id' => $student->id,
-                    'student_hemis_id' => $item['student']['id'],
-                    'student_name' => $item['student']['name'],
-                    'employee_id' => $item['employee']['id'],
-                    'employee_name' => $item['employee']['name'],
-                    'subject_id' => $item['subject']['id'],
-                    'subject_name' => $item['subject']['name'],
-                    'subject_code' => $item['subject']['code'],
-                    'education_year_code' => $item['educationYear']['code'],
-                    'education_year_name' => $item['educationYear']['name'],
-                    'education_year_current' => $item['educationYear']['current'],
-                    'semester_code' => $item['semester']['code'],
-                    'semester_name' => $item['semester']['name'],
-                    'group_id' => $item['group']['id'],
-                    'group_name' => $item['group']['name'],
-                    'education_lang_code' => $item['group']['educationLang']['code'],
-                    'education_lang_name' => $item['group']['educationLang']['name'],
-                    'training_type_code' => $item['trainingType']['code'],
-                    'training_type_name' => $item['trainingType']['name'],
-                    'lesson_pair_code' => $item['lessonPair']['code'],
-                    'lesson_pair_name' => $item['lessonPair']['name'],
-                    'lesson_pair_start_time' => $item['lessonPair']['start_time'],
-                    'lesson_pair_end_time' => $item['lessonPair']['end_time'],
-                    'absent_on' => $item['absent_on'],
-                    'absent_off' => $item['absent_off'],
-                    'lesson_date' => Carbon::createFromTimestamp($item['lesson_date']),
-                    'status' => 'absent',
-                ]
-            );
+            $this->retryOnLockTimeout(function () use ($item, $student) {
+                Attendance::updateOrCreate(
+                    [
+                        'hemis_id' => $item['id'],
+                    ],
+                    [
+                        'subject_schedule_id' => $item['_subject_schedule'],
+                        'student_id' => $student->id,
+                        'student_hemis_id' => $item['student']['id'],
+                        'student_name' => $item['student']['name'],
+                        'employee_id' => $item['employee']['id'],
+                        'employee_name' => $item['employee']['name'],
+                        'subject_id' => $item['subject']['id'],
+                        'subject_name' => $item['subject']['name'],
+                        'subject_code' => $item['subject']['code'],
+                        'education_year_code' => $item['educationYear']['code'],
+                        'education_year_name' => $item['educationYear']['name'],
+                        'education_year_current' => $item['educationYear']['current'],
+                        'semester_code' => $item['semester']['code'],
+                        'semester_name' => $item['semester']['name'],
+                        'group_id' => $item['group']['id'],
+                        'group_name' => $item['group']['name'],
+                        'education_lang_code' => $item['group']['educationLang']['code'],
+                        'education_lang_name' => $item['group']['educationLang']['name'],
+                        'training_type_code' => $item['trainingType']['code'],
+                        'training_type_name' => $item['trainingType']['name'],
+                        'lesson_pair_code' => $item['lessonPair']['code'],
+                        'lesson_pair_name' => $item['lessonPair']['name'],
+                        'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                        'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                        'absent_on' => $item['absent_on'],
+                        'absent_off' => $item['absent_off'],
+                        'lesson_date' => Carbon::createFromTimestamp($item['lesson_date']),
+                        'status' => 'absent',
+                    ]
+                );
+            });
 
             $this->processGradeForAbsence($item, $student, $isFinal);
         }
@@ -841,34 +991,36 @@ class ImportGrades extends Command
         ])->first();
 
         if (!$existingGrade) {
-            StudentGrade::create([
-                'hemis_id' => 111,
-                'student_id' => $student->id,
-                'student_hemis_id' => $student->hemis_id,
-                'semester_code' => $item['semester']['code'],
-                'semester_name' => $item['semester']['name'],
-                'education_year_code' => $item['educationYear']['code'] ?? null,
-                'education_year_name' => $item['educationYear']['name'] ?? null,
-                'subject_schedule_id' => $item['_subject_schedule'],
-                'subject_id' => $item['subject']['id'],
-                'subject_name' => $item['subject']['name'],
-                'subject_code' => $item['subject']['code'],
-                'training_type_code' => $item['trainingType']['code'],
-                'training_type_name' => $item['trainingType']['name'],
-                'employee_id' => $item['employee']['id'],
-                'employee_name' => $item['employee']['name'],
-                'lesson_pair_code' => $item['lessonPair']['code'],
-                'lesson_pair_name' => $item['lessonPair']['name'],
-                'lesson_pair_start_time' => $item['lessonPair']['start_time'],
-                'lesson_pair_end_time' => $item['lessonPair']['end_time'],
-                'grade' => null,
-                'lesson_date' => $lessonDate,
-                'created_at_api' => Carbon::now(),
-                'reason' => 'absent',
-                'deadline' => $this->getDeadline($student->level_code, $lessonDate),
-                'status' => 'pending',
-                'is_final' => $isFinal,
-            ]);
+            $this->retryOnLockTimeout(function () use ($item, $student, $lessonDate, $isFinal) {
+                StudentGrade::create([
+                    'hemis_id' => 111,
+                    'student_id' => $student->id,
+                    'student_hemis_id' => $student->hemis_id,
+                    'semester_code' => $item['semester']['code'],
+                    'semester_name' => $item['semester']['name'],
+                    'education_year_code' => $item['educationYear']['code'] ?? null,
+                    'education_year_name' => $item['educationYear']['name'] ?? null,
+                    'subject_schedule_id' => $item['_subject_schedule'],
+                    'subject_id' => $item['subject']['id'],
+                    'subject_name' => $item['subject']['name'],
+                    'subject_code' => $item['subject']['code'],
+                    'training_type_code' => $item['trainingType']['code'],
+                    'training_type_name' => $item['trainingType']['name'],
+                    'employee_id' => $item['employee']['id'],
+                    'employee_name' => $item['employee']['name'],
+                    'lesson_pair_code' => $item['lessonPair']['code'],
+                    'lesson_pair_name' => $item['lessonPair']['name'],
+                    'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                    'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                    'grade' => null,
+                    'lesson_date' => $lessonDate,
+                    'created_at_api' => Carbon::now(),
+                    'reason' => 'absent',
+                    'deadline' => $this->getDeadline($student->level_code, $lessonDate),
+                    'status' => 'pending',
+                    'is_final' => $isFinal,
+                ]);
+            });
         }
     }
 
@@ -882,6 +1034,37 @@ class ImportGrades extends Command
             return $lessonDate->copy()->addDays($deadline->deadline_days)->endOfDay();
         }
         return $lessonDate->copy()->addWeek()->endOfDay();
+    }
+
+    // =========================================================================
+    // Lock wait timeout bo'lganda qayta urinish (3 marta, oraliq bilan)
+    // MySQL Error 1205: Lock wait timeout exceeded
+    // =========================================================================
+    private function retryOnLockTimeout(callable $callback, int $maxRetries = 3): mixed
+    {
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                return $callback();
+            } catch (\Illuminate\Database\QueryException $e) {
+                // MySQL error 1205 = Lock wait timeout exceeded
+                if ($e->getCode() == 1205 || $e->getCode() == 1213 || $e->getCode() == '40001'
+                    || str_contains($e->getMessage(), 'Lock wait timeout')
+                    || str_contains($e->getMessage(), 'Deadlock found')) {
+                    $waitSeconds = $attempt * 2; // 2s, 4s, 6s
+                    $this->warn("Lock/Deadlock xato (urinish {$attempt}/{$maxRetries}), {$waitSeconds}s kutilmoqda...");
+                    Log::warning("[ImportGrades] Lock/Deadlock attempt {$attempt}/{$maxRetries}, waiting {$waitSeconds}s");
+                    sleep($waitSeconds);
+
+                    if ($attempt === $maxRetries) {
+                        throw $e;
+                    }
+                } else {
+                    throw $e;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function sendTelegramReport()

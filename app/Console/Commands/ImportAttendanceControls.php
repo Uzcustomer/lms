@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\AttendanceControl;
+use App\Services\ImportProgressReporter;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -141,6 +142,7 @@ class ImportAttendanceControls extends Command
     // =========================================================================
     private function fetchAllPages(string $token, ?int $from = null, ?int $to = null): array|false
     {
+        $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
         $allItems = [];
         $page = 1;
         $pageSize = 200;
@@ -174,6 +176,9 @@ class ImportAttendanceControls extends Command
                         $totalPages = $json['data']['pagination']['pageCount'] ?? 1;
                         $allItems = array_merge($allItems, $items);
                         $this->info("Fetched page {$page}/{$totalPages} (" . count($items) . " items)");
+                        if ($reporter) {
+                            $reporter->updateProgress($page, $totalPages);
+                        }
                         $pageSuccess = true;
                         sleep(1);
                     } else {
@@ -205,6 +210,35 @@ class ImportAttendanceControls extends Command
     }
 
     // =========================================================================
+    // Lock wait timeout bo'lganda qayta urinish (3 marta, oraliq bilan)
+    // =========================================================================
+    private function retryOnLockTimeout(callable $callback, int $maxRetries = 3): mixed
+    {
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                return $callback();
+            } catch (\Illuminate\Database\QueryException $e) {
+                if ($e->getCode() == 1205 || $e->getCode() == 1213 || $e->getCode() == '40001'
+                    || str_contains($e->getMessage(), 'Lock wait timeout')
+                    || str_contains($e->getMessage(), 'Deadlock found')) {
+                    $waitSeconds = $attempt * 2;
+                    $this->warn("Lock/Deadlock xato (urinish {$attempt}/{$maxRetries}), {$waitSeconds}s kutilmoqda...");
+                    Log::warning("[AttCtrl] Lock/Deadlock attempt {$attempt}/{$maxRetries}, waiting {$waitSeconds}s");
+                    sleep($waitSeconds);
+
+                    if ($attempt === $maxRetries) {
+                        throw $e;
+                    }
+                } else {
+                    throw $e;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // =========================================================================
     // Davomat nazoratini bazaga yozish
     // Live: faqat upsert (soft-delete QILMAYDI — API har doim to'liq ma'lumot qaytarmaydi)
     // Final: soft delete + upsert (tunda, barcha ma'lumot to'liq bo'lganda)
@@ -223,9 +257,11 @@ class ImportAttendanceControls extends Command
         // oldingi importda kiritilgan yozuvlarni yo'qotib qo'yadi.
         // Tranzaksiyadan TASHQARIDA — tez bajariladi va lockni ushlab turmasligi kerak
         if ($isFinal) {
-            $softDeletedCount = AttendanceControl::where('lesson_date', '>=', $dateStart)
-                ->where('lesson_date', '<=', $dateEnd)
-                ->delete();
+            $softDeletedCount = $this->retryOnLockTimeout(fn () =>
+                AttendanceControl::where('lesson_date', '>=', $dateStart)
+                    ->where('lesson_date', '<=', $dateEnd)
+                    ->delete()
+            );
             $this->info("Soft deleted {$softDeletedCount} old records for {$dateStr}");
         }
 
@@ -277,7 +313,9 @@ class ImportAttendanceControls extends Command
         ];
 
         foreach (array_chunk($upsertRows, 200) as $chunk) {
-            DB::table('attendance_controls')->upsert($chunk, ['hemis_id'], $updateColumns);
+            $this->retryOnLockTimeout(fn () =>
+                DB::table('attendance_controls')->upsert($chunk, ['hemis_id'], $updateColumns)
+            );
         }
 
         $this->info("Written " . count($upsertRows) . " records for {$dateStr} (is_final=" . ($isFinal ? 'true' : 'false') . ")");

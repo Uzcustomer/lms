@@ -361,21 +361,28 @@
 
                             @php
                                 $oldDeanFaculties = old('dean_faculties', $teacher->deanFaculties->pluck('department_hemis_id')->toArray());
+                                $isDekanChecked = in_array('dekan', $oldRoles);
                             @endphp
-                            <div id="department-section" style="display: none; margin-top: 10px;">
+                            <div id="department-section" style="display: {{ $isDekanChecked ? 'block' : 'none' }}; margin-top: 10px;">
                                 <div style="padding: 10px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">
                                     <label style="font-size: 11px; font-weight: 600; color: #1e40af; display: block; margin-bottom: 6px;">Dekan roli uchun fakultetlar (bir nechta tanlash mumkin):</label>
-                                    <div style="display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;">
-                                        @foreach($departments as $department)
-                                            <label style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px;"
-                                                   onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='transparent'">
-                                                <input type="checkbox" name="dean_faculties[]" value="{{ $department->department_hemis_id }}"
-                                                    {{ in_array($department->department_hemis_id, $oldDeanFaculties) ? 'checked' : '' }}
-                                                    style="accent-color: #2563eb;">
-                                                {{ $department->name }}
-                                            </label>
-                                        @endforeach
-                                    </div>
+                                    @if($departments->isEmpty())
+                                        <div style="padding: 8px; background: #fef9c3; border: 1px solid #fde68a; border-radius: 6px; font-size: 12px; color: #854d0e;">
+                                            Fakultetlar ro'yxati topilmadi. Iltimos, avval <strong>import:specialties-departments</strong> buyrug'ini ishga tushiring.
+                                        </div>
+                                    @else
+                                        <div style="display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;">
+                                            @foreach($departments as $department)
+                                                <label style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                                                       onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='transparent'">
+                                                    <input type="checkbox" name="dean_faculties[]" value="{{ $department->department_hemis_id }}"
+                                                        {{ in_array($department->department_hemis_id, $oldDeanFaculties) ? 'checked' : '' }}
+                                                        style="accent-color: #2563eb;">
+                                                    {{ $department->name }}
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
 
@@ -436,27 +443,38 @@
         }
 
         function toggleRole(checkbox) {
-            var card = checkbox.closest('.role-card');
-            var icon = card.querySelector('[data-icon]');
-            var check = card.querySelector('.check-indicator');
+            try {
+                var card = checkbox.closest('.role-card');
+                var icon = card.querySelector('[data-icon]');
+                var check = card.querySelector('.check-indicator');
 
-            card.classList.toggle('role-active', checkbox.checked);
-            icon.classList.toggle('role-icon-active', checkbox.checked);
-            check.classList.toggle('hidden', !checkbox.checked);
+                card.classList.toggle('role-active', checkbox.checked);
+                icon.classList.toggle('role-icon-active', checkbox.checked);
+                check.classList.toggle('hidden', !checkbox.checked);
+            } catch (e) {
+                console.error('toggleRole card error:', e);
+            }
 
-            var dekanCheckbox = document.querySelector('input[value="dekan"]');
-            var dept = document.getElementById('department-section');
-            if (dept && dekanCheckbox) {
-                dept.style.display = dekanCheckbox.checked ? 'block' : 'none';
+            try {
+                var dekanCheckbox = document.querySelector('input[value="dekan"]');
+                var dept = document.getElementById('department-section');
+                if (dept && dekanCheckbox) {
+                    dept.style.display = dekanCheckbox.checked ? 'block' : 'none';
+                }
+            } catch (e) {
+                console.error('toggleRole dept error:', e);
             }
         }
 
-        document.addEventListener('DOMContentLoaded', function () {
-            var dekanCheckbox = document.querySelector('input[value="dekan"]');
-            var dept = document.getElementById('department-section');
-            if (dept && dekanCheckbox) {
-                dept.style.display = dekanCheckbox.checked ? 'block' : 'none';
-            }
+        // Fallback: event delegation for checkbox changes (in case inline onchange doesn't fire)
+        document.addEventListener('click', function (e) {
+            var label = e.target.closest('.role-card');
+            if (!label) return;
+            // Small delay to let the checkbox state update first
+            setTimeout(function () {
+                var cb = label.querySelector('input[type="checkbox"]');
+                if (cb) toggleRole(cb);
+            }, 10);
         });
     </script>
 

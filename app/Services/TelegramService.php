@@ -30,6 +30,64 @@ class TelegramService
     }
 
     /**
+     * Xabar yuborish va message_id qaytarish (keyinroq editMessage uchun)
+     */
+    public function sendAndGetId(string $chatId, string $message): ?int
+    {
+        $botToken = config('services.telegram.bot_token');
+
+        if (!$botToken) {
+            Log::warning('Telegram bot token is not configured');
+            return null;
+        }
+
+        try {
+            $response = Http::retry(3, 1000)
+                ->post("https://api.telegram.org/bot{$botToken}/sendMessage", [
+                    'chat_id' => $chatId,
+                    'text' => $message,
+                ]);
+
+            if ($response->successful()) {
+                return $response->json('result.message_id');
+            }
+        } catch (\Throwable $e) {
+            Log::error('Telegram xabar yuborishda xato: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Mavjud xabarni tahrirlash (progress ko'rsatish uchun)
+     */
+    public function editMessage(string $chatId, int $messageId, string $newText): bool
+    {
+        $botToken = config('services.telegram.bot_token');
+
+        if (!$botToken) {
+            return false;
+        }
+
+        try {
+            Http::retry(2, 500)
+                ->post("https://api.telegram.org/bot{$botToken}/editMessageText", [
+                    'chat_id' => $chatId,
+                    'message_id' => $messageId,
+                    'text' => $newText,
+                ]);
+
+            return true;
+        } catch (\Throwable $e) {
+            // "message is not modified" xatosini ignore qilish
+            if (!str_contains($e->getMessage(), 'message is not modified')) {
+                Log::error('Telegram xabarni tahrirlashda xato: ' . $e->getMessage());
+            }
+            return false;
+        }
+    }
+
+    /**
      * Foydalanuvchining shaxsiy Telegram chat_id ga xabar yuborish
      */
     public function sendToUser(string $chatId, string $message): bool

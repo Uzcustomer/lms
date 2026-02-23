@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 class ScheduleImportService
 {
-    public function importBetween(Carbon $from, Carbon $to): void
+    public function importBetween(Carbon $from, Carbon $to, ?\Closure $onProgress = null): void
     {
         $message = "🟢 Jadval importi boshlandi: {$from->toDateString()} — {$to->toDateString()}";
         $this->notifyTelegram($message);
@@ -69,6 +69,10 @@ class ScheduleImportService
                 }
                 $schedule->save();
                 $importedHemisIds[] = $item['id'];
+            }
+
+            if ($onProgress) {
+                $onProgress($page, $pages);
             }
 
             if ($page % 50 === 0 || $page === $pages) {

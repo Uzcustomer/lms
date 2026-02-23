@@ -323,6 +323,9 @@
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
         function statusBadge(val) {
+            if (val === null) {
+                return '<span class="badge" style="background:#e2e8f0;color:#64748b;">-</span>';
+            }
             if (val) {
                 return '<span class="badge badge-status-yes">Ha</span>';
             }

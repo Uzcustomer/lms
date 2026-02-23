@@ -137,6 +137,19 @@ class AppLocalizations {
   String get workInfo => get('work_info');
   String get department => get('department');
   String get position => get('position');
+  String get journal => get('journal');
+  String get save => get('save');
+  String get saved => get('saved');
+  String get gradeSaved => get('grade_saved');
+  String get enterGrade => get('enter_grade');
+  String get noFile => get('no_file');
+  String get locked => get('locked');
+  String get regrade => get('regrade');
+  String get waitingResubmit => get('waiting_resubmit');
+  String get lessonNotOpened => get('lesson_not_opened');
+  String get file => get('file');
+  String get attempt => get('attempt');
+  String get absent => get('absent');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
@@ -256,6 +269,19 @@ class AppLocalizations {
       'department': 'Kafedra',
       'position': 'Lavozim',
       'phone': 'Telefon',
+      'journal': 'Jurnal',
+      'save': 'Saqlash',
+      'saved': 'Saqlandi',
+      'grade_saved': 'Baho saqlandi',
+      'enter_grade': 'Baho kiriting',
+      'no_file': 'Fayl yuklanmagan',
+      'locked': 'Bloklangan',
+      'regrade': 'Qayta baholash',
+      'waiting_resubmit': 'Qayta yuklash kutilmoqda',
+      'lesson_not_opened': 'Dars ochilmagan',
+      'file': 'Fayl',
+      'attempt': 'urinish',
+      'absent': 'NB',
     },
     'ru': {
       'app_title': 'Tashmedunitf Lms',
@@ -374,6 +400,19 @@ class AppLocalizations {
       'department': 'Кафедра',
       'position': 'Должность',
       'phone': 'Телефон',
+      'journal': 'Журнал',
+      'save': 'Сохранить',
+      'saved': 'Сохранено',
+      'grade_saved': 'Оценка сохранена',
+      'enter_grade': 'Введите оценку',
+      'no_file': 'Файл не загружен',
+      'locked': 'Заблокировано',
+      'regrade': 'Переоценить',
+      'waiting_resubmit': 'Ожидание повторной загрузки',
+      'lesson_not_opened': 'Урок не открыт',
+      'file': 'Файл',
+      'attempt': 'попытка',
+      'absent': 'Н',
     },
     'en': {
       'app_title': 'Tashmedunitf Lms',
@@ -492,6 +531,19 @@ class AppLocalizations {
       'department': 'Department',
       'position': 'Position',
       'phone': 'Phone',
+      'journal': 'Journal',
+      'save': 'Save',
+      'saved': 'Saved',
+      'grade_saved': 'Grade saved',
+      'enter_grade': 'Enter grade',
+      'no_file': 'No file uploaded',
+      'locked': 'Locked',
+      'regrade': 'Regrade',
+      'waiting_resubmit': 'Waiting for resubmission',
+      'lesson_not_opened': 'Lesson not opened',
+      'file': 'File',
+      'attempt': 'attempt',
+      'absent': 'A',
     },
   };
 

@@ -27,26 +27,18 @@ class AuthController extends Controller
 
         $student = null;
         $hemisLogin = false;
-        $clientIp = $request->ip();
 
         // Try HEMIS authentication first
-        $response = Http::withoutVerifying()
-            ->withHeaders([
-                'X-Forwarded-For' => $clientIp,
-                'X-Real-IP' => $clientIp,
-            ])
-            ->post('https://student.ttatf.uz/rest/v1/auth/login', [
-                'login' => $request->login,
-                'password' => $request->password,
-            ]);
+        $response = Http::withoutVerifying()->post('https://student.ttatf.uz/rest/v1/auth/login', [
+            'login' => $request->login,
+            'password' => $request->password,
+        ]);
 
         if ($response->successful() && $response->json('success')) {
             $hemisToken = $response->json('data.token');
 
             $studentDataResponse = Http::withoutVerifying()->withHeaders([
                 'Authorization' => 'Bearer ' . $hemisToken,
-                'X-Forwarded-For' => $clientIp,
-                'X-Real-IP' => $clientIp,
             ])->get('https://student.ttatf.uz/rest/v1/account/me');
 
             if ($studentDataResponse->successful()) {

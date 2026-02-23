@@ -30,42 +30,82 @@ class StudentAuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
+        $loginId = $request->login;
+
+        // 1-bosqich: HEMIS API ga login so'rovi
+        Log::channel('student_auth')->info('[HEMIS LOGIN] So\'rov yuborilmoqda', [
+            'login' => $loginId,
+            'ip' => $request->ip(),
+        ]);
+
         try {
             $response = Http::withoutVerifying()
-                ->timeout(10)
+                ->timeout(15)
                 ->post('https://student.ttatf.uz/rest/v1/auth/login', [
-                    'login' => $request->login,
+                    'login' => $loginId,
                     'password' => $request->password,
                 ]);
         } catch (\Exception $e) {
-            Log::warning('HEMIS API login xatolik', [
-                'login' => $request->login,
+            Log::channel('student_auth')->error('[HEMIS LOGIN] API ulanish xatosi (timeout/network)', [
+                'login' => $loginId,
                 'error' => $e->getMessage(),
+                'ip' => $request->ip(),
             ]);
 
             // HEMIS ishlamayotgan bo'lsa — lokal parol bilan urinish
             return $this->tryLocalPassword($request, hemsFailed: true);
         }
 
+        Log::channel('student_auth')->info('[HEMIS LOGIN] API javob olindi', [
+            'login' => $loginId,
+            'hemis_status' => $response->status(),
+            'hemis_success' => $response->json('success'),
+            'hemis_message' => $response->json('message'),
+            'hemis_error' => $response->json('error'),
+        ]);
+
         if ($response->successful() && $response->json('success')) {
             $token = $response->json('data.token');
 
+            // 2-bosqich: Talaba ma'lumotlarini olish
+            Log::channel('student_auth')->info('[HEMIS ACCOUNT/ME] So\'rov yuborilmoqda', [
+                'login' => $loginId,
+            ]);
+
             try {
                 $studentDataResponse = Http::withoutVerifying()
-                    ->timeout(10)
+                    ->timeout(15)
                     ->withHeaders([
                         'Authorization' => 'Bearer ' . $token,
                     ])->get('https://student.ttatf.uz/rest/v1/account/me');
             } catch (\Exception $e) {
-                Log::warning('HEMIS API account/me xatolik', [
-                    'login' => $request->login,
+                Log::channel('student_auth')->error('[HEMIS ACCOUNT/ME] API ulanish xatosi (timeout/network)', [
+                    'login' => $loginId,
                     'error' => $e->getMessage(),
                 ]);
                 return back()->withErrors(['login' => 'HEMIS serveriga ulanishda xatolik. Qaytadan urinib ko\'ring.'])->onlyInput('login', '_profile');
             }
 
+            Log::channel('student_auth')->info('[HEMIS ACCOUNT/ME] API javob olindi', [
+                'login' => $loginId,
+                'hemis_status' => $studentDataResponse->status(),
+                'hemis_success' => $studentDataResponse->json('success'),
+                'hemis_message' => $studentDataResponse->json('message'),
+            ]);
+
             if ($studentDataResponse->successful()) {
                 $studentData = $studentDataResponse->json('data');
+
+                // 3-bosqich: Bazada talabani topish/yaratish
+                $existingStudent = Student::where('student_id_number', $studentData['student_id_number'])->first();
+
+                Log::channel('student_auth')->info('[LMS DB] Talaba qidirilmoqda', [
+                    'login' => $loginId,
+                    'hemis_student_id_number' => $studentData['student_id_number'] ?? null,
+                    'hemis_id' => $studentData['id'] ?? null,
+                    'bazada_topildi' => $existingStudent ? true : false,
+                    'bazadagi_id' => $existingStudent?->id,
+                ]);
 
                 $student = Student::updateOrCreate(
                     ['student_id_number' => $studentData['student_id_number']],
@@ -88,22 +128,32 @@ class StudentAuthController extends Controller
                 $request->session()->regenerate();
                 ActivityLogService::logLogin('student');
 
+                Log::channel('student_auth')->info('[LOGIN SUCCESS] Talaba tizimga kirdi', [
+                    'login' => $loginId,
+                    'student_id' => $student->id,
+                    'student_id_number' => $student->student_id_number,
+                    'full_name' => $student->full_name,
+                    'auth_method' => 'hemis',
+                ]);
+
                 if (!$student->isProfileComplete() || $student->isTelegramDeadlinePassed()) {
                     return redirect()->route('student.complete-profile');
                 }
 
                 return redirect()->intended(route('student.dashboard'))->with('studentData', $studentData);
             } else {
-                Log::warning('HEMIS API account/me muvaffaqiyatsiz', [
-                    'login' => $request->login,
-                    'status' => $studentDataResponse->status(),
+                Log::channel('student_auth')->warning('[HEMIS ACCOUNT/ME] Muvaffaqiyatsiz javob', [
+                    'login' => $loginId,
+                    'hemis_status' => $studentDataResponse->status(),
+                    'hemis_body' => mb_substr($studentDataResponse->body(), 0, 500),
                 ]);
                 return back()->withErrors(['login' => 'Talabaning ma\'lumotlarini olishda xatolik.'])->onlyInput('login', '_profile');
             }
         } else {
-            Log::info('HEMIS login muvaffaqiyatsiz, lokal parol tekshirilmoqda', [
-                'login' => $request->login,
+            Log::channel('student_auth')->warning('[HEMIS LOGIN] HEMIS rad etdi', [
+                'login' => $loginId,
                 'hemis_status' => $response->status(),
+                'hemis_body' => mb_substr($response->body(), 0, 500),
             ]);
 
             return $this->tryLocalPassword($request, hemsFailed: false);
@@ -115,14 +165,33 @@ class StudentAuthController extends Controller
      */
     private function tryLocalPassword(Request $request, bool $hemsFailed = false)
     {
-        $student = Student::where('student_id_number', $request->login)->first();
+        $loginId = $request->login;
+
+        Log::channel('student_auth')->info('[LOCAL AUTH] Lokal parol tekshiruvi boshlanmoqda', [
+            'login' => $loginId,
+            'hemis_failed' => $hemsFailed,
+            'ip' => $request->ip(),
+        ]);
+
+        $student = Student::where('student_id_number', $loginId)->first();
 
         if (!$student) {
+            Log::channel('student_auth')->warning('[LOCAL AUTH] Talaba bazada topilmadi', [
+                'login' => $loginId,
+                'hemis_failed' => $hemsFailed,
+                'sabab' => 'student_id_number bazada mavjud emas',
+            ]);
             return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
         }
 
         // Lokal parol mavjud emas
         if (!$student->local_password) {
+            Log::channel('student_auth')->warning('[LOCAL AUTH] Lokal parol yo\'q', [
+                'login' => $loginId,
+                'student_id' => $student->id,
+                'hemis_failed' => $hemsFailed,
+                'sabab' => 'local_password NULL — faqat HEMIS orqali kirish mumkin',
+            ]);
             if ($hemsFailed) {
                 return back()->withErrors(['login' => "HEMIS tizimi vaqtincha ishlamayapti. Iltimos, keyinroq urinib ko'ring."])->onlyInput('login', '_profile');
             }
@@ -131,11 +200,22 @@ class StudentAuthController extends Controller
 
         // Lokal parol muddati tugagan
         if ($student->local_password_expires_at && $student->local_password_expires_at->isPast()) {
+            Log::channel('student_auth')->warning('[LOCAL AUTH] Lokal parol muddati tugagan', [
+                'login' => $loginId,
+                'student_id' => $student->id,
+                'expired_at' => $student->local_password_expires_at->toDateTimeString(),
+            ]);
             return back()->withErrors(['login' => "Vaqtinchalik parol muddati tugagan. Admin bilan bog'laning."])->onlyInput('login', '_profile');
         }
 
         // Parol tekshiruvi
         if (!Hash::check($request->password, $student->local_password)) {
+            Log::channel('student_auth')->warning('[LOCAL AUTH] Lokal parol noto\'g\'ri', [
+                'login' => $loginId,
+                'student_id' => $student->id,
+                'hemis_failed' => $hemsFailed,
+                'sabab' => 'Kiritilgan parol lokal parolga mos kelmadi',
+            ]);
             if ($hemsFailed) {
                 return back()->withErrors(['login' => "HEMIS tizimi vaqtincha ishlamayapti va lokal parol noto'g'ri."])->onlyInput('login', '_profile');
             }
@@ -153,6 +233,14 @@ class StudentAuthController extends Controller
         Auth::guard('student')->login($student);
         $request->session()->regenerate();
         ActivityLogService::logLogin('student');
+
+        Log::channel('student_auth')->info('[LOGIN SUCCESS] Talaba lokal parol bilan kirdi', [
+            'login' => $loginId,
+            'student_id' => $student->id,
+            'student_id_number' => $student->student_id_number,
+            'full_name' => $student->full_name,
+            'auth_method' => 'local_password',
+        ]);
 
         if ($student->must_change_password) {
             return redirect()->route('student.password.edit');

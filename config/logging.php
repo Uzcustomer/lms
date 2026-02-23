@@ -143,6 +143,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'student_auth' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/student_auth.log'),
+            'level' => 'debug',
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

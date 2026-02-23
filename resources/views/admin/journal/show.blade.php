@@ -2697,8 +2697,8 @@
         }
 
         // MT grading urgency modal
-        const mtDangerCount = {{ $dangerCount ?? 0 }};
-        const mtUngradedCount = {{ $ungradedCount ?? 0 }};
+        const mtDangerCount = {{ $mtDangerCount ?? 0 }};
+        const mtUngradedCount = {{ $mtUngradedCount ?? 0 }};
         let mtModalShown = false;
 
         function showMtUrgencyModal() {

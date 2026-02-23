@@ -1372,6 +1372,75 @@ class TeacherApiController extends Controller
     }
 
     /**
+     * Active subjects list — same as web JournalController::index()
+     * Returns all active subject+group combinations for the teacher in current semester
+     */
+    public function activeSubjects(Request $request): JsonResponse
+    {
+        $teacher = $request->user();
+
+        $assignments = $this->getTeacherSubjectAssignments($teacher->hemis_id);
+        $teacherSubjectIds = $assignments['subject_ids'];
+        $teacherGroupIds = $assignments['group_ids'];
+
+        if (empty($teacherSubjectIds) && empty($teacherGroupIds)) {
+            return response()->json(['data' => []]);
+        }
+
+        $query = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
+            ->where('s.current', true)
+            ->whereIn('cs.subject_id', $teacherSubjectIds)
+            ->whereIn('g.group_hemis_id', $teacherGroupIds)
+            ->select([
+                'cs.subject_id',
+                'cs.subject_name',
+                'cs.semester_code',
+                'cs.semester_name',
+                'cs.credit',
+                'cs.department_name as kafedra_name',
+                'c.education_type_name',
+                'g.id as group_id',
+                'g.name as group_name',
+                'g.group_hemis_id',
+                'f.name as faculty_name',
+                'sp.name as specialty_name',
+                's.level_name',
+            ])
+            ->distinct()
+            ->orderBy('g.name')
+            ->orderBy('cs.subject_name')
+            ->get();
+
+        return response()->json([
+            'data' => $query->map(fn($row) => [
+                'subject_id' => $row->subject_id,
+                'subject_name' => $row->subject_name,
+                'semester_code' => $row->semester_code,
+                'semester_name' => $row->semester_name,
+                'credit' => $row->credit,
+                'kafedra_name' => $row->kafedra_name,
+                'education_type_name' => $row->education_type_name,
+                'group_id' => $row->group_id,
+                'group_name' => $row->group_name,
+                'group_hemis_id' => $row->group_hemis_id,
+                'faculty_name' => $row->faculty_name,
+                'specialty_name' => $row->specialty_name,
+                'level_name' => $row->level_name,
+            ])->values(),
+        ]);
+    }
+
+    /**
      * O'qituvchining biriktirilgan fan va guruhlarini aniqlash.
      * Web LMS JournalController bilan bir xil logika.
      */

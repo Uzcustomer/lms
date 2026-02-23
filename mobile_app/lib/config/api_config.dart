@@ -33,6 +33,7 @@ class ApiConfig {
   static const String teacherSemesters = '/teacher/semesters';
   static const String teacherSubjects = '/teacher/subjects';
   static const String teacherGroupStudentGrades = '/teacher/group-student-grades';
+  static const String teacherActiveSubjects = '/teacher/active-subjects';
   static const String teacherJournal = '/teacher/journal';
   static const String teacherSaveLessonGrade = '/teacher/grades/lesson';
   static const String teacherSaveMtGrade = '/teacher/grades/mt';

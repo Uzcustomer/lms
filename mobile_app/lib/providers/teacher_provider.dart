@@ -14,6 +14,7 @@ class TeacherProvider extends ChangeNotifier {
   List<dynamic>? _groups;
   List<dynamic>? _semesters;
   List<dynamic>? _subjects;
+  List<dynamic>? _activeSubjects;
   Map<String, dynamic>? _pagination;
 
   TeacherProvider(this._service);
@@ -26,6 +27,7 @@ class TeacherProvider extends ChangeNotifier {
   List<dynamic>? get groups => _groups;
   List<dynamic>? get semesters => _semesters;
   List<dynamic>? get subjects => _subjects;
+  List<dynamic>? get activeSubjects => _activeSubjects;
   Map<String, dynamic>? get pagination => _pagination;
 
   Future<void> loadDashboard() async {
@@ -109,6 +111,22 @@ class TeacherProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> loadActiveSubjects() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _service.getActiveSubjects();
+      _activeSubjects = response['data'] as List<dynamic>?;
+    } on ApiException catch (e) {
+      _error = e.message;
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
   Future<void> loadSubjects({required int groupId, required int semesterId}) async {
     _isLoading = true;
     _error = null;
@@ -135,6 +153,7 @@ class TeacherProvider extends ChangeNotifier {
     _groups = null;
     _semesters = null;
     _subjects = null;
+    _activeSubjects = null;
     notifyListeners();
   }
 }

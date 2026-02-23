@@ -2450,7 +2450,16 @@
             body.innerHTML = '<div class="mavzular-loading"><div class="sidebar-spinner" style="margin:0 auto 8px;"></div>Mavzular yuklanmoqda...</div>';
 
             fetch(`${topicsUrl}?${params}`)
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) {
+                        throw new Error('Server xatolik qaytardi: ' + r.status);
+                    }
+                    const contentType = r.headers.get('content-type') || '';
+                    if (!contentType.includes('application/json')) {
+                        throw new Error('Kutilmagan javob formati. Sahifani yangilang yoki qayta kiring.');
+                    }
+                    return r.json();
+                })
                 .then(data => {
                     if (!data.success || !data.data || !data.data.items || data.data.items.length === 0) {
                         allTopics = [];

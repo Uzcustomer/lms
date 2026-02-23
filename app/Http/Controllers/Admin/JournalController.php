@@ -2795,6 +2795,10 @@ class JournalController extends Controller
             if ($response->successful()) {
                 $data = $response->json();
 
+                if (!is_array($data)) {
+                    return response()->json(['success' => false, 'error' => 'HEMIS API noto\'g\'ri javob qaytardi', 'data' => ['items' => []]]);
+                }
+
                 $items = $data['data']['items'] ?? [];
 
                 // Fan bo'yicha filtrlash (API da subject filter yo'q)

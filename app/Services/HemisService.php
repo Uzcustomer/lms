@@ -601,4 +601,38 @@ class HemisService
             ]
         );
     }
+
+    /**
+     * HEMIS dan kontrakt ro'yxatini olish
+     */
+    public function fetchContracts(array $params = []): array
+    {
+        try {
+            $response = Http::withoutVerifying()
+                ->timeout(30)
+                ->withToken($this->token)
+                ->get($this->baseUrl . 'data/contract-list', array_merge([
+                    'page' => $params['page'] ?? 1,
+                    'limit' => $params['limit'] ?? 50,
+                ], array_filter([
+                    '_student' => $params['_student'] ?? null,
+                    '_education_year' => $params['_education_year'] ?? null,
+                ])));
+
+            if (!$response->successful()) {
+                Log::error('HEMIS contract-list request failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return ['success' => false, 'error' => 'HEMIS API so\'rov xatosi: HTTP ' . $response->status()];
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('Exception fetching contracts from HEMIS', [
+                'message' => $e->getMessage(),
+            ]);
+            return ['success' => false, 'error' => 'HEMIS bilan bog\'lanishda xatolik: ' . $e->getMessage()];
+        }
+    }
 }

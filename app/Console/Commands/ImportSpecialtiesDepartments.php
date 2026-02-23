@@ -190,8 +190,8 @@ class ImportSpecialtiesDepartments extends Command
                 [
                     'name' => $faculty->faculty_name,
                     'code' => $faculty->faculty_code,
-                    'structure_type_code' => $faculty->faculty_structure_type_code ?? '11',
-                    'structure_type_name' => $faculty->faculty_structure_type_name ?? 'Fakultet',
+                    'structure_type_code' => '11',
+                    'structure_type_name' => 'Fakultet',
                     'locality_type_code' => '11',
                     'locality_type_name' => 'Asosiy',
                     'parent_id' => null,
@@ -199,7 +199,7 @@ class ImportSpecialtiesDepartments extends Command
                 ]
             );
             $total++;
-            $this->info("Fakultet: {$faculty->faculty_name} (ID: {$faculty->faculty_id})");
+            $this->info("Fakultet: {$faculty->faculty_name} (ID: {$faculty->faculty_id}, original code: {$faculty->faculty_structure_type_code})");
         }
 
         // Kafedralarni schedules jadvalidan olish

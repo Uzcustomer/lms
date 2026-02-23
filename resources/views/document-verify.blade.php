@@ -16,11 +16,14 @@
             justify-content: center;
             padding: 20px;
         }
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
         .card {
             background: #ffffff;
             border-radius: 16px;
             box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-            max-width: 480px;
             width: 100%;
             overflow: hidden;
         }
@@ -99,68 +102,117 @@
             background: #c6f6d5;
         }
         .verification-icon svg { width: 24px; height: 24px; }
+        .pdf-section {
+            margin-top: 16px;
+        }
+        .pdf-embed {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+        .pdf-download-btn {
+            display: inline-block;
+            margin-top: 12px;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%);
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        .pdf-download-btn:hover {
+            opacity: 0.9;
+        }
+        .pdf-download-btn svg {
+            width: 16px;
+            height: 16px;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        @media (max-width: 640px) {
+            .pdf-embed {
+                height: 400px;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="card">
-        <div class="card-header">
-            <img src="{{ asset('logo.png') }}" alt="Logo">
-            <h1>TDTU Termiz filiali</h1>
-            <p>Hujjat haqiqiyligini tekshirish</p>
-        </div>
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <img src="{{ asset('logo.png') }}" alt="Logo">
+                <h1>TDTU Termiz filiali</h1>
+                <p>Hujjat haqiqiyligini tekshirish</p>
+            </div>
 
-        <div class="card-body" style="text-align: center;">
-            <div class="verification-icon">
-                <svg fill="none" stroke="#22543d" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
-                </svg>
+            <div class="card-body" style="text-align: center;">
+                <div class="verification-icon">
+                    <svg fill="none" stroke="#22543d" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <span class="status-badge">Haqiqiy hujjat</span>
             </div>
-            <span class="status-badge">Haqiqiy hujjat</span>
-        </div>
 
-        <div class="card-body" style="padding-top: 0;">
-            <div class="info-row">
-                <span class="info-label">Hujjat turi</span>
-                <span class="info-value">{{ $verification->document_type }}</span>
+            <div class="card-body" style="padding-top: 0;">
+                <div class="info-row">
+                    <span class="info-label">Hujjat turi</span>
+                    <span class="info-value">{{ $verification->document_type }}</span>
+                </div>
+                @if($verification->subject_name)
+                <div class="info-row">
+                    <span class="info-label">Fan</span>
+                    <span class="info-value">{{ $verification->subject_name }}</span>
+                </div>
+                @endif
+                @if($verification->group_names)
+                <div class="info-row">
+                    <span class="info-label">Guruh</span>
+                    <span class="info-value">{{ $verification->group_names }}</span>
+                </div>
+                @endif
+                @if($verification->semester_name)
+                <div class="info-row">
+                    <span class="info-label">Semestr</span>
+                    <span class="info-value">{{ $verification->semester_name }}</span>
+                </div>
+                @endif
+                @if($verification->department_name)
+                <div class="info-row">
+                    <span class="info-label">Fakultet</span>
+                    <span class="info-value">{{ $verification->department_name }}</span>
+                </div>
+                @endif
+                <div class="info-row">
+                    <span class="info-label">Yaratilgan sana</span>
+                    <span class="info-value">{{ $verification->generated_at->format('d.m.Y H:i') }}</span>
+                </div>
+                @if($verification->generated_by)
+                <div class="info-row">
+                    <span class="info-label">Yaratgan</span>
+                    <span class="info-value">{{ $verification->generated_by }}</span>
+                </div>
+                @endif
             </div>
-            @if($verification->subject_name)
-            <div class="info-row">
-                <span class="info-label">Fan</span>
-                <span class="info-value">{{ $verification->subject_name }}</span>
-            </div>
-            @endif
-            @if($verification->group_names)
-            <div class="info-row">
-                <span class="info-label">Guruh</span>
-                <span class="info-value">{{ $verification->group_names }}</span>
-            </div>
-            @endif
-            @if($verification->semester_name)
-            <div class="info-row">
-                <span class="info-label">Semestr</span>
-                <span class="info-value">{{ $verification->semester_name }}</span>
-            </div>
-            @endif
-            @if($verification->department_name)
-            <div class="info-row">
-                <span class="info-label">Fakultet</span>
-                <span class="info-value">{{ $verification->department_name }}</span>
-            </div>
-            @endif
-            <div class="info-row">
-                <span class="info-label">Yaratilgan sana</span>
-                <span class="info-value">{{ $verification->generated_at->format('d.m.Y H:i') }}</span>
-            </div>
-            @if($verification->generated_by)
-            <div class="info-row">
-                <span class="info-label">Yaratgan</span>
-                <span class="info-value">{{ $verification->generated_by }}</span>
-            </div>
-            @endif
-        </div>
 
-        <div class="card-footer">
-            TDTU Termiz filiali mark platformasi &copy; {{ date('Y') }}
+            @if($documentUrl)
+            <div class="card-body pdf-section" style="padding-top: 0;">
+                <embed src="{{ $documentUrl }}" type="application/pdf" class="pdf-embed">
+                <div style="text-align: center;">
+                    <a href="{{ $documentUrl }}" target="_blank" class="pdf-download-btn">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Hujjatni yuklab olish
+                    </a>
+                </div>
+            </div>
+            @endif
+
+            <div class="card-footer">
+                TDTU Termiz filiali mark platformasi &copy; {{ date('Y') }}
+            </div>
         </div>
     </div>
 </body>

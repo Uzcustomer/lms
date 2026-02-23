@@ -2,10 +2,12 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Schedule;
 use App\Models\Specialty;
 use App\Models\Department;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 class ImportSpecialtiesDepartments extends Command
@@ -15,14 +17,14 @@ class ImportSpecialtiesDepartments extends Command
      *
      * @var string
      */
-    protected $signature = 'import:specialties-departments';
+    protected $signature = 'import:specialties-departments {--local : Lokal bazadan (schedules jadvalidan) import qilish}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Imports specialties and departments from HEMIS API';
+    protected $description = 'Imports specialties and departments from HEMIS API or local database';
 
     public function __construct()
     {
@@ -34,6 +36,10 @@ class ImportSpecialtiesDepartments extends Command
      */
     public function handle(TelegramService $telegram)
     {
+        if ($this->option('local')) {
+            return $this->importFromLocal();
+        }
+
         $telegram->notify("🟢 Mutaxassislik va kafedralar importi boshlandi");
         $this->info('Fetching specialties and departments data from HEMIS API...');
 
@@ -44,8 +50,25 @@ class ImportSpecialtiesDepartments extends Command
         $totalDepartments = 0;
         $totalSpecialties = 0;
 
+        $this->info("HEMIS API URL: {$baseUrl}");
+        $this->info("Token: " . ($token ? mb_substr($token, 0, 10) . '...' : 'TOPILMADI'));
+
+        if (!$token) {
+            $this->error('HEMIS_API_TOKEN .env faylida sozlanmagan!');
+            return 1;
+        }
+
         do {
-            $response = Http::withoutVerifying()->withToken($token)->get("{$baseUrl}/data/department-list?limit=$pageSize&page=$page");
+            $url = "{$baseUrl}/data/department-list?limit=$pageSize&page=$page";
+            $this->info("So'rov: {$url}");
+
+            try {
+                $response = Http::withoutVerifying()->withToken($token)->get($url);
+            } catch (\Exception $e) {
+                $this->error("HTTP xatolik: " . $e->getMessage());
+                $telegram->notify("❌ Kafedralar importida HTTP xatolik: " . $e->getMessage());
+                break;
+            }
 
             if ($response->successful()) {
                 $data = $response->json()['data'];
@@ -74,8 +97,9 @@ class ImportSpecialtiesDepartments extends Command
 
                 $page++;
             } else {
-                $telegram->notify("❌ Kafedralar importida xatolik yuz berdi (API)");
-                $this->error('Failed to fetch data from the API for departments.');
+                $this->error("API xatolik! Status: {$response->status()}, URL: {$url}");
+                $this->error("Javob: " . mb_substr($response->body(), 0, 500));
+                $telegram->notify("❌ Kafedralar importida xatolik: HTTP {$response->status()}");
                 break;
             }
         } while ($page <= $totalPages);
@@ -83,7 +107,15 @@ class ImportSpecialtiesDepartments extends Command
         $page = 1;
 
         do {
-            $response = Http::withoutVerifying()->withToken($token)->get("{$baseUrl}/data/specialty-list?limit=$pageSize&page=$page");
+            $url = "{$baseUrl}/data/specialty-list?limit=$pageSize&page=$page";
+
+            try {
+                $response = Http::withoutVerifying()->withToken($token)->get($url);
+            } catch (\Exception $e) {
+                $this->error("HTTP xatolik: " . $e->getMessage());
+                $telegram->notify("❌ Mutaxassisliklar importida HTTP xatolik: " . $e->getMessage());
+                break;
+            }
 
             if ($response->successful()) {
                 $data = $response->json()['data'];
@@ -121,13 +153,85 @@ class ImportSpecialtiesDepartments extends Command
 
                 $page++;
             } else {
-                $telegram->notify("❌ Mutaxassisliklar importida xatolik yuz berdi (API)");
-                $this->error('Failed to fetch data from the API for specialties.');
+                $this->error("API xatolik! Status: {$response->status()}, URL: {$url}");
+                $this->error("Javob: " . mb_substr($response->body(), 0, 500));
+                $telegram->notify("❌ Mutaxassisliklar importida xatolik: HTTP {$response->status()}");
                 break;
             }
         } while ($page <= $totalPages);
 
         $telegram->notify("✅ Mutaxassislik va kafedralar importi tugadi. Kafedralar: {$totalDepartments} ta, Mutaxassisliklar: {$totalSpecialties} ta");
         $this->info('Specialties and departments import completed successfully.');
+    }
+
+    /**
+     * Lokal bazadagi schedules jadvalidan fakultet va kafedralarni import qilish.
+     */
+    protected function importFromLocal(): int
+    {
+        $this->info('Lokal bazadan (schedules jadvalidan) import qilinmoqda...');
+
+        $total = 0;
+
+        // Fakultetlarni schedules jadvalidan olish
+        $faculties = DB::table('schedules')
+            ->select('faculty_id', 'faculty_name', 'faculty_code', 'faculty_structure_type_code', 'faculty_structure_type_name')
+            ->whereNotNull('faculty_id')
+            ->where('faculty_id', '>', 0)
+            ->distinct()
+            ->get()
+            ->unique('faculty_id');
+
+        $this->info("Schedules jadvalidan {$faculties->count()} ta fakultet topildi.");
+
+        foreach ($faculties as $faculty) {
+            Department::updateOrCreate(
+                ['department_hemis_id' => $faculty->faculty_id],
+                [
+                    'name' => $faculty->faculty_name,
+                    'code' => $faculty->faculty_code,
+                    'structure_type_code' => $faculty->faculty_structure_type_code ?? '11',
+                    'structure_type_name' => $faculty->faculty_structure_type_name ?? 'Fakultet',
+                    'locality_type_code' => '11',
+                    'locality_type_name' => 'Asosiy',
+                    'parent_id' => null,
+                    'active' => true,
+                ]
+            );
+            $total++;
+            $this->info("Fakultet: {$faculty->faculty_name} (ID: {$faculty->faculty_id})");
+        }
+
+        // Kafedralarni schedules jadvalidan olish
+        $departments = DB::table('schedules')
+            ->select('department_id', 'department_name', 'department_code', 'department_structure_type_code', 'department_structure_type_name')
+            ->whereNotNull('department_id')
+            ->where('department_id', '>', 0)
+            ->distinct()
+            ->get()
+            ->unique('department_id');
+
+        $this->info("Schedules jadvalidan {$departments->count()} ta kafedra topildi.");
+
+        foreach ($departments as $dept) {
+            Department::updateOrCreate(
+                ['department_hemis_id' => $dept->department_id],
+                [
+                    'name' => $dept->department_name,
+                    'code' => $dept->department_code,
+                    'structure_type_code' => $dept->department_structure_type_code ?? '12',
+                    'structure_type_name' => $dept->department_structure_type_name ?? 'Kafedra',
+                    'locality_type_code' => '11',
+                    'locality_type_name' => 'Asosiy',
+                    'parent_id' => null,
+                    'active' => true,
+                ]
+            );
+            $total++;
+            $this->info("Kafedra: {$dept->department_name} (ID: {$dept->department_id})");
+        }
+
+        $this->info("Jami {$total} ta yozuv departments jadvaliga qo'shildi/yangilandi.");
+        return 0;
     }
 }

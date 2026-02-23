@@ -361,8 +361,9 @@
 
                             @php
                                 $oldDeanFaculties = old('dean_faculties', $teacher->deanFaculties->pluck('department_hemis_id')->toArray());
+                                $isDekanChecked = in_array('dekan', $oldRoles);
                             @endphp
-                            <div id="department-section" style="display: none; margin-top: 10px;">
+                            <div id="department-section" style="display: {{ $isDekanChecked ? 'block' : 'none' }}; margin-top: 10px;">
                                 <div style="padding: 10px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">
                                     <label style="font-size: 11px; font-weight: 600; color: #1e40af; display: block; margin-bottom: 6px;">Dekan roli uchun fakultetlar (bir nechta tanlash mumkin):</label>
                                     @if($departments->isEmpty())

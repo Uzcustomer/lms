@@ -133,6 +133,14 @@ return [
             'level' => 'debug',
         ],
 
+        'student_auth' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/student_auth.log'),
+            'level' => 'debug',
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

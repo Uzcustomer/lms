@@ -38,13 +38,14 @@ class ImportSpecialtiesDepartments extends Command
         $this->info('Fetching specialties and departments data from HEMIS API...');
 
         $token = config('services.hemis.token');
+        $baseUrl = rtrim(config('services.hemis.base_url'), '/');
         $page = 1;
         $pageSize = 40;
         $totalDepartments = 0;
         $totalSpecialties = 0;
 
         do {
-            $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/department-list?limit=$pageSize&page=$page");
+            $response = Http::withoutVerifying()->withToken($token)->get("{$baseUrl}/data/department-list?limit=$pageSize&page=$page");
 
             if ($response->successful()) {
                 $data = $response->json()['data'];
@@ -82,7 +83,7 @@ class ImportSpecialtiesDepartments extends Command
         $page = 1;
 
         do {
-            $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/specialty-list?limit=$pageSize&page=$page");
+            $response = Http::withoutVerifying()->withToken($token)->get("{$baseUrl}/data/specialty-list?limit=$pageSize&page=$page");
 
             if ($response->successful()) {
                 $data = $response->json()['data'];

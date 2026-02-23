@@ -365,17 +365,23 @@
                             <div id="department-section" style="display: none; margin-top: 10px;">
                                 <div style="padding: 10px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">
                                     <label style="font-size: 11px; font-weight: 600; color: #1e40af; display: block; margin-bottom: 6px;">Dekan roli uchun fakultetlar (bir nechta tanlash mumkin):</label>
-                                    <div style="display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;">
-                                        @foreach($departments as $department)
-                                            <label style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px;"
-                                                   onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='transparent'">
-                                                <input type="checkbox" name="dean_faculties[]" value="{{ $department->department_hemis_id }}"
-                                                    {{ in_array($department->department_hemis_id, $oldDeanFaculties) ? 'checked' : '' }}
-                                                    style="accent-color: #2563eb;">
-                                                {{ $department->name }}
-                                            </label>
-                                        @endforeach
-                                    </div>
+                                    @if($departments->isEmpty())
+                                        <div style="padding: 8px; background: #fef9c3; border: 1px solid #fde68a; border-radius: 6px; font-size: 12px; color: #854d0e;">
+                                            Fakultetlar ro'yxati topilmadi. Iltimos, avval <strong>import:specialties-departments</strong> buyrug'ini ishga tushiring.
+                                        </div>
+                                    @else
+                                        <div style="display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;">
+                                            @foreach($departments as $department)
+                                                <label style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                                                       onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='transparent'">
+                                                    <input type="checkbox" name="dean_faculties[]" value="{{ $department->department_hemis_id }}"
+                                                        {{ in_array($department->department_hemis_id, $oldDeanFaculties) ? 'checked' : '' }}
+                                                        style="accent-color: #2563eb;">
+                                                    {{ $department->name }}
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
 

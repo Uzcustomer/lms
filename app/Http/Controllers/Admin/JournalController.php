@@ -1329,14 +1329,112 @@ class JournalController extends Controller
         $created = 0;
 
         try {
-            $page = 1;
-            $pages = 1;
-
             // Guruh talabalarini oldindan yuklash (hemis_id → student row)
             $students = DB::table('students')
                 ->where('group_id', $groupId)
                 ->get()
                 ->keyBy('hemis_id');
+
+            // Grade item ni bazaga yozish uchun yordamchi funksiya (takrorlanmaslik uchun)
+            $processGradeItem = function (array $item) use ($students, &$synced, &$created) {
+                $studentHemisId = $item['_student'] ?? null;
+                if (!$studentHemisId) return;
+
+                $student = $students[$studentHemisId] ?? null;
+                if (!$student) return;
+
+                $gradeValue = $item['grade'] ?? null;
+                $lessonDate = isset($item['lesson_date'])
+                    ? \Carbon\Carbon::createFromTimestamp($item['lesson_date'])
+                    : null;
+                if (!$lessonDate) return;
+
+                $hemisId = $item['id'];
+
+                // Mavjud grade tekshirish (soft-deleted larni ham qo'shib)
+                $existingGrade = DB::table('student_grades')
+                    ->where('hemis_id', $hemisId)
+                    ->first();
+
+                $markingScore = MarkingSystemScore::getByStudentHemisId($studentHemisId);
+                $isLowGrade = ($student->level_code == 16 && $gradeValue < 3)
+                    || ($student->level_code != 16 && $gradeValue < $markingScore->minimum_limit);
+
+                if ($existingGrade) {
+                    $updateData = [
+                        'grade' => $gradeValue,
+                        'employee_id' => $item['employee']['id'],
+                        'employee_name' => $item['employee']['name'],
+                        'deleted_at' => null,
+                        'updated_at' => now(),
+                    ];
+
+                    if ($existingGrade->status !== 'retake' && $existingGrade->reason !== 'absent') {
+                        $updateData['status'] = $isLowGrade ? 'pending' : 'recorded';
+                        $updateData['reason'] = $isLowGrade ? 'low_grade' : null;
+                        if ($isLowGrade && !$existingGrade->deadline) {
+                            $deadline = DB::table('deadlines')->where('level_code', $student->level_code)->first();
+                            $deadlineDays = $deadline ? $deadline->deadline_days : 7;
+                            $updateData['deadline'] = $lessonDate->copy()->addDays($deadlineDays)->endOfDay();
+                        }
+                    }
+
+                    DB::table('student_grades')
+                        ->where('id', $existingGrade->id)
+                        ->update($updateData);
+                    $synced++;
+                } else {
+                    $deadline = null;
+                    $status = 'recorded';
+                    $reason = null;
+
+                    if ($isLowGrade) {
+                        $status = 'pending';
+                        $reason = 'low_grade';
+                        $deadlineRow = DB::table('deadlines')->where('level_code', $student->level_code)->first();
+                        $deadlineDays = $deadlineRow ? $deadlineRow->deadline_days : 7;
+                        $deadline = $lessonDate->copy()->addDays($deadlineDays)->endOfDay();
+                    }
+
+                    DB::table('student_grades')->insert([
+                        'hemis_id' => $hemisId,
+                        'student_id' => $student->id,
+                        'student_hemis_id' => $studentHemisId,
+                        'semester_code' => $item['semester']['code'],
+                        'semester_name' => $item['semester']['name'],
+                        'education_year_code' => $item['educationYear']['code'] ?? null,
+                        'education_year_name' => $item['educationYear']['name'] ?? null,
+                        'subject_schedule_id' => $item['_subject_schedule'] ?? null,
+                        'subject_id' => $item['subject']['id'],
+                        'subject_name' => $item['subject']['name'],
+                        'subject_code' => $item['subject']['code'],
+                        'training_type_code' => $item['trainingType']['code'],
+                        'training_type_name' => $item['trainingType']['name'],
+                        'employee_id' => $item['employee']['id'],
+                        'employee_name' => $item['employee']['name'],
+                        'lesson_pair_code' => $item['lessonPair']['code'],
+                        'lesson_pair_name' => $item['lessonPair']['name'],
+                        'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                        'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                        'grade' => $gradeValue,
+                        'lesson_date' => $lessonDate,
+                        'created_at_api' => isset($item['created_at'])
+                            ? \Carbon\Carbon::createFromTimestamp($item['created_at'])
+                            : now(),
+                        'reason' => $reason,
+                        'deadline' => $deadline,
+                        'status' => $status,
+                        'is_final' => true,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                    $created++;
+                }
+            };
+
+            // === 1-QADAM: Asosiy sync (_group + _subject) ===
+            $page = 1;
+            $pages = 1;
 
             do {
                 $response = Http::withoutVerifying()
@@ -1364,115 +1462,101 @@ class JournalController extends Controller
                 $pages = $data['pagination']['pageCount'] ?? 1;
 
                 foreach ($items as $item) {
-                    $studentHemisId = $item['_student'] ?? null;
-                    if (!$studentHemisId) {
-                        continue;
-                    }
-
-                    $student = $students[$studentHemisId] ?? null;
-                    if (!$student) {
-                        continue;
-                    }
-
-                    $gradeValue = $item['grade'] ?? null;
-                    $lessonDate = isset($item['lesson_date'])
-                        ? \Carbon\Carbon::createFromTimestamp($item['lesson_date'])
-                        : null;
-                    if (!$lessonDate) {
-                        continue;
-                    }
-
-                    $hemisId = $item['id'];
-
-                    // Mavjud grade tekshirish (soft-deleted larni ham qo'shib)
-                    $existingGrade = DB::table('student_grades')
-                        ->where('hemis_id', $hemisId)
-                        ->first();
-
-                    $markingScore = MarkingSystemScore::getByStudentHemisId($studentHemisId);
-                    $isLowGrade = ($student->level_code == 16 && $gradeValue < 3)
-                        || ($student->level_code != 16 && $gradeValue < $markingScore->minimum_limit);
-
-                    if ($existingGrade) {
-                        // Mavjud grade ni yangilash — retake_grade va lokal ma'lumotlarga tegmaslik
-                        $updateData = [
-                            'grade' => $gradeValue,
-                            'employee_id' => $item['employee']['id'],
-                            'employee_name' => $item['employee']['name'],
-                            'deleted_at' => null, // Soft-deleted bo'lsa tiklash
-                            'updated_at' => now(),
-                        ];
-
-                        // Agar retake holatida emas va absent emas bo'lsa, statusni ham yangilash
-                        if ($existingGrade->status !== 'retake' && $existingGrade->reason !== 'absent') {
-                            $updateData['status'] = $isLowGrade ? 'pending' : 'recorded';
-                            $updateData['reason'] = $isLowGrade ? 'low_grade' : null;
-                            if ($isLowGrade && !$existingGrade->deadline) {
-                                $deadline = DB::table('deadlines')->where('level_code', $student->level_code)->first();
-                                $deadlineDays = $deadline ? $deadline->deadline_days : 7;
-                                $updateData['deadline'] = $lessonDate->copy()->addDays($deadlineDays)->endOfDay();
-                            }
-                        }
-
-                        DB::table('student_grades')
-                            ->where('id', $existingGrade->id)
-                            ->update($updateData);
-                        $synced++;
-                    } else {
-                        // Yangi grade yaratish
-                        $deadline = null;
-                        $status = 'recorded';
-                        $reason = null;
-
-                        if ($isLowGrade) {
-                            $status = 'pending';
-                            $reason = 'low_grade';
-                            $deadlineRow = DB::table('deadlines')->where('level_code', $student->level_code)->first();
-                            $deadlineDays = $deadlineRow ? $deadlineRow->deadline_days : 7;
-                            $deadline = $lessonDate->copy()->addDays($deadlineDays)->endOfDay();
-                        }
-
-                        DB::table('student_grades')->insert([
-                            'hemis_id' => $hemisId,
-                            'student_id' => $student->id,
-                            'student_hemis_id' => $studentHemisId,
-                            'semester_code' => $item['semester']['code'],
-                            'semester_name' => $item['semester']['name'],
-                            'education_year_code' => $item['educationYear']['code'] ?? null,
-                            'education_year_name' => $item['educationYear']['name'] ?? null,
-                            'subject_schedule_id' => $item['_subject_schedule'] ?? null,
-                            'subject_id' => $item['subject']['id'],
-                            'subject_name' => $item['subject']['name'],
-                            'subject_code' => $item['subject']['code'],
-                            'training_type_code' => $item['trainingType']['code'],
-                            'training_type_name' => $item['trainingType']['name'],
-                            'employee_id' => $item['employee']['id'],
-                            'employee_name' => $item['employee']['name'],
-                            'lesson_pair_code' => $item['lessonPair']['code'],
-                            'lesson_pair_name' => $item['lessonPair']['name'],
-                            'lesson_pair_start_time' => $item['lessonPair']['start_time'],
-                            'lesson_pair_end_time' => $item['lessonPair']['end_time'],
-                            'grade' => $gradeValue,
-                            'lesson_date' => $lessonDate,
-                            'created_at_api' => isset($item['created_at'])
-                                ? \Carbon\Carbon::createFromTimestamp($item['created_at'])
-                                : now(),
-                            'reason' => $reason,
-                            'deadline' => $deadline,
-                            'status' => $status,
-                            'is_final' => true,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-                        $created++;
-                    }
+                    $processGradeItem($item);
                 }
 
                 $page++;
                 if ($page <= $pages) {
-                    usleep(500000); // 0.5s
+                    usleep(500000);
                 }
             } while ($page <= $pages);
+
+            // === 2-QADAM: Fallback — jadvalda bahosi yo'q kunlar uchun _group + sana orqali olish ===
+            // HEMIS API _subject bilan hamma baholarni qaytarmasligi mumkin (turli subject_schedule),
+            // shuning uchun bahosi yo'q (date+pair) lar uchun _group + lesson_date_from/to bilan olish
+            $scheduleDatePairs = DB::table('schedules')
+                ->where('group_id', $groupId)
+                ->where('subject_id', $subjectId)
+                ->whereNull('deleted_at')
+                ->whereNotNull('lesson_date')
+                ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
+                ->select(DB::raw('DATE(lesson_date) as lesson_date_str'), 'lesson_pair_code')
+                ->distinct()
+                ->get();
+
+            if ($scheduleDatePairs->isNotEmpty()) {
+                $studentHemisIds = $students->keys()->toArray();
+                $existingGradeKeys = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->whereNotNull('lesson_date')
+                    ->whereNotNull('grade')
+                    ->selectRaw("CONCAT(DATE(lesson_date), '_', lesson_pair_code) as dp")
+                    ->distinct()
+                    ->pluck('dp')
+                    ->flip()
+                    ->toArray();
+
+                $missingDates = [];
+                foreach ($scheduleDatePairs as $sp) {
+                    $key = $sp->lesson_date_str . '_' . $sp->lesson_pair_code;
+                    if (!isset($existingGradeKeys[$key])) {
+                        $missingDates[$sp->lesson_date_str] = true;
+                    }
+                }
+
+                if (!empty($missingDates)) {
+                    Log::info("Grade sync fallback: {$groupId}/{$subjectId} — " . count($missingDates) . " ta sanada baholar yo'q, alternativ API bilan urinilmoqda", [
+                        'missing_dates' => array_keys($missingDates),
+                    ]);
+
+                    $createdBefore = $created;
+                    foreach (array_keys($missingDates) as $missingDate) {
+                        $dateCarbon = \Carbon\Carbon::parse($missingDate);
+                        $fromTs = $dateCarbon->copy()->startOfDay()->timestamp;
+                        $toTs = $dateCarbon->copy()->endOfDay()->timestamp;
+
+                        $fbPage = 1;
+                        $fbPages = 1;
+
+                        do {
+                            $fbResponse = Http::withoutVerifying()
+                                ->timeout(30)
+                                ->withToken($token)
+                                ->get($baseUrl . '/data/student-grade-list', [
+                                    '_group' => $groupId,
+                                    'lesson_date_from' => $fromTs,
+                                    'lesson_date_to' => $toTs,
+                                    'limit' => 200,
+                                    'page' => $fbPage,
+                                ]);
+
+                            if (!$fbResponse || !$fbResponse->successful()) break;
+
+                            $fbData = $fbResponse->json('data', []);
+                            $fbItems = $fbData['items'] ?? [];
+                            $fbPages = $fbData['pagination']['pageCount'] ?? 1;
+
+                            foreach ($fbItems as $fbItem) {
+                                // Faqat kerakli fan uchun filtrlash
+                                if (($fbItem['subject']['id'] ?? null) != $subjectId) continue;
+                                $processGradeItem($fbItem);
+                            }
+
+                            $fbPage++;
+                            if ($fbPage <= $fbPages) {
+                                usleep(500000);
+                            }
+                        } while ($fbPage <= $fbPages);
+                    }
+
+                    $fallbackCreated = $created - $createdBefore;
+                    if ($fallbackCreated > 0) {
+                        Log::info("Grade sync fallback: {$groupId}/{$subjectId} — {$fallbackCreated} ta yangi baho qo'shildi");
+                    }
+                }
+            }
 
         } catch (\Throwable $e) {
             Log::error('Grade sync xatolik: ' . $e->getMessage(), [

@@ -443,23 +443,39 @@
         }
 
         function toggleRole(checkbox) {
-            var card = checkbox.closest('.role-card');
-            var icon = card.querySelector('[data-icon]');
-            var check = card.querySelector('.check-indicator');
+            try {
+                var card = checkbox.closest('.role-card');
+                var icon = card.querySelector('[data-icon]');
+                var check = card.querySelector('.check-indicator');
 
-            card.classList.toggle('role-active', checkbox.checked);
-            icon.classList.toggle('role-icon-active', checkbox.checked);
-            check.classList.toggle('hidden', !checkbox.checked);
+                card.classList.toggle('role-active', checkbox.checked);
+                icon.classList.toggle('role-icon-active', checkbox.checked);
+                check.classList.toggle('hidden', !checkbox.checked);
+            } catch (e) {
+                console.error('toggleRole card error:', e);
+            }
 
-            var dekanCheckbox = document.querySelector('input[value="dekan"]');
-            var dept = document.getElementById('department-section');
-            if (dept && dekanCheckbox) {
-                dept.style.display = dekanCheckbox.checked ? 'block' : 'none';
+            try {
+                var dekanCheckbox = document.querySelector('input[value="dekan"]');
+                var dept = document.getElementById('department-section');
+                if (dept && dekanCheckbox) {
+                    dept.style.display = dekanCheckbox.checked ? 'block' : 'none';
+                }
+            } catch (e) {
+                console.error('toggleRole dept error:', e);
             }
         }
 
-        // Server-side Blade template handles initial display state via $isDekanChecked
-        // toggleRole() handles runtime changes when user clicks checkboxes
+        // Fallback: event delegation for checkbox changes (in case inline onchange doesn't fire)
+        document.addEventListener('click', function (e) {
+            var label = e.target.closest('.role-card');
+            if (!label) return;
+            // Small delay to let the checkbox state update first
+            setTimeout(function () {
+                var cb = label.querySelector('input[type="checkbox"]');
+                if (cb) toggleRole(cb);
+            }, 10);
+        });
     </script>
 
     <style>

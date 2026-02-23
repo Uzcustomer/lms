@@ -32,6 +32,7 @@ use App\Http\Controllers\Admin\TimetableViewController;
 use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\Admin\ServerDebugController;
+use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\MoodleImportController;
 
 
@@ -134,6 +135,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'reject'])->name('reject');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'download'])->name('download');
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
+        });
+
+        // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)
+        Route::prefix('contracts')->name('contracts.')->group(function () {
+            Route::get('/', [ContractController::class, 'index'])->name('index');
+            Route::get('/data', [ContractController::class, 'data'])->name('data');
         });
 
         Route::prefix('independent')->name('independent.')->group(function () {

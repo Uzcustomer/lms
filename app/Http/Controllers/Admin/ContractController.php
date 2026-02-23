@@ -28,11 +28,10 @@ class ContractController extends Controller
             ->groupBy('education_type_code', 'education_type_name')
             ->get();
 
-        $educationYears = DB::table('semesters')
-            ->select('education_year as code', 'education_year_name as name')
-            ->whereNotNull('education_year')
-            ->groupBy('education_year', 'education_year_name')
-            ->orderByDesc('education_year')
+        $educationYears = Curriculum::select('education_year_code as code', 'education_year_name as name')
+            ->whereNotNull('education_year_code')
+            ->groupBy('education_year_code', 'education_year_name')
+            ->orderByDesc('education_year_code')
             ->get();
 
         $currentEducationYear = DB::table('semesters')

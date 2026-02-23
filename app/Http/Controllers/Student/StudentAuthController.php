@@ -156,7 +156,10 @@ class StudentAuthController extends Controller
                 'hemis_body' => mb_substr($response->body(), 0, 500),
             ]);
 
-            return $this->tryLocalPassword($request, hemsFailed: false);
+            // 429 = rate limit / CAPTCHA — bu server tomondan cheklov, talaba xatosi emas
+            $isServerSideFailure = $response->status() === 429;
+
+            return $this->tryLocalPassword($request, hemsFailed: $isServerSideFailure);
         }
     }
 

@@ -611,7 +611,7 @@ class HemisService
             $response = Http::withoutVerifying()
                 ->timeout(30)
                 ->withToken($this->token)
-                ->get($this->baseUrl . 'data/contract-list', array_merge([
+                ->get($this->baseUrl . '/v1/data/contract-list', array_merge([
                     'page' => $params['page'] ?? 1,
                     'limit' => $params['limit'] ?? 50,
                 ], array_filter([

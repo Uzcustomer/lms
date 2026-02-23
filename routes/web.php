@@ -51,6 +51,9 @@ Route::get('/refresh-csrf', function () {
 // Sababli ariza tekshirish (QR kod orqali, public)
 Route::get('/absence-excuse/verify/{token}', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'verify'])->name('absence-excuse.verify');
 
+// Hujjat haqiqiyligini tekshirish (QR kod orqali, public)
+Route::get('/document/verify/{token}', [\App\Http\Controllers\DocumentVerificationController::class, 'verify'])->name('document.verify');
+
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
         Route::post('/login', [AdminAuthController::class, 'login'])->name('login.post');

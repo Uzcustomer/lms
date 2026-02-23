@@ -14,6 +14,7 @@ use App\Models\Specialty;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\YnSubmission;
+use App\Models\DocumentVerification;
 use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -752,6 +753,56 @@ class YnQaytnomaController extends Controller
             $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
             $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($allMaruzaText), ['size' => 11]);
 
+            // QR code yaratish
+            $generatedBy = null;
+            if (auth()->guard('teacher')->check()) {
+                $generatedBy = auth()->guard('teacher')->user()->full_name ?? auth()->guard('teacher')->user()->name ?? null;
+            } elseif (auth()->guard('web')->check()) {
+                $generatedBy = auth()->guard('web')->user()->name ?? null;
+            }
+
+            $verification = DocumentVerification::createForDocument([
+                'document_type' => 'YN oldi qaydnoma',
+                'subject_name' => $subject->subject_name,
+                'group_names' => implode(', ', $groupNames),
+                'semester_name' => $semester->name ?? null,
+                'department_name' => $department->name ?? null,
+                'generated_by' => $generatedBy,
+            ]);
+
+            $verificationUrl = $verification->getVerificationUrl();
+            $qrImagePath = null;
+
+            try {
+                $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data=' . urlencode($verificationUrl) . '&size=200x200';
+                $client = new \GuzzleHttp\Client();
+                $qrTempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_qr.png';
+                $response = $client->request('GET', $qrApiUrl, [
+                    'verify' => false,
+                    'sink' => $qrTempPath,
+                    'timeout' => 10,
+                ]);
+                if ($response->getStatusCode() == 200 && file_exists($qrTempPath) && filesize($qrTempPath) > 0) {
+                    $qrImagePath = $qrTempPath;
+                }
+            } catch (\Exception $e) {
+                // QR code generatsiyasi muvaffaqiyatsiz bo'lsa, davom etamiz
+            }
+
+            if ($qrImagePath) {
+                $section->addTextBreak(1);
+                $section->addImage($qrImagePath, [
+                    'width' => 80,
+                    'height' => 80,
+                    'alignment' => Jc::START,
+                ]);
+                $section->addText(
+                    'Hujjat haqiqiyligini tekshirish uchun QR kodni skanerlang',
+                    ['size' => 8, 'italic' => true, 'color' => '666666'],
+                    ['spaceAfter' => 0]
+                );
+            }
+
             $groupNamesStr = str_replace(['/', '\\', ' '], '_', implode('_', $groupNames));
             $subjectNameStr = str_replace(['/', '\\', ' '], '_', $subject->subject_name);
             $fileName = 'YN_oldi_qaydnoma_' . $groupNamesStr . '_' . $subjectNameStr . '.docx';
@@ -759,6 +810,11 @@ class YnQaytnomaController extends Controller
 
             $objWriter = IOFactory::createWriter($phpWord, 'Word2007');
             $objWriter->save($tempPath);
+
+            // QR vaqtinchalik faylni tozalash
+            if ($qrImagePath) {
+                @unlink($qrImagePath);
+            }
 
             $files[] = [
                 'path' => $tempPath,

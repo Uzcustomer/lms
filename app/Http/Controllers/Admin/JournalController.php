@@ -351,16 +351,17 @@ class JournalController extends Controller
             ->merge($lectureScheduleRows->pluck('lesson_date'))
             ->min();
 
-        // Data source: get all JB grades with lesson_pair info and status fields
-        // Filter by education_year_code to exclude grades from previous education years
-        // Fall back to minScheduleDate for legacy records without education_year_code
-        $jbGradesRaw = DB::table('student_grades')
+        // Data source: barcha baholarni bitta so'rovda olish (training_type filter QILINMAYDI).
+        // HEMIS API da schedule va grade endpointlari bitta dars uchun turli training_type
+        // qaytarishi mumkin — shuning uchun baholarni training_type bo'yicha filtrlash o'rniga,
+        // jadval (schedule) dagi (sana + para) juftliklari asosida JB va MT ga ajratamiz.
+        // ON (100), OSKI (101), Test (102) alohida so'rovda olinadi.
+        $allGradesRaw = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->whereNotIn('training_type_name', $excludedTrainingTypes)
-            ->whereNotIn('training_type_code', $excludedTrainingCodes)
+            ->whereNotIn('training_type_code', [100, 101, 102])
             ->whereNotNull('lesson_date')
             ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
                 $q2->where('education_year_code', $educationYearCode)
@@ -371,27 +372,6 @@ class JournalController extends Controller
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at')
-            ->orderBy('lesson_date')
-            ->orderBy('lesson_pair_code')
-            ->get();
-
-        // Get all MT grades with lesson_pair info and status fields
-        $mtGradesRaw = DB::table('student_grades')
-            ->whereNull('deleted_at')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->where('training_type_code', 99)
-            ->whereNotNull('lesson_date')
-            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
-                $q2->where('education_year_code', $educationYearCode)
-                    ->orWhere(function ($q3) use ($minScheduleDate) {
-                        $q3->whereNull('education_year_code')
-                            ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
-                    });
-            }))
-            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -497,6 +477,29 @@ class JournalController extends Controller
             }
             $mtPairsPerDay[$col['date']]++;
         }
+
+        // Jadval (date+pair) asosida baholarni JB va MT ga ajratish.
+        // HEMIS API da schedule va grade uchun training_type farq qilishi mumkin,
+        // shuning uchun jadval tuzilishi (schedule) yagona manba hisoblanadi.
+        $jbDatePairSet = [];
+        foreach ($jbColumns as $c) {
+            $normalizedDate = \Carbon\Carbon::parse($c['date'])->format('Y-m-d');
+            $jbDatePairSet[$normalizedDate . '_' . $c['pair']] = true;
+        }
+        $mtDatePairSet = [];
+        foreach ($mtColumns as $c) {
+            $normalizedDate = \Carbon\Carbon::parse($c['date'])->format('Y-m-d');
+            $mtDatePairSet[$normalizedDate . '_' . $c['pair']] = true;
+        }
+
+        $jbGradesRaw = $allGradesRaw->filter(function ($g) use ($jbDatePairSet) {
+            $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+            return isset($jbDatePairSet[$normalizedDate . '_' . $g->lesson_pair_code]);
+        });
+        $mtGradesRaw = $allGradesRaw->filter(function ($g) use ($mtDatePairSet) {
+            $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+            return isset($mtDatePairSet[$normalizedDate . '_' . $g->lesson_pair_code]);
+        });
 
         // Build grades data structure: student_hemis_id => date => pair => ['grade' => value, 'is_retake' => bool, 'id' => id, 'status' => status, 'retake_grade' => retake_grade, 'reason' => reason]
         $jbGrades = [];

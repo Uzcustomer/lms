@@ -107,13 +107,19 @@
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
-                                        <th>ID</th>
-                                        <th>Talaba ID</th>
-                                        <th>Kalit</th>
+                                        <th>FISH</th>
+                                        <th>Kontrakt raqami</th>
+                                        <th>Kontrakt turi</th>
+                                        <th>Ta'lim turi</th>
+                                        <th>Ta'lim shakli</th>
+                                        <th>Fakultet</th>
+                                        <th>Yo'nalish</th>
+                                        <th>Kurs</th>
                                         <th>O'quv yili</th>
-                                        <th>Ma'lumotlar</th>
-                                        <th>Yaratilgan</th>
-                                        <th>Yangilangan</th>
+                                        <th>Kontrakt summasi</th>
+                                        <th>To'langan</th>
+                                        <th>Qoldiq</th>
+                                        <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -142,6 +148,13 @@
             if (stripSpecialChars(data.text).indexOf(stripSpecialChars(params.term)) > -1) return $.extend({}, data, true);
             if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) return $.extend({}, data, true);
             return null;
+        }
+
+        function formatMoney(val) {
+            if (!val && val !== 0) return '-';
+            var num = parseFloat(val);
+            if (isNaN(num)) return '-';
+            return num.toLocaleString('uz-UZ', {minimumFractionDigits: 0, maximumFractionDigits: 0}) + ' so\'m';
         }
 
         function formatTimestamp(ts) {
@@ -220,32 +233,37 @@
             });
         }
 
+        function getStatusClass(status) {
+            if (!status) return '';
+            var s = status.toLowerCase();
+            if (s.indexOf('утвержд') > -1 || s.indexOf('tasdiqlangan') > -1) return 'status-green';
+            if (s.indexOf('отменен') > -1 || s.indexOf('bekor') > -1) return 'status-red';
+            if (s.indexOf('ожидан') > -1 || s.indexOf('kutilmoqda') > -1) return 'status-yellow';
+            return 'status-gray';
+        }
+
         function renderTable(items) {
             var html = '';
             var limit = parseInt($('#per_page').val()) || 50;
             for (var i = 0; i < items.length; i++) {
                 var item = items[i];
+                var d = item._data || {};
+                var stCls = getStatusClass(d.status);
                 html += '<tr>';
                 html += '<td class="td-num">' + (i + 1 + ((currentPage - 1) * limit)) + '</td>';
-                html += '<td style="color:#64748b;">' + esc(String(item.id)) + '</td>';
-                html += '<td><span class="badge badge-indigo">' + esc(String(item._student)) + '</span></td>';
-                html += '<td><span class="text-cell" style="font-weight:600;color:#0f172a;">' + esc(item.key) + '</span></td>';
-                html += '<td><span class="badge badge-violet">' + esc(String(item._education_year)) + '</span></td>';
-                html += '<td>';
-                if (item._data && item._data.length > 0) {
-                    for (var d = 0; d < item._data.length; d++) {
-                        var attr = item._data[d];
-                        var keys = Object.keys(attr);
-                        for (var k = 0; k < keys.length; k++) {
-                            html += '<span class="data-badge">' + esc(keys[k]) + ': ' + esc(String(attr[keys[k]])) + '</span>';
-                        }
-                    }
-                } else {
-                    html += '-';
-                }
-                html += '</td>';
-                html += '<td style="color:#64748b;font-size:12px;white-space:nowrap;">' + formatTimestamp(item.created_at) + '</td>';
-                html += '<td style="color:#64748b;font-size:12px;white-space:nowrap;">' + formatTimestamp(item.updated_at) + '</td>';
+                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;min-width:180px;">' + esc(d.fullName) + '</span></td>';
+                html += '<td><span class="badge badge-indigo">' + esc(d.contractNumber) + '</span></td>';
+                html += '<td><span class="text-cell">' + esc(d.eduContractTypeName) + '</span></td>';
+                html += '<td><span class="badge badge-violet">' + esc(d.eduTypeName) + '</span></td>';
+                html += '<td><span class="text-cell">' + esc(d.eduForm) + '</span></td>';
+                html += '<td><span class="text-cell text-emerald">' + esc(d.facultyName) + '</span></td>';
+                html += '<td><span class="text-cell text-cyan" style="max-width:180px;">' + esc(d.eduSpecialityName) + '</span></td>';
+                html += '<td style="text-align:center;"><span class="badge badge-course">' + esc(d.eduCourse) + '</span></td>';
+                html += '<td style="white-space:nowrap;"><span class="badge badge-year">' + esc(d.eduYear) + '</span></td>';
+                html += '<td style="text-align:right;white-space:nowrap;"><span class="money-cell">' + formatMoney(d.eduContractSum) + '</span></td>';
+                html += '<td style="text-align:right;white-space:nowrap;"><span class="money-cell money-paid">' + formatMoney(d.paidCreditAmount) + '</span></td>';
+                html += '<td style="text-align:right;white-space:nowrap;"><span class="money-cell money-debt">' + formatMoney(d.unPaidCreditAmount) + '</span></td>';
+                html += '<td style="text-align:center;"><span class="badge ' + stCls + '">' + esc(d.status) + '</span></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -270,10 +288,24 @@
 
         function downloadExcel() {
             if (allItems.length === 0) return;
-            var csv = '\uFEFF#,ID,Talaba ID,Kalit,O\'quv yili,Yaratilgan,Yangilangan\n';
+            var sep = ',';
+            var csv = '\uFEFF#' + sep + 'FISH' + sep + 'Kontrakt raqami' + sep + 'Kontrakt turi' + sep + 'Ta\'lim turi' + sep + 'Ta\'lim shakli' + sep + 'Fakultet' + sep + 'Yo\'nalish' + sep + 'Kurs' + sep + 'O\'quv yili' + sep + 'Kontrakt summasi' + sep + 'To\'langan' + sep + 'Qoldiq' + sep + 'Status\n';
             for (var i = 0; i < allItems.length; i++) {
-                var item = allItems[i];
-                csv += (i+1) + ',' + (item.id||'') + ',' + (item._student||'') + ',"' + (item.key||'').replace(/"/g,'""') + '",' + (item._education_year||'') + ',' + formatTimestamp(item.created_at) + ',' + formatTimestamp(item.updated_at) + '\n';
+                var d = allItems[i]._data || {};
+                csv += (i+1) + sep;
+                csv += '"' + (d.fullName||'').replace(/"/g,'""') + '"' + sep;
+                csv += '"' + (d.contractNumber||'').replace(/"/g,'""') + '"' + sep;
+                csv += '"' + (d.eduContractTypeName||'').replace(/"/g,'""') + '"' + sep;
+                csv += '"' + (d.eduTypeName||'').replace(/"/g,'""') + '"' + sep;
+                csv += '"' + (d.eduForm||'').replace(/"/g,'""') + '"' + sep;
+                csv += '"' + (d.facultyName||'').replace(/"/g,'""') + '"' + sep;
+                csv += '"' + (d.eduSpecialityName||'').replace(/"/g,'""') + '"' + sep;
+                csv += '"' + (d.eduCourse||'').replace(/"/g,'""') + '"' + sep;
+                csv += '"' + (d.eduYear||'').replace(/"/g,'""') + '"' + sep;
+                csv += (d.eduContractSum||0) + sep;
+                csv += (d.paidCreditAmount||0) + sep;
+                csv += (d.unPaidCreditAmount||0) + sep;
+                csv += '"' + (d.status||'').replace(/"/g,'""') + '"\n';
             }
             var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
             var link = document.createElement('a');
@@ -288,7 +320,6 @@
                 .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
 
-            // Enter tugmasini bosib qidirish
             $('#student_id').on('keypress', function(e) {
                 if (e.which === 13) loadContracts(1);
             });
@@ -316,7 +347,6 @@
             $('#level_code').change(function() { rSem(); rGrp(); });
             $('#semester').change(function() { rGrp(); });
 
-            // Boshlang'ich yuklash
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
             pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester');
@@ -359,22 +389,33 @@
         .contract-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .contract-table thead { position: sticky; top: 0; z-index: 10; }
         .contract-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
-        .contract-table th { padding: 14px 10px; text-align: left; font-weight: 600; font-size: 11px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
-        .contract-table th.th-num { padding: 14px 10px 14px 16px; width: 44px; }
+        .contract-table th { padding: 12px 8px; text-align: left; font-weight: 600; font-size: 10.5px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
+        .contract-table th.th-num { padding: 12px 8px 12px 14px; width: 40px; }
         .contract-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
         .contract-table tbody tr:nth-child(even) { background: #f8fafc; }
         .contract-table tbody tr:nth-child(odd) { background: #fff; }
         .contract-table tbody tr:hover { background: #eff6ff !important; box-shadow: inset 4px 0 0 #2b5ea7; }
-        .contract-table td { padding: 10px 10px; vertical-align: middle; line-height: 1.4; }
-        .td-num { padding-left: 16px !important; font-weight: 700; color: #2b5ea7; font-size: 13px; }
+        .contract-table td { padding: 8px 8px; vertical-align: middle; line-height: 1.4; }
+        .td-num { padding-left: 14px !important; font-weight: 700; color: #2b5ea7; font-size: 12px; }
 
-        .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
-        .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
-        .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
+        .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+        .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; }
+        .badge-course { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .badge-year { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; font-size: 10.5px; }
 
-        .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
+        .text-cell { font-size: 12px; font-weight: 500; line-height: 1.35; display: block; }
+        .text-emerald { color: #047857; }
+        .text-cyan { color: #0e7490; white-space: normal; word-break: break-word; }
 
-        .data-badge { display: inline-block; padding: 2px 8px; margin: 2px 3px; background: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+        .money-cell { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .money-paid { color: #16a34a; }
+        .money-debt { color: #dc2626; }
+
+        .status-green { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; font-weight: 700; }
+        .status-red { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; font-weight: 700; }
+        .status-yellow { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; font-weight: 700; }
+        .status-gray { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-weight: 700; }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }

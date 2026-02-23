@@ -1108,6 +1108,33 @@ class AcademicScheduleController extends Controller
             $objWriter = IOFactory::createWriter($phpWord, 'Word2007');
             $objWriter->save($tempPath);
 
+            // Hujjatni PDF ga aylantirib doimiy saqlash (tekshirish sahifasi uchun)
+            try {
+                $pdfStorageDir = storage_path('app/public/documents/verified');
+                if (!is_dir($pdfStorageDir)) {
+                    mkdir($pdfStorageDir, 0755, true);
+                }
+
+                $pdfCommand = sprintf(
+                    'soffice --headless --convert-to pdf --outdir %s %s 2>&1',
+                    escapeshellarg($pdfStorageDir),
+                    escapeshellarg($tempPath)
+                );
+                exec($pdfCommand, $pdfOutput, $pdfReturnCode);
+
+                $generatedPdfName = pathinfo(basename($tempPath), PATHINFO_FILENAME) . '.pdf';
+                $generatedPdfFullPath = $pdfStorageDir . '/' . $generatedPdfName;
+
+                if ($pdfReturnCode === 0 && file_exists($generatedPdfFullPath)) {
+                    $permanentPdfName = $verification->token . '.pdf';
+                    $permanentPdfPath = $pdfStorageDir . '/' . $permanentPdfName;
+                    rename($generatedPdfFullPath, $permanentPdfPath);
+                    $verification->update(['document_path' => 'documents/verified/' . $permanentPdfName]);
+                }
+            } catch (\Throwable $e) {
+                // PDF saqlash muvaffaqiyatsiz bo'lsa, davom etamiz
+            }
+
             // QR vaqtinchalik faylni tozalash
             if ($qrImagePath) {
                 @unlink($qrImagePath);

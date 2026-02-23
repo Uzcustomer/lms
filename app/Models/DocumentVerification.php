@@ -16,6 +16,7 @@ class DocumentVerification extends Model
         'department_name',
         'generated_by',
         'generated_at',
+        'document_path',
         'meta',
     ];
 

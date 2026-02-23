@@ -10,6 +10,30 @@ class DocumentVerificationController extends Controller
     {
         $verification = DocumentVerification::where('token', $token)->firstOrFail();
 
-        return view('document-verify', compact('verification'));
+        $documentUrl = null;
+        if ($verification->document_path) {
+            $documentUrl = route('document.verify.pdf', $verification->token);
+        }
+
+        return view('document-verify', compact('verification', 'documentUrl'));
+    }
+
+    public function viewPdf($token)
+    {
+        $verification = DocumentVerification::where('token', $token)->firstOrFail();
+
+        if (!$verification->document_path) {
+            abort(404);
+        }
+
+        $filePath = storage_path('app/public/' . $verification->document_path);
+
+        if (!file_exists($filePath)) {
+            abort(404);
+        }
+
+        return response()->file($filePath, [
+            'Content-Type' => 'application/pdf',
+        ]);
     }
 }

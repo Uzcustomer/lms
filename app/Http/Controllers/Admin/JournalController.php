@@ -1035,7 +1035,6 @@ class JournalController extends Controller
             'otherGrades',
             'attendanceData',
             'manualMtGrades',
-            'manualMtGradesRaw',
             'mtGradeHistory',
             'mtMaxResubmissions',
             'mtSubmissions',
@@ -1063,8 +1062,6 @@ class JournalController extends Controller
      */
     public function syncSchedule(Request $request)
     {
-        set_time_limit(120);
-
         $data = $request->validate([
             'group_id' => 'required',
             'subject_id' => 'required',

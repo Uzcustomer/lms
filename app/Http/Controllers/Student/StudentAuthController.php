@@ -38,9 +38,15 @@ class StudentAuthController extends Controller
             'ip' => $request->ip(),
         ]);
 
+        $clientIp = $request->ip();
+
         try {
             $response = Http::withoutVerifying()
                 ->timeout(15)
+                ->withHeaders([
+                    'X-Forwarded-For' => $clientIp,
+                    'X-Real-IP' => $clientIp,
+                ])
                 ->post('https://student.ttatf.uz/rest/v1/auth/login', [
                     'login' => $loginId,
                     'password' => $request->password,
@@ -77,6 +83,8 @@ class StudentAuthController extends Controller
                     ->timeout(15)
                     ->withHeaders([
                         'Authorization' => 'Bearer ' . $token,
+                        'X-Forwarded-For' => $clientIp,
+                        'X-Real-IP' => $clientIp,
                     ])->get('https://student.ttatf.uz/rest/v1/account/me');
             } catch (\Exception $e) {
                 Log::channel('student_auth')->error('[HEMIS ACCOUNT/ME] API ulanish xatosi (timeout/network)', [
@@ -156,7 +164,10 @@ class StudentAuthController extends Controller
                 'hemis_body' => mb_substr($response->body(), 0, 500),
             ]);
 
-            return $this->tryLocalPassword($request, hemsFailed: false);
+            // 429 = rate limit / CAPTCHA — bu server tomondan cheklov, talaba xatosi emas
+            $isServerSideFailure = $response->status() === 429;
+
+            return $this->tryLocalPassword($request, hemsFailed: $isServerSideFailure);
         }
     }
 

@@ -218,10 +218,12 @@ class ImportAttendanceControls extends Command
             try {
                 return $callback();
             } catch (\Illuminate\Database\QueryException $e) {
-                if ($e->getCode() == 1205 || str_contains($e->getMessage(), 'Lock wait timeout')) {
+                if ($e->getCode() == 1205 || $e->getCode() == 1213 || $e->getCode() == '40001'
+                    || str_contains($e->getMessage(), 'Lock wait timeout')
+                    || str_contains($e->getMessage(), 'Deadlock found')) {
                     $waitSeconds = $attempt * 2;
-                    $this->warn("Lock wait timeout (urinish {$attempt}/{$maxRetries}), {$waitSeconds}s kutilmoqda...");
-                    Log::warning("[AttCtrl] Lock wait timeout attempt {$attempt}/{$maxRetries}, waiting {$waitSeconds}s");
+                    $this->warn("Lock/Deadlock xato (urinish {$attempt}/{$maxRetries}), {$waitSeconds}s kutilmoqda...");
+                    Log::warning("[AttCtrl] Lock/Deadlock attempt {$attempt}/{$maxRetries}, waiting {$waitSeconds}s");
                     sleep($waitSeconds);
 
                     if ($attempt === $maxRetries) {

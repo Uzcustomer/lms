@@ -243,12 +243,34 @@ class ImportGrades extends Command
                     ->exists();
 
                 if ($hasFinalizedForDate) {
-                    $cleaned = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                    // Faqat is_final=true dublikati bor bo'lgan is_final=false yozuvlarni soft delete
+                    // Lokal qo'yilgan (HEMIS da yo'q) baholarni SAQLAB QOLISH
+                    $cleaned = DB::update("
+                        UPDATE student_grades sg
+                        INNER JOIN student_grades g2
+                            ON g2.student_id = sg.student_id
+                            AND g2.subject_id = sg.subject_id
+                            AND DATE(g2.lesson_date) = DATE(sg.lesson_date)
+                            AND g2.lesson_pair_code = sg.lesson_pair_code
+                            AND g2.training_type_code = sg.training_type_code
+                            AND g2.is_final = 1
+                            AND g2.deleted_at IS NULL
+                            AND g2.id != sg.id
+                        SET sg.deleted_at = NOW()
+                        WHERE sg.is_final = 0
+                            AND sg.deleted_at IS NULL
+                            AND DATE(sg.lesson_date) = ?
+                    ", [$dateStr]);
+
+                    // Qolgan is_final=false yozuvlarni (lokal/qo'lda kiritilgan) is_final=true qilish
+                    $upgraded = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
                         ->where('lesson_date', '<=', $dateEndOfDay)
                         ->where('is_final', false)
-                        ->delete();
-                    $this->info("  {$date->toDateString()} — is_final=true allaqachon mavjud, {$cleaned} ta is_final=false qoldiq tozalandi.");
-                    Log::info("[FinalImport] {$date->toDateString()} — cleaned {$cleaned} leftover is_final=false records (is_final=true already exists).");
+                        ->whereNull('deleted_at')
+                        ->update(['is_final' => true]);
+
+                    $this->info("  {$date->toDateString()} — is_final=true mavjud, {$cleaned} ta dublikat tozalandi, {$upgraded} ta lokal baho yakunlandi.");
+                    Log::info("[FinalImport] {$date->toDateString()} — cleaned {$cleaned} duplicate is_final=false, upgraded {$upgraded} unique local records.");
                     $successDays++;
                     continue;
                 }
@@ -268,6 +290,23 @@ class ImportGrades extends Command
                     $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
                     $this->error("  {$date->toDateString()} — API xato ({$errorDetail}), keyingi kunga o'tiladi.");
                     $failedDays[] = "{$date->toDateString()} ({$errorDetail})";
+                    continue;
+                }
+
+                // XAVFSIZLIK: API 0 ta baho qaytarsa, mavjud yozuvlarni o'chirmaslik
+                if (empty($gradeItems)) {
+                    $this->warn("  {$date->toDateString()} — API 0 ta baho qaytardi, mavjud yozuvlar saqlanadi.");
+                    Log::warning("[FinalImport] {$date->toDateString()} — API returned 0 grades, preserving existing records.");
+                    // Mavjud is_final=false yozuvlarni is_final=true ga o'zgartirish
+                    $upgraded = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                        ->where('lesson_date', '<=', $dateEndOfDay)
+                        ->where('is_final', false)
+                        ->whereNull('deleted_at')
+                        ->update(['is_final' => true]);
+                    if ($upgraded > 0) {
+                        $this->info("  {$upgraded} ta mavjud yozuv is_final=true qilindi.");
+                    }
+                    $successDays++;
                     continue;
                 }
 
@@ -631,6 +670,26 @@ class ImportGrades extends Command
         unset($filteredItems, $studentsMap, $deadlinesMap, $hemisIds);
 
         // ====================================================================
+        // XAVFSIZLIK: Agar yangi yozuvlar bo'sh bo'lsa, mavjud yozuvlarni o'chirmaslik
+        // API 0 ta baho qaytarsa yoki barcha studentlar topilmasa — eski baholar saqlanadi
+        // ====================================================================
+        if ($gradeCount === 0) {
+            $this->warn("applyGrades: 0 ta yozuv tayyorlandi ({$date->toDateString()}), mavjud yozuvlar saqlanadi.");
+            Log::warning("[ApplyGrades] 0 insert rows for {$date->toDateString()}, skipping delete to preserve existing data.");
+            if ($isFinal) {
+                $upgraded = StudentGrade::where('lesson_date', '>=', $dateStart)
+                    ->where('lesson_date', '<=', $dateEnd)
+                    ->where('is_final', false)
+                    ->whereNull('deleted_at')
+                    ->update(['is_final' => true]);
+                if ($upgraded > 0) {
+                    $this->info("  {$upgraded} ta mavjud yozuv is_final=true qilindi.");
+                }
+            }
+            return;
+        }
+
+        // ====================================================================
         // 1-QADAM: Read-only — tranzaksiyadan OLDIN (lock ushlamasligi uchun)
         // ====================================================================
         $retakeBackup = StudentGrade::where('lesson_date', '>=', $dateStart)
@@ -988,10 +1047,12 @@ class ImportGrades extends Command
                 return $callback();
             } catch (\Illuminate\Database\QueryException $e) {
                 // MySQL error 1205 = Lock wait timeout exceeded
-                if ($e->getCode() == 1205 || str_contains($e->getMessage(), 'Lock wait timeout')) {
+                if ($e->getCode() == 1205 || $e->getCode() == 1213 || $e->getCode() == '40001'
+                    || str_contains($e->getMessage(), 'Lock wait timeout')
+                    || str_contains($e->getMessage(), 'Deadlock found')) {
                     $waitSeconds = $attempt * 2; // 2s, 4s, 6s
-                    $this->warn("Lock wait timeout (urinish {$attempt}/{$maxRetries}), {$waitSeconds}s kutilmoqda...");
-                    Log::warning("[ImportGrades] Lock wait timeout attempt {$attempt}/{$maxRetries}, waiting {$waitSeconds}s");
+                    $this->warn("Lock/Deadlock xato (urinish {$attempt}/{$maxRetries}), {$waitSeconds}s kutilmoqda...");
+                    Log::warning("[ImportGrades] Lock/Deadlock attempt {$attempt}/{$maxRetries}, waiting {$waitSeconds}s");
                     sleep($waitSeconds);
 
                     if ($attempt === $maxRetries) {

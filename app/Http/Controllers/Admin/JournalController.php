@@ -1126,6 +1126,20 @@ class JournalController extends Controller
                 $message .= " Baholar: {$gradeResult['synced']} ta yangilandi, {$gradeResult['created']} ta yangi qo'shildi.";
             }
 
+            // Fallback debug info — foydalanuvchiga ko'rsatish
+            $fbDebug = $gradeResult['fallback_debug'] ?? [];
+            if (!empty($fbDebug)) {
+                $fbSummary = [];
+                foreach ($fbDebug as $date => $info) {
+                    if (is_string($info)) {
+                        $fbSummary[] = "{$date}: {$info}";
+                    } else {
+                        $fbSummary[] = "{$date}: API={$info['api_total']}, fan={$info['matched_subject']}, juftliklar=" . implode(',', $info['all_pairs'] ?? []);
+                    }
+                }
+                $message .= " [Fallback: " . implode('; ', $fbSummary) . "]";
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => $message,
@@ -1435,6 +1449,8 @@ class JournalController extends Controller
             // === 1-QADAM: Asosiy sync (_group + _subject) ===
             $page = 1;
             $pages = 1;
+            $mainApiItemCount = 0;
+            $mainApiPairs = [];
 
             do {
                 $response = Http::withoutVerifying()
@@ -1460,8 +1476,12 @@ class JournalController extends Controller
                 $data = $response->json('data', []);
                 $items = $data['items'] ?? [];
                 $pages = $data['pagination']['pageCount'] ?? 1;
+                $mainApiItemCount += count($items);
 
                 foreach ($items as $item) {
+                    $pairCode = $item['lessonPair']['code'] ?? '?';
+                    $dateStr = isset($item['lesson_date']) ? date('Y-m-d', $item['lesson_date']) : '?';
+                    $mainApiPairs[$dateStr . '_' . $pairCode] = true;
                     $processGradeItem($item);
                 }
 
@@ -1470,6 +1490,14 @@ class JournalController extends Controller
                     usleep(500000);
                 }
             } while ($page <= $pages);
+
+            Log::info("Grade sync 1-qadam: {$groupId}/{$subjectId}", [
+                'api_total_items' => $mainApiItemCount,
+                'api_pages' => $pages,
+                'api_date_pairs' => array_keys($mainApiPairs),
+                'synced' => $synced,
+                'created' => $created,
+            ]);
 
             // === 2-QADAM: Fallback — jadvalda bahosi yo'q kunlar uchun _group + sana orqali olish ===
             // HEMIS API _subject bilan hamma baholarni qaytarmasligi mumkin (turli subject_schedule),
@@ -1480,9 +1508,17 @@ class JournalController extends Controller
                 ->whereNull('deleted_at')
                 ->whereNotNull('lesson_date')
                 ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
-                ->select(DB::raw('DATE(lesson_date) as lesson_date_str'), 'lesson_pair_code')
+                ->select(DB::raw('DATE(lesson_date) as lesson_date_str'), 'lesson_pair_code', 'training_type_code')
                 ->distinct()
                 ->get();
+
+            Log::info("Grade sync 2-qadam: jadval tekshiruvi", [
+                'group_id' => $groupId,
+                'subject_id' => $subjectId,
+                'schedule_date_pairs' => $scheduleDatePairs->map(fn($sp) => "{$sp->lesson_date_str}_{$sp->lesson_pair_code}(tt:{$sp->training_type_code})")->toArray(),
+            ]);
+
+            $fallbackDebug = [];
 
             if ($scheduleDatePairs->isNotEmpty()) {
                 $studentHemisIds = $students->keys()->toArray();
@@ -1498,19 +1534,27 @@ class JournalController extends Controller
                     ->flip()
                     ->toArray();
 
+                Log::info("Grade sync 2-qadam: mavjud baholar", [
+                    'existing_grade_keys' => array_keys($existingGradeKeys),
+                ]);
+
+                $missingDatePairs = [];
                 $missingDates = [];
                 foreach ($scheduleDatePairs as $sp) {
                     $key = $sp->lesson_date_str . '_' . $sp->lesson_pair_code;
                     if (!isset($existingGradeKeys[$key])) {
+                        $missingDatePairs[] = $key;
                         $missingDates[$sp->lesson_date_str] = true;
                     }
                 }
 
                 if (!empty($missingDates)) {
-                    Log::info("Grade sync fallback: {$groupId}/{$subjectId} — " . count($missingDates) . " ta sanada baholar yo'q, alternativ API bilan urinilmoqda", [
+                    Log::info("Grade sync fallback: {$groupId}/{$subjectId} — " . count($missingDates) . " ta sanada baholar yo'q", [
+                        'missing_date_pairs' => $missingDatePairs,
                         'missing_dates' => array_keys($missingDates),
                     ]);
 
+                    $syncedBefore = $synced;
                     $createdBefore = $created;
                     foreach (array_keys($missingDates) as $missingDate) {
                         $dateCarbon = \Carbon\Carbon::parse($missingDate);
@@ -1519,6 +1563,10 @@ class JournalController extends Controller
 
                         $fbPage = 1;
                         $fbPages = 1;
+                        $fbTotalItems = 0;
+                        $fbMatchedItems = 0;
+                        $fbAllSubjects = [];
+                        $fbAllPairs = [];
 
                         do {
                             $fbResponse = Http::withoutVerifying()
@@ -1532,15 +1580,32 @@ class JournalController extends Controller
                                     'page' => $fbPage,
                                 ]);
 
-                            if (!$fbResponse || !$fbResponse->successful()) break;
+                            if (!$fbResponse || !$fbResponse->successful()) {
+                                Log::warning("Grade sync fallback: API xatolik — {$missingDate}", [
+                                    'group_id' => $groupId,
+                                    'status' => $fbResponse ? $fbResponse->status() : 'timeout',
+                                    'body' => $fbResponse ? substr($fbResponse->body(), 0, 300) : 'N/A',
+                                    'from_ts' => $fromTs,
+                                    'to_ts' => $toTs,
+                                ]);
+                                $fallbackDebug[$missingDate] = 'API_ERROR:' . ($fbResponse ? $fbResponse->status() : 'timeout');
+                                break;
+                            }
 
                             $fbData = $fbResponse->json('data', []);
                             $fbItems = $fbData['items'] ?? [];
                             $fbPages = $fbData['pagination']['pageCount'] ?? 1;
+                            $fbTotalItems += count($fbItems);
 
                             foreach ($fbItems as $fbItem) {
+                                $fbSubjectId = $fbItem['subject']['id'] ?? null;
+                                $fbPairCode = $fbItem['lessonPair']['code'] ?? null;
+                                $fbAllSubjects[$fbSubjectId] = ($fbItem['subject']['name'] ?? '?');
+                                $fbAllPairs[$fbPairCode] = true;
+
                                 // Faqat kerakli fan uchun filtrlash
-                                if (($fbItem['subject']['id'] ?? null) != $subjectId) continue;
+                                if ($fbSubjectId != $subjectId) continue;
+                                $fbMatchedItems++;
                                 $processGradeItem($fbItem);
                             }
 
@@ -1549,13 +1614,44 @@ class JournalController extends Controller
                                 usleep(500000);
                             }
                         } while ($fbPage <= $fbPages);
+
+                        $fallbackDebug[$missingDate] = [
+                            'api_total' => $fbTotalItems,
+                            'matched_subject' => $fbMatchedItems,
+                            'all_subjects' => $fbAllSubjects,
+                            'all_pairs' => array_keys($fbAllPairs),
+                        ];
+
+                        Log::info("Grade sync fallback: {$missingDate} natijalari", [
+                            'group_id' => $groupId,
+                            'subject_id' => $subjectId,
+                            'from_ts' => $fromTs,
+                            'to_ts' => $toTs,
+                            'api_total_items' => $fbTotalItems,
+                            'matched_subject_items' => $fbMatchedItems,
+                            'all_subjects_in_response' => $fbAllSubjects,
+                            'all_pairs_in_response' => array_keys($fbAllPairs),
+                        ]);
                     }
 
+                    $fallbackSynced = $synced - $syncedBefore;
                     $fallbackCreated = $created - $createdBefore;
-                    if ($fallbackCreated > 0) {
-                        Log::info("Grade sync fallback: {$groupId}/{$subjectId} — {$fallbackCreated} ta yangi baho qo'shildi");
-                    }
+                    Log::info("Grade sync fallback yakuniy: {$groupId}/{$subjectId}", [
+                        'fallback_synced' => $fallbackSynced,
+                        'fallback_created' => $fallbackCreated,
+                        'debug' => $fallbackDebug,
+                    ]);
+                } else {
+                    Log::info("Grade sync: hamma baholar mavjud, fallback kerak emas", [
+                        'group_id' => $groupId,
+                        'subject_id' => $subjectId,
+                    ]);
                 }
+            } else {
+                Log::info("Grade sync: jadvalda dars topilmadi (schedules bo'sh)", [
+                    'group_id' => $groupId,
+                    'subject_id' => $subjectId,
+                ]);
             }
 
         } catch (\Throwable $e) {
@@ -1565,7 +1661,11 @@ class JournalController extends Controller
             ]);
         }
 
-        return ['synced' => $synced, 'created' => $created];
+        return [
+            'synced' => $synced,
+            'created' => $created,
+            'fallback_debug' => $fallbackDebug ?? [],
+        ];
     }
 
     /**

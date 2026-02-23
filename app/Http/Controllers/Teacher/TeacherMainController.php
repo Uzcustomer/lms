@@ -304,6 +304,7 @@ class TeacherMainController extends Controller
 
             $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('semester_code', $semester->code)
+                ->where('is_active', true)
                 ->get();
         }
 
@@ -597,6 +598,7 @@ class TeacherMainController extends Controller
         if ($teacher->hasRole('dekan') or $teacher->groups->contains($group)) {
             $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('semester_code', $semester->code)
+                ->where('is_active', true)
                 ->pluck('subject_name', 'id');
         } else {
             $subject_ids = StudentGrade::join('students', 'student_grades.student_hemis_id', '=', 'students.hemis_id')
@@ -607,7 +609,7 @@ class TeacherMainController extends Controller
                 ->pluck('student_grades.subject_id');
 
             $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
-                ->where('semester_code', $semester->code)->whereIn('subject_id', $subject_ids)->pluck('subject_name', 'id');
+                ->where('semester_code', $semester->code)->where('is_active', true)->whereIn('subject_id', $subject_ids)->pluck('subject_name', 'id');
 
         }
 

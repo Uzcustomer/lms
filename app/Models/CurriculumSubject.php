@@ -26,6 +26,7 @@ class CurriculumSubject extends Model
         'credit',
         'in_group',
         'at_semester',
+        'is_active',
         'subject_details',
         'subject_exam_types',
         'rating_grade_code',
@@ -40,9 +41,15 @@ class CurriculumSubject extends Model
         'total_acload' => 'decimal:2',
         'credit' => 'decimal:2',
         'at_semester' => 'boolean',
+        'is_active' => 'boolean',
         'subject_details' => 'array',
         'subject_exam_types' => 'array',
     ];
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
 
     public function curriculum()
     {

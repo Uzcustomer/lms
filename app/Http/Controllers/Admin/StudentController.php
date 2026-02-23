@@ -328,7 +328,7 @@ class StudentController extends Controller
         $curriculumId = $request->input('curriculum_id');
 
         if ($curriculumId) {
-            $subjects = CurriculumSubject::where('curricula_hemis_id', $curriculumId)->get(['subject_id as id', 'subject_name as name']);
+            $subjects = CurriculumSubject::where('curricula_hemis_id', $curriculumId)->where('is_active', true)->get(['subject_id as id', 'subject_name as name']);
             return response()->json($subjects);
         }
 
@@ -859,6 +859,7 @@ class StudentController extends Controller
 
         $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
             ->where('semester_code', $semester->code)
+            ->where('is_active', true)
             ->pluck('subject_name', 'id');
 
         return response()->json($subjects);
@@ -871,6 +872,7 @@ class StudentController extends Controller
 
         $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
             ->where('semester_code', $semester->code)
+            ->where('is_active', true)
             ->pluck('subject_name', 'curriculum_subject_hemis_id');
 
         return response()->json($subjects);

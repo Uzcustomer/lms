@@ -96,7 +96,8 @@ class JournalController extends Controller
                 ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
                 ->where('g.department_active', true)
-                ->where('g.active', true);
+                ->where('g.active', true)
+                ->where('cs.is_active', true);
         };
 
         // Kafedra dropdown uchun - faqat haqiqiy natija bor kafedralar
@@ -2552,7 +2553,8 @@ class JournalController extends Controller
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->where('g.department_active', true)
-            ->where('g.active', true);
+            ->where('g.active', true)
+            ->where('cs.is_active', true);
 
         // O'qituvchi uchun faqat o'zi o'tadigan fanlar
         // O'qituvchi uchun faqat o'zi o'tadigan fanlar/guruhlar

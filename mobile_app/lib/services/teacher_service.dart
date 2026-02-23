@@ -60,4 +60,52 @@ class TeacherService {
       'subject_id': subjectId.toString(),
     });
   }
+
+  Future<Map<String, dynamic>> getJournal({
+    required int groupId,
+    required String subjectId,
+    required String semesterCode,
+  }) async {
+    return await _api.get(ApiConfig.teacherJournal, queryParams: {
+      'group_id': groupId.toString(),
+      'subject_id': subjectId,
+      'semester_code': semesterCode,
+    });
+  }
+
+  Future<Map<String, dynamic>> saveOpenedLessonGrade({
+    required String studentHemisId,
+    required String subjectId,
+    required String semesterCode,
+    required String lessonDate,
+    required String lessonPairCode,
+    required double grade,
+    required String groupHemisId,
+  }) async {
+    return await _api.post(ApiConfig.teacherSaveLessonGrade, {
+      'student_hemis_id': studentHemisId,
+      'subject_id': subjectId,
+      'semester_code': semesterCode,
+      'lesson_date': lessonDate,
+      'lesson_pair_code': lessonPairCode,
+      'grade': grade,
+      'group_hemis_id': groupHemisId,
+    }, auth: true);
+  }
+
+  Future<Map<String, dynamic>> saveMtGrade({
+    required String studentHemisId,
+    required String subjectId,
+    required String semesterCode,
+    required double grade,
+    bool regrade = false,
+  }) async {
+    return await _api.post(ApiConfig.teacherSaveMtGrade, {
+      'student_hemis_id': studentHemisId,
+      'subject_id': subjectId,
+      'semester_code': semesterCode,
+      'grade': grade,
+      'regrade': regrade,
+    }, auth: true);
+  }
 }

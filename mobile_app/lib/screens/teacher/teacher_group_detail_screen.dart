@@ -32,6 +32,7 @@ class _TeacherGroupDetailScreenState extends State<TeacherGroupDetailScreen> {
   List<Map<String, dynamic>> _semesters = [];
   List<Map<String, dynamic>> _subjects = [];
   int? _selectedSemesterId;
+  String? _selectedSemesterCode;
 
   @override
   void initState() {
@@ -64,6 +65,7 @@ class _TeacherGroupDetailScreenState extends State<TeacherGroupDetailScreen> {
         _selectedSemesterId = current['id'] is int
             ? current['id']
             : int.tryParse(current['id'].toString());
+        _selectedSemesterCode = current['code']?.toString();
         _loadSubjects();
       }
 
@@ -163,7 +165,10 @@ class _TeacherGroupDetailScreenState extends State<TeacherGroupDetailScreen> {
                                   selectedColor: AppTheme.primaryColor,
                                   onSelected: (_) {
                                     if (!isSelected) {
-                                      setState(() => _selectedSemesterId = id);
+                                      setState(() {
+                                        _selectedSemesterId = id;
+                                        _selectedSemesterCode = s['code']?.toString();
+                                      });
                                       _loadSubjects();
                                     }
                                   },
@@ -211,9 +216,7 @@ class _TeacherGroupDetailScreenState extends State<TeacherGroupDetailScreen> {
   Widget _buildSubjectCard(Map<String, dynamic> subject, int index, bool isDark) {
     final name = subject['subject_name']?.toString() ?? '';
     final credit = subject['credit'];
-    final subjectId = subject['id'] is int
-        ? subject['id'] as int
-        : int.tryParse(subject['id'].toString()) ?? 0;
+    final subjectId = subject['subject_id']?.toString() ?? subject['id'].toString();
 
     final colors = [
       const Color(0xFF1565C0),
@@ -272,8 +275,8 @@ class _TeacherGroupDetailScreenState extends State<TeacherGroupDetailScreen> {
               builder: (_) => TeacherJournalScreen(
                 groupId: widget.groupId,
                 groupName: widget.groupName,
-                semesterId: _selectedSemesterId!,
                 subjectId: subjectId,
+                semesterCode: _selectedSemesterCode ?? '',
                 subjectName: name,
               ),
             ),

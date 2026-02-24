@@ -437,7 +437,8 @@
             weekCount: 0,
             savedHours: {},
             savedTopics: {},
-            hemisTopics: {}
+            hemisTopics: {},
+            canEdit: false
         };
 
         // Mustaqil ta'limni filtrdan chiqarish
@@ -485,6 +486,7 @@
                     ktrState.savedHours = {};
                     ktrState.savedTopics = {};
                     ktrState.hemisTopics = data.hemis_topics || {};
+                    ktrState.canEdit = data.can_edit || false;
 
                     // Saqlangan ma'lumotlarni yuklash
                     if (data.plan && data.plan.plan_data) {
@@ -497,11 +499,24 @@
                         }
                     }
 
-                    $('#ktr-week-selector').show();
+                    // Tahrirlash huquqi bo'yicha UI
+                    if (ktrState.canEdit) {
+                        $('#ktr-week-selector').show();
+                        $('#ktr-save-btn').show();
+                    } else {
+                        $('#ktr-week-selector').hide();
+                        $('#ktr-save-btn').hide();
+                    }
                     $('.ktr-week-btn').removeClass('active');
 
                     if (data.plan && data.plan.week_count) {
                         selectWeekCount(data.plan.week_count, true);
+                    } else if (!ktrState.canEdit) {
+                        // Reja yo'q va tahrirlash huquqi yo'q
+                        $('#ktr-plan-table-wrap').hide();
+                        $('#ktr-validation-msg')
+                            .html('Bu fan uchun hali KTR rejasi tuzilmagan.')
+                            .removeClass('ktr-msg-error').addClass('ktr-msg-success').show();
                     }
                 },
                 error: function(xhr) {
@@ -562,7 +577,8 @@
                     if (fromLoad && ktrState.savedHours[w] && ktrState.savedHours[w][code] !== undefined) {
                         hrs = ktrState.savedHours[w][code];
                     }
-                    tbody += '<td class="ktr-td-hrs"><input type="number" min="0" class="ktr-cell ktr-hours" data-week="' + w + '" data-code="' + code + '" value="' + hrs + '"></td>';
+                    var readonlyAttr = ktrState.canEdit ? '' : ' readonly disabled';
+                    tbody += '<td class="ktr-td-hrs"><input type="number" min="0" class="ktr-cell ktr-hours" data-week="' + w + '" data-code="' + code + '" value="' + hrs + '"' + readonlyAttr + '></td>';
                 });
                 tbody += '</tr>';
             }

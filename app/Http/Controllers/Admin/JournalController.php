@@ -3821,6 +3821,24 @@ class JournalController extends Controller
             ], 404);
         }
 
+        // Check if auth user exists in users table (teacher guard may use different auth table)
+        $submittedByUserId = DB::table('users')->where('id', auth()->id())->exists() ? auth()->id() : null;
+
+        if (!$submittedByUserId) {
+            // Teacher guard orqali kirgan bo'lsa, teachers jadvalidan login bo'yicha users jadvalidan qidirish
+            $teacher = auth()->guard('teacher')->user();
+            if ($teacher) {
+                $submittedByUserId = DB::table('users')->where('email', $teacher->login)->value('id');
+            }
+        }
+
+        if (!$submittedByUserId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Foydalanuvchi topilmadi. Iltimos, qayta kiring.',
+            ], 403);
+        }
+
         DB::beginTransaction();
         try {
             // YN submission yozuvini yaratish
@@ -3828,7 +3846,7 @@ class JournalController extends Controller
                 'subject_id' => $subjectId,
                 'semester_code' => $semesterCode,
                 'group_hemis_id' => $groupHemisId,
-                'submitted_by' => auth()->id(),
+                'submitted_by' => $submittedByUserId,
                 'submitted_at' => now(),
             ]);
 

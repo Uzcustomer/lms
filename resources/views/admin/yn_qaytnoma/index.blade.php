@@ -137,7 +137,7 @@
                         <svg style="width: 48px; height: 48px; margin: 0 auto 12px; color: #cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                         </svg>
-                        <p style="color: #94a3b8; font-size: 14px;">YN yuborilgan guruhlarni ko'rish uchun filtrlarni tanlang va "Ko'rsatish" tugmasini bosing.</p>
+                        <p style="color: #94a3b8; font-size: 14px;">Guruhlarni ko'rish uchun filtrlarni tanlang va "Qidirish" tugmasini bosing.</p>
                     </div>
 
                     <table id="groups-table" class="yn-table" style="display: none;">
@@ -154,6 +154,7 @@
                                 <th>Semestr</th>
                                 <th>Guruh</th>
                                 <th>Fanlar soni</th>
+                                <th>Holat</th>
                                 <th>Yuborilgan sana</th>
                             </tr>
                         </thead>
@@ -165,7 +166,7 @@
                         <svg style="width: 48px; height: 48px; margin: 0 auto 12px; color: #cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
                         </svg>
-                        <p style="color: #94a3b8; font-size: 14px;">Tanlangan filtrlar bo'yicha YN yuborilgan guruhlar topilmadi.</p>
+                        <p style="color: #94a3b8; font-size: 14px;">Tanlangan filtrlar bo'yicha guruhlar topilmadi.</p>
                     </div>
                 </div>
 
@@ -323,6 +324,18 @@
 
             data.forEach(function (row, index) {
                 var submittedDate = row.last_submitted_at ? new Date(row.last_submitted_at).toLocaleDateString('uz-UZ') : '-';
+                var submitted = parseInt(row.submitted_subject_count) || 0;
+                var total = parseInt(row.total_subject_count) || 0;
+
+                var statusBadge = '';
+                if (submitted === 0) {
+                    statusBadge = '<span class="badge badge-status-red">Yuborilmagan</span>';
+                } else if (submitted >= total) {
+                    statusBadge = '<span class="badge badge-status-green">Yuborilgan</span>';
+                } else {
+                    statusBadge = '<span class="badge badge-status-yellow">Jarayonda (' + submitted + '/' + total + ')</span>';
+                }
+
                 var tr = '<tr>' +
                     '<td style="text-align:center;">' +
                         '<input type="checkbox" class="group-checkbox" ' +
@@ -338,7 +351,8 @@
                     '<td><span class="badge badge-violet">' + (row.level_name || '-') + '</span></td>' +
                     '<td><span class="badge badge-teal">' + (row.semester_name || '-') + '</span></td>' +
                     '<td><span class="badge badge-indigo">' + (row.group_name || '-') + '</span></td>' +
-                    '<td><span class="badge badge-subject">' + (row.subject_count || 0) + ' ta fan</span></td>' +
+                    '<td><span class="badge badge-subject">' + submitted + ' / ' + total + ' ta fan</span></td>' +
+                    '<td>' + statusBadge + '</td>' +
                     '<td><span class="text-cell text-date">' + submittedDate + '</span></td>' +
                     '</tr>';
                 tbody.append(tr);
@@ -796,6 +810,24 @@
             background: #fef3c7;
             color: #92400e;
             border: 1px solid #fde68a;
+        }
+        .badge-status-green {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            white-space: nowrap;
+        }
+        .badge-status-red {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+            white-space: nowrap;
+        }
+        .badge-status-yellow {
+            background: #fef9c3;
+            color: #854d0e;
+            border: 1px solid #fde68a;
+            white-space: nowrap;
         }
 
         /* ===== Text Cells ===== */

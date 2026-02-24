@@ -31,16 +31,16 @@ class YnQaytnomaController extends Controller
 
     private function baseQuery()
     {
-        return DB::table('yn_submissions as ys')
-            ->join('groups as g', 'g.group_hemis_id', '=', 'ys.group_hemis_id')
-            ->join('semesters as s', function ($join) {
-                $join->on('s.curriculum_hemis_id', '=', 'g.curriculum_hemis_id')
-                    ->on('s.code', '=', 'ys.semester_code');
-            })
-            ->leftJoin('curriculum_subjects as cs', function ($join) {
+        return DB::table('groups as g')
+            ->join('semesters as s', 's.curriculum_hemis_id', '=', 'g.curriculum_hemis_id')
+            ->join('curriculum_subjects as cs', function ($join) {
                 $join->on('cs.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
-                    ->on('cs.subject_id', '=', 'ys.subject_id')
-                    ->on('cs.semester_code', '=', 'ys.semester_code');
+                    ->on('cs.semester_code', '=', 's.code');
+            })
+            ->leftJoin('yn_submissions as ys', function ($join) {
+                $join->on('ys.group_hemis_id', '=', 'g.group_hemis_id')
+                    ->on('ys.semester_code', '=', 's.code')
+                    ->on('ys.subject_id', '=', 'cs.subject_id');
             })
             ->leftJoin('departments as d', function ($join) {
                 $join->on('d.department_hemis_id', '=', 'g.department_hemis_id')
@@ -66,10 +66,10 @@ class YnQaytnomaController extends Controller
             $query->where('s.level_code', $request->level_code);
         }
         if ($request->semester_code) {
-            $query->where('ys.semester_code', $request->semester_code);
+            $query->where('s.code', $request->semester_code);
         }
         if ($request->subject_id) {
-            $query->where('ys.subject_id', $request->subject_id);
+            $query->where('cs.subject_id', $request->subject_id);
         }
         if ($request->group_id) {
             $query->where('g.group_hemis_id', $request->group_id);
@@ -112,16 +112,17 @@ class YnQaytnomaController extends Controller
                 's.name as semester_name',
                 'c.education_type_name'
             )
-            ->selectRaw('COUNT(DISTINCT ys.subject_id) as subject_count')
+            ->selectRaw('COUNT(DISTINCT cs.subject_id) as total_subject_count')
+            ->selectRaw('COUNT(DISTINCT ys.subject_id) as submitted_subject_count')
             ->selectRaw('MAX(ys.submitted_at) as last_submitted_at');
 
         $query = $this->applyFilters($query, $request);
 
         $groups = $query
             ->groupBy(
-                'g.group_hemis_id', 'ys.semester_code',
+                'g.group_hemis_id', 's.code',
                 'g.id', 'g.name', 'd.name', 'sp.name',
-                's.level_code', 's.level_name', 's.code', 's.name',
+                's.level_code', 's.level_name', 's.name',
                 'c.education_type_name'
             )
             ->orderBy('d.name')
@@ -170,8 +171,8 @@ class YnQaytnomaController extends Controller
     public function getSubjects(Request $request)
     {
         $query = $this->baseQuery()
-            ->select('ys.subject_id as id', 'cs.subject_name as name')
-            ->whereNotNull('ys.subject_id')
+            ->select('cs.subject_id as id', 'cs.subject_name as name')
+            ->whereNotNull('cs.subject_id')
             ->whereNotNull('cs.subject_name');
 
         $query = $this->applyFilters($query, $request);

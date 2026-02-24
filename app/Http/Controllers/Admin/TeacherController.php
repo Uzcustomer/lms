@@ -247,9 +247,11 @@ class TeacherController extends Controller
                 $query->where('subject_name', 'like', "%{$search}%");
             })
             ->when($levelCode, function ($query, $levelCode) {
-                $query->whereHas('semester', function ($q) use ($levelCode) {
-                    $q->where('level_code', $levelCode);
-                });
+                $semesterCodes = Semester::where('level_code', $levelCode)
+                    ->pluck('code')
+                    ->unique()
+                    ->toArray();
+                $query->whereIn('semester_code', $semesterCodes);
             })
             ->selectRaw('MIN(id) as id, subject_name, subject_code, semester_code, semester_name, MIN(department_name) as department_name')
             ->groupBy('subject_name', 'subject_code', 'semester_code', 'semester_name')

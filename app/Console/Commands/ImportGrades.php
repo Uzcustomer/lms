@@ -37,7 +37,7 @@ class ImportGrades extends Command
         $this->token = config('services.hemis.token') ?? '';
     }
 
-    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)}';
+    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)} {--to= : Backfill end date (Y-m-d), default yesterday}';
 
     protected $description = 'Import student grades and attendance from Hemis API';
 
@@ -449,10 +449,11 @@ class ImportGrades extends Command
         }
 
         $startDate = Carbon::parse($fromDate)->startOfDay();
-        $endDate = Carbon::yesterday()->startOfDay();
+        $toDate = $this->option('to');
+        $endDate = $toDate ? Carbon::parse($toDate)->startOfDay() : Carbon::yesterday()->startOfDay();
 
         if ($startDate->greaterThan($endDate)) {
-            $this->error("Boshlanish sanasi ({$startDate->toDateString()}) kechagi kundan ({$endDate->toDateString()}) katta bo'lishi mumkin emas.");
+            $this->error("Boshlanish sanasi ({$startDate->toDateString()}) tugash sanasidan ({$endDate->toDateString()}) katta bo'lishi mumkin emas.");
             return;
         }
 
@@ -493,14 +494,15 @@ class ImportGrades extends Command
                 continue;
             }
 
-            $this->applyGrades($gradeItems, $date, true);
+            $isFinal = !$date->isToday();
+            $this->applyGrades($gradeItems, $date, $isFinal);
 
             // Attendance
             $attendanceItems = $this->fetchAllPages('attendance-list', $dayFrom, $dayTo);
             if ($attendanceItems !== false) {
                 foreach ($attendanceItems as $item) {
                     try {
-                        $this->processAttendance($item, true);
+                        $this->processAttendance($item, $isFinal);
                     } catch (\Throwable $e) {
                         Log::warning("[Backfill] Attendance item failed: " . substr($e->getMessage(), 0, 100));
                     }

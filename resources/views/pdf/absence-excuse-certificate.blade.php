@@ -253,8 +253,8 @@
     <div class="body-text">
         <p>
             Toshkent davlat tibbiyot universiteti Termiz filiali
-            @if($excuse->department_name){{ $excuse->department_name }}@endif
-            @if($excuse->group_name){{ $excuse->group_name }} guruh@endif
+            {{ $excuse->department_name ? $excuse->department_name : '' }}
+            {{ $excuse->group_name ? $excuse->group_name . ' guruh' : '' }}
             talabasi <span class="student-name">{{ $excuse->student_full_name }}</span>
             (HEMIS ID: {{ $excuse->student_hemis_id }})
             {{ mb_strtolower($excuse->reason_label) }} sababli

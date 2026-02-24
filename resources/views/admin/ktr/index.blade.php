@@ -524,12 +524,12 @@
             var types = ktrState.trainingTypes;
             var codes = ktrState.filteredCodes;
 
-            // Thead: Hafta | [Soat per type] | Mavzu (bitta ustun)
+            // Thead: Hafta | Mavzu | [Soat per type]
             var thead = '<tr><th class="ktr-th-week" rowspan="2">Hafta</th>';
+            thead += '<th class="ktr-th-topic-combined" rowspan="2">Mavzu</th>';
             codes.forEach(function(code) {
                 thead += '<th class="ktr-th-type">' + types[code].name + '<div class="ktr-th-hours">' + types[code].hours + ' soat</div></th>';
             });
-            thead += '<th class="ktr-th-topic-combined" rowspan="2">Mavzu</th>';
             thead += '</tr><tr>';
             codes.forEach(function() {
                 thead += '<th class="ktr-th-sub">Soat</th>';
@@ -542,6 +542,7 @@
             for (var w = 1; w <= weekCount; w++) {
                 tbody += '<tr>';
                 tbody += '<td class="ktr-td-week">' + w + '</td>';
+                tbody += '<td class="ktr-td-topic" id="ktr-topic-cell-' + w + '"><span class="ktr-topic-text ktr-topic-hidden" id="ktr-topic-' + w + '"></span></td>';
                 codes.forEach(function(code) {
                     var hrs = '';
                     if (fromLoad && ktrState.savedHours[w] && ktrState.savedHours[w][code] !== undefined) {
@@ -549,23 +550,22 @@
                     }
                     tbody += '<td class="ktr-td-hrs"><input type="number" min="0" class="ktr-cell ktr-hours" data-week="' + w + '" data-code="' + code + '" value="' + hrs + '"></td>';
                 });
-                tbody += '<td class="ktr-td-topic" id="ktr-topic-cell-' + w + '"><span class="ktr-topic-text ktr-topic-hidden" id="ktr-topic-' + w + '"></span></td>';
                 tbody += '</tr>';
             }
             $('#ktr-plan-tbody').html(tbody);
 
             // Tfoot
             var tfoot = '<tr class="ktr-tfoot-sum"><td class="ktr-td-week" style="font-weight:700;">Jami</td>';
+            tfoot += '<td class="ktr-td-topic-empty"></td>';
             codes.forEach(function(code) {
                 tfoot += '<td class="ktr-td-sum" id="ktr-col-sum-' + code + '">0</td>';
             });
-            tfoot += '<td class="ktr-td-topic-empty"></td>';
             tfoot += '</tr>';
             tfoot += '<tr class="ktr-tfoot-load"><td class="ktr-td-week" style="font-weight:700;">Yukl.</td>';
+            tfoot += '<td class="ktr-td-topic-empty"></td>';
             codes.forEach(function(code) {
                 tfoot += '<td class="ktr-td-load">' + types[code].hours + '</td>';
             });
-            tfoot += '<td class="ktr-td-topic-empty"></td>';
             tfoot += '</tr>';
             $('#ktr-plan-tfoot').html(tfoot);
 
@@ -766,12 +766,11 @@
             rows.push([title]);
             rows.push([]);
 
-            // Header row 2: column names
-            var header = ['Hafta'];
+            // Header row 2: column names - Hafta | Mavzu | Soatlar
+            var header = ['Hafta', 'Mavzu'];
             codes.forEach(function(code) {
                 header.push(types[code].name + ' (soat)');
             });
-            header.push('Mavzu');
             rows.push(header);
 
             // Ketma-ket tartib raqamini hisoblash
@@ -784,7 +783,6 @@
                 var topicParts = [];
                 codes.forEach(function(code) {
                     var hrs = $('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val() || '';
-                    row.push(hrs);
                     var val = parseInt(hrs) || 0;
                     if (val > 0) {
                         var topicName = getHemisTopic(code, seqCounters[code]);
@@ -793,11 +791,15 @@
                     }
                 });
                 row.push(topicParts.join('; '));
+                codes.forEach(function(code) {
+                    var hrs = $('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val() || '';
+                    row.push(hrs);
+                });
                 rows.push(row);
             }
 
             // Jami row
-            var jamiRow = ['Jami'];
+            var jamiRow = ['Jami', ''];
             codes.forEach(function(code) {
                 var colSum = 0;
                 $('.ktr-hours[data-code="' + code + '"]').each(function() {
@@ -805,15 +807,13 @@
                 });
                 jamiRow.push(colSum);
             });
-            jamiRow.push('');
             rows.push(jamiRow);
 
             // Yuklama row
-            var loadRow = ['Yuklama'];
+            var loadRow = ['Yuklama', ''];
             codes.forEach(function(code) {
                 loadRow.push(types[code].hours);
             });
-            loadRow.push('');
             rows.push(loadRow);
 
             // Build CSV

@@ -62,12 +62,24 @@ class DocumentTemplateService
 
         // QR kod rasm sifatida
         if ($qrImagePath && file_exists($qrImagePath)) {
-            $processor->setImageValue('qr_code', [
-                'path' => $qrImagePath,
-                'width' => 100,
-                'height' => 100,
-                'ratio' => true,
-            ]);
+            try {
+                // Fayl haqiqiy rasm ekanligini tekshirish
+                $imageInfo = @getimagesize($qrImagePath);
+                if ($imageInfo !== false) {
+                    $processor->setImageValue('qr_code', [
+                        'path' => $qrImagePath,
+                        'width' => 100,
+                        'height' => 100,
+                        'ratio' => true,
+                    ]);
+                } else {
+                    // Fayl rasm emas (EPS yoki boshqa format) — placeholder ni o'chirish
+                    $processor->setValue('qr_code', '');
+                }
+            } catch (\Throwable $e) {
+                // setImageValue xatolik bersa — placeholder ni o'chirish
+                $processor->setValue('qr_code', '');
+            }
         } else {
             // QR kod yo'q bo'lsa, placeholder'ni o'chiramiz
             $processor->setValue('qr_code', '');
@@ -126,31 +138,52 @@ class DocumentTemplateService
 
         $qrPath = $tempDir . '/' . uniqid('qr_') . '.png';
 
-        // 1-usul: BaconQrCode
-        if (class_exists(\BaconQrCode\Writer::class)) {
-            $renderer = new \BaconQrCode\Renderer\ImageRenderer(
-                new \BaconQrCode\Renderer\RendererStyle\RendererStyle(300, 1),
-                new \BaconQrCode\Renderer\Image\EpsImageBackEnd()
-            );
-
-            // PNG uchun GD yoki Imagick kerak, EPS fallback
-            if (class_exists(\BaconQrCode\Renderer\Image\ImagickImageBackEnd::class) && extension_loaded('imagick')) {
+        // 1-usul: BaconQrCode + Imagick (faqat Imagick mavjud bo'lsa — haqiqiy PNG yaratadi)
+        if (class_exists(\BaconQrCode\Writer::class) && extension_loaded('imagick')) {
+            try {
                 $renderer = new \BaconQrCode\Renderer\ImageRenderer(
                     new \BaconQrCode\Renderer\RendererStyle\RendererStyle(300, 1),
                     new \BaconQrCode\Renderer\Image\ImagickImageBackEnd()
                 );
-            }
-
-            try {
                 $pngData = (new \BaconQrCode\Writer($renderer))->writeString($data);
                 file_put_contents($qrPath, $pngData);
                 return $qrPath;
             } catch (\Throwable $e) {
-                // Fallback to online API
+                // Imagick bilan xatolik — keyingi usulga o'tish
             }
         }
 
-        // 2-usul: Online API
+        // 2-usul: BaconQrCode SVG → GD orqali PNG ga aylantirish
+        if (class_exists(\BaconQrCode\Writer::class) && extension_loaded('gd')) {
+            try {
+                $renderer = new \BaconQrCode\Renderer\ImageRenderer(
+                    new \BaconQrCode\Renderer\RendererStyle\RendererStyle(300, 1),
+                    new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
+                );
+                $svgData = (new \BaconQrCode\Writer($renderer))->writeString($data);
+
+                // SVG ni vaqtinchalik faylga yozib, Imagick yoki GD orqali PNG ga aylantirish
+                $tempSvg = $tempDir . '/' . uniqid('qr_svg_') . '.svg';
+                file_put_contents($tempSvg, $svgData);
+
+                // Imagick orqali SVG → PNG
+                if (extension_loaded('imagick')) {
+                    $imagick = new \Imagick();
+                    $imagick->readImage($tempSvg);
+                    $imagick->setImageFormat('png');
+                    $imagick->writeImage($qrPath);
+                    $imagick->clear();
+                    @unlink($tempSvg);
+                    return $qrPath;
+                }
+
+                @unlink($tempSvg);
+            } catch (\Throwable $e) {
+                // Keyingi usulga o'tish
+            }
+        }
+
+        // 3-usul: Online API (eng ishonchli fallback)
         $apiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&data=' . urlencode($data);
         $pngData = @file_get_contents($apiUrl);
 
@@ -159,6 +192,7 @@ class DocumentTemplateService
             return $qrPath;
         }
 
+        // QR kod yaratib bo'lmadi — null qaytarish (shablon QR kodsiz davom etadi)
         return null;
     }
 }

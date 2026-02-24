@@ -641,11 +641,28 @@ class JournalController extends Controller
 
         // Get students basic info
         // Chetlashgan talabalar: joriy semestrda bo'lsa — ko'rsatiladi (qizil), oldingi semestrlarda — chiqariladi
+        // NULL student_status_code ham faol deb hisoblanadi (chiqarilmaydi)
+        // Chetlashgan (60) talaba bahosi yoki davomati bo'lsa — ko'rsatiladi
         $students = DB::table('students')
             ->where('group_id', $group->group_hemis_id)
-            ->where(function ($query) use ($semesterCode) {
-                $query->where('student_status_code', '!=', '60')
-                      ->orWhere('semester_code', $semesterCode);
+            ->where(function ($query) use ($semesterCode, $subjectId) {
+                $query
+                    // Faol talabalar (status != 60, shu jumladan NULL): doimo ko'rsatiladi
+                    ->where(function ($q) {
+                        $q->where('student_status_code', '!=', '60')
+                          ->orWhereNull('student_status_code');
+                    })
+                    // Chetlashgan talabalar: semester mos kelsa ko'rsatiladi
+                    ->orWhere('semester_code', $semesterCode)
+                    // Chetlashgan talabalar: bahosi bo'lsa ko'rsatiladi (NB ham)
+                    ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
+                        $sub->select(DB::raw(1))
+                            ->from('student_grades')
+                            ->whereColumn('student_grades.student_hemis_id', 'students.hemis_id')
+                            ->where('student_grades.subject_id', $subjectId)
+                            ->where('student_grades.semester_code', $semesterCode)
+                            ->whereNull('student_grades.deleted_at');
+                    });
             })
             ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
             ->orderBy('full_name')

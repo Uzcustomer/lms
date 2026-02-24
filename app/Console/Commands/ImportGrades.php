@@ -180,55 +180,14 @@ class ImportGrades extends Command
         Log::info('[FinalImport] Starting at ' . Carbon::now());
 
         // Oxirgi 7 kunni tekshirish (bugundan tashqari)
-        // LIVE importga bog'liq emas — bazada yozuv bo'lmasa ham HEMIS dan tortadi
+        // LIVE importga bog'liq emas — har bir kunni mustaqil tekshiramiz
         $lookbackStart = Carbon::today()->subDays(7)->startOfDay();
         $todayStart = Carbon::today()->startOfDay();
 
-        // 1. Bazada is_final=false bo'lgan kunlar (LIVE import orqali tushgan)
-        $unfinishedDates = StudentGrade::where('is_final', false)
-            ->where('lesson_date', '>=', $lookbackStart)
-            ->where('lesson_date', '<', $todayStart)
-            ->selectRaw('DATE(lesson_date) as grade_date')
-            ->distinct()
-            ->pluck('grade_date')
-            ->toArray();
-
-        // 2. Bazada umuman yozuv bo'lmagan kunlar (LIVE import ishlamagan)
-        // Oxirgi 7 kun ichida yakunlanganlarni topib, qolganlarni qo'shamiz
-        $finalizedDates = StudentGrade::where('is_final', true)
-            ->where('lesson_date', '>=', $lookbackStart)
-            ->where('lesson_date', '<', $todayStart)
-            ->whereNull('deleted_at')
-            ->selectRaw('DATE(lesson_date) as grade_date')
-            ->distinct()
-            ->pluck('grade_date')
-            ->toArray();
-
-        $allKnownDates = array_unique(array_merge($unfinishedDates, $finalizedDates));
-
-        // Oxirgi 7 kundan yakunlanmagan yoki bazada umuman yo'q kunlarni aniqlash
-        $missingDates = [];
+        // Barcha 7 kunni ro'yxatga olish
+        $allDatesToProcess = [];
         for ($d = $lookbackStart->copy(); $d->lt($todayStart); $d->addDay()) {
-            $dateStr = $d->toDateString();
-            if (!in_array($dateStr, $allKnownDates)) {
-                $missingDates[] = $dateStr;
-            }
-        }
-
-        // Barcha qayta ishlash kerak bo'lgan kunlar: is_final=false + bazada yo'q kunlar
-        $allDatesToProcess = array_unique(array_merge($unfinishedDates, $missingDates));
-        sort($allDatesToProcess);
-
-        if (empty($allDatesToProcess)) {
-            $this->info('Final import: barcha kunlar allaqachon yakunlangan.');
-            Log::info('[FinalImport] All recent days already finalized, nothing to do.');
-            $this->report['final-import'] = [
-                'total_days' => 0,
-                'success_days' => 0,
-                'failed_pages' => [],
-            ];
-            $this->sendTelegramReport();
-            return;
+            $allDatesToProcess[] = $d->toDateString();
         }
 
         $totalDays = count($allDatesToProcess);
@@ -236,13 +195,8 @@ class ImportGrades extends Command
         $failedDays = [];
         $dayNum = 0;
 
-        $unfinishedCount = count($unfinishedDates);
-        $missingCount = count($missingDates);
-        $this->info("Qayta ishlash kerak: {$totalDays} ta kun (yakunlanmagan: {$unfinishedCount}, bazada yo'q: {$missingCount})");
-        $this->info("  Kunlar: " . implode(', ', $allDatesToProcess));
-        Log::info("[FinalImport] Found {$totalDays} days to process (unfinished: {$unfinishedCount}, missing: {$missingCount})", [
-            'dates' => $allDatesToProcess,
-        ]);
+        $this->info("Final import: {$totalDays} ta kun tekshiriladi ({$allDatesToProcess[0]} — " . end($allDatesToProcess) . ")");
+        Log::info("[FinalImport] Processing {$totalDays} days", ['dates' => $allDatesToProcess]);
 
         foreach ($allDatesToProcess as $dateStr) {
             $dayNum++;
@@ -256,35 +210,22 @@ class ImportGrades extends Command
                     $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr})");
                 }
 
-                // Bazada shu kun uchun yozuvlar bormi?
-                $hasAnyForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
-                    ->where('lesson_date', '<=', $dateEndOfDay)
-                    ->whereNull('deleted_at')
-                    ->exists();
-
-                $hasUnfinalizedForDate = $hasAnyForDate && StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                // Bazada shu kun uchun yozuvlar holati
+                $hasUnfinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
                     ->where('lesson_date', '<=', $dateEndOfDay)
                     ->where('is_final', false)
                     ->whereNull('deleted_at')
                     ->exists();
 
-                // Yozuvlar bor va hammasi is_final=true — o'tkazish
-                if ($hasAnyForDate && !$hasUnfinalizedForDate) {
-                    $this->info("  {$date->toDateString()} — BARCHA yozuvlar yakunlangan, o'tkazib yuborildi.");
-                    $totalDays--;
-                    continue;
-                }
-
-                // Agar shu kun uchun is_final=true yozuvlar ALLAQACHON mavjud bo'lsa,
-                // is_final=false qoldiqlarni tozalab, API ni qayta chaqirmaslik
-                $hasFinalizedForDate = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
+                $finalizedCount = StudentGrade::where('lesson_date', '>=', $dateStartOfDay)
                     ->where('lesson_date', '<=', $dateEndOfDay)
                     ->where('is_final', true)
-                    ->exists();
+                    ->whereNull('deleted_at')
+                    ->count();
 
-                if ($hasFinalizedForDate) {
-                    // Faqat is_final=true dublikati bor bo'lgan is_final=false yozuvlarni soft delete
-                    // Lokal qo'yilgan (HEMIS da yo'q) baholarni SAQLAB QOLISH
+                // ─── Stsenariy A: is_final=false + is_final=true aralash mavjud ───
+                // Dublikatlarni tozalash (journal sync tiklagan is_final=false yozuvlar)
+                if ($hasUnfinalizedForDate && $finalizedCount > 0) {
                     $cleaned = DB::update("
                         UPDATE student_grades sg
                         INNER JOIN student_grades g2
@@ -309,19 +250,38 @@ class ImportGrades extends Command
                         ->whereNull('deleted_at')
                         ->update(['is_final' => true]);
 
-                    $this->info("  {$date->toDateString()} — is_final=true mavjud, {$cleaned} ta dublikat tozalandi, {$upgraded} ta lokal baho yakunlandi.");
-                    Log::info("[FinalImport] {$date->toDateString()} — cleaned {$cleaned} duplicate is_final=false, upgraded {$upgraded} unique local records.");
-                    $successDays++;
+                    $this->info("  {$dateStr} — dublikat tozalandi: {$cleaned} o'chirildi, {$upgraded} ta lokal baho yakunlandi.");
+                    Log::info("[FinalImport] {$dateStr} — cleaned {$cleaned} duplicate is_final=false, upgraded {$upgraded} unique local records.");
+
+                    // To'liq import bo'lgan bo'lsa (ko'p yozuv), API dan qayta tortish shart emas
+                    if ($finalizedCount >= 500) {
+                        $successDays++;
+                        continue;
+                    }
+                    // Kam yozuv (journal sync dan) — API dan to'ldirish kerak
+                    $this->info("  {$dateStr} — qisman yakunlangan ({$finalizedCount} ta yozuv), API dan to'ldirish...");
+                }
+
+                // ─── Stsenariy B: Faqat is_final=true (journal sync dan) ───
+                // Kam yozuv — to'liq import bo'lmagan, API dan tortish kerak
+                if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500) {
+                    $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv), o'tkazildi.");
+                    $totalDays--;
                     continue;
                 }
 
+                // ─── Stsenariy C: API dan tortish ───
+                // - Bazada yozuv yo'q (LIVE import ishlamagan)
+                // - Faqat is_final=false mavjud (is_final=true hali yo'q)
+                // - Qisman is_final=true (journal sync dan, kam yozuv)
                 $from = $date->copy()->startOfDay()->timestamp;
                 $to = $date->copy()->endOfDay()->timestamp;
 
-                $reason = !$hasAnyForDate ? 'bazada yozuv yo\'q' : 'is_final=false mavjud';
-                $this->info("  {$date->toDateString()} — API dan tortilmoqda ({$reason})...");
+                $reason = $finalizedCount === 0 && !$hasUnfinalizedForDate
+                    ? 'bazada yozuv yo\'q'
+                    : ($finalizedCount > 0 ? "qisman ({$finalizedCount} ta yozuv)" : 'is_final=false mavjud');
+                $this->info("  {$dateStr} — API dan tortilmoqda ({$reason})...");
 
-                // Baholar — $date ni berib, boshqa kunlik recordlarni fetch paytida filtrlaymiz
                 if ($reporter) {
                     $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), baholar API...");
                 }
@@ -329,17 +289,26 @@ class ImportGrades extends Command
 
                 if ($gradeItems === false) {
                     $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
-                    $this->error("  {$date->toDateString()} — API xato ({$errorDetail}), keyingi kunga o'tiladi.");
-                    $failedDays[] = "{$date->toDateString()} ({$errorDetail})";
+                    $this->error("  {$dateStr} — API xato ({$errorDetail}), keyingi kunga o'tiladi.");
+                    $failedDays[] = "{$dateStr} ({$errorDetail})";
                     continue;
                 }
 
-                // XAVFSIZLIK: API 0 ta baho qaytarsa, mavjud yozuvlarni o'chirmaslik
-                // is_final=false turaveradi — keyingi importda API dan qayta tortiladi
                 if (empty($gradeItems)) {
-                    $this->warn("  {$date->toDateString()} — API 0 ta baho qaytardi, is_final=false saqlanadi (keyingi importda qayta uriniladi).");
-                    Log::warning("[FinalImport] {$date->toDateString()} — API returned 0 grades, keeping is_final=false for retry.");
-                    $failedDays[] = "{$date->toDateString()} (API 0 ta baho qaytardi)";
+                    if (!$hasUnfinalizedForDate && $finalizedCount === 0) {
+                        // Bazada yozuv yo'q, API ham 0 — bu kunda dars bo'lmagan
+                        $this->info("  {$dateStr} — dars bo'lmagan (API 0, bazada yozuv yo'q).");
+                        $successDays++;
+                    } elseif ($hasUnfinalizedForDate) {
+                        // is_final=false yozuvlar bor, lekin API 0 qaytardi — retry uchun saqlanadi
+                        $this->warn("  {$dateStr} — API 0 ta baho qaytardi, is_final=false saqlanadi (keyingi importda qayta uriniladi).");
+                        Log::warning("[FinalImport] {$dateStr} — API returned 0 grades, keeping is_final=false for retry.");
+                        $failedDays[] = "{$dateStr} (API 0, is_final=false saqlanadi)";
+                    } else {
+                        // Faqat is_final=true bor (journal sync dan), API 0 — yangi ma'lumot yo'q
+                        $this->info("  {$dateStr} — API 0, mavjud {$finalizedCount} ta yozuv saqlanadi.");
+                        $successDays++;
+                    }
                     continue;
                 }
 
@@ -709,16 +678,7 @@ class ImportGrades extends Command
         if ($gradeCount === 0) {
             $this->warn("applyGrades: 0 ta yozuv tayyorlandi ({$date->toDateString()}), mavjud yozuvlar saqlanadi.");
             Log::warning("[ApplyGrades] 0 insert rows for {$date->toDateString()}, skipping delete to preserve existing data.");
-            if ($isFinal) {
-                $upgraded = StudentGrade::where('lesson_date', '>=', $dateStart)
-                    ->where('lesson_date', '<=', $dateEnd)
-                    ->where('is_final', false)
-                    ->whereNull('deleted_at')
-                    ->update(['is_final' => true]);
-                if ($upgraded > 0) {
-                    $this->info("  {$upgraded} ta mavjud yozuv is_final=true qilindi.");
-                }
-            }
+            // is_final=false ni true ga O'TKAZMAYMIZ — keyingi importda API qayta tortiladi
             return;
         }
 

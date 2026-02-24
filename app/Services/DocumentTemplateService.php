@@ -95,6 +95,9 @@ class DocumentTemplateService
 
         $processor->saveAs($tempDocx);
 
+        // EMF rasmlarni PNG ga aylantirish (PhpWord/DomPDF EMF ni qo'llab-quvvatlamaydi)
+        $this->convertEmfImagesToPng($tempDocx);
+
         $pdfPath = 'absence-excuses/approved/' . $excuse->verification_token . '.pdf';
         $pdfGenerated = false;
 
@@ -181,6 +184,116 @@ class DocumentTemplateService
         }
 
         return $pdfPath;
+    }
+
+    /**
+     * DOCX ichidagi EMF rasmlarni PNG ga aylantirish
+     * PhpWord/DomPDF EMF formatini qo'llab-quvvatlamaydi
+     */
+    private function convertEmfImagesToPng(string $docxPath): void
+    {
+        $zip = new \ZipArchive();
+        if ($zip->open($docxPath) !== true) {
+            return;
+        }
+
+        $emfFiles = [];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if (preg_match('/^word\/media\/.*\.emf$/i', $name)) {
+                $emfFiles[] = $name;
+            }
+        }
+
+        if (empty($emfFiles)) {
+            $zip->close();
+            return;
+        }
+
+        $tempDir = storage_path('app/temp');
+
+        foreach ($emfFiles as $emfFile) {
+            $emfData = $zip->getFromName($emfFile);
+            if (!$emfData) {
+                continue;
+            }
+
+            $pngData = null;
+
+            // 1-usul: Imagick orqali EMF → PNG
+            if (extension_loaded('imagick')) {
+                try {
+                    $tempEmf = $tempDir . '/' . uniqid('emf_') . '.emf';
+                    file_put_contents($tempEmf, $emfData);
+
+                    $imagick = new \Imagick();
+                    $imagick->setResolution(150, 150);
+                    $imagick->readImage($tempEmf);
+                    $imagick->setImageFormat('png');
+                    $pngData = $imagick->getImageBlob();
+                    $imagick->clear();
+                    @unlink($tempEmf);
+                } catch (\Throwable $e) {
+                    $pngData = null;
+                }
+            }
+
+            // 2-usul: GD orqali 1x1 shaffof PNG placeholder
+            if (!$pngData && extension_loaded('gd')) {
+                $img = imagecreatetruecolor(200, 200);
+                imagesavealpha($img, true);
+                $transparent = imagecolorallocatealpha($img, 255, 255, 255, 127);
+                imagefill($img, 0, 0, $transparent);
+                ob_start();
+                imagepng($img);
+                $pngData = ob_get_clean();
+                imagedestroy($img);
+            }
+
+            if (!$pngData) {
+                continue;
+            }
+
+            // EMF ni PNG bilan almashtirish
+            $pngFile = preg_replace('/\.emf$/i', '.png', $emfFile);
+            $zip->addFromString($pngFile, $pngData);
+            $zip->deleteName($emfFile);
+
+            // [Content_Types].xml da EMF → PNG ga yangilash
+            $contentTypes = $zip->getFromName('[Content_Types].xml');
+            if ($contentTypes) {
+                // EMF extension uchun Override/Default mavjud bo'lsa PNG ga o'zgartirish
+                if (strpos($contentTypes, 'Extension="emf"') !== false) {
+                    $contentTypes = str_replace(
+                        'Extension="emf" ContentType="image/x-emf"',
+                        'Extension="png" ContentType="image/png"',
+                        $contentTypes
+                    );
+                } elseif (strpos($contentTypes, 'Extension="png"') === false) {
+                    // PNG extension hali yo'q bo'lsa qo'shish
+                    $contentTypes = str_replace(
+                        '</Types>',
+                        '<Default Extension="png" ContentType="image/png"/></Types>',
+                        $contentTypes
+                    );
+                }
+                $zip->addFromString('[Content_Types].xml', $contentTypes);
+            }
+
+            // word/_rels/*.xml.rels da fayl nomini yangilash
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $name = $zip->getNameIndex($i);
+                if (preg_match('/^word\/_rels\/.*\.rels$/', $name)) {
+                    $relsContent = $zip->getFromName($name);
+                    if ($relsContent && strpos($relsContent, basename($emfFile)) !== false) {
+                        $relsContent = str_replace(basename($emfFile), basename($pngFile), $relsContent);
+                        $zip->addFromString($name, $relsContent);
+                    }
+                }
+            }
+        }
+
+        $zip->close();
     }
 
     /**

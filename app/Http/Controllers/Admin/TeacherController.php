@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
 
 class TeacherController extends Controller
@@ -216,6 +217,10 @@ class TeacherController extends Controller
         }
 
         if ($isSubjectResponsible) {
+            if (!Schema::hasTable('teacher_responsible_subjects')) {
+                Log::error('updateRoles - teacher_responsible_subjects jadvali mavjud emas');
+                return redirect()->back()->withInput()->with('error', "teacher_responsible_subjects jadvali mavjud emas. Serverda 'php artisan migrate' buyrug'ini ishga tushiring.");
+            }
             try {
                 $teacher->responsibleSubjects()->sync($request->input('responsible_subjects', []));
             } catch (\Throwable $e) {

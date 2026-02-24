@@ -101,7 +101,10 @@ class DocumentTemplateService
         $pdfPath = 'absence-excuses/approved/' . $excuse->verification_token . '.pdf';
         $pdfGenerated = false;
 
-        // 1-usul: LibreOffice (eng sifatli natija)
+        // LibreOffice orqali PDF generatsiya (yagona sifatli usul)
+        // PhpWord → HTML → DomPDF usuli Word formatlanishni buzadi,
+        // shuning uchun faqat LibreOffice ishlatiladi.
+        // LibreOffice yo'q bo'lsa, kontroller Blade template fallback ishlatadi.
         $sofficePath = $this->findSoffice();
         if ($sofficePath) {
             $command = sprintf(
@@ -122,64 +125,13 @@ class DocumentTemplateService
             }
         }
 
-        // 2-usul: PhpWord → HTML → Barryvdh DomPDF
-        if (!$pdfGenerated) {
-            try {
-                $phpWord = \PhpOffice\PhpWord\IOFactory::load($tempDocx);
-
-                // PhpWord dan HTML ga aylantirish
-                $htmlWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'HTML');
-                $tempHtml = $tempDir . '/' . uniqid('output_') . '.html';
-                $htmlWriter->save($tempHtml);
-
-                $htmlContent = file_get_contents($tempHtml);
-                @unlink($tempHtml);
-
-                if ($htmlContent) {
-                    // Barryvdh DomPDF orqali PDF yaratish
-                    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($htmlContent);
-                    $pdf->setPaper('a4', 'portrait');
-                    $pdfContent = $pdf->output();
-
-                    if ($pdfContent && strlen($pdfContent) > 0) {
-                        Storage::disk('public')->put($pdfPath, $pdfContent);
-                        $pdfGenerated = true;
-                    }
-                }
-            } catch (\Throwable $e) {
-                // PhpWord HTML+DomPDF ishlamadi
-                \Log::warning('PhpWord HTML+DomPDF failed: ' . $e->getMessage());
-            }
-        }
-
-        // 3-usul: PhpWord IOFactory to'g'ridan-to'g'ri PDF writer
-        if (!$pdfGenerated) {
-            try {
-                \PhpOffice\PhpWord\Settings::setPdfRendererName(\PhpOffice\PhpWord\Settings::PDF_RENDERER_DOMPDF);
-                \PhpOffice\PhpWord\Settings::setPdfRendererPath(base_path('vendor/dompdf/dompdf'));
-
-                $phpWord = \PhpOffice\PhpWord\IOFactory::load($tempDocx);
-                $tempPdf = $tempDir . '/' . uniqid('output_') . '.pdf';
-                $pdfWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'PDF');
-                $pdfWriter->save($tempPdf);
-
-                if (file_exists($tempPdf) && filesize($tempPdf) > 0) {
-                    Storage::disk('public')->put($pdfPath, file_get_contents($tempPdf));
-                    @unlink($tempPdf);
-                    $pdfGenerated = true;
-                }
-            } catch (\Throwable $e) {
-                \Log::warning('PhpWord direct PDF writer failed: ' . $e->getMessage());
-            }
-        }
-
         // Tozalash
         @unlink($tempDocx);
 
         if (!$pdfGenerated) {
             throw new \RuntimeException(
-                'Word shablondan PDF generatsiya qilib bo\'lmadi. ' .
-                'Serverda LibreOffice o\'rnatish tavsiya etiladi: sudo apt install libreoffice-writer'
+                'LibreOffice serverda o\'rnatilmagan. Sifatli PDF uchun: sudo apt install libreoffice-writer. ' .
+                'Hozircha Blade shablon ishlatiladi.'
             );
         }
 

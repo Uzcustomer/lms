@@ -1120,6 +1120,9 @@ class JournalController extends Controller
             if ($attendanceResult['synced'] > 0) {
                 $message .= " Davomat: {$attendanceResult['synced']} ta yangilandi.";
             }
+            if (($attendanceResult['absence_grades_created'] ?? 0) > 0) {
+                $message .= " NB: {$attendanceResult['absence_grades_created']} ta yangi NB yozildi.";
+            }
             if ($attendanceResult['retake_recalculated'] > 0) {
                 $message .= " {$attendanceResult['retake_recalculated']} ta otrabotka bahosi qayta hisoblandi.";
             }
@@ -1162,6 +1165,13 @@ class JournalController extends Controller
         $token = config('services.hemis.token');
         $synced = 0;
         $retakeRecalculated = 0;
+        $absenceGradesCreated = 0;
+
+        // Talabalar map (hemis_id → student row) — NB uchun student_grades yaratishda kerak
+        $studentsMap = DB::table('students')
+            ->where('group_id', $groupId)
+            ->get()
+            ->keyBy('hemis_id');
 
         try {
             $page = 1;
@@ -1247,6 +1257,58 @@ class JournalController extends Controller
 
                     $synced++;
 
+                    // student_grades ga NB yozuv yaratish (agar mavjud bo'lmasa)
+                    // Jurnal NB ni student_grades.reason='absent' dan o'qiydi
+                    $studentHemisId = $item['student']['id'];
+                    $student = $studentsMap->get($studentHemisId);
+                    if ($student) {
+                        $existingGrade = DB::table('student_grades')
+                            ->where('student_id', $student->id)
+                            ->where('subject_id', $item['subject']['id'])
+                            ->whereDate('lesson_date', $lessonDate->format('Y-m-d'))
+                            ->where('lesson_pair_code', $item['lessonPair']['code'])
+                            ->where('training_type_code', $item['trainingType']['code'])
+                            ->whereNull('deleted_at')
+                            ->first();
+
+                        if (!$existingGrade) {
+                            $deadline = DB::table('deadlines')->where('level_code', $student->level_code)->first();
+                            $deadlineDays = $deadline ? $deadline->deadline_days : 7;
+
+                            DB::table('student_grades')->insert([
+                                'hemis_id' => 111,
+                                'student_id' => $student->id,
+                                'student_hemis_id' => $studentHemisId,
+                                'semester_code' => $item['semester']['code'],
+                                'semester_name' => $item['semester']['name'],
+                                'education_year_code' => $item['educationYear']['code'] ?? null,
+                                'education_year_name' => $item['educationYear']['name'] ?? null,
+                                'subject_schedule_id' => $item['_subject_schedule'] ?? null,
+                                'subject_id' => $item['subject']['id'],
+                                'subject_name' => $item['subject']['name'],
+                                'subject_code' => $item['subject']['code'],
+                                'training_type_code' => $item['trainingType']['code'],
+                                'training_type_name' => $item['trainingType']['name'],
+                                'employee_id' => $item['employee']['id'],
+                                'employee_name' => $item['employee']['name'],
+                                'lesson_pair_code' => $item['lessonPair']['code'],
+                                'lesson_pair_name' => $item['lessonPair']['name'],
+                                'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                                'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                                'grade' => null,
+                                'lesson_date' => $lessonDate,
+                                'created_at_api' => now(),
+                                'reason' => 'absent',
+                                'deadline' => $lessonDate->copy()->addDays($deadlineDays)->endOfDay(),
+                                'status' => 'pending',
+                                'is_final' => true,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                            $absenceGradesCreated++;
+                        }
+                    }
+
                     // Agar sababli holat o'zgargan bo'lsa — retake bahosini qayta hisoblash
                     if ($oldAbsentOn !== null && $oldAbsentOn !== $newAbsentOn) {
                         $recalculated = $this->recalculateRetakeGrade(
@@ -1275,7 +1337,7 @@ class JournalController extends Controller
             ]);
         }
 
-        return ['synced' => $synced, 'retake_recalculated' => $retakeRecalculated];
+        return ['synced' => $synced, 'retake_recalculated' => $retakeRecalculated, 'absence_grades_created' => $absenceGradesCreated];
     }
 
     /**

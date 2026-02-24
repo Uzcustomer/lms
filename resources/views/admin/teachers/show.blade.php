@@ -460,6 +460,12 @@
                 <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: #1e293b;">Fan tanlash</h3>
                 <button type="button" onclick="closeSubjectModal()" class="subject-modal-close">&times;</button>
             </div>
+            <div style="padding: 0 16px; padding-top: 12px;">
+                <label style="font-size: 11px; font-weight: 600; color: #64748b; display: block; margin-bottom: 4px;">Kurs bo'yicha filtr:</label>
+                <select id="subject-course-filter" onchange="searchSubjects()" style="width: 100%; padding: 7px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; color: #334155; background: #fff; outline: none; cursor: pointer;">
+                    <option value="">Barcha kurslar</option>
+                </select>
+            </div>
             <div class="subject-modal-search">
                 <svg style="width: 16px; height: 16px; color: #94a3b8; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -558,10 +564,38 @@
             }
         }
 
+        var subjectCoursesLoaded = false;
+
+        function loadSubjectCourses() {
+            if (subjectCoursesLoaded) return;
+            fetch('{{ route("admin.teachers.subject-courses") }}', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(courses) {
+                var select = document.getElementById('subject-course-filter');
+                courses.forEach(function(course) {
+                    var option = document.createElement('option');
+                    option.value = course.level_code;
+                    option.textContent = course.level_name;
+                    select.appendChild(option);
+                });
+                subjectCoursesLoaded = true;
+            })
+            .catch(function(error) {
+                console.error('Course load error:', error);
+            });
+        }
+
         function openSubjectModal() {
             document.getElementById('subject-modal').style.display = 'flex';
             document.getElementById('subject-search-input').value = '';
+            document.getElementById('subject-course-filter').value = '';
             document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Fan nomini kiriting va qidiring</div>';
+            loadSubjectCourses();
             setTimeout(function() {
                 document.getElementById('subject-search-input').focus();
             }, 100);
@@ -574,16 +608,21 @@
         function searchSubjects() {
             clearTimeout(subjectSearchTimeout);
             var query = document.getElementById('subject-search-input').value.trim();
+            var levelCode = document.getElementById('subject-course-filter').value;
 
-            if (query.length < 2) {
-                document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Kamida 2 ta belgi kiriting</div>';
+            if (query.length < 2 && !levelCode) {
+                document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Kamida 2 ta belgi kiriting yoki kursni tanlang</div>';
                 return;
             }
 
             document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Qidirilmoqda...</div>';
 
             subjectSearchTimeout = setTimeout(function() {
-                fetch('{{ route("admin.teachers.search-subjects") }}?q=' + encodeURIComponent(query), {
+                var url = '{{ route("admin.teachers.search-subjects") }}?q=' + encodeURIComponent(query);
+                if (levelCode) {
+                    url += '&level_code=' + encodeURIComponent(levelCode);
+                }
+                fetch(url, {
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest'

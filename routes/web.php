@@ -263,6 +263,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/teachers', [TeacherController::class, 'index'])->name('teachers.index');
         Route::get('/teachers/export-excel', [TeacherController::class, 'exportExcel'])->name('teachers.export-excel');
         Route::get('/teachers/search-subjects', [TeacherController::class, 'searchSubjects'])->name('teachers.search-subjects');
+        Route::get('/teachers/subject-courses', [TeacherController::class, 'getSubjectCourses'])->name('teachers.subject-courses');
         Route::get('/teachers/{teacher}', [TeacherController::class, 'show'])->name('teachers.show');
         Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
         Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');

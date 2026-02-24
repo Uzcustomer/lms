@@ -7,6 +7,7 @@ use App\Exports\TeacherExport;
 use App\Http\Controllers\Controller;
 use App\Models\CurriculumSubject;
 use App\Models\Department;
+use App\Models\Semester;
 use App\Models\Teacher;
 use App\Services\ActivityLogService;
 use App\Services\TelegramService;
@@ -235,10 +236,16 @@ class TeacherController extends Controller
     public function searchSubjects(Request $request)
     {
         $search = $request->input('q', '');
+        $levelCode = $request->input('level_code', '');
 
         $subjects = CurriculumSubject::active()
             ->when($search, function ($query, $search) {
                 $query->where('subject_name', 'like', "%{$search}%");
+            })
+            ->when($levelCode, function ($query, $levelCode) {
+                $query->whereHas('semester', function ($q) use ($levelCode) {
+                    $q->where('level_code', $levelCode);
+                });
             })
             ->select('id', 'subject_name', 'subject_code', 'semester_name', 'department_name')
             ->orderBy('subject_name')
@@ -246,6 +253,18 @@ class TeacherController extends Controller
             ->get();
 
         return response()->json($subjects);
+    }
+
+    public function getSubjectCourses()
+    {
+        $courses = Semester::whereNotNull('level_code')
+            ->whereNotNull('level_name')
+            ->select('level_code', 'level_name')
+            ->distinct()
+            ->orderBy('level_code')
+            ->get();
+
+        return response()->json($courses);
     }
 
     public function exportExcel(Request $request)

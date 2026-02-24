@@ -123,7 +123,9 @@ class HemisOAuthController extends Controller
             ->timeout(15)
             ->withHeaders([
                 'Authorization' => 'Bearer ' . $accessToken,
-            ])->get("{$baseUrl}/oauth/api/user");
+            ])->get("{$baseUrl}/oauth/api/user", [
+                'fields' => 'id,uuid,type,name,login,picture,email,university_id,phone',
+            ]);
 
         Log::channel('student_auth')->info('[HEMIS OAUTH] User javobi', [
             'status' => $userResponse->status(),
@@ -136,28 +138,42 @@ class HemisOAuthController extends Controller
         }
 
         $userData = $userResponse->json();
-        $studentIdNumber = $userData['student_id_number'] ?? ($userData['login'] ?? null);
+        $hemisLogin = $userData['login'] ?? null;
+        $hemisId = $userData['id'] ?? null;
+        $studentIdNumber = $userData['student_id_number'] ?? $hemisLogin;
 
         Log::channel('student_auth')->info('[HEMIS OAUTH] Foydalanuvchi ma\'lumotlari olindi', [
+            'hemis_id' => $hemisId,
+            'login' => $hemisLogin,
             'student_id_number' => $studentIdNumber,
             'name' => $userData['name'] ?? $userData['full_name'] ?? null,
             'keys' => array_keys($userData),
         ]);
 
-        if (!$studentIdNumber) {
+        if (!$studentIdNumber && !$hemisId) {
             return redirect()->route('student.login')
-                ->withErrors(['login' => 'HEMIS tizimidan talaba raqami olinmadi. Kalitlar: ' . implode(', ', array_keys($userData))]);
+                ->withErrors(['login' => 'HEMIS tizimidan talaba ma\'lumotlari olinmadi. Kalitlar: ' . implode(', ', array_keys($userData))]);
         }
 
-        // 3-bosqich: Bazada talabani topish
+        // 3-bosqich: Bazada talabani topish (student_id_number yoki hemis_id bo'yicha)
         $student = Student::where('student_id_number', $studentIdNumber)->first();
+
+        if (!$student && $hemisLogin && $hemisLogin !== $studentIdNumber) {
+            $student = Student::where('student_id_number', $hemisLogin)->first();
+        }
+
+        if (!$student && $hemisId) {
+            $student = Student::where('hemis_id', $hemisId)->first();
+        }
 
         if (!$student) {
             Log::channel('student_auth')->warning('[HEMIS OAUTH] Talaba bazada topilmadi', [
                 'student_id_number' => $studentIdNumber,
+                'hemis_id' => $hemisId,
+                'login' => $hemisLogin,
             ]);
             return redirect()->route('student.login')
-                ->withErrors(['login' => 'Siz LMS tizimida ro\'yxatdan o\'tmagansiz (' . $studentIdNumber . '). Admin bilan bog\'laning.']);
+                ->withErrors(['login' => 'Siz LMS tizimida ro\'yxatdan o\'tmagansiz (login: ' . $hemisLogin . ', id: ' . $hemisId . '). Admin bilan bog\'laning.']);
         }
 
         // Token saqlash (ixtiyoriy — ustun yo'q bo'lsa xato bermaydi)

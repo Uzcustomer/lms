@@ -84,7 +84,7 @@
                                         </span>
                                     @endforeach
                                 @endif
-                                @if($teacher->hasRole('fan_masuli'))
+                                @if($teacher->hasRole('fan_masuli') && $teacher->relationLoaded('responsibleSubjects'))
                                     @foreach($teacher->responsibleSubjects as $subject)
                                         <span class="badge badge-subject">
                                             <svg style="width: 12px; height: 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,7 +154,7 @@
                                 </span>
                             </div>
                         @endif
-                        @if($teacher->hasRole('fan_masuli') && $teacher->responsibleSubjects->count())
+                        @if($teacher->hasRole('fan_masuli') && $teacher->relationLoaded('responsibleSubjects') && $teacher->responsibleSubjects->count())
                             <div class="info-row">
                                 <span class="info-label">Mas'ul fan{{ $teacher->responsibleSubjects->count() > 1 ? 'lar' : '' }}</span>
                                 <span class="info-value" style="color: #92400e;">
@@ -405,7 +405,7 @@
                             </div>
 
                             @php
-                                $oldResponsibleSubjects = old('responsible_subjects', $teacher->responsibleSubjects->pluck('id')->toArray());
+                                $oldResponsibleSubjects = old('responsible_subjects', $teacher->relationLoaded('responsibleSubjects') ? $teacher->responsibleSubjects->pluck('id')->toArray() : []);
                                 $isFanMasuliChecked = in_array('fan_masuli', $oldRoles);
                             @endphp
                             <div id="subject-section" style="display: {{ $isFanMasuliChecked ? 'block' : 'none' }}; margin-top: 10px;">
@@ -413,7 +413,7 @@
                                     <label style="font-size: 11px; font-weight: 600; color: #92400e; display: block; margin-bottom: 6px;">Fan mas'uli roli uchun fanlar:</label>
 
                                     <div id="selected-subjects" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-                                        @foreach($teacher->responsibleSubjects as $subject)
+                                        @foreach(($teacher->relationLoaded('responsibleSubjects') ? $teacher->responsibleSubjects : []) as $subject)
                                             <div class="selected-subject-item" data-id="{{ $subject->id }}">
                                                 <input type="hidden" name="responsible_subjects[]" value="{{ $subject->id }}">
                                                 <div style="flex: 1; min-width: 0;">

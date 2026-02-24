@@ -90,11 +90,9 @@ class ImportGrades extends Command
             return;
         }
 
-        $this->sendProgressStart('live', 1, $today->toDateString());
+        $liveStartTime = microtime(true);
 
         // HEMIS API timestamplarni UTC kun chegaralari bo'yicha filter qiladi.
-        // Local (Asia/Tashkent UTC+5) midnight yuborsa, API noto'g'ri kunni qaytaradi.
-        // Masalan: Feb 21 00:00 Tashkent = Feb 20 19:00 UTC → API "Feb 20" deb tushunadi.
         $from = Carbon::parse($today->toDateString(), 'UTC')->startOfDay()->timestamp;
         $to = Carbon::parse($today->toDateString(), 'UTC')->endOfDay()->timestamp;
 
@@ -102,81 +100,70 @@ class ImportGrades extends Command
         if ($reporter) {
             $reporter->setStepContext('baholar API...');
         }
-        // $today ni filtrlash uchun beramiz — HEMIS boshqa kunlik recordlarni ham qaytaradi
         $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to, $today);
+        $gradeCount = 0;
+        $gradeError = null;
 
         if ($gradeItems === false) {
-            $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
-            $this->error("Grade API failed — eski baholar saqlanib qoldi. ({$errorDetail})");
-            Log::error("[LiveImport] Grade API failed: {$errorDetail}");
-            $this->report['student-grade-list'] = [
-                'total_days' => 1,
-                'success_days' => 0,
-                'failed_pages' => ["API xato ({$errorDetail})"],
-            ];
+            $gradeError = $this->lastFetchError ?: 'noma\'lum xato';
+            $this->error("Grade API failed — eski baholar saqlanib qoldi. ({$gradeError})");
+            Log::error("[LiveImport] Grade API failed: {$gradeError}");
             if ($reporter) {
-                $reporter->failStep($errorDetail);
+                $reporter->failStep($gradeError);
             }
         } else {
             try {
-                // 2-qadam: Muvaffaqiyatli — soft delete + yangi yozish
                 if ($reporter) {
                     $reporter->setStepContext('bazaga yozilmoqda ' . count($gradeItems) . ' ta yozuv...');
                 }
+                $gradeCount = count($gradeItems);
                 $this->applyGrades($gradeItems, $today, false);
-                $this->report['student-grade-list'] = [
-                    'total_days' => 1,
-                    'success_days' => 1,
-                    'failed_pages' => [],
-                ];
                 if ($reporter) {
                     $reporter->completeStep();
                 }
             } catch (\Throwable $e) {
+                $gradeError = substr($e->getMessage(), 0, 100);
                 $this->error("applyGrades EXCEPTION: {$e->getMessage()}");
                 Log::error("[LiveImport] applyGrades exception: {$e->getMessage()}", [
                     'trace' => $e->getTraceAsString(),
                 ]);
-                $this->report['student-grade-list'] = [
-                    'total_days' => 1,
-                    'success_days' => 0,
-                    'failed_pages' => ["Exception: " . substr($e->getMessage(), 0, 100)],
-                ];
                 if ($reporter) {
-                    $reporter->failStep(substr($e->getMessage(), 0, 100));
+                    $reporter->failStep($gradeError);
                 }
             }
         }
 
-        // Davomatni alohida import qilish (eski logika — attendance uchun soft delete kerak emas)
+        // 2-qadam: Davomatni import qilish
         if ($reporter) {
             $reporter->startStep('Davomat import qilinmoqda', 'Davomat import qilindi');
             $reporter->setStepContext('davomat API...');
         }
+        $attendanceError = null;
         try {
             $this->importAttendance($from, $to, $today);
             if ($reporter) {
                 $reporter->completeStep();
             }
         } catch (\Throwable $e) {
+            $attendanceError = substr($e->getMessage(), 0, 100);
             $this->error("importAttendance EXCEPTION: {$e->getMessage()}");
             Log::error("[LiveImport] importAttendance exception: {$e->getMessage()}", [
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->report['attendance-list'] = [
-                'total_days' => 1,
-                'success_days' => 0,
-                'failed_pages' => ["Exception: " . substr($e->getMessage(), 0, 100)],
-            ];
             if ($reporter) {
-                $reporter->failStep(substr($e->getMessage(), 0, 100));
+                $reporter->failStep($attendanceError);
             }
         }
 
-        $liveSuccess = isset($this->report['student-grade-list']) && empty($this->report['student-grade-list']['failed_pages']) ? 1 : 0;
-        $liveFailed = $liveSuccess ? [] : ($this->report['student-grade-list']['failed_pages'] ?? []);
-        $this->sendProgressDone('live', $liveSuccess, 1, $liveFailed);
-        $this->sendTelegramReport();
+        // NB sonini bazadan olish (bugungi)
+        $nbCount = StudentGrade::where('lesson_date', '>=', $today->copy()->startOfDay())
+            ->where('lesson_date', '<=', $today->copy()->endOfDay())
+            ->where('reason', 'absent')
+            ->whereNull('deleted_at')
+            ->count();
+
+        $elapsed = round((microtime(true) - $liveStartTime) / 60, 1);
+        $this->sendDailyLiveReport($gradeCount, $nbCount, $gradeError, $attendanceError, $elapsed);
         Log::info('[LiveImport] Completed at ' . Carbon::now());
     }
 
@@ -1298,6 +1285,73 @@ class ImportGrades extends Command
         if ($total <= 0) return '[' . str_repeat('░', $width) . ']';
         $filled = min($width, (int) round($current / $total * $width));
         return '[' . str_repeat('█', $filled) . str_repeat('░', $width - $filled) . ']';
+    }
+
+    // =========================================================================
+    // Kunlik yig'ma Telegram xabar (live import uchun)
+    // Kunda 1 ta xabar — har 30 daqiqalik import natijasi qo'shib boriladi
+    // =========================================================================
+    private function sendDailyLiveReport(int $gradeCount, int $nbCount, ?string $gradeError, ?string $attendanceError, float $elapsed): void
+    {
+        $chatId = config('services.telegram.chat_id');
+        if (!$chatId) return;
+
+        $telegram = app(TelegramService::class);
+        $stateFile = storage_path('app/telegram_live_daily.json');
+        $today = Carbon::today()->toDateString();
+        $time = Carbon::now()->format('H:i');
+
+        // Bugungi xabar holatini o'qish
+        $state = null;
+        if (file_exists($stateFile)) {
+            $state = json_decode(file_get_contents($stateFile), true);
+            if (($state['date'] ?? null) !== $today) {
+                $state = null; // boshqa kun — yangi xabar
+            }
+        }
+
+        // Yangi qator tayyorlash
+        $hasError = $gradeError || $attendanceError;
+        $icon = $hasError ? '⚠️' : '✅';
+        $line = "{$time} {$icon}";
+        if ($gradeError) {
+            $line .= " baholar: ❌ {$gradeError}";
+        } else {
+            $line .= " baholar: {$gradeCount}";
+        }
+        if ($attendanceError) {
+            $line .= ", NB: ❌ {$attendanceError}";
+        } else {
+            $line .= ", NB: {$nbCount}";
+        }
+        $line .= " ({$elapsed} daq)";
+
+        if ($state && !empty($state['message_id'])) {
+            // Mavjud xabarga qo'shish
+            $state['lines'][] = $line;
+            $msg = $this->buildDailyMessage($today, $state['lines']);
+            $telegram->editMessage($chatId, $state['message_id'], $msg);
+        } else {
+            // Yangi xabar yuborish
+            $state = ['date' => $today, 'lines' => [$line]];
+            $msg = $this->buildDailyMessage($today, $state['lines']);
+            $msgId = $telegram->sendAndGetId($chatId, $msg);
+            $state['message_id'] = $msgId;
+        }
+
+        // Holatni saqlash
+        file_put_contents($stateFile, json_encode($state));
+
+        // Console uchun ham chiqarish
+        $this->info($line);
+    }
+
+    private function buildDailyMessage(string $date, array $lines): string
+    {
+        $formatted = Carbon::parse($date)->format('d.m.Y');
+        $msg = "📊 Live import — {$formatted}\n\n";
+        $msg .= implode("\n", $lines);
+        return $msg;
     }
 
     private function sendTelegramReport()

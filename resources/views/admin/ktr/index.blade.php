@@ -437,12 +437,23 @@
             weekCount: 0,
             savedHours: {},
             savedTopics: {},
-            hemisTopics: {}
+            hemisTopics: {},
+            canEdit: false
         };
 
         // Mustaqil ta'limni filtrdan chiqarish
         function isMustaqil(name) {
             return /mustaqil/i.test(name.replace(/[^a-zA-Z\u0400-\u04FF]/g, ''));
+        }
+
+        // Mashg'ulot turi tartibini aniqlash (Ma'ruza, Amaliy, Laboratoriya, ...)
+        var ktrTypeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar'];
+        function getTypePosition(name) {
+            var normalized = name.replace(/[^a-zA-Z\u0400-\u04FF]/g, '').toLowerCase();
+            for (var i = 0; i < ktrTypeOrder.length; i++) {
+                if (normalized.indexOf(ktrTypeOrder[i]) > -1) return i;
+            }
+            return ktrTypeOrder.length;
         }
 
         function openKtrPlan(csId) {
@@ -463,14 +474,19 @@
                     ktrState.totalLoad = data.total_acload;
                     ktrState.trainingTypes = data.training_types;
 
-                    // Mustaqil ta'limni chiqarib tashlash
-                    ktrState.filteredCodes = Object.keys(data.training_types).filter(function(code) {
-                        return !isMustaqil(data.training_types[code].name);
-                    });
+                    // Mustaqil ta'limni chiqarib tashlash va to'g'ri tartibda saralash
+                    ktrState.filteredCodes = Object.keys(data.training_types)
+                        .filter(function(code) {
+                            return !isMustaqil(data.training_types[code].name);
+                        })
+                        .sort(function(a, b) {
+                            return getTypePosition(data.training_types[a].name) - getTypePosition(data.training_types[b].name);
+                        });
 
                     ktrState.savedHours = {};
                     ktrState.savedTopics = {};
                     ktrState.hemisTopics = data.hemis_topics || {};
+                    ktrState.canEdit = data.can_edit || false;
 
                     // Saqlangan ma'lumotlarni yuklash
                     if (data.plan && data.plan.plan_data) {
@@ -483,11 +499,24 @@
                         }
                     }
 
-                    $('#ktr-week-selector').show();
+                    // Tahrirlash huquqi bo'yicha UI
+                    if (ktrState.canEdit) {
+                        $('#ktr-week-selector').show();
+                        $('#ktr-save-btn').show();
+                    } else {
+                        $('#ktr-week-selector').hide();
+                        $('#ktr-save-btn').hide();
+                    }
                     $('.ktr-week-btn').removeClass('active');
 
                     if (data.plan && data.plan.week_count) {
                         selectWeekCount(data.plan.week_count, true);
+                    } else if (!ktrState.canEdit) {
+                        // Reja yo'q va tahrirlash huquqi yo'q
+                        $('#ktr-plan-table-wrap').hide();
+                        $('#ktr-validation-msg')
+                            .html('Bu fan uchun hali KTR rejasi tuzilmagan.')
+                            .removeClass('ktr-msg-error').addClass('ktr-msg-success').show();
                     }
                 },
                 error: function(xhr) {
@@ -548,7 +577,8 @@
                     if (fromLoad && ktrState.savedHours[w] && ktrState.savedHours[w][code] !== undefined) {
                         hrs = ktrState.savedHours[w][code];
                     }
-                    tbody += '<td class="ktr-td-hrs"><input type="number" min="0" class="ktr-cell ktr-hours" data-week="' + w + '" data-code="' + code + '" value="' + hrs + '"></td>';
+                    var readonlyAttr = ktrState.canEdit ? '' : ' readonly disabled';
+                    tbody += '<td class="ktr-td-hrs"><input type="number" min="0" class="ktr-cell ktr-hours" data-week="' + w + '" data-code="' + code + '" value="' + hrs + '"' + readonlyAttr + '></td>';
                 });
                 tbody += '</tr>';
             }

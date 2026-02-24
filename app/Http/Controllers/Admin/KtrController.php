@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
+use App\Models\CurriculumSubjectTeacher;
 use App\Models\Department;
 use App\Models\KtrPlan;
+use App\Models\Teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -438,6 +440,30 @@ class KtrController extends Controller
     }
 
     /**
+     * Foydalanuvchi ushbu fan KTR rejasini tahrirlash huquqiga ega ekanligini tekshirish
+     */
+    private function canEditSubjectKtr(CurriculumSubject $cs): bool
+    {
+        $user = auth()->user();
+
+        // Superadmin/admin har doim tahrirlashi mumkin
+        if ($user->hasRole(['superadmin', 'admin', 'kichik_admin'])) {
+            return true;
+        }
+
+        // O'qituvchi/fan mas'uli - faqat o'z fanlari uchun
+        if ($user instanceof Teacher && $user->hemis_id) {
+            return CurriculumSubjectTeacher::where('employee_id', $user->hemis_id)
+                ->where('subject_id', $cs->subject_id)
+                ->where('active', true)
+                ->exists();
+        }
+
+        // Registrator ofisi va boshqa rollar - faqat ko'rish
+        return false;
+    }
+
+    /**
      * Fan uchun KTR rejasini olish
      */
     public function getPlan($curriculumSubjectId)
@@ -491,6 +517,7 @@ class KtrController extends Controller
             'total_acload' => (int) $cs->total_acload,
             'training_types' => $trainingTypes,
             'hemis_topics' => $hemisTopics,
+            'can_edit' => $this->canEditSubjectKtr($cs),
             'plan' => $plan ? [
                 'week_count' => $plan->week_count,
                 'plan_data' => $plan->plan_data,
@@ -565,6 +592,13 @@ class KtrController extends Controller
     public function savePlan(Request $request, $curriculumSubjectId)
     {
         $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
+
+        if (!$this->canEditSubjectKtr($cs)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sizda ushbu fan KTR rejasini tahrirlash huquqi yo\'q.',
+            ], 403);
+        }
 
         $request->validate([
             'week_count' => 'required|integer|min:1|max:15',

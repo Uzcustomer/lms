@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
 
 class TeacherController extends Controller
@@ -188,27 +189,54 @@ class TeacherController extends Controller
             'responsible_subjects.required' => "Fan mas'uli roli uchun kamida bitta fanni tanlash majburiy.",
         ]);
 
-        foreach ($roles as $roleName) {
-            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+        try {
+            foreach ($roles as $roleName) {
+                Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+            }
+
+            $oldRoles = $teacher->getRoleNames()->toArray();
+            $teacher->syncRoles($roles);
+        } catch (\Throwable $e) {
+            Log::error('updateRoles - syncRoles xatolik: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'Rollarni saqlashda xatolik: ' . $e->getMessage());
         }
 
-        $oldRoles = $teacher->getRoleNames()->toArray();
-        $teacher->syncRoles($roles);
-
         if ($isDean) {
-            $teacher->deanFaculties()->sync($request->input('dean_faculties', []));
+            try {
+                $teacher->deanFaculties()->sync($request->input('dean_faculties', []));
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - deanFaculties xatolik: ' . $e->getMessage());
+                return redirect()->back()->withInput()->with('error', 'Dekan fakultetlarini saqlashda xatolik: ' . $e->getMessage());
+            }
         } else {
-            $teacher->deanFaculties()->detach();
+            try {
+                $teacher->deanFaculties()->detach();
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - deanFaculties detach xatolik: ' . $e->getMessage());
+            }
         }
 
         if ($isSubjectResponsible) {
-            $teacher->responsibleSubjects()->sync($request->input('responsible_subjects', []));
+            if (!Schema::hasTable('teacher_responsible_subjects')) {
+                Log::error('updateRoles - teacher_responsible_subjects jadvali mavjud emas');
+                return redirect()->back()->withInput()->with('error', "teacher_responsible_subjects jadvali mavjud emas. Serverda 'php artisan migrate' buyrug'ini ishga tushiring.");
+            }
+            try {
+                $teacher->responsibleSubjects()->sync($request->input('responsible_subjects', []));
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - responsibleSubjects xatolik: ' . $e->getMessage());
+                return redirect()->back()->withInput()->with('error', "Fanlarni saqlashda xatolik: " . $e->getMessage());
+            }
         } else {
-            $teacher->responsibleSubjects()->detach();
+            try {
+                $teacher->responsibleSubjects()->detach();
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - responsibleSubjects detach xatolik: ' . $e->getMessage());
+            }
         }
 
         ActivityLogService::log('update', 'teacher', "Xodim rollari yangilandi: {$teacher->full_name}", $teacher, [
-            'roles' => $oldRoles,
+            'roles' => $oldRoles ?? [],
         ], [
             'roles' => $roles,
         ]);

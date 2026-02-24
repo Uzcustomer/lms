@@ -9,6 +9,7 @@ class DiagnoseHemisApi extends Command
 {
     protected $signature = 'hemis:diagnose
         {--date= : Tekshirish sanasi (YYYY-MM-DD, default: 2026-02-22)}
+        {--utc : Timestamplarni UTC midnight bilan yaratish (timezone testga)}
         {--all-pages : Barcha sahifalarni yuklash (sekin, lekin to\'liq)}';
 
     protected $description = 'HEMIS API sana filtrini diagnostika qilish — noto\'g\'ri sanalar qaytishini isbotlash';
@@ -22,10 +23,21 @@ class DiagnoseHemisApi extends Command
             ? Carbon::parse($this->option('date'))
             : Carbon::parse('2026-02-22');
 
-        $from = $date->copy()->startOfDay()->timestamp;
-        $to = $date->copy()->endOfDay()->timestamp;
-        $dayOfWeek = $date->translatedFormat('l');
+        $useUtc = $this->option('utc');
         $fetchAllPages = $this->option('all-pages');
+
+        if ($useUtc) {
+            // UTC midnight timestamps — HEMIS API qanday kutishi kerak
+            $from = Carbon::parse($date->toDateString(), 'UTC')->startOfDay()->timestamp;
+            $to = Carbon::parse($date->toDateString(), 'UTC')->endOfDay()->timestamp;
+        } else {
+            // Local timezone (Asia/Tashkent) — hozirgi usul
+            $from = $date->copy()->startOfDay()->timestamp;
+            $to = $date->copy()->endOfDay()->timestamp;
+        }
+
+        $dayOfWeek = $date->translatedFormat('l');
+        $tzLabel = $useUtc ? 'UTC' : config('app.timezone', 'Asia/Tashkent');
 
         $this->newLine();
         $this->info("╔══════════════════════════════════════════════════════════════╗");
@@ -35,8 +47,13 @@ class DiagnoseHemisApi extends Command
 
         $this->info("┌─ SO'ROV ────────────────────────────────────────────────────┐");
         $this->info("│ Sana:     {$date->toDateString()} ({$dayOfWeek})");
-        $this->info("│ lesson_date_from = {$from}  (" . Carbon::createFromTimestamp($from)->format('Y-m-d H:i:s') . ")");
-        $this->info("│ lesson_date_to   = {$to}  (" . Carbon::createFromTimestamp($to)->format('Y-m-d H:i:s') . ")");
+        $this->info("│ Rejim:    " . ($useUtc ? 'UTC midnight' : "Local ({$tzLabel})"));
+        $this->info("│ lesson_date_from = {$from}");
+        $this->info("│   Local: " . Carbon::createFromTimestamp($from)->format('Y-m-d H:i:s'));
+        $this->info("│   UTC:   " . Carbon::createFromTimestamp($from)->utc()->format('Y-m-d H:i:s'));
+        $this->info("│ lesson_date_to   = {$to}");
+        $this->info("│   Local: " . Carbon::createFromTimestamp($to)->format('Y-m-d H:i:s'));
+        $this->info("│   UTC:   " . Carbon::createFromTimestamp($to)->utc()->format('Y-m-d H:i:s'));
         $this->info("│ limit = 200");
         $this->info("│");
         $this->info("│ curl ekvivalenti:");

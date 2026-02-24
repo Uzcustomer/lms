@@ -22,6 +22,9 @@ class ImportGrades extends Command
     protected ?string $baseUrl;
     protected ?string $token;
     protected array $report = [];
+    private ?int $telegramProgressMsgId = null;
+    private array $dayStatuses = [];
+    private ?float $importStartTime = null;
 
     public function __construct()
     {
@@ -82,6 +85,8 @@ class ImportGrades extends Command
             Log::info("[LiveImport] Today's ALL grades finalized, skipping.");
             return;
         }
+
+        $this->sendProgressStart('live', 1, $today->toDateString());
 
         // HEMIS API timestamplarni UTC kun chegaralari bo'yicha filter qiladi.
         // Local (Asia/Tashkent UTC+5) midnight yuborsa, API noto'g'ri kunni qaytaradi.
@@ -164,6 +169,9 @@ class ImportGrades extends Command
             }
         }
 
+        $liveSuccess = isset($this->report['student-grade-list']) && empty($this->report['student-grade-list']['failed_pages']) ? 1 : 0;
+        $liveFailed = $liveSuccess ? [] : ($this->report['student-grade-list']['failed_pages'] ?? []);
+        $this->sendProgressDone('live', $liveSuccess, 1, $liveFailed);
         $this->sendTelegramReport();
         Log::info('[LiveImport] Completed at ' . Carbon::now());
     }
@@ -200,6 +208,9 @@ class ImportGrades extends Command
 
         $this->info("Final import: {$totalDays} ta kun tekshiriladi ({$allDatesToProcess[0]} — " . end($allDatesToProcess) . ")");
         Log::info("[FinalImport] Processing {$totalDays} days", ['dates' => $allDatesToProcess]);
+
+        $originalTotal = $totalDays;
+        $this->sendProgressStart('final', $totalDays, "{$allDatesToProcess[0]} — " . end($allDatesToProcess));
 
         foreach ($allDatesToProcess as $dateStr) {
             $dayNum++;
@@ -258,6 +269,7 @@ class ImportGrades extends Command
 
                     // To'liq import bo'lgan bo'lsa (ko'p yozuv), API dan qayta tortish shart emas
                     if ($finalizedCount >= 500) {
+                        $this->updateDayProgress($dateStr, '✅', "tozalandi ({$cleaned})", $dayNum, $originalTotal);
                         $successDays++;
                         continue;
                     }
@@ -269,6 +281,7 @@ class ImportGrades extends Command
                 // Kam yozuv — to'liq import bo'lmagan, API dan tortish kerak
                 if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500) {
                     $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv), o'tkazildi.");
+                    $this->updateDayProgress($dateStr, '✅', "to'liq ({$finalizedCount})", $dayNum, $originalTotal);
                     $totalDays--;
                     continue;
                 }
@@ -285,6 +298,7 @@ class ImportGrades extends Command
                     ? 'bazada yozuv yo\'q'
                     : ($finalizedCount > 0 ? "qisman ({$finalizedCount} ta yozuv)" : 'is_final=false mavjud');
                 $this->info("  {$dateStr} — API dan tortilmoqda ({$reason})...");
+                $this->updateDayProgress($dateStr, '⏳', "API...", $dayNum, $originalTotal);
 
                 if ($reporter) {
                     $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), baholar API...");
@@ -294,6 +308,7 @@ class ImportGrades extends Command
                 if ($gradeItems === false) {
                     $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
                     $this->error("  {$dateStr} — API xato ({$errorDetail}), keyingi kunga o'tiladi.");
+                    $this->updateDayProgress($dateStr, '❌', "API xato", $dayNum, $originalTotal);
                     $failedDays[] = "{$dateStr} ({$errorDetail})";
                     continue;
                 }
@@ -302,15 +317,18 @@ class ImportGrades extends Command
                     if (!$hasUnfinalizedForDate && $finalizedCount === 0) {
                         // Bazada yozuv yo'q, API ham 0 — bu kunda dars bo'lmagan
                         $this->info("  {$dateStr} — dars bo'lmagan (API 0, bazada yozuv yo'q).");
+                        $this->updateDayProgress($dateStr, '✅', "dars yo'q", $dayNum, $originalTotal);
                         $successDays++;
                     } elseif ($hasUnfinalizedForDate) {
                         // is_final=false yozuvlar bor, lekin API 0 qaytardi — retry uchun saqlanadi
                         $this->warn("  {$dateStr} — API 0 ta baho qaytardi, is_final=false saqlanadi (keyingi importda qayta uriniladi).");
+                        $this->updateDayProgress($dateStr, '⚠️', "API 0, retry", $dayNum, $originalTotal);
                         Log::warning("[FinalImport] {$dateStr} — API returned 0 grades, keeping is_final=false for retry.");
                         $failedDays[] = "{$dateStr} (API 0, is_final=false saqlanadi)";
                     } else {
                         // Faqat is_final=true bor (journal sync dan), API 0 — yangi ma'lumot yo'q
                         $this->info("  {$dateStr} — API 0, mavjud {$finalizedCount} ta yozuv saqlanadi.");
+                        $this->updateDayProgress($dateStr, '✅', "mavjud ({$finalizedCount})", $dayNum, $originalTotal);
                         $successDays++;
                     }
                     continue;
@@ -339,6 +357,7 @@ class ImportGrades extends Command
                     }
                 }
 
+                $this->updateDayProgress($dateStr, '✅', count($gradeItems) . " ta baho", $dayNum, $originalTotal);
                 $successDays++;
                 $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
             } catch (\Throwable $e) {
@@ -348,11 +367,14 @@ class ImportGrades extends Command
                     'trace' => $e->getTraceAsString(),
                 ]);
                 $failedDays[] = "{$date->toDateString()} (Exception: " . substr($errorMsg, 0, 100) . ")";
+                $this->updateDayProgress($dateStr, '❌', "xato", $dayNum, $originalTotal);
             }
         }
 
         // Global tozalash: eski is_final=false duplikatlarni kunlik batch qilib soft-delete qilish
         // Katta self-join o'rniga kunlik bo'lib tozalash — lock vaqtini qisqartiradi
+        $this->info("Global tozalash boshlandi...");
+        $this->updateDayProgress('tozalash', '⏳', 'global cleanup...', $dayNum, $originalTotal);
         try {
             $globalCleaned = 0;
             $staleDates = DB::table('student_grades')
@@ -392,12 +414,15 @@ class ImportGrades extends Command
             $failedDays[] = "Global cleanup (Exception: " . substr($e->getMessage(), 0, 100) . ")";
         }
 
+        $this->updateDayProgress('tozalash', '✅', 'tugadi', $dayNum, $originalTotal);
+
         $this->report['final-import'] = [
             'total_days' => $totalDays,
             'success_days' => $successDays,
             'failed_pages' => $failedDays,
         ];
 
+        $this->sendProgressDone('final', $successDays, $originalTotal, $failedDays);
         $this->sendTelegramReport();
         Log::info("[FinalImport] Completed at " . Carbon::now() . ": {$successDays}/{$totalDays} days finalized.");
     }
@@ -428,10 +453,14 @@ class ImportGrades extends Command
         $this->info("BACKFILL: {$startDate->toDateString()} → {$endDate->toDateString()} ({$totalDays} kun)");
         Log::info("[Backfill] Starting from {$startDate->toDateString()} to {$endDate->toDateString()}");
 
+        $this->sendProgressStart('backfill', $totalDays, "{$startDate->toDateString()} — {$endDate->toDateString()}");
+
         $successDays = 0;
         $failedDays = [];
+        $dayNum = 0;
 
         foreach ($period as $date) {
+            $dayNum++;
             // UTC midnight — HEMIS API UTC kun chegaralari bo'yicha filter qiladi
             $dayFrom = Carbon::parse($date->toDateString(), 'UTC')->startOfDay()->timestamp;
             $dayTo = Carbon::parse($date->toDateString(), 'UTC')->endOfDay()->timestamp;
@@ -444,6 +473,7 @@ class ImportGrades extends Command
             if ($gradeItems === false) {
                 $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
                 $this->error("XATO: {$date->toDateString()} — baholar import qilinmadi ({$errorDetail}), keyingi kunga o'tiladi.");
+                $this->updateDayProgress($date->toDateString(), '❌', "API xato", $dayNum, $totalDays);
                 $failedDays[] = "{$date->toDateString()} ({$errorDetail})";
                 continue;
             }
@@ -462,6 +492,7 @@ class ImportGrades extends Command
                 }
             }
 
+            $this->updateDayProgress($date->toDateString(), '✅', "tayyor", $dayNum, $totalDays);
             $successDays++;
             $this->info("Tayyor: {$date->toDateString()} — {$successDays}/{$totalDays}");
         }
@@ -472,6 +503,7 @@ class ImportGrades extends Command
             'failed_pages' => $failedDays,
         ];
 
+        $this->sendProgressDone('backfill', $successDays, $totalDays, $failedDays);
         $this->sendTelegramReport();
 
         $this->info("BACKFILL tugadi: {$successDays}/{$totalDays} kun muvaffaqiyatli.");
@@ -1062,6 +1094,117 @@ class ImportGrades extends Command
         }
 
         return null;
+    }
+
+    // =========================================================================
+    // Progress tracking — Telegram live xabar + Console banner
+    // =========================================================================
+    private function sendProgressStart(string $mode, int $totalDays, string $dateRange): void
+    {
+        $this->importStartTime = microtime(true);
+        $this->dayStatuses = [];
+
+        // Console
+        $this->newLine();
+        $this->info("╔══════════════════════════════════════════════════════════╗");
+        $this->info("║  " . strtoupper($mode) . " IMPORT BOSHLANDI (" . Carbon::now()->format('H:i:s') . ")");
+        $this->info("║  {$totalDays} kun: {$dateRange}");
+        $this->info("╚══════════════════════════════════════════════════════════╝");
+
+        // Telegram — yangi xabar yuborish va ID saqlash
+        $chatId = config('services.telegram.chat_id');
+        if (!$chatId) return;
+
+        $bar = $this->makeProgressBar(0, $totalDays);
+        $msg = "⏳ " . strtoupper($mode) . " import boshlandi\n"
+             . Carbon::now()->format('d.m.Y H:i') . "\n\n"
+             . "{$bar} 0/{$totalDays}\n\n"
+             . $dateRange;
+
+        $this->telegramProgressMsgId = app(TelegramService::class)->sendAndGetId($chatId, $msg);
+    }
+
+    private function updateDayProgress(string $key, string $icon, string $details, int $current, int $total): void
+    {
+        $this->dayStatuses[$key] = "{$icon} {$details}";
+
+        // Faqat Telegram yangilash — console allaqachon info() orqali yozilmoqda
+        $chatId = config('services.telegram.chat_id');
+        if (!$this->telegramProgressMsgId || !$chatId) return;
+
+        $elapsed = round((microtime(true) - $this->importStartTime) / 60, 1);
+        $bar = $this->makeProgressBar($current, $total);
+        $mode = strtoupper($this->option('mode'));
+
+        $lines = [];
+        foreach ($this->dayStatuses as $d => $s) {
+            $label = (strlen($d) === 10 && ($d[4] ?? '') === '-') ? substr($d, 5) : $d;
+            $lines[] = "{$label} {$s}";
+        }
+
+        $msg = "⏳ {$mode} import jarayonda...\n"
+             . Carbon::now()->format('d.m.Y H:i') . "\n\n"
+             . "{$bar} {$current}/{$total}\n\n"
+             . implode("\n", $lines) . "\n\n"
+             . "⏱ {$elapsed} daq";
+
+        app(TelegramService::class)->editMessage($chatId, $this->telegramProgressMsgId, $msg);
+    }
+
+    private function sendProgressDone(string $mode, int $successDays, int $totalDays, array $failedDays = []): void
+    {
+        $elapsed = $this->importStartTime
+            ? round((microtime(true) - $this->importStartTime) / 60, 1)
+            : 0;
+        $hasErrors = !empty($failedDays);
+
+        // Console
+        $this->newLine();
+        $status = $hasErrors ? "XATOLAR BOR" : "MUVAFFAQIYATLI";
+        $this->info("╔══════════════════════════════════════════════════════════╗");
+        $this->info("║  " . strtoupper($mode) . " IMPORT TUGADI — {$status}");
+        $this->info("║  Natija: {$successDays}/{$totalDays} kun muvaffaqiyatli");
+        $this->info("║  Vaqt: {$elapsed} daqiqa (" . Carbon::now()->format('H:i:s') . ")");
+        if ($hasErrors) {
+            foreach ($failedDays as $f) {
+                $this->error("║  xato: {$f}");
+            }
+        }
+        $this->info("╚══════════════════════════════════════════════════════════╝");
+        $this->newLine();
+
+        // Telegram — yakuniy xabarni yangilash
+        $chatId = config('services.telegram.chat_id');
+        if (!$this->telegramProgressMsgId || !$chatId) return;
+
+        $emoji = $hasErrors ? "⚠️" : "✅";
+        $bar = $this->makeProgressBar($successDays, $totalDays);
+
+        $lines = [];
+        foreach ($this->dayStatuses as $d => $s) {
+            $label = (strlen($d) === 10 && ($d[4] ?? '') === '-') ? substr($d, 5) : $d;
+            $lines[] = "{$label} {$s}";
+        }
+
+        $msg = "{$emoji} " . strtoupper($mode) . " import tugadi\n"
+             . Carbon::now()->format('d.m.Y H:i') . "\n\n"
+             . "{$bar} {$successDays}/{$totalDays}\n\n"
+             . implode("\n", $lines) . "\n\n"
+             . "📊 {$successDays}/{$totalDays} muvaffaqiyatli\n"
+             . "⏱ {$elapsed} daqiqa";
+
+        if ($hasErrors) {
+            $msg .= "\n\n❌ Xatolar:\n" . implode("\n", array_map(fn($f) => "• {$f}", $failedDays));
+        }
+
+        app(TelegramService::class)->editMessage($chatId, $this->telegramProgressMsgId, $msg);
+    }
+
+    private function makeProgressBar(int $current, int $total, int $width = 20): string
+    {
+        if ($total <= 0) return '[' . str_repeat('░', $width) . ']';
+        $filled = min($width, (int) round($current / $total * $width));
+        return '[' . str_repeat('█', $filled) . str_repeat('░', $width - $filled) . ']';
     }
 
     private function sendTelegramReport()

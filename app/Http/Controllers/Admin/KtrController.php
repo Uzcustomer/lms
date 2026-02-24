@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
+use App\Models\CurriculumSubject;
 use App\Models\Department;
+use App\Models\KtrPlan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -241,5 +243,101 @@ class KtrController extends Controller
         }
 
         return response()->json($result);
+    }
+
+    /**
+     * Fan uchun KTR rejasini olish
+     */
+    public function getPlan($curriculumSubjectId)
+    {
+        $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
+
+        // Mashg'ulot turlarini subject_details dan olish
+        $trainingTypes = [];
+        $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+        if (is_array($details)) {
+            foreach ($details as $detail) {
+                $code = (string) ($detail['trainingType']['code'] ?? '');
+                $name = $detail['trainingType']['name'] ?? '';
+                $hours = (int) ($detail['academic_load'] ?? 0);
+                if ($code !== '' && $name !== '') {
+                    $trainingTypes[$code] = [
+                        'name' => $name,
+                        'hours' => $hours,
+                    ];
+                }
+            }
+        }
+
+        // Belgilangan tartibda saralash
+        $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar', 'mustaqil'];
+        $normalize = function ($str) {
+            return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower($str));
+        };
+        uksort($trainingTypes, function ($a, $b) use ($trainingTypes, $typeOrder, $normalize) {
+            $nameA = $normalize($trainingTypes[$a]['name']);
+            $nameB = $normalize($trainingTypes[$b]['name']);
+            $posA = count($typeOrder);
+            $posB = count($typeOrder);
+            foreach ($typeOrder as $i => $keyword) {
+                if ($posA === count($typeOrder) && str_contains($nameA, $keyword)) $posA = $i;
+                if ($posB === count($typeOrder) && str_contains($nameB, $keyword)) $posB = $i;
+            }
+            return $posA <=> $posB;
+        });
+
+        $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
+
+        return response()->json([
+            'subject_name' => $cs->subject_name,
+            'total_acload' => (int) $cs->total_acload,
+            'training_types' => $trainingTypes,
+            'plan' => $plan ? [
+                'week_count' => $plan->week_count,
+                'plan_data' => $plan->plan_data,
+            ] : null,
+        ]);
+    }
+
+    /**
+     * Fan uchun KTR rejasini saqlash
+     */
+    public function savePlan(Request $request, $curriculumSubjectId)
+    {
+        $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
+
+        $request->validate([
+            'week_count' => 'required|integer|min:1|max:15',
+            'plan_data' => 'required|array',
+        ]);
+
+        // Jami soatlarni tekshirish
+        $totalEntered = 0;
+        foreach ($request->plan_data as $weekData) {
+            foreach ($weekData as $hours) {
+                $totalEntered += (int) $hours;
+            }
+        }
+
+        if ($totalEntered != (int) $cs->total_acload) {
+            return response()->json([
+                'success' => false,
+                'message' => "Jami soatlar mos kelmadi! Kiritilgan: {$totalEntered}, Jami yuklama: " . (int) $cs->total_acload,
+            ], 422);
+        }
+
+        KtrPlan::updateOrCreate(
+            ['curriculum_subject_id' => $curriculumSubjectId],
+            [
+                'week_count' => $request->week_count,
+                'plan_data' => $request->plan_data,
+                'created_by' => auth()->id(),
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'KTR rejasi muvaffaqiyatli saqlandi!',
+        ]);
     }
 }

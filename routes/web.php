@@ -302,6 +302,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-specialties', [KtrController::class, 'getSpecialties'])->name('get-specialties');
             Route::get('/get-level-codes', [KtrController::class, 'getLevelCodes'])->name('get-level-codes');
             Route::get('/get-semesters', [KtrController::class, 'getSemesters'])->name('get-semesters');
+            Route::get('/plan/{curriculumSubjectId}', [KtrController::class, 'getPlan'])->name('get-plan');
+            Route::post('/plan/{curriculumSubjectId}', [KtrController::class, 'savePlan'])->name('save-plan');
         });
 
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');

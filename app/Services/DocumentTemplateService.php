@@ -102,37 +102,48 @@ class DocumentTemplateService
         $pdfGenerated = false;
 
         // LibreOffice orqali PDF generatsiya (yagona sifatli usul)
-        // PhpWord → HTML → DomPDF usuli Word formatlanishni buzadi,
-        // shuning uchun faqat LibreOffice ishlatiladi.
-        // LibreOffice yo'q bo'lsa, kontroller Blade template fallback ishlatadi.
         $sofficePath = $this->findSoffice();
-        if ($sofficePath) {
-            $command = sprintf(
-                '%s --headless --convert-to pdf --outdir %s %s 2>&1',
-                escapeshellarg($sofficePath),
-                escapeshellarg($tempDir),
-                escapeshellarg($tempDocx)
-            );
 
-            exec($command, $output, $returnCode);
+        if (!$sofficePath) {
+            @unlink($tempDocx);
+            \Log::warning('LibreOffice topilmadi. findSoffice() null qaytardi. PATH: ' . (getenv('PATH') ?: 'bo\'sh'));
+            throw new \RuntimeException('LibreOffice topilmadi. O\'rnating: sudo apt install libreoffice-writer');
+        }
 
-            $generatedPdf = preg_replace('/\.docx$/', '.pdf', $tempDocx);
+        \Log::info('LibreOffice topildi: ' . $sofficePath);
 
-            if ($returnCode === 0 && file_exists($generatedPdf)) {
-                Storage::disk('public')->put($pdfPath, file_get_contents($generatedPdf));
-                @unlink($generatedPdf);
-                $pdfGenerated = true;
-            }
+        // HOME muhit o'zgaruvchisi kerak (www-data uchun)
+        $homeDir = getenv('HOME') ?: '/tmp';
+        $command = sprintf(
+            'HOME=%s %s --headless --norestore --convert-to pdf --outdir %s %s 2>&1',
+            escapeshellarg($homeDir),
+            escapeshellarg($sofficePath),
+            escapeshellarg($tempDir),
+            escapeshellarg($tempDocx)
+        );
+
+        exec($command, $output, $returnCode);
+        $outputStr = implode("\n", $output);
+
+        \Log::info('LibreOffice command: ' . $command);
+        \Log::info('LibreOffice output: ' . $outputStr);
+        \Log::info('LibreOffice return code: ' . $returnCode);
+
+        $generatedPdf = preg_replace('/\.docx$/', '.pdf', $tempDocx);
+
+        if ($returnCode === 0 && file_exists($generatedPdf)) {
+            Storage::disk('public')->put($pdfPath, file_get_contents($generatedPdf));
+            @unlink($generatedPdf);
+            $pdfGenerated = true;
         }
 
         // Tozalash
         @unlink($tempDocx);
 
         if (!$pdfGenerated) {
-            throw new \RuntimeException(
-                'LibreOffice serverda o\'rnatilmagan. Sifatli PDF uchun: sudo apt install libreoffice-writer. ' .
-                'Hozircha Blade shablon ishlatiladi.'
-            );
+            $errorMsg = 'LibreOffice konvertatsiya xatosi (code: ' . $returnCode . '). Output: ' . $outputStr;
+            \Log::error($errorMsg);
+            throw new \RuntimeException($errorMsg);
         }
 
         return $pdfPath;

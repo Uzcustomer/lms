@@ -61,6 +61,22 @@
         </div>
     </form>
 
+    <div style="margin-top: 16px; text-align: center;">
+        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+            <div style="flex: 1; height: 1px; background-color: #d1d5db;"></div>
+            <span style="padding: 0 12px; font-size: 12px; color: #6b7280;">yoki</span>
+            <div style="flex: 1; height: 1px; background-color: #d1d5db;"></div>
+        </div>
+        <a href="{{ route('hemis.oauth.teacher.redirect') }}"
+           style="display: inline-flex; align-items: center; justify-content: center; width: 100%; padding: 10px 16px; background-color: #059669; color: #ffffff; font-size: 14px; font-weight: 600; border-radius: 8px; text-decoration: none; transition: background-color 0.2s;"
+           onmouseover="this.style.backgroundColor='#047857'" onmouseout="this.style.backgroundColor='#059669'">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 1.25rem; height: 1.25rem; margin-right: 8px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 1 1 9 0v3.75M3.75 21.75h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H3.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+            </svg>
+            HEMIS orqali kirish
+        </a>
+    </div>
+
     <script>
         function togglePassword() {
             const input = document.getElementById('password');

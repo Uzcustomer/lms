@@ -11,6 +11,7 @@
         "laravel/framework": "^11.9",
         "laravel/sanctum": "*",
         "laravel/tinker": "^2.9",
+        "league/oauth2-client": "^2.9",
         "livewire/livewire": "^3.5",
         "maatwebsite/excel": "^3.1",
         "phpoffice/phpspreadsheet": "^1.29",

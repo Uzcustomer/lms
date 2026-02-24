@@ -44,6 +44,14 @@ Route::get('/', function () {
         ->header('Expires', '0');
 })->name('welcome');
 
+// HEMIS OAuth routes
+Route::prefix('auth/hemis')->name('hemis.oauth.')->group(function () {
+    Route::get('/student/redirect', [\App\Http\Controllers\Auth\HemisOAuthController::class, 'redirectStudent'])->name('student.redirect');
+    Route::get('/student/callback', [\App\Http\Controllers\Auth\HemisOAuthController::class, 'callbackStudent'])->name('student.callback');
+    Route::get('/teacher/redirect', [\App\Http\Controllers\Auth\HemisOAuthController::class, 'redirectTeacher'])->name('teacher.redirect');
+    Route::get('/teacher/callback', [\App\Http\Controllers\Auth\HemisOAuthController::class, 'callbackTeacher'])->name('teacher.callback');
+});
+
 // CSRF tokenni yangilash (login sahifa uchun)
 Route::get('/refresh-csrf', function () {
     return response()->json(['token' => csrf_token()]);

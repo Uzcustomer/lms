@@ -217,7 +217,7 @@
             @endif
 
             {{-- Student forma --}}
-            <form x-show="tab === 'student'" x-transition.opacity.duration.200ms method="POST" action="{{ route('student.login.post') }}">
+            <form x-show="tab === 'student'" method="POST" action="{{ route('student.login.post') }}">
                 @csrf
                 <input type="hidden" name="_profile" value="student">
 
@@ -264,7 +264,7 @@
             </form>
 
             {{-- Xodim forma --}}
-            <form x-show="tab === 'teacher'" x-transition.opacity.duration.200ms method="POST" action="{{ route('teacher.login.post') }}">
+            <form x-show="tab === 'teacher'" method="POST" action="{{ route('teacher.login.post') }}">
                 @csrf
                 <input type="hidden" name="_profile" value="teacher">
 

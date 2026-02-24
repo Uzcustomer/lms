@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Console\Commands\ImportAttendanceControls;
+use App\Console\Commands\ImportGrades;
 use App\Services\ScheduleImportService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -53,10 +55,14 @@ class SyncReportDataJob implements ShouldQueue
                 $dateStr = $current->toDateString();
                 $this->updateProgress("Davomat: {$dateStr}", $currentStep, $totalSteps);
 
-                Artisan::call('import:attendance-controls', [
-                    '--date' => $dateStr,
-                    '--silent' => true,
-                ]);
+                try {
+                    Artisan::call(ImportAttendanceControls::class, [
+                        '--date' => $dateStr,
+                        '--silent' => true,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning("[SyncReportDataJob] Davomat xato ({$dateStr}): {$e->getMessage()}");
+                }
 
                 $currentStep++;
                 $current->addDay();
@@ -68,10 +74,14 @@ class SyncReportDataJob implements ShouldQueue
                 $dateStr = $current->toDateString();
                 $this->updateProgress("Baholar: {$dateStr}", $currentStep, $totalSteps);
 
-                Artisan::call('student:import-data', [
-                    '--date' => $dateStr,
-                    '--silent' => true,
-                ]);
+                try {
+                    Artisan::call(ImportGrades::class, [
+                        '--date' => $dateStr,
+                        '--silent' => true,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning("[SyncReportDataJob] Baholar xato ({$dateStr}): {$e->getMessage()}");
+                }
 
                 $currentStep++;
                 $current->addDay();

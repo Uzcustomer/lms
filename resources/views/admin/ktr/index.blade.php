@@ -436,7 +436,8 @@
             filteredCodes: [],
             weekCount: 0,
             savedHours: {},
-            savedTopics: {}
+            savedTopics: {},
+            hemisTopics: {}
         };
 
         // Mustaqil ta'limni filtrdan chiqarish
@@ -469,6 +470,7 @@
 
                     ktrState.savedHours = {};
                     ktrState.savedTopics = {};
+                    ktrState.hemisTopics = data.hemis_topics || {};
 
                     // Saqlangan ma'lumotlarni yuklash
                     if (data.plan && data.plan.plan_data) {
@@ -510,6 +512,19 @@
             $('#ktr-plan-table-wrap').slideDown(200);
         }
 
+        // Hemis dan kelgan mavzuni olish (position = week raqami)
+        function getHemisTopic(code, weekNum) {
+            var topics = ktrState.hemisTopics[code];
+            if (!topics || !topics.length) return '';
+            // position = weekNum yoki index = weekNum - 1
+            for (var i = 0; i < topics.length; i++) {
+                if (topics[i].position === weekNum) return topics[i].name;
+            }
+            // position mos kelmasa, index bo'yicha
+            if (weekNum - 1 < topics.length) return topics[weekNum - 1].name;
+            return '';
+        }
+
         function buildPlanTable(weekCount, fromLoad) {
             var types = ktrState.trainingTypes;
             var codes = ktrState.filteredCodes;
@@ -530,17 +545,16 @@
             var tbody = '';
             for (var w = 1; w <= weekCount; w++) {
                 tbody += '<tr>';
-                tbody += '<td class="ktr-td-week">' + w + '-hafta</td>';
+                tbody += '<td class="ktr-td-week">' + w + '</td>';
                 codes.forEach(function(code) {
                     var hrs = '';
-                    var topic = '';
-                    if (fromLoad) {
-                        if (ktrState.savedHours[w] && ktrState.savedHours[w][code] !== undefined) hrs = ktrState.savedHours[w][code];
-                        if (ktrState.savedTopics[w] && ktrState.savedTopics[w][code] !== undefined) topic = ktrState.savedTopics[w][code];
+                    if (fromLoad && ktrState.savedHours[w] && ktrState.savedHours[w][code] !== undefined) {
+                        hrs = ktrState.savedHours[w][code];
                     }
                     var hasVal = hrs !== '' && parseInt(hrs) > 0;
-                    tbody += '<td class="ktr-td-input"><input type="number" min="0" class="ktr-cell ktr-hours" data-week="' + w + '" data-code="' + code + '" value="' + hrs + '"></td>';
-                    tbody += '<td class="ktr-td-topic"><input type="text" class="ktr-cell ktr-topic' + (hasVal ? '' : ' ktr-topic-hidden') + '" data-week="' + w + '" data-code="' + code + '" value="' + (topic || '').replace(/"/g, '&quot;') + '" placeholder="Mavzu..."></td>';
+                    var topicText = getHemisTopic(code, w);
+                    tbody += '<td class="ktr-td-hrs"><input type="number" min="0" class="ktr-cell ktr-hours" data-week="' + w + '" data-code="' + code + '" value="' + hrs + '"></td>';
+                    tbody += '<td class="ktr-td-topic"><span class="ktr-topic-text' + (hasVal ? '' : ' ktr-topic-hidden') + '" data-week="' + w + '" data-code="' + code + '">' + (topicText || '').replace(/</g, '&lt;') + '</span></td>';
                 });
                 tbody += '</tr>';
             }
@@ -552,7 +566,7 @@
                 tfoot += '<td class="ktr-td-sum" id="ktr-col-sum-' + code + '">0</td><td class="ktr-td-topic-empty"></td>';
             });
             tfoot += '</tr>';
-            tfoot += '<tr class="ktr-tfoot-load"><td class="ktr-td-week" style="font-weight:700;">Yuklama</td>';
+            tfoot += '<tr class="ktr-tfoot-load"><td class="ktr-td-week" style="font-weight:700;">Yukl.</td>';
             codes.forEach(function(code) {
                 tfoot += '<td class="ktr-td-load">' + types[code].hours + '</td><td class="ktr-td-topic-empty"></td>';
             });
@@ -565,75 +579,46 @@
                 var w = $el.data('week');
                 var code = $el.data('code');
                 var val = parseInt($el.val()) || 0;
-                var $topic = $('.ktr-topic[data-week="' + w + '"][data-code="' + code + '"]');
+                var $topic = $('.ktr-topic-text[data-week="' + w + '"][data-code="' + code + '"]');
                 if (val > 0) {
                     $topic.removeClass('ktr-topic-hidden');
                 } else {
-                    $topic.addClass('ktr-topic-hidden').val('');
+                    $topic.addClass('ktr-topic-hidden');
                 }
                 recalcKtr();
             });
 
-            // Keyboard navigation (Excel-like)
-            $('#ktr-plan-table').off('keydown', '.ktr-cell').on('keydown', '.ktr-cell', function(e) {
+            // Keyboard navigation (Excel-like) - faqat soat inputlari
+            $('#ktr-plan-table').off('keydown', '.ktr-hours').on('keydown', '.ktr-hours', function(e) {
                 var key = e.which;
                 if ([13, 9, 38, 40].indexOf(key) === -1) return;
 
                 var $this = $(this);
                 var week = parseInt($this.data('week'));
                 var code = $this.data('code');
-                var isHours = $this.hasClass('ktr-hours');
                 var $target = null;
 
-                if (key === 13 || key === 40) { // Enter / Down -> same column next row
+                if (key === 13 || key === 40) { // Enter / Down
                     e.preventDefault();
                     var nextW = week + 1;
                     if (nextW > ktrState.weekCount) nextW = 1;
-                    if (isHours) {
-                        $target = $('.ktr-hours[data-week="' + nextW + '"][data-code="' + code + '"]');
-                    } else {
-                        $target = $('.ktr-topic[data-week="' + nextW + '"][data-code="' + code + '"]');
-                        if ($target.hasClass('ktr-topic-hidden')) $target = $('.ktr-hours[data-week="' + nextW + '"][data-code="' + code + '"]');
-                    }
-                } else if (key === 38) { // Up -> same column prev row
+                    $target = $('.ktr-hours[data-week="' + nextW + '"][data-code="' + code + '"]');
+                } else if (key === 38) { // Up
                     e.preventDefault();
                     var prevW = week - 1;
                     if (prevW < 1) prevW = ktrState.weekCount;
-                    if (isHours) {
-                        $target = $('.ktr-hours[data-week="' + prevW + '"][data-code="' + code + '"]');
-                    } else {
-                        $target = $('.ktr-topic[data-week="' + prevW + '"][data-code="' + code + '"]');
-                        if ($target.hasClass('ktr-topic-hidden')) $target = $('.ktr-hours[data-week="' + prevW + '"][data-code="' + code + '"]');
-                    }
-                } else if (key === 9) { // Tab -> next cell in row
+                    $target = $('.ktr-hours[data-week="' + prevW + '"][data-code="' + code + '"]');
+                } else if (key === 9) { // Tab -> next type column
                     e.preventDefault();
                     var cIdx = codes.indexOf(String(code));
-                    if (isHours) {
-                        // hours -> topic (if visible) or next hours
-                        var $topic = $('.ktr-topic[data-week="' + week + '"][data-code="' + code + '"]');
-                        if (!$topic.hasClass('ktr-topic-hidden') && !e.shiftKey) {
-                            $target = $topic;
-                        } else if (!e.shiftKey) {
-                            var nIdx = cIdx + 1;
-                            if (nIdx < codes.length) $target = $('.ktr-hours[data-week="' + week + '"][data-code="' + codes[nIdx] + '"]');
-                            else $target = $('.ktr-hours[data-week="' + (week < ktrState.weekCount ? week + 1 : 1) + '"][data-code="' + codes[0] + '"]');
-                        } else {
-                            // shift+tab backward
-                            var pIdx = cIdx - 1;
-                            if (pIdx >= 0) {
-                                var $pt = $('.ktr-topic[data-week="' + week + '"][data-code="' + codes[pIdx] + '"]');
-                                $target = !$pt.hasClass('ktr-topic-hidden') ? $pt : $('.ktr-hours[data-week="' + week + '"][data-code="' + codes[pIdx] + '"]');
-                            }
-                        }
+                    if (!e.shiftKey) {
+                        var nIdx = cIdx + 1;
+                        if (nIdx < codes.length) $target = $('.ktr-hours[data-week="' + week + '"][data-code="' + codes[nIdx] + '"]');
+                        else $target = $('.ktr-hours[data-week="' + (week < ktrState.weekCount ? week + 1 : 1) + '"][data-code="' + codes[0] + '"]');
                     } else {
-                        // topic -> next hours
-                        if (!e.shiftTab) {
-                            var nIdx2 = cIdx + 1;
-                            if (nIdx2 < codes.length) $target = $('.ktr-hours[data-week="' + week + '"][data-code="' + codes[nIdx2] + '"]');
-                            else $target = $('.ktr-hours[data-week="' + (week < ktrState.weekCount ? week + 1 : 1) + '"][data-code="' + codes[0] + '"]');
-                        } else {
-                            $target = $('.ktr-hours[data-week="' + week + '"][data-code="' + code + '"]');
-                        }
+                        var pIdx = cIdx - 1;
+                        if (pIdx >= 0) $target = $('.ktr-hours[data-week="' + week + '"][data-code="' + codes[pIdx] + '"]');
+                        else $target = $('.ktr-hours[data-week="' + (week > 1 ? week - 1 : ktrState.weekCount) + '"][data-code="' + codes[codes.length - 1] + '"]');
                     }
                 }
 
@@ -696,8 +681,8 @@
                 topics[w] = {};
                 codes.forEach(function(code) {
                     hours[w][code] = parseInt($('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val()) || 0;
-                    var topicVal = $('.ktr-topic[data-week="' + w + '"][data-code="' + code + '"]').val() || '';
-                    if (topicVal) topics[w][code] = topicVal;
+                    var topicText = getHemisTopic(code, w);
+                    if (topicText) topics[w][code] = topicText;
                 });
             }
 
@@ -759,7 +744,7 @@
                 var row = [w + '-hafta'];
                 codes.forEach(function(code) {
                     var hrs = $('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val() || '';
-                    var topic = $('.ktr-topic[data-week="' + w + '"][data-code="' + code + '"]').val() || '';
+                    var topic = getHemisTopic(code, w);
                     row.push(hrs);
                     row.push(topic);
                 });
@@ -1033,8 +1018,9 @@
         .ktr-modal {
             background: #fff;
             border-radius: 16px;
-            width: 100%;
-            max-width: 95vw;
+            width: auto;
+            min-width: 600px;
+            max-width: 90vw;
             max-height: 90vh;
             box-shadow: 0 25px 60px rgba(0,0,0,0.2);
             position: relative;
@@ -1071,7 +1057,7 @@
         }
         .ktr-modal-close:hover { color: #0f172a; }
         .ktr-modal-body {
-            padding: 20px 24px;
+            padding: 16px 20px;
             overflow-y: auto;
             flex: 1;
         }
@@ -1124,7 +1110,7 @@
         }
         .ktr-plan-table thead th {
             background: #f8fafc;
-            padding: 10px 8px;
+            padding: 6px 4px;
             text-align: center;
             font-weight: 600;
             font-size: 11px;
@@ -1142,26 +1128,30 @@
             color: #94a3b8;
             margin-top: 2px;
         }
-        .ktr-th-week { min-width: 90px; text-align: left; padding-left: 12px !important; }
+        .ktr-th-week { min-width: 55px; width: 55px; text-align: center; padding: 6px 4px !important; }
         .ktr-td-week {
-            padding: 6px 12px;
+            padding: 4px 6px;
             font-weight: 500;
+            font-size: 12px;
             color: #475569;
             background: #f8fafc;
             border: 1px solid #e2e8f0;
             white-space: nowrap;
+            text-align: center;
+            width: 55px;
         }
-        .ktr-td-input {
-            padding: 4px;
+        .ktr-td-hrs {
+            padding: 3px;
             border: 1px solid #e2e8f0;
             text-align: center;
+            width: 50px;
         }
         .ktr-hours {
             width: 100%;
-            max-width: 60px;
+            max-width: 44px;
             margin: 0 auto;
             display: block;
-            padding: 6px 4px;
+            padding: 4px 2px;
             border: 1.5px solid #e2e8f0;
             border-radius: 6px;
             text-align: center;
@@ -1177,32 +1167,30 @@
         .ktr-cell:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
 
         /* Topic cells */
-        .ktr-td-topic { padding: 4px; border: 1px solid #e2e8f0; }
-        .ktr-topic {
-            width: 100%;
-            min-width: 120px;
-            padding: 6px 8px;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #0f172a;
-            outline: none;
-            transition: border-color 0.15s;
+        .ktr-td-topic {
+            padding: 3px 6px;
+            border: 1px solid #e2e8f0;
+            min-width: 110px;
         }
-        .ktr-topic:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+        .ktr-topic-text {
+            font-size: 11px;
+            color: #475569;
+            line-height: 1.3;
+            display: block;
+        }
         .ktr-topic-hidden {
             visibility: hidden;
         }
         .ktr-th-sub {
             font-size: 10px !important;
-            padding: 4px 6px !important;
+            padding: 3px 4px !important;
             text-transform: none !important;
             color: #94a3b8 !important;
             background: #f1f5f9 !important;
             border: 1px solid #e2e8f0;
             font-weight: 500 !important;
         }
-        .ktr-th-topic { min-width: 130px; }
+        .ktr-th-topic { min-width: 110px; }
         .ktr-td-topic-empty {
             border: 1px solid #e2e8f0;
             background: #f8fafc;

@@ -9,6 +9,8 @@ use App\Models\Department;
 use App\Models\KtrPlan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class KtrController extends Controller
@@ -481,15 +483,80 @@ class KtrController extends Controller
             $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
         }
 
+        // HEMIS dan mavzularni olish
+        $hemisTopics = $this->fetchHemisTopics($cs);
+
         return response()->json([
             'subject_name' => $cs->subject_name,
             'total_acload' => (int) $cs->total_acload,
             'training_types' => $trainingTypes,
+            'hemis_topics' => $hemisTopics,
             'plan' => $plan ? [
                 'week_count' => $plan->week_count,
                 'plan_data' => $plan->plan_data,
             ] : null,
         ]);
+    }
+
+    /**
+     * HEMIS API dan fan mavzularini olish (training type bo'yicha guruhlangan)
+     */
+    private function fetchHemisTopics(CurriculumSubject $cs): array
+    {
+        $baseUrl = rtrim(config('services.hemis.base_url', 'https://student.ttatf.uz/rest'), '/');
+        if (!str_contains($baseUrl, '/v1')) {
+            $baseUrl .= '/v1';
+        }
+        $token = config('services.hemis.token');
+
+        try {
+            $response = Http::withoutVerifying()
+                ->withToken($token)
+                ->timeout(15)
+                ->get($baseUrl . '/data/curriculum-subject-topic-list', [
+                    '_curriculum' => $cs->curricula_hemis_id,
+                    '_semester' => $cs->semester_code,
+                    'limit' => 200,
+                    'page' => 1,
+                ]);
+
+            if (!$response->successful()) {
+                return [];
+            }
+
+            $items = $response->json('data.items') ?? [];
+
+            // Fan bo'yicha filtrlash
+            $subjectId = (int) $cs->subject_id;
+            $items = array_filter($items, function ($item) use ($subjectId) {
+                return isset($item['subject']['id']) && (int) $item['subject']['id'] === $subjectId;
+            });
+
+            // Training type bo'yicha guruhlash va position bo'yicha tartiblash
+            $topicsByType = [];
+            foreach ($items as $item) {
+                $typeCode = (string) ($item['_training_type'] ?? '');
+                if ($typeCode === '') continue;
+
+                if (!isset($topicsByType[$typeCode])) {
+                    $topicsByType[$typeCode] = [];
+                }
+                $topicsByType[$typeCode][] = [
+                    'position' => (int) ($item['position'] ?? 0),
+                    'name' => $item['name'] ?? '',
+                ];
+            }
+
+            // Position bo'yicha tartiblash
+            foreach ($topicsByType as &$topics) {
+                usort($topics, fn($a, $b) => $a['position'] <=> $b['position']);
+            }
+
+            return $topicsByType;
+        } catch (\Exception $e) {
+            Log::warning('KTR hemis topics fetch failed', ['error' => $e->getMessage()]);
+            return [];
+        }
     }
 
     /**

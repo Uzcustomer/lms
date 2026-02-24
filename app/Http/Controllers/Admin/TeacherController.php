@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\ProjectRole;
 use App\Exports\TeacherExport;
 use App\Http\Controllers\Controller;
+use App\Models\CurriculumSubject;
 use App\Models\Department;
+use App\Models\Semester;
 use App\Models\Teacher;
 use App\Services\ActivityLogService;
 use App\Services\TelegramService;
@@ -65,6 +67,7 @@ class TeacherController extends Controller
 
     public function show(Teacher $teacher)
     {
+        $teacher->load('responsibleSubjects');
         $departments = Department::where('structure_type_code', '11')
             ->where('active', true)
             ->orderBy('name')
@@ -167,14 +170,18 @@ class TeacherController extends Controller
 
         $roles = $request->input('roles', []);
         $isDean = in_array(ProjectRole::DEAN->value, $roles);
+        $isSubjectResponsible = in_array(ProjectRole::SUBJECT_RESPONSIBLE->value, $roles);
 
         $request->validate([
             'roles' => 'nullable|array',
             'roles.*' => 'in:' . implode(',', $validRoleValues),
             'dean_faculties' => [$isDean ? 'required' : 'nullable', 'array'],
             'dean_faculties.*' => 'exists:departments,department_hemis_id',
+            'responsible_subjects' => [$isSubjectResponsible ? 'required' : 'nullable', 'array'],
+            'responsible_subjects.*' => 'exists:curriculum_subjects,id',
         ], [
             'dean_faculties.required' => 'Dekan roli uchun kamida bitta fakultetni tanlash majburiy.',
+            'responsible_subjects.required' => "Fan mas'uli roli uchun kamida bitta fanni tanlash majburiy.",
         ]);
 
         foreach ($roles as $roleName) {
@@ -188,6 +195,12 @@ class TeacherController extends Controller
             $teacher->deanFaculties()->sync($request->input('dean_faculties', []));
         } else {
             $teacher->deanFaculties()->detach();
+        }
+
+        if ($isSubjectResponsible) {
+            $teacher->responsibleSubjects()->sync($request->input('responsible_subjects', []));
+        } else {
+            $teacher->responsibleSubjects()->detach();
         }
 
         ActivityLogService::log('update', 'teacher', "Xodim rollari yangilandi: {$teacher->full_name}", $teacher, [
@@ -218,6 +231,40 @@ class TeacherController extends Controller
         $teacher->save();
 
         return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Aloqa ma\'lumotlari yangilandi');
+    }
+
+    public function searchSubjects(Request $request)
+    {
+        $search = $request->input('q', '');
+        $levelCode = $request->input('level_code', '');
+
+        $subjects = CurriculumSubject::active()
+            ->when($search, function ($query, $search) {
+                $query->where('subject_name', 'like', "%{$search}%");
+            })
+            ->when($levelCode, function ($query, $levelCode) {
+                $query->whereHas('semester', function ($q) use ($levelCode) {
+                    $q->where('level_code', $levelCode);
+                });
+            })
+            ->select('id', 'subject_name', 'subject_code', 'semester_name', 'department_name')
+            ->orderBy('subject_name')
+            ->limit(50)
+            ->get();
+
+        return response()->json($subjects);
+    }
+
+    public function getSubjectCourses()
+    {
+        $courses = Semester::whereNotNull('level_code')
+            ->whereNotNull('level_name')
+            ->select('level_code', 'level_name')
+            ->distinct()
+            ->orderBy('level_code')
+            ->get();
+
+        return response()->json($courses);
     }
 
     public function exportExcel(Request $request)

@@ -566,9 +566,20 @@ class ReportController extends Controller
                 $current->addDay();
             }
 
+            // Baholarni (student_grades) yangilash — har bir kun uchun
+            // Hisobotda "baho qo'yilgan/qo'yilmagan" ustuni to'g'ri ko'rsatilishi uchun
+            $current = $from->copy();
+            while ($current->lte($to)) {
+                \Illuminate\Support\Facades\Artisan::call('student:import-data', [
+                    '--date' => $current->toDateString(),
+                    '--silent' => true,
+                ]);
+                $current->addDay();
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => "Jadval va davomat nazorati yangilandi ({$from->toDateString()} — {$to->toDateString()}).",
+                'message' => "Jadval, davomat nazorati va baholar yangilandi ({$from->toDateString()} — {$to->toDateString()}).",
             ]);
         } catch (\Throwable $e) {
             return response()->json([

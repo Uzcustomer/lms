@@ -37,12 +37,16 @@ class ImportGrades extends Command
         $this->token = config('services.hemis.token') ?? '';
     }
 
-    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)}';
+    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)} {--date= : Single date import (Y-m-d)} {--silent : Suppress Telegram notifications}';
 
     protected $description = 'Import student grades and attendance from Hemis API';
 
     public function handle()
     {
+        if ($this->option('date')) {
+            return $this->handleSingleDayImport();
+        }
+
         $mode = $this->option('mode');
 
         if ($mode === 'final') {
@@ -54,6 +58,39 @@ class ImportGrades extends Command
         }
 
         return $this->handleLiveImport();
+    }
+
+    // =========================================================================
+    // SINGLE DAY IMPORT — ma'lum bir sana uchun baholarni import qilish
+    // Hisobot sync (Yangilash) tugmasidan chaqiriladi
+    // =========================================================================
+    private function handleSingleDayImport()
+    {
+        $date = Carbon::parse($this->option('date'));
+        $dateStr = $date->toDateString();
+
+        $this->info("Single-day import: {$dateStr}");
+        Log::info("[SingleDayImport] Starting for {$dateStr}");
+
+        $from = Carbon::parse($dateStr, 'UTC')->startOfDay()->timestamp;
+        $to = Carbon::parse($dateStr, 'UTC')->endOfDay()->timestamp;
+
+        $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to, $date);
+
+        if ($gradeItems === false) {
+            $errorDetail = $this->lastFetchError ?: 'noma\'lum xato';
+            $this->error("Single-day import: API xato ({$errorDetail}) — {$dateStr}");
+            Log::error("[SingleDayImport] API failed for {$dateStr}: {$errorDetail}");
+            return;
+        }
+
+        if (!empty($gradeItems)) {
+            $this->applyGrades($gradeItems, $date, false);
+        }
+
+        $count = count($gradeItems);
+        $this->info("Single-day import done: {$dateStr}, {$count} ta baho");
+        Log::info("[SingleDayImport] Completed for {$dateStr}: {$count} grades");
     }
 
     // =========================================================================

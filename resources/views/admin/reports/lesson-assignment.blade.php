@@ -291,7 +291,7 @@
                     date_from: dateFrom,
                     date_to: dateTo,
                 },
-                timeout: 180000,
+                timeout: 300000,
                 success: function(res) {
                     icon.css('animation', '');
                     text.text('Yangilash');

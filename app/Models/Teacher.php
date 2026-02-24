@@ -146,4 +146,13 @@ class Teacher extends Authenticatable
         return $this->deanFaculties()->pluck('departments.department_hemis_id')->toArray();
     }
 
+    /**
+     * Fan mas'uli sifatida bog'langan fanlar (ko'p-ko'p)
+     */
+    public function responsibleSubjects()
+    {
+        return $this->belongsToMany(CurriculumSubject::class, 'teacher_responsible_subjects', 'teacher_id', 'curriculum_subject_id')
+            ->withTimestamps();
+    }
+
 }

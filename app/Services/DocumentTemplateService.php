@@ -119,7 +119,37 @@ class DocumentTemplateService
             }
         }
 
-        // 2-usul: PhpWord IOFactory + DomPDF
+        // 2-usul: PhpWord → HTML → Barryvdh DomPDF
+        if (!$pdfGenerated) {
+            try {
+                $phpWord = \PhpOffice\PhpWord\IOFactory::load($tempDocx);
+
+                // PhpWord dan HTML ga aylantirish
+                $htmlWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'HTML');
+                $tempHtml = $tempDir . '/' . uniqid('output_') . '.html';
+                $htmlWriter->save($tempHtml);
+
+                $htmlContent = file_get_contents($tempHtml);
+                @unlink($tempHtml);
+
+                if ($htmlContent) {
+                    // Barryvdh DomPDF orqali PDF yaratish
+                    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($htmlContent);
+                    $pdf->setPaper('a4', 'portrait');
+                    $pdfContent = $pdf->output();
+
+                    if ($pdfContent && strlen($pdfContent) > 0) {
+                        Storage::disk('public')->put($pdfPath, $pdfContent);
+                        $pdfGenerated = true;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // PhpWord HTML+DomPDF ishlamadi
+                \Log::warning('PhpWord HTML+DomPDF failed: ' . $e->getMessage());
+            }
+        }
+
+        // 3-usul: PhpWord IOFactory to'g'ridan-to'g'ri PDF writer
         if (!$pdfGenerated) {
             try {
                 \PhpOffice\PhpWord\Settings::setPdfRendererName(\PhpOffice\PhpWord\Settings::PDF_RENDERER_DOMPDF);
@@ -136,7 +166,7 @@ class DocumentTemplateService
                     $pdfGenerated = true;
                 }
             } catch (\Throwable $e) {
-                // PhpWord PDF writer ishlamadi — keyingi usulga o'tish
+                \Log::warning('PhpWord direct PDF writer failed: ' . $e->getMessage());
             }
         }
 
@@ -145,8 +175,8 @@ class DocumentTemplateService
 
         if (!$pdfGenerated) {
             throw new \RuntimeException(
-                'PDF generatsiya qilib bo\'lmadi. Serverda LibreOffice (soffice) yoki PhpWord DomPDF renderer o\'rnatilmagan. ' .
-                'Yechim: "sudo apt install libreoffice-writer" yoki composer require dompdf/dompdf.'
+                'Word shablondan PDF generatsiya qilib bo\'lmadi. ' .
+                'Serverda LibreOffice o\'rnatish tavsiya etiladi: sudo apt install libreoffice-writer'
             );
         }
 

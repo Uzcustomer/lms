@@ -38,6 +38,23 @@ class HemisOAuthController extends Controller
      */
     public function callback(Request $request)
     {
+        try {
+            return $this->handleCallback($request);
+        } catch (\Exception $e) {
+            Log::channel('student_auth')->error('[HEMIS OAUTH] Kutilmagan xato', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => mb_substr($e->getTraceAsString(), 0, 1000),
+                'ip' => $request->ip(),
+            ]);
+
+            return redirect()->route('student.login')
+                ->withErrors(['login' => 'Xatolik yuz berdi: ' . $e->getMessage()]);
+        }
+    }
+
+    private function handleCallback(Request $request)
+    {
         // State tekshiruvi (CSRF himoya)
         $savedState = $request->session()->pull('hemis_oauth_state');
         if (!$savedState || $savedState !== $request->input('state')) {
@@ -70,105 +87,106 @@ class HemisOAuthController extends Controller
 
         // 1-bosqich: Code ni access token ga almashtirish
         Log::channel('student_auth')->info('[HEMIS OAUTH] Token so\'ralmoqda', [
+            'base_url' => $baseUrl,
             'ip' => $request->ip(),
         ]);
 
-        try {
-            $tokenResponse = Http::withoutVerifying()
-                ->timeout(15)
-                ->asForm()
-                ->post("{$baseUrl}/oauth/access-token", [
-                    'grant_type' => 'authorization_code',
-                    'client_id' => config('services.hemis_oauth.client_id'),
-                    'client_secret' => config('services.hemis_oauth.client_secret'),
-                    'redirect_uri' => config('services.hemis_oauth.redirect_uri'),
-                    'code' => $code,
-                ]);
-        } catch (\Exception $e) {
-            Log::channel('student_auth')->error('[HEMIS OAUTH] Token so\'rovda xatolik', [
-                'error' => $e->getMessage(),
-                'ip' => $request->ip(),
+        $tokenResponse = Http::withoutVerifying()
+            ->timeout(15)
+            ->asForm()
+            ->post("{$baseUrl}/oauth/access-token", [
+                'grant_type' => 'authorization_code',
+                'client_id' => config('services.hemis_oauth.client_id'),
+                'client_secret' => config('services.hemis_oauth.client_secret'),
+                'redirect_uri' => config('services.hemis_oauth.redirect_uri'),
+                'code' => $code,
             ]);
-            return redirect()->route('student.login')
-                ->withErrors(['login' => 'HEMIS serveriga ulanishda xatolik.']);
-        }
+
+        Log::channel('student_auth')->info('[HEMIS OAUTH] Token javobi', [
+            'status' => $tokenResponse->status(),
+            'body' => mb_substr($tokenResponse->body(), 0, 500),
+        ]);
 
         if (!$tokenResponse->successful()) {
-            Log::channel('student_auth')->warning('[HEMIS OAUTH] Token olishda xatolik', [
-                'status' => $tokenResponse->status(),
-                'body' => mb_substr($tokenResponse->body(), 0, 500),
-            ]);
             return redirect()->route('student.login')
-                ->withErrors(['login' => 'HEMIS tizimidan token olinmadi.']);
+                ->withErrors(['login' => 'HEMIS tizimidan token olinmadi (status: ' . $tokenResponse->status() . ').']);
         }
 
         $accessToken = $tokenResponse->json('access_token');
         if (!$accessToken) {
-            Log::channel('student_auth')->warning('[HEMIS OAUTH] Token javobda access_token topilmadi', [
-                'body' => mb_substr($tokenResponse->body(), 0, 500),
-            ]);
             return redirect()->route('student.login')
-                ->withErrors(['login' => 'HEMIS tizimidan token olinmadi.']);
+                ->withErrors(['login' => 'HEMIS javobida access_token topilmadi.']);
         }
 
         // 2-bosqich: Foydalanuvchi ma'lumotlarini olish
-        Log::channel('student_auth')->info('[HEMIS OAUTH] Foydalanuvchi ma\'lumotlari so\'ralmoqda');
-
-        try {
-            $userResponse = Http::withoutVerifying()
-                ->timeout(15)
-                ->withHeaders([
-                    'Authorization' => 'Bearer ' . $accessToken,
-                ])->get("{$baseUrl}/oauth/api/user");
-        } catch (\Exception $e) {
-            Log::channel('student_auth')->error('[HEMIS OAUTH] User ma\'lumotlari olishda xatolik', [
-                'error' => $e->getMessage(),
+        $userResponse = Http::withoutVerifying()
+            ->timeout(15)
+            ->withHeaders([
+                'Authorization' => 'Bearer ' . $accessToken,
+            ])->get("{$baseUrl}/oauth/api/user", [
+                'fields' => 'id,uuid,type,name,login,picture,email,university_id,phone',
             ]);
-            return redirect()->route('student.login')
-                ->withErrors(['login' => 'HEMIS serveriga ulanishda xatolik.']);
-        }
+
+        Log::channel('student_auth')->info('[HEMIS OAUTH] User javobi', [
+            'status' => $userResponse->status(),
+            'body' => mb_substr($userResponse->body(), 0, 1000),
+        ]);
 
         if (!$userResponse->successful()) {
-            Log::channel('student_auth')->warning('[HEMIS OAUTH] User ma\'lumotlari olinmadi', [
-                'status' => $userResponse->status(),
-                'body' => mb_substr($userResponse->body(), 0, 500),
-            ]);
             return redirect()->route('student.login')
-                ->withErrors(['login' => 'Foydalanuvchi ma\'lumotlarini olishda xatolik.']);
+                ->withErrors(['login' => 'Foydalanuvchi ma\'lumotlarini olishda xatolik (status: ' . $userResponse->status() . ').']);
         }
 
         $userData = $userResponse->json();
-        $studentIdNumber = $userData['student_id_number'] ?? ($userData['login'] ?? null);
+        $hemisLogin = $userData['login'] ?? null;
+        $hemisId = $userData['id'] ?? null;
+        $studentIdNumber = $userData['student_id_number'] ?? $hemisLogin;
 
         Log::channel('student_auth')->info('[HEMIS OAUTH] Foydalanuvchi ma\'lumotlari olindi', [
+            'hemis_id' => $hemisId,
+            'login' => $hemisLogin,
             'student_id_number' => $studentIdNumber,
             'name' => $userData['name'] ?? $userData['full_name'] ?? null,
+            'keys' => array_keys($userData),
         ]);
 
-        if (!$studentIdNumber) {
-            Log::channel('student_auth')->warning('[HEMIS OAUTH] student_id_number topilmadi', [
-                'user_data_keys' => array_keys($userData),
-            ]);
+        if (!$studentIdNumber && !$hemisId) {
             return redirect()->route('student.login')
-                ->withErrors(['login' => 'HEMIS tizimidan talaba raqami olinmadi.']);
+                ->withErrors(['login' => 'HEMIS tizimidan talaba ma\'lumotlari olinmadi. Kalitlar: ' . implode(', ', array_keys($userData))]);
         }
 
-        // 3-bosqich: Bazada talabani topish
+        // 3-bosqich: Bazada talabani topish (student_id_number yoki hemis_id bo'yicha)
         $student = Student::where('student_id_number', $studentIdNumber)->first();
+
+        if (!$student && $hemisLogin && $hemisLogin !== $studentIdNumber) {
+            $student = Student::where('student_id_number', $hemisLogin)->first();
+        }
+
+        if (!$student && $hemisId) {
+            $student = Student::where('hemis_id', $hemisId)->first();
+        }
 
         if (!$student) {
             Log::channel('student_auth')->warning('[HEMIS OAUTH] Talaba bazada topilmadi', [
                 'student_id_number' => $studentIdNumber,
+                'hemis_id' => $hemisId,
+                'login' => $hemisLogin,
             ]);
             return redirect()->route('student.login')
-                ->withErrors(['login' => 'Siz LMS tizimida ro\'yxatdan o\'tmagansiz. Admin bilan bog\'laning.']);
+                ->withErrors(['login' => 'Siz LMS tizimida ro\'yxatdan o\'tmagansiz (login: ' . $hemisLogin . ', id: ' . $hemisId . '). Admin bilan bog\'laning.']);
         }
 
-        // Token saqlash
-        $student->update([
-            'token' => $accessToken,
-            'token_expires_at' => now()->addDays(7),
-        ]);
+        // Token saqlash (ixtiyoriy — ustun yo'q bo'lsa xato bermaydi)
+        try {
+            $student->update([
+                'token' => $accessToken,
+                'token_expires_at' => now()->addDays(7),
+            ]);
+        } catch (\Exception $e) {
+            Log::channel('student_auth')->warning('[HEMIS OAUTH] Token saqlashda xato (davom etiladi)', [
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // Boshqa guardlarni tozalash
         foreach (['web', 'teacher'] as $guard) {
@@ -188,7 +206,14 @@ class HemisOAuthController extends Controller
 
         Auth::guard('student')->login($student);
         $request->session()->regenerate();
-        ActivityLogService::logLogin('student');
+
+        try {
+            ActivityLogService::logLogin('student');
+        } catch (\Exception $e) {
+            Log::channel('student_auth')->warning('[HEMIS OAUTH] Activity log xatosi (davom etiladi)', [
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         Log::channel('student_auth')->info('[LOGIN SUCCESS] Talaba HEMIS OAuth orqali kirdi', [
             'student_id' => $student->id,

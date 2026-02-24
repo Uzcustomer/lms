@@ -92,38 +92,83 @@ class DocumentTemplateService
         }
 
         $tempDocx = $tempDir . '/' . uniqid('template_') . '.docx';
-        $tempPdf = $tempDir . '/' . uniqid('output_') . '.pdf';
 
         $processor->saveAs($tempDocx);
 
-        // LibreOffice orqali PDF ga aylantirish
-        $command = sprintf(
-            'soffice --headless --convert-to pdf --outdir %s %s 2>&1',
-            escapeshellarg($tempDir),
-            escapeshellarg($tempDocx)
-        );
+        $pdfPath = 'absence-excuses/approved/' . $excuse->verification_token . '.pdf';
+        $pdfGenerated = false;
 
-        exec($command, $output, $returnCode);
+        // 1-usul: LibreOffice (eng sifatli natija)
+        $sofficePath = $this->findSoffice();
+        if ($sofficePath) {
+            $command = sprintf(
+                '%s --headless --convert-to pdf --outdir %s %s 2>&1',
+                escapeshellarg($sofficePath),
+                escapeshellarg($tempDir),
+                escapeshellarg($tempDocx)
+            );
 
-        // LibreOffice PDF faylni .docx nomi bilan yaratadi
-        $generatedPdf = preg_replace('/\.docx$/', '.pdf', $tempDocx);
+            exec($command, $output, $returnCode);
 
-        if ($returnCode !== 0 || !file_exists($generatedPdf)) {
-            // Tozalash
-            @unlink($tempDocx);
-            throw new \RuntimeException('PDF generatsiyada xatolik (LibreOffice). Return code: ' . $returnCode . '. Output: ' . implode("\n", $output));
+            $generatedPdf = preg_replace('/\.docx$/', '.pdf', $tempDocx);
+
+            if ($returnCode === 0 && file_exists($generatedPdf)) {
+                Storage::disk('public')->put($pdfPath, file_get_contents($generatedPdf));
+                @unlink($generatedPdf);
+                $pdfGenerated = true;
+            }
         }
 
-        // PDF ni kerakli joyga ko'chirish
-        $pdfPath = 'absence-excuses/approved/' . $excuse->verification_token . '.pdf';
-        $pdfContent = file_get_contents($generatedPdf);
-        Storage::disk('public')->put($pdfPath, $pdfContent);
+        // 2-usul: PhpWord IOFactory + DomPDF
+        if (!$pdfGenerated) {
+            try {
+                \PhpOffice\PhpWord\Settings::setPdfRendererName(\PhpOffice\PhpWord\Settings::PDF_RENDERER_DOMPDF);
+                \PhpOffice\PhpWord\Settings::setPdfRendererPath(base_path('vendor/dompdf/dompdf'));
 
-        // Vaqtinchalik fayllarni tozalash
+                $phpWord = \PhpOffice\PhpWord\IOFactory::load($tempDocx);
+                $tempPdf = $tempDir . '/' . uniqid('output_') . '.pdf';
+                $pdfWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'PDF');
+                $pdfWriter->save($tempPdf);
+
+                if (file_exists($tempPdf) && filesize($tempPdf) > 0) {
+                    Storage::disk('public')->put($pdfPath, file_get_contents($tempPdf));
+                    @unlink($tempPdf);
+                    $pdfGenerated = true;
+                }
+            } catch (\Throwable $e) {
+                // PhpWord PDF writer ishlamadi — keyingi usulga o'tish
+            }
+        }
+
+        // Tozalash
         @unlink($tempDocx);
-        @unlink($generatedPdf);
+
+        if (!$pdfGenerated) {
+            throw new \RuntimeException(
+                'PDF generatsiya qilib bo\'lmadi. Serverda LibreOffice (soffice) yoki PhpWord DomPDF renderer o\'rnatilmagan. ' .
+                'Yechim: "sudo apt install libreoffice-writer" yoki composer require dompdf/dompdf.'
+            );
+        }
 
         return $pdfPath;
+    }
+
+    /**
+     * LibreOffice (soffice) topish
+     */
+    private function findSoffice(): ?string
+    {
+        $paths = ['soffice', '/usr/bin/soffice', '/usr/local/bin/soffice', '/usr/bin/libreoffice'];
+
+        foreach ($paths as $path) {
+            exec('which ' . escapeshellarg($path) . ' 2>/dev/null', $output, $returnCode);
+            if ($returnCode === 0) {
+                return $path;
+            }
+            $output = [];
+        }
+
+        return null;
     }
 
     /**

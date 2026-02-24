@@ -1140,6 +1140,9 @@ class JournalController extends Controller
             if ($attendanceResult['retake_recalculated'] > 0) {
                 $message .= " {$attendanceResult['retake_recalculated']} ta otrabotka bahosi qayta hisoblandi.";
             }
+            if (($attendanceResult['absent_grades_created'] ?? 0) > 0) {
+                $message .= " NB: {$attendanceResult['absent_grades_created']} ta ga'iblik yozuvi yaratildi.";
+            }
             if ($gradeResult['synced'] > 0 || $gradeResult['created'] > 0) {
                 $message .= " Baholar: {$gradeResult['synced']} ta yangilandi, {$gradeResult['created']} ta yangi qo'shildi.";
             }
@@ -1179,6 +1182,13 @@ class JournalController extends Controller
         $token = config('services.hemis.token');
         $synced = 0;
         $retakeRecalculated = 0;
+        $absentGradesCreated = 0;
+
+        // Talabalarni oldindan yuklash (NB uchun student_grades yaratish kerak bo'lganda)
+        $studentsMap = DB::table('students')
+            ->where('group_id', $groupId)
+            ->get()
+            ->keyBy('hemis_id');
 
         try {
             $page = 1;
@@ -1264,6 +1274,57 @@ class JournalController extends Controller
 
                     $synced++;
 
+                    // Amaliy (praktik) turlar uchun: student_grades da yozuv bo'lmasa, NB yozuvi yaratish
+                    // HEMIS grade API ga'ib talaba uchun baho qaytarmaydi, shuning uchun
+                    // davomat asosida reason='absent' yozuv yaratamiz — jurnalda NB ko'rinishi uchun
+                    $trainingTypeCode = $item['trainingType']['code'];
+                    if (!in_array($trainingTypeCode, [11, 99, 100, 101, 102])) {
+                        $studentHemisId = $item['student']['id'];
+                        $existingGrade = DB::table('student_grades')
+                            ->where('student_hemis_id', $studentHemisId)
+                            ->where('subject_id', $item['subject']['id'])
+                            ->where('lesson_pair_code', $item['lessonPair']['code'])
+                            ->whereRaw('DATE(lesson_date) = ?', [$lessonDate->format('Y-m-d')])
+                            ->whereNull('deleted_at')
+                            ->first();
+
+                        if (!$existingGrade) {
+                            $student = $studentsMap[$studentHemisId] ?? null;
+                            if ($student) {
+                                DB::table('student_grades')->insert([
+                                    'hemis_id' => $item['id'],
+                                    'student_id' => $student->id,
+                                    'student_hemis_id' => $studentHemisId,
+                                    'semester_code' => $item['semester']['code'],
+                                    'semester_name' => $item['semester']['name'],
+                                    'education_year_code' => $item['educationYear']['code'] ?? null,
+                                    'education_year_name' => $item['educationYear']['name'] ?? null,
+                                    'subject_schedule_id' => $item['_subject_schedule'] ?? 0,
+                                    'subject_id' => $item['subject']['id'],
+                                    'subject_name' => $item['subject']['name'],
+                                    'subject_code' => $item['subject']['code'] ?? '',
+                                    'training_type_code' => $trainingTypeCode,
+                                    'training_type_name' => $item['trainingType']['name'],
+                                    'employee_id' => $item['employee']['id'],
+                                    'employee_name' => $item['employee']['name'],
+                                    'lesson_pair_code' => $item['lessonPair']['code'],
+                                    'lesson_pair_name' => $item['lessonPair']['name'],
+                                    'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                                    'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                                    'grade' => null,
+                                    'lesson_date' => $lessonDate,
+                                    'created_at_api' => now(),
+                                    'reason' => 'absent',
+                                    'status' => 'recorded',
+                                    'is_final' => true,
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
+                                ]);
+                                $absentGradesCreated++;
+                            }
+                        }
+                    }
+
                     // Agar sababli holat o'zgargan bo'lsa — retake bahosini qayta hisoblash
                     if ($oldAbsentOn !== null && $oldAbsentOn !== $newAbsentOn) {
                         $recalculated = $this->recalculateRetakeGrade(
@@ -1292,7 +1353,7 @@ class JournalController extends Controller
             ]);
         }
 
-        return ['synced' => $synced, 'retake_recalculated' => $retakeRecalculated];
+        return ['synced' => $synced, 'retake_recalculated' => $retakeRecalculated, 'absent_grades_created' => $absentGradesCreated];
     }
 
     /**
@@ -1388,6 +1449,18 @@ class JournalController extends Controller
                     ->where('hemis_id', $hemisId)
                     ->whereNull('deleted_at')
                     ->first();
+
+                // Fallback: davomat sinxronizatsiyasi yaratgan NB yozuvini topish
+                // (hemis_id attendance recordniki bo'lishi mumkin)
+                if (!$existingGrade) {
+                    $existingGrade = DB::table('student_grades')
+                        ->where('student_hemis_id', $studentHemisId)
+                        ->where('subject_id', $item['subject']['id'])
+                        ->where('lesson_pair_code', $item['lessonPair']['code'])
+                        ->whereRaw('DATE(lesson_date) = ?', [$lessonDate->format('Y-m-d')])
+                        ->whereNull('deleted_at')
+                        ->first();
+                }
 
                 $markingScore = MarkingSystemScore::getByStudentHemisId($studentHemisId);
                 $isLowGrade = ($student->level_code == 16 && $gradeValue < 3)

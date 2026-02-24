@@ -504,11 +504,31 @@ class KtrController extends Controller
             'plan_data' => 'required|array',
         ]);
 
-        // Jami soatlarni tekshirish
+        // Yangi format: plan_data = {hours: {...}, topics: {...}}
+        $planData = $request->plan_data;
+        $hoursData = $planData['hours'] ?? $planData;
+
+        // Jami soatlarni tekshirish (mustaqil ta'lim soatlarini ham hisoblash)
         $totalEntered = 0;
-        foreach ($request->plan_data as $weekData) {
-            foreach ($weekData as $hours) {
-                $totalEntered += (int) $hours;
+        foreach ($hoursData as $weekData) {
+            if (is_array($weekData)) {
+                foreach ($weekData as $hours) {
+                    $totalEntered += (int) $hours;
+                }
+            }
+        }
+
+        // Mustaqil ta'lim soatlarini qo'shish (avtomatik)
+        $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+        if (is_array($details)) {
+            $normalize = function ($str) {
+                return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower($str));
+            };
+            foreach ($details as $detail) {
+                $name = $detail['trainingType']['name'] ?? '';
+                if (preg_match('/mustaqil/i', $normalize($name))) {
+                    $totalEntered += (int) ($detail['academic_load'] ?? 0);
+                }
             }
         }
 

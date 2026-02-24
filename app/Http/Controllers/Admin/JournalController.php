@@ -1366,9 +1366,10 @@ class JournalController extends Controller
 
                 $hemisId = $item['id'];
 
-                // Mavjud grade tekshirish (soft-deleted larni ham qo'shib)
+                // Mavjud grade tekshirish (faqat AKTIV yozuvlar — soft-deleted larni tiklamaslik)
                 $existingGrade = DB::table('student_grades')
                     ->where('hemis_id', $hemisId)
+                    ->whereNull('deleted_at')
                     ->first();
 
                 $markingScore = MarkingSystemScore::getByStudentHemisId($studentHemisId);
@@ -1380,7 +1381,6 @@ class JournalController extends Controller
                         'grade' => $gradeValue,
                         'employee_id' => $item['employee']['id'],
                         'employee_name' => $item['employee']['name'],
-                        'deleted_at' => null,
                         'updated_at' => now(),
                     ];
 

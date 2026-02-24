@@ -380,14 +380,18 @@ class ImportGrades extends Command
             }
         }
 
-        // Global tozalash: eski is_final=false duplikatlarni kunlik batch qilib soft-delete qilish
-        // Katta self-join o'rniga kunlik bo'lib tozalash — lock vaqtini qisqartiradi
-        $this->info("Global tozalash boshlandi...");
+        // Global tozalash: is_final=false duplikatlarni kunlik batch qilib soft-delete qilish
+        // Faqat oxirgi 14 kun — asosiy sabab (JournalController zombie tiklash) tuzatilgan
+        // Agar tarixiy tozalash kerak bo'lsa: php artisan student:import-data --mode=backfill
+        $cleanupDays = 14;
+        $cleanupFrom = Carbon::today()->subDays($cleanupDays)->toDateString();
+        $this->info("Global tozalash boshlandi (oxirgi {$cleanupDays} kun)...");
         try {
             $globalCleaned = 0;
             $staleDates = DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->where('is_final', false)
+                ->whereRaw('DATE(lesson_date) >= ?', [$cleanupFrom])
                 ->whereRaw('DATE(lesson_date) < CURDATE()')
                 ->selectRaw('DATE(lesson_date) as grade_date')
                 ->distinct()

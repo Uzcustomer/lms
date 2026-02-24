@@ -83,8 +83,11 @@ class ImportGrades extends Command
             return;
         }
 
-        $from = $today->copy()->startOfDay()->timestamp;
-        $to = Carbon::now()->timestamp;
+        // HEMIS API timestamplarni UTC kun chegaralari bo'yicha filter qiladi.
+        // Local (Asia/Tashkent UTC+5) midnight yuborsa, API noto'g'ri kunni qaytaradi.
+        // Masalan: Feb 21 00:00 Tashkent = Feb 20 19:00 UTC → API "Feb 20" deb tushunadi.
+        $from = Carbon::parse($today->toDateString(), 'UTC')->startOfDay()->timestamp;
+        $to = Carbon::parse($today->toDateString(), 'UTC')->endOfDay()->timestamp;
 
         // 1-qadam: Baholarni API dan tortib olish (xotiraga)
         if ($reporter) {
@@ -274,8 +277,9 @@ class ImportGrades extends Command
                 // - Bazada yozuv yo'q (LIVE import ishlamagan)
                 // - Faqat is_final=false mavjud (is_final=true hali yo'q)
                 // - Qisman is_final=true (journal sync dan, kam yozuv)
-                $from = $date->copy()->startOfDay()->timestamp;
-                $to = $date->copy()->endOfDay()->timestamp;
+                // UTC midnight — HEMIS API UTC kun chegaralari bo'yicha filter qiladi
+                $from = Carbon::parse($date->toDateString(), 'UTC')->startOfDay()->timestamp;
+                $to = Carbon::parse($date->toDateString(), 'UTC')->endOfDay()->timestamp;
 
                 $reason = $finalizedCount === 0 && !$hasUnfinalizedForDate
                     ? 'bazada yozuv yo\'q'
@@ -428,8 +432,9 @@ class ImportGrades extends Command
         $failedDays = [];
 
         foreach ($period as $date) {
-            $dayFrom = $date->copy()->startOfDay()->timestamp;
-            $dayTo = $date->copy()->endOfDay()->timestamp;
+            // UTC midnight — HEMIS API UTC kun chegaralari bo'yicha filter qiladi
+            $dayFrom = Carbon::parse($date->toDateString(), 'UTC')->startOfDay()->timestamp;
+            $dayTo = Carbon::parse($date->toDateString(), 'UTC')->endOfDay()->timestamp;
 
             $this->info("--- {$date->toDateString()} ---");
 
@@ -512,9 +517,8 @@ class ImportGrades extends Command
                     if ($response->successful()) {
                         $data = $response->json()['data']['items'] ?? [];
 
-                        // Agar filterDate berilgan bo'lsa, boshqa kunlik recordlarni DARHOL tashlash
-                        // HEMIS API noto'g'ri filter qiladi: ~8257 ta boshqa kunlik record qaytaradi
-                        // Ularni xotiraga yig'maslik uchun shu yerda filtrlaymiz
+                        // Xavfsizlik filtri: UTC timestamp fix bilan API to'g'ri ishlashi kerak,
+                        // lekin ehtiyot sifatida boshqa kunlik recordlarni tashlash saqlanadi
                         if ($filterDate && $endpoint === 'student-grade-list') {
                             $beforeCount = count($data);
                             $data = array_filter($data, function ($item) use ($filterDate) {

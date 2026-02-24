@@ -34,6 +34,7 @@ use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
+use App\Http\Controllers\Admin\KtrController;
 use App\Http\Controllers\MoodleImportController;
 
 
@@ -294,6 +295,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/student-grades-week/export-box', [AdminStudentController::class, 'exportStudentGradesBox'])->name('student-grades-week.export-box');
         Route::post('/student-grades-update-via-excel/import', [AdminStudentController::class, 'import'])->name('student-import-grades');
 
+        // KTR (Kalendar tematik reja)
+        Route::prefix('ktr')->name('ktr.')->group(function () {
+            Route::get('/', [KtrController::class, 'index'])->name('index');
+            Route::get('/get-specialties', [KtrController::class, 'getSpecialties'])->name('get-specialties');
+            Route::get('/get-level-codes', [KtrController::class, 'getLevelCodes'])->name('get-level-codes');
+            Route::get('/get-semesters', [KtrController::class, 'getSemesters'])->name('get-semesters');
+        });
 
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');
         Route::get('/reports/jn/data', [ReportController::class, 'jnReportData'])->name('reports.jn.data');

@@ -284,10 +284,18 @@
                     <!-- Xabarnoma -->
                     <div id="ktr-validation-msg" class="ktr-validation-msg" style="display:none;"></div>
 
-                    <!-- Saqlash tugmasi -->
-                    <div style="display: flex; justify-content: flex-end; margin-top: 16px; gap: 10px;">
-                        <button type="button" class="ktr-btn ktr-btn-secondary" onclick="closeKtrModal()">Bekor qilish</button>
-                        <button type="button" class="ktr-btn ktr-btn-primary" id="ktr-save-btn" onclick="saveKtrPlan()">Saqlash</button>
+                    <!-- Tugmalar -->
+                    <div style="display: flex; justify-content: space-between; margin-top: 16px; align-items: center;">
+                        <button type="button" class="ktr-btn ktr-btn-export" onclick="exportKtrPlan()">
+                            <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            Excel
+                        </button>
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" class="ktr-btn ktr-btn-secondary" onclick="closeKtrModal()">Bekor qilish</button>
+                            <button type="button" class="ktr-btn ktr-btn-primary" id="ktr-save-btn" onclick="saveKtrPlan()">Saqlash</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -722,6 +730,80 @@
                         .removeClass('ktr-msg-success').addClass('ktr-msg-error').show();
                 }
             });
+        }
+
+        function exportKtrPlan() {
+            var types = ktrState.trainingTypes;
+            var codes = ktrState.filteredCodes;
+            var title = $('#ktr-modal-title').text();
+
+            // CSV content
+            var rows = [];
+            // BOM
+            var bom = '\uFEFF';
+
+            // Header row 1: Fan nomi
+            rows.push([title]);
+            rows.push([]);
+
+            // Header row 2: column names
+            var header = ['Hafta'];
+            codes.forEach(function(code) {
+                header.push(types[code].name + ' (soat)');
+                header.push(types[code].name + ' (mavzu)');
+            });
+            rows.push(header);
+
+            // Data rows
+            for (var w = 1; w <= ktrState.weekCount; w++) {
+                var row = [w + '-hafta'];
+                codes.forEach(function(code) {
+                    var hrs = $('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val() || '';
+                    var topic = $('.ktr-topic[data-week="' + w + '"][data-code="' + code + '"]').val() || '';
+                    row.push(hrs);
+                    row.push(topic);
+                });
+                rows.push(row);
+            }
+
+            // Jami row
+            var jamiRow = ['Jami'];
+            codes.forEach(function(code) {
+                var colSum = 0;
+                $('.ktr-hours[data-code="' + code + '"]').each(function() {
+                    colSum += parseInt($(this).val()) || 0;
+                });
+                jamiRow.push(colSum);
+                jamiRow.push('');
+            });
+            rows.push(jamiRow);
+
+            // Yuklama row
+            var loadRow = ['Yuklama'];
+            codes.forEach(function(code) {
+                loadRow.push(types[code].hours);
+                loadRow.push('');
+            });
+            rows.push(loadRow);
+
+            // Build CSV
+            var csv = bom + rows.map(function(row) {
+                return row.map(function(cell) {
+                    var s = String(cell == null ? '' : cell);
+                    if (s.indexOf(';') > -1 || s.indexOf('"') > -1 || s.indexOf('\n') > -1) {
+                        return '"' + s.replace(/"/g, '""') + '"';
+                    }
+                    return s;
+                }).join(';');
+            }).join('\n');
+
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'KTR_' + title.replace(/[^a-zA-Z0-9\u0400-\u04FF]/g, '_') + '.csv';
+            a.click();
+            URL.revokeObjectURL(url);
         }
     </script>
 
@@ -1166,6 +1248,18 @@
             color: #475569;
         }
         .ktr-btn-secondary:hover { background: #e2e8f0; }
+        .ktr-btn-export {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #059669, #047857);
+            color: #fff;
+            box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+        }
+        .ktr-btn-export:hover {
+            background: linear-gradient(135deg, #047857, #065f46);
+            transform: translateY(-1px);
+        }
 
         /* Validation message */
         .ktr-validation-msg {

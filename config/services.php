@@ -40,7 +40,7 @@ return [
     ],
 
     'hemis_oauth' => [
-        'base_url' => env('HEMIS_OAUTH_BASE_URL', 'https://my.hemis.uz'),
+        'base_url' => env('HEMIS_OAUTH_BASE_URL', 'https://student.ttatf.uz'),
         'client_id' => env('HEMIS_OAUTH_CLIENT_ID'),
         'client_secret' => env('HEMIS_OAUTH_CLIENT_SECRET'),
         'redirect_uri' => env('HEMIS_OAUTH_REDIRECT_URI'),

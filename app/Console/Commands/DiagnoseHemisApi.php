@@ -7,7 +7,10 @@ use Illuminate\Console\Command;
 
 class DiagnoseHemisApi extends Command
 {
-    protected $signature = 'hemis:diagnose {--date= : Tekshirish sanasi (YYYY-MM-DD, default: 2026-02-22 yakshanba)}';
+    protected $signature = 'hemis:diagnose
+        {--date= : Tekshirish sanasi (YYYY-MM-DD, default: 2026-02-22)}
+        {--all-pages : Barcha sahifalarni yuklash (sekin, lekin to\'liq)}';
+
     protected $description = 'HEMIS API sana filtrini diagnostika qilish — noto\'g\'ri sanalar qaytishini isbotlash';
 
     public function handle()
@@ -17,12 +20,12 @@ class DiagnoseHemisApi extends Command
 
         $date = $this->option('date')
             ? Carbon::parse($this->option('date'))
-            : Carbon::parse('2026-02-22'); // Yakshanba — dam olish kuni
+            : Carbon::parse('2026-02-22');
 
         $from = $date->copy()->startOfDay()->timestamp;
         $to = $date->copy()->endOfDay()->timestamp;
-
         $dayOfWeek = $date->translatedFormat('l');
+        $fetchAllPages = $this->option('all-pages');
 
         $this->newLine();
         $this->info("╔══════════════════════════════════════════════════════════════╗");
@@ -30,38 +33,231 @@ class DiagnoseHemisApi extends Command
         $this->info("╚══════════════════════════════════════════════════════════════╝");
         $this->newLine();
 
-        // ── 1. So'rov ma'lumotlari ──
-        $queryString = http_build_query([
-            'limit' => 200,
-            'page' => 1,
-            'lesson_date_from' => $from,
-            'lesson_date_to' => $to,
-        ]);
-        $fullUrl = "{$baseUrl}/v1/data/student-grade-list?{$queryString}";
-
-        $this->info("┌─ SO'ROV (curl) ───────────────────────────────────────────────┐");
+        $this->info("┌─ SO'ROV ────────────────────────────────────────────────────┐");
         $this->info("│ Sana:     {$date->toDateString()} ({$dayOfWeek})");
+        $this->info("│ lesson_date_from = {$from}  (" . Carbon::createFromTimestamp($from)->format('Y-m-d H:i:s') . ")");
+        $this->info("│ lesson_date_to   = {$to}  (" . Carbon::createFromTimestamp($to)->format('Y-m-d H:i:s') . ")");
+        $this->info("│ limit = 200");
         $this->info("│");
-        $this->info("│ curl komandasi:");
-        $this->info("│   curl -k -H \"Authorization: Bearer \$TOKEN\" \\");
-        $this->info("│     \"{$baseUrl}/v1/data/student-grade-list?limit=200&page=1\\");
-        $this->info("│     &lesson_date_from={$from}&lesson_date_to={$to}\"");
-        $this->info("│");
-        $this->info("│ Parametrlar:");
-        $this->info("│   lesson_date_from = {$from}");
-        $this->info("│     → " . Carbon::createFromTimestamp($from)->format('Y-m-d H:i:s') . " (Asia/Tashkent)");
-        $this->info("│     → " . Carbon::createFromTimestamp($from)->utc()->format('Y-m-d H:i:s') . " (UTC)");
-        $this->info("│   lesson_date_to   = {$to}");
-        $this->info("│     → " . Carbon::createFromTimestamp($to)->format('Y-m-d H:i:s') . " (Asia/Tashkent)");
-        $this->info("│     → " . Carbon::createFromTimestamp($to)->utc()->format('Y-m-d H:i:s') . " (UTC)");
-        $this->info("│   limit = 200, page = 1");
+        $this->info("│ curl ekvivalenti:");
+        $this->info("│   curl -k -H 'Authorization: Bearer <TOKEN>' \\");
+        $this->info("│     '{$baseUrl}/v1/data/student-grade-list?limit=200&page=1&lesson_date_from={$from}&lesson_date_to={$to}'");
         $this->info("└─────────────────────────────────────────────────────────────┘");
         $this->newLine();
 
-        // ── 2. curl bilan API so'rovi ──
-        $this->info("curl bilan so'rov yuborilmoqda...");
+        // ── 1-sahifani yuklash ──
+        $this->info("1-sahifani yuklamoqda...");
+        $firstPage = $this->fetchPage($baseUrl, $token, $from, $to, 1);
+        if ($firstPage === null) {
+            return 1;
+        }
 
-        $ch = curl_init($fullUrl);
+        $items = $firstPage['items'];
+        $totalCount = $firstPage['totalCount'];
+        $pageCount = $firstPage['pageCount'];
+
+        $this->info("  Jami: {$totalCount} ta yozuv, {$pageCount} sahifa");
+
+        if (count($items) === 0) {
+            $this->info("Hech qanday yozuv qaytmadi.");
+            return 0;
+        }
+
+        // ── Qaysi sahifalarni yuklash kerak? ──
+        $allItems = $items;
+
+        if ($fetchAllPages && $pageCount > 1) {
+            // Barcha sahifalarni yuklash
+            $this->info("Barcha {$pageCount} sahifani yuklamoqda...");
+            for ($p = 2; $p <= $pageCount; $p++) {
+                $this->output->write("  Sahifa {$p}/{$pageCount}...");
+                $page = $this->fetchPage($baseUrl, $token, $from, $to, $p);
+                if ($page !== null) {
+                    $allItems = array_merge($allItems, $page['items']);
+                    $this->output->writeln(" " . count($page['items']) . " ta yozuv");
+                } else {
+                    $this->output->writeln(" XATO!");
+                }
+            }
+        } elseif ($pageCount > 1) {
+            // Namuna sahifalar: boshi, o'rtasi, oxiri
+            $samplePages = $this->getSamplePages($pageCount, 8);
+            $this->info("Namuna sahifalarni yuklamoqda: " . implode(', ', $samplePages) . " ...");
+            foreach ($samplePages as $p) {
+                if ($p === 1) {
+                    continue; // 1-sahifa allaqachon yuklangan
+                }
+                $this->output->write("  Sahifa {$p}/{$pageCount}...");
+                $page = $this->fetchPage($baseUrl, $token, $from, $to, $p);
+                if ($page !== null) {
+                    $allItems = array_merge($allItems, $page['items']);
+                    $this->output->writeln(" " . count($page['items']) . " ta yozuv");
+                } else {
+                    $this->output->writeln(" XATO!");
+                }
+            }
+        }
+
+        $this->newLine();
+        $this->info("Jami yuklangan yozuvlar: " . count($allItems));
+
+        // ── Sanalar bo'yicha tahlil ──
+        $dateGroups = [];
+        $timestamps = [];
+        foreach ($allItems as $item) {
+            $ts = $item['lesson_date'] ?? 0;
+            $d = Carbon::createFromTimestamp($ts)->toDateString();
+            if (!isset($dateGroups[$d])) {
+                $dateGroups[$d] = ['count' => 0, 'items' => []];
+            }
+            $dateGroups[$d]['count']++;
+            $dateGroups[$d]['items'][] = $item;
+            $timestamps[] = $ts;
+        }
+
+        ksort($dateGroups);
+
+        $correctCount = $dateGroups[$date->toDateString()]['count'] ?? 0;
+        $wrongCount = count($allItems) - $correctCount;
+
+        $minTs = min($timestamps);
+        $maxTs = max($timestamps);
+        $minDate = Carbon::createFromTimestamp($minTs);
+        $maxDate = Carbon::createFromTimestamp($maxTs);
+        $daySpan = $minDate->diffInDays($maxDate);
+
+        // ── Vaqt oralig'i ──
+        $this->newLine();
+        $this->info("┌─ VAQT ORALIG'I ────────────────────────────────────────────┐");
+        $this->info("│ So'ralgan:   {$date->toDateString()} (faqat 1 kun)");
+        $this->info("│ Kelgan min:  {$minDate->format('Y-m-d H:i:s')} (ts: {$minTs})");
+        $this->info("│ Kelgan max:  {$maxDate->format('Y-m-d H:i:s')} (ts: {$maxTs})");
+        $this->info("│ Farq:        {$daySpan} kunlik oraliq!");
+        $this->info("└─────────────────────────────────────────────────────────────┘");
+
+        // ── Unikal sanalar ──
+        $uniqueDates = array_keys($dateGroups);
+        $this->newLine();
+        $this->info("┌─ UNIKAL SANALAR (" . count($uniqueDates) . " ta) ──────────────────────────────┐");
+        $this->info("│");
+
+        $maxBarWidth = 40;
+        $maxCount = max(array_column($dateGroups, 'count'));
+
+        foreach ($dateGroups as $d => $info) {
+            $count = $info['count'];
+            $barLen = $maxCount > 0 ? (int) round($count / $maxCount * $maxBarWidth) : 0;
+            $bar = str_repeat('█', max(1, $barLen));
+            $padCount = str_pad($count, 5, ' ', STR_PAD_LEFT);
+
+            if ($d === $date->toDateString()) {
+                $this->info("│  {$d}  {$padCount} ta  {$bar}  ← TO'G'RI");
+            } else {
+                $this->warn("│  {$d}  {$padCount} ta  {$bar}  ← NOTO'G'RI!");
+            }
+        }
+
+        $this->info("│");
+        $this->info("├─────────────────────────────────────────────────────────────┤");
+        $this->info("│  Jami yuklangan:    " . count($allItems) . " ta");
+        $this->info("│  To'g'ri sanali:    {$correctCount} ta");
+
+        $wrongPercent = 0;
+        if ($wrongCount > 0) {
+            $wrongPercent = round($wrongCount / count($allItems) * 100, 1);
+            $this->error("│  Noto'g'ri sanali:  {$wrongCount} ta ({$wrongPercent}%)");
+        } else {
+            $this->info("│  Noto'g'ri sanali:  0 ta");
+        }
+        $this->info("└─────────────────────────────────────────────────────────────┘");
+
+        // ── 30-40 ta namuna yozuv ──
+        if ($wrongCount > 0) {
+            $this->newLine();
+
+            // Noto'g'ri sanalar uchun namuna yig'ish
+            $wrongDateGroups = [];
+            foreach ($dateGroups as $d => $info) {
+                if ($d !== $date->toDateString()) {
+                    $wrongDateGroups[$d] = $info['items'];
+                }
+            }
+
+            $sampled = $this->sampleFromGroups($wrongDateGroups, 35);
+            $sampledTotal = $this->countSampled($sampled);
+
+            $this->info("┌─ NOTO'G'RI SANADAGI NAMUNA YOZUVLAR ({$sampledTotal} ta) ─────────┐");
+            $this->info("│");
+            $this->info("│  So'rov: FAQAT {$date->toDateString()} baholarini so'radik.");
+            $this->info("│  API quyidagi BOSHQA sanalar yozuvlarini qaytarmoqda:");
+            $this->info("│");
+
+            $num = 0;
+            foreach ($sampled as $sana => $records) {
+                $totalForDate = $dateGroups[$sana]['count'] ?? count($records);
+                $this->warn("│  ── {$sana} (jami {$totalForDate} ta) ─────────────────────────────");
+                foreach ($records as $item) {
+                    $num++;
+                    $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
+                    $studentName = $this->getStudentName($item);
+                    $subjectName = $item['subject']['name'] ?? '?';
+                    $grade = $item['grade'] ?? '-';
+                    $trainingType = $item['trainingType']['name'] ?? ($item['_training_type'] ?? '?');
+
+                    $this->warn("│  {$num}. [{$lessonDate->format('Y-m-d H:i')}] {$studentName}");
+                    $this->info("│     Fan: {$subjectName}");
+                    $this->info("│     Baho: {$grade} | Mashg'ulot: {$trainingType}");
+                    $this->info("│     timestamp: {$item['lesson_date']}");
+                    $this->info("│");
+                }
+            }
+
+            $this->info("└─────────────────────────────────────────────────────────────┘");
+
+            // ── Xulosa ──
+            $this->newLine();
+            $this->error("╔══════════════════════════════════════════════════════════════╗");
+            $this->error("║  XULOSA: HEMIS API SANA FILTRI ISHLAMAYAPTI                 ║");
+            $this->error("╠══════════════════════════════════════════════════════════════╣");
+            $this->error("║                                                              ║");
+            $this->error("║  So'ralgan:       {$date->toDateString()} ({$dayOfWeek})");
+            $this->error("║  Unikal sanalar:  " . count($uniqueDates) . " ta topildi (kutilgan: 1 ta)");
+            $this->error("║  Sana oralig'i:   {$minDate->toDateString()} — {$maxDate->toDateString()} ({$daySpan} kun)");
+            $this->error("║  Noto'g'ri:       {$wrongCount} / " . count($allItems) . " ({$wrongPercent}%)");
+            $this->error("║  API jami:        {$totalCount} ta yozuv, {$pageCount} sahifa");
+            $this->error("║                                                              ║");
+
+            if ($daySpan > 1) {
+                $this->error("║  Bu timezone muammosi EMAS:                                ║");
+                $this->error("║  Timezone faqat ±5 soat (1 kun), lekin {$daySpan} kun farq bor    ║");
+            }
+
+            $this->error("║                                                              ║");
+            $this->error("║  Yechim: client-side sana filtri (ImportGrades.php)          ║");
+            $this->error("╚══════════════════════════════════════════════════════════════╝");
+        } else {
+            $this->newLine();
+            $this->info("Barcha yozuvlar to'g'ri sanaga mos — API to'g'ri ishlayapti.");
+        }
+
+        return 0;
+    }
+
+    /**
+     * Bitta sahifani curl bilan yuklash
+     */
+    private function fetchPage(string $baseUrl, string $token, int $from, int $to, int $page): ?array
+    {
+        $queryString = http_build_query([
+            'limit' => 200,
+            'page' => $page,
+            'lesson_date_from' => $from,
+            'lesson_date_to' => $to,
+        ]);
+
+        $url = "{$baseUrl}/v1/data/student-grade-list?{$queryString}";
+
+        $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_SSL_VERIFYPEER => false,
@@ -73,202 +269,95 @@ class DiagnoseHemisApi extends Command
             ],
         ]);
 
-        $responseBody = curl_exec($ch);
+        $body = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        $totalTime = round(curl_getinfo($ch, CURLINFO_TOTAL_TIME), 2);
+        $error = curl_error($ch);
         curl_close($ch);
 
-        if ($curlError) {
-            $this->error("curl xato: {$curlError}");
-            return 1;
+        if ($error) {
+            $this->error("curl xato (sahifa {$page}): {$error}");
+            return null;
         }
-
-        $this->info("  HTTP status: {$httpCode}, javob vaqti: {$totalTime}s");
 
         if ($httpCode !== 200) {
-            $this->error("API xato: HTTP {$httpCode}");
-            $this->error(mb_substr($responseBody, 0, 500));
-            return 1;
+            $this->error("HTTP {$httpCode} (sahifa {$page})");
+            return null;
         }
 
-        $json = json_decode($responseBody, true);
-
+        $json = json_decode($body, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->error("JSON parse xato: " . json_last_error_msg());
-            return 1;
+            $this->error("JSON xato (sahifa {$page}): " . json_last_error_msg());
+            return null;
         }
 
-        $items = $json['data']['items'] ?? [];
-        $pagination = $json['data']['pagination'] ?? [];
-        $totalCount = $pagination['totalCount'] ?? '?';
-        $pageCount = $pagination['pageCount'] ?? '?';
-
-        // ── 3. Umumiy natija ──
-        $this->newLine();
-        $this->info("┌─ JAVOB ──────────────────────────────────────────────────────┐");
-        $this->info("│ HTTP status:                   {$httpCode}");
-        $this->info("│ Jami yozuvlar (totalCount):    {$totalCount}");
-        $this->info("│ Jami sahifalar (pageCount):    {$pageCount}");
-        $this->info("│ Shu sahifadagi yozuvlar:       " . count($items));
-        $this->info("│ Javob hajmi:                   " . strlen($responseBody) . " bayt");
-        $this->info("└─────────────────────────────────────────────────────────────┘");
-
-        if (count($items) === 0) {
-            $this->newLine();
-            $this->info("Hech qanday yozuv qaytmadi.");
-            return 0;
-        }
-
-        // ── 4. Sanalar bo'yicha guruhlash ──
-        $dateGroups = [];
-        $timestamps = [];
-        foreach ($items as $item) {
-            $lessonTs = $item['lesson_date'] ?? 0;
-            $lessonDate = Carbon::createFromTimestamp($lessonTs)->toDateString();
-            if (!isset($dateGroups[$lessonDate])) {
-                $dateGroups[$lessonDate] = 0;
-            }
-            $dateGroups[$lessonDate]++;
-            $timestamps[] = $lessonTs;
-        }
-
-        ksort($dateGroups);
-
-        $correctCount = $dateGroups[$date->toDateString()] ?? 0;
-        $wrongCount = count($items) - $correctCount;
-
-        // Vaqt oralig'i
-        $minTimestamp = min($timestamps);
-        $maxTimestamp = max($timestamps);
-        $minDate = Carbon::createFromTimestamp($minTimestamp);
-        $maxDate = Carbon::createFromTimestamp($maxTimestamp);
-        $daySpan = $minDate->diffInDays($maxDate);
-
-        $this->newLine();
-        $this->info("┌─ VAQT ORALIG'I ────────────────────────────────────────────┐");
-        $this->info("│ So'ralgan:     {$date->toDateString()} (faqat 1 kun)");
-        $this->info("│ Kelgan min:    {$minDate->format('Y-m-d H:i:s')} (ts: {$minTimestamp})");
-        $this->info("│ Kelgan max:    {$maxDate->format('Y-m-d H:i:s')} (ts: {$maxTimestamp})");
-        $this->info("│ Farq:          {$daySpan} kun oralig'idagi yozuvlar qaytdi!");
-        $this->info("└─────────────────────────────────────────────────────────────┘");
-
-        // ── 5. Sanalar taqsimoti ──
-        $this->newLine();
-        $this->info("┌─ SANALAR TAQSIMOTI (1-sahifa, " . count($items) . " ta yozuv) ─────────────┐");
-
-        foreach ($dateGroups as $d => $count) {
-            $bar = str_repeat('█', min($count, 50));
-            if ($d === $date->toDateString()) {
-                $this->info("│  {$d}: {$count} ta  {$bar}  ← TO'G'RI");
-            } else {
-                $this->warn("│  {$d}: {$count} ta  {$bar}  ← NOTO'G'RI!");
-            }
-        }
-
-        $this->info("├─────────────────────────────────────────────────────────────┤");
-        $this->info("│  To'g'ri sanali:    {$correctCount} ta");
-
-        $wrongPercent = 0;
-        if ($wrongCount > 0) {
-            $wrongPercent = round($wrongCount / count($items) * 100, 1);
-            $this->error("│  Noto'g'ri sanali:  {$wrongCount} ta ({$wrongPercent}%)");
-        } else {
-            $this->info("│  Noto'g'ri sanali:  0 ta");
-        }
-        $this->info("└─────────────────────────────────────────────────────────────┘");
-
-        // ── 6. Namuna yozuvlar (30-40 ta) ──
-        if ($wrongCount > 0) {
-            $this->newLine();
-
-            // Noto'g'ri sanadagi yozuvlarni yig'ish
-            $wrongItems = [];
-            $correctItems = [];
-            foreach ($items as $item) {
-                $lessonDate = Carbon::createFromTimestamp($item['lesson_date'])->toDateString();
-                if ($lessonDate !== $date->toDateString()) {
-                    $wrongItems[] = $item;
-                } else {
-                    $correctItems[] = $item;
-                }
-            }
-
-            // 30-40 ta namuna: turli sanalardan teng taqsimlash
-            $sampled = $this->sampleRecords($wrongItems, 35);
-
-            $this->info("┌─ NOTO'G'RI SANADAGI NAMUNA YOZUVLAR ({$this->countSampled($sampled)} ta) ──────┐");
-            $this->info("│");
-            $this->info("│  So'rov: FAQAT {$date->toDateString()} sanadagi baholar so'raldi.");
-            $this->info("│  Lekin API quyidagi boshqa sanadagi yozuvlarni ham qaytarmoqda:");
-            $this->info("│");
-
-            $num = 0;
-            foreach ($sampled as $sanaGroup => $records) {
-                $this->warn("│  ── {$sanaGroup} (so'ralmagan sana) ──────────────────────────");
-                foreach ($records as $item) {
-                    $num++;
-                    $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
-                    $studentName = $this->getStudentName($item);
-                    $subjectName = $item['subject']['name'] ?? '?';
-                    $grade = $item['grade'] ?? '-';
-                    $trainingType = $item['trainingType']['name'] ?? ($item['_training_type'] ?? '?');
-
-                    $this->warn("│  {$num}. {$lessonDate->format('Y-m-d H:i:s')} | {$studentName}");
-                    $this->info("│     Fan: {$subjectName}");
-                    $this->info("│     Baho: {$grade} | Mashg'ulot: {$trainingType}");
-                    $this->info("│     lesson_date timestamp: {$item['lesson_date']}");
-                    $this->info("│");
-                }
-            }
-
-            $this->info("└─────────────────────────────────────────────────────────────┘");
-
-            // ── 7. To'g'ri sanadagi namuna (agar bor bo'lsa) ──
-            if (count($correctItems) > 0) {
-                $this->newLine();
-                $showCorrect = array_slice($correctItems, 0, 5);
-                $this->info("┌─ TO'G'RI SANADAGI NAMUNA ({$correctCount} tadan " . count($showCorrect) . " tasi) ──────────┐");
-                foreach ($showCorrect as $i => $item) {
-                    $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
-                    $studentName = $this->getStudentName($item);
-                    $subjectName = $item['subject']['name'] ?? '?';
-                    $grade = $item['grade'] ?? '-';
-
-                    $this->info("│  " . ($i + 1) . ". {$lessonDate->format('Y-m-d H:i:s')} | {$studentName}");
-                    $this->info("│     Fan: {$subjectName} | Baho: {$grade}");
-                }
-                $this->info("└─────────────────────────────────────────────────────────────┘");
-            }
-
-            // ── 8. Yakuniy xulosa ──
-            $this->newLine();
-            $this->error("╔══════════════════════════════════════════════════════════════╗");
-            $this->error("║  XULOSA: HEMIS API SANA FILTRI ISHLAMAYAPTI                 ║");
-            $this->error("╠══════════════════════════════════════════════════════════════╣");
-            $this->error("║                                                              ║");
-            $this->error("║  So'ralgan sana:    {$date->toDateString()} ({$dayOfWeek})");
-            $this->error("║  Kelgan yozuvlar:   {$daySpan} kunlik oraliqdan");
-            $this->error("║  Noto'g'ri yozuv:   {$wrongCount} / " . count($items) . " ({$wrongPercent}%)");
-            $this->error("║  Jami sahifalar:    {$pageCount} (taxminan {$totalCount} ta yozuv)");
-            $this->error("║                                                              ║");
-            $this->error("║  Bu timezone muammosi EMAS:                                  ║");
-            $this->error("║  - Timezone farqi faqat ±5 soat (qo'shni kun)                ║");
-            $this->error("║  - Lekin API {$daySpan} kunlik oralikdagi yozuvlarni qaytarmoqda");
-            $this->error("║                                                              ║");
-            $this->error("║  Bizning yechim: client-side filtr (ImportGrades.php:515)    ║");
-            $this->error("╚══════════════════════════════════════════════════════════════╝");
-        } else {
-            $this->newLine();
-            $this->info("API to'g'ri ishlayapti — barcha yozuvlar so'ralgan sanaga mos.");
-        }
-
-        return 0;
+        return [
+            'items' => $json['data']['items'] ?? [],
+            'totalCount' => $json['data']['pagination']['totalCount'] ?? 0,
+            'pageCount' => $json['data']['pagination']['pageCount'] ?? 0,
+        ];
     }
 
     /**
-     * Talaba ismini olish (turli API formatlar uchun)
+     * Namuna sahifalarni tanlash: boshi, o'rtasi, oxiri
      */
+    private function getSamplePages(int $pageCount, int $sampleSize): array
+    {
+        if ($pageCount <= $sampleSize) {
+            return range(1, $pageCount);
+        }
+
+        $pages = [1];
+        $step = ($pageCount - 1) / ($sampleSize - 1);
+        for ($i = 1; $i < $sampleSize - 1; $i++) {
+            $pages[] = (int) round(1 + $i * $step);
+        }
+        $pages[] = $pageCount;
+
+        return array_unique($pages);
+    }
+
+    /**
+     * Har sanadan teng miqdorda namuna olish
+     */
+    private function sampleFromGroups(array $groups, int $targetCount): array
+    {
+        $groupCount = count($groups);
+        if ($groupCount === 0) {
+            return [];
+        }
+
+        $perGroup = max(2, intdiv($targetCount, $groupCount));
+        $remaining = $targetCount;
+        $result = [];
+
+        foreach ($groups as $key => $records) {
+            $take = min($perGroup, $remaining, count($records));
+            $result[$key] = array_slice($records, 0, $take);
+            $remaining -= $take;
+            if ($remaining <= 0) {
+                break;
+            }
+        }
+
+        // Qolgan joyni to'ldirish
+        if ($remaining > 0) {
+            foreach ($groups as $key => $records) {
+                $taken = count($result[$key] ?? []);
+                $canTake = min($remaining, count($records) - $taken);
+                if ($canTake > 0) {
+                    $extra = array_slice($records, $taken, $canTake);
+                    $result[$key] = array_merge($result[$key] ?? [], $extra);
+                    $remaining -= $canTake;
+                }
+                if ($remaining <= 0) {
+                    break;
+                }
+            }
+        }
+
+        return $result;
+    }
+
     private function getStudentName(array $item): string
     {
         if (!empty($item['_student'])) {
@@ -283,60 +372,6 @@ class DiagnoseHemisApi extends Command
         return '?';
     }
 
-    /**
-     * Noto'g'ri sanadagi yozuvlardan har sanadan teng miqdorda namuna olish.
-     */
-    private function sampleRecords(array $wrongItems, int $targetCount): array
-    {
-        // Sanalar bo'yicha guruhlash
-        $bySana = [];
-        foreach ($wrongItems as $item) {
-            $d = Carbon::createFromTimestamp($item['lesson_date'])->toDateString();
-            $bySana[$d][] = $item;
-        }
-        ksort($bySana);
-
-        $sanaCount = count($bySana);
-        if ($sanaCount === 0) {
-            return [];
-        }
-
-        // Har sanadan taxminan teng miqdorda olish
-        $perSana = max(1, intdiv($targetCount, $sanaCount));
-        $remaining = $targetCount;
-
-        $result = [];
-        foreach ($bySana as $sana => $records) {
-            $take = min($perSana, $remaining, count($records));
-            $result[$sana] = array_slice($records, 0, $take);
-            $remaining -= $take;
-            if ($remaining <= 0) {
-                break;
-            }
-        }
-
-        // Agar hali joy bo'lsa, qolganlardan to'ldirish
-        if ($remaining > 0) {
-            foreach ($bySana as $sana => $records) {
-                $alreadyTaken = count($result[$sana] ?? []);
-                $canTake = min($remaining, count($records) - $alreadyTaken);
-                if ($canTake > 0) {
-                    $extra = array_slice($records, $alreadyTaken, $canTake);
-                    $result[$sana] = array_merge($result[$sana] ?? [], $extra);
-                    $remaining -= $canTake;
-                }
-                if ($remaining <= 0) {
-                    break;
-                }
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Namuna yozuvlar sonini hisoblash
-     */
     private function countSampled(array $sampled): int
     {
         $count = 0;

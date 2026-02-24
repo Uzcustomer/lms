@@ -512,16 +512,11 @@
             $('#ktr-plan-table-wrap').slideDown(200);
         }
 
-        // Hemis dan kelgan mavzuni olish (position = week raqami)
-        function getHemisTopic(code, weekNum) {
+        // Hemis dan kelgan mavzuni olish (topicIndex = 0-based ketma-ket tartib raqami)
+        function getHemisTopic(code, topicIndex) {
             var topics = ktrState.hemisTopics[code];
             if (!topics || !topics.length) return '';
-            // position = weekNum yoki index = weekNum - 1
-            for (var i = 0; i < topics.length; i++) {
-                if (topics[i].position === weekNum) return topics[i].name;
-            }
-            // position mos kelmasa, index bo'yicha
-            if (weekNum - 1 < topics.length) return topics[weekNum - 1].name;
+            if (topicIndex < topics.length) return topics[topicIndex].name;
             return '';
         }
 
@@ -529,14 +524,15 @@
             var types = ktrState.trainingTypes;
             var codes = ktrState.filteredCodes;
 
-            // Thead: Hafta | [Soat | Mavzu] per type
+            // Thead: Hafta | [Soat per type] | Mavzu (bitta ustun)
             var thead = '<tr><th class="ktr-th-week" rowspan="2">Hafta</th>';
             codes.forEach(function(code) {
-                thead += '<th class="ktr-th-type" colspan="2">' + types[code].name + '<div class="ktr-th-hours">' + types[code].hours + ' soat</div></th>';
+                thead += '<th class="ktr-th-type">' + types[code].name + '<div class="ktr-th-hours">' + types[code].hours + ' soat</div></th>';
             });
+            thead += '<th class="ktr-th-topic-combined" rowspan="2">Mavzu</th>';
             thead += '</tr><tr>';
             codes.forEach(function() {
-                thead += '<th class="ktr-th-sub">Soat</th><th class="ktr-th-sub ktr-th-topic">Mavzu</th>';
+                thead += '<th class="ktr-th-sub">Soat</th>';
             });
             thead += '</tr>';
             $('#ktr-plan-thead').html(thead);
@@ -551,11 +547,9 @@
                     if (fromLoad && ktrState.savedHours[w] && ktrState.savedHours[w][code] !== undefined) {
                         hrs = ktrState.savedHours[w][code];
                     }
-                    var hasVal = hrs !== '' && parseInt(hrs) > 0;
-                    var topicText = getHemisTopic(code, w);
                     tbody += '<td class="ktr-td-hrs"><input type="number" min="0" class="ktr-cell ktr-hours" data-week="' + w + '" data-code="' + code + '" value="' + hrs + '"></td>';
-                    tbody += '<td class="ktr-td-topic"><span class="ktr-topic-text' + (hasVal ? '' : ' ktr-topic-hidden') + '" data-week="' + w + '" data-code="' + code + '">' + (topicText || '').replace(/</g, '&lt;') + '</span></td>';
                 });
+                tbody += '<td class="ktr-td-topic" id="ktr-topic-cell-' + w + '"><span class="ktr-topic-text ktr-topic-hidden" id="ktr-topic-' + w + '"></span></td>';
                 tbody += '</tr>';
             }
             $('#ktr-plan-tbody').html(tbody);
@@ -563,28 +557,21 @@
             // Tfoot
             var tfoot = '<tr class="ktr-tfoot-sum"><td class="ktr-td-week" style="font-weight:700;">Jami</td>';
             codes.forEach(function(code) {
-                tfoot += '<td class="ktr-td-sum" id="ktr-col-sum-' + code + '">0</td><td class="ktr-td-topic-empty"></td>';
+                tfoot += '<td class="ktr-td-sum" id="ktr-col-sum-' + code + '">0</td>';
             });
+            tfoot += '<td class="ktr-td-topic-empty"></td>';
             tfoot += '</tr>';
             tfoot += '<tr class="ktr-tfoot-load"><td class="ktr-td-week" style="font-weight:700;">Yukl.</td>';
             codes.forEach(function(code) {
-                tfoot += '<td class="ktr-td-load">' + types[code].hours + '</td><td class="ktr-td-topic-empty"></td>';
+                tfoot += '<td class="ktr-td-load">' + types[code].hours + '</td>';
             });
+            tfoot += '<td class="ktr-td-topic-empty"></td>';
             tfoot += '</tr>';
             $('#ktr-plan-tfoot').html(tfoot);
 
             // Event handlers
             $('#ktr-plan-table').off('input', '.ktr-hours').on('input', '.ktr-hours', function() {
-                var $el = $(this);
-                var w = $el.data('week');
-                var code = $el.data('code');
-                var val = parseInt($el.val()) || 0;
-                var $topic = $('.ktr-topic-text[data-week="' + w + '"][data-code="' + code + '"]');
-                if (val > 0) {
-                    $topic.removeClass('ktr-topic-hidden');
-                } else {
-                    $topic.addClass('ktr-topic-hidden');
-                }
+                recalcTopics();
                 recalcKtr();
             });
 
@@ -625,7 +612,47 @@
                 if ($target && $target.length) $target.focus().select();
             });
 
+            recalcTopics();
             recalcKtr();
+        }
+
+        // Mavzularni qayta hisoblash (ketma-ket tartib raqami bo'yicha)
+        function recalcTopics() {
+            var codes = ktrState.filteredCodes;
+            var types = ktrState.trainingTypes;
+
+            // Har bir code uchun: qaysi haftalarda soat > 0, ketma-ket raqamlash
+            var topicIndexMap = {}; // topicIndexMap[code][week] = 0-based index
+            codes.forEach(function(code) {
+                topicIndexMap[code] = {};
+                var seq = 0;
+                for (var w = 1; w <= ktrState.weekCount; w++) {
+                    var val = parseInt($('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val()) || 0;
+                    if (val > 0) {
+                        topicIndexMap[code][w] = seq;
+                        seq++;
+                    }
+                }
+            });
+
+            // Har bir hafta uchun birlashtirilgan mavzu matnini yaratish
+            for (var w = 1; w <= ktrState.weekCount; w++) {
+                var parts = [];
+                codes.forEach(function(code) {
+                    if (topicIndexMap[code][w] !== undefined) {
+                        var topicName = getHemisTopic(code, topicIndexMap[code][w]);
+                        if (topicName) {
+                            parts.push('<b>' + types[code].name + '</b>: ' + topicName.replace(/</g, '&lt;'));
+                        }
+                    }
+                });
+                var $cell = $('#ktr-topic-' + w);
+                if (parts.length > 0) {
+                    $cell.html(parts.join('<br>')).removeClass('ktr-topic-hidden');
+                } else {
+                    $cell.html('').addClass('ktr-topic-hidden');
+                }
+            }
         }
 
         function recalcKtr() {
@@ -676,13 +703,21 @@
             var hours = {};
             var topics = {};
 
+            // Ketma-ket tartib raqamini hisoblash
+            var seqCounters = {};
+            codes.forEach(function(code) { seqCounters[code] = 0; });
+
             for (var w = 1; w <= ktrState.weekCount; w++) {
                 hours[w] = {};
                 topics[w] = {};
                 codes.forEach(function(code) {
-                    hours[w][code] = parseInt($('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val()) || 0;
-                    var topicText = getHemisTopic(code, w);
-                    if (topicText) topics[w][code] = topicText;
+                    var val = parseInt($('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val()) || 0;
+                    hours[w][code] = val;
+                    if (val > 0) {
+                        var topicText = getHemisTopic(code, seqCounters[code]);
+                        if (topicText) topics[w][code] = topicText;
+                        seqCounters[code]++;
+                    }
                 });
             }
 
@@ -735,19 +770,29 @@
             var header = ['Hafta'];
             codes.forEach(function(code) {
                 header.push(types[code].name + ' (soat)');
-                header.push(types[code].name + ' (mavzu)');
             });
+            header.push('Mavzu');
             rows.push(header);
+
+            // Ketma-ket tartib raqamini hisoblash
+            var seqCounters = {};
+            codes.forEach(function(code) { seqCounters[code] = 0; });
 
             // Data rows
             for (var w = 1; w <= ktrState.weekCount; w++) {
                 var row = [w + '-hafta'];
+                var topicParts = [];
                 codes.forEach(function(code) {
                     var hrs = $('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val() || '';
-                    var topic = getHemisTopic(code, w);
                     row.push(hrs);
-                    row.push(topic);
+                    var val = parseInt(hrs) || 0;
+                    if (val > 0) {
+                        var topicName = getHemisTopic(code, seqCounters[code]);
+                        if (topicName) topicParts.push(types[code].name + ': ' + topicName);
+                        seqCounters[code]++;
+                    }
                 });
+                row.push(topicParts.join('; '));
                 rows.push(row);
             }
 
@@ -759,16 +804,16 @@
                     colSum += parseInt($(this).val()) || 0;
                 });
                 jamiRow.push(colSum);
-                jamiRow.push('');
             });
+            jamiRow.push('');
             rows.push(jamiRow);
 
             // Yuklama row
             var loadRow = ['Yuklama'];
             codes.forEach(function(code) {
                 loadRow.push(types[code].hours);
-                loadRow.push('');
             });
+            loadRow.push('');
             rows.push(loadRow);
 
             // Build CSV
@@ -1175,7 +1220,7 @@
         .ktr-topic-text {
             font-size: 11px;
             color: #475569;
-            line-height: 1.3;
+            line-height: 1.5;
             display: block;
         }
         .ktr-topic-hidden {
@@ -1190,7 +1235,14 @@
             border: 1px solid #e2e8f0;
             font-weight: 500 !important;
         }
-        .ktr-th-topic { min-width: 110px; }
+        .ktr-th-topic-combined {
+            min-width: 200px;
+            text-align: center;
+            vertical-align: middle !important;
+            background: #f0fdf4 !important;
+            color: #166534 !important;
+            font-weight: 700 !important;
+        }
         .ktr-td-topic-empty {
             border: 1px solid #e2e8f0;
             background: #f8fafc;

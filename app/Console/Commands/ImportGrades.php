@@ -25,6 +25,10 @@ class ImportGrades extends Command
     private ?int $telegramProgressMsgId = null;
     private array $dayStatuses = [];
     private ?float $importStartTime = null;
+    private float $lastTelegramUpdate = 0;
+    private string $currentDayKey = '';
+    private int $currentDayNum = 0;
+    private int $currentDayTotal = 0;
 
     public function __construct()
     {
@@ -216,6 +220,11 @@ class ImportGrades extends Command
             $dayNum++;
             $date = Carbon::parse($dateStr);
 
+            // Kun ichidagi sub-progress uchun kontekst
+            $this->currentDayKey = $dateStr;
+            $this->currentDayNum = $dayNum;
+            $this->currentDayTotal = $originalTotal;
+
             try {
                 $dateStartOfDay = $date->copy()->startOfDay();
                 $dateEndOfDay = $date->copy()->endOfDay();
@@ -374,7 +383,6 @@ class ImportGrades extends Command
         // Global tozalash: eski is_final=false duplikatlarni kunlik batch qilib soft-delete qilish
         // Katta self-join o'rniga kunlik bo'lib tozalash — lock vaqtini qisqartiradi
         $this->info("Global tozalash boshlandi...");
-        $this->updateDayProgress('tozalash', '⏳', 'global cleanup...', $dayNum, $originalTotal);
         try {
             $globalCleaned = 0;
             $staleDates = DB::table('student_grades')
@@ -384,6 +392,13 @@ class ImportGrades extends Command
                 ->selectRaw('DATE(lesson_date) as grade_date')
                 ->distinct()
                 ->pluck('grade_date');
+
+            $staleTotal = $staleDates->count();
+            $staleProcessed = 0;
+            $this->info("  {$staleTotal} ta kun topildi, tozalash boshlanmoqda...");
+            $this->updateDayProgress('tozalash', '⏳', "0/{$staleTotal} kun...", $dayNum, $originalTotal);
+
+            $lastTgUpdate = microtime(true);
 
             foreach ($staleDates as $staleDate) {
                 $cleaned = DB::update("
@@ -403,18 +418,28 @@ class ImportGrades extends Command
                         AND DATE(sg.lesson_date) = ?
                 ", [$staleDate]);
                 $globalCleaned += $cleaned;
+                $staleProcessed++;
+
+                // Telegram va consolega har 5 kunda yoki 10 sekundda yangilash
+                $now = microtime(true);
+                if ($staleProcessed % 5 === 0 || $staleProcessed === $staleTotal || ($now - $lastTgUpdate) > 10) {
+                    $this->info("  tozalash: {$staleProcessed}/{$staleTotal} kun ({$globalCleaned} ta o'chirildi)");
+                    $this->updateDayProgress('tozalash', '⏳', "{$staleProcessed}/{$staleTotal} kun, {$globalCleaned} ta", $dayNum, $originalTotal);
+                    $lastTgUpdate = $now;
+                }
             }
 
             if ($globalCleaned > 0) {
-                $this->info("Global cleanup: {$globalCleaned} ta eski is_final=false duplikat tozalandi ({$staleDates->count()} kun).");
-                Log::info("[FinalImport] Global cleanup: {$globalCleaned} stale is_final=false duplicates removed across {$staleDates->count()} days.");
+                $this->info("Global cleanup: {$globalCleaned} ta eski is_final=false duplikat tozalandi ({$staleTotal} kun).");
+                Log::info("[FinalImport] Global cleanup: {$globalCleaned} stale is_final=false duplicates removed across {$staleTotal} days.");
             }
         } catch (\Throwable $e) {
             Log::error("[FinalImport] Global cleanup exception: {$e->getMessage()}");
             $failedDays[] = "Global cleanup (Exception: " . substr($e->getMessage(), 0, 100) . ")";
         }
 
-        $this->updateDayProgress('tozalash', '✅', 'tugadi', $dayNum, $originalTotal);
+        $cleanedCount = $globalCleaned ?? 0;
+        $this->updateDayProgress('tozalash', '✅', "tugadi ({$cleanedCount} ta)", $dayNum, $originalTotal);
 
         $this->report['final-import'] = [
             'total_days' => $totalDays,
@@ -461,6 +486,12 @@ class ImportGrades extends Command
 
         foreach ($period as $date) {
             $dayNum++;
+
+            // Kun ichidagi sub-progress uchun kontekst
+            $this->currentDayKey = $date->toDateString();
+            $this->currentDayNum = $dayNum;
+            $this->currentDayTotal = $totalDays;
+
             // UTC midnight — HEMIS API UTC kun chegaralari bo'yicha filter qiladi
             $dayFrom = Carbon::parse($date->toDateString(), 'UTC')->startOfDay()->timestamp;
             $dayTo = Carbon::parse($date->toDateString(), 'UTC')->endOfDay()->timestamp;
@@ -565,6 +596,7 @@ class ImportGrades extends Command
                         if ($reporter) {
                             $reporter->updateProgress($currentPage, $totalPages);
                         }
+                        $this->updateCurrentDayStatus("API {$currentPage}/{$totalPages}");
                         $pageSuccess = true;
                         sleep(2);
                     } else {
@@ -703,6 +735,7 @@ class ImportGrades extends Command
         }
 
         $gradeCount = count($insertRows);
+        $this->updateCurrentDayStatus("{$gradeCount} ta tayyorlandi, bazaga yozilmoqda...");
 
         // Xotirani bo'shatish — filteredItems va studentsMap endi kerak emas
         unset($filteredItems, $studentsMap, $deadlinesMap, $hemisIds);
@@ -1132,7 +1165,12 @@ class ImportGrades extends Command
         $chatId = config('services.telegram.chat_id');
         if (!$this->telegramProgressMsgId || !$chatId) return;
 
-        $elapsed = round((microtime(true) - $this->importStartTime) / 60, 1);
+        // Telegram rate limit: ⏳ uchun minimum 5 sekund oraliq, ✅/❌ har doim yuboriladi
+        $now = microtime(true);
+        if ($icon === '⏳' && ($now - $this->lastTelegramUpdate) < 5) return;
+        $this->lastTelegramUpdate = $now;
+
+        $elapsed = round(($now - $this->importStartTime) / 60, 1);
         $bar = $this->makeProgressBar($current, $total);
         $mode = strtoupper($this->option('mode'));
 
@@ -1149,6 +1187,16 @@ class ImportGrades extends Command
              . "⏱ {$elapsed} daq";
 
         app(TelegramService::class)->editMessage($chatId, $this->telegramProgressMsgId, $msg);
+    }
+
+    /**
+     * Joriy kun uchun sub-step statusini yangilash (fetchAllPages/applyGrades ichidan)
+     */
+    private function updateCurrentDayStatus(string $details): void
+    {
+        if ($this->currentDayKey && $this->currentDayTotal > 0) {
+            $this->updateDayProgress($this->currentDayKey, '⏳', $details, $this->currentDayNum, $this->currentDayTotal);
+        }
     }
 
     private function sendProgressDone(string $mode, int $successDays, int $totalDays, array $failedDays = []): void

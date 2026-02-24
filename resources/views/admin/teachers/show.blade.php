@@ -349,6 +349,11 @@
                         Rollarni boshqarish
                     </div>
                     <div class="card-body">
+                        @if(session('error'))
+                            <div style="padding: 10px; background: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 10px; font-size: 12px; color: #dc2626;">
+                                <strong>Xatolik:</strong> {{ session('error') }}
+                            </div>
+                        @endif
                         <form action="{{ route('admin.teachers.update-roles', $teacher) }}" method="POST" onsubmit="return validateRolesForm()">
                             @csrf
                             @method('PUT')

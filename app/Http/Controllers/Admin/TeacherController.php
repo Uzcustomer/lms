@@ -170,62 +170,73 @@ class TeacherController extends Controller
 
     public function updateRoles(Request $request, Teacher $teacher)
     {
+        $validRoleValues = array_values(array_map(fn ($r) => $r->value, ProjectRole::staffRoles()));
+
+        $roles = $request->input('roles', []);
+        $isDean = in_array(ProjectRole::DEAN->value, $roles);
+        $isSubjectResponsible = in_array(ProjectRole::SUBJECT_RESPONSIBLE->value, $roles);
+
+        $request->validate([
+            'roles' => 'nullable|array',
+            'roles.*' => 'in:' . implode(',', $validRoleValues),
+            'dean_faculties' => [$isDean ? 'required' : 'nullable', 'array'],
+            'dean_faculties.*' => 'exists:departments,department_hemis_id',
+            'responsible_subjects' => [$isSubjectResponsible ? 'required' : 'nullable', 'array'],
+            'responsible_subjects.*' => 'exists:curriculum_subjects,id',
+        ], [
+            'dean_faculties.required' => 'Dekan roli uchun kamida bitta fakultetni tanlash majburiy.',
+            'responsible_subjects.required' => "Fan mas'uli roli uchun kamida bitta fanni tanlash majburiy.",
+        ]);
+
         try {
-            $validRoleValues = array_values(array_map(fn ($r) => $r->value, ProjectRole::staffRoles()));
-
-            $roles = $request->input('roles', []);
-            $isDean = in_array(ProjectRole::DEAN->value, $roles);
-            $isSubjectResponsible = in_array(ProjectRole::SUBJECT_RESPONSIBLE->value, $roles);
-
-            $request->validate([
-                'roles' => 'nullable|array',
-                'roles.*' => 'in:' . implode(',', $validRoleValues),
-                'dean_faculties' => [$isDean ? 'required' : 'nullable', 'array'],
-                'dean_faculties.*' => 'exists:departments,department_hemis_id',
-                'responsible_subjects' => [$isSubjectResponsible ? 'required' : 'nullable', 'array'],
-                'responsible_subjects.*' => 'exists:curriculum_subjects,id',
-            ], [
-                'dean_faculties.required' => 'Dekan roli uchun kamida bitta fakultetni tanlash majburiy.',
-                'responsible_subjects.required' => "Fan mas'uli roli uchun kamida bitta fanni tanlash majburiy.",
-            ]);
-
             foreach ($roles as $roleName) {
                 Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
             }
 
             $oldRoles = $teacher->getRoleNames()->toArray();
             $teacher->syncRoles($roles);
-
-            if ($isDean) {
-                $teacher->deanFaculties()->sync($request->input('dean_faculties', []));
-            } else {
-                $teacher->deanFaculties()->detach();
-            }
-
-            if ($isSubjectResponsible) {
-                $teacher->responsibleSubjects()->sync($request->input('responsible_subjects', []));
-            } else {
-                $teacher->responsibleSubjects()->detach();
-            }
-
-            ActivityLogService::log('update', 'teacher', "Xodim rollari yangilandi: {$teacher->full_name}", $teacher, [
-                'roles' => $oldRoles,
-            ], [
-                'roles' => $roles,
-            ]);
-
-            return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Rollar muvaffaqiyatli yangilandi');
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('updateRoles error: ' . $e->getMessage(), [
-                'teacher_id' => $teacher->id,
-                'roles' => $request->input('roles'),
-                'responsible_subjects' => $request->input('responsible_subjects'),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            throw $e;
+            Log::error('updateRoles - syncRoles xatolik: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'Rollarni saqlashda xatolik: ' . $e->getMessage());
         }
+
+        if ($isDean) {
+            try {
+                $teacher->deanFaculties()->sync($request->input('dean_faculties', []));
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - deanFaculties xatolik: ' . $e->getMessage());
+                return redirect()->back()->withInput()->with('error', 'Dekan fakultetlarini saqlashda xatolik: ' . $e->getMessage());
+            }
+        } else {
+            try {
+                $teacher->deanFaculties()->detach();
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - deanFaculties detach xatolik: ' . $e->getMessage());
+            }
+        }
+
+        if ($isSubjectResponsible) {
+            try {
+                $teacher->responsibleSubjects()->sync($request->input('responsible_subjects', []));
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - responsibleSubjects xatolik: ' . $e->getMessage());
+                return redirect()->back()->withInput()->with('error', "Fanlarni saqlashda xatolik: " . $e->getMessage());
+            }
+        } else {
+            try {
+                $teacher->responsibleSubjects()->detach();
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - responsibleSubjects detach xatolik: ' . $e->getMessage());
+            }
+        }
+
+        ActivityLogService::log('update', 'teacher', "Xodim rollari yangilandi: {$teacher->full_name}", $teacher, [
+            'roles' => $oldRoles ?? [],
+        ], [
+            'roles' => $roles,
+        ]);
+
+        return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Rollar muvaffaqiyatli yangilandi');
     }
 
     public function updateContact(Request $request, Teacher $teacher)

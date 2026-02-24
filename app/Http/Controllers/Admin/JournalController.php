@@ -1259,7 +1259,7 @@ class JournalController extends Controller
 
                     $synced++;
 
-                    // student_grades ga NB yozuv yaratish yoki mavjud yozuvni reason='absent' ga yangilash
+                    // student_grades ga NB yozuv yaratish (agar mavjud bo'lmasa)
                     // Jurnal NB ni student_grades.reason='absent' dan o'qiydi
                     $studentHemisId = $item['student']['id'];
                     $student = $studentsMap->get($studentHemisId);
@@ -1274,7 +1274,6 @@ class JournalController extends Controller
                             ->first();
 
                         if (!$existingGrade) {
-                            // Yangi NB yozuv yaratish
                             $deadline = DB::table('deadlines')->where('level_code', $student->level_code)->first();
                             $deadlineDays = $deadline ? $deadline->deadline_days : 7;
 
@@ -1308,24 +1307,6 @@ class JournalController extends Controller
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ]);
-                            $absenceGradesCreated++;
-                        } elseif ($existingGrade->reason !== 'absent') {
-                            // Mavjud yozuv bor lekin reason='absent' emas — NB deb belgilash
-                            // HEMIS baho API yozuv yaratgan, lekin davomat API talaba yo'q deyapti
-                            $updateData = ['reason' => 'absent', 'updated_at' => now()];
-                            // Agar retake holati bo'lmasa, status va grade ni ham yangilash
-                            if ($existingGrade->status !== 'retake') {
-                                $updateData['status'] = 'pending';
-                                $updateData['grade'] = null;
-                                if (!$existingGrade->deadline) {
-                                    $deadline = DB::table('deadlines')->where('level_code', $student->level_code)->first();
-                                    $deadlineDays = $deadline ? $deadline->deadline_days : 7;
-                                    $updateData['deadline'] = $lessonDate->copy()->addDays($deadlineDays)->endOfDay();
-                                }
-                            }
-                            DB::table('student_grades')
-                                ->where('id', $existingGrade->id)
-                                ->update($updateData);
                             $absenceGradesCreated++;
                         }
                     }

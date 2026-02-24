@@ -1112,20 +1112,6 @@ class ImportGrades extends Command
                     'is_final' => $isFinal,
                 ]);
             });
-        } elseif ($existingGrade->reason !== 'absent') {
-            // Mavjud yozuv bor lekin reason='absent' emas — NB deb belgilash
-            // applyGrades() baho yaratgan, lekin davomat API talaba yo'q deyapti
-            $this->retryOnLockTimeout(function () use ($existingGrade, $student, $lessonDate, $isFinal) {
-                $updateData = ['reason' => 'absent', 'updated_at' => now()];
-                if ($existingGrade->status !== 'retake') {
-                    $updateData['status'] = 'pending';
-                    $updateData['grade'] = null;
-                    if (!$existingGrade->deadline) {
-                        $updateData['deadline'] = $this->getDeadline($student->level_code, $lessonDate);
-                    }
-                }
-                $existingGrade->update($updateData);
-            });
         }
     }
 

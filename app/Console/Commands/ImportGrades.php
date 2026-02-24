@@ -278,6 +278,7 @@ class ImportGrades extends Command
 
                     // To'liq import bo'lgan bo'lsa (ko'p yozuv), API dan qayta tortish shart emas
                     if ($finalizedCount >= 500) {
+                        $this->importDayAttendance($dateStr, $date, true);
                         $this->updateDayProgress($dateStr, '✅', "tozalandi ({$cleaned})", $dayNum, $originalTotal);
                         $successDays++;
                         continue;
@@ -289,6 +290,7 @@ class ImportGrades extends Command
                 // ─── Stsenariy B: Faqat is_final=true (journal sync dan) ───
                 // Kam yozuv — to'liq import bo'lmagan, API dan tortish kerak
                 if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500) {
+                    $this->importDayAttendance($dateStr, $date, true);
                     $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv), o'tkazildi.");
                     $this->updateDayProgress($dateStr, '✅', "to'liq ({$finalizedCount})", $dayNum, $originalTotal);
                     $totalDays--;
@@ -323,6 +325,9 @@ class ImportGrades extends Command
                 }
 
                 if (empty($gradeItems)) {
+                    // Baho bo'lmasa ham, davomat (NB) bo'lishi mumkin
+                    $this->importDayAttendance($dateStr, $date, true);
+
                     if (!$hasUnfinalizedForDate && $finalizedCount === 0) {
                         // Bazada yozuv yo'q, API ham 0 — bu kunda dars bo'lmagan
                         $this->info("  {$dateStr} — dars bo'lmagan (API 0, bazada yozuv yo'q).");
@@ -352,19 +357,7 @@ class ImportGrades extends Command
                 if ($reporter) {
                     $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat API...");
                 }
-                $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
-                if ($attendanceItems !== false) {
-                    if ($reporter) {
-                        $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), davomat yozilmoqda...");
-                    }
-                    foreach ($attendanceItems as $item) {
-                        try {
-                            $this->processAttendance($item, true);
-                        } catch (\Throwable $e) {
-                            Log::warning("[FinalImport] Attendance item failed: " . substr($e->getMessage(), 0, 100));
-                        }
-                    }
-                }
+                $this->importDayAttendance($dateStr, $date, true);
 
                 $this->updateDayProgress($dateStr, '✅', count($gradeItems) . " ta baho", $dayNum, $originalTotal);
                 $successDays++;
@@ -989,6 +982,38 @@ class ImportGrades extends Command
             'status' => $status,
             'is_final' => $isFinal,
         ]);
+    }
+
+    // =========================================================================
+    // Kunlik davomat import (barcha stsenariyalarda — A, B, C)
+    // Baholar to'liq yakunlangan bo'lsa ham, yangi NB/davomat kelishi mumkin
+    // =========================================================================
+    private function importDayAttendance(string $dateStr, Carbon $date, bool $isFinal = true): void
+    {
+        $this->updateCurrentDayStatus("davomat API...");
+
+        $from = Carbon::parse($dateStr, 'UTC')->startOfDay()->timestamp;
+        $to = Carbon::parse($dateStr, 'UTC')->endOfDay()->timestamp;
+
+        $attendanceItems = $this->fetchAllPages('attendance-list', $from, $to);
+        if ($attendanceItems === false) {
+            Log::warning("[ImportAttendance] {$dateStr} — API xato, davomat import qilinmadi.");
+            return;
+        }
+
+        $count = 0;
+        foreach ($attendanceItems as $item) {
+            try {
+                $this->processAttendance($item, $isFinal);
+                $count++;
+            } catch (\Throwable $e) {
+                Log::warning("[ImportAttendance] {$dateStr} — item failed: " . substr($e->getMessage(), 0, 100));
+            }
+        }
+
+        if ($count > 0) {
+            $this->info("  {$dateStr} — {$count} ta davomat import qilindi.");
+        }
     }
 
     // =========================================================================

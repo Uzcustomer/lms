@@ -84,6 +84,27 @@
                                 </select>
                             </div>
 
+                            <div class="filter-item" style="flex: 1; min-width: 200px;">
+                                <label class="filter-label" style="color: #ea580c;">
+                                    <span class="fl-dot" style="background:#ea580c;"></span> Fan
+                                </label>
+                                <input type="text" name="subject_name" id="subject_name" value="{{ request('subject_name') }}"
+                                       placeholder="Fan nomini kiriting..."
+                                       style="height: 36px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 10px; font-size: 13px; outline: none; width: 100%;"
+                                       onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                            </div>
+
+                            <div class="filter-item" style="min-width: 130px;">
+                                <label class="filter-label fl-slate">
+                                    <span class="fl-dot" style="background:#94a3b8;"></span> Holati
+                                </label>
+                                <select name="active_filter" id="active_filter" class="select2" style="width: 100%;">
+                                    <option value="active" {{ request('active_filter', 'active') == 'active' ? 'selected' : '' }}>Faol</option>
+                                    <option value="inactive" {{ request('active_filter') == 'inactive' ? 'selected' : '' }}>Nofaol</option>
+                                    <option value="all" {{ request('active_filter') == 'all' ? 'selected' : '' }}>Barchasi</option>
+                                </select>
+                            </div>
+
                             <div class="filter-item" style="min-width: 90px;">
                                 <label class="filter-label fl-slate">
                                     <span class="fl-dot" style="background:#94a3b8;"></span> Sahifada
@@ -104,6 +125,12 @@
                                     </svg>
                                     Qidirish
                                 </button>
+                                <a href="{{ route('admin.ktr.export', request()->query()) }}" class="ktr-export-btn">
+                                    <svg style="width: 16px; height: 16px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    Excel
+                                </a>
                                 <div id="filter-loading" class="hidden" style="display: none; align-items: center; color: #2b5ea7;">
                                     <svg class="animate-spin" style="height: 16px; width: 16px; margin-right: 4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -164,7 +191,7 @@
                                         </th>
                                     @endforeach
                                     @foreach($trainingTypes as $code => $name)
-                                        <th style="text-align: center; min-width: 80px;">{{ $name }}</th>
+                                        <th class="ktr-type-th">{{ $name }}</th>
                                     @endforeach
                                 </tr>
                             </thead>
@@ -186,17 +213,13 @@
                                             }
                                         }
                                     @endphp
-                                    <tr class="journal-row">
+                                    <tr class="journal-row" style="cursor: pointer;" onclick="openKtrPlan({{ $item->id }})">
                                         <td class="td-num">{{ $subjects->firstItem() + $index }}</td>
                                         <td><span class="text-cell text-emerald">{{ $item->faculty_name ?? '-' }}</span></td>
                                         <td><span class="text-cell text-cyan">{{ $item->specialty_name ?? '-' }}</span></td>
                                         <td><span class="badge badge-violet">{{ $item->level_name ?? '-' }}</span></td>
                                         <td><span class="badge badge-teal">{{ $item->semester_name ?? '-' }}</span></td>
-                                        <td>
-                                            <a href="javascript:void(0)" class="ktr-subject-link" onclick="openKtrPlan({{ $item->id }})">
-                                                {{ $item->subject_name ?? '-' }}
-                                            </a>
-                                        </td>
+                                        <td><span class="text-cell text-subject">{{ $item->subject_name ?? '-' }}</span></td>
                                         <td style="text-align: center;"><span class="badge badge-blue">{{ $item->credit ?? '-' }}</span></td>
                                         <td style="text-align: center;"><span class="badge badge-amber">{{ $item->total_acload ?? '-' }}</span></td>
                                         @foreach($trainingTypes as $code => $name)
@@ -434,9 +457,13 @@
                         selectWeekCount(data.plan.week_count, true);
                     }
                 },
-                error: function() {
+                error: function(xhr) {
                     $('#ktr-modal-loading').hide();
-                    alert("Ma'lumotlarni yuklashda xatolik yuz berdi");
+                    var msg = "Ma'lumotlarni yuklashda xatolik yuz berdi";
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        msg += ': ' + xhr.responseJSON.message;
+                    }
+                    alert(msg);
                 }
             });
         }
@@ -601,6 +628,27 @@
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
             transform: translateY(-1px);
         }
+        .ktr-export-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #059669, #047857);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+            text-decoration: none;
+        }
+        .ktr-export-btn:hover {
+            background: linear-gradient(135deg, #047857, #065f46);
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+            transform: translateY(-1px);
+            color: #fff;
+        }
 
         /* Filter container - Journal bilan bir xil */
         .filter-container {
@@ -706,7 +754,7 @@
             vertical-align: middle;
         }
         .journal-row:hover {
-            background: #f8fafc;
+            background: #eff6ff;
         }
         .th-num, .td-num {
             width: 40px;
@@ -760,18 +808,14 @@
             height: 34px !important;
         }
 
-        /* Subject link in table */
-        .ktr-subject-link {
-            color: #1d4ed8;
-            font-weight: 500;
-            font-size: 13px;
-            text-decoration: none;
-            cursor: pointer;
-            transition: color 0.15s;
-        }
-        .ktr-subject-link:hover {
-            color: #2563eb;
-            text-decoration: underline;
+        /* Training type column headers */
+        .ktr-type-th {
+            text-align: center;
+            min-width: 60px;
+            max-width: 80px;
+            white-space: normal !important;
+            line-height: 1.3;
+            padding: 8px 4px !important;
         }
 
         /* Modal overlay */

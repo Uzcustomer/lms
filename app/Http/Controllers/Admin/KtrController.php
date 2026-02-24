@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\KtrPlan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class KtrController extends Controller
 {
@@ -44,8 +45,7 @@ class KtrController extends Controller
                         ->on('s.code', '=', 'cs.semester_code');
                 })
                 ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
-                ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
-                ->where('cs.is_active', true);
+                ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id');
         };
 
         // Natija query
@@ -85,6 +85,18 @@ class KtrController extends Controller
 
         if ($request->filled('semester_code')) {
             $query->where('cs.semester_code', $request->semester_code);
+        }
+
+        if ($request->filled('subject_name')) {
+            $query->where('cs.subject_name', 'like', '%' . $request->subject_name . '%');
+        }
+
+        // Faol/nofaol fanlar filtri (default: faol)
+        $activeFilter = $request->get('active_filter', 'active');
+        if ($activeFilter === 'active') {
+            $query->where('cs.is_active', true);
+        } elseif ($activeFilter === 'inactive') {
+            $query->where('cs.is_active', false);
         }
 
         // Joriy semestr (default ON)
@@ -246,6 +258,184 @@ class KtrController extends Controller
     }
 
     /**
+     * Fanlar ro'yxatini qaytaradi (filter uchun)
+     */
+    public function getSubjects(Request $request)
+    {
+        $query = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->where('cs.is_active', true)
+            ->whereNotNull('cs.subject_name');
+
+        if ($request->filled('education_type')) {
+            $query->where('c.education_type_code', $request->education_type);
+        }
+        if ($request->get('current_semester', '1') == '1') {
+            $query->where('s.current', true);
+        }
+
+        $subjects = $query
+            ->select('cs.subject_name')
+            ->groupBy('cs.subject_name')
+            ->orderBy('cs.subject_name')
+            ->get();
+
+        $result = [];
+        foreach ($subjects as $s) {
+            $result[$s->subject_name] = $s->subject_name;
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * Excelga export
+     */
+    public function export(Request $request)
+    {
+        $query = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
+            ->select([
+                'f.name as faculty_name',
+                'sp.name as specialty_name',
+                's.level_name',
+                'cs.semester_name',
+                'cs.subject_name',
+                'cs.credit',
+                'cs.total_acload',
+                'cs.subject_details',
+            ]);
+
+        if ($request->filled('education_type')) {
+            $query->where('c.education_type_code', $request->education_type);
+        }
+        if ($request->filled('faculty')) {
+            $query->where('f.id', $request->faculty);
+        }
+        if ($request->filled('specialty')) {
+            $query->where('sp.specialty_hemis_id', $request->specialty);
+        }
+        if ($request->filled('level_code')) {
+            $query->where('s.level_code', $request->level_code);
+        }
+        if ($request->filled('semester_code')) {
+            $query->where('cs.semester_code', $request->semester_code);
+        }
+        if ($request->filled('subject_name')) {
+            $query->where('cs.subject_name', 'like', '%' . $request->subject_name . '%');
+        }
+
+        $activeFilter = $request->get('active_filter', 'active');
+        if ($activeFilter === 'active') {
+            $query->where('cs.is_active', true);
+        } elseif ($activeFilter === 'inactive') {
+            $query->where('cs.is_active', false);
+        }
+
+        if ($request->get('current_semester', '1') == '1') {
+            $query->where('s.current', true);
+        }
+
+        $query->orderBy('f.name')->orderBy('cs.subject_name');
+        $items = $query->get();
+
+        // Barcha training type larni yig'ish
+        $allTypes = [];
+        foreach ($items as $item) {
+            $details = is_string($item->subject_details) ? json_decode($item->subject_details, true) : $item->subject_details;
+            if (is_array($details)) {
+                foreach ($details as $d) {
+                    $code = (string) ($d['trainingType']['code'] ?? '');
+                    $name = $d['trainingType']['name'] ?? '';
+                    if ($code !== '' && $name !== '') {
+                        $allTypes[$code] = $name;
+                    }
+                }
+            }
+        }
+
+        // Tartibda saralash
+        $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar', 'mustaqil'];
+        $normalize = function ($str) {
+            return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower($str));
+        };
+        uksort($allTypes, function ($a, $b) use ($allTypes, $typeOrder, $normalize) {
+            $nameA = $normalize($allTypes[$a]);
+            $nameB = $normalize($allTypes[$b]);
+            $posA = count($typeOrder);
+            $posB = count($typeOrder);
+            foreach ($typeOrder as $i => $kw) {
+                if ($posA === count($typeOrder) && str_contains($nameA, $kw)) $posA = $i;
+                if ($posB === count($typeOrder) && str_contains($nameB, $kw)) $posB = $i;
+            }
+            return $posA <=> $posB;
+        });
+
+        $typeCodes = array_keys($allTypes);
+
+        // CSV yaratish
+        $filename = 'KTR_' . date('Y-m-d_H-i') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ];
+
+        $callback = function () use ($items, $allTypes, $typeCodes) {
+            $file = fopen('php://output', 'w');
+            fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM for UTF-8
+
+            // Header
+            $header = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Kredit', 'Jami yuklama'];
+            foreach ($allTypes as $name) {
+                $header[] = $name;
+            }
+            fputcsv($file, $header, ';');
+
+            // Data
+            $i = 1;
+            foreach ($items as $item) {
+                $details = is_string($item->subject_details) ? json_decode($item->subject_details, true) : $item->subject_details;
+                $loadMap = [];
+                if (is_array($details)) {
+                    foreach ($details as $d) {
+                        $tCode = (string) ($d['trainingType']['code'] ?? '');
+                        $hours = (int) ($d['academic_load'] ?? 0);
+                        if ($tCode !== '') $loadMap[$tCode] = $hours;
+                    }
+                }
+
+                $row = [
+                    $i++,
+                    $item->faculty_name ?? '-',
+                    $item->specialty_name ?? '-',
+                    $item->level_name ?? '-',
+                    $item->semester_name ?? '-',
+                    $item->subject_name ?? '-',
+                    $item->credit ?? '-',
+                    $item->total_acload ?? '-',
+                ];
+                foreach ($typeCodes as $code) {
+                    $row[] = isset($loadMap[$code]) && $loadMap[$code] > 0 ? $loadMap[$code] : '-';
+                }
+                fputcsv($file, $row, ';');
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
      * Fan uchun KTR rejasini olish
      */
     public function getPlan($curriculumSubjectId)
@@ -286,7 +476,10 @@ class KtrController extends Controller
             return $posA <=> $posB;
         });
 
-        $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
+        $plan = null;
+        if (Schema::hasTable('ktr_plans')) {
+            $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
+        }
 
         return response()->json([
             'subject_name' => $cs->subject_name,
@@ -324,6 +517,18 @@ class KtrController extends Controller
                 'success' => false,
                 'message' => "Jami soatlar mos kelmadi! Kiritilgan: {$totalEntered}, Jami yuklama: " . (int) $cs->total_acload,
             ], 422);
+        }
+
+        if (!Schema::hasTable('ktr_plans')) {
+            Schema::create('ktr_plans', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('curriculum_subject_id');
+                $table->unsignedSmallInteger('week_count');
+                $table->json('plan_data');
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+                $table->unique('curriculum_subject_id');
+            });
         }
 
         KtrPlan::updateOrCreate(

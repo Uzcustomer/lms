@@ -67,7 +67,11 @@ class TeacherController extends Controller
 
     public function show(Teacher $teacher)
     {
-        $teacher->load('responsibleSubjects');
+        try {
+            $teacher->load('responsibleSubjects');
+        } catch (\Exception $e) {
+            // teacher_responsible_subjects jadvali mavjud bo'lmasa
+        }
         $departments = Department::where('structure_type_code', '11')
             ->where('active', true)
             ->orderBy('name')

@@ -251,8 +251,8 @@ class TeacherController extends Controller
                     $q->where('level_code', $levelCode);
                 });
             })
-            ->selectRaw('MIN(id) as id, subject_name, subject_code, MIN(semester_name) as semester_name, MIN(department_name) as department_name')
-            ->groupBy('subject_name', 'subject_code')
+            ->selectRaw('MIN(id) as id, subject_name, subject_code, semester_code, semester_name, MIN(department_name) as department_name')
+            ->groupBy('subject_name', 'subject_code', 'semester_code', 'semester_name')
             ->orderBy('subject_name')
             ->limit(50)
             ->get();

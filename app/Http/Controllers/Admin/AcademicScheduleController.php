@@ -189,6 +189,19 @@ class AcademicScheduleController extends Controller
             ->select('group_id', DB::raw('COUNT(*) as cnt'))
             ->pluck('cnt', 'group_id');
 
+        // YN yuborilgan holati (o'qituvchi YN ga yuborish tugmasini bosganmi)
+        $subjectIds = $transformedData->pluck('subject')->pluck('subject_id')->unique()->toArray();
+        $ynSubmissions = [];
+        if (!empty($groupHemisIds) && !empty($subjectIds)) {
+            $ynSubmissionRows = DB::table('yn_submissions')
+                ->whereIn('group_hemis_id', $groupHemisIds)
+                ->whereIn('subject_id', $subjectIds)
+                ->get();
+            foreach ($ynSubmissionRows as $row) {
+                $ynSubmissions[$row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code] = $row->submitted_at;
+            }
+        }
+
         // Quiz natijalarini hisoblash (guruh + fan + yn_turi bo'yicha nechta talaba topshirgan)
         $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
@@ -223,10 +236,12 @@ class AcademicScheduleController extends Controller
         }
 
         // Ma'lumotlarga qo'shish
-        $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts) {
+        $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts, $ynSubmissions) {
             $item['student_count'] = $studentCounts[$item['group']->group_hemis_id] ?? 0;
             $quizKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['yn_type'] ?? '');
             $item['quiz_count'] = $quizCounts[$quizKey] ?? 0;
+            $ynKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['subject']->semester_code ?? '');
+            $item['yn_submitted'] = isset($ynSubmissions[$ynKey]);
             return $item;
         });
 

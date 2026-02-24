@@ -122,6 +122,7 @@
                                     <th class="sortable" data-col="9" style="width:100px;text-align:center;">YN turi <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="10" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
+                                    <th class="sortable" data-col="12" style="width:120px;text-align:center;">YN yuborilgan <span class="sort-icon"></span></th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
@@ -141,6 +142,13 @@
                                             <option value="green" data-color="#16a34a">Yashil</option>
                                             <option value="yellow" data-color="#d97706">Sariq</option>
                                             <option value="red" data-color="#dc2626">Qizil</option>
+                                        </select>
+                                    </th>
+                                    <th>
+                                        <select class="col-filter color-filter" data-col="12" data-filter-type="color">
+                                            <option value="">Barchasi</option>
+                                            <option value="green" data-color="#16a34a">Yuborilgan</option>
+                                            <option value="red" data-color="#dc2626">Yuborilmagan</option>
                                         </select>
                                     </th>
                                 </tr>
@@ -195,6 +203,13 @@
                                             @endphp
                                             <td class="td-quiz-count" data-sort-value="{{ $qc }}" data-color="{{ $qcColor }}" style="text-align:center;">
                                                 <span class="{{ $qcClass }}">{{ $qc }}/{{ $sc }}</span>
+                                            </td>
+                                            <td data-sort-value="{{ ($item['yn_submitted'] ?? false) ? 'Yuborilgan' : 'Yuborilmagan' }}" data-color="{{ ($item['yn_submitted'] ?? false) ? 'green' : 'red' }}" style="text-align:center;">
+                                                @if($item['yn_submitted'] ?? false)
+                                                    <span class="yn-submitted-yes">Yuborilgan</span>
+                                                @else
+                                                    <span class="yn-submitted-no">Yuborilmagan</span>
+                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach
@@ -768,6 +783,9 @@
         .quiz-count-zero { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
         .quiz-count-partial { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
         .quiz-count-full { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+        .yn-submitted-yes { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+        .yn-submitted-no { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 
         .color-filter option[value="green"] { color: #16a34a; font-weight: 600; }
         .color-filter option[value="yellow"] { color: #d97706; font-weight: 600; }

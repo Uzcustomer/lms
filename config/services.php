@@ -39,6 +39,13 @@ return [
         'token' => env('HEMIS_API_TOKEN'),
     ],
 
+    'hemis_oauth' => [
+        'base_url' => env('HEMIS_OAUTH_BASE_URL', 'https://my.hemis.uz'),
+        'client_id' => env('HEMIS_OAUTH_CLIENT_ID'),
+        'client_secret' => env('HEMIS_OAUTH_CLIENT_SECRET'),
+        'redirect_uri' => env('HEMIS_OAUTH_REDIRECT_URI'),
+    ],
+
     'telegram' => [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),

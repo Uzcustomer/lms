@@ -14,6 +14,7 @@ use App\Http\Controllers\QaytnomaController;
 use App\Http\Controllers\AbsenceReportController;
 use App\Http\Controllers\VedomostController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Student\HemisOAuthController;
 use App\Http\Controllers\Student\StudentAuthController;
 use App\Http\Controllers\Student\StudentController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -476,6 +477,10 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+// HEMIS OAuth routes
+Route::get('/auth/hemis/redirect', [HemisOAuthController::class, 'redirect'])->name('auth.hemis.redirect');
+Route::get('/auth/oauth-callback', [HemisOAuthController::class, 'callback'])->name('auth.hemis.callback');
 
 Route::prefix('student')->name('student.')->group(function () {
 

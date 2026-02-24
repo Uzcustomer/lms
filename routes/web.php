@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\StudentController as AdminStudentController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
+use App\Http\Controllers\Teacher\TeacherHemisOAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
@@ -478,9 +479,13 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-// HEMIS OAuth routes
+// HEMIS OAuth routes (talabalar — student.ttatf.uz)
 Route::get('/auth/hemis/redirect', [HemisOAuthController::class, 'redirect'])->name('auth.hemis.redirect');
 Route::get('/auth/oauth-callback', [HemisOAuthController::class, 'callback'])->name('auth.hemis.callback');
+
+// HEMIS OAuth routes (xodimlar — hemis.ttatf.uz)
+Route::get('/auth/hemis-teacher/redirect', [TeacherHemisOAuthController::class, 'redirect'])->name('auth.hemis_teacher.redirect');
+Route::get('/auth/teacher-oauth-callback', [TeacherHemisOAuthController::class, 'callback'])->name('auth.hemis_teacher.callback');
 
 Route::prefix('student')->name('student.')->group(function () {
 

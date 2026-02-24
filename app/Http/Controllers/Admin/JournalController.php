@@ -1320,7 +1320,7 @@ class JournalController extends Controller
                                 'reason' => 'absent',
                                 'deadline' => $lessonDate->copy()->addDays($deadlineDays)->endOfDay(),
                                 'status' => 'pending',
-                                'is_final' => true,
+                                'is_final' => !$lessonDate->isToday(),
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ]);
@@ -1525,7 +1525,7 @@ class JournalController extends Controller
                         'reason' => $reason,
                         'deadline' => $deadline,
                         'status' => $status,
-                        'is_final' => true,
+                        'is_final' => !$lessonDate->isToday(),
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);

@@ -1117,11 +1117,10 @@ class JournalController extends Controller
             if ($studentResult['deactivated'] > 0) {
                 $message .= " {$studentResult['deactivated']} ta talaba chetlashgan deb belgilandi.";
             }
-            if ($attendanceResult['synced'] > 0) {
-                $message .= " Davomat: {$attendanceResult['synced']} ta yangilandi.";
-            }
-            if (($attendanceResult['absence_grades_created'] ?? 0) > 0) {
-                $message .= " NB: {$attendanceResult['absence_grades_created']} ta yangi NB yozildi.";
+            $totalItems = $attendanceResult['total_api_items'] ?? 0;
+            $nbCreated = $attendanceResult['absence_grades_created'] ?? 0;
+            if ($attendanceResult['synced'] > 0 || $totalItems > 0) {
+                $message .= " Davomat: API={$totalItems}, NB={$attendanceResult['synced']}, yangi_NB={$nbCreated}.";
             }
             if ($attendanceResult['retake_recalculated'] > 0) {
                 $message .= " {$attendanceResult['retake_recalculated']} ta otrabotka bahosi qayta hisoblandi.";
@@ -1166,6 +1165,7 @@ class JournalController extends Controller
         $synced = 0;
         $retakeRecalculated = 0;
         $absenceGradesCreated = 0;
+        $totalApiItems = 0;
 
         // Talabalar map (hemis_id → student row) — NB uchun student_grades yaratishda kerak
         $studentsMap = DB::table('students')
@@ -1201,6 +1201,8 @@ class JournalController extends Controller
                 $data = $response->json('data', []);
                 $items = $data['items'] ?? [];
                 $pages = $data['pagination']['pageCount'] ?? 1;
+
+                $totalApiItems += count($items);
 
                 foreach ($items as $item) {
                     if (($item['absent_off'] ?? 0) <= 0 && ($item['absent_on'] ?? 0) <= 0) {
@@ -1337,7 +1339,12 @@ class JournalController extends Controller
             ]);
         }
 
-        return ['synced' => $synced, 'retake_recalculated' => $retakeRecalculated, 'absence_grades_created' => $absenceGradesCreated];
+        return [
+            'synced' => $synced,
+            'retake_recalculated' => $retakeRecalculated,
+            'absence_grades_created' => $absenceGradesCreated,
+            'total_api_items' => $totalApiItems,
+        ];
     }
 
     /**

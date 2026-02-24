@@ -445,6 +445,16 @@
             return /mustaqil/i.test(name.replace(/[^a-zA-Z\u0400-\u04FF]/g, ''));
         }
 
+        // Mashg'ulot turi tartibini aniqlash (Ma'ruza, Amaliy, Laboratoriya, ...)
+        var ktrTypeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar'];
+        function getTypePosition(name) {
+            var normalized = name.replace(/[^a-zA-Z\u0400-\u04FF]/g, '').toLowerCase();
+            for (var i = 0; i < ktrTypeOrder.length; i++) {
+                if (normalized.indexOf(ktrTypeOrder[i]) > -1) return i;
+            }
+            return ktrTypeOrder.length;
+        }
+
         function openKtrPlan(csId) {
             ktrState.csId = csId;
             $('#ktr-modal-overlay').fadeIn(200);
@@ -463,10 +473,14 @@
                     ktrState.totalLoad = data.total_acload;
                     ktrState.trainingTypes = data.training_types;
 
-                    // Mustaqil ta'limni chiqarib tashlash
-                    ktrState.filteredCodes = Object.keys(data.training_types).filter(function(code) {
-                        return !isMustaqil(data.training_types[code].name);
-                    });
+                    // Mustaqil ta'limni chiqarib tashlash va to'g'ri tartibda saralash
+                    ktrState.filteredCodes = Object.keys(data.training_types)
+                        .filter(function(code) {
+                            return !isMustaqil(data.training_types[code].name);
+                        })
+                        .sort(function(a, b) {
+                            return getTypePosition(data.training_types[a].name) - getTypePosition(data.training_types[b].name);
+                        });
 
                     ktrState.savedHours = {};
                     ktrState.savedTopics = {};

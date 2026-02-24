@@ -216,6 +216,9 @@
                 </div>
             @endif
 
+            {{-- Formalar konteyneri — tab almashtirganda bounce bo'lmasligi uchun --}}
+            <div style="min-height: 320px;">
+
             {{-- Student forma --}}
             <form x-show="tab === 'student'" method="POST" action="{{ route('student.login.post') }}">
                 @csrf
@@ -343,6 +346,8 @@
                     </button>
                 </form>
             </template>
+
+            </div>{{-- /formalar konteyneri --}}
         </div>
 
         {{-- Pastki izoh --}}

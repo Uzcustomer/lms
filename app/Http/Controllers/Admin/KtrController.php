@@ -127,7 +127,24 @@ class KtrController extends Controller
                 }
             }
         }
-        ksort($trainingTypes);
+        // Mashg'ulot turlarini belgilangan tartibda saralash
+        $typeOrder = [
+            "Ma'ruza", "Amaliy", "Laboratoriya", "Labaratoriya",
+            "Klinik mashg'ulot", "Seminar", "Mustaqil ta'lim",
+        ];
+        uksort($trainingTypes, function ($a, $b) use ($trainingTypes, $typeOrder) {
+            $nameA = mb_strtolower($trainingTypes[$a]);
+            $nameB = mb_strtolower($trainingTypes[$b]);
+            $posA = count($typeOrder);
+            $posB = count($typeOrder);
+            foreach ($typeOrder as $i => $typeName) {
+                if (mb_strtolower($typeName) === $nameA) { $posA = $i; break; }
+            }
+            foreach ($typeOrder as $i => $typeName) {
+                if (mb_strtolower($typeName) === $nameB) { $posB = $i; break; }
+            }
+            return $posA <=> $posB;
+        });
 
         return view('admin.ktr.index', compact(
             'subjects',

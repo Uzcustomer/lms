@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\KtrPlan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class KtrController extends Controller
 {
@@ -286,7 +287,10 @@ class KtrController extends Controller
             return $posA <=> $posB;
         });
 
-        $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
+        $plan = null;
+        if (Schema::hasTable('ktr_plans')) {
+            $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
+        }
 
         return response()->json([
             'subject_name' => $cs->subject_name,
@@ -324,6 +328,18 @@ class KtrController extends Controller
                 'success' => false,
                 'message' => "Jami soatlar mos kelmadi! Kiritilgan: {$totalEntered}, Jami yuklama: " . (int) $cs->total_acload,
             ], 422);
+        }
+
+        if (!Schema::hasTable('ktr_plans')) {
+            Schema::create('ktr_plans', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('curriculum_subject_id');
+                $table->unsignedSmallInteger('week_count');
+                $table->json('plan_data');
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+                $table->unique('curriculum_subject_id');
+            });
         }
 
         KtrPlan::updateOrCreate(

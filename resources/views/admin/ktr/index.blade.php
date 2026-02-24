@@ -434,9 +434,13 @@
                         selectWeekCount(data.plan.week_count, true);
                     }
                 },
-                error: function() {
+                error: function(xhr) {
                     $('#ktr-modal-loading').hide();
-                    alert("Ma'lumotlarni yuklashda xatolik yuz berdi");
+                    var msg = "Ma'lumotlarni yuklashda xatolik yuz berdi";
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        msg += ': ' + xhr.responseJSON.message;
+                    }
+                    alert(msg);
                 }
             });
         }

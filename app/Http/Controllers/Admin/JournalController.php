@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Models\MarkingSystemScore;
 use App\Models\YnConsent;
+use App\Models\YnStudentGrade;
 use App\Models\YnSubmission;
 
 class JournalController extends Controller
@@ -3937,16 +3938,198 @@ class JournalController extends Controller
             ], 403);
         }
 
+        // --- JN/MT hisoblash (jurnal logikasi bilan bir xil) ---
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
+        // Jadvaldan (schedule) dars sanalarini olish
+        $jbScheduleRows = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotIn('training_type_code', $excludedTrainingCodes)
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date', 'lesson_pair_code')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
+        $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
+            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+
+        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+
+        $jbPairsPerDay = [];
+        foreach ($jbColumns as $col) {
+            $jbPairsPerDay[$col['date']] = ($jbPairsPerDay[$col['date']] ?? 0) + 1;
+        }
+
+        $jbDatePairSet = [];
+        foreach ($jbColumns as $col) {
+            $jbDatePairSet[$col['date'] . '_' . $col['pair']] = true;
+        }
+
+        $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+        $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
+            return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
+        }));
+        $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
+        $totalJbDaysForAverage = count($jbLessonDatesForAverage);
+
+        // MT jadval sanalarini olish
+        $mtScheduleRows = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->where('training_type_code', 99)
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date', 'lesson_pair_code')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
+        $mtColumns = $mtScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
+            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+
+        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+
+        $mtPairsPerDay = [];
+        foreach ($mtColumns as $col) {
+            $mtPairsPerDay[$col['date']] = ($mtPairsPerDay[$col['date']] ?? 0) + 1;
+        }
+
+        $mtDatePairSet = [];
+        foreach ($mtColumns as $col) {
+            $mtDatePairSet[$col['date'] . '_' . $col['pair']] = true;
+        }
+
+        $totalMtDays = count($mtLessonDates);
+
+        // Baholarni olish
+        $allGradesRaw = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotIn('training_type_code', [100, 101, 102, 103])
+            ->whereNotNull('lesson_date')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
+        // Baho filtrlash (jurnal logikasi bilan bir xil)
+        $getEffectiveGrade = function ($row) {
+            if ($row->status === 'pending') return null;
+            if ($row->reason === 'absent' && $row->grade === null) {
+                return $row->retake_grade !== null ? $row->retake_grade : null;
+            }
+            if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+                return null;
+            }
+            if ($row->status === 'recorded') return $row->grade;
+            if ($row->status === 'closed') return $row->grade;
+            if ($row->retake_grade !== null) return $row->retake_grade;
+            return null;
+        };
+
+        // JB baholarni tuzish
+        $jbGrades = [];
+        $mtGrades = [];
+        foreach ($allGradesRaw as $g) {
+            $effectiveGrade = $getEffectiveGrade($g);
+            if ($effectiveGrade === null) continue;
+            $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+            $key = $normalizedDate . '_' . $g->lesson_pair_code;
+            if (isset($jbDatePairSet[$key])) {
+                $jbGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effectiveGrade;
+            }
+            if (isset($mtDatePairSet[$key])) {
+                $mtGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effectiveGrade;
+            }
+        }
+
+        // Manual MT baholarini olish
+        $manualMtGrades = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNull('lesson_date')
+            ->whereNotNull('grade')
+            ->select('student_hemis_id', 'grade')
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        // Har bir talaba uchun JN va MT hisoblash
+        $studentGradeSnapshots = [];
+        foreach ($studentHemisIds as $hemisId) {
+            // JN hisoblash
+            $dailySum = 0;
+            $studentDayGrades = $jbGrades[$hemisId] ?? [];
+            foreach ($jbLessonDates as $date) {
+                $dayGrades = $studentDayGrades[$date] ?? [];
+                $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                $gradeSum = array_sum($dayGrades);
+                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                    $dailySum += $dayAverage;
+                }
+            }
+            $jn = $totalJbDaysForAverage > 0
+                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                : 0;
+
+            // MT hisoblash
+            $mtDailySum = 0;
+            $studentMtGrades = $mtGrades[$hemisId] ?? [];
+            foreach ($mtLessonDates as $date) {
+                $dayGrades = $studentMtGrades[$date] ?? [];
+                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                $gradeSum = array_sum($dayGrades);
+                $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+            }
+            $mt = $totalMtDays > 0
+                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                : 0;
+
+            // Manual MT override
+            if (isset($manualMtGrades[$hemisId])) {
+                $mt = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+            }
+
+            $studentGradeSnapshots[$hemisId] = ['jn' => $jn, 'mt' => $mt];
+        }
+
         DB::beginTransaction();
         try {
             // YN submission yozuvini yaratish
-            YnSubmission::create([
+            $ynSubmission = YnSubmission::create([
                 'subject_id' => $subjectId,
                 'semester_code' => $semesterCode,
                 'group_hemis_id' => $groupHemisId,
                 'submitted_by' => $submittedByUserId,
                 'submitted_at' => now(),
             ]);
+
+            // Har bir talaba uchun JN/MT snapshot saqlash
+            $insertData = [];
+            $now = now();
+            foreach ($studentGradeSnapshots as $hemisId => $grades) {
+                $insertData[] = [
+                    'yn_submission_id' => $ynSubmission->id,
+                    'student_hemis_id' => $hemisId,
+                    'jn' => $grades['jn'],
+                    'mt' => $grades['mt'],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+            if (!empty($insertData)) {
+                YnStudentGrade::insert($insertData);
+            }
 
             // Barcha tegishli student_grades yozuvlarini qulflash (JN va MT)
             DB::table('student_grades')

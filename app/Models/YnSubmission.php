@@ -28,4 +28,9 @@ class YnSubmission extends Model
     {
         return $this->belongsTo(User::class, 'submitted_by');
     }
+
+    public function studentGrades()
+    {
+        return $this->hasMany(YnStudentGrade::class);
+    }
 }

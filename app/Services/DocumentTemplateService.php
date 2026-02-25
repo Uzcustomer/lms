@@ -264,14 +264,19 @@ class DocumentTemplateService
      */
     private function findSoffice(): ?string
     {
-        $paths = ['soffice', '/usr/bin/soffice', '/usr/local/bin/soffice', '/usr/bin/libreoffice'];
+        // To'liq yo'llarni bevosita tekshirish (which PHP muhitida ishlamasligi mumkin)
+        $absolutePaths = ['/usr/bin/soffice', '/usr/local/bin/soffice', '/usr/bin/libreoffice', '/usr/lib/libreoffice/program/soffice'];
 
-        foreach ($paths as $path) {
-            exec('which ' . escapeshellarg($path) . ' 2>/dev/null', $output, $returnCode);
-            if ($returnCode === 0) {
+        foreach ($absolutePaths as $path) {
+            if (file_exists($path) && is_executable($path)) {
                 return $path;
             }
-            $output = [];
+        }
+
+        // which orqali qidirish (fallback)
+        exec('which soffice 2>/dev/null', $output, $returnCode);
+        if ($returnCode === 0 && !empty($output[0])) {
+            return trim($output[0]);
         }
 
         return null;

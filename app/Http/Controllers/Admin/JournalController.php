@@ -24,6 +24,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Models\MarkingSystemScore;
+use App\Models\AbsenceExcuse;
+use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnConsent;
 use App\Models\YnStudentGrade;
 use App\Models\YnSubmission;
@@ -1033,6 +1035,29 @@ class JournalController extends Controller
             }
         }
 
+        // Sababli: tasdiqlangan sababli hujjatlarni olish (YN yuborilgandan keyin)
+        $approvedExcuses = collect();
+        $excuseGradeSnapshots = collect();
+        if ($ynSubmission) {
+            $approvedExcuses = AbsenceExcuse::where('status', 'approved')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->whereHas('makeups', function ($q) use ($subjectId) {
+                    $q->where('subject_id', $subjectId)
+                        ->whereIn('assessment_type', ['jn', 'mt']);
+                })
+                ->with(['makeups' => function ($q) use ($subjectId) {
+                    $q->where('subject_id', $subjectId);
+                }])
+                ->get()
+                ->keyBy('student_hemis_id');
+
+            // Avval kiritilgan sababli baholarni olish
+            $excuseGradeSnapshots = YnStudentGrade::where('yn_submission_id', $ynSubmission->id)
+                ->where('source', 'like', 'absence_excuse:%')
+                ->get()
+                ->keyBy('student_hemis_id');
+        }
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
@@ -1087,7 +1112,9 @@ class JournalController extends Controller
             'ynConsents',
             'ynSubmission',
             'canSubmitYn',
-            'levelDeadline'
+            'levelDeadline',
+            'approvedExcuses',
+            'excuseGradeSnapshots'
         ));
     }
 

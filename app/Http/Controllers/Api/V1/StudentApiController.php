@@ -460,7 +460,18 @@ class StudentApiController extends Controller
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->whereIn('training_type_code', [100, 101, 102, 103])
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
+                                    $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
+                                }));
+                        });
+                }))
+                ->when($subjectEducationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
+                    $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
+                }))
                 ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
                 ->get();
 

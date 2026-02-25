@@ -302,7 +302,8 @@ class ImportGrades extends Command
 
                     // Oxirgi 3 kun DOIM API dan tortiladi (to'liq ishonch uchun)
                     // Eski kunlar (4+ kun) uchun — yetarli yozuv bo'lsa skip
-                    $daysAgo = Carbon::today()->diffInDays($date);
+                    // Carbon 3: diffInDays() manfiy qaytaradi, shuning uchun abs()
+                    $daysAgo = abs(Carbon::today()->diffInDays($date));
                     if ($finalizedCount >= 500 && $daysAgo >= 3) {
                         $this->importDayAttendance($dateStr, $date, true);
                         $this->updateDayProgress($dateStr, '✅', "tozalandi ({$cleaned})", $dayNum, $originalTotal);
@@ -316,7 +317,8 @@ class ImportGrades extends Command
                 // ─── Stsenariy B: Faqat is_final=true mavjud ───
                 // Oxirgi 3 kun DOIM API dan qayta tortiladi (race condition yoki API xato bo'lgan bo'lishi mumkin)
                 // Eski kunlar (4+ kun) — yetarli yozuv bo'lsa skip
-                $daysAgo = Carbon::today()->diffInDays($date);
+                // Carbon 3: diffInDays() manfiy qaytaradi, shuning uchun abs()
+                $daysAgo = abs(Carbon::today()->diffInDays($date));
                 if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500 && $daysAgo >= 3) {
                     $this->importDayAttendance($dateStr, $date, true);
                     $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv, {$daysAgo} kun oldin), o'tkazildi.");
@@ -504,7 +506,7 @@ class ImportGrades extends Command
         }
 
         $period = CarbonPeriod::create($startDate, $endDate);
-        $totalDays = $startDate->diffInDays($endDate) + 1;
+        $totalDays = abs($startDate->diffInDays($endDate)) + 1;
 
         $this->info("BACKFILL: {$startDate->toDateString()} → {$endDate->toDateString()} ({$totalDays} kun)");
         Log::info("[Backfill] Starting from {$startDate->toDateString()} to {$endDate->toDateString()}");

@@ -8,38 +8,38 @@
     @push('styles')
     <style>
         /* ======= RANGE CALENDAR ======= */
-        .rc-calendar { user-select: none; width: 100%; }
+        .rc-calendar { user-select: none; max-width: 480px; }
         .rc-header {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 14px 20px; background: linear-gradient(135deg, #4f46e5, #6366f1);
-            border-radius: 16px 16px 0 0;
+            padding: 10px 16px; background: linear-gradient(135deg, #4f46e5, #6366f1);
+            border-radius: 12px 12px 0 0;
         }
-        .rc-header-title { color: #fff; font-weight: 700; font-size: 20px; letter-spacing: 0.3px; }
+        .rc-header-title { color: #fff; font-weight: 700; font-size: 15px; letter-spacing: 0.3px; }
         .rc-nav {
-            width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
-            background: rgba(255,255,255,0.15); border-radius: 10px; cursor: pointer;
+            width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.15); border-radius: 8px; cursor: pointer;
             color: #fff; transition: all .15s; border: none;
         }
         .rc-nav:hover { background: rgba(255,255,255,0.3); }
         .rc-nav:disabled { opacity: .3; cursor: not-allowed; }
         .rc-weekdays {
             display: grid; grid-template-columns: repeat(7, 1fr);
-            background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 10px 12px 8px;
+            background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 6px 8px 5px;
         }
         .rc-weekdays span {
-            text-align: center; font-size: 14px; font-weight: 700;
+            text-align: center; font-size: 11px; font-weight: 700;
             color: #64748b; text-transform: uppercase;
         }
         .rc-weekdays span:last-child { color: #ef4444; }
         .rc-grid {
             display: grid; grid-template-columns: repeat(7, 1fr);
-            gap: 3px; padding: 10px 12px 14px;
+            gap: 2px; padding: 6px 8px 8px;
         }
         .rc-day {
             display: flex; align-items: center; justify-content: center;
-            aspect-ratio: 1; font-size: 18px; font-weight: 600; color: #334155;
-            border-radius: 10px; cursor: pointer; transition: all .12s; position: relative;
-            border: none; background: transparent; min-height: 44px;
+            aspect-ratio: 1; font-size: 13px; font-weight: 600; color: #334155;
+            border-radius: 8px; cursor: pointer; transition: all .12s; position: relative;
+            border: none; background: transparent; min-height: 32px;
         }
         .rc-day:hover:not(.rc-disabled):not(.rc-empty) { background: #eef2ff; }
         .rc-day.rc-empty { cursor: default; }
@@ -52,13 +52,13 @@
         }
         .rc-day.rc-start {
             background: #4f46e5; color: #fff !important; font-weight: 700;
-            border-radius: 10px 4px 4px 10px;
+            border-radius: 8px 3px 3px 8px;
         }
         .rc-day.rc-end {
             background: #4f46e5; color: #fff !important; font-weight: 700;
-            border-radius: 4px 10px 10px 4px;
+            border-radius: 3px 8px 8px 3px;
         }
-        .rc-day.rc-start.rc-end { border-radius: 10px; }
+        .rc-day.rc-start.rc-end { border-radius: 8px; }
         .rc-day.rc-in-range { background: #e0e7ff; color: #3730a3; border-radius: 3px; }
         .rc-day.rc-start.rc-today, .rc-day.rc-end.rc-today { box-shadow: none; }
         /* Max limit ko'rsatish */
@@ -167,12 +167,13 @@
         @media (max-width: 640px) {
             .ae-card-header { padding: 14px 16px; }
             .ae-card-body { padding: 16px; }
-            .rc-header { padding: 12px 14px; }
-            .rc-header-title { font-size: 16px; }
-            .rc-grid { padding: 8px 6px 10px; gap: 2px; }
-            .rc-day { font-size: 15px; min-height: 40px; border-radius: 8px; }
-            .rc-weekdays { padding: 8px 6px 6px; }
-            .rc-weekdays span { font-size: 12px; }
+            .rc-calendar { max-width: 100%; }
+            .rc-header { padding: 8px 12px; }
+            .rc-header-title { font-size: 13px; }
+            .rc-grid { padding: 4px 4px 6px; gap: 1px; }
+            .rc-day { font-size: 12px; min-height: 28px; border-radius: 6px; }
+            .rc-weekdays { padding: 5px 4px 4px; }
+            .rc-weekdays span { font-size: 10px; }
             .sc-cell { width: 40px; height: 52px; border-radius: 8px; }
             .sc-cell-d { font-size: 14px; }
             .assessment-card-head { padding: 12px 14px; }
@@ -295,8 +296,8 @@
                             </div>
                             <div>
                                 <label for="description" class="ae-label">Izoh <span class="text-gray-400 font-normal">(ixtiyoriy)</span></label>
-                                <textarea name="description" id="description" rows="4" maxlength="1000"
-                                          class="ae-textarea" placeholder="Qo'shimcha ma'lumot...">{{ old('description') }}</textarea>
+                                <textarea name="description" id="description" rows="6" maxlength="1000"
+                                          class="ae-textarea" placeholder="Qo'shimcha ma'lumot..." style="min-height: 180px;">{{ old('description') }}</textarea>
                             </div>
                         </div>
                     </div>
@@ -326,26 +327,26 @@
                         </div>
 
                         {{-- Tanlangan oraliq ko'rsatish --}}
-                        <div x-show="reason" class="flex items-center gap-4 mb-5">
-                            <div class="flex-1 rounded-xl p-4 text-center border transition-all"
+                        <div x-show="reason" class="flex items-center gap-3 mb-4">
+                            <div class="flex-1 rounded-lg p-3 text-center border transition-all"
                                  :class="startDate ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
-                                <p class="text-xs uppercase font-bold text-gray-400 mb-1">Boshlanish</p>
-                                <p class="text-lg font-bold" :class="startDate ? 'text-indigo-700' : 'text-gray-300'"
+                                <p class="text-[10px] uppercase font-bold text-gray-400 mb-0.5">Boshlanish</p>
+                                <p class="text-sm font-bold" :class="startDate ? 'text-indigo-700' : 'text-gray-300'"
                                    x-text="startDate ? fmtDate(startDate) : '—'"></p>
                             </div>
-                            <svg class="w-6 h-6 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
                             </svg>
-                            <div class="flex-1 rounded-xl p-4 text-center border transition-all"
+                            <div class="flex-1 rounded-lg p-3 text-center border transition-all"
                                  :class="endDate ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
-                                <p class="text-xs uppercase font-bold text-gray-400 mb-1">Tugash</p>
-                                <p class="text-lg font-bold" :class="endDate ? 'text-indigo-700' : 'text-gray-300'"
+                                <p class="text-[10px] uppercase font-bold text-gray-400 mb-0.5">Tugash</p>
+                                <p class="text-sm font-bold" :class="endDate ? 'text-indigo-700' : 'text-gray-300'"
                                    x-text="endDate ? fmtDate(endDate) : '—'"></p>
                             </div>
                             <template x-if="startDate && endDate">
-                                <div class="flex-shrink-0 bg-indigo-100 text-indigo-700 px-5 py-3 rounded-xl text-center">
-                                    <p class="text-xs uppercase font-bold opacity-60">Jami</p>
-                                    <p class="text-lg font-bold" x-text="totalDays + ' kun'"></p>
+                                <div class="flex-shrink-0 bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg text-center">
+                                    <p class="text-[10px] uppercase font-bold opacity-60">Jami</p>
+                                    <p class="text-sm font-bold" x-text="totalDays + ' kun'"></p>
                                 </div>
                             </template>
                         </div>
@@ -371,15 +372,15 @@
                         </div>
 
                         {{-- Kalendar --}}
-                        <div x-show="reason" class="rc-calendar border border-gray-200 rounded-2xl overflow-hidden">
+                        <div x-show="reason" class="rc-calendar border border-gray-200 rounded-xl overflow-hidden">
                             {{-- Header --}}
                             <div class="rc-header">
                                 <button type="button" @click="prevMonth()" class="rc-nav">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
                                 </button>
                                 <span class="rc-header-title" x-text="monthYearLabel"></span>
                                 <button type="button" @click="nextMonth()" class="rc-nav" :disabled="!canGoNext">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
                                 </button>
                             </div>
                             {{-- Weekdays --}}

@@ -54,6 +54,26 @@
                         <x-dropdown-link :href="route('student.profile')">
                             {{ __('Talaba ma\'lumoti') }}
                         </x-dropdown-link>
+
+                        <!-- Language Switcher -->
+                        <div class="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+                        <div class="px-4 py-1 text-xs text-gray-400 uppercase tracking-wider">{{ __('Til') }}</div>
+                        <div class="flex items-center gap-1 px-4 py-2">
+                            <a href="{{ route('language.switch', 'uz') }}"
+                               class="px-2 py-1 text-xs rounded {{ app()->getLocale() === 'uz' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600' }}">
+                                O'zbek
+                            </a>
+                            <a href="{{ route('language.switch', 'ru') }}"
+                               class="px-2 py-1 text-xs rounded {{ app()->getLocale() === 'ru' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600' }}">
+                                Русский
+                            </a>
+                            <a href="{{ route('language.switch', 'en') }}"
+                               class="px-2 py-1 text-xs rounded {{ app()->getLocale() === 'en' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600' }}">
+                                English
+                            </a>
+                        </div>
+                        <div class="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+
                         @if(session('impersonating'))
                             <form method="POST" action="{{ route('impersonate.stop') }}">
                                 @csrf
@@ -127,6 +147,26 @@
                 <x-responsive-nav-link :href="route('student.profile')">
                     {{ __('Talaba ma\'lumoti') }}
                 </x-responsive-nav-link>
+
+                <!-- Language Switcher (Mobile) -->
+                <div class="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+                <div class="px-4 py-1 text-xs text-gray-400 uppercase tracking-wider">{{ __('Til') }}</div>
+                <div class="flex items-center gap-2 px-4 py-2">
+                    <a href="{{ route('language.switch', 'uz') }}"
+                       class="px-3 py-1.5 text-sm rounded {{ app()->getLocale() === 'uz' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' }}">
+                        O'zbek
+                    </a>
+                    <a href="{{ route('language.switch', 'ru') }}"
+                       class="px-3 py-1.5 text-sm rounded {{ app()->getLocale() === 'ru' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' }}">
+                        Русский
+                    </a>
+                    <a href="{{ route('language.switch', 'en') }}"
+                       class="px-3 py-1.5 text-sm rounded {{ app()->getLocale() === 'en' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' }}">
+                        English
+                    </a>
+                </div>
+                <div class="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+
                 @if(session('impersonating'))
                     <form method="POST" action="{{ route('impersonate.stop') }}">
                         @csrf

@@ -101,11 +101,12 @@
         /* ======= CARD STYLES ======= */
         .ae-card {
             background: #fff; border-radius: 18px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
-            border: 1px solid #f1f5f9; overflow: hidden;
+            border: 1px solid #f1f5f9; overflow: visible;
         }
         .ae-card-header {
             padding: 18px 24px; border-bottom: 1px solid #f1f5f9;
             display: flex; align-items: center; gap: 12px;
+            border-radius: 18px 18px 0 0; background: #fff;
         }
         .ae-card-header-icon {
             width: 42px; height: 42px; border-radius: 12px;
@@ -137,12 +138,13 @@
         /* ======= ASSESSMENT CARD ======= */
         .assessment-card {
             background: #fff; border: 1.5px solid #e2e8f0; border-radius: 16px;
-            transition: all .2s; overflow: hidden;
+            transition: all .2s; overflow: visible;
         }
         .assessment-card:hover { border-color: #c7d2fe; box-shadow: 0 4px 14px rgba(0,0,0,.05); }
         .assessment-card-head {
             padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
             border-bottom: 1px solid #f1f5f9; flex-wrap: wrap; gap: 6px;
+            border-radius: 16px 16px 0 0; background: #fff;
         }
 
         /* ======= SUBMIT BTN ======= */

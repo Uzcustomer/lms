@@ -67,10 +67,9 @@ class StudentController extends Controller
             ->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
-            ->where('status', 'recorded')
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('created_at', 'desc')
-            ->take(4)
+            ->take(10)
             ->get();
 
         return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'recentGrades'));

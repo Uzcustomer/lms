@@ -8,7 +8,7 @@
     @push('styles')
     <style>
         /* ======= RANGE CALENDAR ======= */
-        .rc-calendar { user-select: none; max-width: 480px; }
+        .rc-calendar { user-select: none; width: 100%; }
         .rc-header {
             display: flex; align-items: center; justify-content: space-between;
             padding: 10px 16px; background: linear-gradient(135deg, #4f46e5, #6366f1);
@@ -167,7 +167,6 @@
         @media (max-width: 640px) {
             .ae-card-header { padding: 14px 16px; }
             .ae-card-body { padding: 16px; }
-            .rc-calendar { max-width: 100%; }
             .rc-header { padding: 8px 12px; }
             .rc-header-title { font-size: 13px; }
             .rc-grid { padding: 4px 4px 6px; gap: 1px; }
@@ -326,100 +325,104 @@
                             <p class="text-sm font-medium text-amber-700">Avval sababni tanlang</p>
                         </div>
 
-                        {{-- Tanlangan oraliq ko'rsatish --}}
-                        <div x-show="reason" class="flex items-center gap-3 mb-4">
-                            <div class="flex-1 rounded-lg p-3 text-center border transition-all"
-                                 :class="startDate ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
-                                <p class="text-[10px] uppercase font-bold text-gray-400 mb-0.5">Boshlanish</p>
-                                <p class="text-sm font-bold" :class="startDate ? 'text-indigo-700' : 'text-gray-300'"
-                                   x-text="startDate ? fmtDate(startDate) : '—'"></p>
-                            </div>
-                            <svg class="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
-                            </svg>
-                            <div class="flex-1 rounded-lg p-3 text-center border transition-all"
-                                 :class="endDate ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
-                                <p class="text-[10px] uppercase font-bold text-gray-400 mb-0.5">Tugash</p>
-                                <p class="text-sm font-bold" :class="endDate ? 'text-indigo-700' : 'text-gray-300'"
-                                   x-text="endDate ? fmtDate(endDate) : '—'"></p>
-                            </div>
-                            <template x-if="startDate && endDate">
-                                <div class="flex-shrink-0 bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg text-center">
-                                    <p class="text-[10px] uppercase font-bold opacity-60">Jami</p>
-                                    <p class="text-sm font-bold" x-text="totalDays + ' kun'"></p>
+                        {{-- Calendar wrapper: indicators + calendar in same max-width --}}
+                        <div x-show="reason" style="max-width: 480px;">
+
+                            {{-- Tanlangan oraliq ko'rsatish --}}
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="flex-1 rounded-lg p-2.5 text-center border transition-all"
+                                     :class="startDate ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
+                                    <p class="text-[10px] uppercase font-bold text-gray-400 mb-0.5">Boshlanish</p>
+                                    <p class="text-sm font-bold" :class="startDate ? 'text-indigo-700' : 'text-gray-300'"
+                                       x-text="startDate ? fmtDate(startDate) : '—'"></p>
                                 </div>
-                            </template>
-                        </div>
-
-                        {{-- Tozalash --}}
-                        <div x-show="startDate || endDate" class="flex justify-end mb-2">
-                            <button type="button" @click="clearDates()"
-                                    class="text-sm text-red-500 hover:text-red-700 font-medium transition">Sanalarni tozalash</button>
-                        </div>
-
-                        {{-- Hint: end_date tanlash --}}
-                        <div x-show="reason && startDate && !endDate && selecting === 'end'" x-cloak
-                             class="mb-3 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3">
-                            <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            <p class="text-sm font-medium text-blue-700">
-                                Endi tugash sanasini tanlang
-                                <template x-if="maxEndDateLabel">
-                                    <span class="text-blue-500">(maks: <span x-text="maxEndDateLabel"></span>)</span>
-                                </template>
-                            </p>
-                        </div>
-
-                        {{-- Kalendar --}}
-                        <div x-show="reason" class="rc-calendar border border-gray-200 rounded-xl overflow-hidden">
-                            {{-- Header --}}
-                            <div class="rc-header">
-                                <button type="button" @click="prevMonth()" class="rc-nav">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
-                                </button>
-                                <span class="rc-header-title" x-text="monthYearLabel"></span>
-                                <button type="button" @click="nextMonth()" class="rc-nav" :disabled="!canGoNext">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
-                                </button>
-                            </div>
-                            {{-- Weekdays --}}
-                            <div class="rc-weekdays">
-                                <span>Du</span><span>Se</span><span>Cho</span><span>Pa</span><span>Ju</span><span>Sha</span><span>Ya</span>
-                            </div>
-                            {{-- Grid --}}
-                            <div class="rc-grid">
-                                <template x-for="cell in calendarCells" :key="cell.key">
-                                    <button type="button"
-                                            @click="cell.date && !cell.disabled && pickDate(cell.dateStr)"
-                                            :disabled="cell.disabled || !cell.date"
-                                            :class="{
-                                                'rc-empty': !cell.date,
-                                                'rc-disabled': cell.disabled && cell.date,
-                                                'rc-sunday': cell.isSunday && cell.date,
-                                                'rc-today': cell.isToday,
-                                                'rc-start': cell.dateStr === startDate,
-                                                'rc-end': cell.dateStr === endDate,
-                                                'rc-in-range': cell.inRange && cell.dateStr !== startDate && cell.dateStr !== endDate
-                                            }"
-                                            class="rc-day"
-                                            x-text="cell.day"></button>
-                                </template>
-                            </div>
-                        </div>
-
-                        {{-- Deadline warning --}}
-                        <div x-show="deadlineWarning" x-transition x-cloak class="mt-4">
-                            <div :class="deadlineExpired ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'"
-                                 class="border rounded-xl p-3 flex items-center gap-2">
-                                <svg class="w-5 h-5 flex-shrink-0"
-                                     :class="deadlineExpired ? 'text-red-500' : 'text-amber-500'"
-                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                <svg class="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
                                 </svg>
-                                <p class="text-sm font-medium"
-                                   :class="deadlineExpired ? 'text-red-700' : 'text-amber-700'"
-                                   x-text="deadlineWarning"></p>
+                                <div class="flex-1 rounded-lg p-2.5 text-center border transition-all"
+                                     :class="endDate ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
+                                    <p class="text-[10px] uppercase font-bold text-gray-400 mb-0.5">Tugash</p>
+                                    <p class="text-sm font-bold" :class="endDate ? 'text-indigo-700' : 'text-gray-300'"
+                                       x-text="endDate ? fmtDate(endDate) : '—'"></p>
+                                </div>
+                                <template x-if="startDate && endDate">
+                                    <div class="flex-shrink-0 bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg text-center">
+                                        <p class="text-[10px] uppercase font-bold opacity-60">Jami</p>
+                                        <p class="text-sm font-bold" x-text="totalDays + ' kun'"></p>
+                                    </div>
+                                </template>
+                            </div>
+
+                            {{-- Tozalash --}}
+                            <div x-show="startDate || endDate" class="flex justify-end mb-2">
+                                <button type="button" @click="clearDates()"
+                                        class="text-sm text-red-500 hover:text-red-700 font-medium transition">Sanalarni tozalash</button>
+                            </div>
+
+                            {{-- Hint: end_date tanlash --}}
+                            <div x-show="startDate && !endDate && selecting === 'end'" x-cloak
+                                 class="mb-3 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl p-3">
+                                <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <p class="text-sm font-medium text-blue-700">
+                                    Endi tugash sanasini tanlang
+                                    <template x-if="maxEndDateLabel">
+                                        <span class="text-blue-500">(maks: <span x-text="maxEndDateLabel"></span>)</span>
+                                    </template>
+                                </p>
+                            </div>
+
+                            {{-- Kalendar --}}
+                            <div class="rc-calendar border border-gray-200 rounded-xl overflow-hidden">
+                                {{-- Header --}}
+                                <div class="rc-header">
+                                    <button type="button" @click="prevMonth()" class="rc-nav">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+                                    </button>
+                                    <span class="rc-header-title" x-text="monthYearLabel"></span>
+                                    <button type="button" @click="nextMonth()" class="rc-nav" :disabled="!canGoNext">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                                    </button>
+                                </div>
+                                {{-- Weekdays --}}
+                                <div class="rc-weekdays">
+                                    <span>Du</span><span>Se</span><span>Cho</span><span>Pa</span><span>Ju</span><span>Sha</span><span>Ya</span>
+                                </div>
+                                {{-- Grid --}}
+                                <div class="rc-grid">
+                                    <template x-for="cell in calendarCells" :key="cell.key">
+                                        <button type="button"
+                                                @click="cell.date && !cell.disabled && pickDate(cell.dateStr)"
+                                                :disabled="cell.disabled || !cell.date"
+                                                :class="{
+                                                    'rc-empty': !cell.date,
+                                                    'rc-disabled': cell.disabled && cell.date,
+                                                    'rc-sunday': cell.isSunday && cell.date,
+                                                    'rc-today': cell.isToday,
+                                                    'rc-start': cell.dateStr === startDate,
+                                                    'rc-end': cell.dateStr === endDate,
+                                                    'rc-in-range': cell.inRange && cell.dateStr !== startDate && cell.dateStr !== endDate
+                                                }"
+                                                class="rc-day"
+                                                x-text="cell.day"></button>
+                                    </template>
+                                </div>
+                            </div>
+
+                            {{-- Deadline warning --}}
+                            <div x-show="deadlineWarning" x-transition x-cloak class="mt-3">
+                                <div :class="deadlineExpired ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'"
+                                     class="border rounded-xl p-3 flex items-center gap-2">
+                                    <svg class="w-5 h-5 flex-shrink-0"
+                                         :class="deadlineExpired ? 'text-red-500' : 'text-amber-500'"
+                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <p class="text-sm font-medium"
+                                       :class="deadlineExpired ? 'text-red-700' : 'text-amber-700'"
+                                       x-text="deadlineWarning"></p>
+                                </div>
                             </div>
                         </div>
 
@@ -439,21 +442,6 @@
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                         </svg>
                         <p class="mt-3 text-base text-gray-500 font-medium">Nazoratlar tekshirilmoqda...</p>
-                    </div>
-                </div>
-
-                {{-- Nazorat topilmadi --}}
-                <div x-show="!loading && searched && assessments.length === 0" x-cloak class="ae-card mb-5">
-                    <div class="p-10 text-center">
-                        <div class="w-16 h-16 mx-auto bg-emerald-50 rounded-2xl flex items-center justify-center mb-4">
-                            <svg class="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                        </div>
-                        <h3 class="text-base font-bold text-gray-900">Nazorat topilmadi</h3>
-                        <p class="mt-1 text-sm text-gray-500">
-                            Siz kelmagan kunlarda nazorat turlari rejalashtirilmagan.
-                        </p>
                     </div>
                 </div>
 
@@ -521,10 +509,10 @@
                                     <div class="sc-strip">
                                         <template x-for="day in makeupCalendarDays" :key="day.date">
                                             <button type="button"
-                                                    @click="!day.isSunday && toggleMakeup(index, day.date)"
-                                                    :disabled="day.isSunday"
+                                                    @click="!isMakeupDisabled(index, day) && toggleMakeup(index, day.date)"
+                                                    :disabled="isMakeupDisabled(index, day)"
                                                     :class="{
-                                                        'sc-off': day.isSunday,
+                                                        'sc-off': isMakeupDisabled(index, day),
                                                         'sc-picked': item.makeup_date === day.date,
                                                         'sc-is-today': day.isToday
                                                     }"
@@ -602,28 +590,28 @@
             get maxDays() {
                 return this.selectedReason?.max_days || null;
             },
-            // Maksimum tugash sanasi (start + maxDays - 1)
+            // Maksimum tugash sanasi — yakshanbalarni hisobga olmasdan maxDays kun
             get maxEndDateStr() {
                 if (!this.startDate || !this.maxDays || this.selecting !== 'end') return null;
                 const s = new Date(this.startDate);
-                const maxEnd = new Date(s);
-                maxEnd.setDate(maxEnd.getDate() + this.maxDays - 1);
-                // Kechagi kundan katta bo'lmasin
-                const today = new Date(); today.setHours(0,0,0,0);
-                const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-                if (maxEnd > today) {
-                    return this._toStr(today);
+                let count = 0;
+                let d = new Date(s);
+                while (count < this.maxDays) {
+                    if (d.getDay() !== 0) count++;
+                    if (count < this.maxDays) d.setDate(d.getDate() + 1);
                 }
-                return this._toStr(maxEnd);
+                const today = new Date(); today.setHours(0,0,0,0);
+                if (d > today) return this._toStr(today);
+                return this._toStr(d);
             },
             get maxEndDateLabel() {
                 if (!this.maxEndDateStr) return '';
                 return this.fmtDate(this.maxEndDateStr);
             },
+            // totalDays — faqat yakshanba bo'lmagan kunlar
             get totalDays() {
                 if (!this.startDate || !this.endDate) return 0;
-                const s = new Date(this.startDate), e = new Date(this.endDate);
-                return e >= s ? Math.floor((e - s) / 86400000) + 1 : 0;
+                return this._countNonSundays(this.startDate, this.endDate);
             },
             get allDatesSelected() {
                 return this.assessments.length > 0 && this.assessments.every(a => a.makeup_date);
@@ -703,9 +691,10 @@
             },
 
             onReasonChange() {
-                // Sabab o'zgarganda, agar tanlangan range maxDays dan katta bo'lsa — endDate ni tozalash
+                // Sabab o'zgarganda, agar tanlangan range maxDays (yakshanbasiz) dan katta bo'lsa — endDate ni tozalash
                 if (this.startDate && this.endDate && this.maxDays) {
-                    if (this.totalDays > this.maxDays) {
+                    const nonSunDays = this._countNonSundays(this.startDate, this.endDate);
+                    if (nonSunDays > this.maxDays) {
                         this.endDate = '';
                         this.selecting = 'end';
                         this.assessments = [];
@@ -749,6 +738,7 @@
                     }
                     this.endDate = dateStr;
                     this.selecting = 'start';
+                    this.buildMakeupCalendar();
                     this.checkDeadline();
                     if (!this.deadlineExpired) {
                         this.fetchAssessments();
@@ -773,6 +763,18 @@
                 if (!this.startDate || !this.endDate) return false;
                 return ds >= this.startDate && ds <= this.endDate;
             },
+            // Yakshanbasiz kunlar soni
+            _countNonSundays(startStr, endStr) {
+                const s = new Date(startStr), e = new Date(endStr);
+                if (e < s) return 0;
+                let count = 0;
+                let d = new Date(s);
+                while (d <= e) {
+                    if (d.getDay() !== 0) count++;
+                    d.setDate(d.getDate() + 1);
+                }
+                return count;
+            },
 
             checkDeadline() {
                 this.deadlineWarning = '';
@@ -793,19 +795,26 @@
                 }
             },
 
+            // Period uzunligiga mos makeup calendar (yakshanbalarni ham ko'rsatadi, lekin disabled)
             buildMakeupCalendar() {
                 const today = new Date();
+                const targetDays = this.totalDays || 14;
                 this.makeupCalendarDays = [];
-                for (let i = 0; i < 60; i++) {
+                let nonSunCount = 0;
+                let i = 0;
+                while (nonSunCount < targetDays) {
                     const d = new Date(today); d.setDate(d.getDate() + i);
+                    const isSun = d.getDay() === 0;
                     this.makeupCalendarDays.push({
                         date: this._toStr(d),
                         dayNum: d.getDate(),
                         weekDay: WDAYS[d.getDay()],
                         month: MSHORT[d.getMonth()],
-                        isSunday: d.getDay() === 0,
+                        isSunday: isSun,
                         isToday: i === 0
                     });
+                    if (!isSun) nonSunCount++;
+                    i++;
                 }
             },
 
@@ -822,11 +831,38 @@
                         this.assessments = (data.assessments || []).map(a => ({...a, makeup_date: ''}));
                     }
                 } catch (e) { console.error('Xatolik:', e); }
+                // Har doim JN chiqsin — agar hali yo'q bo'lsa qo'shamiz
+                const hasJn = this.assessments.some(a => a.assessment_type === 'jn');
+                if (!hasJn) {
+                    this.assessments.push({
+                        subject_name: 'Joriy nazorat',
+                        subject_id: '',
+                        assessment_type: 'jn',
+                        assessment_type_code: 'jn',
+                        original_date: this.startDate,
+                        makeup_date: '',
+                        is_default_jn: true
+                    });
+                }
+                // Makeup calendar period uzunligiga mos ravishda qayta quriladi
+                this.buildMakeupCalendar();
                 this.loading = false; this.searched = true;
             },
 
             toggleMakeup(idx, dateStr) {
                 this.assessments[idx].makeup_date = this.assessments[idx].makeup_date === dateStr ? '' : dateStr;
+            },
+
+            // JN uchun boshqa testlar tanlagan sanalar disabled bo'ladi
+            isMakeupDisabled(index, day) {
+                if (day.isSunday) return true;
+                const item = this.assessments[index];
+                if (!item) return false;
+                // JN uchun: boshqa testlar tanlagan sanalar band
+                if (item.assessment_type === 'jn') {
+                    return this.assessments.some((a, i) => i !== index && a.assessment_type !== 'jn' && a.makeup_date === day.date);
+                }
+                return false;
             },
 
             handleDrop(e) {

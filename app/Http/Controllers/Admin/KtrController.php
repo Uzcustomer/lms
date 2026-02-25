@@ -11,6 +11,7 @@ use App\Models\KtrChangeApproval;
 use App\Models\KtrChangeRequest;
 use App\Models\KtrPlan;
 use App\Models\Teacher;
+use App\Models\TeacherNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -939,6 +940,9 @@ class KtrController extends Controller
 
         $cr->load('approvals');
 
+        // Xabarnoma yuborish (har bir tasdiqlash uchun)
+        $this->sendApproverNotifications($cr, $cs, $user);
+
         return response()->json([
             'success' => true,
             'message' => 'O\'zgartirish uchun ruxsat so\'rovi jo\'natildi!',
@@ -955,6 +959,63 @@ class KtrController extends Controller
                 'is_approved' => false,
             ],
         ]);
+    }
+
+    /**
+     * Tasdiqlash kerak bo'lgan xodimlarga xabarnoma yuborish
+     */
+    private function sendApproverNotifications(KtrChangeRequest $cr, CurriculumSubject $cs, $requestedBy): void
+    {
+        try {
+            if (!Schema::hasTable('teacher_notifications')) {
+                Schema::create('teacher_notifications', function (\Illuminate\Database\Schema\Blueprint $table) {
+                    $table->id();
+                    $table->unsignedBigInteger('teacher_id');
+                    $table->string('type')->default('ktr_change_request');
+                    $table->string('title');
+                    $table->text('message');
+                    $table->string('link')->nullable();
+                    $table->json('data')->nullable();
+                    $table->timestamp('read_at')->nullable();
+                    $table->timestamps();
+                    $table->index('teacher_id');
+                    $table->index(['teacher_id', 'read_at']);
+                });
+            }
+
+            $requesterName = $requestedBy instanceof Teacher ? $requestedBy->full_name : 'Noma\'lum';
+            $roleNames = [
+                'kafedra_mudiri' => 'Kafedra mudiri',
+                'dekan' => 'Dekan',
+                'registrator_ofisi' => 'Registrator ofisi',
+            ];
+
+            foreach ($cr->approvals as $approval) {
+                if (!$approval->approver_id) {
+                    continue;
+                }
+
+                $roleName = $roleNames[$approval->role] ?? $approval->role;
+
+                TeacherNotification::create([
+                    'teacher_id' => $approval->approver_id,
+                    'type' => 'ktr_change_request',
+                    'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                    'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
+                    'link' => route('admin.ktr.index'),
+                    'data' => [
+                        'change_request_id' => $cr->id,
+                        'approval_id' => $approval->id,
+                        'curriculum_subject_id' => $cs->id,
+                        'subject_name' => $cs->subject_name,
+                        'role' => $approval->role,
+                        'requested_by' => $requesterName,
+                    ],
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('Xabarnoma yuborishda xatolik', ['error' => $e->getMessage()]);
+        }
     }
 
     /**

@@ -36,6 +36,8 @@ use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
 use App\Http\Controllers\MoodleImportController;
+use App\Http\Controllers\Admin\NotificationController;
+use App\Http\Controllers\LanguageController;
 
 
 Route::get('/', function () {
@@ -58,6 +60,9 @@ Route::get('/absence-excuse/verify/{token}/pdf', [\App\Http\Controllers\AbsenceE
 // Hujjat haqiqiyligini tekshirish (QR kod orqali, public)
 Route::get('/document/verify/{token}', [\App\Http\Controllers\DocumentVerificationController::class, 'verify'])->name('document.verify');
 Route::get('/document/verify/{token}/pdf', [\App\Http\Controllers\DocumentVerificationController::class, 'viewPdf'])->name('document.verify.pdf');
+
+// Til almashtirish (Language switch)
+Route::get('/language/{locale}', [LanguageController::class, 'switch'])->name('language.switch');
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
@@ -272,6 +277,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/teachers/{teacher}/contact', [TeacherController::class, 'updateContact'])->name('teachers.update-contact');
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
+
+        // Xabarnomalar (Notifications)
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
+        Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+        Route::get('/notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
+        Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+        Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
+        Route::get('/notifications-unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
 
         // Unified settings page
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');

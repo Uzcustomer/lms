@@ -261,7 +261,7 @@
 
                                 <div x-show="reason" x-cloak>
                                     <input type="text" x-ref="mainCalendar" readonly
-                                           x-init="$watch('reason', v => { if (v) $nextTick(() => initMainCal()) })"
+                                           @click="initMainCal(true)"
                                            class="ae-input cursor-pointer"
                                            placeholder="Boshlanish — Tugash">
 
@@ -439,16 +439,24 @@
                 if (this.startDate && this.endDate) {
                     this.fetchAssessments();
                 }
-                // If reason already set (old input), init flatpickr
+                this.$watch('reason', (val) => {
+                    if (val) {
+                        this.$nextTick(() => this.initMainCal());
+                    }
+                });
                 if (this.reason) {
                     this.$nextTick(() => this.initMainCal());
                 }
             },
 
             // ---- Main calendar (Flatpickr range) ----
-            initMainCal() {
+            initMainCal(autoOpen) {
                 const el = this.$refs.mainCalendar;
-                if (!el || this.mainFp) return;
+                if (!el || typeof flatpickr === 'undefined') return;
+                if (this.mainFp) {
+                    if (autoOpen) this.mainFp.open();
+                    return;
+                }
 
                 const self = this;
                 this.mainFp = flatpickr(el, {
@@ -474,6 +482,7 @@
                         }
                     }
                 });
+                if (autoOpen) this.mainFp.open();
             },
 
             onReasonChange() {

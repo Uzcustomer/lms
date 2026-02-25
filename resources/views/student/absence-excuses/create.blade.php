@@ -8,11 +8,12 @@
     @push('styles')
     <style>
         /* ======= RANGE CALENDAR ======= */
-        .rc-calendar { user-select: none; width: 100%; }
+        .rc-calendar { user-select: none; width: 100%; max-height: 300px; overflow-y: auto; }
         .rc-header {
             display: flex; align-items: center; justify-content: space-between;
             padding: 10px 16px; background: linear-gradient(135deg, #4f46e5, #6366f1);
             border-radius: 12px 12px 0 0;
+            position: sticky; top: 0; z-index: 2;
         }
         .rc-header-title { color: #fff; font-weight: 700; font-size: 15px; letter-spacing: 0.3px; }
         .rc-nav {
@@ -25,6 +26,7 @@
         .rc-weekdays {
             display: grid; grid-template-columns: repeat(7, 1fr);
             background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 6px 8px 5px;
+            position: sticky; top: 42px; z-index: 1;
         }
         .rc-weekdays span {
             text-align: center; font-size: 11px; font-weight: 700;
@@ -73,6 +75,7 @@
         .rc-mini .rc-weekdays { padding: 4px 6px 3px; }
         .rc-mini .rc-weekdays span { font-size: 9px; }
         .rc-mini .rc-grid { gap: 1px; padding: 4px 6px 6px; }
+        .rc-mini { max-height: 300px; }
         .rc-mini .rc-day { font-size: 11px; min-height: 26px; border-radius: 6px; }
         .rc-day.rc-picked-single {
             background: #4f46e5; color: #fff !important; font-weight: 700; border-radius: 8px;
@@ -108,8 +111,10 @@
             box-shadow: 0 0 0 3px rgba(129,140,248,0.15);
         }
         .ae-file-zone {
-            border: 2px dashed #d1d5db; border-radius: 14px; padding: 28px;
+            border: 2px dashed #d1d5db; border-radius: 12px; padding: 10px 16px;
             text-align: center; cursor: pointer; transition: all .2s; background: #fafbfc;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 52px;
         }
         .ae-file-zone:hover { border-color: #818cf8; background: #eef2ff; }
         .ae-file-zone.has-file { border-color: #34d399; background: #ecfdf5; }
@@ -199,7 +204,7 @@
                             <p class="text-sm text-gray-500 mt-0.5">Sabab, hujjat raqami va tasdiqlovchi fayl</p>
                         </div>
                     </div>
-                    <div class="ae-card-body space-y-6">
+                    <div class="ae-card-body space-y-8">
                         {{-- ROW 1: Sabab + Hujjat raqami + Tasdiqlovchi hujjat --}}
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
@@ -227,22 +232,20 @@
                             <div>
                                 <label class="ae-label">Tasdiqlovchi hujjat <span class="req">*</span></label>
                                 <label for="file" class="ae-file-zone block" :class="fileName ? 'has-file' : ''"
-                                       style="padding: 16px;"
                                        @dragover.prevent="$el.classList.add('border-indigo-400','bg-indigo-50')"
                                        @dragleave.prevent="$el.classList.remove('border-indigo-400','bg-indigo-50')"
                                        @drop.prevent="handleDrop($event)">
-                                    <div x-show="!fileName">
-                                        <svg class="mx-auto w-8 h-8 text-gray-300 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div x-show="!fileName" class="flex items-center gap-2">
+                                        <svg class="w-5 h-5 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                                         </svg>
-                                        <p class="text-sm text-gray-500">Faylni <span class="text-indigo-600 font-semibold">tanlang</span></p>
-                                        <p class="text-xs text-gray-400 mt-0.5">PDF, JPG, PNG, DOC (10MB)</p>
+                                        <span class="text-sm text-gray-500">Faylni <span class="text-indigo-600 font-semibold">tanlang</span></span>
                                     </div>
-                                    <div x-show="fileName" class="flex items-center justify-center gap-2">
-                                        <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div x-show="fileName" class="flex items-center gap-2">
+                                        <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
-                                        <span class="text-sm font-semibold text-emerald-700" x-text="fileName"></span>
+                                        <span class="text-sm font-semibold text-emerald-700 truncate" x-text="fileName"></span>
                                     </div>
                                 </label>
                                 <input type="file" name="file" id="file" required accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
@@ -386,7 +389,7 @@
                             <div>
                                 <label for="description" class="ae-label">Izoh <span class="text-gray-400 font-normal">(ixtiyoriy)</span></label>
                                 <textarea name="description" id="description" rows="12" maxlength="1000"
-                                          class="ae-textarea" placeholder="Qo'shimcha ma'lumot..." style="min-height: 340px;">{{ old('description') }}</textarea>
+                                          class="ae-textarea" placeholder="Qo'shimcha ma'lumot..." style="min-height: 300px; max-height: 300px;">{{ old('description') }}</textarea>
                             </div>
                         </div>
                     </div>
@@ -849,6 +852,19 @@
                 if (item.cal_month === 11) { item.cal_month = 0; item.cal_year++; }
                 else item.cal_month++;
             },
+            // Bugundan boshlab totalDays ta yakshanbasiz kun — max sana
+            get miniMaxDateStr() {
+                const allowed = this.totalDays;
+                if (!allowed) return null;
+                const today = new Date(); today.setHours(0,0,0,0);
+                let count = 0;
+                let d = new Date(today);
+                while (count < allowed) {
+                    if (d.getDay() !== 0) count++;
+                    if (count < allowed) d.setDate(d.getDate() + 1);
+                }
+                return this._toStr(d);
+            },
             getMiniCells(index) {
                 const item = this.assessments[index];
                 if (!item) return [];
@@ -859,6 +875,7 @@
                 const daysInMonth = new Date(item.cal_year, item.cal_month + 1, 0).getDate();
                 const today = new Date(); today.setHours(0,0,0,0);
                 const todayStr = this._toStr(today);
+                const maxDate = this.miniMaxDateStr;
                 // JN range for restricting others
                 const jnItem = this.assessments.find(a => a.assessment_type === 'jn');
                 const jnStart = jnItem?.makeup_start || '';
@@ -871,6 +888,8 @@
                     const ds = this._toStr(dt);
                     const isSun = dt.getDay() === 0;
                     const isPast = dt < today;
+                    // Period-length cheklovi: bugundan boshlab totalDays ta yakshanbasiz kundan keyingilar disabled
+                    const beyondLimit = maxDate ? ds > maxDate : false;
                     // Non-JN: JN range dates are taken
                     let takenByJn = false;
                     if (item.assessment_type !== 'jn' && jnStart && jnEnd) {
@@ -879,7 +898,7 @@
                     cells.push({
                         key: ds, date: dt, dateStr: ds, day: d,
                         isSunday: isSun, isToday: ds === todayStr,
-                        disabled: isPast || isSun || takenByJn,
+                        disabled: isPast || isSun || takenByJn || beyondLimit,
                         takenByJn: takenByJn
                     });
                 }

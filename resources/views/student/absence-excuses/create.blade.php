@@ -14,7 +14,7 @@
             padding: 14px 20px; background: linear-gradient(135deg, #4f46e5, #6366f1);
             border-radius: 16px 16px 0 0;
         }
-        .rc-header-title { color: #fff; font-weight: 700; font-size: 18px; letter-spacing: 0.3px; }
+        .rc-header-title { color: #fff; font-weight: 700; font-size: 20px; letter-spacing: 0.3px; }
         .rc-nav {
             width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
             background: rgba(255,255,255,0.15); border-radius: 10px; cursor: pointer;
@@ -27,7 +27,7 @@
             background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 10px 12px 8px;
         }
         .rc-weekdays span {
-            text-align: center; font-size: 13px; font-weight: 700;
+            text-align: center; font-size: 14px; font-weight: 700;
             color: #64748b; text-transform: uppercase;
         }
         .rc-weekdays span:last-child { color: #ef4444; }
@@ -37,7 +37,7 @@
         }
         .rc-day {
             display: flex; align-items: center; justify-content: center;
-            aspect-ratio: 1; font-size: 16px; font-weight: 600; color: #334155;
+            aspect-ratio: 1; font-size: 18px; font-weight: 600; color: #334155;
             border-radius: 10px; cursor: pointer; transition: all .12s; position: relative;
             border: none; background: transparent; min-height: 44px;
         }
@@ -90,9 +90,9 @@
         .sc-cell.sc-is-today:not(.sc-picked) {
             border-color: #818cf8; box-shadow: 0 0 0 2px rgba(129,140,248,0.3);
         }
-        .sc-cell-wd { font-size: 11px; text-transform: uppercase; font-weight: 700; line-height: 1; opacity: .6; }
-        .sc-cell-d { font-size: 22px; font-weight: 800; line-height: 1.2; }
-        .sc-cell-m { font-size: 10px; line-height: 1; opacity: .5; font-weight: 600; }
+        .sc-cell-wd { font-size: 12px; text-transform: uppercase; font-weight: 700; line-height: 1; opacity: .6; }
+        .sc-cell-d { font-size: 24px; font-weight: 800; line-height: 1.2; }
+        .sc-cell-m { font-size: 11px; line-height: 1; opacity: .5; font-weight: 600; }
         .sc-cell.sc-picked .sc-cell-wd,
         .sc-cell.sc-picked .sc-cell-m { opacity: .7; }
 
@@ -112,11 +112,11 @@
         .ae-card-body { padding: 24px; }
 
         /* ======= FORM ELEMENTS ======= */
-        .ae-label { display: block; font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+        .ae-label { display: block; font-size: 16px; font-weight: 600; color: #374151; margin-bottom: 8px; }
         .ae-label .req { color: #ef4444; margin-left: 2px; }
         .ae-input, .ae-select, .ae-textarea {
             width: 100%; border: 1.5px solid #e2e8f0; border-radius: 12px;
-            padding: 12px 16px; font-size: 16px; color: #1e293b;
+            padding: 14px 16px; font-size: 17px; color: #1e293b;
             transition: border-color .15s, box-shadow .15s; background: #fff;
         }
         .ae-input:focus, .ae-select:focus, .ae-textarea:focus {
@@ -144,7 +144,7 @@
         /* ======= SUBMIT BTN ======= */
         .ae-submit {
             display: inline-flex; align-items: center; gap: 8px;
-            padding: 14px 32px; border-radius: 14px; font-size: 16px; font-weight: 700;
+            padding: 14px 32px; border-radius: 14px; font-size: 18px; font-weight: 700;
             color: #fff; border: none; cursor: pointer; transition: all .2s;
             background: linear-gradient(135deg, #4f46e5, #6366f1);
             box-shadow: 0 4px 14px rgba(79,70,229,0.3);
@@ -181,7 +181,7 @@
     @endpush
 
     <div class="py-6">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8" x-data="absenceForm()" x-init="init()">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8" x-data="absenceForm()" x-init="init()">
 
             @if(session('error'))
                 <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mb-4">
@@ -215,19 +215,30 @@
                         </div>
                     </div>
                     <div class="ae-card-body space-y-6">
-                        {{-- Sabab --}}
-                        <div>
-                            <label for="reason" class="ae-label">Sabab <span class="req">*</span></label>
-                            <select name="reason" id="reason" required x-model="reason"
-                                    @change="onReasonChange()" class="ae-select">
-                                <option value="">Sababni tanlang...</option>
-                                @foreach($reasons as $key => $data)
-                                    <option value="{{ $key }}" {{ old('reason') == $key ? 'selected' : '' }}>{{ $data['label'] }}</option>
-                                @endforeach
-                            </select>
-                            @error('reason')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
+                        {{-- ROW 1: Sabab + Hujjat raqami --}}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label for="reason" class="ae-label">Sabab <span class="req">*</span></label>
+                                <select name="reason" id="reason" required x-model="reason"
+                                        @change="onReasonChange()" class="ae-select">
+                                    <option value="">Sababni tanlang...</option>
+                                    @foreach($reasons as $key => $data)
+                                        <option value="{{ $key }}" {{ old('reason') == $key ? 'selected' : '' }}>{{ $data['label'] }}</option>
+                                    @endforeach
+                                </select>
+                                @error('reason')
+                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                            <div>
+                                <label for="doc_number" class="ae-label">Hujjat raqami <span class="req">*</span></label>
+                                <input type="text" name="doc_number" id="doc_number"
+                                       value="{{ old('doc_number') }}" placeholder="Masalan: 123/2026"
+                                       required class="ae-input">
+                                @error('doc_number')
+                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
                         </div>
 
                         {{-- Sabab info --}}
@@ -239,11 +250,11 @@
                                 </svg>
                             </div>
                             <div>
-                                <p class="font-semibold text-indigo-900 text-[15px]">Talab qilinadigan hujjat:</p>
-                                <p class="text-indigo-700 mt-1 text-[15px]" x-text="selectedReason?.document"></p>
+                                <p class="font-semibold text-indigo-900 text-base">Talab qilinadigan hujjat:</p>
+                                <p class="text-indigo-700 mt-1 text-base" x-text="selectedReason?.document"></p>
                                 <div class="flex flex-wrap gap-2 mt-2">
                                     <template x-if="selectedReason?.max_days">
-                                        <span class="inline-flex items-center px-2.5 py-1 text-sm font-bold bg-indigo-100 text-indigo-700 rounded-lg">
+                                        <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-indigo-100 text-indigo-700 rounded-lg">
                                             Maksimum: <span x-text="selectedReason?.max_days" class="ml-1"></span> kun
                                         </span>
                                     </template>
@@ -254,50 +265,39 @@
                             </div>
                         </div>
 
-                        {{-- Hujjat raqami --}}
-                        <div>
-                            <label for="doc_number" class="ae-label">Hujjat raqami <span class="req">*</span></label>
-                            <input type="text" name="doc_number" id="doc_number"
-                                   value="{{ old('doc_number') }}" placeholder="Masalan: 123/2026"
-                                   required class="ae-input">
-                            @error('doc_number')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        {{-- Fayl yuklash --}}
-                        <div>
-                            <label class="ae-label">Tasdiqlovchi hujjat (spravka) <span class="req">*</span></label>
-                            <label for="file" class="ae-file-zone block" :class="fileName ? 'has-file' : ''"
-                                   @dragover.prevent="$el.classList.add('border-indigo-400','bg-indigo-50')"
-                                   @dragleave.prevent="$el.classList.remove('border-indigo-400','bg-indigo-50')"
-                                   @drop.prevent="handleDrop($event)">
-                                <div x-show="!fileName">
-                                    <svg class="mx-auto w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                                    </svg>
-                                    <p class="text-base text-gray-500">Faylni bu yerga tashlang yoki <span class="text-indigo-600 font-semibold">tanlang</span></p>
-                                    <p class="text-sm text-gray-400 mt-1">PDF, JPG, PNG, DOC, DOCX (maks. 10MB)</p>
-                                </div>
-                                <div x-show="fileName" class="flex items-center justify-center gap-2">
-                                    <svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                    <span class="text-base font-semibold text-emerald-700" x-text="fileName"></span>
-                                </div>
-                            </label>
-                            <input type="file" name="file" id="file" required accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                                   class="hidden" @change="fileName = $event.target.files[0]?.name || ''">
-                            @error('file')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        {{-- Izoh --}}
-                        <div>
-                            <label for="description" class="ae-label">Izoh <span class="text-gray-400 font-normal">(ixtiyoriy)</span></label>
-                            <textarea name="description" id="description" rows="2" maxlength="1000"
-                                      class="ae-textarea" placeholder="Qo'shimcha ma'lumot...">{{ old('description') }}</textarea>
+                        {{-- ROW 2: Fayl yuklash + Izoh --}}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="ae-label">Tasdiqlovchi hujjat (spravka) <span class="req">*</span></label>
+                                <label for="file" class="ae-file-zone block" :class="fileName ? 'has-file' : ''"
+                                       @dragover.prevent="$el.classList.add('border-indigo-400','bg-indigo-50')"
+                                       @dragleave.prevent="$el.classList.remove('border-indigo-400','bg-indigo-50')"
+                                       @drop.prevent="handleDrop($event)">
+                                    <div x-show="!fileName">
+                                        <svg class="mx-auto w-10 h-10 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                        </svg>
+                                        <p class="text-base text-gray-500">Faylni tashlang yoki <span class="text-indigo-600 font-semibold">tanlang</span></p>
+                                        <p class="text-sm text-gray-400 mt-1">PDF, JPG, PNG, DOC, DOCX (maks. 10MB)</p>
+                                    </div>
+                                    <div x-show="fileName" class="flex items-center justify-center gap-2">
+                                        <svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        <span class="text-base font-semibold text-emerald-700" x-text="fileName"></span>
+                                    </div>
+                                </label>
+                                <input type="file" name="file" id="file" required accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                       class="hidden" @change="fileName = $event.target.files[0]?.name || ''">
+                                @error('file')
+                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                            <div>
+                                <label for="description" class="ae-label">Izoh <span class="text-gray-400 font-normal">(ixtiyoriy)</span></label>
+                                <textarea name="description" id="description" rows="4" maxlength="1000"
+                                          class="ae-textarea" placeholder="Qo'shimcha ma'lumot...">{{ old('description') }}</textarea>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -326,26 +326,26 @@
                         </div>
 
                         {{-- Tanlangan oraliq ko'rsatish --}}
-                        <div x-show="reason" class="flex items-center gap-3 mb-4">
-                            <div class="flex-1 rounded-xl p-3 text-center border transition-all"
+                        <div x-show="reason" class="flex items-center gap-4 mb-5">
+                            <div class="flex-1 rounded-xl p-4 text-center border transition-all"
                                  :class="startDate ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
                                 <p class="text-xs uppercase font-bold text-gray-400 mb-1">Boshlanish</p>
-                                <p class="text-base font-bold" :class="startDate ? 'text-indigo-700' : 'text-gray-300'"
+                                <p class="text-lg font-bold" :class="startDate ? 'text-indigo-700' : 'text-gray-300'"
                                    x-text="startDate ? fmtDate(startDate) : '—'"></p>
                             </div>
-                            <svg class="w-5 h-5 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-6 h-6 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
                             </svg>
-                            <div class="flex-1 rounded-xl p-3 text-center border transition-all"
+                            <div class="flex-1 rounded-xl p-4 text-center border transition-all"
                                  :class="endDate ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
                                 <p class="text-xs uppercase font-bold text-gray-400 mb-1">Tugash</p>
-                                <p class="text-base font-bold" :class="endDate ? 'text-indigo-700' : 'text-gray-300'"
+                                <p class="text-lg font-bold" :class="endDate ? 'text-indigo-700' : 'text-gray-300'"
                                    x-text="endDate ? fmtDate(endDate) : '—'"></p>
                             </div>
                             <template x-if="startDate && endDate">
-                                <div class="flex-shrink-0 bg-indigo-100 text-indigo-700 px-4 py-2.5 rounded-xl text-center">
-                                    <p class="text-[10px] uppercase font-bold opacity-60">Jami</p>
-                                    <p class="text-base font-bold" x-text="totalDays + ' kun'"></p>
+                                <div class="flex-shrink-0 bg-indigo-100 text-indigo-700 px-5 py-3 rounded-xl text-center">
+                                    <p class="text-xs uppercase font-bold opacity-60">Jami</p>
+                                    <p class="text-lg font-bold" x-text="totalDays + ' kun'"></p>
                                 </div>
                             </template>
                         </div>
@@ -483,14 +483,14 @@
                         <template x-for="(item, index) in assessments" :key="index">
                             <div class="assessment-card">
                                 <div class="assessment-card-head">
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-base font-bold text-gray-900" x-text="item.subject_name"></span>
-                                        <span class="px-2.5 py-1 text-xs font-bold rounded-lg"
+                                    <div class="flex items-center gap-3 flex-wrap">
+                                        <span class="text-lg font-bold text-gray-900" x-text="item.subject_name"></span>
+                                        <span class="px-3 py-1 text-sm font-bold rounded-lg"
                                               :class="'badge-' + item.assessment_type"
                                               x-text="getLabel(item.assessment_type)"></span>
                                     </div>
                                     <div class="flex items-center gap-3">
-                                        <span class="text-sm text-gray-400">
+                                        <span class="text-base text-gray-400">
                                             Asl sana: <span class="font-semibold text-gray-600" x-text="fmtDate(item.original_date)"></span>
                                         </span>
                                     </div>
@@ -500,14 +500,14 @@
                                     <div class="flex items-center justify-between mb-3">
                                         <div>
                                             <template x-if="item.makeup_date">
-                                                <span class="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                                <span class="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-base font-bold">
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                                                     <span x-text="fmtDate(item.makeup_date)"></span>
                                                 </span>
                                             </template>
                                             <template x-if="!item.makeup_date">
-                                                <span class="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-lg text-sm font-medium">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01"></path></svg>
+                                                <span class="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-lg text-base font-medium">
+                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01"></path></svg>
                                                     Sana tanlanmagan
                                                 </span>
                                             </template>

@@ -599,8 +599,8 @@
             document.getElementById('subject-modal').style.display = 'flex';
             document.getElementById('subject-search-input').value = '';
             document.getElementById('subject-course-filter').value = '';
-            document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Fan nomini kiriting va qidiring</div>';
             loadSubjectCourses();
+            searchSubjects();
             setTimeout(function() {
                 document.getElementById('subject-search-input').focus();
             }, 100);
@@ -614,11 +614,6 @@
             clearTimeout(subjectSearchTimeout);
             var query = document.getElementById('subject-search-input').value.trim();
             var levelCode = document.getElementById('subject-course-filter').value;
-
-            if (query.length < 2 && !levelCode) {
-                document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Kamida 2 ta belgi kiriting yoki kursni tanlang</div>';
-                return;
-            }
 
             document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Qidirilmoqda...</div>';
 

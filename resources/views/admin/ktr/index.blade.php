@@ -627,6 +627,17 @@
             } else {
                 html += '<div class="ktr-change-title">O\'zgartirish so\'rovi holati</div>';
             }
+            var info = ktrState.approverInfo;
+            if (info.faculty_name || info.kafedra_name) {
+                html += '<div class="ktr-info-row">';
+                if (info.faculty_name) {
+                    html += '<span class="ktr-info-item"><svg style="width:14px;height:14px;margin-right:4px;vertical-align:middle;color:#3b82f6;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg><b>Fakultet:</b> ' + info.faculty_name + '</span>';
+                }
+                if (info.kafedra_name) {
+                    html += '<span class="ktr-info-item"><svg style="width:14px;height:14px;margin-right:4px;vertical-align:middle;color:#8b5cf6;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg><b>Kafedra:</b> ' + info.kafedra_name + '</span>';
+                }
+                html += '</div>';
+            }
             html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
             cr.approvals.forEach(function(a) {
                 html += '<tr>';
@@ -1556,6 +1567,26 @@
             border-radius: 6px;
             font-size: 11px;
             font-weight: 600;
+        }
+        .ktr-info-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .ktr-info-item {
+            display: inline-flex;
+            align-items: center;
+            font-size: 13px;
+            color: #334155;
+        }
+        .ktr-info-item b {
+            margin-right: 4px;
+            color: #475569;
         }
         .ktr-approved { background: #dcfce7; color: #166534; }
         .ktr-rejected { background: #fef2f2; color: #dc2626; }

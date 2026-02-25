@@ -17,6 +17,7 @@ class YnSubmission extends Model
         'semester_code',
         'group_hemis_id',
         'submitted_by',
+        'submitted_by_guard',
         'submitted_at',
     ];
 
@@ -26,6 +27,10 @@ class YnSubmission extends Model
 
     public function submittedBy()
     {
+        if ($this->submitted_by_guard === 'teacher') {
+            return $this->belongsTo(Teacher::class, 'submitted_by');
+        }
+
         return $this->belongsTo(User::class, 'submitted_by');
     }
 }

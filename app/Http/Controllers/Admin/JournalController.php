@@ -3919,15 +3919,18 @@ class JournalController extends Controller
             ], 404);
         }
 
-        // Check if auth user exists in users table (teacher guard may use different auth table)
-        $submittedByUserId = DB::table('users')->where('id', auth()->id())->exists() ? auth()->id() : null;
+        // Determine submitted_by ID and guard type
+        $submittedByUserId = null;
+        $submittedByGuard = 'web';
 
-        if (!$submittedByUserId) {
-            // Teacher guard orqali kirgan bo'lsa, teachers jadvalidan login bo'yicha users jadvalidan qidirish
-            $teacher = auth()->guard('teacher')->user();
-            if ($teacher) {
-                $submittedByUserId = DB::table('users')->where('email', $teacher->login)->value('id');
-            }
+        if (auth()->guard('teacher')->check()) {
+            // Teacher guard orqali kirgan bo'lsa, teacher ID ni saqlash
+            $submittedByUserId = auth()->guard('teacher')->id();
+            $submittedByGuard = 'teacher';
+        } elseif (auth()->guard('web')->check()) {
+            // Web guard orqali kirgan bo'lsa, user ID ni saqlash
+            $submittedByUserId = auth()->guard('web')->id();
+            $submittedByGuard = 'web';
         }
 
         if (!$submittedByUserId) {
@@ -3945,6 +3948,7 @@ class JournalController extends Controller
                 'semester_code' => $semesterCode,
                 'group_hemis_id' => $groupHemisId,
                 'submitted_by' => $submittedByUserId,
+                'submitted_by_guard' => $submittedByGuard,
                 'submitted_at' => now(),
             ]);
 

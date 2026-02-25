@@ -42,14 +42,21 @@ class KafedraController extends Controller
             ->orderBy('name')
             ->get();
 
+        // Nom bo'yicha deduplikatsiya: fakultetga tayinlangan yozuvni ustun qilish
+        $uniqueKafedras = $allKafedras->groupBy(fn($k) => mb_strtolower(trim($k->name)))
+            ->map(function ($group) use ($parentMap) {
+                // Fakultetga tayinlangan yozuvni tanlash, aks holda birinchisini
+                return $group->first(fn($k) => isset($parentMap[strval($k->parent_id)])) ?? $group->first();
+            })
+            ->values();
+
         // Kafedralarni fakultetlarga ajratish
         $assigned = collect();
         $unassigned = collect();
 
-        foreach ($allKafedras as $k) {
+        foreach ($uniqueKafedras as $k) {
             $pid = strval($k->parent_id);
             if (isset($parentMap[$pid])) {
-                // Dublikat xalqaro → asosiy xalqaro ga yo'naltirish
                 $k->setAttribute('display_parent_id', $parentMap[$pid]);
                 $assigned->push($k);
             } else {

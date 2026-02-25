@@ -7,41 +7,58 @@
 
     @push('styles')
     <style>
+        /* ======= CALENDAR DROPDOWN ======= */
+        .cal-dropdown-wrap { position: relative; }
+        .cal-trigger {
+            width: 100%; border: 1.5px solid #e2e8f0; border-radius: 12px;
+            padding: 14px 16px; font-size: 17px; color: #1e293b; background: #fff;
+            display: flex; align-items: center; justify-content: space-between;
+            cursor: pointer; transition: border-color .15s, box-shadow .15s;
+        }
+        .cal-trigger:hover { border-color: #c7d2fe; }
+        .cal-trigger.active { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.15); }
+        .cal-trigger .cal-trigger-text { font-weight: 600; }
+        .cal-trigger .cal-trigger-placeholder { color: #9ca3af; font-weight: 400; }
+        .cal-dropdown {
+            position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
+            background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,.12); overflow: hidden;
+        }
+
         /* ======= RANGE CALENDAR ======= */
-        .rc-calendar { user-select: none; width: 100%; max-height: 300px; overflow-y: auto; }
+        .rc-calendar { user-select: none; width: 100%; }
         .rc-header {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 10px 16px; background: linear-gradient(135deg, #4f46e5, #6366f1);
-            border-radius: 12px 12px 0 0;
-            position: sticky; top: 0; z-index: 2;
+            padding: 8px 12px; background: linear-gradient(135deg, #4f46e5, #6366f1);
+            border-radius: 0;
         }
-        .rc-header-title { color: #fff; font-weight: 700; font-size: 15px; letter-spacing: 0.3px; }
+        .rc-calendar:first-child .rc-header, .cal-dropdown .rc-header { border-radius: 10px 10px 0 0; }
+        .rc-header-title { color: #fff; font-weight: 700; font-size: 13px; letter-spacing: 0.3px; }
         .rc-nav {
-            width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
-            background: rgba(255,255,255,0.15); border-radius: 8px; cursor: pointer;
+            width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.15); border-radius: 6px; cursor: pointer;
             color: #fff; transition: all .15s; border: none;
         }
         .rc-nav:hover { background: rgba(255,255,255,0.3); }
         .rc-nav:disabled { opacity: .3; cursor: not-allowed; }
         .rc-weekdays {
             display: grid; grid-template-columns: repeat(7, 1fr);
-            background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 6px 8px 5px;
-            position: sticky; top: 42px; z-index: 1;
+            background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 4px 6px 3px;
         }
         .rc-weekdays span {
-            text-align: center; font-size: 11px; font-weight: 700;
+            text-align: center; font-size: 10px; font-weight: 700;
             color: #64748b; text-transform: uppercase;
         }
         .rc-weekdays span:last-child { color: #ef4444; }
         .rc-grid {
             display: grid; grid-template-columns: repeat(7, 1fr);
-            gap: 2px; padding: 6px 8px 8px;
+            gap: 1px; padding: 4px 6px 6px;
         }
         .rc-day {
             display: flex; align-items: center; justify-content: center;
-            aspect-ratio: 1; font-size: 13px; font-weight: 600; color: #334155;
-            border-radius: 8px; cursor: pointer; transition: all .12s; position: relative;
-            border: none; background: transparent; min-height: 32px;
+            font-size: 12px; font-weight: 600; color: #334155;
+            border-radius: 6px; cursor: pointer; transition: all .12s; position: relative;
+            border: none; background: transparent; min-height: 28px;
         }
         .rc-day:hover:not(.rc-disabled):not(.rc-empty) { background: #eef2ff; }
         .rc-day.rc-empty { cursor: default; }
@@ -50,38 +67,36 @@
         .rc-day.rc-sunday.rc-disabled { color: #fecaca; }
         .rc-day.rc-today {
             background: #eef2ff; font-weight: 800; color: #4f46e5;
-            box-shadow: inset 0 0 0 2px #818cf8;
+            box-shadow: inset 0 0 0 1.5px #818cf8;
         }
         .rc-day.rc-start {
             background: #4f46e5; color: #fff !important; font-weight: 700;
-            border-radius: 8px 3px 3px 8px;
+            border-radius: 6px 2px 2px 6px;
         }
         .rc-day.rc-end {
             background: #4f46e5; color: #fff !important; font-weight: 700;
-            border-radius: 3px 8px 8px 3px;
+            border-radius: 2px 6px 6px 2px;
         }
-        .rc-day.rc-start.rc-end { border-radius: 8px; }
-        .rc-day.rc-in-range { background: #e0e7ff; color: #3730a3; border-radius: 3px; }
+        .rc-day.rc-start.rc-end { border-radius: 6px; }
+        .rc-day.rc-in-range { background: #e0e7ff; color: #3730a3; border-radius: 2px; }
         .rc-day.rc-start.rc-today, .rc-day.rc-end.rc-today { box-shadow: none; }
-        /* Max limit ko'rsatish */
-        .rc-day.rc-max-edge {
-            box-shadow: inset 0 0 0 2px #f59e0b;
+        .rc-day.rc-picked-single {
+            background: #4f46e5; color: #fff !important; font-weight: 700; border-radius: 6px;
         }
+        .rc-day.rc-taken { background: #fef3c7; color: #92400e; cursor: not-allowed; }
 
         /* ======= MINI CALENDAR (assessment cards) ======= */
-        .rc-mini .rc-header { padding: 6px 10px; border-radius: 10px 10px 0 0; }
-        .rc-mini .rc-header-title { font-size: 12px; }
-        .rc-mini .rc-nav { width: 24px; height: 24px; border-radius: 6px; }
-        .rc-mini .rc-weekdays { padding: 4px 6px 3px; }
-        .rc-mini .rc-weekdays span { font-size: 9px; }
-        .rc-mini .rc-grid { gap: 1px; padding: 4px 6px 6px; }
-        .rc-mini { max-height: 300px; }
-        .rc-mini .rc-day { font-size: 11px; min-height: 26px; border-radius: 6px; }
-        .rc-day.rc-picked-single {
-            background: #4f46e5; color: #fff !important; font-weight: 700; border-radius: 8px;
-        }
-        .rc-mini .rc-day.rc-picked-single { border-radius: 6px; }
-        .rc-day.rc-taken { background: #fef3c7; color: #92400e; cursor: not-allowed; }
+        .rc-mini .rc-header { padding: 5px 8px; }
+        .rc-mini .rc-header-title { font-size: 11px; }
+        .rc-mini .rc-nav { width: 22px; height: 22px; border-radius: 5px; }
+        .rc-mini .rc-weekdays { padding: 3px 4px 2px; }
+        .rc-mini .rc-weekdays span { font-size: 8px; }
+        .rc-mini .rc-grid { gap: 0; padding: 2px 4px 4px; }
+        .rc-mini .rc-day { font-size: 10px; min-height: 24px; border-radius: 4px; }
+        .rc-mini .rc-day.rc-start { border-radius: 4px 1px 1px 4px; }
+        .rc-mini .rc-day.rc-end { border-radius: 1px 4px 4px 1px; }
+        .rc-mini .rc-day.rc-start.rc-end { border-radius: 4px; }
+        .rc-mini .rc-day.rc-in-range { border-radius: 1px; }
 
         /* ======= CARD STYLES ======= */
         .ae-card {
@@ -156,15 +171,15 @@
         @media (max-width: 640px) {
             .ae-card-header { padding: 14px 16px; }
             .ae-card-body { padding: 16px; }
-            .rc-header { padding: 8px 12px; }
-            .rc-header-title { font-size: 13px; }
-            .rc-grid { padding: 4px 4px 6px; gap: 1px; }
-            .rc-day { font-size: 12px; min-height: 28px; border-radius: 6px; }
-            .rc-weekdays { padding: 5px 4px 4px; }
-            .rc-weekdays span { font-size: 10px; }
-            .rc-mini .rc-day { font-size: 10px; min-height: 22px; }
-            .rc-mini .rc-header { padding: 5px 8px; }
-            .rc-mini .rc-header-title { font-size: 11px; }
+            .rc-header { padding: 6px 8px; }
+            .rc-header-title { font-size: 11px; }
+            .rc-grid { padding: 3px 3px 4px; gap: 0; }
+            .rc-day { font-size: 11px; min-height: 24px; }
+            .rc-weekdays { padding: 3px 3px 2px; }
+            .rc-weekdays span { font-size: 9px; }
+            .rc-mini .rc-day { font-size: 9px; min-height: 20px; }
+            .rc-mini .rc-header { padding: 4px 6px; }
+            .rc-mini .rc-header-title { font-size: 10px; }
             .assessment-card-head { padding: 12px 14px; }
         }
     </style>
@@ -204,7 +219,7 @@
                             <p class="text-sm text-gray-500 mt-0.5">Sabab, hujjat raqami va tasdiqlovchi fayl</p>
                         </div>
                     </div>
-                    <div class="ae-card-body space-y-8">
+                    <div class="ae-card-body space-y-6">
                         {{-- ROW 1: Sabab + Hujjat raqami + Tasdiqlovchi hujjat --}}
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
@@ -280,117 +295,111 @@
                             </div>
                         </div>
 
-                        {{-- ROW 2: Calendar + Izoh --}}
+                        {{-- ROW 2: Sana oralig'i (dropdown calendar) --}}
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {{-- Calendar side --}}
-                            <div>
+                            <div class="cal-dropdown-wrap" @click.outside="showMainCal = false">
                                 <label class="ae-label">Sana oralig'i <span class="req">*</span></label>
 
-                                <div x-show="!reason" class="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                                    <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.832c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-                                    </svg>
-                                    <p class="text-sm font-medium text-amber-700">Avval sababni tanlang</p>
-                                </div>
+                                <template x-if="!reason">
+                                    <div class="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                                        <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.832c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                        </svg>
+                                        <p class="text-sm font-medium text-amber-700">Avval sababni tanlang</p>
+                                    </div>
+                                </template>
 
-                                <div x-show="reason" x-cloak>
-                                    {{-- Date indicators --}}
-                                    <div class="flex items-center gap-2 mb-2">
-                                        <div class="flex-1 rounded-lg p-2 text-center border transition-all"
-                                             :class="startDate ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
-                                            <p class="text-[10px] uppercase font-bold text-gray-400">Boshlanish</p>
-                                            <p class="text-sm font-bold" :class="startDate ? 'text-indigo-700' : 'text-gray-300'"
-                                               x-text="startDate ? fmtDate(startDate) : '—'"></p>
-                                        </div>
-                                        <span class="text-gray-300 text-xs">&rarr;</span>
-                                        <div class="flex-1 rounded-lg p-2 text-center border transition-all"
-                                             :class="endDate ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
-                                            <p class="text-[10px] uppercase font-bold text-gray-400">Tugash</p>
-                                            <p class="text-sm font-bold" :class="endDate ? 'text-indigo-700' : 'text-gray-300'"
-                                               x-text="endDate ? fmtDate(endDate) : '—'"></p>
-                                        </div>
-                                        <template x-if="startDate && endDate">
-                                            <div class="flex-shrink-0 bg-indigo-100 text-indigo-700 px-2 py-1.5 rounded-lg text-center">
-                                                <p class="text-[10px] uppercase font-bold opacity-60">Jami</p>
-                                                <p class="text-sm font-bold" x-text="totalDays + ' kun'"></p>
+                                <template x-if="reason">
+                                    <div>
+                                        {{-- Input trigger --}}
+                                        <div class="cal-trigger" :class="showMainCal ? 'active' : ''"
+                                             @click="showMainCal = !showMainCal">
+                                            <div>
+                                                <template x-if="startDate && endDate">
+                                                    <span class="cal-trigger-text" x-text="fmtDate(startDate) + '  —  ' + fmtDate(endDate) + ' (' + totalDays + ' kun)'"></span>
+                                                </template>
+                                                <template x-if="startDate && !endDate">
+                                                    <span class="cal-trigger-text"><span x-text="fmtDate(startDate)"></span> <span class="text-gray-400 font-normal">— tugash sanasini tanlang</span></span>
+                                                </template>
+                                                <template x-if="!startDate">
+                                                    <span class="cal-trigger-placeholder">Boshlanish — Tugash</span>
+                                                </template>
                                             </div>
-                                        </template>
-                                        <template x-if="startDate || endDate">
-                                            <button type="button" @click="clearDates()"
-                                                    class="text-xs text-red-400 hover:text-red-600 font-medium flex-shrink-0">Tozalash</button>
-                                        </template>
-                                    </div>
+                                            <div class="flex items-center gap-2">
+                                                <template x-if="startDate || endDate">
+                                                    <button type="button" @click.stop="clearDates(); showMainCal = false"
+                                                            class="text-xs text-red-400 hover:text-red-600 font-medium">Tozalash</button>
+                                                </template>
+                                                <svg class="w-5 h-5 text-gray-400 transition-transform" :class="showMainCal ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                            </div>
+                                        </div>
 
-                                    {{-- Hint --}}
-                                    <div x-show="startDate && !endDate && selecting === 'end'" x-cloak
-                                         class="mb-2 flex items-center gap-1 text-xs text-blue-600 font-medium">
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                        Tugash sanasini tanlang
-                                        <template x-if="maxEndDateLabel">
-                                            <span>(maks: <span x-text="maxEndDateLabel"></span>)</span>
-                                        </template>
-                                    </div>
+                                        {{-- Dropdown calendar --}}
+                                        <div x-show="showMainCal" x-transition.origin.top x-cloak class="cal-dropdown">
+                                            {{-- Hint --}}
+                                            <div x-show="startDate && !endDate && selecting === 'end'" class="px-3 py-1.5 bg-blue-50 text-xs text-blue-600 font-medium flex items-center gap-1">
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                                Tugash sanasini tanlang
+                                                <template x-if="maxEndDateLabel">
+                                                    <span>(maks: <span x-text="maxEndDateLabel"></span>)</span>
+                                                </template>
+                                            </div>
 
-                                    {{-- Calendar --}}
-                                    <div class="rc-calendar border border-gray-200 rounded-xl overflow-hidden">
-                                        <div class="rc-header">
-                                            <button type="button" @click="prevMonth()" class="rc-nav">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
-                                            </button>
-                                            <span class="rc-header-title" x-text="monthYearLabel"></span>
-                                            <button type="button" @click="nextMonth()" class="rc-nav" :disabled="!canGoNext">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
-                                            </button>
-                                        </div>
-                                        <div class="rc-weekdays">
-                                            <span>Du</span><span>Se</span><span>Cho</span><span>Pa</span><span>Ju</span><span>Sha</span><span>Ya</span>
-                                        </div>
-                                        <div class="rc-grid">
-                                            <template x-for="cell in calendarCells" :key="cell.key">
-                                                <button type="button"
-                                                        @click="cell.date && !cell.disabled && pickDate(cell.dateStr)"
-                                                        :disabled="cell.disabled || !cell.date"
-                                                        :class="{
-                                                            'rc-empty': !cell.date,
-                                                            'rc-disabled': cell.disabled && cell.date,
-                                                            'rc-sunday': cell.isSunday && cell.date,
-                                                            'rc-today': cell.isToday,
-                                                            'rc-start': cell.dateStr === startDate,
-                                                            'rc-end': cell.dateStr === endDate,
-                                                            'rc-in-range': cell.inRange && cell.dateStr !== startDate && cell.dateStr !== endDate
-                                                        }"
-                                                        class="rc-day"
-                                                        x-text="cell.day"></button>
-                                            </template>
-                                        </div>
-                                    </div>
+                                            <div class="rc-calendar">
+                                                <div class="rc-header">
+                                                    <button type="button" @click="prevMonth()" class="rc-nav">
+                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+                                                    </button>
+                                                    <span class="rc-header-title" x-text="monthYearLabel"></span>
+                                                    <button type="button" @click="nextMonth()" class="rc-nav" :disabled="!canGoNext">
+                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                                                    </button>
+                                                </div>
+                                                <div class="rc-weekdays">
+                                                    <span>Du</span><span>Se</span><span>Cho</span><span>Pa</span><span>Ju</span><span>Sha</span><span>Ya</span>
+                                                </div>
+                                                <div class="rc-grid">
+                                                    <template x-for="cell in calendarCells" :key="cell.key">
+                                                        <button type="button"
+                                                                @click="cell.date && !cell.disabled && pickDate(cell.dateStr)"
+                                                                :disabled="cell.disabled || !cell.date"
+                                                                :class="{
+                                                                    'rc-empty': !cell.date,
+                                                                    'rc-disabled': cell.disabled && cell.date,
+                                                                    'rc-sunday': cell.isSunday && cell.date,
+                                                                    'rc-today': cell.isToday,
+                                                                    'rc-start': cell.dateStr === startDate,
+                                                                    'rc-end': cell.dateStr === endDate,
+                                                                    'rc-in-range': cell.inRange && cell.dateStr !== startDate && cell.dateStr !== endDate
+                                                                }"
+                                                                class="rc-day"
+                                                                x-text="cell.day"></button>
+                                                    </template>
+                                                </div>
+                                            </div>
 
-                                    {{-- Deadline warning --}}
-                                    <div x-show="deadlineWarning" x-transition x-cloak class="mt-2">
-                                        <div :class="deadlineExpired ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'"
-                                             class="border rounded-lg p-2 flex items-center gap-2">
-                                            <svg class="w-4 h-4 flex-shrink-0"
-                                                 :class="deadlineExpired ? 'text-red-500' : 'text-amber-500'"
-                                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                            </svg>
-                                            <p class="text-xs font-medium"
-                                               :class="deadlineExpired ? 'text-red-700' : 'text-amber-700'"
-                                               x-text="deadlineWarning"></p>
+                                            {{-- Deadline warning --}}
+                                            <div x-show="deadlineWarning" class="px-3 py-2">
+                                                <div :class="deadlineExpired ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'"
+                                                     class="border rounded-lg p-2 flex items-center gap-2">
+                                                    <svg class="w-4 h-4 flex-shrink-0"
+                                                         :class="deadlineExpired ? 'text-red-500' : 'text-amber-500'"
+                                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                    <p class="text-xs font-medium"
+                                                       :class="deadlineExpired ? 'text-red-700' : 'text-amber-700'"
+                                                       x-text="deadlineWarning"></p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                </template>
 
                                 <input type="hidden" name="start_date" :value="startDate">
                                 <input type="hidden" name="end_date" :value="endDate">
                             </div>
-
-                            {{-- Izoh side --}}
-                            <div>
-                                <label for="description" class="ae-label">Izoh <span class="text-gray-400 font-normal">(ixtiyoriy)</span></label>
-                                <textarea name="description" id="description" rows="12" maxlength="1000"
-                                          class="ae-textarea" placeholder="Qo'shimcha ma'lumot..." style="min-height: 300px; max-height: 300px;">{{ old('description') }}</textarea>
-                            </div>
+                            <div></div>
                         </div>
                     </div>
                 </div>
@@ -424,14 +433,14 @@
                                 <p class="text-sm text-gray-500 mt-0.5">Har bir nazorat uchun qayta topshirish sanasini tanlang</p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-lg font-bold text-indigo-600" x-text="assessments.filter(a => a.makeup_date).length + '/' + assessments.length"></span>
+                                <span class="text-lg font-bold text-indigo-600" x-text="assessments.filter(a => a.assessment_type === 'jn' ? (a.makeup_start && a.makeup_end) : !!a.makeup_date).length + '/' + assessments.length"></span>
                                 <span class="text-gray-400 text-sm">tanlangan</span>
                             </div>
                         </div>
                     </div>
 
                     {{-- Assessment cards --}}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
                         <template x-for="(item, index) in assessments" :key="index">
                             <div class="assessment-card">
                                 <div class="assessment-card-head">
@@ -446,83 +455,97 @@
                                     </span>
                                 </div>
                                 <div class="px-4 py-3">
-                                    {{-- JN: range indicator --}}
-                                    <template x-if="item.assessment_type === 'jn'">
-                                        <div class="flex items-center gap-2 mb-2">
-                                            <div class="flex-1 rounded p-1.5 text-center border text-xs"
-                                                 :class="item.makeup_start ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
-                                                <p class="font-bold" :class="item.makeup_start ? 'text-indigo-700' : 'text-gray-300'"
-                                                   x-text="item.makeup_start ? fmtDate(item.makeup_start) : 'Boshlanish'"></p>
-                                            </div>
-                                            <span class="text-gray-300 text-xs">&rarr;</span>
-                                            <div class="flex-1 rounded p-1.5 text-center border text-xs"
-                                                 :class="item.makeup_end ? 'border-indigo-200 bg-indigo-50/50' : 'border-gray-200 bg-gray-50'">
-                                                <p class="font-bold" :class="item.makeup_end ? 'text-indigo-700' : 'text-gray-300'"
-                                                   x-text="item.makeup_end ? fmtDate(item.makeup_end) : 'Tugash'"></p>
-                                            </div>
-                                            <template x-if="item.makeup_start || item.makeup_end">
-                                                <button type="button" @click="clearMiniDates(index)"
-                                                        class="text-xs text-red-400 hover:text-red-600 font-medium flex-shrink-0">Tozalash</button>
-                                            </template>
-                                        </div>
-                                    </template>
-
-                                    {{-- Non-JN: single date status --}}
-                                    <template x-if="item.assessment_type !== 'jn'">
-                                        <div class="flex items-center justify-between mb-2">
+                                    <div class="cal-dropdown-wrap" @click.outside="item.show_cal = false">
+                                        {{-- JN: input trigger for range --}}
+                                        <template x-if="item.assessment_type === 'jn'">
                                             <div>
-                                                <template x-if="item.makeup_date">
-                                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                                        <span x-text="fmtDate(item.makeup_date)"></span>
-                                                    </span>
-                                                </template>
-                                                <template x-if="!item.makeup_date">
-                                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-lg text-sm font-medium">
-                                                        Sana tanlanmagan
-                                                    </span>
-                                                </template>
+                                                <div class="cal-trigger" :class="item.show_cal ? 'active' : ''" @click="item.show_cal = !item.show_cal"
+                                                     style="padding: 10px 14px; font-size: 14px; border-radius: 10px;">
+                                                    <div>
+                                                        <template x-if="item.makeup_start && item.makeup_end">
+                                                            <span class="cal-trigger-text" x-text="fmtDate(item.makeup_start) + ' — ' + fmtDate(item.makeup_end)"></span>
+                                                        </template>
+                                                        <template x-if="item.makeup_start && !item.makeup_end">
+                                                            <span class="cal-trigger-text"><span x-text="fmtDate(item.makeup_start)"></span> <span class="text-gray-400 font-normal">— tugash?</span></span>
+                                                        </template>
+                                                        <template x-if="!item.makeup_start">
+                                                            <span class="cal-trigger-placeholder">Sana oralig'ini tanlang</span>
+                                                        </template>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <template x-if="item.makeup_start || item.makeup_end">
+                                                            <button type="button" @click.stop="clearMiniDates(index); item.show_cal = false"
+                                                                    class="text-xs text-red-400 hover:text-red-600 font-medium">Tozalash</button>
+                                                        </template>
+                                                        <svg class="w-4 h-4 text-gray-400" :class="item.show_cal ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <template x-if="item.makeup_date">
-                                                <button type="button" @click="item.makeup_date = ''"
-                                                        class="text-xs text-red-400 hover:text-red-600 font-medium transition">Bekor qilish</button>
-                                            </template>
-                                        </div>
-                                    </template>
+                                        </template>
 
-                                    {{-- Mini monthly calendar --}}
-                                    <div class="rc-calendar rc-mini border border-gray-200 rounded-lg overflow-hidden">
-                                        <div class="rc-header">
-                                            <button type="button" @click="miniPrevMonth(index)" class="rc-nav">
-                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
-                                            </button>
-                                            <span class="rc-header-title" x-text="getMiniMonthLabel(index)"></span>
-                                            <button type="button" @click="miniNextMonth(index)" class="rc-nav">
-                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
-                                            </button>
-                                        </div>
-                                        <div class="rc-weekdays">
-                                            <span>Du</span><span>Se</span><span>Cho</span><span>Pa</span><span>Ju</span><span>Sha</span><span>Ya</span>
-                                        </div>
-                                        <div class="rc-grid">
-                                            <template x-for="cell in getMiniCells(index)" :key="cell.key">
-                                                <button type="button"
-                                                        @click="cell.date && !cell.disabled && miniPickDate(index, cell.dateStr)"
-                                                        :disabled="cell.disabled || !cell.date"
-                                                        :class="{
-                                                            'rc-empty': !cell.date,
-                                                            'rc-disabled': cell.disabled && cell.date,
-                                                            'rc-sunday': cell.isSunday && cell.date,
-                                                            'rc-today': cell.isToday,
-                                                            'rc-start': item.assessment_type === 'jn' && cell.dateStr === item.makeup_start,
-                                                            'rc-end': item.assessment_type === 'jn' && cell.dateStr === item.makeup_end,
-                                                            'rc-in-range': item.assessment_type === 'jn' && miniInRange(index, cell.dateStr),
-                                                            'rc-picked-single': item.assessment_type !== 'jn' && cell.dateStr === item.makeup_date,
-                                                            'rc-taken': cell.takenByJn
-                                                        }"
-                                                        class="rc-day"
-                                                        x-text="cell.day"></button>
-                                            </template>
+                                        {{-- Non-JN: input trigger for single date --}}
+                                        <template x-if="item.assessment_type !== 'jn'">
+                                            <div>
+                                                <div class="cal-trigger" :class="item.show_cal ? 'active' : ''" @click="item.show_cal = !item.show_cal"
+                                                     style="padding: 10px 14px; font-size: 14px; border-radius: 10px;">
+                                                    <div>
+                                                        <template x-if="item.makeup_date">
+                                                            <span class="cal-trigger-text flex items-center gap-1.5">
+                                                                <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                                                <span x-text="fmtDate(item.makeup_date)"></span>
+                                                            </span>
+                                                        </template>
+                                                        <template x-if="!item.makeup_date">
+                                                            <span class="cal-trigger-placeholder">Sanani tanlang</span>
+                                                        </template>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <template x-if="item.makeup_date">
+                                                            <button type="button" @click.stop="item.makeup_date = ''; item.show_cal = false"
+                                                                    class="text-xs text-red-400 hover:text-red-600 font-medium">Bekor qilish</button>
+                                                        </template>
+                                                        <svg class="w-4 h-4 text-gray-400" :class="item.show_cal ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        {{-- Dropdown mini calendar --}}
+                                        <div x-show="item.show_cal" x-transition.origin.top x-cloak class="cal-dropdown">
+                                            <div class="rc-calendar rc-mini">
+                                                <div class="rc-header">
+                                                    <button type="button" @click="miniPrevMonth(index)" class="rc-nav">
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+                                                    </button>
+                                                    <span class="rc-header-title" x-text="getMiniMonthLabel(index)"></span>
+                                                    <button type="button" @click="miniNextMonth(index)" class="rc-nav">
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                                                    </button>
+                                                </div>
+                                                <div class="rc-weekdays">
+                                                    <span>Du</span><span>Se</span><span>Cho</span><span>Pa</span><span>Ju</span><span>Sha</span><span>Ya</span>
+                                                </div>
+                                                <div class="rc-grid">
+                                                    <template x-for="cell in getMiniCells(index)" :key="cell.key">
+                                                        <button type="button"
+                                                                @click="cell.date && !cell.disabled && miniPickDate(index, cell.dateStr)"
+                                                                :disabled="cell.disabled || !cell.date"
+                                                                :class="{
+                                                                    'rc-empty': !cell.date,
+                                                                    'rc-disabled': cell.disabled && cell.date,
+                                                                    'rc-sunday': cell.isSunday && cell.date,
+                                                                    'rc-today': cell.isToday,
+                                                                    'rc-start': item.assessment_type === 'jn' && cell.dateStr === item.makeup_start,
+                                                                    'rc-end': item.assessment_type === 'jn' && cell.dateStr === item.makeup_end,
+                                                                    'rc-in-range': item.assessment_type === 'jn' && miniInRange(index, cell.dateStr),
+                                                                    'rc-picked-single': item.assessment_type !== 'jn' && cell.dateStr === item.makeup_date,
+                                                                    'rc-taken': cell.takenByJn
+                                                                }"
+                                                                class="rc-day"
+                                                                x-text="cell.day"></button>
+                                                    </template>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -538,6 +561,15 @@
                                 </div>
                             </div>
                         </template>
+                    </div>
+                </div>
+
+                {{-- ===== IZOH ===== --}}
+                <div class="ae-card mb-6">
+                    <div class="ae-card-body">
+                        <label for="description" class="ae-label">Izoh <span class="text-gray-400 font-normal">(ixtiyoriy)</span></label>
+                        <textarea name="description" id="description" rows="4" maxlength="1000"
+                                  class="ae-textarea" placeholder="Qo'shimcha ma'lumot...">{{ old('description') }}</textarea>
                     </div>
                 </div>
 
@@ -576,6 +608,7 @@
             startDate: '{{ old("start_date", "") }}',
             endDate: '{{ old("end_date", "") }}',
             selecting: 'start',
+            showMainCal: false,
 
             // Deadline
             deadlineWarning: '',
@@ -743,6 +776,7 @@
                     }
                     this.endDate = dateStr;
                     this.selecting = 'start';
+                    this.showMainCal = false;
                     this.checkDeadline();
                     if (!this.deadlineExpired) {
                         this.fetchAssessments();
@@ -813,7 +847,7 @@
                         const data = await resp.json();
                         this.assessments = (data.assessments || []).map(a => ({
                             ...a, makeup_date: '', makeup_start: '', makeup_end: '',
-                            jn_selecting: 'start', cal_month: cm, cal_year: cy
+                            jn_selecting: 'start', cal_month: cm, cal_year: cy, show_cal: false
                         }));
                     }
                 } catch (e) { console.error('Xatolik:', e); }
@@ -825,7 +859,7 @@
                         assessment_type: 'jn', assessment_type_code: 'jn',
                         original_date: this.startDate, makeup_date: '',
                         makeup_start: '', makeup_end: '', jn_selecting: 'start',
-                        cal_month: cm, cal_year: cy, is_default_jn: true
+                        cal_month: cm, cal_year: cy, show_cal: false, is_default_jn: true
                     });
                 }
                 // JN har doim birinchi
@@ -920,6 +954,7 @@
                         }
                         item.makeup_end = dateStr;
                         item.jn_selecting = 'start';
+                        item.show_cal = false;
                         // JN range o'zgarganda, ichiga tushgan boshqa testlar tozalanadi
                         this.assessments.forEach(a => {
                             if (a.assessment_type !== 'jn' && a.makeup_date) {
@@ -931,6 +966,7 @@
                     }
                 } else {
                     item.makeup_date = item.makeup_date === dateStr ? '' : dateStr;
+                    if (item.makeup_date) item.show_cal = false;
                 }
             },
             miniInRange(index, dateStr) {

@@ -51,8 +51,20 @@ class AbsenceExcuseController extends Controller
 
         $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
 
+        // Shu muddat ichidagi barcha darslardan unique fanlarni olish (JN uchun)
+        $jnSubjects = Schedule::where('group_id', $groupId)
+            ->whereDate('lesson_date', '>=', $startDate)
+            ->whereDate('lesson_date', '<=', $endDate)
+            ->select('subject_name', 'subject_id')
+            ->distinct()
+            ->get()
+            ->map(fn($s) => ['subject_name' => $s->subject_name, 'subject_id' => $s->subject_id])
+            ->values()
+            ->toArray();
+
         return response()->json([
             'assessments' => $missedAssessments->values()->toArray(),
+            'jn_subjects' => $jnSubjects,
         ]);
     }
 

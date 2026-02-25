@@ -68,13 +68,13 @@
 
         /* ======= SCROLL CALENDAR (makeup) ======= */
         .sc-strip {
-            display: flex; overflow-x: auto; gap: 8px; padding: 10px 4px 14px;
+            display: flex; overflow-x: auto; gap: 5px; padding: 8px 2px 10px;
             -webkit-overflow-scrolling: touch; scrollbar-width: thin;
         }
-        .sc-strip::-webkit-scrollbar { height: 4px; }
+        .sc-strip::-webkit-scrollbar { height: 3px; }
         .sc-strip::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .sc-cell {
-            flex-shrink: 0; width: 60px; height: 76px; border-radius: 14px;
+            flex-shrink: 0; width: 44px; height: 58px; border-radius: 10px;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             font-weight: 500; transition: all .15s; cursor: pointer;
             border: 1.5px solid #e2e8f0; background: #fff;
@@ -90,9 +90,9 @@
         .sc-cell.sc-is-today:not(.sc-picked) {
             border-color: #818cf8; box-shadow: 0 0 0 2px rgba(129,140,248,0.3);
         }
-        .sc-cell-wd { font-size: 12px; text-transform: uppercase; font-weight: 700; line-height: 1; opacity: .6; }
-        .sc-cell-d { font-size: 24px; font-weight: 800; line-height: 1.2; }
-        .sc-cell-m { font-size: 11px; line-height: 1; opacity: .5; font-weight: 600; }
+        .sc-cell-wd { font-size: 9px; text-transform: uppercase; font-weight: 700; line-height: 1; opacity: .6; }
+        .sc-cell-d { font-size: 16px; font-weight: 800; line-height: 1.2; }
+        .sc-cell-m { font-size: 8px; line-height: 1; opacity: .5; font-weight: 600; }
         .sc-cell.sc-picked .sc-cell-wd,
         .sc-cell.sc-picked .sc-cell-m { opacity: .7; }
 
@@ -137,8 +137,8 @@
         }
         .assessment-card:hover { border-color: #c7d2fe; box-shadow: 0 4px 14px rgba(0,0,0,.05); }
         .assessment-card-head {
-            padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
-            border-bottom: 1px solid #f1f5f9; flex-wrap: wrap; gap: 8px;
+            padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid #f1f5f9; flex-wrap: wrap; gap: 6px;
         }
 
         /* ======= SUBMIT BTN ======= */
@@ -173,8 +173,8 @@
             .rc-day { font-size: 15px; min-height: 40px; border-radius: 8px; }
             .rc-weekdays { padding: 8px 6px 6px; }
             .rc-weekdays span { font-size: 12px; }
-            .sc-cell { width: 54px; height: 68px; border-radius: 12px; }
-            .sc-cell-d { font-size: 20px; }
+            .sc-cell { width: 40px; height: 52px; border-radius: 8px; }
+            .sc-cell-d { font-size: 14px; }
             .assessment-card-head { padding: 12px 14px; }
         }
     </style>
@@ -214,9 +214,9 @@
                             <p class="text-sm text-gray-500 mt-0.5">Sabab, hujjat raqami va tasdiqlovchi fayl</p>
                         </div>
                     </div>
-                    <div class="ae-card-body space-y-6">
+                    <div class="ae-card-body space-y-8">
                         {{-- ROW 1: Sabab + Hujjat raqami --}}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label for="reason" class="ae-label">Sabab <span class="req">*</span></label>
                                 <select name="reason" id="reason" required x-model="reason"
@@ -266,7 +266,7 @@
                         </div>
 
                         {{-- ROW 2: Fayl yuklash + Izoh --}}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label class="ae-label">Tasdiqlovchi hujjat (spravka) <span class="req">*</span></label>
                                 <label for="file" class="ae-file-zone block" :class="fileName ? 'has-file' : ''"
@@ -479,42 +479,40 @@
                     </div>
 
                     {{-- Assessment cards --}}
-                    <div class="space-y-4 mb-5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
                         <template x-for="(item, index) in assessments" :key="index">
                             <div class="assessment-card">
                                 <div class="assessment-card-head">
-                                    <div class="flex items-center gap-3 flex-wrap">
-                                        <span class="text-lg font-bold text-gray-900" x-text="item.subject_name"></span>
-                                        <span class="px-3 py-1 text-sm font-bold rounded-lg"
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-base font-bold text-gray-900" x-text="item.subject_name"></span>
+                                        <span class="px-2 py-0.5 text-xs font-bold rounded-lg"
                                               :class="'badge-' + item.assessment_type"
                                               x-text="getLabel(item.assessment_type)"></span>
                                     </div>
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-base text-gray-400">
-                                            Asl sana: <span class="font-semibold text-gray-600" x-text="fmtDate(item.original_date)"></span>
-                                        </span>
-                                    </div>
+                                    <span class="text-sm text-gray-400">
+                                        <span class="font-semibold text-gray-600" x-text="fmtDate(item.original_date)"></span>
+                                    </span>
                                 </div>
-                                <div class="px-5 py-4">
+                                <div class="px-4 py-3">
                                     {{-- Status --}}
-                                    <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center justify-between mb-2">
                                         <div>
                                             <template x-if="item.makeup_date">
-                                                <span class="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-base font-bold">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                                                     <span x-text="fmtDate(item.makeup_date)"></span>
                                                 </span>
                                             </template>
                                             <template x-if="!item.makeup_date">
-                                                <span class="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-lg text-base font-medium">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01"></path></svg>
+                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-lg text-sm font-medium">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01"></path></svg>
                                                     Sana tanlanmagan
                                                 </span>
                                             </template>
                                         </div>
                                         <template x-if="item.makeup_date">
                                             <button type="button" @click="item.makeup_date = ''"
-                                                    class="text-sm text-red-400 hover:text-red-600 font-medium transition">Bekor qilish</button>
+                                                    class="text-xs text-red-400 hover:text-red-600 font-medium transition">Bekor qilish</button>
                                         </template>
                                     </div>
 

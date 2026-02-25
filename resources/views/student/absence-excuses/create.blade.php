@@ -136,41 +136,31 @@
         .ae-file-zone:hover { border-color: #818cf8; background: #eef2ff; }
         .ae-file-zone.has-file { border-color: #34d399; background: #ecfdf5; }
 
-        /* ======= ASSESSMENT TABLE ======= */
-        .ae-table-wrap { overflow: visible; border-radius: 14px; border: 1.5px solid #e2e8f0; background: #fff; }
-        .ae-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        .ae-table thead th {
-            padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;
-            background: #f8fafc; border-bottom: 2px solid #e2e8f0;
+        /* ======= FAN CARD GRID ======= */
+        .ae-fan-grid {
+            display: grid; gap: 14px;
         }
-        .ae-table tbody td {
-            padding: 10px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; overflow: visible;
+        .ae-fan-card {
+            background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px;
+            overflow: visible; min-width: 0;
         }
-        .ae-table tbody tr:last-child td { border-bottom: none; }
-        .ae-table .ae-subject-cell { font-weight: 700; color: #1e293b; border-right: 1px solid #f1f5f9; }
-        .ae-table .ae-date-cell { position: relative; min-width: 200px; overflow: visible; }
-        .ae-table .ae-date-cell .cal-dropdown { z-index: 100; }
-
-        /* ======= MOBILE CARD LAYOUT ======= */
-        .ae-mobile-group {
-            background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px; overflow: visible;
+        .ae-fan-header {
+            padding: 12px 16px; font-size: 14px; font-weight: 700; color: #1e293b;
+            background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+            border-radius: 14px 14px 0 0; display: flex; align-items: center; gap: 10px;
+            text-transform: uppercase; line-height: 1.3;
         }
-        .ae-mobile-subject {
-            padding: 10px 14px; font-size: 13px; font-weight: 700; color: #1e293b;
-            background: #f8fafc; border-bottom: 1px solid #e2e8f0; border-radius: 12px 12px 0 0;
-            display: flex; align-items: center; gap: 8px; text-transform: uppercase;
-        }
-        .ae-mobile-num {
+        .ae-fan-num {
             display: inline-flex; align-items: center; justify-content: center;
-            width: 22px; height: 22px; border-radius: 6px; font-size: 11px;
+            width: 26px; height: 26px; border-radius: 8px; font-size: 13px;
             font-weight: 700; color: #6366f1; background: #eef2ff; flex-shrink: 0;
         }
-        .ae-mobile-item {
-            padding: 10px 14px; border-bottom: 1px solid #f1f5f9;
+        .ae-fan-name { flex: 1; min-width: 0; }
+        .ae-fan-item {
+            padding: 12px 16px; border-bottom: 1px solid #f1f5f9;
         }
-        .ae-mobile-item:last-child { border-bottom: none; }
-        .ae-mobile-item .cal-dropdown { z-index: 100; }
+        .ae-fan-item:last-child { border-bottom: none; }
+        .ae-fan-item .cal-dropdown { z-index: 100; }
 
         /* ======= SUBMIT BTN ======= */
         .ae-submit {
@@ -230,10 +220,12 @@
             .rc-mini .rc-header { padding: 5px 8px; }
             .rc-mini .rc-header-title { font-size: 11px; }
 
-            /* Mobile group cards */
-            .ae-mobile-subject { font-size: 12px; padding: 8px 12px; }
-            .ae-mobile-item { padding: 8px 12px; }
-            .ae-mobile-num { width: 20px; height: 20px; font-size: 10px; }
+            /* Fan grid mobile */
+            .ae-fan-grid { gap: 10px !important; grid-template-columns: 1fr !important; }
+            .ae-fan-header { font-size: 12px; padding: 8px 12px; border-radius: 10px 10px 0 0; }
+            .ae-fan-card { border-radius: 10px; }
+            .ae-fan-item { padding: 8px 12px; }
+            .ae-fan-num { width: 20px; height: 20px; font-size: 10px; border-radius: 6px; }
 
             /* Submit */
             .ae-submit { font-size: 15px; padding: 12px 24px; border-radius: 12px; }
@@ -511,52 +503,17 @@
                         </div>
                     </div>
 
-                    {{-- ===== DESKTOP: Table ===== --}}
-                    <div class="ae-table-wrap mb-6 hidden md:block">
-                        <table class="ae-table">
-                            <thead>
-                                <tr>
-                                    <th style="width:40px">T/r</th>
-                                    <th>Fan</th>
-                                    <th>Nazorat turlari</th>
-                                    <th>Qayta topshirish muddati</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="(group, gi) in groupedAssessments" :key="gi">
-                                    <template x-for="(item, ri) in group.items" :key="item._idx">
-                                        <tr>
-                                            <template x-if="ri === 0">
-                                                <td class="ae-subject-cell text-center" :rowspan="group.items.length" x-text="gi + 1" style="font-weight:600; color:#6366f1;"></td>
-                                            </template>
-                                            <template x-if="ri === 0">
-                                                <td class="ae-subject-cell" :rowspan="group.items.length" x-text="group.subject_name" style="text-transform:uppercase;"></td>
-                                            </template>
-                                            <td>
-                                                <span class="px-2 py-0.5 text-xs font-bold rounded-lg inline-block"
-                                                      :class="'badge-' + item.assessment_type"
-                                                      x-text="getLabel(item.assessment_type)"></span>
-                                            </td>
-                                            <td class="ae-date-cell">
-                                                @include('student.absence-excuses._calendar-cell')
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {{-- ===== MOBILE: Card layout ===== --}}
-                    <div class="mb-6 md:hidden" style="display:flex; flex-direction:column; gap:12px;">
-                        <template x-for="(group, gi) in groupedAssessments" :key="'m'+gi">
-                            <div class="ae-mobile-group">
-                                <div class="ae-mobile-subject">
-                                    <span class="ae-mobile-num" x-text="gi + 1"></span>
-                                    <span x-text="group.subject_name" style="text-transform:uppercase;"></span>
+                    {{-- ===== GRID: Fan cards ===== --}}
+                    <div class="ae-fan-grid mb-6"
+                         :style="'grid-template-columns: repeat(' + (groupedAssessments.length >= 3 ? 3 : 2) + ', 1fr)'">
+                        <template x-for="(group, gi) in groupedAssessments" :key="gi">
+                            <div class="ae-fan-card">
+                                <div class="ae-fan-header">
+                                    <span class="ae-fan-num" x-text="gi + 1"></span>
+                                    <span class="ae-fan-name" x-text="group.subject_name"></span>
                                 </div>
-                                <template x-for="(item, ri) in group.items" :key="'m'+item._idx">
-                                    <div class="ae-mobile-item">
+                                <template x-for="(item, ri) in group.items" :key="item._idx">
+                                    <div class="ae-fan-item">
                                         <div style="margin-bottom:6px;">
                                             <span class="px-2 py-0.5 text-xs font-bold rounded-lg inline-block"
                                                   :class="'badge-' + item.assessment_type"

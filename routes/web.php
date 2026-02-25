@@ -35,6 +35,7 @@ use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
+use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\MoodleImportController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\LanguageController;
@@ -322,6 +323,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/export', [KtrController::class, 'export'])->name('export');
             Route::get('/plan/{curriculumSubjectId}', [KtrController::class, 'getPlan'])->name('get-plan');
             Route::post('/plan/{curriculumSubjectId}', [KtrController::class, 'savePlan'])->name('save-plan');
+        });
+
+        // Kafedra (Fakultet va kafedralar tuzilmasi)
+        Route::prefix('kafedra')->name('kafedra.')->group(function () {
+            Route::get('/', [KafedraController::class, 'index'])->name('index');
+            Route::post('/transfer', [KafedraController::class, 'transfer'])->name('transfer');
         });
 
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');

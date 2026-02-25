@@ -37,8 +37,8 @@
                             <select name="recipient_type" id="recipient_type"
                                     class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
                                     onchange="toggleRecipientList()">
-                                <option value="App\Models\User">{{ __('notifications.admin_user') }}</option>
-                                <option value="App\Models\Teacher">{{ __('notifications.teacher') }}</option>
+                                <option value="App\Models\User" {{ old('recipient_type', 'App\Models\User') === 'App\Models\User' ? 'selected' : '' }}>{{ __('notifications.admin_user') }}</option>
+                                <option value="App\Models\Teacher" {{ old('recipient_type') === 'App\Models\Teacher' ? 'selected' : '' }}>{{ __('notifications.teacher') }}</option>
                             </select>
                         </div>
 
@@ -51,7 +51,7 @@
                                 <option value="{{ $u->id }}">{{ $u->name }}</option>
                                 @endforeach
                             </select>
-                            <select name="recipient_id" id="recipient_teacher" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm" style="display: none;">
+                            <select name="" id="recipient_teacher" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm" style="display: none;">
                                 <option value="">-- {{ __('notifications.select_recipient') }} --</option>
                                 @foreach($teachers as $t)
                                 <option value="{{ $t->id }}">{{ $t->full_name }}</option>
@@ -114,6 +114,7 @@
                 userSelect.name = 'recipient_id';
             }
         }
+        document.addEventListener('DOMContentLoaded', toggleRecipientList);
     </script>
     @endpush
 </x-app-layout>

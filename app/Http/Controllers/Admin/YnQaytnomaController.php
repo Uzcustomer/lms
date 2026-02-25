@@ -420,13 +420,10 @@ class YnQaytnomaController extends Controller
 
                 if (!$subject) continue;
 
-                // YN ga yuborilganda saqlangan baholarni olish (snapshot)
-                $savedGrades = YnStudentGrade::where('yn_submission_id', $submission->id)
-                    ->pluck('jn', 'student_hemis_id')
-                    ->toArray();
-                $savedMtGrades = YnStudentGrade::where('yn_submission_id', $submission->id)
-                    ->pluck('mt', 'student_hemis_id')
-                    ->toArray();
+                // Har bir talaba uchun eng oxirgi snapshotni olish (tarixli)
+                $latestSnapshots = YnStudentGrade::latestPerStudent($submission->id)->get();
+                $savedGrades = $latestSnapshots->pluck('jn', 'student_hemis_id')->toArray();
+                $savedMtGrades = $latestSnapshots->pluck('mt', 'student_hemis_id')->toArray();
 
                 // Talabalar ro'yxatini olish
                 $students = Student::select('full_name as student_name', 'student_id_number as student_id', 'hemis_id')

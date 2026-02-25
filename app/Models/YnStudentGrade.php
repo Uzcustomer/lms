@@ -14,6 +14,7 @@ class YnStudentGrade extends Model
         'student_hemis_id',
         'jn',
         'mt',
+        'source',
     ];
 
     public function ynSubmission()
@@ -24,5 +25,19 @@ class YnStudentGrade extends Model
     public function student()
     {
         return $this->belongsTo(Student::class, 'student_hemis_id', 'hemis_id');
+    }
+
+    /**
+     * Har bir talaba uchun eng oxirgi snapshotni olish
+     */
+    public function scopeLatestPerStudent($query, $ynSubmissionId)
+    {
+        return $query->where('yn_submission_id', $ynSubmissionId)
+            ->whereIn('id', function ($sub) use ($ynSubmissionId) {
+                $sub->selectRaw('MAX(id)')
+                    ->from('yn_student_grades')
+                    ->where('yn_submission_id', $ynSubmissionId)
+                    ->groupBy('student_hemis_id');
+            });
     }
 }

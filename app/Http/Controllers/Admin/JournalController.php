@@ -4123,6 +4123,7 @@ class JournalController extends Controller
                     'student_hemis_id' => $hemisId,
                     'jn' => $grades['jn'],
                     'mt' => $grades['mt'],
+                    'source' => 'yn_submitted',
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];

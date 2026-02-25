@@ -14,9 +14,10 @@ return new class extends Migration
             $table->string('student_hemis_id');
             $table->integer('jn')->default(0);
             $table->integer('mt')->default(0);
+            $table->string('source')->default('yn_submitted'); // yn_submitted, absence_excuse:ID
             $table->timestamps();
 
-            $table->unique(['yn_submission_id', 'student_hemis_id'], 'yn_student_grades_unique');
+            $table->index(['yn_submission_id', 'student_hemis_id'], 'yn_student_grades_submission_student');
             $table->index('student_hemis_id');
         });
     }

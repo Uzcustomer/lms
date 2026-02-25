@@ -16,26 +16,34 @@ class KafedraController extends Controller
             ->orderBy('name')
             ->get();
 
-        // Har bir fakultetning kafedralari (parent_id orqali bog'langan)
-        $facultyIds = $faculties->pluck('id')->toArray();
+        // Fakultetlarning HEMIS ID lari (parent_id shu qiymatga ishora qiladi)
+        $facultyHemisIds = $faculties->pluck('department_hemis_id')->toArray();
 
-        $kafedras = Department::whereIn('parent_id', $facultyIds)
+        // HEMIS ID -> faculty mapping (view da groupBy uchun)
+        $hemisToFaculty = $faculties->keyBy('department_hemis_id');
+
+        // Faqat haqiqiy kafedralar - nomida "kafedra" so'zi bor bo'lganlar
+        // parent_id = faculty ning department_hemis_id ga teng
+        $kafedras = Department::whereIn('parent_id', $facultyHemisIds)
             ->where('active', true)
+            ->where('name', 'LIKE', '%kafedra%')
             ->orderBy('name')
             ->get()
             ->groupBy('parent_id');
 
-        // Parent_id bo'lmagan yoki noto'g'ri kafedralari (tayinlanmagan)
-        $unassigned = Department::where('structure_type_code', '!=', 11)
-            ->where('active', true)
-            ->where(function ($q) use ($facultyIds) {
+        // Fakultetga tayinlanmagan kafedralar (parent_id bo'sh yoki noto'g'ri)
+        $unassigned = Department::where('active', true)
+            ->where('name', 'LIKE', '%kafedra%')
+            ->where('structure_type_code', '!=', 11)
+            ->where(function ($q) use ($facultyHemisIds) {
                 $q->whereNull('parent_id')
-                  ->orWhereNotIn('parent_id', $facultyIds);
+                  ->orWhere('parent_id', 0)
+                  ->orWhereNotIn('parent_id', $facultyHemisIds);
             })
             ->orderBy('name')
             ->get();
 
-        return view('admin.kafedra.index', compact('faculties', 'kafedras', 'unassigned'));
+        return view('admin.kafedra.index', compact('faculties', 'kafedras', 'unassigned', 'hemisToFaculty'));
     }
 
     /**
@@ -54,7 +62,7 @@ class KafedraController extends Controller
             ->where('active', true)
             ->firstOrFail();
 
-        $kafedra->parent_id = $faculty->id;
+        $kafedra->parent_id = $faculty->department_hemis_id;
         $kafedra->save();
 
         return response()->json([

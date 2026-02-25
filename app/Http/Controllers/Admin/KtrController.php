@@ -755,36 +755,64 @@ class KtrController extends Controller
         ];
 
         try {
-            // Kafedra
+            // Kafedra (CurriculumSubject.department_id = kafedra HEMIS ID)
             $kafedra = Department::where('department_hemis_id', $cs->department_id)->first();
             if ($kafedra) {
                 $info['kafedra_name'] = $kafedra->name;
 
-                // Kafedra mudiri
+                // Kafedra mudiri - Spatie role orqali
                 $mudiri = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'kafedra_mudiri'))
                     ->where('department_hemis_id', $kafedra->department_hemis_id)
                     ->where('is_active', true)
                     ->first();
+                // Fallback: role ustuni orqali
+                if (!$mudiri) {
+                    $mudiri = Teacher::where('role', 'kafedra_mudiri')
+                        ->where('department_hemis_id', $kafedra->department_hemis_id)
+                        ->where('is_active', true)
+                        ->first();
+                }
                 if ($mudiri) {
                     $info['kafedra_mudiri'] = ['id' => $mudiri->id, 'name' => $mudiri->full_name];
                 }
+            }
 
-                // Fakultet (kafedra uchun parent)
-                if ($kafedra->parent_id) {
-                    $faculty = Department::find($kafedra->parent_id);
-                    if ($faculty) {
-                        $info['faculty_name'] = $faculty->name;
+            // Fakultetni topish: Curriculum orqali (eng ishonchli yo'l)
+            // CurriculumSubject.curricula_hemis_id -> Curriculum.department_hemis_id = fakultet HEMIS ID
+            $faculty = null;
+            $curriculum = Curriculum::where('curricula_hemis_id', $cs->curricula_hemis_id)->first();
+            if ($curriculum && $curriculum->department_hemis_id) {
+                $faculty = Department::where('department_hemis_id', $curriculum->department_hemis_id)
+                    ->where('structure_type_code', '11')
+                    ->first();
+            }
 
-                        // Dekan
-                        if (Schema::hasTable('dean_faculties')) {
-                            $dekan = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'dekan'))
-                                ->whereHas('deanFaculties', fn ($q) => $q->where('dean_faculties.department_hemis_id', $faculty->department_hemis_id))
-                                ->where('is_active', true)
-                                ->first();
-                            if ($dekan) {
-                                $info['dekan'] = ['id' => $dekan->id, 'name' => $dekan->full_name];
-                            }
-                        }
+            // Fallback: kafedra parent_id orqali (parent_id = HEMIS parent ID)
+            if (!$faculty && $kafedra && $kafedra->parent_id) {
+                $faculty = Department::where('department_hemis_id', $kafedra->parent_id)->first();
+            }
+
+            if ($faculty) {
+                $info['faculty_name'] = $faculty->name;
+
+                // Dekan
+                if (Schema::hasTable('dean_faculties')) {
+                    $dekan = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'dekan'))
+                        ->whereHas('deanFaculties', fn ($q) => $q->where('dean_faculties.department_hemis_id', $faculty->department_hemis_id))
+                        ->where('is_active', true)
+                        ->first();
+                    if ($dekan) {
+                        $info['dekan'] = ['id' => $dekan->id, 'name' => $dekan->full_name];
+                    }
+                }
+                // Fallback: role ustuni orqali
+                if (!$info['dekan']) {
+                    $dekan = Teacher::where('role', 'dekan')
+                        ->where('department_hemis_id', $faculty->department_hemis_id)
+                        ->where('is_active', true)
+                        ->first();
+                    if ($dekan) {
+                        $info['dekan'] = ['id' => $dekan->id, 'name' => $dekan->full_name];
                     }
                 }
             }
@@ -793,6 +821,11 @@ class KtrController extends Controller
             $registrator = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'registrator_ofisi'))
                 ->where('is_active', true)
                 ->first();
+            if (!$registrator) {
+                $registrator = Teacher::where('role', 'registrator_ofisi')
+                    ->where('is_active', true)
+                    ->first();
+            }
             if ($registrator) {
                 $info['registrator'] = ['id' => $registrator->id, 'name' => $registrator->full_name];
             }

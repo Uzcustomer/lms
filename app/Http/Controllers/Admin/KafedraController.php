@@ -20,15 +20,20 @@ class KafedraController extends Controller
         $xalqaroMain = $allFaculties->first(fn($f) => stripos($f->name, 'xalqaro') !== false && stripos($f->name, 'davolash') === false);
         $xalqaroDuplicates = $allFaculties->filter(fn($f) => stripos($f->name, 'xalqaro') !== false && $f->id !== ($xalqaroMain->id ?? 0));
 
-        // Asosiy fakultetlar ro'yxati (dublikat xalqaro fakultetlarsiz)
+        // Ko'rsatiladigan fakultetlar (dublikatlarsiz)
         $faculties = $allFaculties->reject(fn($f) => $xalqaroDuplicates->contains('id', $f->id));
 
-        // Barcha fakultetlarning HEMIS ID lari (dublikatlar ham)
-        $allFacultyHemisIds = $allFaculties->pluck('department_hemis_id')->map(fn($id) => (int) $id)->toArray();
-
-        // Dublikat xalqaro fakultetlarning HEMIS ID lari
-        $xalqaroDupHemisIds = $xalqaroDuplicates->pluck('department_hemis_id')->map(fn($id) => (int) $id)->toArray();
-        $xalqaroMainHemisId = $xalqaroMain ? (int) $xalqaroMain->department_hemis_id : 0;
+        // parent_id -> ko'rsatiladigan faculty hemis_id mapping
+        // Dublikat xalqaro faculty hemis_id larini asosiy xalqaro ga yo'naltirish
+        $parentMap = [];
+        foreach ($faculties as $f) {
+            $parentMap[strval($f->department_hemis_id)] = strval($f->department_hemis_id);
+        }
+        if ($xalqaroMain) {
+            foreach ($xalqaroDuplicates as $dup) {
+                $parentMap[strval($dup->department_hemis_id)] = strval($xalqaroMain->department_hemis_id);
+            }
+        }
 
         // Barcha kafedralarni BITTA so'rov bilan olish
         $allKafedras = Department::where('active', true)
@@ -37,22 +42,22 @@ class KafedraController extends Controller
             ->orderBy('name')
             ->get();
 
-        // Dublikat xalqaro fakultet kafedralari uchun parent_id ni asosiyga yo'naltirish
-        $allKafedras->each(function ($k) use ($xalqaroDupHemisIds, $xalqaroMainHemisId) {
-            if (in_array((int) $k->parent_id, $xalqaroDupHemisIds)) {
-                $k->parent_id = $xalqaroMainHemisId;
+        // Kafedralarni fakultetlarga ajratish
+        $assigned = collect();
+        $unassigned = collect();
+
+        foreach ($allKafedras as $k) {
+            $pid = strval($k->parent_id);
+            if (isset($parentMap[$pid])) {
+                // Dublikat xalqaro → asosiy xalqaro ga yo'naltirish
+                $k->setAttribute('display_parent_id', $parentMap[$pid]);
+                $assigned->push($k);
+            } else {
+                $unassigned->push($k);
             }
-        });
+        }
 
-        // PHP da ajratish - har bir kafedra faqat BITTA joyda ko'rinadi
-        $displayHemisIds = $faculties->pluck('department_hemis_id')->map(fn($id) => (int) $id)->toArray();
-
-        $kafedras = $allKafedras
-            ->filter(fn($k) => in_array((int) $k->parent_id, $displayHemisIds))
-            ->groupBy('parent_id');
-
-        $unassigned = $allKafedras
-            ->filter(fn($k) => !in_array((int) $k->parent_id, $displayHemisIds));
+        $kafedras = $assigned->groupBy('display_parent_id');
 
         return view('admin.kafedra.index', compact('faculties', 'kafedras', 'unassigned'));
     }

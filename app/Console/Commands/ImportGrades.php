@@ -37,7 +37,7 @@ class ImportGrades extends Command
         $this->token = config('services.hemis.token') ?? '';
     }
 
-    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)} {--date= : Single date import (Y-m-d)} {--silent : Suppress Telegram notifications}';
+    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)} {--to= : Backfill end date (Y-m-d), default yesterday} {--date= : Single date import (Y-m-d)} {--silent : Suppress Telegram notifications}';
 
     protected $description = 'Import student grades and attendance from Hemis API';
 
@@ -471,6 +471,11 @@ class ImportGrades extends Command
         $this->sendProgressDone('final', $successDays, $originalTotal, $failedDays);
         $this->sendTelegramReport();
         Log::info("[FinalImport] Completed at " . Carbon::now() . ": {$successDays}/{$totalDays} days finalized.");
+
+        // 04:00 retry ni boshqarish — muvaffaqiyatli bo'lsa cache ga yozish
+        if (empty($failedDays)) {
+            \Illuminate\Support\Facades\Cache::put('final_import_last_success', Carbon::now()->toDateTimeString(), now()->addHours(12));
+        }
     }
 
     // =========================================================================
@@ -486,10 +491,11 @@ class ImportGrades extends Command
         }
 
         $startDate = Carbon::parse($fromDate)->startOfDay();
-        $endDate = Carbon::yesterday()->startOfDay();
+        $toDate = $this->option('to');
+        $endDate = $toDate ? Carbon::parse($toDate)->startOfDay() : Carbon::yesterday()->startOfDay();
 
         if ($startDate->greaterThan($endDate)) {
-            $this->error("Boshlanish sanasi ({$startDate->toDateString()}) kechagi kundan ({$endDate->toDateString()}) katta bo'lishi mumkin emas.");
+            $this->error("Boshlanish sanasi ({$startDate->toDateString()}) tugash sanasidan ({$endDate->toDateString()}) katta bo'lishi mumkin emas.");
             return;
         }
 
@@ -530,14 +536,15 @@ class ImportGrades extends Command
                 continue;
             }
 
-            $this->applyGrades($gradeItems, $date, true);
+            $isFinal = !$date->isToday();
+            $this->applyGrades($gradeItems, $date, $isFinal);
 
             // Attendance
             $attendanceItems = $this->fetchAllPages('attendance-list', $dayFrom, $dayTo);
             if ($attendanceItems !== false) {
                 foreach ($attendanceItems as $item) {
                     try {
-                        $this->processAttendance($item, true);
+                        $this->processAttendance($item, $isFinal);
                     } catch (\Throwable $e) {
                         Log::warning("[Backfill] Attendance item failed: " . substr($e->getMessage(), 0, 100));
                     }
@@ -600,6 +607,20 @@ class ImportGrades extends Command
 
                     if ($response->successful()) {
                         $data = $response->json()['data']['items'] ?? [];
+                        $pagination = $response->json()['data']['pagination'] ?? [];
+
+                        // Diagnostika: API pagination ma'lumotlarini log qilish
+                        if ($currentPage === 1) {
+                            $totalCount = $pagination['totalCount'] ?? $pagination['total'] ?? 'N/A';
+                            $pageCount = $pagination['pageCount'] ?? 'N/A';
+                            $this->info("[API Diag] {$endpoint}: totalCount={$totalCount}, pageCount={$pageCount}, firstPageItems=" . count($data));
+                            Log::info("[API Diag] {$endpoint}: totalCount={$totalCount}, pageCount={$pageCount}, firstPageItems=" . count($data), [
+                                'from' => $from,
+                                'to' => $to,
+                                'filterDate' => $filterDate?->toDateString(),
+                                'pagination' => $pagination,
+                            ]);
+                        }
 
                         // Xavfsizlik filtri: UTC timestamp fix bilan API to'g'ri ishlashi kerak,
                         // lekin ehtiyot sifatida boshqa kunlik recordlarni tashlash saqlanadi

@@ -9,9 +9,14 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote')->hourly();
 
 // Baholar: kechasi 00:30 da FINAL import (kechagi va yakunlanmagan kunlarni is_final=true qiladi)
-// 04:00 da takroriy — agar 00:30 dagi crash bo'lsa, qayta urinadi
+// bootstrap/app.php da ham 00:30 ga withoutOverlapping bilan scheduled
+// 04:00 da retry: FAQAT oldingi run xato bergan bo'lsa qayta ishlaydi
 Schedule::command('student:import-data --mode=final')->dailyAt('00:30');
-Schedule::command('student:import-data --mode=final')->dailyAt('04:00');
+Schedule::command('student:import-data --mode=final')->dailyAt('04:00')->when(function () {
+    // Faqat agar bugun 00:30 run muvaffaqiyatsiz bo'lgan yoki ishlamagan bo'lsa
+    $lastSuccess = \Illuminate\Support\Facades\Cache::get('final_import_last_success');
+    return !$lastSuccess || !Carbon::parse($lastSuccess)->isToday();
+});
 
 // Davomat nazorati: kechasi 02:00 da FINAL import (kechagi va yakunlanmagan kunlarni is_final=true qiladi)
 Schedule::command('import:attendance-controls --mode=final')->dailyAt('02:00');

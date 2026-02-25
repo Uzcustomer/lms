@@ -300,22 +300,26 @@ class ImportGrades extends Command
                     $this->info("  {$dateStr} — dublikat tozalandi: {$cleaned} o'chirildi, {$upgraded} ta lokal baho yakunlandi.");
                     Log::info("[FinalImport] {$dateStr} — cleaned {$cleaned} duplicate is_final=false, upgraded {$upgraded} unique local records.");
 
-                    // To'liq import bo'lgan bo'lsa (ko'p yozuv), API dan qayta tortish shart emas
-                    if ($finalizedCount >= 500) {
+                    // Oxirgi 3 kun DOIM API dan tortiladi (to'liq ishonch uchun)
+                    // Eski kunlar (4+ kun) uchun — yetarli yozuv bo'lsa skip
+                    $daysAgo = Carbon::today()->diffInDays($date);
+                    if ($finalizedCount >= 500 && $daysAgo >= 3) {
                         $this->importDayAttendance($dateStr, $date, true);
                         $this->updateDayProgress($dateStr, '✅', "tozalandi ({$cleaned})", $dayNum, $originalTotal);
                         $successDays++;
                         continue;
                     }
-                    // Kam yozuv (journal sync dan) — API dan to'ldirish kerak
-                    $this->info("  {$dateStr} — qisman yakunlangan ({$finalizedCount} ta yozuv), API dan to'ldirish...");
+                    // Kam yozuv yoki yaqin sana — API dan to'ldirish kerak
+                    $this->info("  {$dateStr} — qisman yakunlangan ({$finalizedCount} ta yozuv, {$daysAgo} kun oldin), API dan to'ldirish...");
                 }
 
-                // ─── Stsenariy B: Faqat is_final=true (journal sync dan) ───
-                // Kam yozuv — to'liq import bo'lmagan, API dan tortish kerak
-                if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500) {
+                // ─── Stsenariy B: Faqat is_final=true mavjud ───
+                // Oxirgi 3 kun DOIM API dan qayta tortiladi (race condition yoki API xato bo'lgan bo'lishi mumkin)
+                // Eski kunlar (4+ kun) — yetarli yozuv bo'lsa skip
+                $daysAgo = Carbon::today()->diffInDays($date);
+                if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500 && $daysAgo >= 3) {
                     $this->importDayAttendance($dateStr, $date, true);
-                    $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv), o'tkazildi.");
+                    $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv, {$daysAgo} kun oldin), o'tkazildi.");
                     $this->updateDayProgress($dateStr, '✅', "to'liq ({$finalizedCount})", $dayNum, $originalTotal);
                     $totalDays--;
                     continue;

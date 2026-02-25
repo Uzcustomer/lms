@@ -323,6 +323,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/export', [KtrController::class, 'export'])->name('export');
             Route::get('/plan/{curriculumSubjectId}', [KtrController::class, 'getPlan'])->name('get-plan');
             Route::post('/plan/{curriculumSubjectId}', [KtrController::class, 'savePlan'])->name('save-plan');
+            Route::post('/change-request/{curriculumSubjectId}', [KtrController::class, 'requestChange'])->name('request-change');
+            Route::post('/change-approve/{approvalId}', [KtrController::class, 'approveChange'])->name('approve-change');
         });
 
         // Kafedra (Fakultet va kafedralar tuzilmasi)

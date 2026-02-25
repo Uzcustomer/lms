@@ -22,6 +22,8 @@
 
     <!-- JSZip for client-side file compression -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    @stack('styles')
 </head>
 <body class="font-sans antialiased">
 <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
@@ -105,6 +107,8 @@
         {{ $slot }}
     </main>
 </div>
+
+    @stack('scripts')
 
     {{-- DEBUG: Console log - account switching debug --}}
     <script>

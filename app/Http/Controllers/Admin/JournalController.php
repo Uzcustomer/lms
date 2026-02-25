@@ -287,9 +287,9 @@ class JournalController extends Controller
             ->pluck('hemis_id');
 
         // Excluded training type names for Amaliyot (JB)
-        $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test"];
-        // Excluded training type codes: 11=Ma'ruza, 99=MT, 100=ON, 101=Oski, 102=Test
-        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        // Excluded training type codes: 11=Ma'ruza, 99=MT, 100=ON, 101=Oski, 102=Test, 103=Quiz
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
         // Calendar source: get scheduled lesson date/pair columns for JB and MT
         $jbScheduleRows = DB::table('schedules')
@@ -641,24 +641,41 @@ class JournalController extends Controller
 
         // Get students basic info
         // Chetlashgan talabalar: joriy semestrda bo'lsa — ko'rsatiladi (qizil), oldingi semestrlarda — chiqariladi
+        // NULL student_status_code ham faol deb hisoblanadi (chiqarilmaydi)
+        // Chetlashgan (60) talaba bahosi yoki davomati bo'lsa — ko'rsatiladi
         $students = DB::table('students')
             ->where('group_id', $group->group_hemis_id)
-            ->where(function ($query) use ($semesterCode) {
-                $query->where('student_status_code', '!=', '60')
-                      ->orWhere('semester_code', $semesterCode);
+            ->where(function ($query) use ($semesterCode, $subjectId) {
+                $query
+                    // Faol talabalar (status != 60, shu jumladan NULL): doimo ko'rsatiladi
+                    ->where(function ($q) {
+                        $q->where('student_status_code', '!=', '60')
+                          ->orWhereNull('student_status_code');
+                    })
+                    // Chetlashgan talabalar: semester mos kelsa ko'rsatiladi
+                    ->orWhere('semester_code', $semesterCode)
+                    // Chetlashgan talabalar: bahosi bo'lsa ko'rsatiladi (NB ham)
+                    ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
+                        $sub->select(DB::raw(1))
+                            ->from('student_grades')
+                            ->whereColumn('student_grades.student_hemis_id', 'students.hemis_id')
+                            ->where('student_grades.subject_id', $subjectId)
+                            ->where('student_grades.semester_code', $semesterCode)
+                            ->whereNull('student_grades.deleted_at');
+                    });
             })
             ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
             ->orderBy('full_name')
             ->get();
 
-        // Get other averages (ON, OSKI, Test) with status-based grade calculation
+        // Get other averages (ON, OSKI, Test, Quiz) with status-based grade calculation
         // Filter by education_year_code to exclude old education year data
         $otherGradesRaw = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->whereIn('training_type_code', [100, 101, 102])
+            ->whereIn('training_type_code', [100, 101, 102, 103])
             ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
                 $q2->where('education_year_code', $educationYearCode)
                     ->orWhere(function ($q3) use ($minScheduleDate) {
@@ -671,14 +688,26 @@ class JournalController extends Controller
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
                 $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
             }))
-            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
             ->get();
 
         $otherGrades = [];
         foreach ($otherGradesRaw as $g) {
             $effectiveGrade = $getEffectiveGrade($g);
             if ($effectiveGrade !== null) {
-                $otherGrades[$g->student_hemis_id][$g->training_type_code][] = $effectiveGrade['grade'];
+                $typeCode = $g->training_type_code;
+                // Legacy code 103 quiz grades: resolve to OSKI(101) or Test(102) via quiz_result
+                if ($typeCode == 103 && $g->quiz_result_id) {
+                    $quizType = DB::table('hemis_quiz_results')->where('id', $g->quiz_result_id)->value('quiz_type');
+                    $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+                    $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+                    if (in_array($quizType, $oskiTypes)) {
+                        $typeCode = 101;
+                    } elseif (in_array($quizType, $testTypes)) {
+                        $typeCode = 102;
+                    }
+                }
+                $otherGrades[$g->student_hemis_id][$typeCode][] = $effectiveGrade['grade'];
             }
         }
         // Calculate averages
@@ -3155,7 +3184,7 @@ class JournalController extends Controller
      */
     private function getTeachersByType($groupHemisId, $subjectId, $semesterCode)
     {
-        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
         $schedules = DB::table('schedules')
             ->where('group_id', $groupHemisId)
@@ -3890,6 +3919,24 @@ class JournalController extends Controller
             ], 404);
         }
 
+        // Check if auth user exists in users table (teacher guard may use different auth table)
+        $submittedByUserId = DB::table('users')->where('id', auth()->id())->exists() ? auth()->id() : null;
+
+        if (!$submittedByUserId) {
+            // Teacher guard orqali kirgan bo'lsa, teachers jadvalidan login bo'yicha users jadvalidan qidirish
+            $teacher = auth()->guard('teacher')->user();
+            if ($teacher) {
+                $submittedByUserId = DB::table('users')->where('email', $teacher->login)->value('id');
+            }
+        }
+
+        if (!$submittedByUserId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Foydalanuvchi topilmadi. Iltimos, qayta kiring.',
+            ], 403);
+        }
+
         DB::beginTransaction();
         try {
             // YN submission yozuvini yaratish
@@ -3897,7 +3944,7 @@ class JournalController extends Controller
                 'subject_id' => $subjectId,
                 'semester_code' => $semesterCode,
                 'group_hemis_id' => $groupHemisId,
-                'submitted_by' => auth()->id(),
+                'submitted_by' => $submittedByUserId,
                 'submitted_at' => now(),
             ]);
 

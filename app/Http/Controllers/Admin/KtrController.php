@@ -5,10 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
+use App\Models\CurriculumSubjectTeacher;
 use App\Models\Department;
 use App\Models\KtrPlan;
+use App\Models\Teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class KtrController extends Controller
@@ -436,6 +440,30 @@ class KtrController extends Controller
     }
 
     /**
+     * Foydalanuvchi ushbu fan KTR rejasini tahrirlash huquqiga ega ekanligini tekshirish
+     */
+    private function canEditSubjectKtr(CurriculumSubject $cs): bool
+    {
+        $user = auth()->user();
+
+        // Superadmin/admin har doim tahrirlashi mumkin
+        if ($user->hasRole(['superadmin', 'admin', 'kichik_admin'])) {
+            return true;
+        }
+
+        // O'qituvchi/fan mas'uli - faqat o'z fanlari uchun
+        if ($user instanceof Teacher && $user->hemis_id) {
+            return CurriculumSubjectTeacher::where('employee_id', $user->hemis_id)
+                ->where('subject_id', $cs->subject_id)
+                ->where('active', true)
+                ->exists();
+        }
+
+        // Registrator ofisi va boshqa rollar - faqat ko'rish
+        return false;
+    }
+
+    /**
      * Fan uchun KTR rejasini olish
      */
     public function getPlan($curriculumSubjectId)
@@ -481,15 +509,81 @@ class KtrController extends Controller
             $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
         }
 
+        // HEMIS dan mavzularni olish
+        $hemisTopics = $this->fetchHemisTopics($cs);
+
         return response()->json([
             'subject_name' => $cs->subject_name,
             'total_acload' => (int) $cs->total_acload,
             'training_types' => $trainingTypes,
+            'hemis_topics' => $hemisTopics,
+            'can_edit' => $this->canEditSubjectKtr($cs),
             'plan' => $plan ? [
                 'week_count' => $plan->week_count,
                 'plan_data' => $plan->plan_data,
             ] : null,
         ]);
+    }
+
+    /**
+     * HEMIS API dan fan mavzularini olish (training type bo'yicha guruhlangan)
+     */
+    private function fetchHemisTopics(CurriculumSubject $cs): array
+    {
+        $baseUrl = rtrim(config('services.hemis.base_url', 'https://student.ttatf.uz/rest'), '/');
+        if (!str_contains($baseUrl, '/v1')) {
+            $baseUrl .= '/v1';
+        }
+        $token = config('services.hemis.token');
+
+        try {
+            $response = Http::withoutVerifying()
+                ->withToken($token)
+                ->timeout(15)
+                ->get($baseUrl . '/data/curriculum-subject-topic-list', [
+                    '_curriculum' => $cs->curricula_hemis_id,
+                    '_semester' => $cs->semester_code,
+                    'limit' => 200,
+                    'page' => 1,
+                ]);
+
+            if (!$response->successful()) {
+                return [];
+            }
+
+            $items = $response->json('data.items') ?? [];
+
+            // Fan bo'yicha filtrlash
+            $subjectId = (int) $cs->subject_id;
+            $items = array_filter($items, function ($item) use ($subjectId) {
+                return isset($item['subject']['id']) && (int) $item['subject']['id'] === $subjectId;
+            });
+
+            // Training type bo'yicha guruhlash va position bo'yicha tartiblash
+            $topicsByType = [];
+            foreach ($items as $item) {
+                $typeCode = (string) ($item['_training_type'] ?? '');
+                if ($typeCode === '') continue;
+
+                if (!isset($topicsByType[$typeCode])) {
+                    $topicsByType[$typeCode] = [];
+                }
+                $topicsByType[$typeCode][] = [
+                    'position' => (int) ($item['position'] ?? 0),
+                    'name' => $item['name'] ?? '',
+                ];
+            }
+
+            // Position bo'yicha tartiblash
+            foreach ($topicsByType as &$topics) {
+                usort($topics, fn($a, $b) => $a['position'] <=> $b['position']);
+            }
+
+            return $topicsByType;
+        } catch (\Exception $e) {
+            Log::warning('KTR hemis topics fetch failed', ['error' => $e->getMessage()]);
+            return [];
+        }
     }
 
     /**
@@ -499,16 +593,43 @@ class KtrController extends Controller
     {
         $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
 
+        if (!$this->canEditSubjectKtr($cs)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sizda ushbu fan KTR rejasini tahrirlash huquqi yo\'q.',
+            ], 403);
+        }
+
         $request->validate([
             'week_count' => 'required|integer|min:1|max:15',
             'plan_data' => 'required|array',
         ]);
 
-        // Jami soatlarni tekshirish
+        // Yangi format: plan_data = {hours: {...}, topics: {...}}
+        $planData = $request->plan_data;
+        $hoursData = $planData['hours'] ?? $planData;
+
+        // Jami soatlarni tekshirish (mustaqil ta'lim soatlarini ham hisoblash)
         $totalEntered = 0;
-        foreach ($request->plan_data as $weekData) {
-            foreach ($weekData as $hours) {
-                $totalEntered += (int) $hours;
+        foreach ($hoursData as $weekData) {
+            if (is_array($weekData)) {
+                foreach ($weekData as $hours) {
+                    $totalEntered += (int) $hours;
+                }
+            }
+        }
+
+        // Mustaqil ta'lim soatlarini qo'shish (avtomatik)
+        $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+        if (is_array($details)) {
+            $normalize = function ($str) {
+                return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower($str));
+            };
+            foreach ($details as $detail) {
+                $name = $detail['trainingType']['name'] ?? '';
+                if (preg_match('/mustaqil/i', $normalize($name))) {
+                    $totalEntered += (int) ($detail['academic_load'] ?? 0);
+                }
             }
         }
 

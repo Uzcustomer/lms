@@ -87,17 +87,28 @@ class AbsenceExcuseController extends Controller
             // Word shablon mavjudligini tekshirish
             $template = DocumentTemplate::getActiveByType('absence_excuse');
 
-            if ($template) {
-                // Word shablon orqali PDF generatsiya
-                $service = new DocumentTemplateService();
-                $qrPath = $service->generateQrImage($verificationUrl);
-                $pdfPath = $service->generateAbsenceExcusePdf($excuse, $reviewerName, $qrPath);
+            $wordTemplateSuccess = false;
 
-                // QR vaqtinchalik faylni tozalash
-                if ($qrPath) {
-                    @unlink($qrPath);
+            if ($template) {
+                try {
+                    // Word shablon orqali PDF generatsiya
+                    $service = new DocumentTemplateService();
+                    $qrPath = $service->generateQrImage($verificationUrl);
+                    $pdfPath = $service->generateAbsenceExcusePdf($excuse, $reviewerName, $qrPath);
+
+                    // QR vaqtinchalik faylni tozalash
+                    if ($qrPath) {
+                        @unlink($qrPath);
+                    }
+
+                    $wordTemplateSuccess = true;
+                } catch (\Throwable $e) {
+                    // Word shablon orqali ishlamadi — Blade fallback ga o'tish
+                    \Log::warning('Word template PDF failed, falling back to Blade: ' . $e->getMessage());
                 }
-            } else {
+            }
+
+            if (!$wordTemplateSuccess) {
                 // Blade shablon orqali (fallback)
                 $qrCodeSvg = null;
                 $qrCodeBase64 = null;

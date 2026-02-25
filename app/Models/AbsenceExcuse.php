@@ -73,6 +73,7 @@ class AbsenceExcuse extends Model
         'student_full_name',
         'group_name',
         'department_name',
+        'doc_number',
         'reason',
         'start_date',
         'end_date',

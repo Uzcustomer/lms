@@ -12,10 +12,11 @@
         $year = now()->year;
         $month = now()->month;
         $academicYear = $month >= 9 ? $year . '.' . ($year + 1) : ($year - 1) . '.' . $year;
+        $daysCount = $excuse->start_date->diffInDays($excuse->end_date) + 1;
     @endphp
     <style>
         @page {
-            margin: 25px 35px 55px 35px;
+            margin: 20mm 20mm 25mm 25mm;
         }
         * {
             margin: 0;
@@ -24,175 +25,222 @@
         }
         body {
             font-family: DejaVu Sans, sans-serif;
-            font-size: 12px;
-            line-height: 1.5;
+            font-size: 11pt;
+            line-height: 1.4;
             color: #000;
         }
 
-        /* Gerb / Logo */
-        .gerb {
-            text-align: center;
-            margin-bottom: 6px;
+        /* ===== HEADER: Gerb + Universitet nomi ===== */
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 4px;
         }
-        .gerb img {
+        .header-table td {
+            vertical-align: middle;
+        }
+        .header-logo {
             width: 70px;
+            text-align: center;
+        }
+        .header-logo img {
+            width: 60px;
             height: auto;
         }
-
-        /* Universitet nomi */
-        .header-uz {
+        .header-text {
             text-align: center;
-            font-size: 10px;
+            padding-left: 5px;
+        }
+        .header-ministry {
+            font-size: 9pt;
             font-weight: bold;
             text-transform: uppercase;
-            line-height: 1.4;
             color: #003366;
-        }
-        .header-en {
-            text-align: center;
-            font-size: 8px;
-            font-style: italic;
-            color: #444;
-            margin-top: 3px;
             line-height: 1.3;
         }
-        .address {
+        .header-university {
+            font-size: 10pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #003366;
+            line-height: 1.3;
+            margin-top: 2px;
+        }
+        .header-en {
+            font-size: 7.5pt;
+            font-style: italic;
+            color: #555;
+            margin-top: 2px;
+            line-height: 1.2;
+        }
+        .header-address {
             text-align: center;
-            font-size: 7.5px;
+            font-size: 7pt;
             color: #666;
             margin-top: 4px;
-            padding-bottom: 8px;
+            padding-bottom: 6px;
             border-bottom: 2.5px solid #003366;
         }
 
-        /* Hujjat meta */
+        /* ===== FARMOYISH sarlavha ===== */
         .doc-meta {
             width: 100%;
-            margin-top: 14px;
             border-collapse: collapse;
+            margin-top: 14px;
         }
         .doc-meta td {
             vertical-align: top;
         }
-        .doc-meta .left-col {
+        .meta-left {
             width: 35%;
-            font-size: 11px;
+            font-size: 10pt;
             line-height: 1.6;
         }
-        .doc-meta .right-col {
+        .meta-right {
             width: 65%;
             text-align: center;
         }
-
-        /* Farmoyish sarlavha */
         .farmoyish-title {
-            font-size: 15px;
+            font-size: 14pt;
             font-weight: bold;
             text-transform: uppercase;
             color: #003366;
             line-height: 1.3;
         }
         .academic-year {
-            font-size: 11px;
+            font-size: 10pt;
             font-weight: bold;
             margin-top: 3px;
         }
 
-        /* Asosiy matn */
+        /* ===== Asosiy matn ===== */
         .body-text {
-            margin-top: 18px;
+            margin-top: 16px;
             text-align: justify;
-            font-size: 12px;
-            line-height: 1.7;
+            font-size: 11pt;
+            line-height: 1.6;
         }
         .body-text p {
-            text-indent: 25px;
-            margin-bottom: 8px;
+            text-indent: 20px;
+            margin-bottom: 6px;
         }
         .student-name {
             font-weight: bold;
             text-transform: uppercase;
         }
 
-        /* Imzolar */
+        /* ===== Fanlar jadvali ===== */
+        .subjects-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            margin-bottom: 12px;
+            font-size: 10pt;
+        }
+        .subjects-table th,
+        .subjects-table td {
+            border: 1px solid #333;
+            padding: 4px 6px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .subjects-table th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+            font-size: 9pt;
+        }
+        .subjects-table td.left-align {
+            text-align: left;
+        }
+
+        /* ===== Imzolar ===== */
         .signatures {
             width: 100%;
-            margin-top: 45px;
             border-collapse: collapse;
+            margin-top: 35px;
         }
         .signatures td {
             vertical-align: bottom;
-            font-size: 12px;
+            font-size: 11pt;
         }
-        .signatures .sig-left {
+        .sig-left {
             width: 50%;
         }
-        .signatures .sig-right {
+        .sig-right {
             width: 50%;
             text-align: right;
         }
 
-        /* Ijrochi */
+        /* ===== Ijrochi ===== */
         .executor {
-            margin-top: 50px;
-            font-size: 8px;
+            margin-top: 40px;
+            font-size: 7.5pt;
             color: #666;
             line-height: 1.5;
         }
 
-        /* QR kod */
+        /* ===== QR kod ===== */
         .qr-container {
             position: fixed;
             bottom: 10px;
-            right: 35px;
+            right: 20px;
             text-align: center;
         }
         .qr-container img {
-            width: 90px;
-            height: 90px;
+            width: 80px;
+            height: 80px;
+        }
+        .qr-label {
+            font-size: 6pt;
+            color: #999;
+            margin-top: 2px;
         }
     </style>
 </head>
 <body>
 
-    {{-- Gerb / Logo --}}
-    <div class="gerb">
-        @if(file_exists(public_path('gerb.png')))
-            <img src="{{ public_path('gerb.png') }}" alt="Gerb">
-        @elseif(file_exists(public_path('logo.png')))
-            <img src="{{ public_path('logo.png') }}" alt="Logo">
-        @endif
-    </div>
+    {{-- ===== HEADER ===== --}}
+    <table class="header-table" cellpadding="0" cellspacing="0">
+        <tr>
+            <td class="header-logo">
+                @if(file_exists(public_path('gerb.png')))
+                    <img src="{{ public_path('gerb.png') }}" alt="Gerb">
+                @elseif(file_exists(public_path('logo.png')))
+                    <img src="{{ public_path('logo.png') }}" alt="Logo">
+                @endif
+            </td>
+            <td class="header-text">
+                <div class="header-ministry">
+                    O'zbekiston Respublikasi Sog'liqni Saqlash Vazirligi
+                </div>
+                <div class="header-university">
+                    Toshkent Davlat Tibbiyot Universiteti Termiz Filiali
+                </div>
+                <div class="header-en">
+                    Ministry of the Health of the Republic of Uzbekistan<br>
+                    Termez Branch of Tashkent State Medical University
+                </div>
+            </td>
+        </tr>
+    </table>
 
-    {{-- Universitet nomi (o'zbekcha) --}}
-    <div class="header-uz">
-        O'ZBEKISTON RESPUBLIKASI SOG'LIQNI SAQLASH VAZIRLIGI<br>
-        TOSHKENT DAVLAT TIBBIYOT UNIVERSITETI TERMIZ FILIALI
-    </div>
-
-    {{-- Universitet nomi (inglizcha) --}}
-    <div class="header-en">
-        MINISTRY OF THE HEALTH OF THE REPUBLIC OF UZBEKISTAN<br>
-        TERMEZ BRANCH OF TASHKENT STATE MEDICAL UNIVERSITY
-    </div>
-
-    {{-- Manzil --}}
-    <div class="address">
+    {{-- Manzil + chiziq --}}
+    <div class="header-address">
         190100, Surxondaryo viloyati, Termiz shahri | Tel/Fax: (0376) 000-00-00 | web: www.tdtutf.uz
     </div>
 
-    {{-- Hujjat meta: sana + raqam (chap) va sarlavha (o'ng) --}}
+    {{-- ===== FARMOYISH META ===== --}}
     <table class="doc-meta" cellpadding="0" cellspacing="0">
         <tr>
-            <td class="left-col">
+            <td class="meta-left">
                 {{ $reviewDate->format('Y') }} yil
                 &laquo;{{ $reviewDate->format('j') }}&raquo;
                 {{ $months[$reviewDate->month] ?? $reviewDate->format('F') }}<br>
                 08-{{ str_pad($excuse->id, 5, '0', STR_PAD_LEFT) }} - son
             </td>
-            <td class="right-col">
+            <td class="meta-right">
                 <div class="farmoyish-title">
-                    REGISTRATOR OFISI<br>FARMOYISHI
+                    Registrator ofisi<br>Farmoyishi
                 </div>
                 <div class="academic-year">
                     {{ $academicYear }} o'quv yili
@@ -201,7 +249,7 @@
         </tr>
     </table>
 
-    {{-- Asosiy matn --}}
+    {{-- ===== ASOSIY MATN ===== --}}
     <div class="body-text">
         <p>
             Toshkent davlat tibbiyot universiteti Termiz filiali
@@ -210,9 +258,9 @@
             talabasi <span class="student-name">{{ $excuse->student_full_name }}</span>
             (HEMIS ID: {{ $excuse->student_hemis_id }})
             {{ mb_strtolower($excuse->reason_label) }} sababli
-            {{ $excuse->start_date->format('Y') }}-yil
-            {{ $excuse->start_date->format('j') }}-{{ $excuse->end_date->format('j') }}-{{ $months[$excuse->start_date->month] ?? $excuse->start_date->format('F') }}
-            kunlari ({{ $excuse->start_date->diffInDays($excuse->end_date) + 1 }} kun)
+            {{ $excuse->start_date->format('d.m.Y') }} dan
+            {{ $excuse->end_date->format('d.m.Y') }} gacha
+            ({{ $daysCount }} kun)
             darslardan qayta topshirish sharti bilan ozod etilsin.
         </p>
 
@@ -228,7 +276,30 @@
         </p>
     </div>
 
-    {{-- Imzolar --}}
+    {{-- ===== FANLAR JADVALI ===== --}}
+    <table class="subjects-table">
+        <thead>
+            <tr>
+                <th style="width: 30px;">T/r</th>
+                <th>Fan</th>
+                <th style="width: 120px;">Nazorat turlari</th>
+                <th style="width: 130px;">Qayta topshirish muddati</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{-- Bo'sh qatorlar (to'ldiriladi) --}}
+            @for ($i = 1; $i <= 5; $i++)
+                <tr>
+                    <td>{{ $i }}</td>
+                    <td class="left-align">&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                </tr>
+            @endfor
+        </tbody>
+    </table>
+
+    {{-- ===== IMZOLAR ===== --}}
     <table class="signatures" cellpadding="0" cellspacing="0">
         <tr>
             <td class="sig-left">
@@ -240,21 +311,23 @@
         </tr>
     </table>
 
-    {{-- Ijrochi ma'lumotlari --}}
+    {{-- ===== IJROCHI ===== --}}
     <div class="executor">
         Ijrochi: {{ $excuse->reviewed_by_name ?? '-' }}<br>
         ID {{ str_pad($excuse->id, 6, '0', STR_PAD_LEFT) }}<br>
         Sana: {{ $reviewDate->format('d.m.Y') }}
     </div>
 
-    {{-- QR kod --}}
+    {{-- ===== QR KOD ===== --}}
     @if(!empty($qrCodeSvg))
         <div class="qr-container">
             {!! $qrCodeSvg !!}
+            <div class="qr-label">Tekshirish</div>
         </div>
     @elseif(!empty($qrCodeBase64))
         <div class="qr-container">
             <img src="data:image/png;base64,{{ $qrCodeBase64 }}" alt="QR Code">
+            <div class="qr-label">Tekshirish</div>
         </div>
     @endif
 

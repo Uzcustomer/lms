@@ -254,7 +254,7 @@ class StudentApiController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
         $gradingCutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
 
@@ -454,14 +454,25 @@ class StudentApiController extends Controller
                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
             }
 
-            // ON, OSKI, Test (100, 101, 102)
+            // ON, OSKI, Test, Quiz (100, 101, 102, 103)
             $otherGradesRaw = DB::table('student_grades')
                 ->where('student_hemis_id', $studentHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
-                ->whereIn('training_type_code', [100, 101, 102])
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
-                ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason')
+                ->whereIn('training_type_code', [100, 101, 102, 103])
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $subjectEducationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
+                                    $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
+                                }));
+                        });
+                }))
+                ->when($subjectEducationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
+                    $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
+                }))
+                ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
                 ->get();
 
             $otherGrades = ['on' => null, 'oski' => null, 'test' => null];
@@ -469,7 +480,19 @@ class StudentApiController extends Controller
             foreach ($otherGradesRaw as $g) {
                 $effectiveGrade = $getEffectiveGrade($g);
                 if ($effectiveGrade !== null) {
-                    $otherByType[$g->training_type_code][] = $effectiveGrade;
+                    $typeCode = $g->training_type_code;
+                    // Legacy code 103 quiz grades: resolve to OSKI(101) or Test(102) via quiz_result
+                    if ($typeCode == 103 && $g->quiz_result_id) {
+                        $quizType = DB::table('hemis_quiz_results')->where('id', $g->quiz_result_id)->value('quiz_type');
+                        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+                        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+                        if (in_array($quizType, $oskiTypes)) {
+                            $typeCode = 101;
+                        } elseif (in_array($quizType, $testTypes)) {
+                            $typeCode = 102;
+                        }
+                    }
+                    $otherByType[$typeCode][] = $effectiveGrade;
                 }
             }
             if (!empty($otherByType[100])) $otherGrades['on'] = round(array_sum($otherByType[100]) / count($otherByType[100]), 0, PHP_ROUND_HALF_UP);

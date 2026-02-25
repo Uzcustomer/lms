@@ -36,6 +36,8 @@ use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
 use App\Http\Controllers\MoodleImportController;
+use App\Http\Controllers\Admin\NotificationController;
+use App\Http\Controllers\LanguageController;
 
 
 Route::get('/', function () {
@@ -58,6 +60,9 @@ Route::get('/absence-excuse/verify/{token}/pdf', [\App\Http\Controllers\AbsenceE
 // Hujjat haqiqiyligini tekshirish (QR kod orqali, public)
 Route::get('/document/verify/{token}', [\App\Http\Controllers\DocumentVerificationController::class, 'verify'])->name('document.verify');
 Route::get('/document/verify/{token}/pdf', [\App\Http\Controllers\DocumentVerificationController::class, 'viewPdf'])->name('document.verify.pdf');
+
+// Til almashtirish (Language switch)
+Route::get('/language/{locale}', [LanguageController::class, 'switch'])->name('language.switch');
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
@@ -262,6 +267,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/teachers', [TeacherController::class, 'index'])->name('teachers.index');
         Route::get('/teachers/export-excel', [TeacherController::class, 'exportExcel'])->name('teachers.export-excel');
+        Route::get('/teachers/search-subjects', [TeacherController::class, 'searchSubjects'])->name('teachers.search-subjects');
+        Route::get('/teachers/subject-courses', [TeacherController::class, 'getSubjectCourses'])->name('teachers.subject-courses');
         Route::get('/teachers/{teacher}', [TeacherController::class, 'show'])->name('teachers.show');
         Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
         Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
@@ -270,6 +277,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/teachers/{teacher}/contact', [TeacherController::class, 'updateContact'])->name('teachers.update-contact');
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
+
+        // Xabarnomalar (Notifications)
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
+        Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+        Route::get('/notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
+        Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+        Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
+        Route::get('/notifications-unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
 
         // Unified settings page
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
@@ -313,6 +330,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/lesson-assignment', [ReportController::class, 'lessonAssignment'])->name('reports.lesson-assignment');
         Route::get('/reports/lesson-assignment/data', [ReportController::class, 'lessonAssignmentData'])->name('reports.lesson-assignment.data');
         Route::post('/reports/lesson-assignment/sync-schedules', [ReportController::class, 'syncSchedulesForReport'])->name('reports.lesson-assignment.sync-schedules');
+        Route::get('/reports/lesson-assignment/sync-status', [ReportController::class, 'syncSchedulesStatus'])->name('reports.lesson-assignment.sync-status');
         Route::get('/reports/lesson-assignment/diagnostic', [ReportController::class, 'lessonAssignmentDiagnostic'])->name('reports.lesson-assignment.diagnostic');
 
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
@@ -549,6 +567,7 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'create'])->name('create');
             Route::post('/store', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'store'])->name('store');
+            Route::post('/missed-assessments', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'missedAssessments'])->name('missed-assessments');
             Route::get('/{id}', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'show'])->name('show');
             Route::get('/{id}/download', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'download'])->name('download');
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');

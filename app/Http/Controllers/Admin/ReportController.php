@@ -534,7 +534,7 @@ class ReportController extends Controller
     /**
      * Dars jadvali yangilash — HEMIS dan tanlangan sana oralig'idagi jadvallarni sinxronlash
      */
-    public function syncSchedulesForReport(Request $request, ScheduleImportService $service)
+    public function syncSchedulesForReport(Request $request)
     {
         $request->validate([
             'date_from' => 'required|date',
@@ -544,7 +544,6 @@ class ReportController extends Controller
         $from = Carbon::parse($request->date_from)->startOfDay();
         $to = Carbon::parse($request->date_to)->endOfDay();
 
-        // Maksimal 31 kun — juda katta oraliq bo'lmasligi uchun
         if ($from->diffInDays($to) > 31) {
             return response()->json([
                 'success' => false,
@@ -552,37 +551,51 @@ class ReportController extends Controller
             ], 422);
         }
 
-        try {
-            // 1. Jadval (schedules) yangilash
-            $service->importBetween($from, $to);
+        $syncKey = 'report_sync_' . auth()->id();
 
-            // 2. Davomat nazorati (attendance_controls) yangilash — har bir kun uchun
-            $current = $from->copy();
-            while ($current->lte($to)) {
-                \Illuminate\Support\Facades\Artisan::call('import:attendance-controls', [
-                    '--date' => $current->toDateString(),
-                    '--silent' => true,
-                ]);
-                $current->addDay();
-            }
-
-            // 3. Baholar va NB import — HEMIS dan sana oralig'i bo'yicha
-            \Illuminate\Support\Facades\Artisan::call('student:import-data', [
-                '--mode' => 'backfill',
-                '--from' => $from->toDateString(),
-                '--to' => $to->toDateString(),
-            ]);
-
+        // Allaqachon ishlab turgan sync bormi?
+        $existing = \Illuminate\Support\Facades\Cache::get($syncKey);
+        if ($existing && $existing['status'] === 'running') {
             return response()->json([
                 'success' => true,
-                'message' => "Jadval, davomat va baholar yangilandi ({$from->toDateString()} — {$to->toDateString()}).",
+                'sync_key' => $syncKey,
+                'message' => 'Sinxronlash allaqachon jarayonda.',
             ]);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'HEMIS bilan sinxronlashda xatolik: ' . $e->getMessage(),
-            ], 500);
         }
+
+        // Darhol "boshlandi" holatini yozish
+        \Illuminate\Support\Facades\Cache::put($syncKey, [
+            'status' => 'running',
+            'message' => 'Navbatga qo\'shildi...',
+            'current' => 0,
+            'total' => 0,
+            'percent' => 0,
+            'updated_at' => now()->toDateTimeString(),
+        ], 600);
+
+        \App\Jobs\SyncReportDataJob::dispatch(
+            $request->date_from,
+            $request->date_to,
+            $syncKey
+        );
+
+        return response()->json([
+            'success' => true,
+            'sync_key' => $syncKey,
+            'message' => 'Sinxronlash boshlandi.',
+        ]);
+    }
+
+    public function syncSchedulesStatus(Request $request)
+    {
+        $syncKey = 'report_sync_' . auth()->id();
+        $data = \Illuminate\Support\Facades\Cache::get($syncKey);
+
+        if (!$data) {
+            return response()->json(['status' => 'none']);
+        }
+
+        return response()->json($data);
     }
 
     /**

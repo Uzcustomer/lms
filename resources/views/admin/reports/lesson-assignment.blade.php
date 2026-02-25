@@ -107,6 +107,7 @@
                                 <button type="button" id="btn-sync" class="btn-sync" onclick="syncSchedules()" title="HEMIS dan dars jadvalini yangilash">
                                     <svg id="sync-icon" style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                                     <span id="sync-text">Yangilash</span>
+                                    <span id="sync-percent" style="display:none;margin-left:4px;font-size:11px;opacity:0.9;"></span>
                                 </button>
                                 <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -267,6 +268,8 @@
             });
         }
 
+        var syncPollTimer = null;
+
         function syncSchedules() {
             var dateFrom = $('#date_from').val();
             var dateTo = $('#date_to').val();
@@ -278,10 +281,12 @@
             var btn = $('#btn-sync');
             var icon = $('#sync-icon');
             var text = $('#sync-text');
+            var pct = $('#sync-percent');
 
             btn.prop('disabled', true).css('opacity', '0.7');
             icon.css('animation', 'spin 0.8s linear infinite');
-            text.text('Yangilanmoqda...');
+            text.text('Boshlanmoqda...');
+            pct.show().text('');
 
             $.ajax({
                 url: '{{ route("admin.reports.lesson-assignment.sync-schedules") }}',
@@ -291,26 +296,15 @@
                     date_from: dateFrom,
                     date_to: dateTo,
                 },
-                timeout: 180000,
+                timeout: 30000,
                 success: function(res) {
-                    icon.css('animation', '');
-                    text.text('Yangilash');
-                    btn.prop('disabled', false).css('opacity', '1');
-
                     if (res.success) {
-                        text.text('Yangilandi!');
-                        btn.css('background', 'linear-gradient(135deg, #16a34a, #22c55e)');
-                        setTimeout(function() {
-                            text.text('Yangilash');
-                            btn.css('background', '');
-                        }, 3000);
-                        loadReport(1);
+                        text.text('Yangilanmoqda...');
+                        startSyncPolling();
                     }
                 },
                 error: function(xhr) {
-                    icon.css('animation', '');
-                    text.text('Yangilash');
-                    btn.prop('disabled', false).css('opacity', '1');
+                    syncReset();
                     var msg = 'Xatolik yuz berdi';
                     if (xhr.responseJSON && xhr.responseJSON.message) {
                         msg = xhr.responseJSON.message;
@@ -318,6 +312,75 @@
                     alert(msg);
                 }
             });
+        }
+
+        function startSyncPolling() {
+            if (syncPollTimer) clearInterval(syncPollTimer);
+            syncPollTimer = setInterval(pollSyncStatus, 2000);
+        }
+
+        function pollSyncStatus() {
+            $.ajax({
+                url: '{{ route("admin.reports.lesson-assignment.sync-status") }}',
+                type: 'GET',
+                timeout: 10000,
+                success: function(res) {
+                    var text = $('#sync-text');
+                    var pct = $('#sync-percent');
+
+                    if (res.status === 'running') {
+                        text.text(res.message || 'Yangilanmoqda...');
+                        if (res.percent > 0) {
+                            pct.show().text(res.percent + '%');
+                        }
+                    } else if (res.status === 'done') {
+                        clearInterval(syncPollTimer);
+                        syncPollTimer = null;
+                        syncDone();
+                    } else if (res.status === 'failed') {
+                        clearInterval(syncPollTimer);
+                        syncPollTimer = null;
+                        syncReset();
+                        alert(res.message || 'Sinxronlashda xatolik yuz berdi');
+                    } else if (res.status === 'none') {
+                        // Hali boshlanmagan yoki cache tozalangan — kutamiz
+                    }
+                },
+                error: function() {
+                    // Tarmoq xatosi — polling davom etadi
+                }
+            });
+        }
+
+        function syncDone() {
+            var btn = $('#btn-sync');
+            var icon = $('#sync-icon');
+            var text = $('#sync-text');
+            var pct = $('#sync-percent');
+
+            icon.css('animation', '');
+            text.text('Yangilandi!');
+            pct.hide();
+            btn.prop('disabled', false).css('opacity', '1');
+            btn.css('background', 'linear-gradient(135deg, #16a34a, #22c55e)');
+            setTimeout(function() {
+                text.text('Yangilash');
+                btn.css('background', '');
+            }, 3000);
+            loadReport(1);
+        }
+
+        function syncReset() {
+            var btn = $('#btn-sync');
+            var icon = $('#sync-icon');
+            var text = $('#sync-text');
+            var pct = $('#sync-percent');
+
+            icon.css('animation', '');
+            text.text('Yangilash');
+            pct.hide();
+            btn.prop('disabled', false).css('opacity', '1');
+            btn.css('background', '');
         }
 
         function esc(s) { return $('<span>').text(s || '-').html(); }

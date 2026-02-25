@@ -13,6 +13,7 @@ use App\Models\Schedule;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AbsenceExcuseController extends Controller
 {
@@ -33,6 +34,28 @@ class AbsenceExcuseController extends Controller
         return view('student.absence-excuses.create', compact('reasons'));
     }
 
+    /**
+     * AJAX: Sana oralig'i bo'yicha o'tkazib yuborilgan nazoratlarni olish
+     */
+    public function missedAssessments(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $student = Auth::guard('student')->user();
+        $startDate = Carbon::parse($request->start_date);
+        $endDate = Carbon::parse($request->end_date);
+        $groupId = $student->group_id;
+
+        $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
+
+        return response()->json([
+            'assessments' => $missedAssessments->values()->toArray(),
+        ]);
+    }
+
     public function store(Request $request)
     {
         $student = Auth::guard('student')->user();
@@ -41,6 +64,7 @@ class AbsenceExcuseController extends Controller
 
         $request->validate([
             'reason' => "required|in:{$reasonKeys}",
+            'doc_number' => 'required|string|max:100',
             'start_date' => 'required|date|before_or_equal:end_date',
             'end_date' => [
                 'required',
@@ -79,7 +103,6 @@ class AbsenceExcuseController extends Controller
                     }
                 },
             ],
-            'description' => 'nullable|string|max:1000',
             'file' => [
                 'required',
                 'file',
@@ -93,38 +116,79 @@ class AbsenceExcuseController extends Controller
                     }
                 },
             ],
+            'makeup_dates' => 'nullable|array',
+            'makeup_dates.*.subject_name' => 'required|string',
+            'makeup_dates.*.subject_id' => 'nullable|string',
+            'makeup_dates.*.assessment_type' => 'required|string',
+            'makeup_dates.*.assessment_type_code' => 'required|string',
+            'makeup_dates.*.original_date' => 'required|date',
+            'makeup_dates.*.makeup_date' => 'required|date|after_or_equal:today',
         ], [
             'reason.required' => 'Sababni tanlang',
             'reason.in' => 'Noto\'g\'ri sabab tanlangan',
+            'doc_number.required' => 'Hujjat raqamini kiriting',
             'start_date.required' => 'Boshlanish sanasini kiriting',
             'end_date.required' => 'Tugash sanasini kiriting',
             'start_date.before_or_equal' => 'Boshlanish sanasi tugash sanasidan keyin bo\'lmasligi kerak',
             'end_date.after_or_equal' => 'Tugash sanasi boshlanish sanasidan oldin bo\'lmasligi kerak',
             'file.required' => 'Hujjat yuklash majburiy',
             'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
+            'makeup_dates.*.makeup_date.required' => 'Har bir nazorat uchun qayta topshirish sanasini tanlang',
+            'makeup_dates.*.makeup_date.after_or_equal' => 'Qayta topshirish sanasi bugungi kundan oldin bo\'lmasligi kerak',
         ]);
 
         $file = $request->file('file');
         $filePath = $file->store('absence-excuses/' . $student->hemis_id, 'public');
 
-        $excuse = AbsenceExcuse::create([
-            'student_id' => $student->id,
-            'student_hemis_id' => $student->hemis_id,
-            'student_full_name' => $student->full_name,
-            'group_name' => $student->group_name,
-            'department_name' => $student->department_name,
-            'reason' => $request->reason,
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
-            'description' => $request->description,
-            'file_path' => $filePath,
-            'file_original_name' => $file->getClientOriginalName(),
-            'status' => 'pending',
-        ]);
+        DB::beginTransaction();
+        try {
+            $excuse = AbsenceExcuse::create([
+                'student_id' => $student->id,
+                'student_hemis_id' => $student->hemis_id,
+                'student_full_name' => $student->full_name,
+                'group_name' => $student->group_name,
+                'department_name' => $student->department_name,
+                'doc_number' => $request->doc_number,
+                'reason' => $request->reason,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date,
+                'description' => $request->description,
+                'file_path' => $filePath,
+                'file_original_name' => $file->getClientOriginalName(),
+                'status' => 'pending',
+            ]);
+
+            // Makeup sanalarni saqlash
+            $makeupDates = $request->input('makeup_dates', []);
+            foreach ($makeupDates as $makeup) {
+                // Yakshanba tekshiruvi
+                $makeupDate = Carbon::parse($makeup['makeup_date']);
+                if ($makeupDate->isSunday()) {
+                    throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
+                }
+
+                AbsenceExcuseMakeup::create([
+                    'absence_excuse_id' => $excuse->id,
+                    'student_id' => $student->id,
+                    'subject_name' => $makeup['subject_name'],
+                    'subject_id' => $makeup['subject_id'] ?? null,
+                    'assessment_type' => $makeup['assessment_type'],
+                    'assessment_type_code' => $makeup['assessment_type_code'],
+                    'original_date' => $makeup['original_date'],
+                    'makeup_date' => $makeup['makeup_date'],
+                    'status' => 'scheduled',
+                ]);
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => $e->getMessage()])->withInput();
+        }
 
         return redirect()
-            ->route('student.absence-excuses.schedule-check', $excuse->id)
-            ->with('success', 'Arizangiz muvaffaqiyatli yuborildi. Endi o\'tkazib yuborilgan nazoratlar uchun qayta topshirish sanalarini tanlang.');
+            ->route('student.absence-excuses.show', $excuse->id)
+            ->with('success', 'Arizangiz muvaffaqiyatli yuborildi!');
     }
 
     public function scheduleCheck($id)
@@ -136,6 +200,129 @@ class AbsenceExcuseController extends Controller
         $endDate = $excuse->end_date;
         $groupId = $student->group_id;
 
+        $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
+
+        $existingMakeups = $excuse->makeups;
+
+        if ($existingMakeups->isEmpty() && $missedAssessments->isNotEmpty()) {
+            foreach ($missedAssessments as $assessment) {
+                AbsenceExcuseMakeup::create([
+                    'absence_excuse_id' => $excuse->id,
+                    'student_id' => $student->id,
+                    'subject_name' => $assessment['subject_name'],
+                    'subject_id' => $assessment['subject_id'],
+                    'assessment_type' => $assessment['assessment_type'],
+                    'assessment_type_code' => $assessment['assessment_type_code'],
+                    'original_date' => $assessment['original_date'],
+                ]);
+            }
+            $excuse->load('makeups');
+        }
+
+        $absentDaysCount = $startDate->diffInDays($endDate) + 1;
+
+        return view('student.absence-excuses.schedule-check', compact('excuse', 'missedAssessments', 'absentDaysCount'));
+    }
+
+    public function storeMakeupDates(Request $request, $id)
+    {
+        $student = Auth::guard('student')->user();
+        $excuse = AbsenceExcuse::byStudent($student->id)->findOrFail($id);
+
+        $makeups = $excuse->makeups;
+
+        if ($makeups->isEmpty()) {
+            return redirect()
+                ->route('student.absence-excuses.show', $excuse->id)
+                ->with('info', 'O\'tkazib yuborilgan nazoratlar topilmadi.');
+        }
+
+        $rules = [];
+        $messages = [];
+        foreach ($makeups as $makeup) {
+            $rules["makeup_dates.{$makeup->id}"] = 'required|date|after_or_equal:today';
+            $messages["makeup_dates.{$makeup->id}.required"] = "{$makeup->subject_name} ({$makeup->assessment_type_label}) uchun sana tanlang.";
+            $messages["makeup_dates.{$makeup->id}.after_or_equal"] = "Sana bugungi kundan oldin bo'lmasligi kerak.";
+        }
+
+        $request->validate($rules, $messages);
+
+        $makeupDates = $request->input('makeup_dates', []);
+
+        foreach ($makeupDates as $date) {
+            $dayOfWeek = Carbon::parse($date)->dayOfWeek;
+            if ($dayOfWeek === Carbon::SUNDAY) {
+                return back()->withErrors(['makeup_dates' => 'Yakshanba kunini tanlash mumkin emas.'])->withInput();
+            }
+        }
+
+        $uniqueDates = collect($makeupDates)->unique()->count();
+        $absentDaysCount = $excuse->start_date->diffInDays($excuse->end_date) + 1;
+
+        if ($uniqueDates > $absentDaysCount) {
+            return back()->withErrors([
+                'makeup_dates' => "Siz {$uniqueDates} ta noyob kun tanladingiz, lekin maksimum {$absentDaysCount} kun tanlash mumkin."
+            ])->withInput();
+        }
+
+        foreach ($makeupDates as $makeupId => $date) {
+            AbsenceExcuseMakeup::where('id', $makeupId)
+                ->where('absence_excuse_id', $excuse->id)
+                ->update([
+                    'makeup_date' => $date,
+                    'status' => 'scheduled',
+                ]);
+        }
+
+        return redirect()
+            ->route('student.absence-excuses.show', $excuse->id)
+            ->with('success', 'Qayta topshirish sanalari muvaffaqiyatli saqlandi.');
+    }
+
+    public function show($id)
+    {
+        $student = Auth::guard('student')->user();
+        $excuse = AbsenceExcuse::byStudent($student->id)->findOrFail($id);
+        $excuse->load('makeups');
+
+        return view('student.absence-excuses.show', compact('excuse'));
+    }
+
+    public function download($id)
+    {
+        $student = Auth::guard('student')->user();
+        $excuse = AbsenceExcuse::byStudent($student->id)->findOrFail($id);
+
+        $filePath = storage_path('app/public/' . $excuse->file_path);
+        if (!file_exists($filePath)) {
+            abort(404, 'Fayl serverda topilmadi');
+        }
+
+        return response()->download($filePath, $excuse->file_original_name);
+    }
+
+    public function downloadPdf($id)
+    {
+        $student = Auth::guard('student')->user();
+        $excuse = AbsenceExcuse::byStudent($student->id)->findOrFail($id);
+
+        if (!$excuse->isApproved() || !$excuse->approved_pdf_path) {
+            abort(404, 'PDF hujjat topilmadi');
+        }
+
+        $filePath = storage_path('app/public/' . $excuse->approved_pdf_path);
+        if (!file_exists($filePath)) {
+            abort(404, 'PDF fayl serverda topilmadi');
+        }
+
+        return response()->download($filePath, 'sababli_ariza_' . $excuse->id . '.pdf');
+    }
+
+    /**
+     * Sana oralig'i bo'yicha o'tkazib yuborilgan nazoratlarni topish
+     */
+    private function findMissedAssessments($groupId, $startDate, $endDate)
+    {
         $missedAssessments = collect();
 
         // 1. Schedules jadvalidan (dars jadvali)
@@ -246,127 +433,8 @@ class AbsenceExcuseController extends Controller
         }
 
         // Duplikatlarni olib tashlash
-        $missedAssessments = $missedAssessments->unique(function ($item) {
+        return $missedAssessments->unique(function ($item) {
             return $item['subject_name'] . '|' . $item['assessment_type'] . '|' . $item['original_date'];
         })->values();
-
-        // AbsenceExcuseMakeup yozuvlarini yaratish (agar hali yaratilmagan bo'lsa)
-        $existingMakeups = $excuse->makeups;
-
-        if ($existingMakeups->isEmpty() && $missedAssessments->isNotEmpty()) {
-            foreach ($missedAssessments as $assessment) {
-                AbsenceExcuseMakeup::create([
-                    'absence_excuse_id' => $excuse->id,
-                    'student_id' => $student->id,
-                    'subject_name' => $assessment['subject_name'],
-                    'subject_id' => $assessment['subject_id'],
-                    'assessment_type' => $assessment['assessment_type'],
-                    'assessment_type_code' => $assessment['assessment_type_code'],
-                    'original_date' => $assessment['original_date'],
-                ]);
-            }
-            $excuse->load('makeups');
-        }
-
-        $absentDaysCount = $startDate->diffInDays($endDate) + 1;
-
-        return view('student.absence-excuses.schedule-check', compact('excuse', 'missedAssessments', 'absentDaysCount'));
-    }
-
-    public function storeMakeupDates(Request $request, $id)
-    {
-        $student = Auth::guard('student')->user();
-        $excuse = AbsenceExcuse::byStudent($student->id)->findOrFail($id);
-
-        $makeups = $excuse->makeups;
-
-        if ($makeups->isEmpty()) {
-            return redirect()
-                ->route('student.absence-excuses.show', $excuse->id)
-                ->with('info', 'O\'tkazib yuborilgan nazoratlar topilmadi.');
-        }
-
-        $rules = [];
-        $messages = [];
-        foreach ($makeups as $makeup) {
-            $rules["makeup_dates.{$makeup->id}"] = 'required|date|after_or_equal:today';
-            $messages["makeup_dates.{$makeup->id}.required"] = "{$makeup->subject_name} ({$makeup->assessment_type_label}) uchun sana tanlang.";
-            $messages["makeup_dates.{$makeup->id}.after_or_equal"] = "Sana bugungi kundan oldin bo'lmasligi kerak.";
-        }
-
-        $request->validate($rules, $messages);
-
-        $makeupDates = $request->input('makeup_dates', []);
-
-        // Yakshanba kunlarini tekshirish
-        foreach ($makeupDates as $date) {
-            $dayOfWeek = Carbon::parse($date)->dayOfWeek;
-            if ($dayOfWeek === Carbon::SUNDAY) {
-                return back()->withErrors(['makeup_dates' => 'Yakshanba kunini tanlash mumkin emas.'])->withInput();
-            }
-        }
-
-        // Noyob kunlar sonini tekshirish
-        $uniqueDates = collect($makeupDates)->unique()->count();
-        $absentDaysCount = $excuse->start_date->diffInDays($excuse->end_date) + 1;
-
-        if ($uniqueDates > $absentDaysCount) {
-            return back()->withErrors([
-                'makeup_dates' => "Siz {$uniqueDates} ta noyob kun tanladingiz, lekin maksimum {$absentDaysCount} kun tanlash mumkin."
-            ])->withInput();
-        }
-
-        // Saqlash
-        foreach ($makeupDates as $makeupId => $date) {
-            AbsenceExcuseMakeup::where('id', $makeupId)
-                ->where('absence_excuse_id', $excuse->id)
-                ->update([
-                    'makeup_date' => $date,
-                    'status' => 'scheduled',
-                ]);
-        }
-
-        return redirect()
-            ->route('student.absence-excuses.show', $excuse->id)
-            ->with('success', 'Qayta topshirish sanalari muvaffaqiyatli saqlandi.');
-    }
-
-    public function show($id)
-    {
-        $student = Auth::guard('student')->user();
-        $excuse = AbsenceExcuse::byStudent($student->id)->findOrFail($id);
-        $excuse->load('makeups');
-
-        return view('student.absence-excuses.show', compact('excuse'));
-    }
-
-    public function download($id)
-    {
-        $student = Auth::guard('student')->user();
-        $excuse = AbsenceExcuse::byStudent($student->id)->findOrFail($id);
-
-        $filePath = storage_path('app/public/' . $excuse->file_path);
-        if (!file_exists($filePath)) {
-            abort(404, 'Fayl serverda topilmadi');
-        }
-
-        return response()->download($filePath, $excuse->file_original_name);
-    }
-
-    public function downloadPdf($id)
-    {
-        $student = Auth::guard('student')->user();
-        $excuse = AbsenceExcuse::byStudent($student->id)->findOrFail($id);
-
-        if (!$excuse->isApproved() || !$excuse->approved_pdf_path) {
-            abort(404, 'PDF hujjat topilmadi');
-        }
-
-        $filePath = storage_path('app/public/' . $excuse->approved_pdf_path);
-        if (!file_exists($filePath)) {
-            abort(404, 'PDF fayl serverda topilmadi');
-        }
-
-        return response()->download($filePath, 'sababli_ariza_' . $excuse->id . '.pdf');
     }
 }

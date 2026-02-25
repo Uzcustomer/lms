@@ -273,31 +273,7 @@
                             </div>
                         </div>
 
-                        {{-- Sabab info --}}
-                        <div x-show="selectedReason" x-transition x-cloak
-                             class="flex items-start gap-3 bg-indigo-50/60 border border-indigo-100 rounded-xl p-4">
-                            <div class="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                            </div>
-                            <div>
-                                <p class="font-semibold text-indigo-900 text-base">Talab qilinadigan hujjat:</p>
-                                <p class="text-indigo-700 mt-1 text-base" x-text="selectedReason?.document"></p>
-                                <div class="flex flex-wrap gap-2 mt-2">
-                                    <template x-if="selectedReason?.max_days">
-                                        <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-indigo-100 text-indigo-700 rounded-lg">
-                                            Maksimum: <span x-text="selectedReason?.max_days" class="ml-1"></span> kun
-                                        </span>
-                                    </template>
-                                </div>
-                                <template x-if="selectedReason?.note">
-                                    <p class="mt-2 text-sm text-indigo-600 italic" x-text="selectedReason?.note"></p>
-                                </template>
-                            </div>
-                        </div>
-
-                        {{-- ROW 2: Sana oralig'i (dropdown calendar) --}}
+                        {{-- ROW 2: Sana oralig'i + Sabab info (bitta qator) --}}
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="cal-dropdown-wrap" @click.outside="showMainCal = false">
                                 <label class="ae-label">Sana oralig'i <span class="req">*</span></label>
@@ -401,7 +377,30 @@
                                 <input type="hidden" name="start_date" :value="startDate">
                                 <input type="hidden" name="end_date" :value="endDate">
                             </div>
-                            <div></div>
+
+                            {{-- Sabab info (o'ng tomonda) --}}
+                            <div x-show="selectedReason" x-transition x-cloak
+                                 class="flex items-start gap-3 bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 self-start">
+                                <div class="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-indigo-900 text-base">Talab qilinadigan hujjat:</p>
+                                    <p class="text-indigo-700 mt-1 text-base" x-text="selectedReason?.document"></p>
+                                    <div class="flex flex-wrap gap-2 mt-2">
+                                        <template x-if="selectedReason?.max_days">
+                                            <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-indigo-100 text-indigo-700 rounded-lg">
+                                                Maksimum: <span x-text="selectedReason?.max_days" class="ml-1"></span> kun
+                                            </span>
+                                        </template>
+                                    </div>
+                                    <template x-if="selectedReason?.note">
+                                        <p class="mt-2 text-sm text-indigo-600 italic" x-text="selectedReason?.note"></p>
+                                    </template>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -442,7 +441,7 @@
                     </div>
 
                     {{-- Assessment cards --}}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
                         <template x-for="(item, index) in assessments" :key="index">
                             <div class="assessment-card">
                                 <div class="assessment-card-head">

@@ -634,12 +634,13 @@
             // Keyboard navigation (Excel-like) - faqat soat inputlari
             $('#ktr-plan-table').off('keydown', '.ktr-hours').on('keydown', '.ktr-hours', function(e) {
                 var key = e.which;
-                if ([13, 9, 38, 40].indexOf(key) === -1) return;
+                if ([13, 9, 37, 38, 39, 40].indexOf(key) === -1) return;
 
                 var $this = $(this);
                 var week = parseInt($this.data('week'));
                 var code = $this.data('code');
                 var $target = null;
+                var cIdx = codes.indexOf(String(code));
 
                 if (key === 13 || key === 40) { // Enter / Down
                     e.preventDefault();
@@ -651,18 +652,16 @@
                     var prevW = week - 1;
                     if (prevW < 1) prevW = ktrState.weekCount;
                     $target = $('.ktr-hours[data-week="' + prevW + '"][data-code="' + code + '"]');
-                } else if (key === 9) { // Tab -> next type column
+                } else if (key === 39 || (key === 9 && !e.shiftKey)) { // Right / Tab
                     e.preventDefault();
-                    var cIdx = codes.indexOf(String(code));
-                    if (!e.shiftKey) {
-                        var nIdx = cIdx + 1;
-                        if (nIdx < codes.length) $target = $('.ktr-hours[data-week="' + week + '"][data-code="' + codes[nIdx] + '"]');
-                        else $target = $('.ktr-hours[data-week="' + (week < ktrState.weekCount ? week + 1 : 1) + '"][data-code="' + codes[0] + '"]');
-                    } else {
-                        var pIdx = cIdx - 1;
-                        if (pIdx >= 0) $target = $('.ktr-hours[data-week="' + week + '"][data-code="' + codes[pIdx] + '"]');
-                        else $target = $('.ktr-hours[data-week="' + (week > 1 ? week - 1 : ktrState.weekCount) + '"][data-code="' + codes[codes.length - 1] + '"]');
-                    }
+                    var nIdx = cIdx + 1;
+                    if (nIdx < codes.length) $target = $('.ktr-hours[data-week="' + week + '"][data-code="' + codes[nIdx] + '"]');
+                    else $target = $('.ktr-hours[data-week="' + (week < ktrState.weekCount ? week + 1 : 1) + '"][data-code="' + codes[0] + '"]');
+                } else if (key === 37 || (key === 9 && e.shiftKey)) { // Left / Shift+Tab
+                    e.preventDefault();
+                    var pIdx = cIdx - 1;
+                    if (pIdx >= 0) $target = $('.ktr-hours[data-week="' + week + '"][data-code="' + codes[pIdx] + '"]');
+                    else $target = $('.ktr-hours[data-week="' + (week > 1 ? week - 1 : ktrState.weekCount) + '"][data-code="' + codes[codes.length - 1] + '"]');
                 }
 
                 if ($target && $target.length) $target.focus().select();

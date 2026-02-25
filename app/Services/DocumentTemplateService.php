@@ -60,6 +60,42 @@ class DocumentTemplateService
         $processor->setValue('academic_year', $academicYear);
         $processor->setValue('verification_url', route('absence-excuse.verify', $excuse->verification_token));
 
+        // Nazoratlar jadvali (cloneRow orqali)
+        $makeups = $excuse->makeups()->orderBy('subject_name')->get();
+        $makeupCount = $makeups->count();
+
+        if ($makeupCount > 0) {
+            $typeLabels = [
+                'jn' => 'Joriy nazorat',
+                'mt' => 'Mustaqil ta\'lim',
+                'oski' => 'YN (OSKE)',
+                'test' => 'YN (Test)',
+            ];
+
+            $processor->cloneRow('m_num', $makeupCount);
+
+            foreach ($makeups->values() as $i => $makeup) {
+                $idx = $i + 1;
+                $processor->setValue("m_num#{$idx}", (string) $idx);
+                $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
+                $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
+
+                // Sana formati
+                if ($makeup->makeup_date) {
+                    $makeupDateStr = $makeup->makeup_date->format('d.m.Y');
+                } else {
+                    $makeupDateStr = 'Belgilanmagan';
+                }
+                $processor->setValue("m_date#{$idx}", $makeupDateStr);
+            }
+        } else {
+            // Agar nazoratlar bo'lmasa placeholder'larni tozalash
+            $processor->setValue('m_num', '');
+            $processor->setValue('m_subject', '');
+            $processor->setValue('m_type', '');
+            $processor->setValue('m_date', '');
+        }
+
         // QR kod rasm sifatida
         if ($qrImagePath && file_exists($qrImagePath)) {
             try {

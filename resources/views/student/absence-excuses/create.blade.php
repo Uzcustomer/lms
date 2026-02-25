@@ -137,7 +137,7 @@
         .ae-file-zone.has-file { border-color: #34d399; background: #ecfdf5; }
 
         /* ======= ASSESSMENT TABLE ======= */
-        .ae-table-wrap { overflow-x: auto; border-radius: 14px; border: 1.5px solid #e2e8f0; background: #fff; }
+        .ae-table-wrap { overflow: visible; border-radius: 14px; border: 1.5px solid #e2e8f0; background: #fff; }
         .ae-table { width: 100%; border-collapse: collapse; font-size: 14px; }
         .ae-table thead th {
             padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 700;
@@ -145,11 +145,12 @@
             background: #f8fafc; border-bottom: 2px solid #e2e8f0;
         }
         .ae-table tbody td {
-            padding: 10px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle;
+            padding: 10px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; overflow: visible;
         }
         .ae-table tbody tr:last-child td { border-bottom: none; }
         .ae-table .ae-subject-cell { font-weight: 700; color: #1e293b; border-right: 1px solid #f1f5f9; }
-        .ae-table .ae-date-cell { position: relative; min-width: 200px; }
+        .ae-table .ae-date-cell { position: relative; min-width: 200px; overflow: visible; }
+        .ae-table .ae-date-cell .cal-dropdown { z-index: 100; }
 
         /* ======= SUBMIT BTN ======= */
         .ae-submit {

@@ -24,22 +24,20 @@ class KafedraController extends Controller
 
         // Faqat haqiqiy kafedralar - nomida "kafedra" so'zi bor bo'lganlar
         // parent_id = faculty ning department_hemis_id ga teng
-        $kafedras = Department::whereIn('parent_id', $facultyHemisIds)
+        $assignedKafedras = Department::whereIn('parent_id', $facultyHemisIds)
             ->where('active', true)
             ->where('name', 'LIKE', '%kafedra%')
             ->orderBy('name')
-            ->get()
-            ->groupBy('parent_id');
+            ->get();
 
-        // Fakultetga tayinlanmagan kafedralar (parent_id bo'sh yoki noto'g'ri)
+        $kafedras = $assignedKafedras->groupBy('parent_id');
+        $assignedIds = $assignedKafedras->pluck('id')->toArray();
+
+        // Fakultetga tayinlanmagan kafedralar - tayinlanganlarni aniq chiqarib tashlash
         $unassigned = Department::where('active', true)
             ->where('name', 'LIKE', '%kafedra%')
             ->where('structure_type_code', '!=', 11)
-            ->where(function ($q) use ($facultyHemisIds) {
-                $q->whereNull('parent_id')
-                  ->orWhere('parent_id', 0)
-                  ->orWhereNotIn('parent_id', $facultyHemisIds);
-            })
+            ->whereNotIn('id', $assignedIds)
             ->orderBy('name')
             ->get();
 

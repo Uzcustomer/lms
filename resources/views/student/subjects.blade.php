@@ -422,12 +422,14 @@
                                         <div class="g-value {{ $gradeClass($v, $v === null) }}">{{ $v !== null ? $v : '-' }}</div>
                                     </div>
                                     <div class="g-item">
+                                        @php $v = $subject['oski']; @endphp
                                         <div class="g-label">OSKI</div>
-                                        <div class="g-value g-none">-</div>
+                                        <div class="g-value {{ $gradeClass($v, $v === null) }}">{{ $v !== null ? $v : '-' }}</div>
                                     </div>
                                     <div class="g-item">
+                                        @php $v = $subject['test']; @endphp
                                         <div class="g-label">Test</div>
-                                        <div class="g-value g-none">-</div>
+                                        <div class="g-value {{ $gradeClass($v, $v === null) }}">{{ $v !== null ? $v : '-' }}</div>
                                     </div>
                                     <div class="g-item">
                                         <div class="g-label">YN</div>

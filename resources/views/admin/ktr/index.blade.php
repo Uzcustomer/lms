@@ -284,6 +284,9 @@
                     <!-- Xabarnoma -->
                     <div id="ktr-validation-msg" class="ktr-validation-msg" style="display:none;"></div>
 
+                    <!-- O'zgartirish so'rovi paneli -->
+                    <div id="ktr-change-panel" style="display:none; margin-top: 12px;"></div>
+
                     <!-- Tugmalar -->
                     <div style="display: flex; justify-content: space-between; margin-top: 16px; align-items: center;">
                         <button type="button" class="ktr-btn ktr-btn-export" onclick="exportKtrPlan()">
@@ -293,11 +296,11 @@
                             Excel
                         </button>
                         <div style="display: flex; gap: 10px;">
-                            <button type="button" class="ktr-btn ktr-btn-edit" id="ktr-edit-btn" onclick="enableKtrEdit()" style="display:none;">
+                            <button type="button" class="ktr-btn ktr-btn-edit" id="ktr-edit-btn" onclick="onKtrEditClick()" style="display:none;">
                                 <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                 </svg>
-                                Tahrirlash
+                                O'zgartirish
                             </button>
                             <button type="button" class="ktr-btn ktr-btn-secondary" onclick="closeKtrModal()">Yopish</button>
                             <button type="button" class="ktr-btn ktr-btn-primary" id="ktr-save-btn" onclick="saveKtrPlan()" style="display:none;">Saqlash</button>
@@ -446,7 +449,9 @@
             hemisTopics: {},
             canEdit: false,
             editMode: false,
-            hasPlan: false
+            hasPlan: false,
+            approverInfo: {},
+            changeRequest: null
         };
 
         // Mustaqil ta'limni filtrdan chiqarish
@@ -496,6 +501,8 @@
                     ktrState.hemisTopics = data.hemis_topics || {};
                     ktrState.canEdit = data.can_edit || false;
                     ktrState.hasPlan = !!(data.plan && data.plan.week_count);
+                    ktrState.approverInfo = data.approver_info || {};
+                    ktrState.changeRequest = data.change_request || null;
 
                     // Saqlangan ma'lumotlarni yuklash
                     if (data.plan && data.plan.plan_data) {
@@ -509,6 +516,7 @@
                     }
 
                     $('.ktr-week-btn').removeClass('active');
+                    $('#ktr-change-panel').hide().html('');
 
                     if (ktrState.hasPlan) {
                         // Saqlangan reja bor - ko'rish rejimida ochiladi
@@ -517,6 +525,10 @@
                         $('#ktr-save-btn').hide();
                         $('#ktr-edit-btn').toggle(ktrState.canEdit);
                         selectWeekCount(data.plan.week_count, true);
+                        // Agar faol o'zgartirish so'rovi bo'lsa, panelni ko'rsatish
+                        if (ktrState.changeRequest) {
+                            renderChangePanel();
+                        }
                     } else if (ktrState.canEdit) {
                         // Reja yo'q, tahrirlash huquqi bor - darhol tahrirlash rejimi
                         ktrState.editMode = true;
@@ -549,14 +561,114 @@
             $('#ktr-modal-overlay').fadeOut(200);
         }
 
+        function onKtrEditClick() {
+            var cr = ktrState.changeRequest;
+            // Agar tasdiqlangan so'rov bo'lsa - tahrirlashga ruxsat
+            if (cr && cr.is_approved) {
+                enableKtrEdit();
+                return;
+            }
+            // So'rov allaqachon jo'natilgan - panelni ko'rsatish
+            if (cr && !cr.is_approved) {
+                renderChangePanel();
+                return;
+            }
+            // So'rov yo'q - ogohlantirish va ruxsat so'rash paneli
+            showChangeRequestPrompt();
+        }
+
         function enableKtrEdit() {
             ktrState.editMode = true;
             $('#ktr-edit-btn').hide();
             $('#ktr-save-btn').show();
             $('#ktr-week-selector').show();
-            // Inputlarni yoqish
+            $('#ktr-change-panel').hide();
             $('.ktr-hours').prop('readonly', false).prop('disabled', false);
             $('#ktr-validation-msg').hide();
+        }
+
+        function getRoleName(role) {
+            var names = {
+                'kafedra_mudiri': 'Kafedra mudiri',
+                'dekan': 'Dekan',
+                'registrator_ofisi': 'Registrator ofisi'
+            };
+            return names[role] || role;
+        }
+
+        function getStatusBadge(status) {
+            if (status === 'approved') return '<span class="ktr-approval-badge ktr-approved">Tasdiqlandi</span>';
+            if (status === 'rejected') return '<span class="ktr-approval-badge ktr-rejected">Rad etildi</span>';
+            return '<span class="ktr-approval-badge ktr-pending">Kutilmoqda</span>';
+        }
+
+        function showChangeRequestPrompt() {
+            var info = ktrState.approverInfo;
+            var html = '<div class="ktr-change-box">';
+            html += '<div class="ktr-change-title">KTR o\'zgartirish uchun ruxsat kerak</div>';
+            html += '<div class="ktr-change-desc">Siz KTRni o\'zgartirish uchun quyidagilardan ruxsat so\'rashingiz kerak:</div>';
+            html += '<ul class="ktr-approver-list">';
+            html += '<li><b>Kafedra mudiri</b>: ' + (info.kafedra_mudiri ? info.kafedra_mudiri.name : 'Topilmadi') + ' <span style="color:#94a3b8;">(' + (info.kafedra_name || '') + ')</span></li>';
+            html += '<li><b>Dekan</b>: ' + (info.dekan ? info.dekan.name : 'Topilmadi') + ' <span style="color:#94a3b8;">(' + (info.faculty_name || '') + ')</span></li>';
+            html += '<li><b>Registrator ofisi</b>: ' + (info.registrator ? info.registrator.name : 'Topilmadi') + '</li>';
+            html += '</ul>';
+            html += '<button type="button" class="ktr-btn ktr-btn-primary" onclick="sendChangeRequest()" id="ktr-request-btn">Ruxsat so\'rash</button>';
+            html += '</div>';
+            $('#ktr-change-panel').html(html).show();
+        }
+
+        function renderChangePanel() {
+            var cr = ktrState.changeRequest;
+            if (!cr) return;
+            var html = '<div class="ktr-change-box">';
+            if (cr.is_approved) {
+                html += '<div class="ktr-change-title" style="color:#059669;">Barcha tasdiqlar olingan!</div>';
+                html += '<div class="ktr-change-desc">Endi "O\'zgartirish" tugmasini bosib tahrirlashingiz mumkin.</div>';
+            } else {
+                html += '<div class="ktr-change-title">O\'zgartirish so\'rovi holati</div>';
+            }
+            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
+            cr.approvals.forEach(function(a) {
+                html += '<tr>';
+                html += '<td>' + getRoleName(a.role) + '</td>';
+                html += '<td>' + a.approver_name + '</td>';
+                html += '<td>' + getStatusBadge(a.status) + '</td>';
+                html += '<td>' + (a.responded_at || '-') + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            if (cr.is_approved) {
+                html += '<div style="margin-top:10px; text-align:right;"><button type="button" class="ktr-btn ktr-btn-primary" onclick="enableKtrEdit()">Tahrirlashni boshlash</button></div>';
+            }
+            html += '</div>';
+            $('#ktr-change-panel').html(html).show();
+            // Tasdiqlangan bo'lsa tugmani ham yangilash
+            if (cr.is_approved) {
+                $('#ktr-edit-btn').hide();
+            }
+        }
+
+        function sendChangeRequest() {
+            $('#ktr-request-btn').prop('disabled', true).text('Jo\'natilmoqda...');
+            $.ajax({
+                url: '/admin/ktr/change-request/' + ktrState.csId,
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                success: function(resp) {
+                    if (resp.success) {
+                        ktrState.changeRequest = resp.change_request;
+                        renderChangePanel();
+                        $('#ktr-edit-btn').hide();
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Xatolik yuz berdi';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    $('#ktr-request-btn').prop('disabled', false).text('Ruxsat so\'rash');
+                    alert(msg);
+                }
+            });
         }
 
         function selectWeekCount(count, fromLoad) {
@@ -1386,5 +1498,67 @@
             color: #16a34a;
             border: 1px solid #bbf7d0;
         }
+
+        /* O'zgartirish so'rovi paneli */
+        .ktr-change-box {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 10px;
+            padding: 16px;
+        }
+        .ktr-change-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #92400e;
+            margin-bottom: 6px;
+        }
+        .ktr-change-desc {
+            font-size: 13px;
+            color: #78350f;
+            margin-bottom: 10px;
+        }
+        .ktr-approver-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 12px;
+        }
+        .ktr-approver-list li {
+            padding: 6px 0;
+            border-bottom: 1px solid #fde68a;
+            font-size: 13px;
+            color: #451a03;
+        }
+        .ktr-approver-list li:last-child { border-bottom: none; }
+        .ktr-approval-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+        .ktr-approval-table th {
+            background: #fef3c7;
+            padding: 6px 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #92400e;
+            border-bottom: 2px solid #fde68a;
+        }
+        .ktr-approval-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #fde68a;
+            color: #451a03;
+        }
+        .ktr-approval-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .ktr-approved { background: #dcfce7; color: #166534; }
+        .ktr-rejected { background: #fef2f2; color: #dc2626; }
+        .ktr-pending { background: #fef9c3; color: #854d0e; }
     </style>
 </x-app-layout>

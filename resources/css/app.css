@@ -1,6 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+[x-cloak] { display: none !important; }
 a {
     color: inherit;
     -webkit-text-decoration: inherit;
@@ -22,60 +23,25 @@ a:hover {
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    justify-content: space-between !important;
+    justify-content: flex-end !important;
     flex-wrap: nowrap !important;
     background: #ffffff;
     border-bottom: 1px solid #e5e7eb;
-    padding: 0 16px;
-    height: 56px;
-    min-height: 56px;
+    padding: 0 12px;
+    height: 40px;
+    min-height: 40px;
     position: sticky;
     top: 0;
     z-index: 40;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     width: 100%;
-}
-.top-header-left {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 12px;
-    flex-shrink: 0;
-}
-.top-header-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #1f2937;
-    white-space: nowrap;
-}
-.hamburger-btn-header {
-    display: none;
-    padding: 6px;
-    border-radius: 6px;
-    color: #6b7280;
-    background: none;
-    border: none;
-    cursor: pointer;
-}
-.hamburger-btn-header:hover {
-    background-color: #f3f4f6;
-    color: #1f2937;
-}
-@media (max-width: 767px) {
-    .hamburger-btn-header {
-        display: flex !important;
-    }
-    .mobile-top-bar {
-        display: none !important;
-    }
 }
 .top-header-right {
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
     flex-wrap: nowrap !important;
-    gap: 4px;
-    margin-left: auto;
+    gap: 2px;
 }
 .top-header-item {
     position: relative;
@@ -86,42 +52,43 @@ a:hover {
     display: inline-flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    gap: 6px;
-    padding: 8px 10px;
-    border-radius: 8px;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
     color: #4b5563;
     background: none;
     border: none;
     cursor: pointer;
     transition: all 0.15s;
     position: relative;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     white-space: nowrap;
     line-height: 1;
+    height: 32px;
 }
 .top-header-btn:hover {
     background-color: #f3f4f6;
     color: #1f2937;
 }
 .top-header-btn svg {
-    width: 20px !important;
-    height: 20px !important;
+    width: 18px !important;
+    height: 18px !important;
     flex-shrink: 0;
 }
 .top-header-lang-label {
     font-weight: 600;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
 }
 .top-header-profile-btn {
-    gap: 8px;
-    padding-left: 6px;
+    gap: 6px;
+    padding-left: 8px;
     border-left: 1px solid #e5e7eb;
-    margin-left: 4px;
+    margin-left: 2px;
 }
 .top-header-avatar {
-    width: 32px !important;
-    height: 32px !important;
-    min-width: 32px;
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px;
     border-radius: 50%;
     background: linear-gradient(135deg, #3b82f6, #1d4ed8);
     color: #fff;
@@ -131,21 +98,21 @@ a:hover {
     flex-shrink: 0;
 }
 .top-header-avatar svg {
-    width: 16px !important;
-    height: 16px !important;
+    width: 14px !important;
+    height: 14px !important;
 }
 .top-header-username {
     font-weight: 500;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     color: #374151;
-    max-width: 140px;
+    max-width: 120px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 .top-header-chevron {
-    width: 16px !important;
-    height: 16px !important;
+    width: 14px !important;
+    height: 14px !important;
     flex-shrink: 0;
     transition: transform 0.2s;
 }
@@ -161,21 +128,21 @@ a:hover {
 /* Notification Badge */
 .notif-badge {
     position: absolute;
-    top: 2px;
-    right: 2px;
-    min-width: 18px;
-    height: 18px;
-    border-radius: 9px;
+    top: 0;
+    right: 0;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
     background: #ef4444;
     color: #fff;
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-weight: 700;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    padding: 0 4px;
+    padding: 0 3px;
     line-height: 1;
-    border: 2px solid #fff;
+    border: 1.5px solid #fff;
 }
 
 /* Top Header Dropdowns */

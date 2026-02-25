@@ -772,24 +772,42 @@ class KtrController extends Controller
                         ->where('is_active', true)
                         ->first();
                 }
+                // Fallback: HEMIS staff_position ustuni orqali
+                if (!$mudiri) {
+                    $mudiri = Teacher::where('staff_position', 'LIKE', '%mudiri%')
+                        ->where('department_hemis_id', $kafedra->department_hemis_id)
+                        ->where('is_active', true)
+                        ->first();
+                }
                 if ($mudiri) {
                     $info['kafedra_mudiri'] = ['id' => $mudiri->id, 'name' => $mudiri->full_name];
                 }
             }
 
-            // Fakultetni topish: Curriculum orqali (eng ishonchli yo'l)
-            // CurriculumSubject.curricula_hemis_id -> Curriculum.department_hemis_id = fakultet HEMIS ID
+            // Fakultetni topish: kafedra parent_id orqali (parent_id = HEMIS parent ID)
+            // ImportSpecialtiesDepartments: 'parent_id' => $departmentData['parent'] (HEMIS ID)
             $faculty = null;
-            $curriculum = Curriculum::where('curricula_hemis_id', $cs->curricula_hemis_id)->first();
-            if ($curriculum && $curriculum->department_hemis_id) {
-                $faculty = Department::where('department_hemis_id', $curriculum->department_hemis_id)
+            if ($kafedra && $kafedra->parent_id) {
+                $faculty = Department::where('department_hemis_id', $kafedra->parent_id)
                     ->where('structure_type_code', '11')
                     ->first();
+                // parent_id ba'zan local ID bo'lishi mumkin (HemisService orqali)
+                if (!$faculty) {
+                    $parent = Department::find($kafedra->parent_id);
+                    if ($parent && $parent->structure_type_code == '11') {
+                        $faculty = $parent;
+                    }
+                }
             }
 
-            // Fallback: kafedra parent_id orqali (parent_id = HEMIS parent ID)
-            if (!$faculty && $kafedra && $kafedra->parent_id) {
-                $faculty = Department::where('department_hemis_id', $kafedra->parent_id)->first();
+            // Fallback: Curriculum orqali
+            if (!$faculty) {
+                $curriculum = Curriculum::where('curricula_hemis_id', $cs->curricula_hemis_id)->first();
+                if ($curriculum && $curriculum->department_hemis_id) {
+                    $faculty = Department::where('department_hemis_id', $curriculum->department_hemis_id)
+                        ->where('structure_type_code', '11')
+                        ->first();
+                }
             }
 
             if ($faculty) {
@@ -808,6 +826,16 @@ class KtrController extends Controller
                 // Fallback: role ustuni orqali
                 if (!$info['dekan']) {
                     $dekan = Teacher::where('role', 'dekan')
+                        ->where('department_hemis_id', $faculty->department_hemis_id)
+                        ->where('is_active', true)
+                        ->first();
+                    if ($dekan) {
+                        $info['dekan'] = ['id' => $dekan->id, 'name' => $dekan->full_name];
+                    }
+                }
+                // Fallback: HEMIS staff_position ustuni orqali
+                if (!$info['dekan']) {
+                    $dekan = Teacher::where('staff_position', 'LIKE', '%ekan%')
                         ->where('department_hemis_id', $faculty->department_hemis_id)
                         ->where('is_active', true)
                         ->first();

@@ -120,11 +120,11 @@ class AbsenceExcuseController extends Controller
                 'file',
                 'max:10240',
                 function ($attribute, $value, $fail) {
-                    $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
+                    $allowedExtensions = ['pdf', 'jpg', 'jpeg'];
                     $clientExt = strtolower($value->getClientOriginalExtension());
                     $guessedExt = $value->guessExtension();
                     if (!in_array($clientExt, $allowedExtensions) && !in_array($guessedExt, $allowedExtensions)) {
-                        $fail('Faqat PDF, JPG, PNG, DOC, DOCX formatdagi fayllar qabul qilinadi.');
+                        $fail('Faqat PDF va JPG formatdagi fayllar qabul qilinadi.');
                     }
                 },
             ],
@@ -134,7 +134,9 @@ class AbsenceExcuseController extends Controller
             'makeup_dates.*.assessment_type' => 'required|string',
             'makeup_dates.*.assessment_type_code' => 'required|string',
             'makeup_dates.*.original_date' => 'required|date',
-            'makeup_dates.*.makeup_date' => 'required|date|after_or_equal:today',
+            'makeup_dates.*.makeup_date' => 'nullable|date|after_or_equal:today',
+            'makeup_dates.*.makeup_start' => 'nullable|date|after_or_equal:today',
+            'makeup_dates.*.makeup_end' => 'nullable|date|after_or_equal:today',
         ], [
             'reason.required' => 'Sababni tanlang',
             'reason.in' => 'Noto\'g\'ri sabab tanlangan',
@@ -145,9 +147,28 @@ class AbsenceExcuseController extends Controller
             'end_date.after_or_equal' => 'Tugash sanasi boshlanish sanasidan oldin bo\'lmasligi kerak',
             'file.required' => 'Hujjat yuklash majburiy',
             'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
-            'makeup_dates.*.makeup_date.required' => 'Har bir nazorat uchun qayta topshirish sanasini tanlang',
             'makeup_dates.*.makeup_date.after_or_equal' => 'Qayta topshirish sanasi bugungi kundan oldin bo\'lmasligi kerak',
+            'makeup_dates.*.makeup_start.after_or_equal' => 'JN boshlanish sanasi bugungi kundan oldin bo\'lmasligi kerak',
+            'makeup_dates.*.makeup_end.after_or_equal' => 'JN tugash sanasi bugungi kundan oldin bo\'lmasligi kerak',
         ]);
+
+        // Har bir makeup uchun sana mavjudligini tekshirish
+        $makeupDates = $request->input('makeup_dates', []);
+        foreach ($makeupDates as $i => $makeup) {
+            if (($makeup['assessment_type'] ?? '') === 'jn') {
+                if (empty($makeup['makeup_start']) || empty($makeup['makeup_end'])) {
+                    return back()->withErrors([
+                        "makeup_dates.{$i}.makeup_start" => ($makeup['subject_name'] ?? 'JN') . ' uchun sana oralig\'ini tanlang',
+                    ])->withInput();
+                }
+            } else {
+                if (empty($makeup['makeup_date'])) {
+                    return back()->withErrors([
+                        "makeup_dates.{$i}.makeup_date" => ($makeup['subject_name'] ?? 'Nazorat') . ' uchun qayta topshirish sanasini tanlang',
+                    ])->withInput();
+                }
+            }
+        }
 
         $file = $request->file('file');
         $filePath = $file->store('absence-excuses/' . $student->hemis_id, 'public');
@@ -171,11 +192,14 @@ class AbsenceExcuseController extends Controller
             ]);
 
             // Makeup sanalarni saqlash
-            $makeupDates = $request->input('makeup_dates', []);
             foreach ($makeupDates as $makeup) {
-                // Yakshanba tekshiruvi
-                $makeupDate = Carbon::parse($makeup['makeup_date']);
-                if ($makeupDate->isSunday()) {
+                // JN uchun makeup_start, boshqalar uchun makeup_date
+                $dateToSave = ($makeup['assessment_type'] === 'jn')
+                    ? ($makeup['makeup_start'] ?? $makeup['makeup_date'])
+                    : $makeup['makeup_date'];
+
+                $parsedDate = Carbon::parse($dateToSave);
+                if ($parsedDate->isSunday()) {
                     throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
                 }
 
@@ -187,7 +211,7 @@ class AbsenceExcuseController extends Controller
                     'assessment_type' => $makeup['assessment_type'],
                     'assessment_type_code' => $makeup['assessment_type_code'],
                     'original_date' => $makeup['original_date'],
-                    'makeup_date' => $makeup['makeup_date'],
+                    'makeup_date' => $dateToSave,
                     'status' => 'scheduled',
                 ]);
             }

@@ -305,7 +305,8 @@
         }
 
         function submitTransfer() {
-            const facultyId = document.getElementById('transfer-faculty-select').value;
+            const select = document.getElementById('transfer-faculty-select');
+            const facultyId = select.value;
             const btn = document.getElementById('transfer-submit-btn');
             const status = document.getElementById('transfer-status');
 

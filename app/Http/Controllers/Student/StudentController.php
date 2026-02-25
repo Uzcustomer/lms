@@ -615,7 +615,7 @@ class StudentController extends Controller
                 ->where('student_hemis_id', $studentHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
-                ->whereNotIn('training_type_code', [100, 101, 102])
+                ->whereNotIn('training_type_code', [100, 101, 102, 103])
                 ->whereNotNull('lesson_date')
                 ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
                     $q2->where('education_year_code', $subjectEducationYearCode);

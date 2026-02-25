@@ -356,7 +356,17 @@ class StudentController extends Controller
                 ->orderBy('lesson_pair_code')
                 ->get();
 
-            $minScheduleDate = $jbScheduleRows->pluck('lesson_date')->min();
+            // Determine earliest schedule date from ALL training types (JB + MT + Ma'ruza)
+            // to match JournalController behavior for education_year_code fallback filtering
+            $allScheduleDatesForMin = DB::table('schedules')
+                ->where('group_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                ->whereNotNull('lesson_date')
+                ->pluck('lesson_date');
+            $minScheduleDate = $allScheduleDatesForMin->min();
 
             $jbGradesRaw = DB::table('student_grades')
                 ->where('student_hemis_id', $studentHemisId)

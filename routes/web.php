@@ -62,7 +62,7 @@ Route::get('/document/verify/{token}', [\App\Http\Controllers\DocumentVerificati
 Route::get('/document/verify/{token}/pdf', [\App\Http\Controllers\DocumentVerificationController::class, 'viewPdf'])->name('document.verify.pdf');
 
 // Til almashtirish (Language switch)
-Route::get('/language/{locale}', [LanguageController::class, 'switch'])->name('language.switch');
+Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->name('language.switch');
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {

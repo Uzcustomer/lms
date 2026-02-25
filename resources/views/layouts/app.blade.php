@@ -39,6 +39,27 @@
                     $headerUser = auth()->user();
                     $headerUserName = $headerUser->name ?? ($headerUser->full_name ?? ($headerUser->short_name ?? __('notifications.user')));
 
+                    // User role info
+                    $headerUserRoles = $headerUser->getRoleNames()->toArray();
+                    $headerActiveRole = session('active_role', $headerUserRoles[0] ?? '');
+                    $headerRoleLabels = [];
+                    foreach (\App\Enums\ProjectRole::cases() as $role) {
+                        $headerRoleLabels[$role->value] = $role->label();
+                    }
+                    $headerActiveRoleLabel = $headerRoleLabels[$headerActiveRole] ?? $headerActiveRole;
+
+                    // Avatar
+                    $headerIsTeacher = auth()->guard('teacher')->check();
+                    $headerUserAvatar = ($headerIsTeacher && isset($headerUser->image) && $headerUser->image) ? $headerUser->image : null;
+
+                    // Logout route
+                    $headerIsImpersonating = session('impersonating', false);
+                    $headerAdminRoles = ['superadmin', 'admin', 'kichik_admin'];
+                    $headerUseTeacherRoutes = $headerIsTeacher && !in_array($headerActiveRole, $headerAdminRoles);
+                    $headerLogoutRoute = $headerIsImpersonating ? route('impersonate.stop') : ($headerUseTeacherRoutes ? route('teacher.logout') : route('admin.logout'));
+                    $headerProfileRoute = $headerUseTeacherRoutes ? route('teacher.info-me') : null;
+                    $headerSwitchRoleRoute = $headerUseTeacherRoutes ? route('teacher.switch-role') : route('admin.switch-role');
+
                     // Unread notification count
                     $headerUserId = $headerUser->id ?? 0;
                     $headerUserType = get_class($headerUser);
@@ -48,37 +69,40 @@
                         ->where('is_read', false)
                         ->count();
                 @endphp
-                <div class="top-header-bar" x-data="{ notifOpen: false, langOpen: false, profileOpen: false }" @click.outside="notifOpen = false; langOpen = false; profileOpen = false">
-                    <!-- Left: Mobile hamburger + breadcrumb -->
-                    <div class="top-header-left">
+                <div class="top-header-bar" style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:nowrap;"
+                     x-data="{ notifOpen: false, langOpen: false, profileOpen: false }">
+                    <!-- Left: Mobile hamburger + title -->
+                    <div class="top-header-left" style="display:flex;flex-direction:row;align-items:center;">
                         <button @click="$store.sidebar.toggle()" class="hamburger-btn-header" x-data>
-                            <svg style="width: 22px; height: 22px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg style="width:22px;height:22px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                             </svg>
                         </button>
                         <span class="top-header-title">{{ config('app.name', 'LMS') }}</span>
                     </div>
 
-                    <!-- Right: Language, Notifications, Profile -->
-                    <div class="top-header-right">
-                        <!-- Language Switcher -->
-                        <div class="top-header-item" style="position: relative;">
-                            <button @click="langOpen = !langOpen; notifOpen = false; profileOpen = false" class="top-header-btn" title="{{ __('notifications.language') }}">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <!-- Right: Til, Xabarnoma, Profil — gorizontal -->
+                    <div class="top-header-right" style="display:flex;flex-direction:row;align-items:center;flex-wrap:nowrap;gap:4px;margin-left:auto;">
+
+                        <!-- 1. Til (Language Switcher) -->
+                        <div class="top-header-item" style="display:inline-block;position:relative;">
+                            <button @click="langOpen = !langOpen; notifOpen = false; profileOpen = false"
+                                    class="top-header-btn" style="display:inline-flex;flex-direction:row;align-items:center;"
+                                    title="{{ __('notifications.language') }}">
+                                <svg style="width:20px;height:20px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
                                 <span class="top-header-lang-label">{{ strtoupper($currentLocale) }}</span>
                             </button>
-                            <!-- Language Dropdown -->
-                            <div x-show="langOpen" x-transition
-                                 class="top-header-dropdown" style="right: 0; min-width: 160px;">
+                            <div x-show="langOpen" x-transition @click.outside="langOpen = false"
+                                 class="top-header-dropdown" style="right:0;min-width:160px;">
                                 @foreach($locales as $code => $label)
                                 <a href="{{ route('language.switch', $code) }}"
                                    class="top-header-dropdown-item {{ $currentLocale === $code ? 'active' : '' }}">
-                                    <span class="font-medium">{{ strtoupper($code) }}</span>
-                                    <span class="ml-2 text-sm opacity-75">{{ $label }}</span>
+                                    <span style="font-weight:600;">{{ strtoupper($code) }}</span>
+                                    <span style="margin-left:8px;font-size:0.85rem;opacity:0.75;">{{ $label }}</span>
                                     @if($currentLocale === $code)
-                                    <svg class="w-4 h-4 ml-auto text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg style="width:16px;height:16px;margin-left:auto;color:#22c55e;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                     @endif
@@ -87,25 +111,26 @@
                             </div>
                         </div>
 
-                        <!-- Notifications Bell -->
-                        <div class="top-header-item" style="position: relative;">
-                            <button @click="notifOpen = !notifOpen; langOpen = false; profileOpen = false" class="top-header-btn" title="{{ __('notifications.notifications') }}">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <!-- 2. Xabarnomalar (Notifications Bell) -->
+                        <div class="top-header-item" style="display:inline-block;position:relative;">
+                            <button @click="notifOpen = !notifOpen; langOpen = false; profileOpen = false"
+                                    class="top-header-btn" style="display:inline-flex;flex-direction:row;align-items:center;"
+                                    title="{{ __('notifications.notifications') }}">
+                                <svg style="width:20px;height:20px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                                 </svg>
                                 @if($headerUnreadCount > 0)
                                 <span class="notif-badge">{{ $headerUnreadCount > 99 ? '99+' : $headerUnreadCount }}</span>
                                 @endif
                             </button>
-                            <!-- Notifications Dropdown -->
-                            <div x-show="notifOpen" x-transition
-                                 class="top-header-dropdown notif-dropdown" style="right: 0; width: 340px;">
+                            <div x-show="notifOpen" x-transition @click.outside="notifOpen = false"
+                                 class="top-header-dropdown notif-dropdown" style="right:0;width:340px;">
                                 <div class="notif-dropdown-header">
-                                    <span class="font-semibold">{{ __('notifications.notifications') }}</span>
+                                    <span style="font-weight:600;">{{ __('notifications.notifications') }}</span>
                                     @if($headerUnreadCount > 0)
-                                    <form method="POST" action="{{ route('admin.notifications.mark-all-read') }}" class="inline">
+                                    <form method="POST" action="{{ route('admin.notifications.mark-all-read') }}" style="display:inline;">
                                         @csrf
-                                        <button type="submit" class="text-xs text-blue-600 hover:text-blue-800">{{ __('notifications.mark_all_read') }}</button>
+                                        <button type="submit" style="font-size:0.75rem;color:#2563eb;background:none;border:none;cursor:pointer;">{{ __('notifications.mark_all_read') }}</button>
                                     </form>
                                     @endif
                                 </div>
@@ -120,16 +145,16 @@
                                     @endphp
                                     @forelse($recentNotifs as $notif)
                                     <a href="{{ route('admin.notifications.show', $notif) }}" class="notif-dropdown-item {{ !$notif->is_read ? 'unread' : '' }}">
-                                        <div class="flex items-start">
-                                            <div class="notif-dot {{ !$notif->is_read ? 'bg-blue-500' : 'bg-transparent' }}"></div>
-                                            <div class="flex-1 min-w-0">
-                                                <p class="text-sm font-medium text-gray-900 truncate">{{ $notif->subject }}</p>
-                                                <p class="text-xs text-gray-500 mt-1">{{ $notif->sent_at ? $notif->sent_at->diffForHumans() : '' }}</p>
+                                        <div style="display:flex;align-items:flex-start;">
+                                            <div class="notif-dot" style="background:{{ !$notif->is_read ? '#3b82f6' : 'transparent' }};"></div>
+                                            <div style="flex:1;min-width:0;">
+                                                <p style="font-size:0.875rem;font-weight:500;color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ $notif->subject }}</p>
+                                                <p style="font-size:0.75rem;color:#6b7280;margin-top:2px;">{{ $notif->sent_at ? $notif->sent_at->diffForHumans() : '' }}</p>
                                             </div>
                                         </div>
                                     </a>
                                     @empty
-                                    <div class="px-4 py-6 text-center text-sm text-gray-500">
+                                    <div style="padding:24px 16px;text-align:center;font-size:0.875rem;color:#6b7280;">
                                         {{ __('notifications.no_notifications') }}
                                     </div>
                                     @endforelse
@@ -140,44 +165,92 @@
                             </div>
                         </div>
 
-                        <!-- Profile -->
-                        <div class="top-header-item" style="position: relative;">
-                            <button @click="profileOpen = !profileOpen; langOpen = false; notifOpen = false" class="top-header-btn top-header-profile-btn">
+                        <!-- 3. Profil (Profile - sidebardagini tepaga ko'chirdik) -->
+                        <div class="top-header-item" style="display:inline-block;position:relative;">
+                            <button @click="profileOpen = !profileOpen; langOpen = false; notifOpen = false"
+                                    class="top-header-btn top-header-profile-btn"
+                                    style="display:inline-flex;flex-direction:row;align-items:center;gap:8px;padding-left:10px;border-left:1px solid #e5e7eb;margin-left:4px;">
+                                @if($headerUserAvatar)
+                                <img src="{{ $headerUserAvatar }}" alt="{{ $headerUserName }}"
+                                     style="width:32px;height:32px;min-width:32px;border-radius:50%;object-fit:cover;border:2px solid #e5e7eb;">
+                                @else
                                 <div class="top-header-avatar">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                     </svg>
                                 </div>
+                                @endif
                                 <span class="top-header-username">{{ $headerUserName }}</span>
-                                <svg class="w-4 h-4 transition-transform" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="top-header-chevron" style="width:16px;height:16px;" :style="profileOpen ? 'transform:rotate(180deg)' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                                 </svg>
                             </button>
-                            <!-- Profile Dropdown -->
-                            <div x-show="profileOpen" x-transition
-                                 class="top-header-dropdown" style="right: 0; min-width: 200px;">
-                                <div class="px-4 py-3 border-b border-gray-100">
-                                    <p class="text-sm font-medium text-gray-900">{{ $headerUserName }}</p>
-                                    <p class="text-xs text-gray-500">{{ $headerUser->email ?? '' }}</p>
+                            <div x-show="profileOpen" x-transition @click.outside="profileOpen = false"
+                                 class="top-header-dropdown" style="right:0;min-width:240px;">
+                                <!-- User info -->
+                                <div style="padding:12px 16px;border-bottom:1px solid #f3f4f6;">
+                                    <p style="font-size:0.875rem;font-weight:600;color:#111827;">{{ $headerUserName }}</p>
+                                    <p style="font-size:0.75rem;color:#6b7280;margin-top:2px;">{{ $headerActiveRoleLabel }}</p>
                                 </div>
-                                <a href="{{ route('admin.notifications.index') }}" class="top-header-dropdown-item">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+
+                                <!-- Profil link -->
+                                @if($headerProfileRoute)
+                                <a href="{{ $headerProfileRoute }}" class="top-header-dropdown-item">
+                                    <svg style="width:16px;height:16px;margin-right:8px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                     </svg>
-                                    {{ __('notifications.notifications') }}
-                                    @if($headerUnreadCount > 0)
-                                    <span class="ml-auto bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{{ $headerUnreadCount }}</span>
-                                    @endif
+                                    Profil
                                 </a>
-                                <form method="POST" action="{{ route('admin.logout') }}">
-                                    @csrf
-                                    <button type="submit" class="top-header-dropdown-item w-full text-left text-red-600 hover:text-red-700">
-                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
-                                        </svg>
-                                        {{ __('notifications.logout') }}
-                                    </button>
-                                </form>
+                                @endif
+
+                                <!-- Rol almashtirish -->
+                                @if(count($headerUserRoles) > 1)
+                                <div style="border-bottom:1px solid #f3f4f6;padding:4px 0;">
+                                    <p style="padding:6px 16px;font-size:0.7rem;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Rolni almashtirish</p>
+                                    @foreach($headerUserRoles as $hRole)
+                                    <form method="POST" action="{{ $headerSwitchRoleRoute }}">
+                                        @csrf
+                                        <input type="hidden" name="role" value="{{ $hRole }}">
+                                        <button type="submit" class="top-header-dropdown-item" style="width:100;justify-content:space-between;">
+                                            <span>{{ $headerRoleLabels[$hRole] ?? $hRole }}</span>
+                                            @if($hRole === $headerActiveRole)
+                                            <svg style="width:16px;height:16px;color:#22c55e;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                                            </svg>
+                                            @endif
+                                        </button>
+                                    </form>
+                                    @endforeach
+                                </div>
+                                @endif
+
+                                <!-- Sozlamalar -->
+                                @if(in_array($headerActiveRole, ['superadmin', 'admin', 'kichik_admin']))
+                                <a href="{{ route('admin.settings') }}" class="top-header-dropdown-item">
+                                    <svg style="width:16px;height:16px;margin-right:8px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                    Sozlamalar
+                                </a>
+                                @endif
+
+                                <!-- Chiqish -->
+                                <div style="border-top:1px solid #f3f4f6;">
+                                    <form method="POST" action="{{ $headerLogoutRoute }}">
+                                        @csrf
+                                        <button type="submit" class="top-header-dropdown-item" style="width:100%;color:#ef4444;">
+                                            <svg style="width:16px;height:16px;margin-right:8px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                @if($headerIsImpersonating)
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"></path>
+                                                @else
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                                                @endif
+                                            </svg>
+                                            {{ $headerIsImpersonating ? 'Superadminga qaytish' : __('notifications.logout') }}
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -102,11 +102,16 @@ class DocumentTemplateService
         $pdfGenerated = false;
 
         // LibreOffice orqali PDF generatsiya (yagona sifatli usul)
-        $sofficePath = $this->findSoffice();
+        $sofficePath = '/usr/bin/soffice';
+
+        if (!file_exists($sofficePath)) {
+            // Fallback: boshqa yo'llardan qidirish
+            $sofficePath = $this->findSoffice();
+        }
 
         if (!$sofficePath) {
             @unlink($tempDocx);
-            \Log::warning('LibreOffice topilmadi. findSoffice() null qaytardi. PATH: ' . (getenv('PATH') ?: 'bo\'sh'));
+            \Log::warning('LibreOffice topilmadi. PATH: ' . (getenv('PATH') ?: 'bo\'sh'));
             throw new \RuntimeException('LibreOffice topilmadi. O\'rnating: sudo apt install libreoffice-writer');
         }
 

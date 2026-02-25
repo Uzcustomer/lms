@@ -293,8 +293,14 @@
                             Excel
                         </button>
                         <div style="display: flex; gap: 10px;">
-                            <button type="button" class="ktr-btn ktr-btn-secondary" onclick="closeKtrModal()">Bekor qilish</button>
-                            <button type="button" class="ktr-btn ktr-btn-primary" id="ktr-save-btn" onclick="saveKtrPlan()">Saqlash</button>
+                            <button type="button" class="ktr-btn ktr-btn-edit" id="ktr-edit-btn" onclick="enableKtrEdit()" style="display:none;">
+                                <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                                Tahrirlash
+                            </button>
+                            <button type="button" class="ktr-btn ktr-btn-secondary" onclick="closeKtrModal()">Yopish</button>
+                            <button type="button" class="ktr-btn ktr-btn-primary" id="ktr-save-btn" onclick="saveKtrPlan()" style="display:none;">Saqlash</button>
                         </div>
                     </div>
                 </div>
@@ -438,7 +444,9 @@
             savedHours: {},
             savedTopics: {},
             hemisTopics: {},
-            canEdit: false
+            canEdit: false,
+            editMode: false,
+            hasPlan: false
         };
 
         // Mustaqil ta'limni filtrdan chiqarish
@@ -487,6 +495,7 @@
                     ktrState.savedTopics = {};
                     ktrState.hemisTopics = data.hemis_topics || {};
                     ktrState.canEdit = data.can_edit || false;
+                    ktrState.hasPlan = !!(data.plan && data.plan.week_count);
 
                     // Saqlangan ma'lumotlarni yuklash
                     if (data.plan && data.plan.plan_data) {
@@ -499,20 +508,27 @@
                         }
                     }
 
-                    // Tahrirlash huquqi bo'yicha UI
-                    if (ktrState.canEdit) {
-                        $('#ktr-week-selector').show();
-                        $('#ktr-save-btn').show();
-                    } else {
-                        $('#ktr-week-selector').hide();
-                        $('#ktr-save-btn').hide();
-                    }
                     $('.ktr-week-btn').removeClass('active');
 
-                    if (data.plan && data.plan.week_count) {
+                    if (ktrState.hasPlan) {
+                        // Saqlangan reja bor - ko'rish rejimida ochiladi
+                        ktrState.editMode = false;
+                        $('#ktr-week-selector').hide();
+                        $('#ktr-save-btn').hide();
+                        $('#ktr-edit-btn').toggle(ktrState.canEdit);
                         selectWeekCount(data.plan.week_count, true);
-                    } else if (!ktrState.canEdit) {
-                        // Reja yo'q va tahrirlash huquqi yo'q
+                    } else if (ktrState.canEdit) {
+                        // Reja yo'q, tahrirlash huquqi bor - darhol tahrirlash rejimi
+                        ktrState.editMode = true;
+                        $('#ktr-week-selector').show();
+                        $('#ktr-save-btn').show();
+                        $('#ktr-edit-btn').hide();
+                    } else {
+                        // Reja yo'q, huquq yo'q
+                        ktrState.editMode = false;
+                        $('#ktr-week-selector').hide();
+                        $('#ktr-save-btn').hide();
+                        $('#ktr-edit-btn').hide();
                         $('#ktr-plan-table-wrap').hide();
                         $('#ktr-validation-msg')
                             .html('Bu fan uchun hali KTR rejasi tuzilmagan.')
@@ -531,6 +547,16 @@
         function closeKtrModal(event) {
             if (event && event.target !== document.getElementById('ktr-modal-overlay')) return;
             $('#ktr-modal-overlay').fadeOut(200);
+        }
+
+        function enableKtrEdit() {
+            ktrState.editMode = true;
+            $('#ktr-edit-btn').hide();
+            $('#ktr-save-btn').show();
+            $('#ktr-week-selector').show();
+            // Inputlarni yoqish
+            $('.ktr-hours').prop('readonly', false).prop('disabled', false);
+            $('#ktr-validation-msg').hide();
         }
 
         function selectWeekCount(count, fromLoad) {
@@ -577,7 +603,7 @@
                     if (fromLoad && ktrState.savedHours[w] && ktrState.savedHours[w][code] !== undefined) {
                         hrs = ktrState.savedHours[w][code];
                     }
-                    var readonlyAttr = ktrState.canEdit ? '' : ' readonly disabled';
+                    var readonlyAttr = ktrState.editMode ? '' : ' readonly disabled';
                     tbody += '<td class="ktr-td-hrs"><input type="number" min="0" class="ktr-cell ktr-hours" data-week="' + w + '" data-code="' + code + '" value="' + hrs + '"' + readonlyAttr + '></td>';
                 });
                 tbody += '</tr>';
@@ -1318,6 +1344,18 @@
             color: #475569;
         }
         .ktr-btn-secondary:hover { background: #e2e8f0; }
+        .ktr-btn-edit {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+            box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+        }
+        .ktr-btn-edit:hover {
+            background: linear-gradient(135deg, #d97706, #b45309);
+            transform: translateY(-1px);
+        }
         .ktr-btn-export {
             display: inline-flex;
             align-items: center;

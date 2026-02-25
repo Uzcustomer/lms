@@ -131,7 +131,7 @@ return [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
-    "training_type_code" => [11, 99, 100, 101, 102],
+    "training_type_code" => [11, 99, 100, 101, 102, 103],
     // Davomat nazorati uchun chiqarib tashlanadigan mashg'ulot turlari (Ma'ruza=11 kiritilmagan)
     "attendance_excluded_training_types" => [99, 100, 101, 102],
     "shakllar" =>

@@ -247,8 +247,8 @@ class StudentController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test"];
-        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
         $gradingCutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
 
@@ -530,14 +530,14 @@ class StudentController extends Controller
                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
             }
 
-            // ---- ON, OSKI, Test (training_type_code: 100, 101, 102) ----
+            // ---- ON, OSKI, Test, Quiz (training_type_code: 100, 101, 102, 103) ----
             $otherGradesRaw = DB::table('student_grades')
                 ->where('student_hemis_id', $studentHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
-                ->whereIn('training_type_code', [100, 101, 102])
+                ->whereIn('training_type_code', [100, 101, 102, 103])
                 ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
-                ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason')
+                ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
                 ->get();
 
             $otherGrades = ['on' => null, 'oski' => null, 'test' => null];
@@ -545,7 +545,19 @@ class StudentController extends Controller
             foreach ($otherGradesRaw as $g) {
                 $effectiveGrade = $getEffectiveGrade($g);
                 if ($effectiveGrade !== null) {
-                    $otherByType[$g->training_type_code][] = $effectiveGrade;
+                    $typeCode = $g->training_type_code;
+                    // Legacy code 103 quiz grades: resolve to OSKI(101) or Test(102) via quiz_result
+                    if ($typeCode == 103 && $g->quiz_result_id) {
+                        $quizType = DB::table('hemis_quiz_results')->where('id', $g->quiz_result_id)->value('quiz_type');
+                        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+                        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+                        if (in_array($quizType, $oskiTypes)) {
+                            $typeCode = 101;
+                        } elseif (in_array($quizType, $testTypes)) {
+                            $typeCode = 102;
+                        }
+                    }
+                    $otherByType[$typeCode][] = $effectiveGrade;
                 }
             }
             if (!empty($otherByType[100])) $otherGrades['on'] = round(array_sum($otherByType[100]) / count($otherByType[100]), 0, PHP_ROUND_HALF_UP);

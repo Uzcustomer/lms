@@ -171,18 +171,66 @@
 
         /* ======= MOBILE ======= */
         @media (max-width: 640px) {
-            .ae-card-header { padding: 14px 16px; }
-            .ae-card-body { padding: 16px; }
+            /* Card */
+            .ae-card { border-radius: 12px; }
+            .ae-card-header { padding: 12px 14px; gap: 8px; border-radius: 12px 12px 0 0; }
+            .ae-card-header-icon { width: 32px; height: 32px; border-radius: 8px; }
+            .ae-card-header-icon svg { width: 16px; height: 16px; }
+            .ae-card-header h3 { font-size: 14px; }
+            .ae-card-header p { font-size: 11px; }
+            .ae-card-body { padding: 14px; }
+
+            /* Form elements */
+            .ae-label { font-size: 13px; margin-bottom: 5px; }
+            .ae-input, .ae-select, .ae-textarea { font-size: 14px; padding: 10px 12px; border-radius: 10px; }
+            .ae-file-zone { min-height: 42px; padding: 8px 12px; border-radius: 10px; }
+            .ae-file-zone span { font-size: 12px !important; }
+
+            /* Calendar trigger */
+            .cal-trigger { font-size: 14px; padding: 10px 12px; border-radius: 10px; }
+
+            /* Calendar */
+            .cal-dropdown { border-radius: 10px; }
             .rc-header { padding: 6px 8px; }
             .rc-header-title { font-size: 11px; }
+            .rc-nav { width: 24px; height: 24px; }
             .rc-grid { padding: 3px 3px 4px; gap: 0; }
             .rc-day { font-size: 11px; min-height: 24px; }
             .rc-weekdays { padding: 3px 3px 2px; }
             .rc-weekdays span { font-size: 9px; }
+
+            /* Mini calendar */
             .rc-mini .rc-day { font-size: 9px; min-height: 20px; }
             .rc-mini .rc-header { padding: 4px 6px; }
             .rc-mini .rc-header-title { font-size: 10px; }
-            .assessment-card-head { padding: 12px 14px; }
+
+            /* Assessment cards */
+            .assessment-card { border-radius: 12px; }
+            .assessment-card-head { padding: 10px 12px; border-radius: 12px 12px 0 0; gap: 4px; }
+            .assessment-card-head .text-base { font-size: 13px !important; }
+            .assessment-card-head .text-xs { font-size: 10px !important; }
+            .assessment-card-head .text-sm { font-size: 11px !important; }
+            .assessment-card .px-4 { padding-left: 12px; padding-right: 12px; }
+            .assessment-card .py-3 { padding-top: 8px; padding-bottom: 8px; }
+
+            /* Submit */
+            .ae-submit { font-size: 15px; padding: 12px 24px; border-radius: 12px; }
+
+            /* Sabab info */
+            .ae-card-body > div[x-show="selectedReason"] { padding: 12px; border-radius: 10px; gap: 8px; }
+            .ae-card-body > div[x-show="selectedReason"] .w-9 { width: 28px; height: 28px; border-radius: 6px; }
+            .ae-card-body > div[x-show="selectedReason"] .text-base { font-size: 13px !important; }
+            .ae-card-body > div[x-show="selectedReason"] .text-sm { font-size: 11px !important; }
+
+            /* Section header counter */
+            .ae-card-header .text-lg { font-size: 14px !important; }
+            .ae-card-header .text-sm { font-size: 11px !important; }
+
+            /* Deadline warning */
+            .ae-card-body .text-xs { font-size: 11px; }
+
+            /* Grid gaps */
+            .ae-card-body .gap-6 { gap: 16px; }
         }
     </style>
     @endpush
@@ -442,7 +490,7 @@
                     </div>
 
                     {{-- Assessment cards --}}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
                         <template x-for="(item, index) in assessments" :key="index">
                             <div class="assessment-card">
                                 <div class="assessment-card-head">
@@ -857,7 +905,7 @@
                 const hasJn = this.assessments.some(a => a.assessment_type === 'jn');
                 if (!hasJn) {
                     this.assessments.unshift({
-                        subject_name: 'Joriy nazorat', subject_id: '',
+                        subject_name: 'Barcha fanlar', subject_id: '',
                         assessment_type: 'jn', assessment_type_code: 'jn',
                         original_date: this.startDate, makeup_date: '',
                         makeup_start: '', makeup_end: '', jn_selecting: 'start',

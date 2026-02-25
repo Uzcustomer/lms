@@ -17,31 +17,24 @@ class KafedraController extends Controller
             ->get();
 
         // Fakultetlarning HEMIS ID lari (parent_id shu qiymatga ishora qiladi)
-        $facultyHemisIds = $faculties->pluck('department_hemis_id')->toArray();
+        $facultyHemisIds = $faculties->pluck('department_hemis_id')->map(fn($id) => (int) $id)->toArray();
 
-        // HEMIS ID -> faculty mapping (view da groupBy uchun)
-        $hemisToFaculty = $faculties->keyBy('department_hemis_id');
-
-        // Faqat haqiqiy kafedralar - nomida "kafedra" so'zi bor bo'lganlar
-        // parent_id = faculty ning department_hemis_id ga teng
-        $assignedKafedras = Department::whereIn('parent_id', $facultyHemisIds)
-            ->where('active', true)
-            ->where('name', 'LIKE', '%kafedra%')
-            ->orderBy('name')
-            ->get();
-
-        $kafedras = $assignedKafedras->groupBy('parent_id');
-        $assignedIds = $assignedKafedras->pluck('id')->toArray();
-
-        // Fakultetga tayinlanmagan kafedralar - tayinlanganlarni aniq chiqarib tashlash
-        $unassigned = Department::where('active', true)
+        // Barcha kafedralarni BITTA so'rov bilan olish
+        $allKafedras = Department::where('active', true)
             ->where('name', 'LIKE', '%kafedra%')
             ->where('structure_type_code', '!=', 11)
-            ->whereNotIn('id', $assignedIds)
             ->orderBy('name')
             ->get();
 
-        return view('admin.kafedra.index', compact('faculties', 'kafedras', 'unassigned', 'hemisToFaculty'));
+        // PHP da ajratish - har bir kafedra faqat BITTA joyda ko'rinadi
+        $kafedras = $allKafedras
+            ->filter(fn($k) => in_array((int) $k->parent_id, $facultyHemisIds))
+            ->groupBy('parent_id');
+
+        $unassigned = $allKafedras
+            ->filter(fn($k) => !in_array((int) $k->parent_id, $facultyHemisIds));
+
+        return view('admin.kafedra.index', compact('faculties', 'kafedras', 'unassigned'));
     }
 
     /**

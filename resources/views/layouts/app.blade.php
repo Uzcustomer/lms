@@ -64,7 +64,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                         </svg>
                         @if($notifUnreadCount > 0)
-                        <span style="position:absolute;top:2px;right:2px;width:9px;height:9px;background:#ef4444;border-radius:50%;border:2px solid #fff;"></span>
+                        <span style="position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;background:#ef4444;border-radius:9px;border:2px solid #fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;line-height:1;">{{ $notifUnreadCount > 99 ? '99+' : $notifUnreadCount }}</span>
                         @endif
                     </button>
 

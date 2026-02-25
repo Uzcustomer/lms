@@ -552,6 +552,7 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'create'])->name('create');
             Route::post('/store', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'store'])->name('store');
+            Route::post('/missed-assessments', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'missedAssessments'])->name('missed-assessments');
             Route::get('/{id}', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'show'])->name('show');
             Route::get('/{id}/download', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'download'])->name('download');
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');

@@ -11,37 +11,50 @@ class KafedraController extends Controller
     public function index()
     {
         // Fakultetlar (structure_type_code = 11)
-        $faculties = Department::where('structure_type_code', 11)
+        $allFaculties = Department::where('structure_type_code', 11)
             ->where('active', true)
             ->orderBy('name')
             ->get();
 
-        // Fakultetlarning HEMIS ID lari (parent_id shu qiymatga ishora qiladi)
-        $facultyHemisIds = $faculties->pluck('department_hemis_id')->toArray();
+        // "Xalqaro" fakultetlarni birlashtirish - faqat "Xalqaro ta'lim fakulteti" qoladi
+        $xalqaroMain = $allFaculties->first(fn($f) => stripos($f->name, 'xalqaro') !== false && stripos($f->name, 'davolash') === false);
+        $xalqaroDuplicates = $allFaculties->filter(fn($f) => stripos($f->name, 'xalqaro') !== false && $f->id !== ($xalqaroMain->id ?? 0));
 
-        // HEMIS ID -> faculty mapping (view da groupBy uchun)
-        $hemisToFaculty = $faculties->keyBy('department_hemis_id');
+        // Asosiy fakultetlar ro'yxati (dublikat xalqaro fakultetlarsiz)
+        $faculties = $allFaculties->reject(fn($f) => $xalqaroDuplicates->contains('id', $f->id));
 
-        // Faqat haqiqiy kafedralar - nomida "kafedra" so'zi bor bo'lganlar
-        // parent_id = faculty ning department_hemis_id ga teng
-        $assignedKafedras = Department::whereIn('parent_id', $facultyHemisIds)
-            ->where('active', true)
-            ->where('name', 'LIKE', '%kafedra%')
-            ->orderBy('name')
-            ->get();
+        // Barcha fakultetlarning HEMIS ID lari (dublikatlar ham)
+        $allFacultyHemisIds = $allFaculties->pluck('department_hemis_id')->map(fn($id) => (int) $id)->toArray();
 
-        $kafedras = $assignedKafedras->groupBy('parent_id');
-        $assignedIds = $assignedKafedras->pluck('id')->toArray();
+        // Dublikat xalqaro fakultetlarning HEMIS ID lari
+        $xalqaroDupHemisIds = $xalqaroDuplicates->pluck('department_hemis_id')->map(fn($id) => (int) $id)->toArray();
+        $xalqaroMainHemisId = $xalqaroMain ? (int) $xalqaroMain->department_hemis_id : 0;
 
-        // Fakultetga tayinlanmagan kafedralar - tayinlanganlarni aniq chiqarib tashlash
-        $unassigned = Department::where('active', true)
+        // Barcha kafedralarni BITTA so'rov bilan olish
+        $allKafedras = Department::where('active', true)
             ->where('name', 'LIKE', '%kafedra%')
             ->where('structure_type_code', '!=', 11)
-            ->whereNotIn('id', $assignedIds)
             ->orderBy('name')
             ->get();
 
-        return view('admin.kafedra.index', compact('faculties', 'kafedras', 'unassigned', 'hemisToFaculty'));
+        // Dublikat xalqaro fakultet kafedralari uchun parent_id ni asosiyga yo'naltirish
+        $allKafedras->each(function ($k) use ($xalqaroDupHemisIds, $xalqaroMainHemisId) {
+            if (in_array((int) $k->parent_id, $xalqaroDupHemisIds)) {
+                $k->parent_id = $xalqaroMainHemisId;
+            }
+        });
+
+        // PHP da ajratish - har bir kafedra faqat BITTA joyda ko'rinadi
+        $displayHemisIds = $faculties->pluck('department_hemis_id')->map(fn($id) => (int) $id)->toArray();
+
+        $kafedras = $allKafedras
+            ->filter(fn($k) => in_array((int) $k->parent_id, $displayHemisIds))
+            ->groupBy('parent_id');
+
+        $unassigned = $allKafedras
+            ->filter(fn($k) => !in_array((int) $k->parent_id, $displayHemisIds));
+
+        return view('admin.kafedra.index', compact('faculties', 'kafedras', 'unassigned'));
     }
 
     /**

@@ -86,17 +86,18 @@
         .rc-day.rc-taken { background: #fef3c7; color: #92400e; cursor: not-allowed; }
 
         /* ======= MINI CALENDAR (assessment cards) ======= */
-        .rc-mini .rc-header { padding: 5px 8px; }
-        .rc-mini .rc-header-title { font-size: 11px; }
-        .rc-mini .rc-nav { width: 22px; height: 22px; border-radius: 5px; }
-        .rc-mini .rc-weekdays { padding: 3px 4px 2px; }
-        .rc-mini .rc-weekdays span { font-size: 8px; }
-        .rc-mini .rc-grid { gap: 0; padding: 2px 4px 4px; }
-        .rc-mini .rc-day { font-size: 10px; min-height: 24px; border-radius: 4px; }
-        .rc-mini .rc-day.rc-start { border-radius: 4px 1px 1px 4px; }
-        .rc-mini .rc-day.rc-end { border-radius: 1px 4px 4px 1px; }
-        .rc-mini .rc-day.rc-start.rc-end { border-radius: 4px; }
-        .rc-mini .rc-day.rc-in-range { border-radius: 1px; }
+        .rc-mini { height: 250px; display: flex; flex-direction: column; }
+        .rc-mini .rc-header { padding: 6px 10px; flex-shrink: 0; }
+        .rc-mini .rc-header-title { font-size: 12px; }
+        .rc-mini .rc-nav { width: 24px; height: 24px; border-radius: 5px; }
+        .rc-mini .rc-weekdays { padding: 4px 6px 3px; flex-shrink: 0; }
+        .rc-mini .rc-weekdays span { font-size: 9px; }
+        .rc-mini .rc-grid { gap: 0; padding: 2px 6px 6px; flex: 1; align-content: start; }
+        .rc-mini .rc-day { font-size: 11px; min-height: 30px; border-radius: 5px; }
+        .rc-mini .rc-day.rc-start { border-radius: 5px 2px 2px 5px; }
+        .rc-mini .rc-day.rc-end { border-radius: 2px 5px 5px 2px; }
+        .rc-mini .rc-day.rc-start.rc-end { border-radius: 5px; }
+        .rc-mini .rc-day.rc-in-range { border-radius: 2px; }
 
         /* ======= CARD STYLES ======= */
         .ae-card {
@@ -200,9 +201,10 @@
             .rc-weekdays span { font-size: 9px; }
 
             /* Mini calendar */
-            .rc-mini .rc-day { font-size: 9px; min-height: 20px; }
-            .rc-mini .rc-header { padding: 4px 6px; }
-            .rc-mini .rc-header-title { font-size: 10px; }
+            .rc-mini { height: 220px; }
+            .rc-mini .rc-day { font-size: 10px; min-height: 26px; }
+            .rc-mini .rc-header { padding: 5px 8px; }
+            .rc-mini .rc-header-title { font-size: 11px; }
 
             /* Assessment cards */
             .assessment-card { border-radius: 12px; }
@@ -490,7 +492,7 @@
                     </div>
 
                     {{-- Assessment cards --}}
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 mb-6" style="gap: 15px;">
                         <template x-for="(item, index) in assessments" :key="index">
                             <div class="assessment-card">
                                 <div class="assessment-card-head">
@@ -899,19 +901,24 @@
                             ...a, makeup_date: '', makeup_start: '', makeup_end: '',
                             jn_selecting: 'start', cal_month: cm, cal_year: cy, show_cal: false
                         }));
+                        // Serverdan JN topilmagan fanlar uchun JN card qo'shish
+                        const jnSubjects = data.jn_subjects || [];
+                        const existingJnSubjects = this.assessments
+                            .filter(a => a.assessment_type === 'jn')
+                            .map(a => a.subject_name);
+                        jnSubjects.forEach(sub => {
+                            if (!existingJnSubjects.includes(sub.subject_name)) {
+                                this.assessments.push({
+                                    subject_name: sub.subject_name, subject_id: sub.subject_id || '',
+                                    assessment_type: 'jn', assessment_type_code: '100',
+                                    original_date: this.startDate, makeup_date: '',
+                                    makeup_start: '', makeup_end: '', jn_selecting: 'start',
+                                    cal_month: cm, cal_year: cy, show_cal: false, is_default_jn: true
+                                });
+                            }
+                        });
                     }
                 } catch (e) { console.error('Xatolik:', e); }
-                // Har doim JN birinchi bo'lib chiqsin
-                const hasJn = this.assessments.some(a => a.assessment_type === 'jn');
-                if (!hasJn) {
-                    this.assessments.unshift({
-                        subject_name: 'Barcha fanlar', subject_id: '',
-                        assessment_type: 'jn', assessment_type_code: 'jn',
-                        original_date: this.startDate, makeup_date: '',
-                        makeup_start: '', makeup_end: '', jn_selecting: 'start',
-                        cal_month: cm, cal_year: cy, show_cal: false, is_default_jn: true
-                    });
-                }
                 // JN har doim birinchi
                 this.assessments.sort((a, b) => a.assessment_type === 'jn' ? -1 : b.assessment_type === 'jn' ? 1 : 0);
                 this.loading = false; this.searched = true;

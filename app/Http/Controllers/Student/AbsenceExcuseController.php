@@ -51,8 +51,20 @@ class AbsenceExcuseController extends Controller
 
         $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
 
+        // Shu muddat ichidagi barcha darslardan unique fanlarni olish (JN uchun)
+        $jnSubjects = Schedule::where('group_id', $groupId)
+            ->whereDate('lesson_date', '>=', $startDate)
+            ->whereDate('lesson_date', '<=', $endDate)
+            ->select('subject_name', 'subject_id')
+            ->distinct()
+            ->get()
+            ->map(fn($s) => ['subject_name' => $s->subject_name, 'subject_id' => $s->subject_id])
+            ->values()
+            ->toArray();
+
         return response()->json([
             'assessments' => $missedAssessments->values()->toArray(),
+            'jn_subjects' => $jnSubjects,
         ]);
     }
 
@@ -76,7 +88,7 @@ class AbsenceExcuseController extends Controller
                         if ($reasonData && $reasonData['max_days']) {
                             $start = Carbon::parse($request->start_date);
                             $end = Carbon::parse($value);
-                            $days = $start->diffInDays($end) + 1;
+                            $days = $this->countNonSundays($start, $end);
                             if ($days > $reasonData['max_days']) {
                                 $fail("Tanlangan sabab uchun maksimum {$reasonData['max_days']} kun ruxsat etiladi. Siz {$days} kun belgiladingiz.");
                             }
@@ -219,7 +231,7 @@ class AbsenceExcuseController extends Controller
             $excuse->load('makeups');
         }
 
-        $absentDaysCount = $startDate->diffInDays($endDate) + 1;
+        $absentDaysCount = $this->countNonSundays($startDate, $endDate);
 
         return view('student.absence-excuses.schedule-check', compact('excuse', 'missedAssessments', 'absentDaysCount'));
     }
@@ -257,7 +269,7 @@ class AbsenceExcuseController extends Controller
         }
 
         $uniqueDates = collect($makeupDates)->unique()->count();
-        $absentDaysCount = $excuse->start_date->diffInDays($excuse->end_date) + 1;
+        $absentDaysCount = $this->countNonSundays($excuse->start_date, $excuse->end_date);
 
         if ($uniqueDates > $absentDaysCount) {
             return back()->withErrors([
@@ -316,6 +328,22 @@ class AbsenceExcuseController extends Controller
         }
 
         return response()->download($filePath, 'sababli_ariza_' . $excuse->id . '.pdf');
+    }
+
+    /**
+     * Yakshanbalarni hisobdan chiqarib, kunlarni sanash
+     */
+    private function countNonSundays(Carbon $start, Carbon $end): int
+    {
+        $days = 0;
+        $current = $start->copy();
+        while ($current->lte($end)) {
+            if ($current->dayOfWeek !== Carbon::SUNDAY) {
+                $days++;
+            }
+            $current->addDay();
+        }
+        return $days;
     }
 
     /**

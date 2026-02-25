@@ -32,6 +32,19 @@
 
             <!-- Main Content -->
             <div class="flex-1 overflow-x-hidden overflow-y-auto sidebar-main-content">
+                <!-- Mobile Top Bar -->
+                <div class="mobile-top-bar" x-data>
+                    <button @click="$store.sidebar.toggle()" class="hamburger-btn">
+                        <svg style="width: 24px; height: 24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <span style="margin-left: 12px; font-size: 1.125rem; font-weight: 600; color: #1f2937;">LMS</span>
+                    <span style="margin-left: auto; font-size: 0.875rem; color: #6b7280;">
+                        {{ Auth::user()->name ?? '' }}
+                    </span>
+                </div>
+
                 <!-- Xabarnomalar ikonchasi — o'ng yuqori burchak -->
                 @php
                     $notifUser = auth()->user();

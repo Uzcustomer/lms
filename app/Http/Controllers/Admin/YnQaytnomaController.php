@@ -419,40 +419,121 @@ class YnQaytnomaController extends Controller
 
                 if (!$subject) continue;
 
-                $currentDate = now();
-                $lessonCount = Schedule::where('subject_id', $subject->subject_id)
+                // --- JN calculation matching journal logic (show.blade.php) ---
+                $excludedTrainingCodes = config('app.training_type_code');
+
+                // Get schedule-based lesson dates and pairs (same as JournalController)
+                $jbScheduleRows = DB::table('schedules')
                     ->where('group_id', $group->group_hemis_id)
-                    ->whereNotIn('training_type_code', config('app.training_type_code'))
-                    ->where('lesson_date', '<=', $currentDate)
-                    ->distinct('lesson_date')
-                    ->count();
+                    ->where('subject_id', $subject->subject_id)
+                    ->whereNull('deleted_at')
+                    ->whereNotIn('training_type_code', $excludedTrainingCodes)
+                    ->whereNotNull('lesson_date')
+                    ->select('lesson_date', 'lesson_pair_code')
+                    ->orderBy('lesson_date')
+                    ->orderBy('lesson_pair_code')
+                    ->get();
 
-                if ($lessonCount == 0) $lessonCount = 1;
+                // Build unique columns and pairs per day
+                $jbColumns = $jbScheduleRows->map(function ($schedule) {
+                    return ['date' => $schedule->lesson_date, 'pair' => $schedule->lesson_pair_code];
+                })->unique(function ($item) {
+                    return $item['date'] . '_' . $item['pair'];
+                })->values();
 
+                $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+
+                $jbPairsPerDay = [];
+                foreach ($jbColumns as $col) {
+                    if (!isset($jbPairsPerDay[$col['date']])) {
+                        $jbPairsPerDay[$col['date']] = 0;
+                    }
+                    $jbPairsPerDay[$col['date']]++;
+                }
+
+                // Build date+pair set for filtering grades
+                $jbDatePairSet = [];
+                foreach ($jbColumns as $col) {
+                    $jbDatePairSet[$col['date'] . '_' . $col['pair']] = true;
+                }
+
+                // Filter lesson dates for average (matching journal's gradingCutoffDate)
+                $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+                $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
+                    return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
+                }));
+                $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
+                $totalJbDaysForAverage = count($jbLessonDatesForAverage);
+
+                // Get student hemis IDs for this group
+                $studentHemisIds = Student::where('group_id', $group->group_hemis_id)->pluck('hemis_id');
+
+                // Fetch raw grades (matching journal's allGradesRaw query)
+                $allGradesRaw = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subject->subject_id)
+                    ->whereNotIn('training_type_code', [100, 101, 102, 103])
+                    ->whereNotNull('lesson_date')
+                    ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                    ->orderBy('lesson_date')
+                    ->orderBy('lesson_pair_code')
+                    ->get();
+
+                // Filter to JB grades matching schedule date+pair combinations
+                $jbGradesRaw = $allGradesRaw->filter(function ($g) use ($jbDatePairSet) {
+                    $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+                    return isset($jbDatePairSet[$normalizedDate . '_' . $g->lesson_pair_code]);
+                });
+
+                // Effective grade helper (matching journal's $getEffectiveGrade)
+                $getEffectiveGrade = function ($row) {
+                    if ($row->status === 'pending') return null;
+                    if ($row->reason === 'absent' && $row->grade === null) {
+                        return $row->retake_grade !== null ? $row->retake_grade : null;
+                    }
+                    if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+                        return null;
+                    }
+                    if ($row->status === 'recorded') return $row->grade;
+                    if ($row->status === 'closed') return $row->grade;
+                    if ($row->retake_grade !== null) return $row->retake_grade;
+                    return null;
+                };
+
+                // Build grades: student_hemis_id => date => pair => grade_value
+                $jbGrades = [];
+                foreach ($jbGradesRaw as $g) {
+                    $effectiveGrade = $getEffectiveGrade($g);
+                    if ($effectiveGrade !== null) {
+                        $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+                        $jbGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effectiveGrade;
+                    }
+                }
+
+                // Calculate JN per student (matching journal's daily average + rounding logic)
+                $studentJnGrades = [];
+                foreach ($jbGrades as $hemisId => $studentDayGrades) {
+                    $dailySum = 0;
+                    foreach ($jbLessonDates as $date) {
+                        $dayGrades = $studentDayGrades[$date] ?? [];
+                        $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                        $gradeSum = array_sum($dayGrades);
+                        $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                        if (isset($jbLessonDatesForAverageLookup[$date])) {
+                            $dailySum += $dayAverage;
+                        }
+                    }
+                    $studentJnGrades[$hemisId] = $totalJbDaysForAverage > 0
+                        ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                        : 0;
+                }
+
+                // Fetch students with MT calculated in SQL (JN will be attached from PHP)
                 $students = Student::selectRaw('
                     students.full_name as student_name,
                     students.student_id_number as student_id,
                     students.hemis_id as hemis_id,
-                    ROUND(
-                        (SELECT sum(inner_table.average_grade) / ' . $lessonCount . '
-                        FROM (
-                            SELECT lesson_date, AVG(COALESCE(
-                                CASE
-                                    WHEN status = "retake" AND (reason = "absent" OR reason = "teacher_victim")
-                                    THEN retake_grade
-                                    WHEN status = "retake" AND reason = "low_grade"
-                                    THEN retake_grade
-                                    WHEN status = "pending" AND reason = "absent"
-                                    THEN grade
-                                    ELSE grade
-                                END, 0)) AS average_grade
-                            FROM student_grades
-                            WHERE student_grades.student_hemis_id = students.hemis_id
-                            AND student_grades.subject_id = ' . $subject->subject_id . '
-                            AND student_grades.training_type_code NOT IN (' . implode(',', config('app.training_type_code')) . ')
-                            GROUP BY student_grades.lesson_date
-                        ) AS inner_table)
-                    ) as jn,
                     ROUND(
                         (SELECT avg(student_grades.grade) as average_grade
                         FROM student_grades
@@ -466,6 +547,11 @@ class YnQaytnomaController extends Controller
                     ->groupBy('students.id')
                     ->orderBy('students.full_name')
                     ->get();
+
+                // Attach JN from PHP calculation to match journal exactly
+                foreach ($students as $student) {
+                    $student->jn = $studentJnGrades[$student->hemis_id] ?? 0;
+                }
 
                 // Get teachers for this subject and group
                 $studentIds = Student::where('group_id', $group->group_hemis_id)

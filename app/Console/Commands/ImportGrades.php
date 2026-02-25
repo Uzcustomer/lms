@@ -434,6 +434,11 @@ class ImportGrades extends Command
         $this->sendProgressDone('final', $successDays, $originalTotal, $failedDays);
         $this->sendTelegramReport();
         Log::info("[FinalImport] Completed at " . Carbon::now() . ": {$successDays}/{$totalDays} days finalized.");
+
+        // 04:00 retry ni boshqarish — muvaffaqiyatli bo'lsa cache ga yozish
+        if (empty($failedDays)) {
+            \Illuminate\Support\Facades\Cache::put('final_import_last_success', Carbon::now()->toDateTimeString(), now()->addHours(12));
+        }
     }
 
     // =========================================================================
@@ -565,6 +570,20 @@ class ImportGrades extends Command
 
                     if ($response->successful()) {
                         $data = $response->json()['data']['items'] ?? [];
+                        $pagination = $response->json()['data']['pagination'] ?? [];
+
+                        // Diagnostika: API pagination ma'lumotlarini log qilish
+                        if ($currentPage === 1) {
+                            $totalCount = $pagination['totalCount'] ?? $pagination['total'] ?? 'N/A';
+                            $pageCount = $pagination['pageCount'] ?? 'N/A';
+                            $this->info("[API Diag] {$endpoint}: totalCount={$totalCount}, pageCount={$pageCount}, firstPageItems=" . count($data));
+                            Log::info("[API Diag] {$endpoint}: totalCount={$totalCount}, pageCount={$pageCount}, firstPageItems=" . count($data), [
+                                'from' => $from,
+                                'to' => $to,
+                                'filterDate' => $filterDate?->toDateString(),
+                                'pagination' => $pagination,
+                            ]);
+                        }
 
                         // Xavfsizlik filtri: UTC timestamp fix bilan API to'g'ri ishlashi kerak,
                         // lekin ehtiyot sifatida boshqa kunlik recordlarni tashlash saqlanadi

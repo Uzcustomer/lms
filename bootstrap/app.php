@@ -51,8 +51,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Live import — har 30 daqiqada bugungi baholarni yangilaydi (faqat 8:30 — 00:00)
         $schedule->command('student:import-data --mode=live')->everyThirtyMinutes()->between('8:30', '23:59')->withoutOverlapping(60);
-        // Final import — har kuni 00:30 da kechagi kunni yakunlaydi
-        $schedule->command('student:import-data --mode=final')->dailyAt('00:30')->withoutOverlapping(60);
+        // Final import routes/console.php da boshqariladi (00:30 + 04:00 retry)
+        // Bu yerdagi dublikat olib tashlandi — ikki joyda schedule bo'lsa race condition bo'ladi
         $schedule->command('import:teachers')->cron('0 0 */2 * *'); // Every 2 days at midnight
 //        $schedule->command('grades:close-expired')->everyMinute();
         $schedule->command('grades:close-expired')->everyThirtyMinutes()->withoutOverlapping(30);

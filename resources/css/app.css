@@ -41,7 +41,7 @@ a:hover {
     flex-direction: row !important;
     align-items: center !important;
     flex-wrap: nowrap !important;
-    gap: 2px;
+    gap: 6px;
 }
 .top-header-item {
     position: relative;
@@ -110,17 +110,8 @@ a:hover {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.top-header-chevron {
-    width: 14px !important;
-    height: 14px !important;
-    flex-shrink: 0;
-    transition: transform 0.2s;
-}
 @media (max-width: 640px) {
     .top-header-username {
-        display: none;
-    }
-    .top-header-chevron {
         display: none;
     }
 }
@@ -145,16 +136,18 @@ a:hover {
     border: 1.5px solid #fff;
 }
 
-/* Top Header Dropdowns */
+/* Top Header Dropdowns — position:fixed, overflow parent ustidan chiqishi uchun */
 .top-header-dropdown {
-    position: absolute;
-    top: calc(100% + 8px);
+    position: fixed;
+    top: 42px;
     background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.12);
-    z-index: 9999;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
+    z-index: 99999;
     overflow: hidden;
+    overflow-y: auto;
+    max-height: calc(100vh - 60px);
 }
 .top-header-dropdown-item {
     display: flex !important;

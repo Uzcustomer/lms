@@ -173,7 +173,7 @@
         /* ======= MOBILE ======= */
         @media (max-width: 640px) {
             /* Card */
-            .ae-card { border-radius: 12px; }
+            .ae-card { border-radius: 12px; margin-bottom: 5px !important; }
             .ae-card-header { padding: 12px 14px; gap: 8px; border-radius: 12px 12px 0 0; }
             .ae-card-header-icon { width: 32px; height: 32px; border-radius: 8px; }
             .ae-card-header-icon svg { width: 16px; height: 16px; }
@@ -306,7 +306,7 @@
                                         <svg class="w-5 h-5 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                                         </svg>
-                                        <span class="text-sm text-gray-500">Faylni <span class="text-indigo-600 font-semibold">tanlang</span></span>
+                                        <span class="text-sm text-gray-500">Faylni <span class="text-indigo-600 font-semibold">tanlang</span> <span class="text-gray-400">(PDF, JPG)</span></span>
                                     </div>
                                     <div x-show="fileName" class="flex items-center gap-2">
                                         <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -315,7 +315,7 @@
                                         <span class="text-sm font-semibold text-emerald-700 truncate" x-text="fileName"></span>
                                     </div>
                                 </label>
-                                <input type="file" name="file" id="file" required accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                <input type="file" name="file" id="file" required accept=".pdf,.jpg,.jpeg"
                                        class="hidden" @change="fileName = $event.target.files[0]?.name || ''">
                                 @error('file')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>

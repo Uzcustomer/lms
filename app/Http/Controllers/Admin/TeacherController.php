@@ -276,8 +276,15 @@ class TeacherController extends Controller
         // O'qituvchining kafedrasidagi fanlarni filtrlash
         if ($teacherId) {
             $teacher = Teacher::find($teacherId);
-            if ($teacher && $teacher->department_hemis_id) {
-                $query->where('department_id', $teacher->department_hemis_id);
+            if ($teacher) {
+                $query->where(function ($q) use ($teacher) {
+                    if ($teacher->department_hemis_id) {
+                        $q->where('department_id', $teacher->department_hemis_id);
+                    }
+                    if ($teacher->department) {
+                        $q->orWhere('department_name', $teacher->department);
+                    }
+                });
             }
         }
 
@@ -295,7 +302,7 @@ class TeacherController extends Controller
             ->selectRaw('MIN(id) as id, subject_name, subject_code, semester_code, semester_name, MIN(department_name) as department_name')
             ->groupBy('subject_name', 'subject_code', 'semester_code', 'semester_name')
             ->orderBy('subject_name')
-            ->limit(50)
+            ->limit(200)
             ->get();
 
         return response()->json($subjects);

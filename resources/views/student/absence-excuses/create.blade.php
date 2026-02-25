@@ -222,69 +222,67 @@
                             </div>
                         </div>
 
-                        {{-- ROW 2: Sana oralig'i + Sabab info --}}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {{-- Sabab info (full width tepada) --}}
+                        <div x-show="selectedReason" x-transition x-cloak
+                             class="flex items-start gap-3 bg-indigo-50/60 border border-indigo-100 rounded-xl p-4">
+                            <div class="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-content flex-shrink-0 mt-0.5"
+                                 style="display:flex;align-items:center;justify-content:center;">
+                                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-semibold text-indigo-900 text-base">Talab qilinadigan hujjat:</p>
+                                <p class="text-indigo-700 mt-1 text-base" x-text="selectedReason?.document"></p>
+                                <div class="flex flex-wrap gap-2 mt-2">
+                                    <template x-if="selectedReason?.max_days">
+                                        <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-indigo-100 text-indigo-700 rounded-lg">
+                                            Maksimum: <span x-text="selectedReason?.max_days" class="ml-1"></span> kun
+                                        </span>
+                                    </template>
+                                    <template x-if="selectedReason?.note">
+                                        <span class="inline-flex items-center px-3 py-1 text-sm italic bg-indigo-50 text-indigo-600 rounded-lg" x-text="selectedReason?.note"></span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- ROW 2: Sana oralig'i --}}
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
                                 <label class="ae-label">Sana oralig'i <span class="req">*</span></label>
 
-                                <template x-if="!reason">
-                                    <div class="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                                        <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.832c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-                                        </svg>
-                                        <p class="text-sm font-medium text-amber-700">Avval sababni tanlang</p>
-                                    </div>
-                                </template>
+                                <div x-show="!reason" class="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                                    <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.832c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                    </svg>
+                                    <p class="text-sm font-medium text-amber-700">Avval sababni tanlang</p>
+                                </div>
 
-                                <template x-if="reason">
-                                    <div>
-                                        <input type="text" x-ref="mainCalendar" readonly
-                                               class="ae-input cursor-pointer"
-                                               placeholder="Boshlanish — Tugash">
+                                <div x-show="reason" x-cloak>
+                                    <input type="text" x-ref="mainCalendar" readonly
+                                           x-init="$watch('reason', v => { if (v) $nextTick(() => initMainCal()) })"
+                                           class="ae-input cursor-pointer"
+                                           placeholder="Boshlanish — Tugash">
 
-                                        {{-- Deadline warning --}}
-                                        <div x-show="deadlineWarning" x-cloak class="mt-2">
-                                            <div :class="deadlineExpired ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'"
-                                                 class="border rounded-lg p-2 flex items-center gap-2">
-                                                <svg class="w-4 h-4 flex-shrink-0"
-                                                     :class="deadlineExpired ? 'text-red-500' : 'text-amber-500'"
-                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                </svg>
-                                                <p class="text-xs font-medium"
-                                                   :class="deadlineExpired ? 'text-red-700' : 'text-amber-700'"
-                                                   x-text="deadlineWarning"></p>
-                                            </div>
+                                    {{-- Deadline warning --}}
+                                    <div x-show="deadlineWarning" x-cloak class="mt-2">
+                                        <div :class="deadlineExpired ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'"
+                                             class="border rounded-lg p-2 flex items-center gap-2">
+                                            <svg class="w-4 h-4 flex-shrink-0"
+                                                 :class="deadlineExpired ? 'text-red-500' : 'text-amber-500'"
+                                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            </svg>
+                                            <p class="text-xs font-medium"
+                                               :class="deadlineExpired ? 'text-red-700' : 'text-amber-700'"
+                                               x-text="deadlineWarning"></p>
                                         </div>
                                     </div>
-                                </template>
+                                </div>
 
                                 <input type="hidden" name="start_date" :value="startDate">
                                 <input type="hidden" name="end_date" :value="endDate">
-                            </div>
-
-                            {{-- Sabab info --}}
-                            <div x-show="selectedReason" x-transition x-cloak
-                                 class="flex items-start gap-3 bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 self-start">
-                                <div class="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p class="font-semibold text-indigo-900 text-base">Talab qilinadigan hujjat:</p>
-                                    <p class="text-indigo-700 mt-1 text-base" x-text="selectedReason?.document"></p>
-                                    <div class="flex flex-wrap gap-2 mt-2">
-                                        <template x-if="selectedReason?.max_days">
-                                            <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-indigo-100 text-indigo-700 rounded-lg">
-                                                Maksimum: <span x-text="selectedReason?.max_days" class="ml-1"></span> kun
-                                            </span>
-                                        </template>
-                                    </div>
-                                    <template x-if="selectedReason?.note">
-                                        <p class="mt-2 text-sm text-indigo-600 italic" x-text="selectedReason?.note"></p>
-                                    </template>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -441,11 +439,7 @@
                 if (this.startDate && this.endDate) {
                     this.fetchAssessments();
                 }
-                this.$watch('reason', (val) => {
-                    if (val) {
-                        this.$nextTick(() => this.initMainCal());
-                    }
-                });
+                // If reason already set (old input), init flatpickr
                 if (this.reason) {
                     this.$nextTick(() => this.initMainCal());
                 }
@@ -494,11 +488,6 @@
                         if (this.mainFp) this.mainFp.clear();
                     }
                 }
-                if (this.mainFp) {
-                    this.mainFp.destroy();
-                    this.mainFp = null;
-                }
-                this.$nextTick(() => this.initMainCal());
             },
 
             // ---- Mini calendars (assessment cards) ----

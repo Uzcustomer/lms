@@ -899,20 +899,20 @@ class ImportGrades extends Command
         // ====================================================================
         $activeKeysAfterImport = StudentGrade::where('lesson_date', '>=', $dateStart)
             ->where('lesson_date', '<=', $dateEnd)
-            ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code'])
+            ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code', 'training_type_code'])
             ->map(fn ($g) => $g->student_hemis_id . '_' . $g->subject_id . '_' .
-                Carbon::parse($g->lesson_date)->toDateString() . '_' . $g->lesson_pair_code)
+                Carbon::parse($g->lesson_date)->toDateString() . '_' . $g->lesson_pair_code . '_' . $g->training_type_code)
             ->flip()
             ->toArray();
 
         $orphanCandidates = StudentGrade::onlyTrashed()
             ->whereIn('id', $activeIdsBeforeDelete)
-            ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code']);
+            ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code', 'training_type_code']);
 
         $orphanIds = [];
         foreach ($orphanCandidates as $orphan) {
             $key = $orphan->student_hemis_id . '_' . $orphan->subject_id . '_' .
-                Carbon::parse($orphan->lesson_date)->toDateString() . '_' . $orphan->lesson_pair_code;
+                Carbon::parse($orphan->lesson_date)->toDateString() . '_' . $orphan->lesson_pair_code . '_' . $orphan->training_type_code;
             if (!isset($activeKeysAfterImport[$key])) {
                 $orphanIds[] = $orphan->id;
             }

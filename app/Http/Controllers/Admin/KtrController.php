@@ -657,7 +657,7 @@ class KtrController extends Controller
         }
 
         $request->validate([
-            'week_count' => 'required|integer|min:1|max:15',
+            'week_count' => 'required|integer|min:1|max:18',
             'plan_data' => 'required|array',
         ]);
 

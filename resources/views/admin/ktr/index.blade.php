@@ -265,7 +265,7 @@
                         <span class="fl-dot" style="background:#3b82f6;"></span> Fan davomiyligi (hafta)
                     </label>
                     <div class="ktr-week-buttons" id="ktr-week-buttons">
-                        @for($w = 1; $w <= 15; $w++)
+                        @for($w = 1; $w <= 18; $w++)
                             <button type="button" class="ktr-week-btn" data-week="{{ $w }}" onclick="selectWeekCount({{ $w }})">{{ $w }}</button>
                         @endfor
                     </div>

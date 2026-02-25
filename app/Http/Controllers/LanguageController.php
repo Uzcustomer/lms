@@ -1,22 +1,20 @@
 <?php
 
-namespace App\Http\Middleware;
+namespace App\Http\Controllers;
 
-use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Session;
 
-class SetLocale
+class LanguageController extends Controller
 {
-    public function handle(Request $request, Closure $next)
+    public function switchLocale(Request $request, $locale)
     {
-        $locale = Session::get('locale', config('app.locale', 'uz'));
-
         if (in_array($locale, ['uz', 'ru', 'en'])) {
+            Session::put('locale', $locale);
             App::setLocale($locale);
         }
 
-        return $next($request);
+        return redirect()->back();
     }
 }

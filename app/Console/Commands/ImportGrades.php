@@ -37,7 +37,7 @@ class ImportGrades extends Command
         $this->token = config('services.hemis.token') ?? '';
     }
 
-    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)} {--date= : Single date import (Y-m-d)} {--silent : Suppress Telegram notifications}';
+    protected $signature = 'student:import-data {--mode=live : Import mode: live, final, or backfill} {--from= : Backfill start date (Y-m-d)} {--to= : Backfill end date (Y-m-d), default yesterday} {--date= : Single date import (Y-m-d)} {--silent : Suppress Telegram notifications}';
 
     protected $description = 'Import student grades and attendance from Hemis API';
 
@@ -300,22 +300,26 @@ class ImportGrades extends Command
                     $this->info("  {$dateStr} — dublikat tozalandi: {$cleaned} o'chirildi, {$upgraded} ta lokal baho yakunlandi.");
                     Log::info("[FinalImport] {$dateStr} — cleaned {$cleaned} duplicate is_final=false, upgraded {$upgraded} unique local records.");
 
-                    // To'liq import bo'lgan bo'lsa (ko'p yozuv), API dan qayta tortish shart emas
-                    if ($finalizedCount >= 500) {
+                    // Oxirgi 3 kun DOIM API dan tortiladi (to'liq ishonch uchun)
+                    // Eski kunlar (4+ kun) uchun — yetarli yozuv bo'lsa skip
+                    $daysAgo = Carbon::today()->diffInDays($date);
+                    if ($finalizedCount >= 500 && $daysAgo >= 3) {
                         $this->importDayAttendance($dateStr, $date, true);
                         $this->updateDayProgress($dateStr, '✅', "tozalandi ({$cleaned})", $dayNum, $originalTotal);
                         $successDays++;
                         continue;
                     }
-                    // Kam yozuv (journal sync dan) — API dan to'ldirish kerak
-                    $this->info("  {$dateStr} — qisman yakunlangan ({$finalizedCount} ta yozuv), API dan to'ldirish...");
+                    // Kam yozuv yoki yaqin sana — API dan to'ldirish kerak
+                    $this->info("  {$dateStr} — qisman yakunlangan ({$finalizedCount} ta yozuv, {$daysAgo} kun oldin), API dan to'ldirish...");
                 }
 
-                // ─── Stsenariy B: Faqat is_final=true (journal sync dan) ───
-                // Kam yozuv — to'liq import bo'lmagan, API dan tortish kerak
-                if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500) {
+                // ─── Stsenariy B: Faqat is_final=true mavjud ───
+                // Oxirgi 3 kun DOIM API dan qayta tortiladi (race condition yoki API xato bo'lgan bo'lishi mumkin)
+                // Eski kunlar (4+ kun) — yetarli yozuv bo'lsa skip
+                $daysAgo = Carbon::today()->diffInDays($date);
+                if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500 && $daysAgo >= 3) {
                     $this->importDayAttendance($dateStr, $date, true);
-                    $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv), o'tkazildi.");
+                    $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv, {$daysAgo} kun oldin), o'tkazildi.");
                     $this->updateDayProgress($dateStr, '✅', "to'liq ({$finalizedCount})", $dayNum, $originalTotal);
                     $totalDays--;
                     continue;
@@ -471,6 +475,11 @@ class ImportGrades extends Command
         $this->sendProgressDone('final', $successDays, $originalTotal, $failedDays);
         $this->sendTelegramReport();
         Log::info("[FinalImport] Completed at " . Carbon::now() . ": {$successDays}/{$totalDays} days finalized.");
+
+        // 04:00 retry ni boshqarish — muvaffaqiyatli bo'lsa cache ga yozish
+        if (empty($failedDays)) {
+            \Illuminate\Support\Facades\Cache::put('final_import_last_success', Carbon::now()->toDateTimeString(), now()->addHours(12));
+        }
     }
 
     // =========================================================================
@@ -486,10 +495,11 @@ class ImportGrades extends Command
         }
 
         $startDate = Carbon::parse($fromDate)->startOfDay();
-        $endDate = Carbon::yesterday()->startOfDay();
+        $toDate = $this->option('to');
+        $endDate = $toDate ? Carbon::parse($toDate)->startOfDay() : Carbon::yesterday()->startOfDay();
 
         if ($startDate->greaterThan($endDate)) {
-            $this->error("Boshlanish sanasi ({$startDate->toDateString()}) kechagi kundan ({$endDate->toDateString()}) katta bo'lishi mumkin emas.");
+            $this->error("Boshlanish sanasi ({$startDate->toDateString()}) tugash sanasidan ({$endDate->toDateString()}) katta bo'lishi mumkin emas.");
             return;
         }
 
@@ -530,14 +540,15 @@ class ImportGrades extends Command
                 continue;
             }
 
-            $this->applyGrades($gradeItems, $date, true);
+            $isFinal = !$date->isToday();
+            $this->applyGrades($gradeItems, $date, $isFinal);
 
             // Attendance
             $attendanceItems = $this->fetchAllPages('attendance-list', $dayFrom, $dayTo);
             if ($attendanceItems !== false) {
                 foreach ($attendanceItems as $item) {
                     try {
-                        $this->processAttendance($item, true);
+                        $this->processAttendance($item, $isFinal);
                     } catch (\Throwable $e) {
                         Log::warning("[Backfill] Attendance item failed: " . substr($e->getMessage(), 0, 100));
                     }
@@ -600,6 +611,20 @@ class ImportGrades extends Command
 
                     if ($response->successful()) {
                         $data = $response->json()['data']['items'] ?? [];
+                        $pagination = $response->json()['data']['pagination'] ?? [];
+
+                        // Diagnostika: API pagination ma'lumotlarini log qilish
+                        if ($currentPage === 1) {
+                            $totalCount = $pagination['totalCount'] ?? $pagination['total'] ?? 'N/A';
+                            $pageCount = $pagination['pageCount'] ?? 'N/A';
+                            $this->info("[API Diag] {$endpoint}: totalCount={$totalCount}, pageCount={$pageCount}, firstPageItems=" . count($data));
+                            Log::info("[API Diag] {$endpoint}: totalCount={$totalCount}, pageCount={$pageCount}, firstPageItems=" . count($data), [
+                                'from' => $from,
+                                'to' => $to,
+                                'filterDate' => $filterDate?->toDateString(),
+                                'pagination' => $pagination,
+                            ]);
+                        }
 
                         // Xavfsizlik filtri: UTC timestamp fix bilan API to'g'ri ishlashi kerak,
                         // lekin ehtiyot sifatida boshqa kunlik recordlarni tashlash saqlanadi

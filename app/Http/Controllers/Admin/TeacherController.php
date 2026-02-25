@@ -269,22 +269,40 @@ class TeacherController extends Controller
     {
         $search = $request->input('q', '');
         $levelCode = $request->input('level_code', '');
+        $teacherId = $request->input('teacher_id');
 
-        $subjects = CurriculumSubject::active()
-            ->when($search, function ($query, $search) {
-                $query->where('subject_name', 'like', "%{$search}%");
+        $query = CurriculumSubject::active();
+
+        // O'qituvchining kafedrasidagi fanlarni filtrlash
+        if ($teacherId) {
+            $teacher = Teacher::find($teacherId);
+            if ($teacher) {
+                $query->where(function ($q) use ($teacher) {
+                    if ($teacher->department_hemis_id) {
+                        $q->where('department_id', $teacher->department_hemis_id);
+                    }
+                    if ($teacher->department) {
+                        $q->orWhere('department_name', $teacher->department);
+                    }
+                });
+            }
+        }
+
+        $subjects = $query
+            ->when($search, function ($q, $search) {
+                $q->where('subject_name', 'like', "%{$search}%");
             })
-            ->when($levelCode, function ($query, $levelCode) {
+            ->when($levelCode, function ($q, $levelCode) {
                 $semesterCodes = Semester::where('level_code', $levelCode)
                     ->pluck('code')
                     ->unique()
                     ->toArray();
-                $query->whereIn('semester_code', $semesterCodes);
+                $q->whereIn('semester_code', $semesterCodes);
             })
             ->selectRaw('MIN(id) as id, subject_name, subject_code, semester_code, semester_name, MIN(department_name) as department_name')
             ->groupBy('subject_name', 'subject_code', 'semester_code', 'semester_name')
             ->orderBy('subject_name')
-            ->limit(50)
+            ->limit(200)
             ->get();
 
         return response()->json($subjects);

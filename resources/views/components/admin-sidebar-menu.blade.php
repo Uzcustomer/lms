@@ -158,6 +158,7 @@
             </svg>
             KTR
         </a>
+
         @endif
 
         @if($hasActiveRole('test_markazi'))
@@ -470,6 +471,38 @@
         </a>
         @endif
         @endif
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+        <div class="sidebar-section">Sozlamalar</div>
+
+        <a href="{{ route('admin.kafedra.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.kafedra.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+            </svg>
+            Kafedralar
+        </a>
+        @endif
+
+        <!-- Xabarnomalar (Notifications) -->
+        <div class="sidebar-section">{{ __('notifications.notifications') }}</div>
+        @php
+            $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
+                ->where('recipient_type', get_class($user))
+                ->where('is_draft', false)
+                ->where('is_read', false)
+                ->count();
+        @endphp
+        <a href="{{ route('admin.notifications.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.notifications.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+            </svg>
+            {{ __('notifications.notifications') }}
+            @if($sidebarUnreadCount > 0)
+            <span class="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">{{ $sidebarUnreadCount }}</span>
+            @endif
+        </a>
     </nav>
 
     <!-- User Section with Profile Dropdown -->

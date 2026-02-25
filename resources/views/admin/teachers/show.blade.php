@@ -599,8 +599,8 @@
             document.getElementById('subject-modal').style.display = 'flex';
             document.getElementById('subject-search-input').value = '';
             document.getElementById('subject-course-filter').value = '';
-            document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Fan nomini kiriting va qidiring</div>';
             loadSubjectCourses();
+            searchSubjects();
             setTimeout(function() {
                 document.getElementById('subject-search-input').focus();
             }, 100);
@@ -615,15 +615,10 @@
             var query = document.getElementById('subject-search-input').value.trim();
             var levelCode = document.getElementById('subject-course-filter').value;
 
-            if (query.length < 2 && !levelCode) {
-                document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Kamida 2 ta belgi kiriting yoki kursni tanlang</div>';
-                return;
-            }
-
             document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Qidirilmoqda...</div>';
 
             subjectSearchTimeout = setTimeout(function() {
-                var url = '{{ route("admin.teachers.search-subjects") }}?q=' + encodeURIComponent(query);
+                var url = '{{ route("admin.teachers.search-subjects") }}?q=' + encodeURIComponent(query) + '&teacher_id={{ $teacher->id }}';
                 if (levelCode) {
                     url += '&level_code=' + encodeURIComponent(levelCode);
                 }

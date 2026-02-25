@@ -7,6 +7,8 @@ use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumSubjectTeacher;
 use App\Models\Department;
+use App\Models\KtrChangeApproval;
+use App\Models\KtrChangeRequest;
 use App\Models\KtrPlan;
 use App\Models\Teacher;
 use Illuminate\Http\Request;
@@ -512,12 +514,41 @@ class KtrController extends Controller
         // HEMIS dan mavzularni olish
         $hemisTopics = $this->fetchHemisTopics($cs);
 
+        // O'zgartirish so'rovi holati
+        $changeRequest = null;
+        if ($plan && Schema::hasTable('ktr_change_requests')) {
+            $cr = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
+                ->where('status', 'pending')
+                ->latest()
+                ->with('approvals')
+                ->first();
+            if ($cr) {
+                $changeRequest = [
+                    'id' => $cr->id,
+                    'status' => $cr->status,
+                    'approvals' => $cr->approvals->map(fn ($a) => [
+                        'id' => $a->id,
+                        'role' => $a->role,
+                        'approver_name' => $a->approver_name,
+                        'status' => $a->status,
+                        'responded_at' => $a->responded_at?->format('d.m.Y H:i'),
+                    ]),
+                    'is_approved' => $cr->isFullyApproved(),
+                ];
+            }
+        }
+
+        // Kafedra va fakultet ma'lumotlari
+        $approverInfo = $this->getApproverInfo($cs);
+
         return response()->json([
             'subject_name' => $cs->subject_name,
             'total_acload' => (int) $cs->total_acload,
             'training_types' => $trainingTypes,
             'hemis_topics' => $hemisTopics,
             'can_edit' => $this->canEditSubjectKtr($cs),
+            'approver_info' => $approverInfo,
+            'change_request' => $changeRequest,
             'plan' => $plan ? [
                 'week_count' => $plan->week_count,
                 'plan_data' => $plan->plan_data,
@@ -600,8 +631,33 @@ class KtrController extends Controller
             ], 403);
         }
 
+        // Mavjud reja bo'lsa, o'zgartirish uchun tasdiqlangan so'rov kerak (adminlar bundan mustasno)
+        $user = auth()->user();
+        $isAdmin = $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
+        $existingPlan = Schema::hasTable('ktr_plans')
+            ? KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->exists()
+            : false;
+
+        if ($existingPlan && !$isAdmin && Schema::hasTable('ktr_change_requests')) {
+            $approvedRequest = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
+                ->where('requested_by', $user->id)
+                ->where('status', 'pending')
+                ->latest()
+                ->first();
+
+            if (!$approvedRequest || !$approvedRequest->isFullyApproved()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'KTR o\'zgartirish uchun barcha tasdiqlar olinmagan.',
+                ], 403);
+            }
+
+            // Tasdiqlangan so'rovni yakunlash
+            $approvedRequest->update(['status' => 'approved']);
+        }
+
         $request->validate([
-            'week_count' => 'required|integer|min:1|max:15',
+            'week_count' => 'required|integer|min:1|max:18',
             'plan_data' => 'required|array',
         ]);
 
@@ -664,6 +720,201 @@ class KtrController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'KTR rejasi muvaffaqiyatli saqlandi!',
+        ]);
+    }
+
+    /**
+     * Kafedra mudiri, dekan va registrator ma'lumotlarini olish
+     */
+    private function getApproverInfo(CurriculumSubject $cs): array
+    {
+        $info = [
+            'kafedra_name' => '',
+            'faculty_name' => '',
+            'kafedra_mudiri' => null,
+            'dekan' => null,
+            'registrator' => null,
+        ];
+
+        // Kafedra
+        $kafedra = Department::where('department_hemis_id', $cs->department_id)->first();
+        if ($kafedra) {
+            $info['kafedra_name'] = $kafedra->name;
+
+            // Kafedra mudiri
+            $mudiri = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'kafedra_mudiri'))
+                ->where('department_hemis_id', $kafedra->department_hemis_id)
+                ->where('is_active', true)
+                ->first();
+            if ($mudiri) {
+                $info['kafedra_mudiri'] = ['id' => $mudiri->id, 'name' => $mudiri->full_name];
+            }
+
+            // Fakultet (kafedra uchun parent)
+            if ($kafedra->parent_id) {
+                $faculty = Department::find($kafedra->parent_id);
+                if ($faculty) {
+                    $info['faculty_name'] = $faculty->name;
+
+                    // Dekan
+                    $dekan = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'dekan'))
+                        ->whereHas('deanFaculties', fn ($q) => $q->where('department_hemis_id', $faculty->department_hemis_id))
+                        ->where('is_active', true)
+                        ->first();
+                    if ($dekan) {
+                        $info['dekan'] = ['id' => $dekan->id, 'name' => $dekan->full_name];
+                    }
+                }
+            }
+        }
+
+        // Registrator ofisi
+        $registrator = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'registrator_ofisi'))
+            ->where('is_active', true)
+            ->first();
+        if ($registrator) {
+            $info['registrator'] = ['id' => $registrator->id, 'name' => $registrator->full_name];
+        }
+
+        return $info;
+    }
+
+    /**
+     * KTR o'zgartirish uchun ruxsat so'rash
+     */
+    public function requestChange($curriculumSubjectId)
+    {
+        $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
+
+        if (!$this->canEditSubjectKtr($cs)) {
+            return response()->json(['success' => false, 'message' => 'Huquq yo\'q.'], 403);
+        }
+
+        // Faol so'rov bormi?
+        if (Schema::hasTable('ktr_change_requests')) {
+            $existing = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
+                ->where('status', 'pending')
+                ->first();
+            if ($existing) {
+                return response()->json(['success' => false, 'message' => 'So\'rov allaqachon jo\'natilgan.'], 422);
+            }
+        }
+
+        // Jadvallarni yaratish (agar mavjud bo'lmasa)
+        if (!Schema::hasTable('ktr_change_requests')) {
+            Schema::create('ktr_change_requests', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('curriculum_subject_id');
+                $table->unsignedBigInteger('requested_by');
+                $table->string('requested_by_guard')->default('teacher');
+                $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
+                $table->timestamps();
+                $table->index('curriculum_subject_id');
+                $table->index('requested_by');
+            });
+        }
+        if (!Schema::hasTable('ktr_change_approvals')) {
+            Schema::create('ktr_change_approvals', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->id();
+                $table->foreignId('change_request_id')->constrained('ktr_change_requests')->onDelete('cascade');
+                $table->string('role');
+                $table->string('approver_name');
+                $table->unsignedBigInteger('approver_id')->nullable();
+                $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
+                $table->timestamp('responded_at')->nullable();
+                $table->timestamps();
+                $table->index('change_request_id');
+            });
+        }
+
+        $user = auth()->user();
+        $approverInfo = $this->getApproverInfo($cs);
+
+        $cr = KtrChangeRequest::create([
+            'curriculum_subject_id' => $curriculumSubjectId,
+            'requested_by' => $user->id,
+            'requested_by_guard' => $user instanceof Teacher ? 'teacher' : 'web',
+        ]);
+
+        // Har bir tasdiqlash uchun yozuv
+        $approvers = [
+            ['role' => 'kafedra_mudiri', 'data' => $approverInfo['kafedra_mudiri']],
+            ['role' => 'dekan', 'data' => $approverInfo['dekan']],
+            ['role' => 'registrator_ofisi', 'data' => $approverInfo['registrator']],
+        ];
+
+        foreach ($approvers as $approver) {
+            KtrChangeApproval::create([
+                'change_request_id' => $cr->id,
+                'role' => $approver['role'],
+                'approver_name' => $approver['data']['name'] ?? 'Topilmadi',
+                'approver_id' => $approver['data']['id'] ?? null,
+            ]);
+        }
+
+        $cr->load('approvals');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'O\'zgartirish uchun ruxsat so\'rovi jo\'natildi!',
+            'change_request' => [
+                'id' => $cr->id,
+                'status' => $cr->status,
+                'approvals' => $cr->approvals->map(fn ($a) => [
+                    'id' => $a->id,
+                    'role' => $a->role,
+                    'approver_name' => $a->approver_name,
+                    'status' => $a->status,
+                    'responded_at' => null,
+                ]),
+                'is_approved' => false,
+            ],
+        ]);
+    }
+
+    /**
+     * KTR o'zgartirish so'rovini tasdiqlash/rad etish
+     */
+    public function approveChange(Request $request, $approvalId)
+    {
+        $approval = KtrChangeApproval::findOrFail($approvalId);
+        $user = auth()->user();
+
+        // Faqat tegishli rol egasi tasdiqlashi mumkin
+        $canApprove = false;
+        if ($approval->approver_id && $user instanceof Teacher && $user->id == $approval->approver_id) {
+            $canApprove = true;
+        }
+        if ($user->hasRole(['superadmin', 'admin'])) {
+            $canApprove = true;
+        }
+        if ($user->hasRole($approval->role)) {
+            $canApprove = true;
+        }
+
+        if (!$canApprove) {
+            return response()->json(['success' => false, 'message' => 'Sizda tasdiqlash huquqi yo\'q.'], 403);
+        }
+
+        $status = $request->input('status', 'approved');
+        if (!in_array($status, ['approved', 'rejected'])) {
+            $status = 'approved';
+        }
+
+        $approval->update([
+            'status' => $status,
+            'responded_at' => now(),
+        ]);
+
+        // Agar rad etilsa, butun so'rovni ham rad etish
+        $cr = $approval->changeRequest;
+        if ($status === 'rejected') {
+            $cr->update(['status' => 'rejected']);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $status === 'approved' ? 'Tasdiqlandi!' : 'Rad etildi.',
         ]);
     }
 }

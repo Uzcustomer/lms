@@ -35,7 +35,10 @@ use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
+use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\MoodleImportController;
+use App\Http\Controllers\Admin\NotificationController;
+use App\Http\Controllers\LanguageController;
 
 
 Route::get('/', function () {
@@ -58,6 +61,9 @@ Route::get('/absence-excuse/verify/{token}/pdf', [\App\Http\Controllers\AbsenceE
 // Hujjat haqiqiyligini tekshirish (QR kod orqali, public)
 Route::get('/document/verify/{token}', [\App\Http\Controllers\DocumentVerificationController::class, 'verify'])->name('document.verify');
 Route::get('/document/verify/{token}/pdf', [\App\Http\Controllers\DocumentVerificationController::class, 'viewPdf'])->name('document.verify.pdf');
+
+// Til almashtirish (Language switch)
+Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->name('language.switch');
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
@@ -273,6 +279,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
 
+        // Xabarnomalar (Notifications)
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
+        Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+        Route::get('/notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
+        Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+        Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
+        Route::get('/notifications-unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
+
         // Unified settings page
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
         Route::post('/settings/deadlines', [SettingsController::class, 'updateDeadlines'])->name('settings.update.deadlines');
@@ -307,6 +323,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/export', [KtrController::class, 'export'])->name('export');
             Route::get('/plan/{curriculumSubjectId}', [KtrController::class, 'getPlan'])->name('get-plan');
             Route::post('/plan/{curriculumSubjectId}', [KtrController::class, 'savePlan'])->name('save-plan');
+            Route::post('/change-request/{curriculumSubjectId}', [KtrController::class, 'requestChange'])->name('request-change');
+            Route::post('/change-approve/{approvalId}', [KtrController::class, 'approveChange'])->name('approve-change');
+        });
+
+        // Kafedra (Fakultet va kafedralar tuzilmasi)
+        Route::prefix('kafedra')->name('kafedra.')->group(function () {
+            Route::get('/', [KafedraController::class, 'index'])->name('index');
+            Route::post('/transfer', [KafedraController::class, 'transfer'])->name('transfer');
         });
 
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');
@@ -492,14 +516,6 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
-
-// Locale switching route
-Route::get('/locale/{locale}', function (string $locale) {
-    if (in_array($locale, ['uz', 'ru', 'en'])) {
-        session(['locale' => $locale]);
-    }
-    return redirect()->back();
-})->name('locale.switch');
 
 // HEMIS OAuth routes (talabalar — student.ttatf.uz)
 Route::get('/auth/hemis/redirect', [HemisOAuthController::class, 'redirect'])->name('auth.hemis.redirect');

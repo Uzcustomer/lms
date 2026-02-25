@@ -623,7 +623,7 @@
             document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Qidirilmoqda...</div>';
 
             subjectSearchTimeout = setTimeout(function() {
-                var url = '{{ route("admin.teachers.search-subjects") }}?q=' + encodeURIComponent(query);
+                var url = '{{ route("admin.teachers.search-subjects") }}?q=' + encodeURIComponent(query) + '&teacher_id={{ $teacher->id }}';
                 if (levelCode) {
                     url += '&level_code=' + encodeURIComponent(levelCode);
                 }

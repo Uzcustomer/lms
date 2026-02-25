@@ -24,6 +24,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'force.student.contact' => \App\Http\Middleware\ForceStudentContact::class,
         ]);
 
+        // Til sozlamasi middleware
+        $middleware->append(\App\Http\Middleware\SetLocale::class);
+
         // Server ulanish debug middleware — har bir requestda DB va server holatini tekshiradi
         $middleware->append(\App\Http\Middleware\ConnectionDebugMiddleware::class);
 

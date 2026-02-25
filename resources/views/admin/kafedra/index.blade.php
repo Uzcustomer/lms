@@ -47,7 +47,7 @@
                         padding: 8px;
                         min-height: 200px;
                     ">
-                        @php $facultyKafedras = $kafedras->get($faculty->id, collect()); @endphp
+                        @php $facultyKafedras = $kafedras->get($faculty->department_hemis_id, collect()); @endphp
                         @foreach($facultyKafedras as $kIndex => $kafedra)
                         <div class="kafedra-card" data-kafedra-id="{{ $kafedra->id }}" style="
                             background: {{ ['#eff6ff', '#ecfdf5', '#fffbeb', '#f5f3ff'][$index % 4] }};
@@ -79,7 +79,7 @@
                                 </span>
                             </div>
                             <!-- Transfer button -->
-                            <button onclick="openTransferModal({{ $kafedra->id }}, '{{ addslashes($kafedra->name) }}', {{ $faculty->id }})"
+                            <button onclick="openTransferModal({{ $kafedra->id }}, '{{ addslashes($kafedra->name) }}', {{ $faculty->department_hemis_id }})"
                                     title="Boshqa fakultetga o'tkazish"
                                     style="
                                         position: absolute;
@@ -214,7 +214,7 @@
                     transition: border-color 0.2s;
                 " onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
                     @foreach($faculties as $faculty)
-                    <option value="{{ $faculty->id }}">{{ $faculty->name }}</option>
+                    <option value="{{ $faculty->id }}" data-hemis-id="{{ $faculty->department_hemis_id }}">{{ $faculty->name }}</option>
                     @endforeach
                 </select>
             </div>
@@ -284,10 +284,11 @@
             document.getElementById('transfer-kafedra-name').textContent = kafedraName;
             document.getElementById('transfer-status').style.display = 'none';
 
-            // Set default selection to a different faculty
+            // Set default selection to a different faculty (compare by hemis ID)
             const select = document.getElementById('transfer-faculty-select');
             for (let i = 0; i < select.options.length; i++) {
-                if (parseInt(select.options[i].value) !== currentFacId) {
+                const hemisId = parseInt(select.options[i].getAttribute('data-hemis-id'));
+                if (hemisId !== currentFacId) {
                     select.selectedIndex = i;
                     break;
                 }
@@ -308,7 +309,9 @@
             const btn = document.getElementById('transfer-submit-btn');
             const status = document.getElementById('transfer-status');
 
-            if (parseInt(facultyId) === currentFacultyId) {
+            const selectedOption = select.options[select.selectedIndex];
+            const selectedHemisId = parseInt(selectedOption.getAttribute('data-hemis-id'));
+            if (selectedHemisId === currentFacultyId) {
                 status.style.display = 'block';
                 status.style.background = '#fef3c7';
                 status.style.color = '#92400e';

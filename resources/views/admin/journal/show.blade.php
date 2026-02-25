@@ -1063,7 +1063,10 @@
                                             foreach ($jbLessonDates as $date) {
                                                 $dayGrades = $studentJbGrades[$date] ?? [];
                                                 $pairsInDay = $jbPairsPerDay[$date] ?? 1;
-                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                // low_grade retake: max(original, retake) hisobga olinadi
+                                                $gradeValues = array_map(fn($g) => ($g['reason'] ?? null) === 'low_grade' && ($g['retake_grade'] ?? null) !== null
+                                                    ? max($g['grade'], $g['retake_grade'])
+                                                    : $g['grade'], $dayGrades);
                                                 $gradeSum = array_sum($gradeValues);
                                                 // Divide by total pairs in day, not just student's grades
                                                 $dailyAverages[$date] = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
@@ -1081,7 +1084,9 @@
                                             foreach ($mtLessonDates as $date) {
                                                 $dayGrades = $studentMtGrades[$date] ?? [];
                                                 $pairsInDay = $mtPairsPerDay[$date] ?? 1;
-                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                $gradeValues = array_map(fn($g) => ($g['reason'] ?? null) === 'low_grade' && ($g['retake_grade'] ?? null) !== null
+                                                    ? max($g['grade'], $g['retake_grade'])
+                                                    : $g['grade'], $dayGrades);
                                                 $gradeSum = array_sum($gradeValues);
                                                 $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                             }
@@ -1247,7 +1252,9 @@
                                             foreach ($jbLessonDates as $date) {
                                                 $dayGrades = $studentJbGrades[$date] ?? [];
                                                 $pairsInDay = $jbPairsPerDay[$date] ?? 1;
-                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                $gradeValues = array_map(fn($g) => ($g['reason'] ?? null) === 'low_grade' && ($g['retake_grade'] ?? null) !== null
+                                                    ? max($g['grade'], $g['retake_grade'])
+                                                    : $g['grade'], $dayGrades);
                                                 $gradeSum = array_sum($gradeValues);
                                                 $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                                 if (isset($jbLessonDatesForAverageLookup[$date])) {
@@ -1263,7 +1270,9 @@
                                             foreach ($mtLessonDates as $date) {
                                                 $dayGrades = $studentMtGrades[$date] ?? [];
                                                 $pairsInDay = $mtPairsPerDay[$date] ?? 1;
-                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                $gradeValues = array_map(fn($g) => ($g['reason'] ?? null) === 'low_grade' && ($g['retake_grade'] ?? null) !== null
+                                                    ? max($g['grade'], $g['retake_grade'])
+                                                    : $g['grade'], $dayGrades);
                                                 $gradeSum = array_sum($gradeValues);
                                                 $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                             }
@@ -1771,7 +1780,9 @@
                                                 foreach ($mtLessonDates as $date) {
                                                     $dayGrades = $studentMtGrades[$date] ?? [];
                                                     $pairsInDay = $mtPairsPerDay[$date] ?? 1;
-                                                    $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                    $gradeValues = array_map(fn($g) => ($g['reason'] ?? null) === 'low_grade' && ($g['retake_grade'] ?? null) !== null
+                                                    ? max($g['grade'], $g['retake_grade'])
+                                                    : $g['grade'], $dayGrades);
                                                     $gradeSum = array_sum($gradeValues);
                                                     $dailyAverages[$date] = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                                     $dailySum += $dailyAverages[$date];
@@ -1861,7 +1872,9 @@
                                             foreach ($mtLessonDates as $date) {
                                                 $dayGrades = $studentMtGrades[$date] ?? [];
                                                 $pairsInDay = $mtPairsPerDay[$date] ?? 1;
-                                                $gradeValues = array_map(fn($g) => $g['grade'], $dayGrades);
+                                                $gradeValues = array_map(fn($g) => ($g['reason'] ?? null) === 'low_grade' && ($g['retake_grade'] ?? null) !== null
+                                                    ? max($g['grade'], $g['retake_grade'])
+                                                    : $g['grade'], $dayGrades);
                                                 $gradeSum = array_sum($gradeValues);
                                                 $dailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                             }

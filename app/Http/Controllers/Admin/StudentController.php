@@ -783,7 +783,7 @@ class StudentController extends Controller
                 if ($grade->status === 'retake' && ($grade->reason === 'absent' || $grade->reason === 'teacher_victim')) {
                     $dailyTotal += $grade->retake_grade ?? 0;
                 } elseif ($grade->status === 'retake' && $grade->reason === 'low_grade') {
-                    $dailyTotal += $grade->retake_grade ?? 0;
+                    $dailyTotal += max($grade->grade ?? 0, $grade->retake_grade ?? 0);
                 } elseif ($grade->status == 'pending' && $grade->reason === 'absent') {
                     $dailyTotal += $grade->grade ?? 0;
                     $absentCount++;

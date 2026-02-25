@@ -519,6 +519,9 @@ class TeacherApiController extends Controller
 
         $getEffectiveGrade = function ($row) {
             if ($row->status === 'pending') {
+                if ($row->reason === 'low_grade' && $row->grade !== null) {
+                    return ['grade' => $row->grade, 'is_retake' => false];
+                }
                 return null;
             }
             if ($row->reason === 'absent' && $row->grade === null) {

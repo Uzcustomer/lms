@@ -146,8 +146,8 @@ class QaytnomaController extends Controller
                                 CASE 
                                     WHEN status = "retake" AND (reason = "absent" OR reason = "teacher_victim") 
                                     THEN retake_grade
-                                    WHEN status = "retake" AND reason = "low_grade" 
-                                    THEN retake_grade
+                                    WHEN status = "retake" AND reason = "low_grade"
+                                    THEN GREATEST(grade, retake_grade)
                                     WHEN status = "pending" AND reason = "absent" 
                                     THEN grade
                                     ELSE grade

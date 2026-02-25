@@ -380,8 +380,11 @@ class JournalController extends Controller
         // Helper function to get effective grade based on status
         // Returns array: ['grade' => value, 'is_retake' => bool] or null
         $getEffectiveGrade = function ($row) {
-            // status = pending → null (skip)
+            // status = pending → null (skip), LEKIN low_grade baholarni ko'rsatish kerak
             if ($row->status === 'pending') {
+                if ($row->reason === 'low_grade' && $row->grade !== null) {
+                    return ['grade' => $row->grade, 'is_retake' => false];
+                }
                 return null;
             }
             // Absent entries with no actual grade: use retake_grade if available, otherwise null (show as NB)

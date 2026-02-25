@@ -436,6 +436,9 @@ class ReportController extends Controller
     private function getEffectiveGradeForJn($row): ?float
     {
         if (($row->status ?? null) === 'pending') {
+            if (($row->reason ?? null) === 'low_grade' && $row->grade !== null) {
+                return (float) $row->grade;
+            }
             return null;
         }
 

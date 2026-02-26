@@ -44,13 +44,12 @@ class DocumentTemplate extends Model
                 '${academic_year}' => 'O\'quv yili (2025.2026)',
                 '${qr_code}' => 'QR kod rasmi (rasm sifatida)',
                 '${verification_url}' => 'Tekshirish URL manzili',
+                '${order_number}' => 'Buyruq raqami (08-00001)',
                 // Nazoratlar jadvali (Word jadvalda cloneRow bilan ishlaydi)
-                // Bitta fan uchun bir nechta nazorat bo'lsa, bitta qatorda ko'rsatiladi
-                '${order_number}' => 'Jadvalda: T/r (1, 2, 3...), Matndа: Buyruq raqami (08-00001)',
-                '${subject_name}' => 'Fan nomi',
-                '${test_type}' => 'Nazorat turi (JN, YN(Test), YN(OSKE), ...)',
-                '${test_date_period}' => 'Qayta topshirish muddati (03.11.2025 dan 07.11.2025 gacha)',
-                '${test_single_date}' => 'Qayta topshirish sanasi (08.11.2025)',
+                '${m_num}' => 'Jadval: T/r (1, 2, 3...)',
+                '${m_subject}' => 'Jadval: Fan nomi',
+                '${m_type}' => 'Jadval: Nazorat turi (JN, YN(Test), YN(OSKE), MT)',
+                '${m_date}' => 'Jadval: Qayta topshirish sanasi/muddati',
             ],
         ],
     ];

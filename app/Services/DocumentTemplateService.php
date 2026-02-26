@@ -59,11 +59,12 @@ class DocumentTemplateService
         $processor->setValue('academic_year', $academicYear);
         $processor->setValue('verification_url', route('absence-excuse.verify', $excuse->verification_token));
 
+        // Buyruq raqami — jadvaldan tashqarida (AVVAL o'rnatiladi, cloneRow dan oldin)
+        $processor->setValue('order_number', '08-' . str_pad($excuse->id, 5, '0', STR_PAD_LEFT));
+
         // Nazoratlar jadvali — fanlar bo'yicha guruhlash
-        // Bitta fan uchun bir nechta nazorat bo'lsa, bitta qatorda ko'rsatiladi
-        $makeups = $excuse->makeups()->orderBy('subject_name')->orderBy('assessment_type')->get();
+        $makeups = $excuse->makeups()->orderBy('subject_name')->get();
         $grouped = $makeups->groupBy('subject_name');
-        $groupCount = $grouped->count();
 
         $typeLabels = [
             'jn' => 'JN',
@@ -72,36 +73,44 @@ class DocumentTemplateService
             'test' => 'YN(Test)',
         ];
 
+        // Tartiblash: Test/OSKI/MT bo'lgan fanlar avval, faqat JN bo'lgan fanlar keyin
+        $sorted = $grouped->sortBy(function ($subjectMakeups) {
+            $hasNonJn = $subjectMakeups->contains(fn($m) => $m->assessment_type !== 'jn');
+            return $hasNonJn ? 0 : 1;
+        });
+
+        $groupCount = $sorted->count();
+
         if ($groupCount > 0) {
-            // cloneRow AVVAL chaqiriladi (order_number jadvalda ham, tashqarida ham ishlatiladi)
-            $processor->cloneRow('order_number', $groupCount);
+            // cloneRow — faqat jadval ichidagi m_num placeholder orqali
+            $processor->cloneRow('m_num', $groupCount);
 
             $idx = 0;
-            foreach ($grouped as $subjectName => $subjectMakeups) {
+            foreach ($sorted as $subjectName => $subjectMakeups) {
                 $idx++;
 
-                // T/r — tartib raqami
-                $processor->setValue("order_number#{$idx}", (string) $idx);
+                // Fan ichida tartiblash: JN birinchi, keyin boshqalar
+                $sortedMakeups = $subjectMakeups->sortBy(function ($m) {
+                    return $m->assessment_type === 'jn' ? 0 : 1;
+                });
+
+                // T/r — tartib raqami (1, 2, 3...)
+                $processor->setValue("m_num#{$idx}", (string) $idx);
 
                 // Fan nomi
-                $processor->setValue("subject_name#{$idx}", $subjectName);
+                $processor->setValue("m_subject#{$idx}", $subjectName);
 
-                // Nazorat turlari, muddatlari va sanalari — har biri newline bilan
+                // Nazorat turlari va sanalari
                 $types = [];
-                $periods = [];
-                $singleDates = [];
+                $dates = [];
 
-                foreach ($subjectMakeups as $makeup) {
+                foreach ($sortedMakeups as $makeup) {
                     $types[] = $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type;
 
                     if ($makeup->assessment_type === 'jn') {
-                        // JN uchun muddat: start_date dan end_date gacha (excuse davri)
-                        $periods[] = $excuse->start_date->format('d.m.Y') . ' dan ' . $excuse->end_date->format('d.m.Y') . ' gacha';
-                        $singleDates[] = '';
+                        $dates[] = $excuse->start_date->format('d.m.Y') . ' - ' . $excuse->end_date->format('d.m.Y');
                     } else {
-                        // Boshqa turlar uchun bitta sana
-                        $periods[] = '';
-                        $singleDates[] = $makeup->makeup_date
+                        $dates[] = $makeup->makeup_date
                             ? $makeup->makeup_date->format('d.m.Y')
                             : 'Belgilanmagan';
                     }
@@ -110,21 +119,16 @@ class DocumentTemplateService
                 // Word ichida yangi qator uchun XML break
                 $br = '</w:t><w:br/><w:t>';
 
-                $processor->setValue("test_type#{$idx}", implode($br, $types));
-                $processor->setValue("test_date_period#{$idx}", implode($br, $periods));
-                $processor->setValue("test_single_date#{$idx}", implode($br, $singleDates));
+                $processor->setValue("m_type#{$idx}", implode($br, $types));
+                $processor->setValue("m_date#{$idx}", implode($br, $dates));
             }
         } else {
             // Agar nazoratlar bo'lmasa placeholder'larni tozalash
-            $processor->setValue('order_number', '');
-            $processor->setValue('subject_name', '');
-            $processor->setValue('test_type', '');
-            $processor->setValue('test_date_period', '');
-            $processor->setValue('test_single_date', '');
+            $processor->setValue('m_num', '');
+            $processor->setValue('m_subject', '');
+            $processor->setValue('m_type', '');
+            $processor->setValue('m_date', '');
         }
-
-        // Buyruq raqami — jadvaldan tashqarida qolgan ${order_number} uchun
-        $processor->setValue('order_number', '08-' . str_pad($excuse->id, 5, '0', STR_PAD_LEFT));
 
         // QR kod rasm sifatida
         if ($qrImagePath && file_exists($qrImagePath)) {

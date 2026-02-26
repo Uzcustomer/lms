@@ -60,9 +60,20 @@ class AbsenceExcuseController extends Controller
 
     public function show($id)
     {
-        $excuse = AbsenceExcuse::findOrFail($id);
+        $excuse = AbsenceExcuse::with(['student', 'makeups' => function ($q) {
+            $q->orderBy('subject_name')
+              ->orderByRaw("FIELD(assessment_type, 'jn', 'mt', 'oski', 'test')");
+        }])->findOrFail($id);
 
-        return view('admin.absence-excuses.show', compact('excuse'));
+        // Yakshanbasiz kunlar soni
+        $daysCount = 0;
+        $d = $excuse->start_date->copy();
+        while ($d->lte($excuse->end_date)) {
+            if (!$d->isSunday()) $daysCount++;
+            $d->addDay();
+        }
+
+        return view('admin.absence-excuses.show', compact('excuse', 'daysCount'));
     }
 
     public function approve($id)

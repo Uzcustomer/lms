@@ -29,7 +29,7 @@ class DocumentTemplate extends Model
         'absence_excuse' => [
             'label' => 'Sababli ariza farmoyishi',
             'placeholders' => [
-                '${student_id}' => 'Talaba ID raqami (368)',
+                '${student_id}' => 'Talaba ID raqami (student_id_number)',
                 '${student_name}' => 'Talaba to\'liq ismi',
                 '${student_hemis_id}' => 'HEMIS ID raqami',
                 '${group_name}' => 'Guruh nomi',

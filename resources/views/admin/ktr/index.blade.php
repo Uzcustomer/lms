@@ -289,7 +289,7 @@
 
                     <!-- Tugmalar -->
                     <div style="display: flex; justify-content: space-between; margin-top: 16px; align-items: center;">
-                        <a id="ktr-word-export-btn" href="#" class="ktr-btn ktr-btn-export" target="_blank" style="text-decoration:none;">
+                        <a id="ktr-word-export-btn" href="#" class="ktr-btn ktr-btn-export" target="_blank" style="text-decoration:none; display:none;">
                             <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
@@ -503,8 +503,13 @@
                     ktrState.hasPlan = !!(data.plan && data.plan.week_count);
                     ktrState.approverInfo = data.approver_info || {};
 
-                    // Word eksport linkini yangilash
+                    // Word eksport linkini yangilash (faqat reja bo'lsa ko'rsatish)
                     $('#ktr-word-export-btn').attr('href', '/admin/ktr/export-word/' + csId);
+                    if (ktrState.hasPlan) {
+                        $('#ktr-word-export-btn').show();
+                    } else {
+                        $('#ktr-word-export-btn').hide();
+                    }
                     ktrState.changeRequest = data.change_request || null;
 
                     // Saqlangan ma'lumotlarni yuklash
@@ -916,6 +921,9 @@
                         $('#ktr-validation-msg')
                             .html(resp.message)
                             .removeClass('ktr-msg-error').addClass('ktr-msg-success').show();
+                        // Saqlangandan keyin Word eksport tugmasini ko'rsatish
+                        ktrState.hasPlan = true;
+                        $('#ktr-word-export-btn').show();
                         setTimeout(function() { $('#ktr-modal-overlay').fadeOut(200); }, 1000);
                     }
                 },

@@ -55,7 +55,8 @@ class DocumentTemplateService
         \Log::info('Template variables found: ' . implode(', ', $processor->getVariables()));
 
         // Matn placeholder'larni almashtirish
-        $processor->setValue('student_id', (string) $excuse->student_id);
+        $studentIdNumber = $excuse->student?->student_id_number ?? '';
+        $processor->setValue('student_id', $studentIdNumber);
         $processor->setValue('student_name', $excuse->student_full_name);
         $processor->setValue('student_hemis_id', $excuse->student_hemis_id);
         $processor->setValue('group_name', $excuse->group_name ?? '');
@@ -77,7 +78,9 @@ class DocumentTemplateService
         $processor->setValue('verification_url', route('absence-excuse.verify', $excuse->verification_token));
 
         // Nazoratlar jadvali (cloneRow orqali)
-        $makeups = $excuse->makeups()->orderBy('subject_name')->get();
+        $makeups = $excuse->makeups()->orderBy('subject_name')
+            ->orderByRaw("FIELD(assessment_type, 'jn', 'mt', 'oski', 'test')")
+            ->get();
         $makeupCount = $makeups->count();
 
         if ($makeupCount > 0) {

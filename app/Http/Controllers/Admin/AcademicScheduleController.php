@@ -16,6 +16,8 @@ use App\Models\Specialty;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\DocumentVerification;
+use App\Models\AbsenceExcuseMakeup;
+use App\Models\YnStudentGrade;
 use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -242,6 +244,30 @@ class AcademicScheduleController extends Controller
             $item['quiz_count'] = $quizCounts[$quizKey] ?? 0;
             $ynKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['subject']->semester_code ?? '');
             $item['yn_submitted'] = isset($ynSubmissions[$ynKey]);
+            return $item;
+        });
+
+        // Sababli talabalar sonini hisoblash (YN ga yuborilgan sabablilar)
+        $excuseCounts = [];
+        if (!empty($groupHemisIds) && !empty($subjectIds)) {
+            $excuseRows = AbsenceExcuseMakeup::join('absence_excuses as ae', 'ae.id', '=', 'absence_excuse_makeups.absence_excuse_id')
+                ->where('ae.status', 'approved')
+                ->whereIn('absence_excuse_makeups.subject_id', $subjectIds)
+                ->whereIn('absence_excuse_makeups.assessment_type', ['jn', 'mt'])
+                ->join('students as st', 'st.id', '=', 'absence_excuse_makeups.student_id')
+                ->whereIn('st.group_id', $groupHemisIds)
+                ->groupBy('st.group_id', 'absence_excuse_makeups.subject_id')
+                ->select('st.group_id', 'absence_excuse_makeups.subject_id', DB::raw('COUNT(DISTINCT ae.student_hemis_id) as cnt'))
+                ->get();
+
+            foreach ($excuseRows as $row) {
+                $excuseCounts[$row->group_id . '|' . $row->subject_id] = $row->cnt;
+            }
+        }
+
+        $transformedData = $transformedData->map(function ($item) use ($excuseCounts) {
+            $excuseKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '');
+            $item['excuse_student_count'] = $excuseCounts[$excuseKey] ?? 0;
             return $item;
         });
 

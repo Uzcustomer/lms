@@ -171,7 +171,12 @@
                                             <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
                                             <td data-sort-value="{{ $item['level_name'] }}" style="text-align:center;color:#1e293b;font-weight:500;">{{ $item['level_name'] }}</td>
                                             <td data-sort-value="{{ $item['semester_name'] }}" style="text-align:center;color:#64748b;font-size:12px;">{{ $item['semester_name'] }}</td>
-                                            <td data-sort-value="1-urinish" style="text-align:center;padding:4px 8px;"><span class="attempt-badge">1-urinish</span></td>
+                                            <td data-sort-value="1-urinish" style="text-align:center;padding:4px 8px;">
+                                                <span class="attempt-badge">1-urinish</span>
+                                                @if(($item['excuse_student_count'] ?? 0) > 0)
+                                                    <br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;" title="Sababli talabalar soni">qo'shimcha: +{{ $item['excuse_student_count'] }}</span>
+                                                @endif
+                                            </td>
                                             <td data-sort-value="{{ $item['yn_type'] ?? '' }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['yn_type'] ?? null)
                                                     <span class="yn-type-badge yn-type-{{ strtolower($item['yn_type']) }}">{{ $item['yn_type'] }}</span>

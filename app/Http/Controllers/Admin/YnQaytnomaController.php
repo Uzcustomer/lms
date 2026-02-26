@@ -13,6 +13,7 @@ use App\Models\Semester;
 use App\Models\Specialty;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\YnStudentGrade;
 use App\Models\YnSubmission;
 use App\Models\DocumentVerification;
 use App\Enums\ProjectRole;
@@ -419,53 +420,23 @@ class YnQaytnomaController extends Controller
 
                 if (!$subject) continue;
 
-                $currentDate = now();
-                $lessonCount = Schedule::where('subject_id', $subject->subject_id)
+                // Har bir talaba uchun eng oxirgi snapshotni olish (tarixli)
+                $latestSnapshots = YnStudentGrade::latestPerStudent($submission->id)->get();
+                $savedGrades = $latestSnapshots->pluck('jn', 'student_hemis_id')->toArray();
+                $savedMtGrades = $latestSnapshots->pluck('mt', 'student_hemis_id')->toArray();
+
+                // Talabalar ro'yxatini olish
+                $students = Student::select('full_name as student_name', 'student_id_number as student_id', 'hemis_id')
                     ->where('group_id', $group->group_hemis_id)
-                    ->whereNotIn('training_type_code', config('app.training_type_code'))
-                    ->where('lesson_date', '<=', $currentDate)
-                    ->distinct('lesson_date')
-                    ->count();
-
-                if ($lessonCount == 0) $lessonCount = 1;
-
-                $students = Student::selectRaw('
-                    students.full_name as student_name,
-                    students.student_id_number as student_id,
-                    students.hemis_id as hemis_id,
-                    ROUND(
-                        (SELECT sum(inner_table.average_grade) / ' . $lessonCount . '
-                        FROM (
-                            SELECT lesson_date, AVG(COALESCE(
-                                CASE
-                                    WHEN status = "retake" AND (reason = "absent" OR reason = "teacher_victim")
-                                    THEN retake_grade
-                                    WHEN status = "retake" AND reason = "low_grade"
-                                    THEN retake_grade
-                                    WHEN status = "pending" AND reason = "absent"
-                                    THEN grade
-                                    ELSE grade
-                                END, 0)) AS average_grade
-                            FROM student_grades
-                            WHERE student_grades.student_hemis_id = students.hemis_id
-                            AND student_grades.subject_id = ' . $subject->subject_id . '
-                            AND student_grades.training_type_code NOT IN (' . implode(',', config('app.training_type_code')) . ')
-                            GROUP BY student_grades.lesson_date
-                        ) AS inner_table)
-                    ) as jn,
-                    ROUND(
-                        (SELECT avg(student_grades.grade) as average_grade
-                        FROM student_grades
-                        WHERE student_grades.student_hemis_id = students.hemis_id
-                        AND student_grades.subject_id = ' . $subject->subject_id . '
-                        AND student_grades.training_type_code = 99
-                        GROUP BY student_grades.student_hemis_id)
-                    ) as mt
-                ')
-                    ->where('students.group_id', $group->group_hemis_id)
-                    ->groupBy('students.id')
-                    ->orderBy('students.full_name')
+                    ->groupBy('id')
+                    ->orderBy('full_name')
                     ->get();
+
+                // Saqlangan snapshot baholarni biriktirish
+                foreach ($students as $student) {
+                    $student->jn = $savedGrades[$student->hemis_id] ?? 0;
+                    $student->mt = $savedMtGrades[$student->hemis_id] ?? 0;
+                }
 
                 // Get teachers for this subject and group
                 $studentIds = Student::where('group_id', $group->group_hemis_id)

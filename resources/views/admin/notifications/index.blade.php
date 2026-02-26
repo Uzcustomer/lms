@@ -141,7 +141,7 @@
                     <div class="flex-1 overflow-y-auto">
                         @forelse($notifications as $notification)
                         @php
-                            $senderName = $notification->sender->name ?? $notification->sender->short_name ?? $notification->sender->full_name ?? null;
+                            $senderName = $notification->sender?->name ?? $notification->sender?->short_name ?? $notification->sender?->full_name ?? null;
                             $isUnread = !$notification->is_read && $tab === 'inbox';
                         @endphp
                         <a href="{{ route('admin.notifications.show', $notification) }}"

@@ -104,7 +104,7 @@
                                     <span style="width:6px;height:6px;flex-shrink:0;margin-top:5px;"></span>
                                     @endif
                                     <div style="flex:1;min-width:0;">
-                                        <p style="font-size:0.7rem;color:#6b7280;margin:0 0 1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ $notif->sender->name ?? $notif->sender->short_name ?? $notif->sender->full_name ?? __('notifications.system') }}</p>
+                                        <p style="font-size:0.7rem;color:#6b7280;margin:0 0 1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ $notif->sender?->name ?? $notif->sender?->short_name ?? $notif->sender?->full_name ?? __('notifications.system') }}</p>
                                         <p style="font-size:0.8rem;font-weight:{{ !$notif->is_read ? '600' : '400' }};color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;">{{ $notif->subject }}</p>
                                         <p style="font-size:0.65rem;color:#6b7280;margin:2px 0 0;">{{ $notif->sent_at ? $notif->sent_at->diffForHumans() : '' }}</p>
                                     </div>

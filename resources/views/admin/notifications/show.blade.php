@@ -89,7 +89,7 @@
                         <!-- Jo'natuvchi -->
                         <div class="px-5 sm:px-6 py-3 flex items-start gap-3">
                             @php
-                                $senderName = $notification->sender->name ?? $notification->sender->short_name ?? $notification->sender->full_name ?? null;
+                                $senderName = $notification->sender?->name ?? $notification->sender?->short_name ?? $notification->sender?->full_name ?? null;
                                 $initial = $senderName ? mb_strtoupper(mb_substr($senderName, 0, 1)) : '?';
                                 $colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500'];
                                 $colorIndex = $notification->sender_id ? ($notification->sender_id % count($colors)) : 0;
@@ -103,14 +103,14 @@
                                     <span class="text-xs text-gray-400">{{ ($notification->sent_at ?? $notification->created_at)->format('d M Y, H:i') }}</span>
                                 </div>
                                 <button @click="showDetails = !showDetails" class="text-xs text-gray-400 hover:text-gray-600 mt-0.5 flex items-center gap-0.5">
-                                    <span>{{ __('notifications.to') }}: {{ $notification->recipient->name ?? $notification->recipient->full_name ?? '—' }}</span>
+                                    <span>{{ __('notifications.to') }}: {{ $notification->recipient?->name ?? $notification->recipient?->full_name ?? '—' }}</span>
                                     <svg class="w-3 h-3 transition-transform" :class="showDetails ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                                     </svg>
                                 </button>
                                 <div x-show="showDetails" x-collapse class="mt-2 text-xs text-gray-500 space-y-0.5 bg-gray-50 rounded-lg p-3 border border-gray-100">
                                     <p><span class="font-medium text-gray-600">{{ __('notifications.from') }}:</span> {{ $senderName ?? __('notifications.system') }}</p>
-                                    <p><span class="font-medium text-gray-600">{{ __('notifications.to') }}:</span> {{ $notification->recipient->name ?? $notification->recipient->full_name ?? '—' }}</p>
+                                    <p><span class="font-medium text-gray-600">{{ __('notifications.to') }}:</span> {{ $notification->recipient?->name ?? $notification->recipient?->full_name ?? '—' }}</p>
                                     <p><span class="font-medium text-gray-600">{{ __('notifications.date') }}:</span> {{ ($notification->sent_at ?? $notification->created_at)->format('d.m.Y H:i:s') }}</p>
                                     <p><span class="font-medium text-gray-600">{{ __('notifications.type') }}:</span> {{ __('notifications.type_' . $notification->type) }}</p>
                                 </div>

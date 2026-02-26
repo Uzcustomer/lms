@@ -49,12 +49,15 @@
                 @php
                     $notifUser = auth()->user();
                     $notifUserId = $notifUser->id ?? 0;
-                    $notifUserType = get_class($notifUser);
-                    $notifUnreadCount = \App\Models\Notification::where('recipient_id', $notifUserId)
-                        ->where('recipient_type', $notifUserType)
-                        ->where('is_draft', false)
-                        ->where('is_read', false)
-                        ->count();
+                    $notifUserType = $notifUser ? get_class($notifUser) : 'App\\Models\\User';
+                    $notifUnreadCount = 0;
+                    try {
+                        $notifUnreadCount = \App\Models\Notification::where('recipient_id', $notifUserId)
+                            ->where('recipient_type', $notifUserType)
+                            ->where('is_draft', false)
+                            ->where('is_read', false)
+                            ->count();
+                    } catch (\Exception $e) {}
                 @endphp
                 <div x-data="{ notifOpen: false }" style="position:fixed;top:10px;right:16px;z-index:9999;">
                     <button @click.stop="notifOpen = !notifOpen"
@@ -88,12 +91,15 @@
                         </div>
                         <div style="max-height:280px;overflow-y:auto;">
                             @php
-                                $recentNotifs = \App\Models\Notification::where('recipient_id', $notifUserId)
-                                    ->where('recipient_type', $notifUserType)
-                                    ->where('is_draft', false)
-                                    ->orderByDesc('sent_at')
-                                    ->take(6)
-                                    ->get();
+                                $recentNotifs = collect();
+                                try {
+                                    $recentNotifs = \App\Models\Notification::where('recipient_id', $notifUserId)
+                                        ->where('recipient_type', $notifUserType)
+                                        ->where('is_draft', false)
+                                        ->orderByDesc('sent_at')
+                                        ->take(6)
+                                        ->get();
+                                } catch (\Exception $e) {}
                             @endphp
                             @forelse($recentNotifs as $notif)
                             <a href="{{ route('admin.notifications.show', $notif) }}"

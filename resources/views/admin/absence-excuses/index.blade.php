@@ -19,7 +19,101 @@
                 </div>
             @endif
 
-            {{-- Statistika --}}
+            {{-- Statistika card --}}
+            <div class="mb-4">
+                <button onclick="document.getElementById('reviewerStatsModal').classList.remove('hidden')"
+                        class="w-full block bg-blue-50 border-2 border-blue-200 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.01] hover:border-blue-400 text-left">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-blue-600">Statistika</p>
+                                <p class="text-xs text-blue-500">Xodimlar bo'yicha arizalar statistikasi</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">{{ $stats['approved'] }} tasdiqlangan</span>
+                            <span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium">{{ $stats['rejected'] }} rad etilgan</span>
+                            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </button>
+            </div>
+
+            {{-- Reviewer Statistika Modal --}}
+            <div id="reviewerStatsModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+                <div class="flex items-center justify-center min-h-screen px-4">
+                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="document.getElementById('reviewerStatsModal').classList.add('hidden')"></div>
+                    <div class="relative bg-white rounded-lg shadow-xl max-w-2xl w-full z-10">
+                        <div class="flex items-center justify-between p-4 border-b bg-blue-50 rounded-t-lg">
+                            <h3 class="text-lg font-semibold text-blue-800">Xodimlar statistikasi</h3>
+                            <button onclick="document.getElementById('reviewerStatsModal').classList.add('hidden')"
+                                    class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        <div class="p-4">
+                            @if($reviewerStats->isEmpty())
+                                <p class="text-gray-500 text-center py-6">Hali hech qanday ariza ko'rib chiqilmagan.</p>
+                            @else
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Xodim</th>
+                                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Tasdiqlagan</th>
+                                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Rad etgan</th>
+                                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Jami</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-gray-200">
+                                            @foreach($reviewerStats as $i => $reviewer)
+                                                <tr class="hover:bg-gray-50">
+                                                    <td class="px-4 py-3 text-sm text-gray-500">{{ $i + 1 }}</td>
+                                                    <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ $reviewer->reviewed_by_name }}</td>
+                                                    <td class="px-4 py-3 text-center">
+                                                        @if($reviewer->approved_count > 0)
+                                                            <a href="{{ route('admin.absence-excuses.index', ['reviewed_by' => $reviewer->reviewed_by, 'status' => 'approved']) }}"
+                                                               class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 hover:bg-green-200 transition">
+                                                                {{ $reviewer->approved_count }}
+                                                            </a>
+                                                        @else
+                                                            <span class="text-gray-400 text-sm">0</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="px-4 py-3 text-center">
+                                                        @if($reviewer->rejected_count > 0)
+                                                            <a href="{{ route('admin.absence-excuses.index', ['reviewed_by' => $reviewer->reviewed_by, 'status' => 'rejected']) }}"
+                                                               class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 hover:bg-red-200 transition">
+                                                                {{ $reviewer->rejected_count }}
+                                                            </a>
+                                                        @else
+                                                            <span class="text-gray-400 text-sm">0</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="px-4 py-3 text-center">
+                                                        <a href="{{ route('admin.absence-excuses.index', ['reviewed_by' => $reviewer->reviewed_by]) }}"
+                                                           class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 hover:bg-blue-200 transition">
+                                                            {{ $reviewer->total_count }}
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Status cardlar --}}
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <a href="{{ route('admin.absence-excuses.index', ['status' => 'pending']) }}"
                    class="block bg-yellow-50 border-2 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.02] {{ request('status') == 'pending' ? 'border-yellow-500 shadow-md ring-2 ring-yellow-200' : 'border-yellow-200 hover:border-yellow-400' }}">
@@ -64,6 +158,18 @@
                     </div>
                 </a>
             </div>
+
+            {{-- Reviewed by filter ko'rsatkich --}}
+            @if(request('reviewed_by'))
+                <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-4 flex items-center justify-between">
+                    <span class="text-sm text-blue-800">
+                        <strong>{{ $reviewerStats->firstWhere('reviewed_by', request('reviewed_by'))?->reviewed_by_name ?? 'Noma\'lum' }}</strong> tomonidan ko'rib chiqilgan arizalar
+                        @if(request('status') == 'approved') (tasdiqlangan) @elseif(request('status') == 'rejected') (rad etilgan) @endif
+                    </span>
+                    <a href="{{ route('admin.absence-excuses.index', request()->except(['reviewed_by'])) }}"
+                       class="text-blue-600 hover:text-blue-800 text-sm font-medium">Tozalash &times;</a>
+                </div>
+            @endif
 
             {{-- Filterlar --}}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 mb-6">

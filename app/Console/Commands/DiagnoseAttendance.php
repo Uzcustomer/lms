@@ -217,8 +217,8 @@ class DiagnoseAttendance extends Command
         $from = $date->copy()->startOfDay()->timestamp;
         $to = $date->copy()->endOfDay()->timestamp;
 
-        $this->info("│  lesson_date_from: {$from} (" . Carbon::createFromTimestamp($from)->format('Y-m-d H:i:s') . ")");
-        $this->info("│  lesson_date_to:   {$to} (" . Carbon::createFromTimestamp($to)->format('Y-m-d H:i:s') . ")");
+        $this->info("│  lesson_date_from: {$from} (" . date('Y-m-d H:i:s', $from) . ")");
+        $this->info("│  lesson_date_to:   {$to} (" . date('Y-m-d H:i:s', $to) . ")");
         $this->info("│");
 
         $apiItems = $this->fetchAllFromHemis($token, $from, $to);
@@ -249,7 +249,8 @@ class DiagnoseAttendance extends Command
         $this->info("│");
 
         foreach ($filteredItems as $item) {
-            $lessonDate = isset($item['lesson_date']) ? date('Y-m-d H:i:s', $item['lesson_date']) : 'null';
+            $lessonTs = $item['lesson_date'] ?? null;
+            $lessonDate = $lessonTs ? date('Y-m-d H:i:s', $lessonTs) : 'null';
             $subjectScheduleId = $item['_subject_schedule'] ?? 'NULL';
             $matchLocal = in_array($subjectScheduleId, $scheduleHemisIds) ? 'SCHEDULE BILAN MOS' : 'SCHEDULE DA YO\'Q!';
 
@@ -261,7 +262,7 @@ class DiagnoseAttendance extends Command
             $this->info("│  group:                " . ($item['group']['id'] ?? '?') . " (" . ($item['group']['name'] ?? '?') . ")");
             $this->info("│  trainingType:         " . ($item['trainingType']['code'] ?? '?') . " (" . ($item['trainingType']['name'] ?? '?') . ")");
             $this->info("│  lessonPair:           " . ($item['lessonPair']['code'] ?? '?') . " (" . ($item['lessonPair']['start_time'] ?? '?') . " - " . ($item['lessonPair']['end_time'] ?? '?') . ")");
-            $this->info("│  lesson_date:          {$lessonDate} (ts: " . ($item['lesson_date'] ?? 'null') . ")");
+            $this->info("│  lesson_date:          {$lessonDate} (ts: " . ($lessonTs ?? 'null') . ")");
             $this->info("│  load:                 " . ($item['load'] ?? '?'));
 
             // Lokal bazada bor-yo'qligini tekshirish
@@ -354,6 +355,65 @@ class DiagnoseAttendance extends Command
                 'HEMIS API da ' . $hemisButNotLocal->count() . ' ta yozuv bor, lekin lokal bazada yo\'q yoki o\'chirilgan',
                 'import:attendance-controls --date=' . $dateStr . ' buyrug\'ini ishga tushiring'
             ];
+        }
+
+        // Tekshirish 6: ESKI/STALE schedulelar (HEMIS API da boshqa schedule_id bor)
+        if ($filteredItems->isNotEmpty()) {
+            $hemisScheduleIds = $filteredItems
+                ->filter(fn($item) => isset($item['_subject_schedule']) && isset($item['lesson_date'])
+                    && date('Y-m-d', $item['lesson_date']) === $dateStr)
+                ->pluck('_subject_schedule')
+                ->unique()
+                ->values()
+                ->toArray();
+
+            $staleSchedules = $schedules->filter(function ($sch) use ($hemisScheduleIds, $attendanceByScheduleId, $attendanceByKey) {
+                // HEMIS da bu schedule_hemis_id yo'q
+                if (in_array($sch->schedule_hemis_id, $hemisScheduleIds)) {
+                    return false;
+                }
+                // Va bu schedule da davomat ham yo'q
+                $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id
+                    . '|' . date('Y-m-d', strtotime($sch->lesson_date))
+                    . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+                return !isset($attendanceByScheduleId[$sch->schedule_hemis_id])
+                    && !isset($attendanceByKey[$attKey]);
+            });
+
+            if ($staleSchedules->isNotEmpty()) {
+                $staleIds = $staleSchedules->pluck('schedule_hemis_id')->implode(', ');
+                $stalePairs = $staleSchedules->map(fn($s) => $s->lesson_pair_code . ' (' .
+                    substr($s->lesson_pair_start_time, 0, 5) . '-' . substr($s->lesson_pair_end_time, 0, 5) . ')'
+                )->implode(', ');
+                $issues[] = [
+                    'KRITIK',
+                    "ESKI JADVALLAR: {$staleSchedules->count()} ta schedule HEMIS da yo'q, lekin lokal bazada hali mavjud.\n" .
+                    "     schedule_hemis_id: [{$staleIds}]\n" .
+                    "     Juftliklar: {$stalePairs}\n" .
+                    "     HEMIS faqat bu IDlarni qaytarmoqda: [" . implode(', ', $hemisScheduleIds) . "]",
+                    "Jadval importini qayta ishga tushiring:\n" .
+                    "     php artisan schedule:import --from={$dateStr} --to={$dateStr}\n" .
+                    "     yoki hisobot sahifasida \"Yangilash\" tugmasini bosing"
+                ];
+            }
+        }
+
+        // Tekshirish 7: Dublikat schedulelar (bir xil kalit, turli schedule_hemis_id)
+        $keyGroups = [];
+        foreach ($schedules as $sch) {
+            $key = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id
+                 . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+            $keyGroups[$key][] = $sch->schedule_hemis_id;
+        }
+        $duplicateKeys = array_filter($keyGroups, fn($ids) => count($ids) > 1);
+        if (!empty($duplicateKeys)) {
+            foreach ($duplicateKeys as $key => $ids) {
+                $issues[] = [
+                    'OGOHLANTIRISH',
+                    "Dublikat jadval: kalit [{$key}] uchun " . count($ids) . " ta schedule bor: [" . implode(', ', $ids) . "]",
+                    "Jadval importini qayta ishga tushiring — HEMIS jadval o'zgargan bo'lishi mumkin"
+                ];
+            }
         }
 
         if (empty($issues)) {

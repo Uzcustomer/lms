@@ -2,13 +2,13 @@
     <style>
         /* Sababli NB katakchalar uchun stil */
         .excuse-nb-cell {
-            background: #fef3c7;
-            color: #92400e;
+            background: #dbeafe;
+            color: #1e40af;
             border-radius: 2px;
             padding: 1px 2px;
         }
         .excuse-nb-cell:hover {
-            background: #fde68a;
+            background: #bfdbfe;
         }
 
         .tab-content {

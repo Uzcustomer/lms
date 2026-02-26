@@ -610,8 +610,7 @@
             html += '<ul class="ktr-approver-list">';
             html += '<li><b>Kafedra mudiri</b>: ' + (info.kafedra_mudiri ? info.kafedra_mudiri.name : 'Topilmadi') + ' <span style="color:#94a3b8;">(' + (info.kafedra_name || '') + ')</span></li>';
             html += '<li><b>Dekan</b>: ' + (info.dekan ? info.dekan.name : 'Topilmadi') + ' <span style="color:#94a3b8;">(' + (info.faculty_name || '') + ')</span></li>';
-            var regNames = (info.registrators && info.registrators.length) ? info.registrators.map(function(r) { return r.name; }).join(', ') : 'Topilmadi';
-            html += '<li><b>Registrator ofisi</b>: ' + regNames + ' <span style="color:#94a3b8;">(har qanday biri tasdiqlashi mumkin)</span></li>';
+            html += '<li><b>Registrator ofisi</b></li>';
             html += '</ul>';
             html += '<button type="button" class="ktr-btn ktr-btn-primary" onclick="sendChangeRequest()" id="ktr-request-btn">Ruxsat so\'rash</button>';
             html += '</div>';

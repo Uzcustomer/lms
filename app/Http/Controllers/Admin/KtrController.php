@@ -1295,7 +1295,7 @@ class KtrController extends Controller
         // Ustun kengliklari
         $haftaW = 700;
         $kunlariW = 1600;
-        $soatEachW = 1000;
+        $soatEachW = 700;
         $soatTotalW = $soatEachW * $typeCount;
         $mavzuW = 14000 - $haftaW - $kunlariW - $soatTotalW;
         if ($mavzuW < 3000) $mavzuW = 3000;
@@ -1323,14 +1323,23 @@ class KtrController extends Controller
         }
 
         // 2-qator sarlavha: (merge) | (merge) | (merge) | Ma'ruza | Amaliy | ...
+        // Vertikal yozuv: har bir harfni alohida qatorga qo'yish
         $table->addRow(null, ['tblHeader' => true]);
         $table->addCell($haftaW, array_merge($cellBorder, ['vMerge' => 'continue']));
         $table->addCell($kunlariW, array_merge($cellBorder, ['vMerge' => 'continue']));
         $table->addCell($mavzuW, array_merge($cellBorder, ['vMerge' => 'continue']));
         foreach ($typeCodes as $code) {
-            $shortName = $filteredTypes[$code]['name'];
-            $table->addCell($soatEachW, $cellBorder)
-                ->addText($shortName, ['bold' => true, 'size' => 8], $cp);
+            $name = $filteredTypes[$code]['name'];
+            $cell = $table->addCell($soatEachW, $cellBorder);
+            // Har bir harfni alohida qator qilib vertikal yozish
+            $chars = mb_str_split($name);
+            foreach ($chars as $char) {
+                $cell->addText(
+                    $char,
+                    ['bold' => true, 'size' => 9],
+                    ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0, 'lineHeight' => 0.8]
+                );
+            }
         }
 
         // ---- MA'LUMOTLAR QATORLARI ----

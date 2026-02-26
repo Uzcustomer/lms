@@ -1424,7 +1424,7 @@
                                                         @if($hasApprovedExcuse && !$hasRetake && !$excuseAlreadySaved)
                                                             {{-- Sababli NB — modal orqali baho kiritish --}}
                                                             <div class="excuse-nb-cell editable-cell cursor-pointer hover:bg-amber-100"
-                                                                 onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->student_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }})"
+                                                                 onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }})"
                                                                  title="Sababli — bosib baho kiriting">
                                                                 <span class="font-medium">NB</span>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>

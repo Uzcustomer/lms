@@ -22,56 +22,77 @@ class NotificationController extends Controller
 
     public function index(Request $request)
     {
-        [$userId, $userType] = $this->getUserInfo();
+        try {
+            [$userId, $userType] = $this->getUserInfo();
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@index getUserInfo error: ' . $e->getMessage());
+            abort(500, 'Auth error: ' . $e->getMessage());
+        }
+
         $tab = $request->get('tab', 'inbox');
         $search = $request->get('search', '');
         $senderFilter = $request->get('sender_id');
 
-        $query = Notification::with('sender');
+        try {
+            $query = Notification::with('sender');
 
-        switch ($tab) {
-            case 'sent':
-                $query->sent($userId)->orderByDesc('sent_at');
-                break;
-            case 'drafts':
-                $query->drafts($userId)->orderByDesc('updated_at');
-                break;
-            default: // inbox
-                $query->inbox($userId)->orderByDesc('sent_at');
-                break;
+            switch ($tab) {
+                case 'sent':
+                    $query->sent($userId)->orderByDesc('sent_at');
+                    break;
+                case 'drafts':
+                    $query->drafts($userId)->orderByDesc('updated_at');
+                    break;
+                default: // inbox
+                    $query->inbox($userId)->orderByDesc('sent_at');
+                    break;
+            }
+
+            if ($search) {
+                $matchingSenderIds = User::where('name', 'like', "%{$search}%")->pluck('id')
+                    ->merge(Teacher::where('full_name', 'like', "%{$search}%")->pluck('id'));
+
+                $query->where(function ($q) use ($search, $matchingSenderIds) {
+                    $q->where('subject', 'like', "%{$search}%")
+                      ->orWhere('body', 'like', "%{$search}%")
+                      ->orWhereIn('sender_id', $matchingSenderIds);
+                });
+            }
+
+            if ($senderFilter) {
+                $query->where('sender_id', $senderFilter);
+            }
+
+            $notifications = $query->paginate(20);
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@index query error: ' . $e->getMessage());
+            $notifications = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
         }
 
-        if ($search) {
-            $matchingSenderIds = User::where('name', 'like', "%{$search}%")->pluck('id')
-                ->merge(Teacher::where('full_name', 'like', "%{$search}%")->pluck('id'));
-
-            $query->where(function ($q) use ($search, $matchingSenderIds) {
-                $q->where('subject', 'like', "%{$search}%")
-                  ->orWhere('body', 'like', "%{$search}%")
-                  ->orWhereIn('sender_id', $matchingSenderIds);
-            });
+        try {
+            $unreadCount = Notification::inbox($userId)->unread()->count();
+            $inboxCount = Notification::inbox($userId)->count();
+            $sentCount = Notification::sent($userId)->count();
+            $draftsCount = Notification::drafts($userId)->count();
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@index counts error: ' . $e->getMessage());
+            $unreadCount = $inboxCount = $sentCount = $draftsCount = 0;
         }
-
-        if ($senderFilter) {
-            $query->where('sender_id', $senderFilter);
-        }
-
-        $notifications = $query->paginate(20);
-
-        $unreadCount = Notification::inbox($userId)->unread()->count();
-        $inboxCount = Notification::inbox($userId)->count();
-        $sentCount = Notification::sent($userId)->count();
-        $draftsCount = Notification::drafts($userId)->count();
 
         // Kelgan xabarlar uchun jo'natuvchilar ro'yxati (filtr uchun)
         $senders = collect();
-        if ($tab === 'inbox') {
-            $inboxSenderIds = Notification::inbox($userId)->distinct()->pluck('sender_id');
-            $senders = User::whereIn('id', $inboxSenderIds)->orderBy('name')->get(['id', 'name'])
-                ->merge(
-                    Teacher::whereIn('id', $inboxSenderIds)->orderBy('full_name')
-                        ->get(['id', 'full_name'])->map(fn ($t) => (object) ['id' => $t->id, 'name' => $t->full_name])
-                );
+        try {
+            if ($tab === 'inbox') {
+                $inboxSenderIds = Notification::inbox($userId)->distinct()->pluck('sender_id');
+                $senders = User::whereIn('id', $inboxSenderIds)->orderBy('name')->get(['id', 'name'])
+                    ->merge(
+                        Teacher::whereIn('id', $inboxSenderIds)->orderBy('full_name')
+                            ->get(['id', 'full_name'])->map(fn ($t) => (object) ['id' => $t->id, 'name' => $t->full_name])
+                    );
+            }
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@index senders error: ' . $e->getMessage());
+            $senders = collect();
         }
 
         return view('admin.notifications.index', compact(
@@ -90,9 +111,14 @@ class NotificationController extends Controller
 
         $notification->load(['sender', 'recipient']);
 
-        $unreadCount = Notification::inbox($userId)->unread()->count();
-        $sentCount = Notification::sent($userId)->count();
-        $draftsCount = Notification::drafts($userId)->count();
+        try {
+            $unreadCount = Notification::inbox($userId)->unread()->count();
+            $sentCount = Notification::sent($userId)->count();
+            $draftsCount = Notification::drafts($userId)->count();
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@show counts error: ' . $e->getMessage());
+            $unreadCount = $sentCount = $draftsCount = 0;
+        }
 
         return view('admin.notifications.show', compact('notification', 'unreadCount', 'sentCount', 'draftsCount'));
     }
@@ -110,9 +136,14 @@ class NotificationController extends Controller
             'label' => $role->label(),
         ]);
 
-        $unreadCount = Notification::inbox($userId)->unread()->count();
-        $sentCount = Notification::sent($userId)->count();
-        $draftsCount = Notification::drafts($userId)->count();
+        try {
+            $unreadCount = Notification::inbox($userId)->unread()->count();
+            $sentCount = Notification::sent($userId)->count();
+            $draftsCount = Notification::drafts($userId)->count();
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@create counts error: ' . $e->getMessage());
+            $unreadCount = $sentCount = $draftsCount = 0;
+        }
 
         return view('admin.notifications.create', compact('users', 'teachers', 'roles', 'unreadCount', 'sentCount', 'draftsCount'));
     }

@@ -32,7 +32,9 @@ return [
     'body' => 'Body',
     'body_placeholder' => 'Enter message text...',
     'from' => 'From',
+    'to' => 'To',
     'date' => 'Date',
+    'type' => 'Type',
     'system' => 'System',
 
     // Types

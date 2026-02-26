@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Notification;
 use App\Models\User;
 use App\Models\Teacher;
+use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -64,10 +65,16 @@ class NotificationController extends Controller
 
     public function create()
     {
-        $users = User::orderBy('name')->get(['id', 'name']);
+        $users = User::with('roles')->orderBy('name')->get();
         $teachers = Teacher::orderBy('full_name')->get(['id', 'full_name']);
 
-        return view('admin.notifications.create', compact('users', 'teachers'));
+        // Rollar ro'yxati (talabadan tashqari)
+        $roles = collect(ProjectRole::staffRoles())->map(fn ($role) => [
+            'value' => $role->value,
+            'label' => $role->label(),
+        ]);
+
+        return view('admin.notifications.create', compact('users', 'teachers', 'roles'));
     }
 
     public function store(Request $request)

@@ -8,18 +8,18 @@
     <div class="py-4 sm:py-6">
         <div class="max-w-3xl mx-auto px-2 sm:px-6 lg:px-8">
             <!-- Back link -->
-            <div class="mb-4">
+            <div class="mb-3">
                 <a href="{{ route('admin.notifications.index') }}"
                    class="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                     </svg>
                     {{ __('notifications.back_to_list') }}
                 </a>
             </div>
 
             @if($errors->any())
-            <div class="mb-4 flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+            <div class="mb-3 flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                 <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
@@ -31,46 +31,50 @@
             </div>
             @endif
 
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200/60 overflow-hidden">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden" x-data="composeForm()">
                 <form method="POST" action="{{ route('admin.notifications.store') }}">
                     @csrf
 
-                    <!-- Compose header -->
-                    <div class="px-5 sm:px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                        <div class="flex items-center gap-2.5">
-                            <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 class="text-sm font-semibold text-gray-800">{{ __('notifications.compose') }}</h3>
-                                <p class="text-xs text-gray-400">{{ __('notifications.compose') }}</p>
-                            </div>
+                    <!-- Gmail-style compose fields -->
+                    <div class="divide-y divide-gray-100">
+                        <!-- Recipient Type row -->
+                        <div class="flex items-center px-5 py-2.5">
+                            <label class="w-20 text-sm text-gray-500 flex-shrink-0">{{ __('notifications.recipient_type') }}</label>
+                            <select name="recipient_type" id="recipient_type"
+                                    class="flex-1 border-0 focus:ring-0 text-sm text-gray-900 py-1 px-0"
+                                    x-model="recipientType" @change="onTypeChange()">
+                                <option value="App\Models\User">{{ __('notifications.admin_user') }}</option>
+                                <option value="App\Models\Teacher">{{ __('notifications.teacher') }}</option>
+                            </select>
                         </div>
-                    </div>
 
-                    <div class="px-5 sm:px-6 py-5 space-y-4">
-                        <!-- Recipient Type + Recipient in one row on desktop -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">{{ __('notifications.recipient_type') }}</label>
-                                <select name="recipient_type" id="recipient_type"
-                                        class="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5"
-                                        onchange="toggleRecipientList()">
-                                    <option value="App\Models\User" {{ old('recipient_type', 'App\Models\User') === 'App\Models\User' ? 'selected' : '' }}>{{ __('notifications.admin_user') }}</option>
-                                    <option value="App\Models\Teacher" {{ old('recipient_type') === 'App\Models\Teacher' ? 'selected' : '' }}>{{ __('notifications.teacher') }}</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">{{ __('notifications.recipient') }}</label>
-                                <select name="recipient_id" id="recipient_user" class="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5">
+                        <!-- Role filter row (only for User type) -->
+                        <div class="flex items-center px-5 py-2.5" x-show="recipientType === 'App\\Models\\User'">
+                            <label class="w-20 text-sm text-gray-500 flex-shrink-0">Rol</label>
+                            <select class="flex-1 border-0 focus:ring-0 text-sm text-gray-900 py-1 px-0"
+                                    x-model="selectedRole" @change="filterByRole()">
+                                <option value="">Barchasi</option>
+                                @foreach($roles as $role)
+                                <option value="{{ $role['value'] }}">{{ $role['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <!-- Recipient row -->
+                        <div class="flex items-center px-5 py-2.5">
+                            <label class="w-20 text-sm text-gray-500 flex-shrink-0">{{ __('notifications.recipient') }}</label>
+                            <div class="flex-1">
+                                <select name="recipient_id" id="recipient_user"
+                                        class="w-full border-0 focus:ring-0 text-sm text-gray-900 py-1 px-0"
+                                        x-show="recipientType === 'App\\Models\\User'">
                                     <option value="">-- {{ __('notifications.select_recipient') }} --</option>
                                     @foreach($users as $u)
-                                    <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                    <option value="{{ $u->id }}" data-roles="{{ $u->getRoleNames()->implode(',') }}">{{ $u->name }}</option>
                                     @endforeach
                                 </select>
-                                <select name="" id="recipient_teacher" class="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5" style="display: none;">
+                                <select name="" id="recipient_teacher"
+                                        class="w-full border-0 focus:ring-0 text-sm text-gray-900 py-1 px-0"
+                                        x-show="recipientType === 'App\\Models\\Teacher'">
                                     <option value="">-- {{ __('notifications.select_recipient') }} --</option>
                                     @foreach($teachers as $t)
                                     <option value="{{ $t->id }}">{{ $t->full_name }}</option>
@@ -79,43 +83,42 @@
                             </div>
                         </div>
 
-                        <!-- Subject -->
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">{{ __('notifications.subject') }}</label>
+                        <!-- Subject row -->
+                        <div class="flex items-center px-5 py-2.5">
+                            <label class="w-20 text-sm text-gray-500 flex-shrink-0">{{ __('notifications.subject') }}</label>
                             <input type="text" name="subject" value="{{ old('subject') }}"
-                                   class="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5"
+                                   class="flex-1 border-0 focus:ring-0 text-sm text-gray-900 py-1 px-0"
                                    placeholder="{{ __('notifications.subject_placeholder') }}" required>
-                        </div>
-
-                        <!-- Body -->
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">{{ __('notifications.body') }}</label>
-                            <textarea name="body" rows="10"
-                                      class="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5 leading-relaxed"
-                                      placeholder="{{ __('notifications.body_placeholder') }}">{{ old('body') }}</textarea>
                         </div>
                     </div>
 
+                    <!-- Body -->
+                    <div class="px-5 pt-3 pb-2">
+                        <textarea name="body" rows="12"
+                                  class="w-full border-0 focus:ring-0 text-sm text-gray-800 leading-relaxed resize-none p-0"
+                                  placeholder="{{ __('notifications.body_placeholder') }}">{{ old('body') }}</textarea>
+                    </div>
+
                     <!-- Actions -->
-                    <div class="px-5 sm:px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
-                        <a href="{{ route('admin.notifications.index') }}"
-                           class="w-full sm:w-auto px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-700 text-center transition-colors">
-                            {{ __('notifications.back_to_list') }}
-                        </a>
-                        <button type="submit" name="save_draft" value="1"
-                                class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all shadow-sm">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                            </svg>
-                            {{ __('notifications.save_draft') }}
-                        </button>
+                    <div class="px-5 py-3 border-t border-gray-100 flex items-center gap-2">
                         <button type="submit"
-                                class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-all shadow-sm hover:shadow">
+                                class="inline-flex items-center gap-1.5 px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-full hover:bg-blue-700 transition-all shadow-sm hover:shadow">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
                             </svg>
                             {{ __('notifications.send') }}
                         </button>
+                        <button type="submit" name="save_draft" value="1"
+                                class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+                            {{ __('notifications.save_draft') }}
+                        </button>
+                        <div class="flex-1"></div>
+                        <a href="{{ route('admin.notifications.index') }}"
+                           class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors" title="{{ __('notifications.delete') }}">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </a>
                     </div>
                 </form>
             </div>
@@ -124,24 +127,46 @@
 
     @push('scripts')
     <script>
-        function toggleRecipientList() {
-            var type = document.getElementById('recipient_type').value;
-            var userSelect = document.getElementById('recipient_user');
-            var teacherSelect = document.getElementById('recipient_teacher');
+        function composeForm() {
+            return {
+                recipientType: '{{ old('recipient_type', 'App\\Models\\User') }}',
+                selectedRole: '',
+                onTypeChange() {
+                    var userSelect = document.getElementById('recipient_user');
+                    var teacherSelect = document.getElementById('recipient_teacher');
 
-            if (type === 'App\\Models\\Teacher') {
-                userSelect.style.display = 'none';
-                userSelect.name = '';
-                teacherSelect.style.display = 'block';
-                teacherSelect.name = 'recipient_id';
-            } else {
-                teacherSelect.style.display = 'none';
-                teacherSelect.name = '';
-                userSelect.style.display = 'block';
-                userSelect.name = 'recipient_id';
+                    if (this.recipientType === 'App\\Models\\Teacher') {
+                        userSelect.name = '';
+                        teacherSelect.name = 'recipient_id';
+                    } else {
+                        teacherSelect.name = '';
+                        userSelect.name = 'recipient_id';
+                    }
+                    this.selectedRole = '';
+                    this.filterByRole();
+                },
+                filterByRole() {
+                    var select = document.getElementById('recipient_user');
+                    var role = this.selectedRole;
+                    var options = select.querySelectorAll('option[data-roles]');
+
+                    options.forEach(function(opt) {
+                        var roles = opt.getAttribute('data-roles') || '';
+                        if (!role || roles.split(',').indexOf(role) !== -1) {
+                            opt.style.display = '';
+                        } else {
+                            opt.style.display = 'none';
+                            if (opt.selected) {
+                                select.value = '';
+                            }
+                        }
+                    });
+                },
+                init() {
+                    this.onTypeChange();
+                }
             }
         }
-        document.addEventListener('DOMContentLoaded', toggleRecipientList);
     </script>
     @endpush
 </x-app-layout>

@@ -8,9 +8,9 @@ return [
     'logout' => 'Chiqish',
 
     // Tabs
-    'inbox' => 'Kelgan xabarlar',
+    'inbox' => 'Kelgan',
     'sent' => "Jo'natilgan",
-    'drafts' => 'Qoralamalar',
+    'drafts' => 'Qoralama',
 
     // Actions
     'compose' => 'Yangi xabar',

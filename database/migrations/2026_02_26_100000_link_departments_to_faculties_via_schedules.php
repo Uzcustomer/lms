@@ -7,41 +7,73 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Kafedralarni fakultetlarga bog'lash: schedules jadvalidan faculty_id va department_id
-     * ma'lumotlarini olib, departments jadvalidagi parent_id ni yangilash.
+     * Kafedralarni fakultetlarga bog'lash (rasmda ko'rsatilgan tarkib asosida).
+     *
+     * 1-son Davolash fakulteti: 5 ta kafedra
+     * 2-son Davolash fakulteti: 5 ta kafedra
+     * Pediatriya fakulteti: 5 ta kafedra
+     * Xalqaro ta'lim fakulteti: 4 ta kafedra
      */
     public function up(): void
     {
-        if (!Schema::hasTable('schedules') || !Schema::hasTable('departments')) {
+        if (!Schema::hasTable('departments')) {
             return;
         }
 
-        // Schedules jadvalidan kafedra-fakultet bog'lanishini olish
-        $mappings = DB::table('schedules')
-            ->select('department_id', 'faculty_id')
-            ->whereNotNull('department_id')
-            ->whereNotNull('faculty_id')
-            ->where('department_id', '>', 0)
-            ->where('faculty_id', '>', 0)
-            ->distinct()
-            ->get()
-            ->unique('department_id');
+        // Fakultet -> kafedra nomlari (LIKE pattern orqali topiladi)
+        $mappings = [
+            // 1-SON DAVOLASH FAKULTETI
+            '1-son Davolash' => [
+                '%Akusherlik va ginekologiya%',
+                '%Ichki kasalliklar propedevtikasi%reabilitologiya%',
+                '%Ijtimoiy-gumanitar fanlar%',
+                '%Patologik anatomiya%sud tibbiyoti%',
+                '%Xirurgik kasalliklar%oilaviy shifokorlikda xirurgiya%',
+            ],
 
-        foreach ($mappings as $mapping) {
-            // Kafedrani topish
-            $kafedra = DB::table('departments')
-                ->where('department_hemis_id', $mapping->department_id)
-                ->first();
+            // 2-SON DAVOLASH FAKULTETI
+            '2-son Davolash' => [
+                '%Anatomiya va klinik anatomiya%',
+                '%Ichki kasalliklar%harbiy dala terapiyasi%gematologiya%',
+                '%Travmatologiya%ortopediya%harbiy dala jarrohligi%',
+                '%Umumiy xirurgiya%bolalar xirurgiyasi%urologiya%',
+                '%Yuqumli kasalliklar%dermatovenerologiya%',
+            ],
 
-            // Fakultetni topish
+            // PEDIATRIYA FAKULTETI
+            'Pediatriya' => [
+                '%Bolalar kasalliklari propedevtikasi%',
+                '%Mikrobiologiya%jamoat salomatligi%gigiyena%',
+                '%Normal va patologik fiziologiya%',
+                '%Otorinolaringologiya%oftalmologiya%onkologiya%',
+                '%Tibbiy psixologiya%nevrologiya%psixiatriya%',
+            ],
+
+            // XALQARO TA'LIM FAKULTETI
+            'Xalqaro' => [
+                '%Farmakologiya va klinik farmakologiya%',
+                '%zbek va xorijiy tillar%',
+                '%Tibbiy biologiya va gistologiya%',
+                '%Tibbiy va biologik kimyo%',
+            ],
+        ];
+
+        foreach ($mappings as $facultyPattern => $kafedraPatterns) {
+            // Fakultetni topish (structure_type_code = '11')
             $faculty = DB::table('departments')
-                ->where('department_hemis_id', $mapping->faculty_id)
                 ->where('structure_type_code', '11')
+                ->where('name', 'LIKE', "%{$facultyPattern}%")
                 ->first();
 
-            if ($kafedra && $faculty) {
+            if (!$faculty) {
+                continue;
+            }
+
+            // Har bir kafedrani fakultetga bog'lash
+            foreach ($kafedraPatterns as $pattern) {
                 DB::table('departments')
-                    ->where('id', $kafedra->id)
+                    ->where('name', 'LIKE', $pattern)
+                    ->where('structure_type_code', '!=', '11')
                     ->update(['parent_id' => $faculty->department_hemis_id]);
             }
         }
@@ -49,7 +81,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        // parent_id larni tozalash
         if (Schema::hasTable('departments')) {
             DB::table('departments')
                 ->where('structure_type_code', '!=', '11')

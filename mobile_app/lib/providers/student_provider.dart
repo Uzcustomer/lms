@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../services/student_service.dart';
 import '../services/api_service.dart';
@@ -14,6 +15,7 @@ class StudentProvider extends ChangeNotifier {
   List<dynamic>? _subjects;
   Map<String, dynamic>? _attendance;
   List<dynamic>? _pendingLessons;
+  List<dynamic>? _excuseRequests;
 
   StudentProvider(this._service);
 
@@ -25,6 +27,7 @@ class StudentProvider extends ChangeNotifier {
   List<dynamic>? get subjects => _subjects;
   Map<String, dynamic>? get attendance => _attendance;
   List<dynamic>? get pendingLessons => _pendingLessons;
+  List<dynamic>? get excuseRequests => _excuseRequests;
 
   Future<void> loadDashboard() async {
     _isLoading = true;
@@ -125,6 +128,41 @@ class StudentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> loadExcuseRequests() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _service.getExcuseRequests();
+      _excuseRequests = response['data'] as List<dynamic>?;
+    } on ApiException catch (e) {
+      _error = e.message;
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> createExcuseRequest({
+    required String type,
+    required String subjectName,
+    required String reason,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final response = await _service.createExcuseRequest(
+      type: type,
+      subjectName: subjectName,
+      reason: reason,
+      fileBytes: fileBytes,
+      fileName: fileName,
+    );
+    // Reload excuse requests after creating
+    await loadExcuseRequests();
+    return response;
+  }
+
   Future<Map<String, dynamic>> saveTelegram(String telegramUsername) async {
     final response = await _service.saveTelegram(telegramUsername);
     return response;
@@ -142,6 +180,7 @@ class StudentProvider extends ChangeNotifier {
     _subjects = null;
     _attendance = null;
     _pendingLessons = null;
+    _excuseRequests = null;
     notifyListeners();
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import '../config/api_config.dart';
 import 'api_service.dart';
 
@@ -51,5 +52,28 @@ class StudentService {
 
   Future<Map<String, dynamic>> checkTelegramVerification() async {
     return await _api.get(ApiConfig.studentCheckTelegram);
+  }
+
+  Future<Map<String, dynamic>> getExcuseRequests() async {
+    return await _api.get(ApiConfig.studentExcuseRequests);
+  }
+
+  Future<Map<String, dynamic>> createExcuseRequest({
+    required String type,
+    required String subjectName,
+    required String reason,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    return await _api.uploadFileWithFields(
+      ApiConfig.studentExcuseRequests,
+      fileBytes: fileBytes,
+      fileName: fileName,
+      fields: {
+        'type': type,
+        'subject_name': subjectName,
+        'reason': reason,
+      },
+    );
   }
 }

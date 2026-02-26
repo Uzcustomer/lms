@@ -44,6 +44,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/pending-lessons', [StudentApiController::class, 'pendingLessons']);
             Route::get('/attendance', [StudentApiController::class, 'attendance']);
 
+            // Sababli ariza (excuse requests)
+            Route::get('/excuse-requests', [StudentApiController::class, 'excuseRequests']);
+            Route::post('/excuse-requests', [StudentApiController::class, 'createExcuseRequest']);
+
             // Profile completion
             Route::post('/complete-profile/phone', [StudentApiController::class, 'savePhone']);
             Route::post('/complete-profile/telegram', [StudentApiController::class, 'saveTelegram']);

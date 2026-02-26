@@ -43,9 +43,6 @@ class DocumentTemplateService
         // PhpWord TemplateProcessor
         $processor = new TemplateProcessor($templatePath);
 
-        // Word bo'laklarga bo'lgan makrolarni tuzatish (${m_num} → ${m_} {num} kabi buzilishlar)
-        $this->fixBrokenTemplateMacros($processor);
-
         // Matn placeholder'larni almashtirish
         $processor->setValue('student_name', $excuse->student_full_name);
         $processor->setValue('student_hemis_id', $excuse->student_hemis_id);
@@ -75,32 +72,24 @@ class DocumentTemplateService
                 'test' => 'YN (Test)',
             ];
 
-            try {
-                $processor->cloneRow('m_num', $makeupCount);
+            $processor->cloneRow('m_num', $makeupCount);
 
-                foreach ($makeups->values() as $i => $makeup) {
-                    $idx = $i + 1;
-                    $processor->setValue("m_num#{$idx}", (string) $idx);
-                    $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
-                    $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
+            foreach ($makeups->values() as $i => $makeup) {
+                $idx = $i + 1;
+                $processor->setValue("m_num#{$idx}", (string) $idx);
+                $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
+                $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
 
-                    if ($makeup->makeup_date) {
-                        $makeupDateStr = $makeup->makeup_date->format('d.m.Y');
-                    } else {
-                        $makeupDateStr = 'Belgilanmagan';
-                    }
-                    $processor->setValue("m_date#{$idx}", $makeupDateStr);
+                // Sana formati
+                if ($makeup->makeup_date) {
+                    $makeupDateStr = $makeup->makeup_date->format('d.m.Y');
+                } else {
+                    $makeupDateStr = 'Belgilanmagan';
                 }
-            } catch (\Throwable $e) {
-                // cloneRow ishlamadi — placeholder markup buzilgan
-                // Jadval placeholder'larini tozalash
-                \Log::warning('cloneRow failed: ' . $e->getMessage());
-                $processor->setValue('m_num', '');
-                $processor->setValue('m_subject', '');
-                $processor->setValue('m_type', '');
-                $processor->setValue('m_date', '');
+                $processor->setValue("m_date#{$idx}", $makeupDateStr);
             }
         } else {
+            // Agar nazoratlar bo'lmasa placeholder'larni tozalash
             $processor->setValue('m_num', '');
             $processor->setValue('m_subject', '');
             $processor->setValue('m_type', '');
@@ -291,74 +280,6 @@ class DocumentTemplateService
         }
 
         $zip->close();
-    }
-
-    /**
-     * Word shablon ichidagi buzilgan ${...} makrolarni tuzatish
-     *
-     * Word ko'pincha ${m_num} ni bo'laklarga ajratadi:
-     *   <w:t>${m_</w:t></w:r><w:r><w:t>num}</w:t>
-     * yoki hatto:
-     *   <w:t>$</w:t></w:r><w:r><w:t>{m_num}</w:t>
-     *
-     * PhpWord fixBrokenMacros() buni har doim ham tuzatmaydi.
-     * Bu metod Reflection orqali XML ga kirib, buzilgan makrolarni birlashtiradi.
-     */
-    private function fixBrokenTemplateMacros(TemplateProcessor $processor): void
-    {
-        $reflection = new \ReflectionClass($processor);
-        $property = $reflection->getProperty('tempDocumentMainPart');
-        $property->setAccessible(true);
-
-        $xml = $property->getValue($processor);
-        $xml = $this->mergeBrokenMacros($xml);
-        $property->setValue($processor, $xml);
-
-        // Header/footer'larni ham tuzatish
-        try {
-            $headersProp = $reflection->getProperty('tempDocumentHeaders');
-            $headersProp->setAccessible(true);
-            $headers = $headersProp->getValue($processor);
-            foreach ($headers as $key => $header) {
-                $headers[$key] = $this->mergeBrokenMacros($header);
-            }
-            $headersProp->setValue($processor, $headers);
-        } catch (\Throwable $e) {
-            // Header yo'q bo'lsa e'tibor bermaslik
-        }
-    }
-
-    /**
-     * XML ichidagi bo'lingan ${...} makrolarni birlashtirish
-     */
-    private function mergeBrokenMacros(string $xml): string
-    {
-        // Run break pattern: </w:t> ... </w:r><w:r...><w:rPr?>... <w:t...>
-        // Bu pattern makro ichida paydo bo'lsa, olib tashlaymiz
-        $runBreak = '<\/w:t>\s*(?:<\/w:r>\s*<w:r\b[^>]*>\s*(?:<w:rPr\b[^>]*\/>\s*|<w:rPr\b[^>]*>.*?<\/w:rPr>\s*)?)?<w:t\b[^>]*>';
-
-        // 1-qadam: $ va { orasidagi run break'ni olib tashlash
-        $xml = preg_replace(
-            '#(\$)' . $runBreak . '(\{)#su',
-            '$1$2',
-            $xml
-        ) ?? $xml;
-
-        // 2-qadam: ${ va } orasidagi run break'larni takroriy olib tashlash
-        for ($i = 0; $i < 15; $i++) {
-            $before = $xml;
-            $xml = preg_replace(
-                '#(\$\{(?:[^}<])*?)' . $runBreak . '([^<]*?\})#su',
-                '$1$2',
-                $xml
-            ) ?? $before;
-
-            if ($xml === $before) {
-                break;
-            }
-        }
-
-        return $xml;
     }
 
     /**

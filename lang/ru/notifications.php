@@ -31,6 +31,7 @@ return [
     'subject_placeholder' => 'Введите тему сообщения',
     'body' => 'Текст',
     'body_placeholder' => 'Введите текст сообщения...',
+    'search_placeholder' => 'Поиск сообщений...',
     'from' => 'От кого',
     'to' => 'Кому',
     'date' => 'Дата',

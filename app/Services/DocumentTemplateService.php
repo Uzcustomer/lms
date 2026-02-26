@@ -85,13 +85,7 @@ class DocumentTemplateService
                     $processor->setValue("m_num#{$idx}", (string) $idx);
                     $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
                     $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
-
-                    if ($makeup->makeup_date) {
-                        $makeupDateStr = $makeup->makeup_date->format('d.m.Y');
-                    } else {
-                        $makeupDateStr = 'Belgilanmagan';
-                    }
-                    $processor->setValue("m_date#{$idx}", $makeupDateStr);
+                    $processor->setValue("m_date#{$idx}", $this->formatMakeupDateRange($makeup));
                 }
             } catch (\Throwable $e) {
                 \Log::warning('cloneRow failed, using manual XML row cloning: ' . $e->getMessage());
@@ -358,6 +352,15 @@ class DocumentTemplateService
             }
         }
 
+        // 3-qadam: ${m_num } kabi ichidagi bo'sh joylarni tozalash → ${m_num}
+        $xml = preg_replace_callback(
+            '#\x24\x7B([^<\x7D]+)\x7D#u',
+            function ($m) {
+                return '${' . trim($m[1]) . '}';
+            },
+            $xml
+        ) ?? $xml;
+
         return $xml;
     }
 
@@ -398,11 +401,7 @@ class DocumentTemplateService
             $row = $templateRow;
 
             // Placeholder'larni almashtirish — str_replace ishlatamiz (regex emas)
-            if ($makeup->makeup_date) {
-                $dateStr = $makeup->makeup_date->format('d.m.Y');
-            } else {
-                $dateStr = 'Belgilanmagan';
-            }
+            $dateStr = $this->formatMakeupDateRange($makeup);
 
             $row = str_replace(
                 ['${m_num}', '${m_subject}', '${m_type}', '${m_date}'],
@@ -423,6 +422,24 @@ class DocumentTemplateService
         $property->setValue($processor, $xml);
 
         \Log::info('manualCloneRow: successfully cloned ' . $makeups->count() . ' rows');
+    }
+
+    /**
+     * Makeup sana yoki range ni formatlash: "26.02.2026" yoki "26.02.2026 — 02.03.2026"
+     */
+    private function formatMakeupDateRange($makeup): string
+    {
+        if (!$makeup->makeup_date) {
+            return 'Belgilanmagan';
+        }
+
+        $start = $makeup->makeup_date->format('d.m.Y');
+
+        if ($makeup->makeup_end_date) {
+            return $start . ' — ' . $makeup->makeup_end_date->format('d.m.Y');
+        }
+
+        return $start;
     }
 
     /**

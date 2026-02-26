@@ -892,10 +892,6 @@
                 const today = new Date(); today.setHours(0,0,0,0);
                 const todayStr = this._toStr(today);
                 const maxDate = this.miniMaxDateStr;
-                // JN range for restricting others
-                const jnItem = this.assessments.find(a => a.assessment_type === 'jn');
-                const jnStart = jnItem?.makeup_start || '';
-                const jnEnd = jnItem?.makeup_end || '';
                 for (let i = 0; i < startWd; i++) {
                     cells.push({ key: 'e' + i, date: null, day: '', disabled: true });
                 }
@@ -904,18 +900,12 @@
                     const ds = this._toStr(dt);
                     const isSun = dt.getDay() === 0;
                     const isPast = dt < today;
-                    // Period-length cheklovi: bugundan boshlab totalDays ta yakshanbasiz kundan keyingilar disabled
                     const beyondLimit = maxDate ? ds > maxDate : false;
-                    // Non-JN: JN range dates are taken
-                    let takenByJn = false;
-                    if (item.assessment_type !== 'jn' && jnStart && jnEnd) {
-                        takenByJn = ds >= jnStart && ds <= jnEnd && !isSun;
-                    }
                     cells.push({
                         key: ds, date: dt, dateStr: ds, day: d,
                         isSunday: isSun, isToday: ds === todayStr,
-                        disabled: isPast || isSun || takenByJn || beyondLimit,
-                        takenByJn: takenByJn
+                        disabled: isPast || isSun || beyondLimit,
+                        takenByJn: false
                     });
                 }
                 return cells;
@@ -937,14 +927,6 @@
                         item.makeup_end = dateStr;
                         item.jn_selecting = 'start';
                         item.show_cal = false;
-                        // JN range o'zgarganda, ichiga tushgan boshqa testlar tozalanadi
-                        this.assessments.forEach(a => {
-                            if (a.assessment_type !== 'jn' && a.makeup_date) {
-                                if (a.makeup_date >= item.makeup_start && a.makeup_date <= item.makeup_end) {
-                                    a.makeup_date = '';
-                                }
-                            }
-                        });
                     }
                 } else {
                     item.makeup_date = item.makeup_date === dateStr ? '' : dateStr;

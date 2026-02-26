@@ -41,15 +41,16 @@ class DocumentTemplate extends Model
                 '${review_date}' => 'Ko\'rib chiqilgan sana (01.01.2026)',
                 '${review_date_full}' => 'Sana to\'liq (2026 yil 1-yanvar)',
                 '${reviewer_name}' => 'Ko\'rib chiquvchi ismi',
-                '${order_number}' => 'Buyruq raqami (08-00001)',
                 '${academic_year}' => 'O\'quv yili (2025.2026)',
                 '${qr_code}' => 'QR kod rasmi (rasm sifatida)',
                 '${verification_url}' => 'Tekshirish URL manzili',
                 // Nazoratlar jadvali (Word jadvalda cloneRow bilan ishlaydi)
-                '${m_num}' => 'Nazorat tartib raqami (1, 2, 3...)',
-                '${m_subject}' => 'Fan nomi',
-                '${m_type}' => 'Nazorat turi (Joriy nazorat, YN (OSKE), ...)',
-                '${m_date}' => 'Qayta topshirish sanasi (01.01.2026 yoki 01.01.2026 — 05.01.2026)',
+                // Bitta fan uchun bir nechta nazorat bo'lsa, bitta qatorda ko'rsatiladi
+                '${order_number}' => 'Jadvalda: T/r (1, 2, 3...), Matndа: Buyruq raqami (08-00001)',
+                '${subject_name}' => 'Fan nomi',
+                '${test_type}' => 'Nazorat turi (JN, YN(Test), YN(OSKE), ...)',
+                '${test_date_period}' => 'Qayta topshirish muddati (03.11.2025 dan 07.11.2025 gacha)',
+                '${test_single_date}' => 'Qayta topshirish sanasi (08.11.2025)',
             ],
         ],
     ];

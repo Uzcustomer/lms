@@ -1295,7 +1295,7 @@ class KtrController extends Controller
         // Ustun kengliklari
         $haftaW = 700;
         $kunlariW = 1600;
-        $soatEachW = 700;
+        $soatEachW = 1000;
         $soatTotalW = $soatEachW * $typeCount;
         $mavzuW = 14000 - $haftaW - $kunlariW - $soatTotalW;
         if ($mavzuW < 3000) $mavzuW = 3000;
@@ -1328,10 +1328,9 @@ class KtrController extends Controller
         $table->addCell($kunlariW, array_merge($cellBorder, ['vMerge' => 'continue']));
         $table->addCell($mavzuW, array_merge($cellBorder, ['vMerge' => 'continue']));
         foreach ($typeCodes as $code) {
-            // Qisqa nom (Ma'ruza, Amaliy, ...)
             $shortName = $filteredTypes[$code]['name'];
-            $table->addCell($soatEachW, array_merge($cellBorder, ['textDirection' => 'btLr']))
-                ->addText($shortName, $hBold, $cp);
+            $table->addCell($soatEachW, $cellBorder)
+                ->addText($shortName, ['bold' => true, 'size' => 8], $cp);
         }
 
         // ---- MA'LUMOTLAR QATORLARI ----

@@ -211,12 +211,55 @@ class ImportGrades extends Command
     // =========================================================================
     private function handleFinalImport()
     {
+        // Final import ko'p xotira ishlatadi (7 kunlik API ma'lumotlari) — OOM oldini olish
+        $currentLimit = trim(ini_get('memory_limit'));
+        if ($currentLimit !== '-1') {
+            ini_set('memory_limit', '512M');
+        }
+
         // Reporter faqat mustaqil chaqirilganda boshlanadi,
         // SendAttendanceFinalDailyReport dan chaqirilganda reporter allaqachon boshqarilmoqda
         $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
 
         $this->info('Starting FINAL import...');
         Log::info('[FinalImport] Starting at ' . Carbon::now());
+
+        // Crash detection: agar process o'lib qolsa (OOM, fatal error),
+        // Telegram ga xabar yuboriladi
+        $crashDetected = true; // sendProgressDone() dan keyin false bo'ladi
+        $shutdownChatId = config('services.telegram.chat_id');
+        $shutdownMsgId = &$this->telegramProgressMsgId;
+        $shutdownDayStatuses = &$this->dayStatuses;
+        $shutdownStartTime = &$this->importStartTime;
+        register_shutdown_function(function () use (&$crashDetected, $shutdownChatId, &$shutdownMsgId, &$shutdownDayStatuses, &$shutdownStartTime) {
+            if (!$crashDetected) return;
+
+            $error = error_get_last();
+            $errorMsg = $error ? "{$error['type']}: {$error['message']}" : 'process killed';
+            Log::critical("[FinalImport] CRASH detected in shutdown handler: {$errorMsg}");
+
+            if (!$shutdownMsgId || !$shutdownChatId) return;
+
+            try {
+                $elapsed = $shutdownStartTime ? round((microtime(true) - $shutdownStartTime) / 60, 1) : 0;
+                $lines = [];
+                foreach ($shutdownDayStatuses as $d => $s) {
+                    $label = (strlen($d) === 10 && ($d[4] ?? '') === '-') ? substr($d, 5) : $d;
+                    $lines[] = "{$label} {$s}";
+                }
+
+                $msg = "💀 FINAL import CRASH\n"
+                     . Carbon::now()->format('d.m.Y H:i') . "\n\n"
+                     . implode("\n", $lines) . "\n\n"
+                     . "❌ Process o'lib qoldi\n"
+                     . "⏱ {$elapsed} daq\n\n"
+                     . "Sabab: " . substr($errorMsg, 0, 200);
+
+                app(TelegramService::class)->editMessage($shutdownChatId, $shutdownMsgId, $msg);
+            } catch (\Throwable $e) {
+                // Shutdown handler ichida exception tashlash xavfli
+            }
+        });
 
         // Oxirgi 7 kunni tekshirish (bugundan tashqari)
         // LIVE importga bog'liq emas — har bir kunni mustaqil tekshiramiz
@@ -381,7 +424,9 @@ class ImportGrades extends Command
                 if ($reporter) {
                     $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), bazaga yozilmoqda " . count($gradeItems) . " ta yozuv...");
                 }
+                $gradeCount = count($gradeItems);
                 $this->applyGrades($gradeItems, $date, true);
+                unset($gradeItems); // Xotirani bo'shatish — keyingi kun uchun joy
 
                 // Attendance
                 if ($reporter) {
@@ -389,7 +434,7 @@ class ImportGrades extends Command
                 }
                 $this->importDayAttendance($dateStr, $date, true);
 
-                $this->updateDayProgress($dateStr, '✅', count($gradeItems) . " ta baho", $dayNum, $originalTotal);
+                $this->updateDayProgress($dateStr, '✅', "{$gradeCount} ta baho", $dayNum, $originalTotal);
                 $successDays++;
                 $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
             } catch (\Throwable $e) {
@@ -475,6 +520,7 @@ class ImportGrades extends Command
         ];
 
         $this->sendProgressDone('final', $successDays, $originalTotal, $failedDays);
+        $crashDetected = false; // Normal tugatish — shutdown handler ishlamasligi kerak
         $this->sendTelegramReport();
         Log::info("[FinalImport] Completed at " . Carbon::now() . ": {$successDays}/{$totalDays} days finalized.");
 
@@ -638,7 +684,10 @@ class ImportGrades extends Command
                             $skippedByFilter += $beforeCount - count($data);
                         }
 
-                        $allItems = array_merge($allItems, $data);
+                        // array_merge o'rniga push — xotira tejash (har merge da yangi massiv yaratilmaydi)
+                        foreach ($data as $item) {
+                            $allItems[] = $item;
+                        }
                         $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
                         $this->info("Fetched {$endpoint} page {$currentPage}/{$totalPages}");
                         if ($reporter) {

@@ -200,13 +200,15 @@ class ImportGrades extends Command
             ->count();
 
         $elapsed = round((microtime(true) - $liveStartTime) / 60, 1);
-        $this->sendDailyLiveReport($gradeCount, $nbCount, $gradeError, $attendanceError, $elapsed);
 
-        // Live import muvaffaqiyatini cache ga yozish (guruh hisoboti uchun)
+        // Cache ni AVVAL yozish — sendDailyLiveReport crash qilsa ham data muvaffaqiyati saqlansin
         if (!$gradeError && !$attendanceError) {
             \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), now()->addHours(2));
         }
 
+        if (!$this->option('silent')) {
+            $this->sendDailyLiveReport($gradeCount, $nbCount, $gradeError, $attendanceError, $elapsed);
+        }
         Log::info('[LiveImport] Completed at ' . Carbon::now());
     }
 
@@ -1459,7 +1461,12 @@ class ImportGrades extends Command
         }
 
         // Holatni saqlash
-        file_put_contents($stateFile, json_encode($state));
+        try {
+            file_put_contents($stateFile, json_encode($state));
+        } catch (\Throwable $e) {
+            Log::warning("[LiveImport] telegram_live_daily.json yozishda xato: {$e->getMessage()}");
+            $this->warn("State fayl yozishda xato (hisobot davom etadi): {$e->getMessage()}");
+        }
 
         // Console uchun ham chiqarish
         $this->info($line);

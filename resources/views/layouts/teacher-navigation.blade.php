@@ -151,6 +151,175 @@
                 {{--                </div>--}}
             </div>
 
+            <!-- Notification Bell -->
+            <div class="hidden sm:flex sm:items-center sm:ms-4" x-data="notificationBell()" x-init="init()">
+                <div class="relative">
+                    <button @click="toggleDropdown()" class="relative p-2 text-gray-500 hover:text-gray-700 focus:outline-none transition duration-150 ease-in-out">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                        </svg>
+                        <span x-show="unreadCount > 0" x-text="unreadCount > 9 ? '9+' : unreadCount"
+                              class="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full min-w-[18px]"
+                              x-cloak></span>
+                    </button>
+
+                    <!-- Dropdown -->
+                    <div x-show="showDropdown" @click.away="showDropdown = false"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-75"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         class="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden"
+                         x-cloak>
+                        <!-- Header -->
+                        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                            <h3 class="text-sm font-semibold text-gray-700">Xabarnomalar</h3>
+                            <button x-show="unreadCount > 0" @click="markAllRead()" class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                Barchasini o'qilgan qilish
+                            </button>
+                        </div>
+                        <!-- List -->
+                        <div class="max-h-80 overflow-y-auto">
+                            <template x-if="notifications.length === 0">
+                                <div class="px-4 py-8 text-center text-gray-400 text-sm">
+                                    Xabarnomalar yo'q
+                                </div>
+                            </template>
+                            <template x-for="n in notifications" :key="n.id">
+                                <div @click="openNotification(n)"
+                                     :class="n.is_read ? 'bg-white' : 'bg-blue-50'"
+                                     class="px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition">
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex-shrink-0 mt-0.5">
+                                            <span :class="n.is_read ? 'bg-gray-300' : 'bg-blue-500'" class="inline-block w-2 h-2 rounded-full"></span>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-medium text-gray-900 truncate" x-text="n.title"></p>
+                                            <p class="text-xs text-gray-600 mt-0.5" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" x-text="n.message"></p>
+                                            <p class="text-xs text-gray-400 mt-1" x-text="n.created_at"></p>
+                                        </div>
+                                        <!-- Tasdiqlash/Rad etish tugmalari -->
+                                        <template x-if="n.data && n.data.approval_id && !n.is_read">
+                                            <div class="flex-shrink-0 flex gap-1" @click.stop>
+                                                <button @click="approveRequest(n, 'approved')"
+                                                        class="px-2 py-1 text-xs font-medium text-white bg-green-500 rounded hover:bg-green-600 transition">
+                                                    Tasdiqlash
+                                                </button>
+                                                <button @click="approveRequest(n, 'rejected')"
+                                                        class="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition">
+                                                    Rad etish
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>[x-cloak] { display: none !important; }</style>
+            <script>
+                function notificationBell() {
+                    return {
+                        showDropdown: false,
+                        unreadCount: 0,
+                        notifications: [],
+                        pollInterval: null,
+
+                        init() {
+                            this.fetchUnreadCount();
+                            this.pollInterval = setInterval(() => this.fetchUnreadCount(), 30000);
+                        },
+
+                        fetchUnreadCount() {
+                            fetch('/teacher/notifications/unread-count')
+                                .then(r => r.json())
+                                .then(data => { this.unreadCount = data.count; })
+                                .catch(() => {});
+                        },
+
+                        toggleDropdown() {
+                            this.showDropdown = !this.showDropdown;
+                            if (this.showDropdown) {
+                                this.fetchNotifications();
+                            }
+                        },
+
+                        fetchNotifications() {
+                            fetch('/teacher/notifications/list')
+                                .then(r => r.json())
+                                .then(data => {
+                                    this.notifications = data.notifications;
+                                    this.unreadCount = data.unread_count;
+                                })
+                                .catch(() => {});
+                        },
+
+                        openNotification(n) {
+                            if (!n.is_read) {
+                                fetch('/teacher/notifications/' + n.id + '/read', {
+                                    method: 'POST',
+                                    headers: {
+                                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                        'Content-Type': 'application/json'
+                                    }
+                                }).then(() => {
+                                    n.is_read = true;
+                                    this.unreadCount = Math.max(0, this.unreadCount - 1);
+                                });
+                            }
+                        },
+
+                        markAllRead() {
+                            fetch('/teacher/notifications/mark-all-read', {
+                                method: 'POST',
+                                headers: {
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                    'Content-Type': 'application/json'
+                                }
+                            }).then(() => {
+                                this.notifications.forEach(n => n.is_read = true);
+                                this.unreadCount = 0;
+                            });
+                        },
+
+                        approveRequest(n, status) {
+                            if (!n.data || !n.data.approval_id) return;
+                            var approvalId = n.data.approval_id;
+                            fetch('/admin/ktr/change-approve/' + approvalId, {
+                                method: 'POST',
+                                headers: {
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ status: status })
+                            }).then(r => r.json()).then(data => {
+                                if (data.success) {
+                                    // O'qilgan deb belgilash
+                                    fetch('/teacher/notifications/' + n.id + '/read', {
+                                        method: 'POST',
+                                        headers: {
+                                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                                            'Content-Type': 'application/json'
+                                        }
+                                    });
+                                    n.is_read = true;
+                                    this.unreadCount = Math.max(0, this.unreadCount - 1);
+                                    n.message = status === 'approved' ? 'Siz tasdiqladingiz' : 'Siz rad etdingiz';
+                                    alert(data.message);
+                                } else {
+                                    alert(data.message || 'Xatolik yuz berdi');
+                                }
+                            }).catch(() => alert('Xatolik yuz berdi'));
+                        }
+                    };
+                }
+            </script>
+
             <!-- Settings Dropdown -->
             <div class="hidden sm:flex sm:items-center sm:ms-6">
                 <x-dropdown align="right" width="48">

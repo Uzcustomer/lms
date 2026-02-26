@@ -625,7 +625,7 @@
                 html += '<div class="ktr-change-title" style="color:#059669;">Barcha tasdiqlar olingan!</div>';
                 html += '<div class="ktr-change-desc">Endi "O\'zgartirish" tugmasini bosib tahrirlashingiz mumkin.</div>';
             } else {
-                html += '<div class="ktr-change-title">O\'zgartirish so\'rovi holati</div>';
+                html += '<div class="ktr-change-title">Ruxsat holati</div>';
             }
             var info = ktrState.approverInfo;
             if (info.faculty_name || info.kafedra_name) {

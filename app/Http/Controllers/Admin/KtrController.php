@@ -12,6 +12,7 @@ use App\Models\KtrChangeRequest;
 use App\Models\KtrPlan;
 use App\Models\Teacher;
 use App\Models\Notification;
+use App\Models\TeacherNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -1038,10 +1039,14 @@ class KtrController extends Controller
                 'registrator_ofisi' => 'Registrator ofisi',
             ];
 
-            // Xabarnoma yuborilgan ID larni kuzatish (duplikatdan saqlash)
+            $hasTeacherNotifications = Schema::hasTable('teacher_notifications');
+
+            // Bitta xodimga bitta xabarnoma (duplikatdan saqlash)
             $notifiedIds = [];
 
             foreach ($cr->approvals as $approval) {
+                $roleName = $roleNames[$approval->role] ?? $approval->role;
+
                 if ($approval->role === 'registrator_ofisi') {
                     // Registrator ofisi - HAMMA xodimlarga xabarnoma yuborish
                     $registrators = $approverInfo['registrators'] ?? [];
@@ -1049,13 +1054,14 @@ class KtrController extends Controller
                         if (!$registrator['id'] || in_array($registrator['id'], $notifiedIds)) {
                             continue;
                         }
-                        Notification::create([
+
+                        $notification = Notification::create([
                             'sender_id' => $senderId,
                             'sender_type' => $senderType,
                             'recipient_id' => $registrator['id'],
                             'recipient_type' => Teacher::class,
                             'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                            'body' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz Registrator ofisi sifatida tasdiqlashingiz kerak.",
+                            'body' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
                             'type' => Notification::TYPE_ALERT,
                             'data' => [
                                 'action' => 'ktr_change_approval',
@@ -1068,6 +1074,23 @@ class KtrController extends Controller
                             'is_draft' => false,
                             'sent_at' => now(),
                         ]);
+
+                        // Teacher notification panelida ham ko'rsatish (qaysi rolda tursa ham ko'radi)
+                        if ($hasTeacherNotifications) {
+                            TeacherNotification::create([
+                                'teacher_id' => $registrator['id'],
+                                'type' => 'ktr_approval',
+                                'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                                'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish ruxsatini so'ramoqda.",
+                                'link' => route('admin.notifications.show', $notification->id),
+                                'data' => [
+                                    'action' => 'ktr_change_approval',
+                                    'approval_id' => $approval->id,
+                                    'notification_id' => $notification->id,
+                                ],
+                            ]);
+                        }
+
                         $notifiedIds[] = $registrator['id'];
                     }
                 } else {
@@ -1076,9 +1099,7 @@ class KtrController extends Controller
                         continue;
                     }
 
-                    $roleName = $roleNames[$approval->role] ?? $approval->role;
-
-                    Notification::create([
+                    $notification = Notification::create([
                         'sender_id' => $senderId,
                         'sender_type' => $senderType,
                         'recipient_id' => $approval->approver_id,
@@ -1097,6 +1118,23 @@ class KtrController extends Controller
                         'is_draft' => false,
                         'sent_at' => now(),
                     ]);
+
+                    // Teacher notification panelida ham ko'rsatish (qaysi rolda tursa ham ko'radi)
+                    if ($hasTeacherNotifications) {
+                        TeacherNotification::create([
+                            'teacher_id' => $approval->approver_id,
+                            'type' => 'ktr_approval',
+                            'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                            'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish ruxsatini so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
+                            'link' => route('admin.notifications.show', $notification->id),
+                            'data' => [
+                                'action' => 'ktr_change_approval',
+                                'approval_id' => $approval->id,
+                                'notification_id' => $notification->id,
+                            ],
+                        ]);
+                    }
+
                     $notifiedIds[] = $approval->approver_id;
                 }
             }

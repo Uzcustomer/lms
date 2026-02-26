@@ -10,10 +10,13 @@ use App\Models\ExamTest;
 use App\Models\OraliqNazorat;
 use App\Models\Oski;
 use App\Models\Schedule;
+use App\Models\User;
+use App\Notifications\NewAbsenceExcuseNotification;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 class AbsenceExcuseController extends Controller
 {
@@ -226,6 +229,14 @@ class AbsenceExcuseController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
             return back()->withErrors(['error' => $e->getMessage()])->withInput();
+        }
+
+        // Admin va registrator ofislariga notification yuborish
+        try {
+            $admins = User::role(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'])->get();
+            Notification::send($admins, new NewAbsenceExcuseNotification($excuse));
+        } catch (\Throwable $e) {
+            \Log::warning('Notification yuborishda xatolik: ' . $e->getMessage());
         }
 
         return redirect()

@@ -39,6 +39,13 @@ class AppServiceProvider extends ServiceProvider
 
         View::composer('components.admin-sidebar-menu', function ($view) {
             $view->with('pendingExcusesCount', AbsenceExcuse::where('status', 'pending')->count());
+
+            $user = auth()->user();
+            $unread = 0;
+            if ($user && method_exists($user, 'unreadNotifications')) {
+                $unread = $user->unreadNotifications()->count();
+            }
+            $view->with('unreadNotificationsCount', $unread);
         });
 
         if (env('APP_ENV', 'local') != 'local') {

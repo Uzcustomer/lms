@@ -32,7 +32,9 @@ return [
     'body' => 'Matn',
     'body_placeholder' => 'Xabar matnini kiriting...',
     'from' => 'Kimdan',
+    'to' => 'Kimga',
     'date' => 'Sana',
+    'type' => 'Turi',
     'system' => 'Tizim',
 
     // Types

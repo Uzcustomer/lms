@@ -333,12 +333,13 @@ class DocumentTemplateService
     private function mergeBrokenMacros(string $xml): string
     {
         // XML run break pattern: </w:t> ... <w:t>
-        $runBreak = '</w:t>.*?<w:t[^>]*>';
+        // # delimiter ishlatamiz chunki / XML ichida bor
+        $runBreak = '<\\/w:t>.*?<w:t[^>]*>';
 
         // 1-qadam: $ va { orasidagi run break'ni olib tashlash
         // $</w:t>...<w:t>{ => ${
         $xml = preg_replace(
-            '/\x24(' . $runBreak . ')\x7B/sU',
+            '#\x24(' . $runBreak . ')\x7B#sU',
             "\x24\x7B",
             $xml
         ) ?? $xml;
@@ -347,7 +348,7 @@ class DocumentTemplateService
         for ($i = 0; $i < 15; $i++) {
             $before = $xml;
             $xml = preg_replace(
-                '/(\x24\x7B[^\x7D<]*)' . $runBreak . '([^\x7D<]*\x7D)/sU',
+                '#(\x24\x7B[^\x7D<]*)' . $runBreak . '([^\x7D<]*\x7D)#sU',
                 '$1$2',
                 $xml
             ) ?? $before;

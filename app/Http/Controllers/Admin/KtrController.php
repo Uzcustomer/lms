@@ -981,20 +981,23 @@ class KtrController extends Controller
         ]);
 
         // Har bir tasdiqlash uchun yozuv
-        $approvers = [
-            ['role' => 'kafedra_mudiri', 'data' => $approverInfo['kafedra_mudiri']],
-            ['role' => 'dekan', 'data' => $approverInfo['dekan']],
-            ['role' => 'registrator_ofisi', 'data' => $approverInfo['registrator']],
-        ];
-
-        foreach ($approvers as $approver) {
+        // Kafedra mudiri va dekan - aniq shaxsga
+        foreach (['kafedra_mudiri' => $approverInfo['kafedra_mudiri'], 'dekan' => $approverInfo['dekan']] as $role => $data) {
             KtrChangeApproval::create([
                 'change_request_id' => $cr->id,
-                'role' => $approver['role'],
-                'approver_name' => $approver['data']['name'] ?? 'Topilmadi',
-                'approver_id' => $approver['data']['id'] ?? null,
+                'role' => $role,
+                'approver_name' => $data['name'] ?? 'Topilmadi',
+                'approver_id' => $data['id'] ?? null,
             ]);
         }
+
+        // Registrator ofisi - har qanday registrator xodimi tasdiqlashi mumkin
+        KtrChangeApproval::create([
+            'change_request_id' => $cr->id,
+            'role' => 'registrator_ofisi',
+            'approver_name' => 'Registrator ofisi xodimlari',
+            'approver_id' => null,
+        ]);
 
         $cr->load('approvals');
 

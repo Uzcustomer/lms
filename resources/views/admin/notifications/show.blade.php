@@ -64,26 +64,31 @@
                     @php
                         $changeRequestId = $notification->data['change_request_id'] ?? null;
                         $user = auth()->user();
-                        $userRoles = $user->getRoleNames()->toArray();
 
-                        // Joriy foydalanuvchiga tegishli barcha approval larni topish
+                        // Joriy foydalanuvchiga tegishli approval larni topish
                         $userApprovals = collect();
                         if ($changeRequestId) {
                             $allApprovals = \App\Models\KtrChangeApproval::where('change_request_id', $changeRequestId)->get();
                             foreach ($allApprovals as $appr) {
                                 $canAct = false;
-                                // Aniq approver_id orqali
-                                if ($appr->approver_id && $user->id == $appr->approver_id) {
-                                    $canAct = true;
+
+                                if ($appr->role === 'registrator_ofisi') {
+                                    // Registrator ofisi - rol orqali tekshirish (har qanday registrator tasdiqlashi mumkin)
+                                    if ($user->hasRole('registrator_ofisi')) {
+                                        $canAct = true;
+                                    }
+                                } else {
+                                    // Kafedra mudiri va dekan - faqat aniq tayinlangan shaxs
+                                    if ($appr->approver_id && $user->id == $appr->approver_id) {
+                                        $canAct = true;
+                                    }
                                 }
-                                // Rol orqali (registrator_ofisi, kafedra_mudiri, dekan)
-                                if (in_array($appr->role, $userRoles)) {
-                                    $canAct = true;
-                                }
+
                                 // Admin har doim
                                 if ($user->hasRole(['superadmin', 'admin'])) {
                                     $canAct = true;
                                 }
+
                                 if ($canAct) {
                                     $userApprovals->push($appr);
                                 }

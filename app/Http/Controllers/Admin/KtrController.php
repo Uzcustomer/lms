@@ -1153,13 +1153,21 @@ class KtrController extends Controller
 
         // Faqat tegishli rol egasi tasdiqlashi mumkin
         $canApprove = false;
-        if ($approval->approver_id && $user instanceof Teacher && $user->id == $approval->approver_id) {
-            $canApprove = true;
+
+        if ($approval->role === 'registrator_ofisi') {
+            // Registrator ofisi - registrator_ofisi roli bor xodim tasdiqlashi mumkin
+            if ($user->hasRole('registrator_ofisi')) {
+                $canApprove = true;
+            }
+        } else {
+            // Kafedra mudiri va dekan - faqat aniq tayinlangan shaxs
+            if ($approval->approver_id && $user instanceof Teacher && $user->id == $approval->approver_id) {
+                $canApprove = true;
+            }
         }
+
+        // Admin har doim tasdiqlashi mumkin
         if ($user->hasRole(['superadmin', 'admin'])) {
-            $canApprove = true;
-        }
-        if ($user->hasRole($approval->role)) {
             $canApprove = true;
         }
 
@@ -1172,10 +1180,18 @@ class KtrController extends Controller
             $status = 'approved';
         }
 
-        $approval->update([
+        $updateData = [
             'status' => $status,
             'responded_at' => now(),
-        ]);
+        ];
+
+        // Registrator ofisi tasdiqlaganda kim tasdiqlaganini saqlash
+        if ($approval->role === 'registrator_ofisi' && !$approval->approver_id) {
+            $updateData['approver_id'] = $user->id;
+            $updateData['approver_name'] = $user->full_name ?? $user->name ?? 'Noma\'lum';
+        }
+
+        $approval->update($updateData);
 
         // Agar rad etilsa, butun so'rovni ham rad etish
         $cr = $approval->changeRequest;
@@ -1183,9 +1199,20 @@ class KtrController extends Controller
             $cr->update(['status' => 'rejected']);
         }
 
+        // Barcha approval holatini qaytarish (jadval yangilanishi uchun)
+        $cr->load('approvals');
+
         return response()->json([
             'success' => true,
             'message' => $status === 'approved' ? 'Tasdiqlandi!' : 'Rad etildi.',
+            'approvals' => $cr->approvals->map(fn ($a) => [
+                'id' => $a->id,
+                'role' => $a->role,
+                'approver_name' => $a->approver_name,
+                'status' => $a->status,
+                'responded_at' => $a->responded_at?->format('d.m.Y H:i'),
+            ]),
+            'is_approved' => $cr->isFullyApproved(),
         ]);
     }
 }

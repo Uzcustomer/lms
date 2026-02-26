@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('ktr_change_requests')) {
+            return;
+        }
+
         Schema::create('ktr_change_requests', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('curriculum_subject_id');

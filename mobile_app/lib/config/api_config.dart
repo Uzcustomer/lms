@@ -25,9 +25,6 @@ class ApiConfig {
   static const String studentSaveTelegram = '/student/complete-profile/telegram';
   static const String studentCheckTelegram = '/student/complete-profile/telegram/check';
 
-  // Student excuse requests
-  static const String studentExcuseRequests = '/student/excuse-requests';
-
   // Teacher endpoints
   static const String teacherDashboard = '/teacher/dashboard';
   static const String teacherProfile = '/teacher/profile';

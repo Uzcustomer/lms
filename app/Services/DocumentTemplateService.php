@@ -56,75 +56,40 @@ class DocumentTemplateService
         $processor->setValue('review_date', $reviewDate->format('d.m.Y'));
         $processor->setValue('review_date_full', $reviewDate->format('Y') . ' yil ' . $reviewDate->format('j') . '-' . ($months[$reviewDate->month] ?? $reviewDate->format('F')));
         $processor->setValue('reviewer_name', $reviewerName);
+        $processor->setValue('order_number', '08-' . str_pad($excuse->id, 5, '0', STR_PAD_LEFT));
         $processor->setValue('academic_year', $academicYear);
         $processor->setValue('verification_url', route('absence-excuse.verify', $excuse->verification_token));
 
-        // Buyruq raqami — jadvaldan tashqarida (AVVAL o'rnatiladi, cloneRow dan oldin)
-        $processor->setValue('order_number', '08-' . str_pad($excuse->id, 5, '0', STR_PAD_LEFT));
-
-        // Nazoratlar jadvali
+        // Nazoratlar jadvali (cloneRow orqali)
         $makeups = $excuse->makeups()->orderBy('subject_name')->get();
-
-        $typeLabels = [
-            'jn' => 'JN',
-            'mt' => 'MT',
-            'oski' => 'YN(OSKE)',
-            'test' => 'YN(Test)',
-        ];
-
-        // Tartiblash: Test/OSKI/MT bo'lgan fanlar avval, faqat JN bo'lgan fanlar keyin
-        // Bir fan ichida JN birinchi, keyin boshqalar
-        $subjectTypes = [];
-        foreach ($makeups as $m) {
-            if (!isset($subjectTypes[$m->subject_name])) {
-                $subjectTypes[$m->subject_name] = false;
-            }
-            if ($m->assessment_type !== 'jn') {
-                $subjectTypes[$m->subject_name] = true; // has non-JN
-            }
-        }
-
-        $sortedMakeups = $makeups->sort(function ($a, $b) use ($subjectTypes) {
-            // 1. Fan bilan non-JN borlar avval
-            $aHasNonJn = $subjectTypes[$a->subject_name] ?? false;
-            $bHasNonJn = $subjectTypes[$b->subject_name] ?? false;
-            if ($aHasNonJn !== $bHasNonJn) {
-                return $bHasNonJn <=> $aHasNonJn; // true (non-JN bor) avval
-            }
-
-            // 2. Fan nomi bo'yicha
-            $nameCompare = strcmp($a->subject_name, $b->subject_name);
-            if ($nameCompare !== 0) {
-                return $nameCompare;
-            }
-
-            // 3. Bir fan ichida: JN avval
-            $aIsJn = $a->assessment_type === 'jn' ? 0 : 1;
-            $bIsJn = $b->assessment_type === 'jn' ? 0 : 1;
-            return $aIsJn <=> $bIsJn;
-        })->values();
-
-        $makeupCount = $sortedMakeups->count();
+        $makeupCount = $makeups->count();
 
         if ($makeupCount > 0) {
+            $typeLabels = [
+                'jn' => 'Joriy nazorat',
+                'mt' => 'Mustaqil ta\'lim',
+                'oski' => 'YN (OSKE)',
+                'test' => 'YN (Test)',
+            ];
+
             $processor->cloneRow('m_num', $makeupCount);
 
-            foreach ($sortedMakeups as $i => $makeup) {
+            foreach ($makeups->values() as $i => $makeup) {
                 $idx = $i + 1;
                 $processor->setValue("m_num#{$idx}", (string) $idx);
                 $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
                 $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
 
-                if ($makeup->assessment_type === 'jn') {
-                    $dateStr = $excuse->start_date->format('d.m.Y') . ' - ' . $excuse->end_date->format('d.m.Y');
+                // Sana formati
+                if ($makeup->makeup_date) {
+                    $makeupDateStr = $makeup->makeup_date->format('d.m.Y');
                 } else {
-                    $dateStr = $makeup->makeup_date
-                        ? $makeup->makeup_date->format('d.m.Y')
-                        : 'Belgilanmagan';
+                    $makeupDateStr = 'Belgilanmagan';
                 }
-                $processor->setValue("m_date#{$idx}", $dateStr);
+                $processor->setValue("m_date#{$idx}", $makeupDateStr);
             }
         } else {
+            // Agar nazoratlar bo'lmasa placeholder'larni tozalash
             $processor->setValue('m_num', '');
             $processor->setValue('m_subject', '');
             $processor->setValue('m_type', '');

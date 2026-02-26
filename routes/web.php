@@ -23,7 +23,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
-use App\Http\Controllers\Teacher\NotificationController;
+use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -628,10 +628,10 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         })->name('switch-role');
         // Xabarnomalar
         Route::prefix('notifications')->name('notifications.')->group(function () {
-            Route::get('/unread-count', [NotificationController::class, 'unreadCount'])->name('unread-count');
-            Route::get('/list', [NotificationController::class, 'index'])->name('list');
-            Route::post('/{id}/read', [NotificationController::class, 'markAsRead'])->name('mark-read');
-            Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+            Route::get('/unread-count', [TeacherNotificationController::class, 'unreadCount'])->name('unread-count');
+            Route::get('/list', [TeacherNotificationController::class, 'index'])->name('list');
+            Route::post('/{id}/read', [TeacherNotificationController::class, 'markAsRead'])->name('mark-read');
+            Route::post('/mark-all-read', [TeacherNotificationController::class, 'markAllAsRead'])->name('mark-all-read');
         });
 
         Route::get('/students', [TeacherMainController::class, 'students'])->name('students');

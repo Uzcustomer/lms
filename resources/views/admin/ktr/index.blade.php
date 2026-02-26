@@ -628,13 +628,18 @@
                 html += '<div class="ktr-change-title">Ruxsat holati</div>';
             }
             var info = ktrState.approverInfo;
-            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Kafedra</th><th>Fakultet</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
+            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Bo\'lim</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
             cr.approvals.forEach(function(a) {
+                var bolim = '-';
+                if (a.role === 'kafedra_mudiri') {
+                    bolim = info.kafedra_name || '-';
+                } else if (a.role === 'dekan') {
+                    bolim = info.faculty_name || '-';
+                }
                 html += '<tr>';
                 html += '<td>' + getRoleName(a.role) + '</td>';
                 html += '<td>' + a.approver_name + '</td>';
-                html += '<td>' + (info.kafedra_name || '-') + '</td>';
-                html += '<td>' + (info.faculty_name || '-') + '</td>';
+                html += '<td>' + bolim + '</td>';
                 html += '<td>' + getStatusBadge(a.status) + '</td>';
                 html += '<td>' + (a.responded_at || '-') + '</td>';
                 html += '</tr>';

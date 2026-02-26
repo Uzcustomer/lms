@@ -89,6 +89,7 @@ class SendAttendanceGroupSummary extends Command
             try {
                 \Illuminate\Support\Facades\Artisan::call('student:import-data', [
                     '--mode' => 'live',
+                    '--silent' => true,
                 ]);
                 $reporter->completeStep();
                 $this->info("Baholar yangilandi.");

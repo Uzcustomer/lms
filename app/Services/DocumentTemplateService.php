@@ -61,6 +61,10 @@ class DocumentTemplateService
         $processor->setValue('department_name', $excuse->department_name ?? '');
         $processor->setValue('reason', mb_strtolower($excuse->reason_label));
         $processor->setValue('reason_document', mb_strtolower($excuse->reason_document));
+        $processor->setValue('reason_note', $excuse->reason_note ?? '');
+        $processor->setValue('reason_max_days', $excuse->reason_max_days ? (string) $excuse->reason_max_days : '');
+        $processor->setValue('description', $excuse->description ?? '');
+        $processor->setValue('doc_number', $excuse->doc_number ?? '');
         $processor->setValue('start_date', $excuse->start_date->format('d.m.Y'));
         $processor->setValue('end_date', $excuse->end_date->format('d.m.Y'));
         $processor->setValue('days_count', (string) $daysCount);

@@ -45,7 +45,7 @@
 
                 {{-- Talaba ma'lumotlari --}}
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-4 h-12 bg-blue-700 dark:bg-blue-900 flex items-center rounded-t-xl">
+                    <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
                         <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                         <h3 class="text-base font-bold text-white">Talaba ma'lumotlari</h3>
                     </div>
@@ -57,19 +57,19 @@
                             </div>
                             <div class="flex justify-between border-t border-gray-100 dark:border-gray-700 pt-2">
                                 <dt class="text-sm text-gray-500 dark:text-gray-400">Talaba ID</dt>
-                                <dd class="text-sm font-semibold text-gray-900 dark:text-white font-mono">{{ $excuse->student?->student_id_number ?? '-' }}</dd>
+                                <dd class="text-sm font-bold text-gray-900 dark:text-white font-mono">{{ $excuse->student?->student_id_number ?? '-' }}</dd>
                             </div>
                             <div class="flex justify-between border-t border-gray-100 dark:border-gray-700 pt-2">
                                 <dt class="text-sm text-gray-500 dark:text-gray-400">HEMIS ID</dt>
-                                <dd class="text-sm text-gray-900 dark:text-white font-mono">{{ $excuse->student_hemis_id }}</dd>
+                                <dd class="text-sm font-bold text-gray-900 dark:text-white font-mono">{{ $excuse->student_hemis_id }}</dd>
                             </div>
                             <div class="flex justify-between border-t border-gray-100 dark:border-gray-700 pt-2">
                                 <dt class="text-sm text-gray-500 dark:text-gray-400">Guruh</dt>
-                                <dd class="text-sm font-semibold text-gray-900 dark:text-white">{{ $excuse->group_name ?? '-' }}</dd>
+                                <dd class="text-sm font-bold text-gray-900 dark:text-white">{{ $excuse->group_name ?? '-' }}</dd>
                             </div>
                             <div class="flex justify-between border-t border-gray-100 dark:border-gray-700 pt-2">
                                 <dt class="text-sm text-gray-500 dark:text-gray-400">Fakultet</dt>
-                                <dd class="text-sm text-gray-900 dark:text-white text-right max-w-[60%]">{{ $excuse->department_name ?? '-' }}</dd>
+                                <dd class="text-sm font-bold text-gray-900 dark:text-white text-right max-w-[60%]">{{ $excuse->department_name ?? '-' }}</dd>
                             </div>
                         </dl>
                     </div>
@@ -77,7 +77,7 @@
 
                 {{-- Ariza tafsilotlari --}}
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-4 h-12 bg-blue-700 dark:bg-blue-900 flex items-center rounded-t-xl">
+                    <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
                         <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         <h3 class="text-base font-bold text-white">Ariza tafsilotlari</h3>
                     </div>
@@ -86,7 +86,7 @@
                             <div class="flex justify-between items-start">
                                 <dt class="text-sm text-gray-500 dark:text-gray-400">Sabab turi</dt>
                                 <dd class="text-right max-w-[65%]">
-                                    <span class="inline-flex px-2.5 py-0.5 text-xs font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                    <span class="inline-flex px-2.5 py-0.5 text-sm font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
                                         {{ $excuse->reason_label }}
                                     </span>
                                 </dd>
@@ -97,17 +97,17 @@
                             </div>
                             <div class="flex justify-between items-start border-t border-gray-100 dark:border-gray-700 pt-2">
                                 <dt class="text-sm text-gray-500 dark:text-gray-400">Talab qilinadigan hujjat</dt>
-                                <dd class="text-sm text-gray-700 dark:text-gray-300 text-right max-w-[55%]">{{ $excuse->reason_document }}</dd>
+                                <dd class="text-sm font-bold text-gray-900 dark:text-white text-right max-w-[55%]">{{ $excuse->reason_document }}</dd>
                             </div>
                             @if($excuse->reason_note)
                                 <div class="flex justify-between items-start border-t border-gray-100 dark:border-gray-700 pt-2">
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Eslatma</dt>
-                                    <dd class="text-sm text-amber-600 dark:text-amber-400 italic text-right max-w-[55%]">{{ $excuse->reason_note }}</dd>
+                                    <dd class="text-sm font-bold text-amber-600 dark:text-amber-400 italic text-right max-w-[55%]">{{ $excuse->reason_note }}</dd>
                                 </div>
                             @endif
                             <div class="flex justify-between border-t border-gray-100 dark:border-gray-700 pt-2">
                                 <dt class="text-sm text-gray-500 dark:text-gray-400">Yuborilgan</dt>
-                                <dd class="text-sm font-semibold text-gray-900 dark:text-white">{{ $excuse->created_at->format('d.m.Y H:i') }}</dd>
+                                <dd class="text-sm font-bold text-gray-900 dark:text-white">{{ $excuse->created_at->format('d.m.Y H:i') }}</dd>
                             </div>
                         </dl>
                     </div>
@@ -115,7 +115,7 @@
 
                 {{-- Qoldirilgan davr --}}
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-4 h-12 bg-blue-700 dark:bg-blue-900 flex items-center rounded-t-xl">
+                    <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
                         <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                         <h3 class="text-base font-bold text-white">Qoldirilgan davr</h3>
                     </div>
@@ -153,7 +153,7 @@
                 {{-- Chap card --}}
                 @if(!$excuse->isPending())
                     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div class="px-4 h-12 bg-blue-700 dark:bg-blue-900 flex items-center rounded-t-xl">
+                        <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
                             <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                             <h3 class="text-base font-bold text-white">Ko'rib chiqish natijasi</h3>
                         </div>
@@ -193,7 +193,7 @@
                     </div>
                 @else
                     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div class="px-4 h-12 bg-blue-700 dark:bg-blue-900 flex items-center rounded-t-xl">
+                        <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
                             <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             <h3 class="text-base font-bold text-white">Qo'shimcha ma'lumot</h3>
                         </div>
@@ -227,7 +227,7 @@
 
                 {{-- O'ng card: Asos hujjati --}}
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-4 h-12 bg-blue-700 dark:bg-blue-900 flex items-center rounded-t-xl">
+                    <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
                         <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                         <h3 class="text-base font-bold text-white">Asos hujjati</h3>
                     </div>
@@ -271,12 +271,12 @@
             {{-- ═══════ 3-QATOR: Qayta topshirish nazoratlari — full width ═══════ --}}
             @if($excuse->makeups->count() > 0)
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-5">
-                    <div class="px-4 h-12 bg-blue-700 dark:bg-blue-900 flex items-center justify-between rounded-t-xl">
+                    <div class="px-4 h-12 flex items-center justify-between rounded-t-xl" style="background-color: #1e40af;">
                         <h3 class="text-base font-bold text-white flex items-center">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                             Qayta topshirish nazoratlari
                         </h3>
-                        <span class="px-3 py-1 text-sm font-bold bg-blue-700 text-white rounded-full">{{ $excuse->makeups->count() }} ta</span>
+                        <span class="px-3 py-1 text-sm font-bold text-white rounded-full" style="background-color: #1e3a8a;">{{ $excuse->makeups->count() }} ta</span>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full">

@@ -15,7 +15,6 @@ use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Setting;
 use App\Models\Student;
-use App\Models\StudentExcuseRequest;
 use App\Models\StudentGrade;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -951,90 +950,6 @@ class StudentApiController extends Controller
             'verified' => $student->isTelegramVerified(),
             'telegram_username' => $student->telegram_username,
             'telegram_days_left' => $student->telegramDaysLeft(),
-        ]);
-    }
-
-    /**
-     * List student's excuse requests
-     */
-    public function excuseRequests(Request $request): JsonResponse
-    {
-        $student = $request->user();
-
-        $requests = StudentExcuseRequest::where('student_id', $student->id)
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn($r) => [
-                'id' => $r->id,
-                'type' => $r->type,
-                'subject_name' => $r->subject_name,
-                'reason' => $r->reason,
-                'file_name' => $r->file_original_name,
-                'status' => $r->status,
-                'admin_comment' => $r->admin_comment,
-                'created_at' => $r->created_at->format('d.m.Y H:i'),
-                'reviewed_at' => $r->reviewed_at?->format('d.m.Y H:i'),
-            ]);
-
-        return response()->json([
-            'data' => $requests,
-        ]);
-    }
-
-    /**
-     * Create a new excuse request with file upload
-     */
-    public function createExcuseRequest(Request $request): JsonResponse
-    {
-        $request->validate([
-            'type' => ['required', 'string', 'in:exam_test,oski'],
-            'subject_name' => ['required', 'string', 'max:255'],
-            'reason' => ['required', 'string', 'max:1000'],
-            'file' => [
-                'required', 'file', 'max:10240',
-                function ($attribute, $value, $fail) {
-                    $ext = strtolower($value->getClientOriginalExtension());
-                    $allowed = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'zip'];
-                    if (!in_array($ext, $allowed)) {
-                        $fail('Faqat pdf, doc, docx, jpg, jpeg, png, zip formatlar qabul qilinadi.');
-                    }
-                },
-            ],
-        ], [
-            'type.required' => 'Ariza turini tanlang.',
-            'type.in' => 'Ariza turi noto\'g\'ri.',
-            'subject_name.required' => 'Fan nomini kiriting.',
-            'reason.required' => 'Sababni kiriting.',
-            'file.required' => 'Fayl yuklang.',
-            'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak.',
-        ]);
-
-        $student = $request->user();
-        $file = $request->file('file');
-        $filePath = $file->store('excuse-requests/' . $student->hemis_id, 'public');
-
-        $excuseRequest = StudentExcuseRequest::create([
-            'student_id' => $student->id,
-            'student_hemis_id' => $student->hemis_id,
-            'student_name' => $student->full_name,
-            'group_name' => $student->group_name,
-            'type' => $request->type,
-            'subject_name' => $request->subject_name,
-            'reason' => $request->reason,
-            'file_path' => $filePath,
-            'file_original_name' => $file->getClientOriginalName(),
-            'status' => 'pending',
-        ]);
-
-        return response()->json([
-            'message' => 'Ariza muvaffaqiyatli yuborildi.',
-            'data' => [
-                'id' => $excuseRequest->id,
-                'type' => $excuseRequest->type,
-                'subject_name' => $excuseRequest->subject_name,
-                'status' => $excuseRequest->status,
-                'created_at' => $excuseRequest->created_at->format('d.m.Y H:i'),
-            ],
         ]);
     }
 }

@@ -202,9 +202,9 @@ class ImportSpecialtiesDepartments extends Command
             $this->info("Fakultet: {$faculty->faculty_name} (ID: {$faculty->faculty_id}, original code: {$faculty->faculty_structure_type_code})");
         }
 
-        // Kafedralarni schedules jadvalidan olish
+        // Kafedralarni schedules jadvalidan olish (faculty_id bilan birga)
         $departments = DB::table('schedules')
-            ->select('department_id', 'department_name', 'department_code', 'department_structure_type_code', 'department_structure_type_name')
+            ->select('department_id', 'department_name', 'department_code', 'department_structure_type_code', 'department_structure_type_name', 'faculty_id')
             ->whereNotNull('department_id')
             ->where('department_id', '>', 0)
             ->distinct()
@@ -214,6 +214,9 @@ class ImportSpecialtiesDepartments extends Command
         $this->info("Schedules jadvalidan {$departments->count()} ta kafedra topildi.");
 
         foreach ($departments as $dept) {
+            // parent_id ni faculty_id ga o'rnatish (kafedrani fakultetga bog'lash)
+            $parentId = ($dept->faculty_id && $dept->faculty_id > 0) ? $dept->faculty_id : null;
+
             Department::updateOrCreate(
                 ['department_hemis_id' => $dept->department_id],
                 [
@@ -223,12 +226,12 @@ class ImportSpecialtiesDepartments extends Command
                     'structure_type_name' => $dept->department_structure_type_name ?? 'Kafedra',
                     'locality_type_code' => '11',
                     'locality_type_name' => 'Asosiy',
-                    'parent_id' => null,
+                    'parent_id' => $parentId,
                     'active' => true,
                 ]
             );
             $total++;
-            $this->info("Kafedra: {$dept->department_name} (ID: {$dept->department_id})");
+            $this->info("Kafedra: {$dept->department_name} (ID: {$dept->department_id}, Fakultet ID: {$parentId})");
         }
 
         $this->info("Jami {$total} ta yozuv departments jadvaliga qo'shildi/yangilandi.");

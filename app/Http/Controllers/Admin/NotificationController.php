@@ -79,6 +79,8 @@ class NotificationController extends Controller
 
     public function create()
     {
+        [$userId, $userType] = $this->getUserInfo();
+
         $users = User::with('roles')->orderBy('name')->get();
         $teachers = Teacher::orderBy('full_name')->get(['id', 'full_name']);
 
@@ -88,17 +90,26 @@ class NotificationController extends Controller
             'label' => $role->label(),
         ]);
 
-        return view('admin.notifications.create', compact('users', 'teachers', 'roles'));
+        $unreadCount = Notification::inbox($userId)->unread()->count();
+        $sentCount = Notification::sent($userId)->count();
+        $draftsCount = Notification::drafts($userId)->count();
+
+        return view('admin.notifications.create', compact('users', 'teachers', 'roles', 'unreadCount', 'sentCount', 'draftsCount'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'recipient_id' => 'required|integer',
-            'recipient_type' => 'required|string|in:App\\Models\\User,App\\Models\\Teacher',
+            'recipient_type' => 'required|string|in:user,teacher',
             'subject' => 'required|string|max:255',
             'body' => 'nullable|string',
         ]);
+
+        $typeMap = [
+            'user' => User::class,
+            'teacher' => Teacher::class,
+        ];
 
         [$senderId, $senderType] = $this->getUserInfo();
 
@@ -108,7 +119,7 @@ class NotificationController extends Controller
             'sender_id' => $senderId,
             'sender_type' => $senderType,
             'recipient_id' => $validated['recipient_id'],
-            'recipient_type' => $validated['recipient_type'],
+            'recipient_type' => $typeMap[$validated['recipient_type']],
             'subject' => $validated['subject'],
             'body' => $validated['body'] ?? '',
             'type' => Notification::TYPE_MESSAGE,

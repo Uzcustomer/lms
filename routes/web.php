@@ -23,7 +23,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
-use App\Http\Controllers\Teacher\NotificationController;
+use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -36,7 +36,10 @@ use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
+use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\MoodleImportController;
+use App\Http\Controllers\Admin\NotificationController;
+use App\Http\Controllers\LanguageController;
 
 
 Route::get('/', function () {
@@ -59,6 +62,9 @@ Route::get('/absence-excuse/verify/{token}/pdf', [\App\Http\Controllers\AbsenceE
 // Hujjat haqiqiyligini tekshirish (QR kod orqali, public)
 Route::get('/document/verify/{token}', [\App\Http\Controllers\DocumentVerificationController::class, 'verify'])->name('document.verify');
 Route::get('/document/verify/{token}/pdf', [\App\Http\Controllers\DocumentVerificationController::class, 'viewPdf'])->name('document.verify.pdf');
+
+// Til almashtirish (Language switch)
+Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->name('language.switch');
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
@@ -93,14 +99,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             }
             return back();
         })->name('switch-role');
-
-        // Xabarnomalar (admin panel uchun)
-        Route::prefix('notifications')->name('notifications.')->group(function () {
-            Route::get('/unread-count', [NotificationController::class, 'unreadCount'])->name('unread-count');
-            Route::get('/list', [NotificationController::class, 'index'])->name('list');
-            Route::post('/{id}/read', [NotificationController::class, 'markAsRead'])->name('mark-read');
-            Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
-        });
 
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
         Route::get('/students/filter/departments', [AdminStudentController::class, 'getFilterDepartments'])->name('students.filter.departments');
@@ -249,6 +247,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
             Route::get('/get-yn-consents', [JournalController::class, 'getYnConsents'])->name('get-yn-consents');
+            Route::post('/save-excuse-grade', [JournalController::class, 'saveExcuseGrade'])->name('save-excuse-grade');
+            Route::post('/submit-excuse-to-yn', [JournalController::class, 'submitExcuseToYn'])->name('submit-excuse-to-yn');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');
@@ -271,6 +271,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/teachers', [TeacherController::class, 'index'])->name('teachers.index');
         Route::get('/teachers/export-excel', [TeacherController::class, 'exportExcel'])->name('teachers.export-excel');
+        Route::get('/teachers/search-subjects', [TeacherController::class, 'searchSubjects'])->name('teachers.search-subjects');
+        Route::get('/teachers/subject-courses', [TeacherController::class, 'getSubjectCourses'])->name('teachers.subject-courses');
         Route::get('/teachers/{teacher}', [TeacherController::class, 'show'])->name('teachers.show');
         Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
         Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
@@ -279,6 +281,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/teachers/{teacher}/contact', [TeacherController::class, 'updateContact'])->name('teachers.update-contact');
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
+
+        // Xabarnomalar (Notifications)
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
+        Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+        Route::get('/notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
+        Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+        Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
+        Route::get('/notifications-unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
 
         // Unified settings page
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
@@ -318,12 +330,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/change-approve/{approvalId}', [KtrController::class, 'approveChange'])->name('approve-change');
         });
 
+        // Kafedra (Fakultet va kafedralar tuzilmasi)
+        Route::prefix('kafedra')->name('kafedra.')->group(function () {
+            Route::get('/', [KafedraController::class, 'index'])->name('index');
+            Route::post('/transfer', [KafedraController::class, 'transfer'])->name('transfer');
+        });
+
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');
         Route::get('/reports/jn/data', [ReportController::class, 'jnReportData'])->name('reports.jn.data');
 
         Route::get('/reports/lesson-assignment', [ReportController::class, 'lessonAssignment'])->name('reports.lesson-assignment');
         Route::get('/reports/lesson-assignment/data', [ReportController::class, 'lessonAssignmentData'])->name('reports.lesson-assignment.data');
         Route::post('/reports/lesson-assignment/sync-schedules', [ReportController::class, 'syncSchedulesForReport'])->name('reports.lesson-assignment.sync-schedules');
+        Route::get('/reports/lesson-assignment/sync-status', [ReportController::class, 'syncSchedulesStatus'])->name('reports.lesson-assignment.sync-status');
         Route::get('/reports/lesson-assignment/diagnostic', [ReportController::class, 'lessonAssignmentDiagnostic'])->name('reports.lesson-assignment.diagnostic');
 
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
@@ -501,9 +520,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-// HEMIS OAuth routes
+// HEMIS OAuth routes (talabalar — student.ttatf.uz)
 Route::get('/auth/hemis/redirect', [HemisOAuthController::class, 'redirect'])->name('auth.hemis.redirect');
 Route::get('/auth/oauth-callback', [HemisOAuthController::class, 'callback'])->name('auth.hemis.callback');
+
 
 Route::prefix('student')->name('student.')->group(function () {
 
@@ -559,6 +579,7 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'create'])->name('create');
             Route::post('/store', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'store'])->name('store');
+            Route::post('/missed-assessments', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'missedAssessments'])->name('missed-assessments');
             Route::get('/{id}', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'show'])->name('show');
             Route::get('/{id}/download', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'download'])->name('download');
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
@@ -607,10 +628,10 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         })->name('switch-role');
         // Xabarnomalar
         Route::prefix('notifications')->name('notifications.')->group(function () {
-            Route::get('/unread-count', [NotificationController::class, 'unreadCount'])->name('unread-count');
-            Route::get('/list', [NotificationController::class, 'index'])->name('list');
-            Route::post('/{id}/read', [NotificationController::class, 'markAsRead'])->name('mark-read');
-            Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+            Route::get('/unread-count', [TeacherNotificationController::class, 'unreadCount'])->name('unread-count');
+            Route::get('/list', [TeacherNotificationController::class, 'index'])->name('list');
+            Route::post('/{id}/read', [TeacherNotificationController::class, 'markAsRead'])->name('mark-read');
+            Route::post('/mark-all-read', [TeacherNotificationController::class, 'markAllAsRead'])->name('mark-all-read');
         });
 
         Route::get('/students', [TeacherMainController::class, 'students'])->name('students');

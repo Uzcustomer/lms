@@ -40,62 +40,94 @@
                         </svg>
                     </button>
                     <span style="margin-left: 12px; font-size: 1.125rem; font-weight: 600; color: #1f2937;">LMS</span>
-                    <!-- Mobile notification bell -->
-                    <div x-data="adminNotifBell()" x-init="init()" style="margin-left: auto;">
-                        <button @click="togglePanel()" style="position: relative; padding: 8px; border-radius: 8px; background: none; border: none; cursor: pointer; color: #4b5563;">
-                            <svg style="width: 22px; height: 22px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                            </svg>
-                            <span x-show="unreadCount > 0" x-text="unreadCount > 9 ? '9+' : unreadCount"
-                                  style="position: absolute; top: 2px; right: 2px; min-width: 18px; height: 18px; background: #ef4444; color: #fff; font-size: 10px; font-weight: 700; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 4px;"></span>
-                        </button>
-                    </div>
+                    <span style="margin-left: auto; font-size: 0.875rem; color: #6b7280;">
+                        {{ Auth::user()->name ?? '' }}
+                    </span>
                 </div>
 
-                <!-- Desktop notification bell (fixed top-right) -->
-                <div x-data="adminNotifBell()" x-init="init()" class="admin-notif-desktop-bell" style="display: none;">
-                    <button @click="togglePanel()" class="admin-notif-bell-btn" style="position: relative;">
-                        <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                <!-- Xabarnomalar ikonchasi — o'ng yuqori burchak -->
+                @php
+                    $notifUser = auth()->user();
+                    $notifUserId = $notifUser->id ?? 0;
+                    $notifUserType = $notifUser ? get_class($notifUser) : 'App\\Models\\User';
+                    $notifUnreadCount = 0;
+                    try {
+                        $notifUnreadCount = \App\Models\Notification::where('recipient_id', $notifUserId)
+                            ->where('is_draft', false)
+                            ->where('is_read', false)
+                            ->count();
+                    } catch (\Exception $e) {}
+                @endphp
+                <div x-data="{ notifOpen: false }" style="position:fixed;top:10px;right:16px;z-index:9999;">
+                    <button @click.stop="notifOpen = !notifOpen"
+                            style="position:relative;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(0,0,0,0.08);cursor:pointer;transition:all 0.15s;"
+                            onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fff'">
+                        <svg style="width:18px;height:18px;color:#4b5563;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                         </svg>
-                        <span x-show="unreadCount > 0" x-text="unreadCount > 9 ? '9+' : unreadCount"
-                              style="position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; background: #ef4444; color: #fff; font-size: 9px; font-weight: 700; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 3px;"></span>
+                        @if($notifUnreadCount > 0)
+                        <span style="position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;background:#ef4444;border-radius:9px;border:2px solid #fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;line-height:1;">{{ $notifUnreadCount > 99 ? '99+' : $notifUnreadCount }}</span>
+                        @endif
                     </button>
-                    <!-- Dropdown panel -->
-                    <div x-show="showPanel" @click.outside="showPanel = false"
-                         x-transition:enter="transition ease-out duration-200"
-                         x-transition:enter-start="opacity-0 transform -translate-y-1"
-                         x-transition:enter-end="opacity-100 transform translate-y-0"
-                         x-transition:leave="transition ease-in duration-150"
-                         x-transition:leave-start="opacity-100"
-                         x-transition:leave-end="opacity-0"
-                         style="position: absolute; right: 0; top: 44px; width: 360px; max-height: 420px; background: #fff; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 9999; overflow: hidden;">
-                        <div style="padding: 12px 16px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center;">
-                            <h3 style="font-size: 14px; font-weight: 600; color: #1f2937; margin: 0;">Xabarnomalar</h3>
-                            <button x-show="unreadCount > 0" @click="markAllRead()" style="font-size: 12px; color: #3b82f6; background: none; border: none; cursor: pointer;">Hammasini o'qilgan</button>
+
+                    <div x-show="notifOpen" x-cloak
+                         x-transition:enter="transition ease-out duration-100"
+                         x-transition:enter-start="opacity-0 transform scale-95"
+                         x-transition:enter-end="opacity-100 transform scale-100"
+                         x-transition:leave="transition ease-in duration-75"
+                         x-transition:leave-start="opacity-100 transform scale-100"
+                         x-transition:leave-end="opacity-0 transform scale-95"
+                         @click.outside="notifOpen = false"
+                         style="position:absolute;top:42px;right:0;width:300px;background:#fff;border:1px solid #d1d5db;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.15);overflow:hidden;z-index:99999;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb;background:#f9fafb;">
+                            <span style="font-weight:600;font-size:0.8rem;color:#111827;">{{ __('notifications.notifications') }}</span>
+                            @if($notifUnreadCount > 0)
+                            <form method="POST" action="{{ route('admin.notifications.mark-all-read') }}" style="display:inline;">
+                                @csrf
+                                <button type="submit" style="font-size:0.65rem;color:#2563eb;background:none;border:none;cursor:pointer;font-weight:500;">{{ __('notifications.mark_all_read') }}</button>
+                            </form>
+                            @endif
                         </div>
-                        <div style="max-height: 350px; overflow-y: auto;">
-                            <template x-if="notifications.length === 0">
-                                <div style="padding: 32px 16px; text-align: center; color: #9ca3af; font-size: 13px;">
-                                    Xabarnomalar yo'q
-                                </div>
-                            </template>
-                            <template x-for="n in notifications" :key="n.id">
-                                <div @click="openNotification(n)"
-                                     :style="'padding: 12px 16px; border-bottom: 1px solid #f9fafb; cursor: pointer; transition: background 0.15s;' + (n.is_read ? '' : 'background: #eff6ff;')"
-                                     onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=this.getAttribute('data-bg')"
-                                     :data-bg="n.is_read ? '' : '#eff6ff'">
-                                    <div style="display: flex; align-items: flex-start; gap: 10px;">
-                                        <div :style="'width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0;' + (n.is_read ? 'background: transparent;' : 'background: #3b82f6;')"></div>
-                                        <div style="flex: 1; min-width: 0;">
-                                            <div style="font-size: 13px; font-weight: 600; color: #1f2937;" x-text="n.title"></div>
-                                            <div style="font-size: 12px; color: #6b7280; margin-top: 2px; line-height: 1.4;" x-text="n.message"></div>
-                                            <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;" x-text="n.created_at"></div>
-                                        </div>
+                        <div style="max-height:280px;overflow-y:auto;">
+                            @php
+                                $recentNotifs = collect();
+                                try {
+                                    $recentNotifs = \App\Models\Notification::with('sender')
+                                        ->where('recipient_id', $notifUserId)
+                                        ->where('is_draft', false)
+                                        ->orderByDesc('sent_at')
+                                        ->take(6)
+                                        ->get();
+                                } catch (\Exception $e) {}
+                            @endphp
+                            @forelse($recentNotifs as $notif)
+                            <a href="{{ route('admin.notifications.show', $notif) }}"
+                               style="display:block;padding:8px 14px;border-bottom:1px solid #f3f4f6;text-decoration:none;transition:background 0.1s;{{ !$notif->is_read ? 'background:#eff6ff;' : '' }}"
+                               onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='{{ !$notif->is_read ? '#eff6ff' : '#fff' }}'">
+                                <div style="display:flex;align-items:flex-start;gap:8px;">
+                                    @if(!$notif->is_read)
+                                    <span style="width:6px;height:6px;background:#3b82f6;border-radius:50%;flex-shrink:0;margin-top:5px;"></span>
+                                    @else
+                                    <span style="width:6px;height:6px;flex-shrink:0;margin-top:5px;"></span>
+                                    @endif
+                                    <div style="flex:1;min-width:0;">
+                                        <p style="font-size:0.7rem;color:#6b7280;margin:0 0 1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ $notif->sender->name ?? $notif->sender->short_name ?? $notif->sender->full_name ?? __('notifications.system') }}</p>
+                                        <p style="font-size:0.8rem;font-weight:{{ !$notif->is_read ? '600' : '400' }};color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;">{{ $notif->subject }}</p>
+                                        <p style="font-size:0.65rem;color:#6b7280;margin:2px 0 0;">{{ $notif->sent_at ? $notif->sent_at->diffForHumans() : '' }}</p>
                                     </div>
                                 </div>
-                            </template>
+                            </a>
+                            @empty
+                            <div style="padding:24px 14px;text-align:center;font-size:0.8rem;color:#9ca3af;">
+                                {{ __('notifications.no_notifications') }}
+                            </div>
+                            @endforelse
                         </div>
+                        <a href="{{ route('admin.notifications.index') }}"
+                           style="display:block;text-align:center;padding:8px;font-size:0.75rem;font-weight:600;color:#3b82f6;border-top:1px solid #e5e7eb;text-decoration:none;transition:background 0.1s;"
+                           onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fff'">
+                            {{ __('notifications.view_all') }}
+                        </a>
                     </div>
                 </div>
 
@@ -137,106 +169,6 @@
         @stack('scripts')
     </body>
     <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
-
-    {{-- Admin notification bell script --}}
-    <script>
-        function adminNotifBell() {
-            return {
-                unreadCount: 0,
-                notifications: [],
-                showPanel: false,
-                init() {
-                    this.fetchUnreadCount();
-                    setInterval(() => this.fetchUnreadCount(), 30000);
-                },
-                fetchUnreadCount() {
-                    fetch('/admin/notifications/unread-count')
-                        .then(r => r.json())
-                        .then(data => {
-                            this.unreadCount = data.count || 0;
-                            if (this.unreadCount > 0 && this.showPanel) {
-                                this.fetchNotifications();
-                            }
-                        })
-                        .catch(() => {});
-                },
-                fetchNotifications() {
-                    fetch('/admin/notifications/list')
-                        .then(r => r.json())
-                        .then(data => {
-                            this.notifications = data.notifications || [];
-                            this.unreadCount = data.unread_count || 0;
-                        })
-                        .catch(() => {});
-                },
-                togglePanel() {
-                    this.showPanel = !this.showPanel;
-                    if (this.showPanel) {
-                        this.fetchNotifications();
-                    }
-                },
-                openNotification(n) {
-                    if (!n.is_read) {
-                        fetch('/admin/notifications/' + n.id + '/read', {
-                            method: 'POST',
-                            headers: {'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content}
-                        }).then(() => {
-                            n.is_read = true;
-                            this.unreadCount = Math.max(0, this.unreadCount - 1);
-                        });
-                    }
-                    if (n.link) {
-                        window.location.href = n.link;
-                    }
-                },
-                markAllRead() {
-                    fetch('/admin/notifications/mark-all-read', {
-                        method: 'POST',
-                        headers: {'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content}
-                    }).then(() => {
-                        this.notifications.forEach(n => n.is_read = true);
-                        this.unreadCount = 0;
-                    });
-                }
-            }
-        }
-    </script>
-    <style>
-        .admin-notif-desktop-bell {
-            position: fixed;
-            top: 12px;
-            right: 20px;
-            z-index: 9998;
-        }
-        .admin-notif-bell-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #4b5563;
-            transition: all 0.15s;
-        }
-        .admin-notif-bell-btn:hover {
-            background: #f3f4f6;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-        }
-        @media (min-width: 768px) {
-            .admin-notif-desktop-bell {
-                display: block !important;
-            }
-        }
-        @media (max-width: 767px) {
-            .admin-notif-desktop-bell {
-                display: none !important;
-            }
-        }
-    </style>
 
     {{-- DEBUG: Console log - account switching debug --}}
     <script>

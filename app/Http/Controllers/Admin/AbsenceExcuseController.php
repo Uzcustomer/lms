@@ -199,7 +199,9 @@ class AbsenceExcuseController extends Controller
             abort(404, 'Fayl serverda topilmadi');
         }
 
-        return response()->download($filePath, $excuse->file_original_name);
+        return response()->file($filePath, [
+            'Content-Disposition' => 'inline; filename="' . $excuse->file_original_name . '"',
+        ]);
     }
 
     public function downloadPdf($id)
@@ -215,6 +217,8 @@ class AbsenceExcuseController extends Controller
             abort(404, 'PDF fayl serverda topilmadi');
         }
 
-        return response()->download($filePath, 'sababli_ariza_' . $excuse->id . '.pdf');
+        return response()->file($filePath, [
+            'Content-Disposition' => 'inline; filename="sababli_ariza_' . $excuse->id . '.pdf"',
+        ]);
     }
 }

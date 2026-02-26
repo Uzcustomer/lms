@@ -62,9 +62,8 @@ class DocumentTemplateService
         // Buyruq raqami — jadvaldan tashqarida (AVVAL o'rnatiladi, cloneRow dan oldin)
         $processor->setValue('order_number', '08-' . str_pad($excuse->id, 5, '0', STR_PAD_LEFT));
 
-        // Nazoratlar jadvali — fanlar bo'yicha guruhlash
+        // Nazoratlar jadvali
         $makeups = $excuse->makeups()->orderBy('subject_name')->get();
-        $grouped = $makeups->groupBy('subject_name');
 
         $typeLabels = [
             'jn' => 'JN',
@@ -74,56 +73,58 @@ class DocumentTemplateService
         ];
 
         // Tartiblash: Test/OSKI/MT bo'lgan fanlar avval, faqat JN bo'lgan fanlar keyin
-        $sorted = $grouped->sortBy(function ($subjectMakeups) {
-            $hasNonJn = $subjectMakeups->contains(fn($m) => $m->assessment_type !== 'jn');
-            return $hasNonJn ? 0 : 1;
-        });
+        // Bir fan ichida JN birinchi, keyin boshqalar
+        $subjectTypes = [];
+        foreach ($makeups as $m) {
+            if (!isset($subjectTypes[$m->subject_name])) {
+                $subjectTypes[$m->subject_name] = false;
+            }
+            if ($m->assessment_type !== 'jn') {
+                $subjectTypes[$m->subject_name] = true; // has non-JN
+            }
+        }
 
-        $groupCount = $sorted->count();
+        $sortedMakeups = $makeups->sort(function ($a, $b) use ($subjectTypes) {
+            // 1. Fan bilan non-JN borlar avval
+            $aHasNonJn = $subjectTypes[$a->subject_name] ?? false;
+            $bHasNonJn = $subjectTypes[$b->subject_name] ?? false;
+            if ($aHasNonJn !== $bHasNonJn) {
+                return $bHasNonJn <=> $aHasNonJn; // true (non-JN bor) avval
+            }
 
-        if ($groupCount > 0) {
-            // cloneRow — faqat jadval ichidagi m_num placeholder orqali
-            $processor->cloneRow('m_num', $groupCount);
+            // 2. Fan nomi bo'yicha
+            $nameCompare = strcmp($a->subject_name, $b->subject_name);
+            if ($nameCompare !== 0) {
+                return $nameCompare;
+            }
 
-            $idx = 0;
-            foreach ($sorted as $subjectName => $subjectMakeups) {
-                $idx++;
+            // 3. Bir fan ichida: JN avval
+            $aIsJn = $a->assessment_type === 'jn' ? 0 : 1;
+            $bIsJn = $b->assessment_type === 'jn' ? 0 : 1;
+            return $aIsJn <=> $bIsJn;
+        })->values();
 
-                // Fan ichida tartiblash: JN birinchi, keyin boshqalar
-                $sortedMakeups = $subjectMakeups->sortBy(function ($m) {
-                    return $m->assessment_type === 'jn' ? 0 : 1;
-                });
+        $makeupCount = $sortedMakeups->count();
 
-                // T/r — tartib raqami (1, 2, 3...)
+        if ($makeupCount > 0) {
+            $processor->cloneRow('m_num', $makeupCount);
+
+            foreach ($sortedMakeups as $i => $makeup) {
+                $idx = $i + 1;
                 $processor->setValue("m_num#{$idx}", (string) $idx);
+                $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
+                $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
 
-                // Fan nomi
-                $processor->setValue("m_subject#{$idx}", $subjectName);
-
-                // Nazorat turlari va sanalari
-                $types = [];
-                $dates = [];
-
-                foreach ($sortedMakeups as $makeup) {
-                    $types[] = $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type;
-
-                    if ($makeup->assessment_type === 'jn') {
-                        $dates[] = $excuse->start_date->format('d.m.Y') . ' - ' . $excuse->end_date->format('d.m.Y');
-                    } else {
-                        $dates[] = $makeup->makeup_date
-                            ? $makeup->makeup_date->format('d.m.Y')
-                            : 'Belgilanmagan';
-                    }
+                if ($makeup->assessment_type === 'jn') {
+                    $dateStr = $excuse->start_date->format('d.m.Y') . ' - ' . $excuse->end_date->format('d.m.Y');
+                } else {
+                    $dateStr = $makeup->makeup_date
+                        ? $makeup->makeup_date->format('d.m.Y')
+                        : 'Belgilanmagan';
                 }
-
-                // Word ichida yangi qator uchun XML break
-                $br = '</w:t><w:br/><w:t>';
-
-                $processor->setValue("m_type#{$idx}", implode($br, $types));
-                $processor->setValue("m_date#{$idx}", implode($br, $dates));
+                $processor->setValue("m_date#{$idx}", $dateStr);
             }
         } else {
-            // Agar nazoratlar bo'lmasa placeholder'larni tozalash
             $processor->setValue('m_num', '');
             $processor->setValue('m_subject', '');
             $processor->setValue('m_type', '');

@@ -287,15 +287,52 @@
             </tr>
         </thead>
         <tbody>
-            {{-- Bo'sh qatorlar (to'ldiriladi) --}}
-            @for ($i = 1; $i <= 5; $i++)
+            @php
+                $typeLabels = [
+                    'jn' => 'JN',
+                    'mt' => 'MT',
+                    'oski' => 'YN(OSKE)',
+                    'test' => 'YN(Test)',
+                ];
+                $makeups = $excuse->makeups()->orderBy('subject_name')->get();
+
+                // Tartiblash: non-JN fanlar avval, JN-only fanlar keyin, fan ichida JN birinchi
+                $subjectTypes = [];
+                foreach ($makeups as $m) {
+                    if (!isset($subjectTypes[$m->subject_name])) {
+                        $subjectTypes[$m->subject_name] = false;
+                    }
+                    if ($m->assessment_type !== 'jn') {
+                        $subjectTypes[$m->subject_name] = true;
+                    }
+                }
+                $sortedMakeups = $makeups->sort(function ($a, $b) use ($subjectTypes) {
+                    $aHas = $subjectTypes[$a->subject_name] ?? false;
+                    $bHas = $subjectTypes[$b->subject_name] ?? false;
+                    if ($aHas !== $bHas) return $bHas <=> $aHas;
+                    $name = strcmp($a->subject_name, $b->subject_name);
+                    if ($name !== 0) return $name;
+                    return ($a->assessment_type === 'jn' ? 0 : 1) <=> ($b->assessment_type === 'jn' ? 0 : 1);
+                })->values();
+            @endphp
+            @forelse ($sortedMakeups as $i => $makeup)
                 <tr>
-                    <td>{{ $i }}</td>
-                    <td class="left-align">&nbsp;</td>
-                    <td>&nbsp;</td>
-                    <td>&nbsp;</td>
+                    <td>{{ $i + 1 }}</td>
+                    <td class="left-align">{{ $makeup->subject_name }}</td>
+                    <td>{{ $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type }}</td>
+                    <td>
+                        @if ($makeup->assessment_type === 'jn')
+                            {{ $excuse->start_date->format('d.m.Y') }} - {{ $excuse->end_date->format('d.m.Y') }}
+                        @else
+                            {{ $makeup->makeup_date ? $makeup->makeup_date->format('d.m.Y') : 'Belgilanmagan' }}
+                        @endif
+                    </td>
                 </tr>
-            @endfor
+            @empty
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #999;">Ma'lumot mavjud emas</td>
+                </tr>
+            @endforelse
         </tbody>
     </table>
 

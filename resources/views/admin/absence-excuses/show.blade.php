@@ -41,13 +41,13 @@
             @endif
 
             {{-- ═══════ 1-QATOR: Talaba | Ariza | Qoldirilgan davr ═══════ --}}
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 
                 {{-- Talaba ma'lumotlari --}}
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-5 py-3 bg-indigo-600 dark:bg-indigo-700 flex items-center">
-                        <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                        <h3 class="text-base font-bold text-white">Talaba ma'lumotlari</h3>
+                    <div class="px-5 py-3 bg-indigo-600 dark:bg-indigo-700 flex items-center rounded-t-xl">
+                        <svg class="w-5 h-5 mr-2 text-indigo-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                        <h3 class="text-base font-bold text-indigo-50">Talaba ma'lumotlari</h3>
                     </div>
                     <div class="p-5">
                         <dl class="space-y-3">
@@ -77,9 +77,9 @@
 
                 {{-- Ariza tafsilotlari --}}
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-5 py-3 bg-blue-600 dark:bg-blue-700 flex items-center">
-                        <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        <h3 class="text-base font-bold text-white">Ariza tafsilotlari</h3>
+                    <div class="px-5 py-3 bg-blue-600 dark:bg-blue-700 flex items-center rounded-t-xl">
+                        <svg class="w-5 h-5 mr-2 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <h3 class="text-base font-bold text-blue-50">Ariza tafsilotlari</h3>
                     </div>
                     <div class="p-5">
                         <dl class="space-y-3">
@@ -115,9 +115,9 @@
 
                 {{-- Qoldirilgan davr --}}
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-5 py-3 bg-orange-500 dark:bg-orange-600 flex items-center">
-                        <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        <h3 class="text-base font-bold text-white">Qoldirilgan davr</h3>
+                    <div class="px-5 py-3 bg-orange-500 dark:bg-orange-600 flex items-center rounded-t-xl">
+                        <svg class="w-5 h-5 mr-2 text-orange-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        <h3 class="text-base font-bold text-orange-50">Qoldirilgan davr</h3>
                     </div>
                     <div class="p-5 text-center">
                         <div class="flex items-center justify-center gap-2 mb-4">
@@ -147,15 +147,15 @@
                 </div>
             </div>
 
-            {{-- ═══════ 2-QATOR: Qo'shimcha ma'lumot + Asos hujjati ═══════ --}}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+            {{-- ═══════ 2-QATOR: Qo'shimcha + Asos hujjati — BITTA QATORDA ═══════ --}}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
-                {{-- Chap card: Ko'rib chiqish natijasi yoki Qo'shimcha --}}
+                {{-- Chap card --}}
                 @if(!$excuse->isPending())
                     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div class="px-5 py-3 bg-emerald-600 dark:bg-emerald-700 flex items-center">
-                            <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                            <h3 class="text-base font-bold text-white">Ko'rib chiqish natijasi</h3>
+                        <div class="px-5 py-3 bg-green-600 dark:bg-green-700 flex items-center rounded-t-xl">
+                            <svg class="w-5 h-5 mr-2 text-green-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                            <h3 class="text-base font-bold text-green-50">Ko'rib chiqish natijasi</h3>
                         </div>
                         <div class="p-5">
                             <dl class="space-y-3">
@@ -177,7 +177,7 @@
                             @if($excuse->isApproved() && $excuse->approved_pdf_path)
                                 <div class="mt-4">
                                     <a href="{{ route('admin.absence-excuses.download-pdf', $excuse->id) }}" target="_blank"
-                                       class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">
+                                       class="inline-flex items-center px-4 py-2 bg-green-600 text-green-50 text-sm font-semibold rounded-lg hover:bg-green-700 transition">
                                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                         Tasdiqlangan PDF
                                     </a>
@@ -193,9 +193,9 @@
                     </div>
                 @else
                     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div class="px-5 py-3 bg-slate-600 dark:bg-slate-700 flex items-center">
-                            <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            <h3 class="text-base font-bold text-white">Qo'shimcha ma'lumot</h3>
+                        <div class="px-5 py-3 bg-gray-700 dark:bg-gray-600 flex items-center rounded-t-xl">
+                            <svg class="w-5 h-5 mr-2 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <h3 class="text-base font-bold text-gray-100">Qo'shimcha ma'lumot</h3>
                         </div>
                         <div class="p-5">
                             @if($excuse->description)
@@ -227,9 +227,9 @@
 
                 {{-- O'ng card: Asos hujjati --}}
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="px-5 py-3 bg-violet-600 dark:bg-violet-700 flex items-center">
-                        <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-                        <h3 class="text-base font-bold text-white">Asos hujjati</h3>
+                    <div class="px-5 py-3 bg-purple-600 dark:bg-purple-700 flex items-center rounded-t-xl">
+                        <svg class="w-5 h-5 mr-2 text-purple-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                        <h3 class="text-base font-bold text-purple-50">Asos hujjati</h3>
                     </div>
                     @php
                         $ext = strtolower(pathinfo($excuse->file_original_name, PATHINFO_EXTENSION));
@@ -243,8 +243,8 @@
                             </div>
                         @else
                             <div class="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
-                                <div class="w-10 h-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center flex-shrink-0">
-                                    <svg class="w-5 h-5 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                <div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                 </div>
                                 <div class="min-w-0">
                                     <p class="text-sm font-bold text-gray-900 dark:text-white truncate">{{ $excuse->file_original_name }}</p>
@@ -254,12 +254,12 @@
                         @endif
                         <div class="flex gap-3">
                             <a href="{{ route('admin.absence-excuses.download', $excuse->id) }}" target="_blank"
-                               class="flex-1 inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
+                               class="flex-1 inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-blue-50 text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                 Ko'rish
                             </a>
                             <a href="{{ route('admin.absence-excuses.download', $excuse->id) }}" download
-                               class="flex-1 inline-flex items-center justify-center px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-lg hover:bg-violet-700 transition">
+                               class="flex-1 inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-purple-50 text-sm font-semibold rounded-lg hover:bg-purple-700 transition">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                                 Yuklab olish
                             </a>
@@ -268,25 +268,25 @@
                 </div>
             </div>
 
-            {{-- ═══════ 3-QATOR: Qayta topshirish nazoratlari — full width ═══════ --}}
+            {{-- ═══════ 3-QATOR: Qayta topshirish nazoratlari — full width, KATTAROQ ═══════ --}}
             @if($excuse->makeups->count() > 0)
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-5">
-                    <div class="px-5 py-3 bg-teal-600 dark:bg-teal-700 flex items-center justify-between">
-                        <h3 class="text-base font-bold text-white flex items-center">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+                    <div class="px-6 py-3.5 bg-indigo-600 dark:bg-indigo-700 flex items-center justify-between rounded-t-xl">
+                        <h3 class="text-lg font-bold text-indigo-50 flex items-center">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                             Qayta topshirish nazoratlari
                         </h3>
-                        <span class="px-2.5 py-0.5 text-xs font-bold bg-white/20 text-white rounded-full">{{ $excuse->makeups->count() }} ta</span>
+                        <span class="px-3 py-1 text-sm font-bold bg-indigo-500 text-indigo-100 rounded-full">{{ $excuse->makeups->count() }} ta</span>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full">
                             <thead>
-                                <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
-                                    <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">#</th>
-                                    <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fan nomi</th>
-                                    <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nazorat turi</th>
-                                    <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Qayta topshirish sanasi</th>
-                                    <th class="px-5 py-3 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Holat</th>
+                                <tr class="bg-gray-50 dark:bg-gray-700/50 border-b-2 border-gray-200 dark:border-gray-600">
+                                    <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider w-14">#</th>
+                                    <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Fan nomi</th>
+                                    <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Nazorat turi</th>
+                                    <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Qayta topshirish sanasi</th>
+                                    <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Holat</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -295,21 +295,20 @@
                                         $typeColors = [
                                             'jn' => 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
                                             'mt' => 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-                                            'oski' => 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-                                            'test' => 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+                                            'oski' => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+                                            'test' => 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
                                         ];
                                         $typeColor = $typeColors[$makeup->assessment_type] ?? 'bg-gray-100 text-gray-700';
-                                        $rowBg = $i % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-750';
                                     @endphp
-                                    <tr class="{{ $rowBg }} border-b border-gray-100 dark:border-gray-700 hover:bg-teal-50/50 dark:hover:bg-teal-900/10 transition">
-                                        <td class="px-5 py-3.5 text-sm text-gray-400 font-bold">{{ $i + 1 }}</td>
-                                        <td class="px-5 py-3.5 text-sm font-bold text-gray-900 dark:text-white">{{ $makeup->subject_name }}</td>
-                                        <td class="px-5 py-3.5">
-                                            <span class="inline-flex px-3 py-1 text-xs font-bold rounded-full {{ $typeColor }}">
+                                    <tr class="{{ $i % 2 === 1 ? 'bg-gray-50 dark:bg-gray-700/30' : '' }} border-b border-gray-100 dark:border-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition">
+                                        <td class="px-6 py-4 text-base text-gray-400 font-bold">{{ $i + 1 }}</td>
+                                        <td class="px-6 py-4 text-base font-bold text-gray-900 dark:text-white">{{ $makeup->subject_name }}</td>
+                                        <td class="px-6 py-4">
+                                            <span class="inline-flex px-3 py-1 text-sm font-bold rounded-full {{ $typeColor }}">
                                                 {{ $makeup->assessment_type_label }}
                                             </span>
                                         </td>
-                                        <td class="px-5 py-3.5 text-sm text-gray-700 dark:text-gray-300">
+                                        <td class="px-6 py-4 text-base text-gray-700 dark:text-gray-300">
                                             @if($makeup->makeup_date)
                                                 <span class="font-semibold">{{ $makeup->makeup_date->format('d.m.Y') }}</span>
                                                 @if($makeup->makeup_end_date)
@@ -320,8 +319,8 @@
                                                 <span class="text-gray-400 italic">Belgilanmagan</span>
                                             @endif
                                         </td>
-                                        <td class="px-5 py-3.5">
-                                            <span class="inline-flex px-3 py-1 text-xs font-bold rounded-full
+                                        <td class="px-6 py-4">
+                                            <span class="inline-flex px-3 py-1 text-sm font-bold rounded-full
                                                 @if($makeup->status === 'completed') bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300
                                                 @elseif($makeup->status === 'scheduled') bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
                                                 @else bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 @endif">
@@ -338,20 +337,20 @@
 
             {{-- ═══════ Tasdiqlash / Rad etish — kichik, o'ng tomonda ═══════ --}}
             @if($excuse->isPending())
-                <div class="flex justify-end mb-5" x-data="{ showReject: false }">
+                <div class="flex justify-end mb-6" x-data="{ showReject: false }">
                     <div class="flex flex-col items-end gap-3">
                         <div class="flex gap-3">
                             <form method="POST" action="{{ route('admin.absence-excuses.approve', $excuse->id) }}"
                                   onsubmit="return confirm('Arizani tasdiqlashni xohlaysizmi? PDF hujjat yaratiladi.')">
                                 @csrf
                                 <button type="submit"
-                                        class="inline-flex items-center px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition">
+                                        class="inline-flex items-center px-5 py-2 bg-green-600 text-green-50 text-sm font-semibold rounded-lg hover:bg-green-700 transition">
                                     <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                     Tasdiqlash
                                 </button>
                             </form>
                             <button @click="showReject = !showReject"
-                                    class="inline-flex items-center px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition">
+                                    class="inline-flex items-center px-5 py-2 bg-red-600 text-red-50 text-sm font-semibold rounded-lg hover:bg-red-700 transition">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                 Rad etish
                             </button>
@@ -369,7 +368,7 @@
                                 @enderror
                                 <div class="flex justify-end">
                                     <button type="submit"
-                                            class="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg hover:bg-red-800 transition">
+                                            class="px-4 py-2 bg-red-700 text-red-50 text-sm font-semibold rounded-lg hover:bg-red-800 transition">
                                         Rad etishni tasdiqlash
                                     </button>
                                 </div>

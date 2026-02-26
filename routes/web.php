@@ -324,6 +324,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-semesters', [KtrController::class, 'getSemesters'])->name('get-semesters');
             Route::get('/get-subjects', [KtrController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/export', [KtrController::class, 'export'])->name('export');
+            Route::get('/export-word/{curriculumSubjectId}', [KtrController::class, 'exportWord'])->name('export-word');
             Route::get('/plan/{curriculumSubjectId}', [KtrController::class, 'getPlan'])->name('get-plan');
             Route::post('/plan/{curriculumSubjectId}', [KtrController::class, 'savePlan'])->name('save-plan');
             Route::post('/change-request/{curriculumSubjectId}', [KtrController::class, 'requestChange'])->name('request-change');

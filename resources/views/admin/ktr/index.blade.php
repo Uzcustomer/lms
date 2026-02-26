@@ -289,12 +289,12 @@
 
                     <!-- Tugmalar -->
                     <div style="display: flex; justify-content: space-between; margin-top: 16px; align-items: center;">
-                        <button type="button" class="ktr-btn ktr-btn-export" onclick="exportKtrPlan()">
+                        <a id="ktr-word-export-btn" href="#" class="ktr-btn ktr-btn-export" target="_blank" style="text-decoration:none;">
                             <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
-                            Excel
-                        </button>
+                            Word
+                        </a>
                         <div style="display: flex; gap: 10px;">
                             <button type="button" class="ktr-btn ktr-btn-edit" id="ktr-edit-btn" onclick="onKtrEditClick()" style="display:none;">
                                 <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -502,6 +502,9 @@
                     ktrState.canEdit = data.can_edit || false;
                     ktrState.hasPlan = !!(data.plan && data.plan.week_count);
                     ktrState.approverInfo = data.approver_info || {};
+
+                    // Word eksport linkini yangilash
+                    $('#ktr-word-export-btn').attr('href', '/admin/ktr/export-word/' + csId);
                     ktrState.changeRequest = data.change_request || null;
 
                     // Saqlangan ma'lumotlarni yuklash

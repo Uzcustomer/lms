@@ -24,26 +24,26 @@ class NotificationController extends Controller
         [$userId, $userType] = $this->getUserInfo();
         $tab = $request->get('tab', 'inbox');
 
-        $query = Notification::query();
+        $query = Notification::with('sender');
 
         switch ($tab) {
             case 'sent':
-                $query->sent($userId, $userType)->orderByDesc('sent_at');
+                $query->sent($userId)->orderByDesc('sent_at');
                 break;
             case 'drafts':
-                $query->drafts($userId, $userType)->orderByDesc('updated_at');
+                $query->drafts($userId)->orderByDesc('updated_at');
                 break;
             default: // inbox
-                $query->inbox($userId, $userType)->orderByDesc('sent_at');
+                $query->inbox($userId)->orderByDesc('sent_at');
                 break;
         }
 
         $notifications = $query->paginate(20);
 
-        $unreadCount = Notification::inbox($userId, $userType)->unread()->count();
-        $inboxCount = Notification::inbox($userId, $userType)->count();
-        $sentCount = Notification::sent($userId, $userType)->count();
-        $draftsCount = Notification::drafts($userId, $userType)->count();
+        $unreadCount = Notification::inbox($userId)->unread()->count();
+        $inboxCount = Notification::inbox($userId)->count();
+        $sentCount = Notification::sent($userId)->count();
+        $draftsCount = Notification::drafts($userId)->count();
 
         return view('admin.notifications.index', compact(
             'notifications', 'tab', 'unreadCount', 'inboxCount', 'sentCount', 'draftsCount'
@@ -125,7 +125,7 @@ class NotificationController extends Controller
     public function markAllRead()
     {
         [$userId, $userType] = $this->getUserInfo();
-        Notification::inbox($userId, $userType)->unread()->update([
+        Notification::inbox($userId)->unread()->update([
             'is_read' => true,
             'read_at' => now(),
         ]);
@@ -136,7 +136,7 @@ class NotificationController extends Controller
     public function getUnreadCount()
     {
         [$userId, $userType] = $this->getUserInfo();
-        $count = Notification::inbox($userId, $userType)->unread()->count();
+        $count = Notification::inbox($userId)->unread()->count();
 
         return response()->json(['count' => $count]);
     }

@@ -289,12 +289,12 @@
 
                     <!-- Tugmalar -->
                     <div style="display: flex; justify-content: space-between; margin-top: 16px; align-items: center;">
-                        <button type="button" class="ktr-btn ktr-btn-export" onclick="exportKtrPlan()">
+                        <a id="ktr-word-export-btn" href="#" class="ktr-btn ktr-btn-export" target="_blank" style="text-decoration:none;">
                             <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
-                            Excel
-                        </button>
+                            Word
+                        </a>
                         <div style="display: flex; gap: 10px;">
                             <button type="button" class="ktr-btn ktr-btn-edit" id="ktr-edit-btn" onclick="onKtrEditClick()" style="display:none;">
                                 <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -502,6 +502,9 @@
                     ktrState.canEdit = data.can_edit || false;
                     ktrState.hasPlan = !!(data.plan && data.plan.week_count);
                     ktrState.approverInfo = data.approver_info || {};
+
+                    // Word eksport linkini yangilash
+                    $('#ktr-word-export-btn').attr('href', '/admin/ktr/export-word/' + csId);
                     ktrState.changeRequest = data.change_request || null;
 
                     // Saqlangan ma'lumotlarni yuklash
@@ -628,13 +631,18 @@
                 html += '<div class="ktr-change-title">Ruxsat holati</div>';
             }
             var info = ktrState.approverInfo;
-            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Kafedra</th><th>Fakultet</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
+            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Bo\'lim</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
             cr.approvals.forEach(function(a) {
+                var bolim = '-';
+                if (a.role === 'kafedra_mudiri') {
+                    bolim = info.kafedra_name || '-';
+                } else if (a.role === 'dekan') {
+                    bolim = info.faculty_name || '-';
+                }
                 html += '<tr>';
                 html += '<td>' + getRoleName(a.role) + '</td>';
                 html += '<td>' + a.approver_name + '</td>';
-                html += '<td>' + (info.kafedra_name || '-') + '</td>';
-                html += '<td>' + (info.faculty_name || '-') + '</td>';
+                html += '<td>' + bolim + '</td>';
                 html += '<td>' + getStatusBadge(a.status) + '</td>';
                 html += '<td>' + (a.responded_at || '-') + '</td>';
                 html += '</tr>';

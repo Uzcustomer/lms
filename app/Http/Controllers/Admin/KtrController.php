@@ -1146,6 +1146,244 @@ class KtrController extends Controller
     /**
      * KTR o'zgartirish so'rovini tasdiqlash/rad etish
      */
+    /**
+     * KTR rejasini Word formatida eksport qilish
+     */
+    public function exportWord($curriculumSubjectId)
+    {
+        $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
+
+        $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
+        if (!$plan) {
+            return back()->with('error', 'KTR rejasi topilmadi.');
+        }
+
+        // Mashg'ulot turlarini olish
+        $trainingTypes = [];
+        $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+        if (is_array($details)) {
+            foreach ($details as $detail) {
+                $code = (string) ($detail['trainingType']['code'] ?? '');
+                $name = $detail['trainingType']['name'] ?? '';
+                $hours = (int) ($detail['academic_load'] ?? 0);
+                if ($code !== '' && $name !== '') {
+                    $trainingTypes[$code] = ['name' => $name, 'hours' => $hours];
+                }
+            }
+        }
+
+        // Tartibda saralash
+        $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar', 'mustaqil'];
+        $normalize = function ($str) {
+            return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower($str));
+        };
+        if (count($trainingTypes) > 1) {
+            uksort($trainingTypes, function ($a, $b) use ($trainingTypes, $typeOrder, $normalize) {
+                $nameA = $normalize($trainingTypes[$a]['name']);
+                $nameB = $normalize($trainingTypes[$b]['name']);
+                $posA = count($typeOrder);
+                $posB = count($typeOrder);
+                foreach ($typeOrder as $i => $keyword) {
+                    if ($posA === count($typeOrder) && str_contains($nameA, $keyword)) $posA = $i;
+                    if ($posB === count($typeOrder) && str_contains($nameB, $keyword)) $posB = $i;
+                }
+                return $posA <=> $posB;
+            });
+        }
+
+        // Mustaqil ta'limni filtrlash (jadvalda ko'rsatilmaydi)
+        $filteredTypes = [];
+        foreach ($trainingTypes as $code => $type) {
+            if (!preg_match('/mustaqil/i', $normalize($type['name']))) {
+                $filteredTypes[$code] = $type;
+            }
+        }
+        $typeCodes = array_keys($filteredTypes);
+
+        // Kafedra va fakultet ma'lumotlari
+        $approverInfo = $this->getApproverInfo($cs);
+
+        // Semestr ma'lumotlari
+        $curriculum = Curriculum::where('curricula_hemis_id', $cs->curricula_hemis_id)->first();
+        $semesterName = $cs->semester_name ?? '';
+        $levelName = '';
+        if ($curriculum) {
+            $semester = DB::table('semesters')
+                ->where('curriculum_hemis_id', $curriculum->curricula_hemis_id)
+                ->where('code', $cs->semester_code)
+                ->first();
+            if ($semester) {
+                $levelName = $semester->level_name ?? '';
+            }
+        }
+
+        $planData = $plan->plan_data;
+        $hoursData = $planData['hours'] ?? $planData;
+        $topicsData = $planData['topics'] ?? [];
+
+        // PhpWord hujjat yaratish
+        $phpWord = new \PhpOffice\PhpWord\PhpWord();
+
+        // Default font
+        $phpWord->setDefaultFontName('Times New Roman');
+        $phpWord->setDefaultFontSize(11);
+
+        $section = $phpWord->addSection([
+            'orientation' => 'landscape',
+            'marginTop' => 600,
+            'marginBottom' => 600,
+            'marginLeft' => 800,
+            'marginRight' => 600,
+        ]);
+
+        // Sarlavha: "TOSHKENT TIBBIYOT AKADEMIYASI TERMIZ FILIALI"
+        $section->addText(
+            'TOSHKENT TIBBIYOT AKADEMIYASI TERMIZ FILIALI',
+            ['bold' => true, 'size' => 12],
+            ['alignment' => 'center', 'spaceAfter' => 0]
+        );
+
+        // Fakultet va kafedra
+        $section->addText(
+            ($approverInfo['faculty_name'] ?: '') . ' fakulteti',
+            ['size' => 11],
+            ['alignment' => 'center', 'spaceAfter' => 0]
+        );
+        $section->addText(
+            ($approverInfo['kafedra_name'] ?: '') . ' kafedrasi',
+            ['size' => 11],
+            ['alignment' => 'center', 'spaceAfter' => 120]
+        );
+
+        // "TASDIQLAYMAN"
+        $tasdiqTable = $section->addTable();
+        $tasdiqTable->addRow();
+        $tasdiqCell = $tasdiqTable->addCell(14000);
+        $tasdiqCell->addText('"TASDIQLAYMAN"', ['bold' => true, 'size' => 11], ['alignment' => 'right', 'spaceAfter' => 0]);
+        $tasdiqCell->addText('Kafedra mudiri: __________ ' . ($approverInfo['kafedra_mudiri']['name'] ?? '_______________'), ['size' => 10], ['alignment' => 'right', 'spaceAfter' => 0]);
+        $tasdiqCell->addText('"___" _____________ 20__ y.', ['size' => 10], ['alignment' => 'right', 'spaceAfter' => 120]);
+
+        // Asosiy sarlavha
+        $section->addText(
+            'KALENDAR TEMATIK REJA',
+            ['bold' => true, 'size' => 14],
+            ['alignment' => 'center', 'spaceAfter' => 120]
+        );
+
+        // Fan ma'lumotlari
+        $section->addText('Fan: ' . $cs->subject_name, ['bold' => true, 'size' => 11], ['spaceAfter' => 0]);
+
+        // Kurs, semestr, kredit
+        $infoLine = 'Kurs: ' . $levelName . '    Semestr: ' . $semesterName . '    Kredit: ' . ($cs->credit ?? '') . '    Jami soat: ' . ($cs->total_acload ?? '');
+        $section->addText($infoLine, ['size' => 11], ['spaceAfter' => 120]);
+
+        // Mashg'ulot turlari bo'yicha soatlar
+        $soatParts = [];
+        foreach ($filteredTypes as $code => $type) {
+            $soatParts[] = $type['name'] . ': ' . $type['hours'] . ' soat';
+        }
+        // Mustaqil ta'lim soatlarini qo'shish
+        foreach ($trainingTypes as $code => $type) {
+            if (preg_match('/mustaqil/i', $normalize($type['name']))) {
+                $soatParts[] = $type['name'] . ': ' . $type['hours'] . ' soat';
+            }
+        }
+        if (!empty($soatParts)) {
+            $section->addText(implode(',   ', $soatParts), ['size' => 10], ['spaceAfter' => 120]);
+        }
+
+        // Jadval yaratish
+        $cellStyle = ['borderSize' => 4, 'borderColor' => '000000', 'valign' => 'center'];
+        $headerStyle = ['bold' => true, 'size' => 9];
+        $dataStyle = ['size' => 9];
+        $centerParagraph = ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0];
+        $leftParagraph = ['spaceAfter' => 0, 'spaceBefore' => 0];
+
+        // Ustunlar soni: Hafta + har bir tur uchun (Mavzu + Soat) = 1 + typeCount*2
+        $typeCount = count($typeCodes);
+        $haftaWidth = 800;
+        $mavzuWidth = (int) ((13000 - $haftaWidth) / max($typeCount, 1) * 0.8);
+        $soatWidth = (int) ((13000 - $haftaWidth) / max($typeCount, 1) * 0.2);
+
+        $table = $section->addTable([
+            'borderSize' => 4,
+            'borderColor' => '000000',
+            'cellMarginTop' => 30,
+            'cellMarginBottom' => 30,
+            'cellMarginLeft' => 50,
+            'cellMarginRight' => 50,
+        ]);
+
+        // 1-qator: Hafta | Mashg'ulot turi nomi (merge 2 cells har biri uchun)
+        $table->addRow(null, ['tblHeader' => true]);
+        $table->addCell($haftaWidth, array_merge($cellStyle, ['vMerge' => 'restart']))->addText('Hafta', $headerStyle, $centerParagraph);
+        foreach ($typeCodes as $code) {
+            $table->addCell($mavzuWidth + $soatWidth, array_merge($cellStyle, ['gridSpan' => 2]))->addText($filteredTypes[$code]['name'], $headerStyle, $centerParagraph);
+        }
+
+        // 2-qator: Hafta (merge) | Mavzu | Soat | Mavzu | Soat ...
+        $table->addRow(null, ['tblHeader' => true]);
+        $table->addCell($haftaWidth, array_merge($cellStyle, ['vMerge' => 'continue']));
+        foreach ($typeCodes as $code) {
+            $table->addCell($mavzuWidth, $cellStyle)->addText('Mavzu', $headerStyle, $centerParagraph);
+            $table->addCell($soatWidth, $cellStyle)->addText('Soat', $headerStyle, $centerParagraph);
+        }
+
+        // Ma'lumotlar qatorlari
+        $seqCounters = [];
+        foreach ($typeCodes as $code) {
+            $seqCounters[$code] = 0;
+        }
+
+        for ($w = 1; $w <= $plan->week_count; $w++) {
+            $table->addRow();
+            $table->addCell($haftaWidth, $cellStyle)->addText($w, $dataStyle, $centerParagraph);
+
+            foreach ($typeCodes as $code) {
+                $hrs = (int) ($hoursData[$w][$code] ?? 0);
+                $topic = $topicsData[$w][$code] ?? '';
+
+                $table->addCell($mavzuWidth, $cellStyle)->addText($topic, $dataStyle, $leftParagraph);
+                $table->addCell($soatWidth, $cellStyle)->addText($hrs > 0 ? $hrs : '', $dataStyle, $centerParagraph);
+
+                if ($hrs > 0) {
+                    $seqCounters[$code]++;
+                }
+            }
+        }
+
+        // Jami qator
+        $table->addRow();
+        $table->addCell($haftaWidth, array_merge($cellStyle, ['bgColor' => 'E8E8E8']))->addText('Jami', ['bold' => true, 'size' => 9], $centerParagraph);
+        foreach ($typeCodes as $code) {
+            $colTotal = 0;
+            for ($w = 1; $w <= $plan->week_count; $w++) {
+                $colTotal += (int) ($hoursData[$w][$code] ?? 0);
+            }
+            $table->addCell($mavzuWidth, array_merge($cellStyle, ['bgColor' => 'E8E8E8']))->addText('', $dataStyle, $centerParagraph);
+            $table->addCell($soatWidth, array_merge($cellStyle, ['bgColor' => 'E8E8E8']))->addText($colTotal, ['bold' => true, 'size' => 9], $centerParagraph);
+        }
+
+        // Imzolar
+        $section->addTextBreak(1);
+
+        // O'qituvchi
+        $user = auth()->user();
+        $teacherName = ($user instanceof Teacher) ? ($user->full_name ?? $user->name) : '';
+
+        $section->addText("Tuzuvchi o'qituvchi: ______________ " . $teacherName, ['size' => 11], ['spaceAfter' => 200]);
+
+        // Fayl nomini generatsiya qilish
+        $filename = 'KTR_' . preg_replace('/[^a-zA-Z0-9\x{0400}-\x{04FF}]/u', '_', $cs->subject_name) . '_' . date('Y-m-d') . '.docx';
+
+        // Faylni yuklash
+        $tempFile = tempnam(sys_get_temp_dir(), 'ktr_') . '.docx';
+        $objWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'Word2007');
+        $objWriter->save($tempFile);
+
+        return response()->download($tempFile, $filename)->deleteFileAfterSend(true);
+    }
+
     public function approveChange(Request $request, $approvalId)
     {
         $approval = KtrChangeApproval::findOrFail($approvalId);
@@ -1153,13 +1391,21 @@ class KtrController extends Controller
 
         // Faqat tegishli rol egasi tasdiqlashi mumkin
         $canApprove = false;
-        if ($approval->approver_id && $user instanceof Teacher && $user->id == $approval->approver_id) {
-            $canApprove = true;
+
+        if ($approval->role === 'registrator_ofisi') {
+            // Registrator ofisi - registrator_ofisi roli bor xodim tasdiqlashi mumkin
+            if ($user->hasRole('registrator_ofisi')) {
+                $canApprove = true;
+            }
+        } else {
+            // Kafedra mudiri va dekan - faqat aniq tayinlangan shaxs
+            if ($approval->approver_id && $user instanceof Teacher && $user->id == $approval->approver_id) {
+                $canApprove = true;
+            }
         }
+
+        // Admin har doim tasdiqlashi mumkin
         if ($user->hasRole(['superadmin', 'admin'])) {
-            $canApprove = true;
-        }
-        if ($user->hasRole($approval->role)) {
             $canApprove = true;
         }
 
@@ -1172,10 +1418,18 @@ class KtrController extends Controller
             $status = 'approved';
         }
 
-        $approval->update([
+        $updateData = [
             'status' => $status,
             'responded_at' => now(),
-        ]);
+        ];
+
+        // Registrator ofisi tasdiqlaganda kim tasdiqlaganini saqlash
+        if ($approval->role === 'registrator_ofisi' && !$approval->approver_id) {
+            $updateData['approver_id'] = $user->id;
+            $updateData['approver_name'] = $user->full_name ?? $user->name ?? 'Noma\'lum';
+        }
+
+        $approval->update($updateData);
 
         // Agar rad etilsa, butun so'rovni ham rad etish
         $cr = $approval->changeRequest;
@@ -1183,9 +1437,20 @@ class KtrController extends Controller
             $cr->update(['status' => 'rejected']);
         }
 
+        // Barcha approval holatini qaytarish (jadval yangilanishi uchun)
+        $cr->load('approvals');
+
         return response()->json([
             'success' => true,
             'message' => $status === 'approved' ? 'Tasdiqlandi!' : 'Rad etildi.',
+            'approvals' => $cr->approvals->map(fn ($a) => [
+                'id' => $a->id,
+                'role' => $a->role,
+                'approver_name' => $a->approver_name,
+                'status' => $a->status,
+                'responded_at' => $a->responded_at?->format('d.m.Y H:i'),
+            ]),
+            'is_approved' => $cr->isFullyApproved(),
         ]);
     }
 }

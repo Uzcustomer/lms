@@ -1057,6 +1057,14 @@ class KtrController extends Controller
                             'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
                             'body' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz Registrator ofisi sifatida tasdiqlashingiz kerak.",
                             'type' => Notification::TYPE_ALERT,
+                            'data' => [
+                                'action' => 'ktr_change_approval',
+                                'change_request_id' => $cr->id,
+                                'approval_id' => $approval->id,
+                                'curriculum_subject_id' => $cs->id,
+                                'subject_name' => $cs->subject_name,
+                                'role' => 'registrator_ofisi',
+                            ],
                             'is_draft' => false,
                             'sent_at' => now(),
                         ]);
@@ -1078,6 +1086,14 @@ class KtrController extends Controller
                         'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
                         'body' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
                         'type' => Notification::TYPE_ALERT,
+                        'data' => [
+                            'action' => 'ktr_change_approval',
+                            'change_request_id' => $cr->id,
+                            'approval_id' => $approval->id,
+                            'curriculum_subject_id' => $cs->id,
+                            'subject_name' => $cs->subject_name,
+                            'role' => $approval->role,
+                        ],
                         'is_draft' => false,
                         'sent_at' => now(),
                     ]);

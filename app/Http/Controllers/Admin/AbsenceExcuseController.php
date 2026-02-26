@@ -104,7 +104,12 @@ class AbsenceExcuseController extends Controller
                     $wordTemplateSuccess = true;
                 } catch (\Throwable $e) {
                     // Word shablon orqali ishlamadi — Blade fallback ga o'tish
-                    \Log::warning('Word template PDF failed, falling back to Blade: ' . $e->getMessage());
+                    $templateError = $e->getMessage();
+                    \Log::error('Word template PDF failed, falling back to Blade: ' . $templateError, [
+                        'exception' => $e::class,
+                        'file' => $e->getFile() . ':' . $e->getLine(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
                 }
             }
 
@@ -147,7 +152,12 @@ class AbsenceExcuseController extends Controller
                 'approved_pdf_path' => $pdfPath,
             ]);
 
-            return back()->with('success', 'Ariza muvaffaqiyatli tasdiqlandi. PDF hujjat yaratildi.');
+            $successMsg = 'Ariza muvaffaqiyatli tasdiqlandi. PDF hujjat yaratildi.';
+            if (!$wordTemplateSuccess && isset($templateError)) {
+                $successMsg .= ' (Shablon xatosi: ' . $templateError . ' — Blade shablon ishlatildi)';
+            }
+
+            return back()->with('success', $successMsg);
         } catch (\Throwable $e) {
             return back()->with('error', 'PDF generatsiyada xatolik: ' . $e->getMessage());
         }

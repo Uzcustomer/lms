@@ -613,6 +613,7 @@
                 return this._countNonSundays(this.startDate, this.endDate);
             },
             get groupedAssessments() {
+                const typeOrder = { jn: 0, mt: 1, oski: 2, test: 3 };
                 const groups = [];
                 const map = {};
                 this.assessments.forEach((item, idx) => {
@@ -624,7 +625,11 @@
                     }
                     map[key].items.push(item);
                 });
-                // Non-JN testlari bor fanlar birinchi (test, oski, mt), faqat JN bor fanlar oxirida
+                // Har bir fan ichida: JN birinchi, keyin MT, OSKI, Test
+                groups.forEach(g => {
+                    g.items.sort((a, b) => (typeOrder[a.assessment_type] ?? 9) - (typeOrder[b.assessment_type] ?? 9));
+                });
+                // Non-JN testlari bor fanlar birinchi, faqat JN bor fanlar oxirida
                 groups.sort((a, b) => {
                     const aHasNonJn = a.items.some(i => i.assessment_type !== 'jn');
                     const bHasNonJn = b.items.some(i => i.assessment_type !== 'jn');

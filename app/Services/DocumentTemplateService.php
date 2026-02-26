@@ -480,7 +480,7 @@ class DocumentTemplateService
         // 1-usul: BaconQrCode + Imagick (faqat Imagick mavjud bo'lsa — haqiqiy PNG yaratadi)
         $darkRed = new \BaconQrCode\Renderer\Color\Rgb(139, 0, 0);
         $white = new \BaconQrCode\Renderer\Color\Rgb(255, 255, 255);
-        $fill = \BaconQrCode\Renderer\RendererStyle\Fill::withForegroundColor($white, $darkRed);
+        $fill = \BaconQrCode\Renderer\RendererStyle\Fill::uniformColor($white, $darkRed);
 
         if (class_exists(\BaconQrCode\Writer::class) && extension_loaded('imagick')) {
             try {

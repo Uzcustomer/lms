@@ -624,6 +624,14 @@
                     }
                     map[key].items.push(item);
                 });
+                // Non-JN testlari bor fanlar birinchi (test, oski, mt), faqat JN bor fanlar oxirida
+                groups.sort((a, b) => {
+                    const aHasNonJn = a.items.some(i => i.assessment_type !== 'jn');
+                    const bHasNonJn = b.items.some(i => i.assessment_type !== 'jn');
+                    if (aHasNonJn && !bHasNonJn) return -1;
+                    if (!aHasNonJn && bHasNonJn) return 1;
+                    return 0;
+                });
                 return groups;
             },
             get allDatesSelected() {
@@ -844,8 +852,6 @@
                         });
                     }
                 } catch (e) { console.error('Xatolik:', e); }
-                // JN har doim birinchi
-                this.assessments.sort((a, b) => a.assessment_type === 'jn' ? -1 : b.assessment_type === 'jn' ? 1 : 0);
                 this.loading = false; this.searched = true;
             },
 
@@ -892,6 +898,15 @@
                 const today = new Date(); today.setHours(0,0,0,0);
                 const todayStr = this._toStr(today);
                 const maxDate = this.miniMaxDateStr;
+                // Shu fan ichidagi JN range ni topish (faqat non-JN lar uchun)
+                let jnStart = '', jnEnd = '';
+                if (item.assessment_type !== 'jn') {
+                    const sameSubjectJn = this.assessments.find(
+                        a => a.assessment_type === 'jn' && a.subject_name === item.subject_name
+                    );
+                    jnStart = sameSubjectJn?.makeup_start || '';
+                    jnEnd = sameSubjectJn?.makeup_end || '';
+                }
                 for (let i = 0; i < startWd; i++) {
                     cells.push({ key: 'e' + i, date: null, day: '', disabled: true });
                 }
@@ -901,11 +916,16 @@
                     const isSun = dt.getDay() === 0;
                     const isPast = dt < today;
                     const beyondLimit = maxDate ? ds > maxDate : false;
+                    // Non-JN: shu fan JN range ichidagi sanalar band
+                    let takenByJn = false;
+                    if (jnStart && jnEnd) {
+                        takenByJn = ds >= jnStart && ds <= jnEnd && !isSun;
+                    }
                     cells.push({
                         key: ds, date: dt, dateStr: ds, day: d,
                         isSunday: isSun, isToday: ds === todayStr,
-                        disabled: isPast || isSun || beyondLimit,
-                        takenByJn: false
+                        disabled: isPast || isSun || beyondLimit || takenByJn,
+                        takenByJn: takenByJn
                     });
                 }
                 return cells;
@@ -927,6 +947,14 @@
                         item.makeup_end = dateStr;
                         item.jn_selecting = 'start';
                         item.show_cal = false;
+                        // Shu fan ichidagi boshqa testlarning JN range ga tushgan sanalarini tozalash
+                        this.assessments.forEach(a => {
+                            if (a.assessment_type !== 'jn' && a.subject_name === item.subject_name && a.makeup_date) {
+                                if (a.makeup_date >= item.makeup_start && a.makeup_date <= item.makeup_end) {
+                                    a.makeup_date = '';
+                                }
+                            }
+                        });
                     }
                 } else {
                     item.makeup_date = item.makeup_date === dateStr ? '' : dateStr;

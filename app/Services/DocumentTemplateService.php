@@ -478,10 +478,14 @@ class DocumentTemplateService
         $qrPath = $tempDir . '/' . uniqid('qr_') . '.png';
 
         // 1-usul: BaconQrCode + Imagick (faqat Imagick mavjud bo'lsa — haqiqiy PNG yaratadi)
+        $darkRed = new \BaconQrCode\Renderer\Color\Rgb(139, 0, 0);
+        $white = new \BaconQrCode\Renderer\Color\Rgb(255, 255, 255);
+        $fill = \BaconQrCode\Renderer\RendererStyle\Fill::withForegroundColor($white, $darkRed);
+
         if (class_exists(\BaconQrCode\Writer::class) && extension_loaded('imagick')) {
             try {
                 $renderer = new \BaconQrCode\Renderer\ImageRenderer(
-                    new \BaconQrCode\Renderer\RendererStyle\RendererStyle(300, 1),
+                    new \BaconQrCode\Renderer\RendererStyle\RendererStyle(300, 1, null, null, $fill),
                     new \BaconQrCode\Renderer\Image\ImagickImageBackEnd()
                 );
                 $pngData = (new \BaconQrCode\Writer($renderer))->writeString($data);
@@ -496,7 +500,7 @@ class DocumentTemplateService
         if (class_exists(\BaconQrCode\Writer::class) && extension_loaded('gd')) {
             try {
                 $renderer = new \BaconQrCode\Renderer\ImageRenderer(
-                    new \BaconQrCode\Renderer\RendererStyle\RendererStyle(300, 1),
+                    new \BaconQrCode\Renderer\RendererStyle\RendererStyle(300, 1, null, null, $fill),
                     new \BaconQrCode\Renderer\Image\SvgImageBackEnd()
                 );
                 $svgData = (new \BaconQrCode\Writer($renderer))->writeString($data);
@@ -523,7 +527,7 @@ class DocumentTemplateService
         }
 
         // 3-usul: Online API (eng ishonchli fallback)
-        $apiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&data=' . urlencode($data);
+        $apiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&color=8B0000&data=' . urlencode($data);
         $pngData = @file_get_contents($apiUrl);
 
         if ($pngData) {

@@ -203,6 +203,11 @@ class AbsenceExcuseController extends Controller
                     throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
                 }
 
+                $makeupEndDate = null;
+                if (($makeup['assessment_type'] ?? '') === 'jn' && !empty($makeup['makeup_end'])) {
+                    $makeupEndDate = $makeup['makeup_end'];
+                }
+
                 AbsenceExcuseMakeup::create([
                     'absence_excuse_id' => $excuse->id,
                     'student_id' => $student->id,
@@ -212,6 +217,7 @@ class AbsenceExcuseController extends Controller
                     'assessment_type_code' => $makeup['assessment_type_code'],
                     'original_date' => $makeup['original_date'],
                     'makeup_date' => $dateToSave,
+                    'makeup_end_date' => $makeupEndDate,
                     'status' => 'scheduled',
                 ]);
             }

@@ -21,6 +21,10 @@ class AbsenceExcuseController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('student_id')) {
+            $query->where('student_id', $request->student_id);
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {

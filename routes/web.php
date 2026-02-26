@@ -94,6 +94,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             return back();
         })->name('switch-role');
 
+        // Xabarnomalar (admin panel uchun)
+        Route::prefix('notifications')->name('notifications.')->group(function () {
+            Route::get('/unread-count', [NotificationController::class, 'unreadCount'])->name('unread-count');
+            Route::get('/list', [NotificationController::class, 'index'])->name('list');
+            Route::post('/{id}/read', [NotificationController::class, 'markAsRead'])->name('mark-read');
+            Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+        });
+
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
         Route::get('/students/filter/departments', [AdminStudentController::class, 'getFilterDepartments'])->name('students.filter.departments');
         Route::get('/students/filter/specialties', [AdminStudentController::class, 'getFilterSpecialties'])->name('students.filter.specialties');

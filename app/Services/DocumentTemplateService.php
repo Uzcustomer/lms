@@ -478,7 +478,7 @@ class DocumentTemplateService
         $qrPath = $tempDir . '/' . uniqid('qr_') . '.png';
 
         // 1-usul: BaconQrCode + Imagick (faqat Imagick mavjud bo'lsa — haqiqiy PNG yaratadi)
-        $darkRed = new \BaconQrCode\Renderer\Color\Rgb(139, 0, 0);
+        $darkRed = new \BaconQrCode\Renderer\Color\Rgb(220, 38, 38);
         $white = new \BaconQrCode\Renderer\Color\Rgb(255, 255, 255);
         $fill = \BaconQrCode\Renderer\RendererStyle\Fill::uniformColor($white, $darkRed);
 
@@ -527,7 +527,7 @@ class DocumentTemplateService
         }
 
         // 3-usul: Online API (eng ishonchli fallback)
-        $apiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&color=8B0000&data=' . urlencode($data);
+        $apiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&color=DC2626&data=' . urlencode($data);
         $pngData = @file_get_contents($apiUrl);
 
         if ($pngData) {

@@ -326,28 +326,31 @@ class DocumentTemplateService
 
     /**
      * XML ichidagi bo'lingan ${...} makrolarni birlashtirish
+     *
+     * PCRE2 da \{ unclosed brace xatosi berishi mumkin,
+     * shuning uchun \x7B (={) va \x7D (=}) hex kodlardan foydalanamiz.
      */
     private function mergeBrokenMacros(string $xml): string
     {
-        // Run break pattern: </w:t>...</w:r> <w:r...><w:rPr?>...</w:rPr> <w:t...>
-        $runBreak = '<\/w:t>\s*(?:<\/w:r>\s*<w:r\b[^>]*>\s*(?:<w:rPr\b[^>]*\/>\s*|<w:rPr\b[^>]*>.*?<\/w:rPr>\s*)?)?<w:t(?:\s[^>]*)?>';
+        // XML run break pattern: </w:t> ... <w:t>
+        $runBreak = '</w:t>.*?<w:t[^>]*>';
 
         // 1-qadam: $ va { orasidagi run break'ni olib tashlash
+        // $</w:t>...<w:t>{ => ${
         $xml = preg_replace(
-            '#(\$)' . $runBreak . '(\{)#su',
-            '$1$2',
+            '/\x24(' . $runBreak . ')\x7B/sU',
+            "\x24\x7B",
             $xml
         ) ?? $xml;
 
         // 2-qadam: ${ va } orasidagi run break'larni takroriy olib tashlash
         for ($i = 0; $i < 15; $i++) {
             $before = $xml;
-            $result = preg_replace(
-                '#(\$\{(?:[^}<])*?)' . $runBreak . '([^<]*?\})#su',
+            $xml = preg_replace(
+                '/(\x24\x7B[^\x7D<]*)' . $runBreak . '([^\x7D<]*\x7D)/sU',
                 '$1$2',
                 $xml
-            );
-            $xml = $result ?? $before;
+            ) ?? $before;
 
             if ($xml === $before) {
                 break;
@@ -393,23 +396,23 @@ class DocumentTemplateService
             $idx = $i + 1;
             $row = $templateRow;
 
-            // Placeholder'larni almashtirish (${...} yoki bo'lingan holda)
-            $row = preg_replace('#\$\{m_num\}#u', (string) $idx, $row);
-            $row = preg_replace('#\$\{m_subject\}#u', htmlspecialchars($makeup->subject_name ?? '', ENT_XML1), $row);
-            $row = preg_replace('#\$\{m_type\}#u', htmlspecialchars($typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type, ENT_XML1), $row);
-
+            // Placeholder'larni almashtirish — str_replace ishlatamiz (regex emas)
             if ($makeup->makeup_date) {
                 $dateStr = $makeup->makeup_date->format('d.m.Y');
             } else {
                 $dateStr = 'Belgilanmagan';
             }
-            $row = preg_replace('#\$\{m_date\}#u', htmlspecialchars($dateStr, ENT_XML1), $row);
 
-            // Agar ${...} hali ham qolgan bo'lsa (bo'lingan holda) — XML taglarini olib tashlab almashtirish
-            $row = preg_replace_callback('#\$\{[^}]*m_num[^}]*\}#u', fn() => (string) $idx, $row);
-            $row = preg_replace_callback('#\$\{[^}]*m_subject[^}]*\}#u', fn() => htmlspecialchars($makeup->subject_name ?? '', ENT_XML1), $row);
-            $row = preg_replace_callback('#\$\{[^}]*m_type[^}]*\}#u', fn() => htmlspecialchars($typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type, ENT_XML1), $row);
-            $row = preg_replace_callback('#\$\{[^}]*m_date[^}]*\}#u', fn() => htmlspecialchars($dateStr, ENT_XML1), $row);
+            $row = str_replace(
+                ['${m_num}', '${m_subject}', '${m_type}', '${m_date}'],
+                [
+                    (string) $idx,
+                    htmlspecialchars($makeup->subject_name ?? '', ENT_XML1),
+                    htmlspecialchars($typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type, ENT_XML1),
+                    htmlspecialchars($dateStr, ENT_XML1),
+                ],
+                $row
+            );
 
             $newRows .= $row;
         }

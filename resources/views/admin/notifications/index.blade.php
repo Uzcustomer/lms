@@ -84,9 +84,12 @@
                                 <!-- Content -->
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-center justify-between">
-                                        <span class="text-sm {{ !$notification->is_read && $tab === 'inbox' ? 'font-semibold text-gray-900' : 'font-medium text-gray-700' }} truncate">
-                                            {{ $notification->subject }}
-                                        </span>
+                                        <div class="truncate">
+                                            <span class="text-xs text-gray-500">{{ $notification->sender->name ?? $notification->sender->short_name ?? $notification->sender->full_name ?? __('notifications.system') }}</span>
+                                            <span class="text-sm {{ !$notification->is_read && $tab === 'inbox' ? 'font-semibold text-gray-900' : 'font-medium text-gray-700' }} block truncate">
+                                                {{ $notification->subject }}
+                                            </span>
+                                        </div>
                                         <span class="text-xs text-gray-400 ml-2 flex-shrink-0">
                                             {{ ($notification->sent_at ?? $notification->updated_at)->format('d.m.Y H:i') }}
                                         </span>

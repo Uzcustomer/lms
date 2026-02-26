@@ -47,15 +47,30 @@ class AbsenceExcuseController extends Controller
 
         $excuses = $query->paginate(20)->withQueryString();
 
+        // Filtrlash: reviewed_by bo'yicha
+        if ($request->filled('reviewed_by')) {
+            $query->where('reviewed_by', $request->reviewed_by);
+        }
+
         $stats = [
             'pending' => AbsenceExcuse::where('status', 'pending')->count(),
             'approved' => AbsenceExcuse::where('status', 'approved')->count(),
             'rejected' => AbsenceExcuse::where('status', 'rejected')->count(),
         ];
 
+        // Reviewer statistikasi — kim qancha ariza tasdiqlagan/rad etgan
+        $reviewerStats = AbsenceExcuse::whereNotNull('reviewed_by')
+            ->selectRaw('reviewed_by, reviewed_by_name,
+                SUM(CASE WHEN status = "approved" THEN 1 ELSE 0 END) as approved_count,
+                SUM(CASE WHEN status = "rejected" THEN 1 ELSE 0 END) as rejected_count,
+                COUNT(*) as total_count')
+            ->groupBy('reviewed_by', 'reviewed_by_name')
+            ->orderByDesc('total_count')
+            ->get();
+
         $reasons = AbsenceExcuse::reasonLabels();
 
-        return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons'));
+        return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats'));
     }
 
     public function show($id)

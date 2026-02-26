@@ -1041,8 +1041,8 @@ class KtrController extends Controller
 
             $hasTeacherNotifications = Schema::hasTable('teacher_notifications');
 
-            // Har bir rol uchun alohida duplikat tekshirish (bir xodim bir nechta rolda bo'lishi mumkin)
-            $notifiedByRole = [];
+            // Bitta xodimga bitta xabarnoma (duplikatdan saqlash)
+            $notifiedIds = [];
 
             foreach ($cr->approvals as $approval) {
                 $roleName = $roleNames[$approval->role] ?? $approval->role;
@@ -1051,12 +1051,7 @@ class KtrController extends Controller
                     // Registrator ofisi - HAMMA xodimlarga xabarnoma yuborish
                     $registrators = $approverInfo['registrators'] ?? [];
                     foreach ($registrators as $registrator) {
-                        if (!$registrator['id']) {
-                            continue;
-                        }
-                        // Shu rol ichida duplikatdan saqlash
-                        $roleKey = $approval->role . '_' . $registrator['id'];
-                        if (in_array($roleKey, $notifiedByRole)) {
+                        if (!$registrator['id'] || in_array($registrator['id'], $notifiedIds)) {
                             continue;
                         }
 
@@ -1066,7 +1061,7 @@ class KtrController extends Controller
                             'recipient_id' => $registrator['id'],
                             'recipient_type' => Teacher::class,
                             'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                            'body' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz Registrator ofisi sifatida tasdiqlashingiz kerak.",
+                            'body' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
                             'type' => Notification::TYPE_ALERT,
                             'data' => [
                                 'action' => 'ktr_change_approval',
@@ -1080,7 +1075,7 @@ class KtrController extends Controller
                             'sent_at' => now(),
                         ]);
 
-                        // Teacher notification panelida ham ko'rsatish
+                        // Teacher notification panelida ham ko'rsatish (qaysi rolda tursa ham ko'radi)
                         if ($hasTeacherNotifications) {
                             TeacherNotification::create([
                                 'teacher_id' => $registrator['id'],
@@ -1096,16 +1091,11 @@ class KtrController extends Controller
                             ]);
                         }
 
-                        $notifiedByRole[] = $roleKey;
+                        $notifiedIds[] = $registrator['id'];
                     }
                 } else {
                     // Kafedra mudiri va dekan - faqat tegishli shaxsga
-                    if (!$approval->approver_id) {
-                        continue;
-                    }
-                    // Shu rol ichida duplikatdan saqlash
-                    $roleKey = $approval->role . '_' . $approval->approver_id;
-                    if (in_array($roleKey, $notifiedByRole)) {
+                    if (!$approval->approver_id || in_array($approval->approver_id, $notifiedIds)) {
                         continue;
                     }
 
@@ -1129,7 +1119,7 @@ class KtrController extends Controller
                         'sent_at' => now(),
                     ]);
 
-                    // Teacher notification panelida ham ko'rsatish
+                    // Teacher notification panelida ham ko'rsatish (qaysi rolda tursa ham ko'radi)
                     if ($hasTeacherNotifications) {
                         TeacherNotification::create([
                             'teacher_id' => $approval->approver_id,
@@ -1145,7 +1135,7 @@ class KtrController extends Controller
                         ]);
                     }
 
-                    $notifiedByRole[] = $roleKey;
+                    $notifiedIds[] = $approval->approver_id;
                 }
             }
         } catch (\Exception $e) {

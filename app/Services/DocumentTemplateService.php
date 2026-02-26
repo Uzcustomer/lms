@@ -55,6 +55,7 @@ class DocumentTemplateService
         \Log::info('Template variables found: ' . implode(', ', $processor->getVariables()));
 
         // Matn placeholder'larni almashtirish
+        $processor->setValue('student_id', (string) $excuse->student_id);
         $processor->setValue('student_name', $excuse->student_full_name);
         $processor->setValue('student_hemis_id', $excuse->student_hemis_id);
         $processor->setValue('group_name', $excuse->group_name ?? '');

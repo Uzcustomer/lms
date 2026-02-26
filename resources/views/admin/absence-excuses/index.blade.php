@@ -68,6 +68,9 @@
             {{-- Filterlar --}}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 mb-6">
                 <form method="GET" action="{{ route('admin.absence-excuses.index') }}" class="flex flex-wrap items-center gap-2">
+                    <input type="number" name="student_id" value="{{ request('student_id') }}"
+                           placeholder="Student ID: 368"
+                           class="w-36 lg:w-40 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 px-2">
                     <input type="text" name="search" value="{{ request('search') }}"
                            placeholder="Ism, HEMIS ID, guruh..."
                            class="w-40 lg:w-48 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 px-2">

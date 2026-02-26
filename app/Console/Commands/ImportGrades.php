@@ -201,6 +201,12 @@ class ImportGrades extends Command
 
         $elapsed = round((microtime(true) - $liveStartTime) / 60, 1);
         $this->sendDailyLiveReport($gradeCount, $nbCount, $gradeError, $attendanceError, $elapsed);
+
+        // Live import muvaffaqiyatini cache ga yozish (guruh hisoboti uchun)
+        if (!$gradeError && !$attendanceError) {
+            \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), now()->addHours(2));
+        }
+
         Log::info('[LiveImport] Completed at ' . Carbon::now());
     }
 

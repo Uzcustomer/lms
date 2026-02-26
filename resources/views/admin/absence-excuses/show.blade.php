@@ -40,16 +40,18 @@
                 </div>
             @endif
 
-            {{-- ═══════ 1-QATOR: Talaba | Ariza | Qoldirilgan davr ═══════ --}}
-            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            {{-- ═══════ BITTA KATTA CONTAINER ═══════ --}}
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden" style="margin-bottom: 20px;">
 
-                {{-- Talaba ma'lumotlari --}}
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden" style="flex: 1;">
-                    <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
-                        <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                        <h3 class="text-base font-bold text-white">Talaba ma'lumotlari</h3>
-                    </div>
-                    <div class="p-4">
+                {{-- 1-QISM: Talaba | Ariza | Davr --}}
+                <div style="display: flex; gap: 0;">
+
+                    {{-- Talaba ma'lumotlari --}}
+                    <div style="flex: 1; border-right: 1px solid #e5e7eb; padding: 16px;">
+                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3" style="display: flex; align-items: center;">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            Talaba ma'lumotlari
+                        </h3>
                         <dl class="space-y-2">
                             <div class="flex justify-between">
                                 <dt class="text-sm text-gray-500 dark:text-gray-400">F.I.O</dt>
@@ -73,15 +75,13 @@
                             </div>
                         </dl>
                     </div>
-                </div>
 
-                {{-- Ariza tafsilotlari --}}
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden" style="flex: 1;">
-                    <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
-                        <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        <h3 class="text-base font-bold text-white">Ariza tafsilotlari</h3>
-                    </div>
-                    <div class="p-4">
+                    {{-- Ariza tafsilotlari --}}
+                    <div style="flex: 1; border-right: 1px solid #e5e7eb; padding: 16px;">
+                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3" style="display: flex; align-items: center;">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            Ariza tafsilotlari
+                        </h3>
                         <dl class="space-y-2">
                             <div class="flex justify-between items-start">
                                 <dt class="text-sm text-gray-500 dark:text-gray-400">Sabab turi</dt>
@@ -111,53 +111,54 @@
                             </div>
                         </dl>
                     </div>
+
+                    {{-- Qoldirilgan davr --}}
+                    <div style="flex: 1; padding: 16px;">
+                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3" style="display: flex; align-items: center;">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            Qoldirilgan davr
+                        </h3>
+                        <div class="text-center">
+                            <div class="flex items-center justify-center gap-2 mb-3">
+                                <div>
+                                    <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $excuse->start_date->format('d.m.Y') }}</p>
+                                    <p class="text-xs text-gray-400">boshlanish</p>
+                                </div>
+                                <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                                <div>
+                                    <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $excuse->end_date->format('d.m.Y') }}</p>
+                                    <p class="text-xs text-gray-400">tugash</p>
+                                </div>
+                            </div>
+                            <span class="inline-flex items-center px-4 py-1.5 rounded-full text-xl font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                                {{ $daysCount }} kun
+                            </span>
+                            <p class="text-xs text-gray-400 mt-1">yakshanbasiz</p>
+                            @if($excuse->reason_max_days)
+                                <p class="text-sm mt-2">
+                                    Maks: <span class="font-bold text-gray-700 dark:text-gray-300">{{ $excuse->reason_max_days }} kun</span>
+                                    @if($daysCount > $excuse->reason_max_days)
+                                        <span class="text-red-600 dark:text-red-400 font-bold ml-1">(limit oshgan!)</span>
+                                    @endif
+                                </p>
+                            @endif
+                        </div>
+                    </div>
                 </div>
 
-                {{-- Qoldirilgan davr --}}
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden" style="flex: 1;">
-                    <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
-                        <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        <h3 class="text-base font-bold text-white">Qoldirilgan davr</h3>
-                    </div>
-                    <div class="p-4 text-center">
-                        <div class="flex items-center justify-center gap-2 mb-3">
-                            <div>
-                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $excuse->start_date->format('d.m.Y') }}</p>
-                                <p class="text-xs text-gray-400">boshlanish</p>
-                            </div>
-                            <svg class="w-4 h-4 text-gray-400 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
-                            <div>
-                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ $excuse->end_date->format('d.m.Y') }}</p>
-                                <p class="text-xs text-gray-400">tugash</p>
-                            </div>
-                        </div>
-                        <span class="inline-flex items-center px-4 py-1.5 rounded-full text-xl font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
-                            {{ $daysCount }} kun
-                        </span>
-                        <p class="text-xs text-gray-400 mt-1">yakshanbasiz</p>
-                        @if($excuse->reason_max_days)
-                            <p class="text-sm mt-2">
-                                Maks: <span class="font-bold text-gray-700 dark:text-gray-300">{{ $excuse->reason_max_days }} kun</span>
-                                @if($daysCount > $excuse->reason_max_days)
-                                    <span class="text-red-600 dark:text-red-400 font-bold ml-1">(limit oshgan!)</span>
-                                @endif
-                            </p>
-                        @endif
-                    </div>
-                </div>
-            </div>
+                {{-- Ajratuvchi chiziq --}}
+                <div style="border-top: 1px solid #e5e7eb;"></div>
 
-            {{-- ═══════ 2-QATOR: Qo'shimcha + Asos hujjati — BITTA QATORDA ═══════ --}}
-            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                {{-- 2-QISM: Ko'rib chiqish/Qo'shimcha + Asos hujjati --}}
+                <div style="display: flex; gap: 0;">
 
-                {{-- Chap card --}}
-                @if(!$excuse->isPending())
-                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden" style="flex: 1;">
-                        <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
-                            <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                            <h3 class="text-base font-bold text-white">Ko'rib chiqish natijasi</h3>
-                        </div>
-                        <div class="p-4">
+                    {{-- Chap: Ko'rib chiqish natijasi yoki Qo'shimcha ma'lumot --}}
+                    <div style="flex: 1; border-right: 1px solid #e5e7eb; padding: 16px;">
+                        @if(!$excuse->isPending())
+                            <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3" style="display: flex; align-items: center;">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                                Ko'rib chiqish natijasi
+                            </h3>
                             <dl class="space-y-2">
                                 <div class="flex justify-between">
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Ko'rib chiqqan</dt>
@@ -165,7 +166,7 @@
                                 </div>
                                 <div class="flex justify-between border-t border-gray-100 dark:border-gray-700 pt-2">
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Sana</dt>
-                                    <dd class="text-sm font-semibold text-gray-900 dark:text-white">{{ $excuse->reviewed_at->format('d.m.Y H:i') }}</dd>
+                                    <dd class="text-sm font-bold text-gray-900 dark:text-white">{{ $excuse->reviewed_at->format('d.m.Y H:i') }}</dd>
                                 </div>
                             </dl>
                             @if($excuse->isRejected() && $excuse->rejection_reason)
@@ -189,15 +190,11 @@
                                     <p class="text-sm text-gray-700 dark:text-gray-300">{{ $excuse->description }}</p>
                                 </div>
                             @endif
-                        </div>
-                    </div>
-                @else
-                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden" style="flex: 1;">
-                        <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
-                            <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            <h3 class="text-base font-bold text-white">Qo'shimcha ma'lumot</h3>
-                        </div>
-                        <div class="p-4">
+                        @else
+                            <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3" style="display: flex; align-items: center;">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                Qo'shimcha ma'lumot
+                            </h3>
                             @if($excuse->description)
                                 <p class="text-sm font-bold text-gray-500 dark:text-gray-400 mb-1">Talaba izohi</p>
                                 <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">{{ $excuse->description }}</p>
@@ -221,21 +218,19 @@
                                     </dd>
                                 </div>
                             </dl>
-                        </div>
+                        @endif
                     </div>
-                @endif
 
-                {{-- O'ng card: Asos hujjati --}}
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden" style="flex: 1;">
-                    <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
-                        <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-                        <h3 class="text-base font-bold text-white">Asos hujjati</h3>
-                    </div>
-                    @php
-                        $ext = strtolower(pathinfo($excuse->file_original_name, PATHINFO_EXTENSION));
-                        $isImage = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
-                    @endphp
-                    <div class="p-4">
+                    {{-- O'ng: Asos hujjati --}}
+                    <div style="flex: 1; padding: 16px;">
+                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3" style="display: flex; align-items: center;">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                            Asos hujjati
+                        </h3>
+                        @php
+                            $ext = strtolower(pathinfo($excuse->file_original_name, PATHINFO_EXTENSION));
+                            $isImage = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+                        @endphp
                         @if($isImage)
                             <div class="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 mb-3">
                                 <img src="{{ asset('storage/' . $excuse->file_path) }}" alt="Asos hujjat"
@@ -266,11 +261,49 @@
                         </div>
                     </div>
                 </div>
+
+                {{-- Tasdiqlash / Rad etish tugmalari (container ichida) --}}
+                @if($excuse->isPending())
+                    <div style="border-top: 1px solid #e5e7eb; padding: 16px;" x-data="{ showReject: false }">
+                        <div class="flex items-center gap-3">
+                            <form method="POST" action="{{ route('admin.absence-excuses.approve', $excuse->id) }}"
+                                  onsubmit="return confirm('Arizani tasdiqlashni xohlaysizmi? PDF hujjat yaratiladi.')">
+                                @csrf
+                                <button type="submit"
+                                        class="inline-flex items-center px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">
+                                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Tasdiqlash
+                                </button>
+                            </form>
+                            <button @click="showReject = !showReject"
+                                    class="inline-flex items-center px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition">
+                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                Rad etish
+                            </button>
+                        </div>
+                        <div x-show="showReject" x-transition class="mt-3" style="max-width: 400px;">
+                            <form method="POST" action="{{ route('admin.absence-excuses.reject', $excuse->id) }}">
+                                @csrf
+                                <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Rad etish sababi</label>
+                                <textarea name="rejection_reason" rows="3" required maxlength="500"
+                                          class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-red-500 focus:ring-red-500 text-sm mb-2"
+                                          placeholder="Rad etish sababini yozing..."></textarea>
+                                @error('rejection_reason')
+                                    <p class="mb-2 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                                <button type="submit"
+                                        class="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg hover:bg-red-800 transition">
+                                    Rad etishni tasdiqlash
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                @endif
             </div>
 
-            {{-- ═══════ 3-QATOR: Qayta topshirish nazoratlari — full width ═══════ --}}
+            {{-- ═══════ TABLE: Qayta topshirish nazoratlari — alohida pastda ═══════ --}}
             @if($excuse->makeups->count() > 0)
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-5">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden" style="margin-bottom: 20px;">
                     <div class="px-4 h-12 flex items-center justify-between rounded-t-xl" style="background-color: #1e40af;">
                         <h3 class="text-base font-bold text-white flex items-center">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
@@ -334,49 +367,6 @@
                                 @endforeach
                             </tbody>
                         </table>
-                    </div>
-                </div>
-            @endif
-
-            {{-- ═══════ Tasdiqlash / Rad etish — kichik, o'ng tomonda ═══════ --}}
-            @if($excuse->isPending())
-                <div class="flex justify-end mb-6" x-data="{ showReject: false }">
-                    <div class="flex flex-col items-end gap-3">
-                        <div class="flex gap-3">
-                            <form method="POST" action="{{ route('admin.absence-excuses.approve', $excuse->id) }}"
-                                  onsubmit="return confirm('Arizani tasdiqlashni xohlaysizmi? PDF hujjat yaratiladi.')">
-                                @csrf
-                                <button type="submit"
-                                        class="inline-flex items-center px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">
-                                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                    Tasdiqlash
-                                </button>
-                            </form>
-                            <button @click="showReject = !showReject"
-                                    class="inline-flex items-center px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition">
-                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                Rad etish
-                            </button>
-                        </div>
-                        <div x-show="showReject" x-transition class="w-full max-w-md">
-                            <form method="POST" action="{{ route('admin.absence-excuses.reject', $excuse->id) }}"
-                                  class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                                @csrf
-                                <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Rad etish sababi</label>
-                                <textarea name="rejection_reason" rows="3" required maxlength="500"
-                                          class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-red-500 focus:ring-red-500 text-sm mb-2"
-                                          placeholder="Rad etish sababini yozing..."></textarea>
-                                @error('rejection_reason')
-                                    <p class="mb-2 text-sm text-red-600">{{ $message }}</p>
-                                @enderror
-                                <div class="flex justify-end">
-                                    <button type="submit"
-                                            class="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg hover:bg-red-800 transition">
-                                        Rad etishni tasdiqlash
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
                     </div>
                 </div>
             @endif

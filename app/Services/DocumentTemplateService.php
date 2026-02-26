@@ -99,13 +99,13 @@ class DocumentTemplateService
                     $processor->setValue("m_num#{$idx}", (string) $idx);
                     $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
                     $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
-                    $processor->setValue("m_date#{$idx}", $this->formatMakeupDateRange($makeup));
+                    $processor->setValue("m_date#{$idx}", $this->formatMakeupDateRange($makeup, $excuse));
                 }
             } catch (\Throwable $e) {
                 \Log::warning('cloneRow failed, using manual XML row cloning: ' . $e->getMessage());
 
                 // cloneRow ishlamadi — Reflection orqali XML da qo'lda qatorlarni klonlash
-                $this->manualCloneRow($processor, $makeups, $typeLabels);
+                $this->manualCloneRow($processor, $makeups, $typeLabels, $excuse);
             }
         } else {
             // Agar nazoratlar bo'lmasa placeholder'larni tozalash
@@ -381,7 +381,7 @@ class DocumentTemplateService
     /**
      * cloneRow ishlamaganda qo'lda XML ichida jadval qatorlarini klonlash
      */
-    private function manualCloneRow(TemplateProcessor $processor, $makeups, array $typeLabels): void
+    private function manualCloneRow(TemplateProcessor $processor, $makeups, array $typeLabels, ?AbsenceExcuse $excuse = null): void
     {
         $reflection = new \ReflectionClass($processor);
         $property = $reflection->getProperty('tempDocumentMainPart');
@@ -415,7 +415,7 @@ class DocumentTemplateService
             $row = $templateRow;
 
             // Placeholder'larni almashtirish — str_replace ishlatamiz (regex emas)
-            $dateStr = $this->formatMakeupDateRange($makeup);
+            $dateStr = $this->formatMakeupDateRange($makeup, $excuse ?? null);
 
             $row = str_replace(
                 ['${m_num}', '${m_subject}', '${m_type}', '${m_date}'],
@@ -441,7 +441,7 @@ class DocumentTemplateService
     /**
      * Makeup sana yoki range ni formatlash: "26.02.2026" yoki "26.02.2026 — 02.03.2026"
      */
-    private function formatMakeupDateRange($makeup): string
+    private function formatMakeupDateRange($makeup, ?AbsenceExcuse $excuse = null): string
     {
         if (!$makeup->makeup_date) {
             return 'Belgilanmagan';
@@ -451,6 +451,14 @@ class DocumentTemplateService
 
         if ($makeup->makeup_end_date) {
             return $start . ' — ' . $makeup->makeup_end_date->format('d.m.Y');
+        }
+
+        // JN uchun fallback: excuse end_date
+        if ($makeup->assessment_type === 'jn') {
+            $excuseModel = $excuse ?? $makeup->absenceExcuse;
+            if ($excuseModel?->end_date) {
+                return $start . ' — ' . $excuseModel->end_date->format('d.m.Y');
+            }
         }
 
         return $start;

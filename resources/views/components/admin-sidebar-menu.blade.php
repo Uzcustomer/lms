@@ -1,9 +1,9 @@
 @php
     $isTeacher = auth()->guard('teacher')->check();
-    $user = auth()->user();
+    $user = auth()->user() ?? auth()->guard('teacher')->user();
 
     // Foydalanuvchi rollari va faol rol
-    $userRoles = $user->getRoleNames()->toArray();
+    $userRoles = $user ? $user->getRoleNames()->toArray() : [];
     $activeRole = session('active_role', $userRoles[0] ?? '');
     // Session dagi rol foydalanuvchida mavjud ekanligini tekshirish
     if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
@@ -54,7 +54,7 @@
     }
 
     // Foydalanuvchi to'liq ismi
-    $userName = $user->name ?? ($user->full_name ?? $user->short_name ?? 'Foydalanuvchi');
+    $userName = $user ? ($user->name ?? ($user->full_name ?? $user->short_name ?? 'Foydalanuvchi')) : 'Foydalanuvchi';
 @endphp
 <!-- Mobile backdrop -->
 <div x-data x-show="$store.sidebar.open"

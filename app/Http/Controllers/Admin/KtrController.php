@@ -12,6 +12,7 @@ use App\Models\KtrChangeRequest;
 use App\Models\KtrPlan;
 use App\Models\Teacher;
 use App\Models\Notification;
+use App\Models\TeacherNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -1038,6 +1039,8 @@ class KtrController extends Controller
                 'registrator_ofisi' => 'Registrator ofisi',
             ];
 
+            $hasTeacherNotifications = Schema::hasTable('teacher_notifications');
+
             // Xabarnoma yuborilgan ID larni kuzatish (duplikatdan saqlash)
             $notifiedIds = [];
 
@@ -1049,7 +1052,7 @@ class KtrController extends Controller
                         if (!$registrator['id'] || in_array($registrator['id'], $notifiedIds)) {
                             continue;
                         }
-                        Notification::create([
+                        $notification = Notification::create([
                             'sender_id' => $senderId,
                             'sender_type' => $senderType,
                             'recipient_id' => $registrator['id'],
@@ -1068,6 +1071,23 @@ class KtrController extends Controller
                             'is_draft' => false,
                             'sent_at' => now(),
                         ]);
+
+                        // Teacher notification panelida ham ko'rsatish
+                        if ($hasTeacherNotifications) {
+                            TeacherNotification::create([
+                                'teacher_id' => $registrator['id'],
+                                'type' => 'ktr_approval',
+                                'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                                'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish ruxsatini so'ramoqda.",
+                                'link' => route('admin.notifications.show', $notification->id),
+                                'data' => [
+                                    'action' => 'ktr_change_approval',
+                                    'approval_id' => $approval->id,
+                                    'notification_id' => $notification->id,
+                                ],
+                            ]);
+                        }
+
                         $notifiedIds[] = $registrator['id'];
                     }
                 } else {
@@ -1078,7 +1098,7 @@ class KtrController extends Controller
 
                     $roleName = $roleNames[$approval->role] ?? $approval->role;
 
-                    Notification::create([
+                    $notification = Notification::create([
                         'sender_id' => $senderId,
                         'sender_type' => $senderType,
                         'recipient_id' => $approval->approver_id,
@@ -1097,6 +1117,23 @@ class KtrController extends Controller
                         'is_draft' => false,
                         'sent_at' => now(),
                     ]);
+
+                    // Teacher notification panelida ham ko'rsatish
+                    if ($hasTeacherNotifications) {
+                        TeacherNotification::create([
+                            'teacher_id' => $approval->approver_id,
+                            'type' => 'ktr_approval',
+                            'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                            'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish ruxsatini so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
+                            'link' => route('admin.notifications.show', $notification->id),
+                            'data' => [
+                                'action' => 'ktr_change_approval',
+                                'approval_id' => $approval->id,
+                                'notification_id' => $notification->id,
+                            ],
+                        ]);
+                    }
+
                     $notifiedIds[] = $approval->approver_id;
                 }
             }

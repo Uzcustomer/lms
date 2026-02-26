@@ -45,12 +45,12 @@ class AbsenceExcuseController extends Controller
             $query->whereDate('end_date', '<=', $request->date_to);
         }
 
-        $excuses = $query->paginate(20)->withQueryString();
-
         // Filtrlash: reviewed_by bo'yicha
         if ($request->filled('reviewed_by')) {
             $query->where('reviewed_by', $request->reviewed_by);
         }
+
+        $excuses = $query->paginate(20)->withQueryString();
 
         $stats = [
             'pending' => AbsenceExcuse::where('status', 'pending')->count(),
@@ -68,9 +68,16 @@ class AbsenceExcuseController extends Controller
             ->orderByDesc('total_count')
             ->get();
 
+        // Har bir reviewer uchun arizalar ro'yxati (modal ichida ko'rsatish uchun)
+        $reviewerExcuses = AbsenceExcuse::whereNotNull('reviewed_by')
+            ->whereIn('status', ['approved', 'rejected'])
+            ->orderByDesc('reviewed_at')
+            ->get()
+            ->groupBy('reviewed_by');
+
         $reasons = AbsenceExcuse::reasonLabels();
 
-        return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats'));
+        return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats', 'reviewerExcuses'));
     }
 
     public function show($id)

@@ -366,7 +366,7 @@ class ImportGrades extends Command
                     $this->importDayAttendance($dateStr, $date, true);
                     $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv, {$daysAgo} kun oldin), o'tkazildi.");
                     $this->updateDayProgress($dateStr, '✅', "to'liq ({$finalizedCount})", $dayNum, $originalTotal);
-                    $totalDays--;
+                    $successDays++;
                     continue;
                 }
 

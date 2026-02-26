@@ -3781,22 +3781,25 @@
             modal.dataset.excuseId = excuseId;
 
             // Sababli hujjat ma'lumotlarini ko'rsatish
-            @if(isset($approvedExcuses))
-            const excuseData = @json($approvedExcuses->map(function($e) {
-                return [
-                    'id' => $e->id,
-                    'hemis_id' => $e->student_hemis_id,
-                    'reason' => $e->reason_label,
-                    'start' => $e->start_date->format('d.m.Y'),
-                    'end' => $e->end_date->format('d.m.Y'),
-                    'doc_number' => $e->doc_number,
-                ];
-            })->keyBy('hemis_id'));
+            @if(isset($approvedExcuses) && $approvedExcuses->isNotEmpty())
+            @php
+                $excuseDataJson = $approvedExcuses->map(function($e) {
+                    return [
+                        'id' => $e->id,
+                        'hemis_id' => $e->student_hemis_id,
+                        'reason' => $e->reason_label,
+                        'start' => $e->start_date ? $e->start_date->format('d.m.Y') : '',
+                        'end' => $e->end_date ? $e->end_date->format('d.m.Y') : '',
+                        'doc_number' => $e->doc_number,
+                    ];
+                })->keyBy('hemis_id');
+            @endphp
+            const excuseData = @json($excuseDataJson);
             const info = excuseData[studentHemisId];
             if (info) {
                 document.getElementById('excuse-modal-reason').textContent = info.reason;
-                document.getElementById('excuse-modal-dates').textContent = info.start + ' — ' + info.end;
-                document.getElementById('excuse-modal-doc').textContent = info.doc_number || '—';
+                document.getElementById('excuse-modal-dates').textContent = info.start + ' \u2014 ' + info.end;
+                document.getElementById('excuse-modal-doc').textContent = info.doc_number || '\u2014';
             }
             @endif
 

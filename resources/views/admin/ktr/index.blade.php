@@ -610,7 +610,8 @@
             html += '<ul class="ktr-approver-list">';
             html += '<li><b>Kafedra mudiri</b>: ' + (info.kafedra_mudiri ? info.kafedra_mudiri.name : 'Topilmadi') + ' <span style="color:#94a3b8;">(' + (info.kafedra_name || '') + ')</span></li>';
             html += '<li><b>Dekan</b>: ' + (info.dekan ? info.dekan.name : 'Topilmadi') + ' <span style="color:#94a3b8;">(' + (info.faculty_name || '') + ')</span></li>';
-            html += '<li><b>Registrator ofisi</b>: ' + (info.registrator ? info.registrator.name : 'Topilmadi') + '</li>';
+            var regNames = (info.registrators && info.registrators.length) ? info.registrators.map(function(r) { return r.name; }).join(', ') : 'Topilmadi';
+            html += '<li><b>Registrator ofisi</b>: ' + regNames + ' <span style="color:#94a3b8;">(har qanday biri tasdiqlashi mumkin)</span></li>';
             html += '</ul>';
             html += '<button type="button" class="ktr-btn ktr-btn-primary" onclick="sendChangeRequest()" id="ktr-request-btn">Ruxsat so\'rash</button>';
             html += '</div>';
@@ -638,11 +639,13 @@
                 }
                 html += '</div>';
             }
-            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
+            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Kafedra</th><th>Fakultet</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
             cr.approvals.forEach(function(a) {
                 html += '<tr>';
                 html += '<td>' + getRoleName(a.role) + '</td>';
                 html += '<td>' + a.approver_name + '</td>';
+                html += '<td>' + (info.kafedra_name || '-') + '</td>';
+                html += '<td>' + (info.faculty_name || '-') + '</td>';
                 html += '<td>' + getStatusBadge(a.status) + '</td>';
                 html += '<td>' + (a.responded_at || '-') + '</td>';
                 html += '</tr>';

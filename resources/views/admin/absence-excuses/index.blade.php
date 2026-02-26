@@ -21,7 +21,8 @@
 
             {{-- Statistika --}}
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <a href="{{ route('admin.absence-excuses.index', ['status' => 'pending']) }}"
+                   class="block bg-yellow-50 border-2 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.02] {{ request('status') == 'pending' ? 'border-yellow-500 shadow-md ring-2 ring-yellow-200' : 'border-yellow-200 hover:border-yellow-400' }}">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
                             <svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -33,8 +34,9 @@
                             <p class="text-2xl font-bold text-yellow-800">{{ $stats['pending'] }}</p>
                         </div>
                     </div>
-                </div>
-                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                </a>
+                <a href="{{ route('admin.absence-excuses.index', ['status' => 'approved']) }}"
+                   class="block bg-green-50 border-2 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.02] {{ request('status') == 'approved' ? 'border-green-500 shadow-md ring-2 ring-green-200' : 'border-green-200 hover:border-green-400' }}">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
                             <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -46,8 +48,9 @@
                             <p class="text-2xl font-bold text-green-800">{{ $stats['approved'] }}</p>
                         </div>
                     </div>
-                </div>
-                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                </a>
+                <a href="{{ route('admin.absence-excuses.index', ['status' => 'rejected']) }}"
+                   class="block bg-red-50 border-2 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.02] {{ request('status') == 'rejected' ? 'border-red-500 shadow-md ring-2 ring-red-200' : 'border-red-200 hover:border-red-400' }}">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
                             <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,46 +62,36 @@
                             <p class="text-2xl font-bold text-red-800">{{ $stats['rejected'] }}</p>
                         </div>
                     </div>
-                </div>
+                </a>
             </div>
 
             {{-- Filterlar --}}
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-6">
-                <form method="GET" action="{{ route('admin.absence-excuses.index') }}" class="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div>
-                        <input type="text" name="search" value="{{ request('search') }}"
-                               placeholder="Talaba ismi, HEMIS ID, guruh..."
-                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                    </div>
-                    <div>
-                        <select name="status" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                            <option value="">Barcha holatlar</option>
-                            <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Kutilmoqda</option>
-                            <option value="approved" {{ request('status') == 'approved' ? 'selected' : '' }}>Tasdiqlangan</option>
-                            <option value="rejected" {{ request('status') == 'rejected' ? 'selected' : '' }}>Rad etilgan</option>
-                        </select>
-                    </div>
-                    <div>
-                        <select name="reason" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                            <option value="">Barcha sabablar</option>
-                            @foreach($reasons as $key => $label)
-                                <option value="{{ $key }}" {{ request('reason') == $key ? 'selected' : '' }}>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <input type="date" name="date_from" value="{{ request('date_from') }}"
-                               placeholder="Sanadan"
-                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                    </div>
-                    <div class="flex gap-2">
-                        <input type="date" name="date_to" value="{{ request('date_to') }}"
-                               placeholder="Sanagacha"
-                               class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 transition">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 mb-6">
+                <form method="GET" action="{{ route('admin.absence-excuses.index') }}" class="flex flex-wrap items-center gap-2">
+                    <input type="text" name="search" value="{{ request('search') }}"
+                           placeholder="Ism, HEMIS ID, guruh..."
+                           class="w-40 lg:w-48 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 px-2">
+                    <select name="status" class="w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 px-2">
+                        <option value="">Barcha holatlar</option>
+                        <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Kutilmoqda</option>
+                        <option value="approved" {{ request('status') == 'approved' ? 'selected' : '' }}>Tasdiqlangan</option>
+                        <option value="rejected" {{ request('status') == 'rejected' ? 'selected' : '' }}>Rad etilgan</option>
+                    </select>
+                    <select name="reason" class="w-36 lg:w-44 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 px-2">
+                        <option value="">Barcha sabablar</option>
+                        @foreach($reasons as $key => $label)
+                            <option value="{{ $key }}" {{ request('reason') == $key ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    <input type="date" name="date_from" value="{{ request('date_from') }}"
+                           class="w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 px-2">
+                    <input type="date" name="date_to" value="{{ request('date_to') }}"
+                           class="w-32 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1.5 px-2">
+                    <div class="flex gap-1.5">
+                        <button type="submit" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-md hover:bg-indigo-700 transition whitespace-nowrap">
                             Qidirish
                         </button>
-                        <a href="{{ route('admin.absence-excuses.index') }}" class="px-3 py-2 bg-gray-200 text-gray-700 text-sm rounded-md hover:bg-gray-300 transition">
+                        <a href="{{ route('admin.absence-excuses.index') }}" class="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded-md hover:bg-gray-300 transition whitespace-nowrap">
                             Tozalash
                         </a>
                     </div>

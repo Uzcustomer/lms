@@ -31,6 +31,7 @@ return [
     'subject_placeholder' => 'Enter message subject',
     'body' => 'Body',
     'body_placeholder' => 'Enter message text...',
+    'search_placeholder' => 'Search messages...',
     'from' => 'From',
     'to' => 'To',
     'date' => 'Date',

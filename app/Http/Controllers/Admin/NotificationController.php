@@ -24,6 +24,7 @@ class NotificationController extends Controller
     {
         [$userId, $userType] = $this->getUserInfo();
         $tab = $request->get('tab', 'inbox');
+        $search = $request->get('search', '');
 
         $query = Notification::with('sender');
 
@@ -39,6 +40,13 @@ class NotificationController extends Controller
                 break;
         }
 
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('subject', 'like', "%{$search}%")
+                  ->orWhere('body', 'like', "%{$search}%");
+            });
+        }
+
         $notifications = $query->paginate(20);
 
         $unreadCount = Notification::inbox($userId)->unread()->count();
@@ -47,7 +55,7 @@ class NotificationController extends Controller
         $draftsCount = Notification::drafts($userId)->count();
 
         return view('admin.notifications.index', compact(
-            'notifications', 'tab', 'unreadCount', 'inboxCount', 'sentCount', 'draftsCount'
+            'notifications', 'tab', 'search', 'unreadCount', 'inboxCount', 'sentCount', 'draftsCount'
         ));
     }
 
@@ -56,11 +64,17 @@ class NotificationController extends Controller
         [$userId, $userType] = $this->getUserInfo();
 
         // Mark as read if recipient
-        if ($notification->recipient_id == $userId && $notification->recipient_type == $userType) {
+        if ($notification->recipient_id == $userId) {
             $notification->markAsRead();
         }
 
-        return view('admin.notifications.show', compact('notification'));
+        $notification->load(['sender', 'recipient']);
+
+        $unreadCount = Notification::inbox($userId)->unread()->count();
+        $sentCount = Notification::sent($userId)->count();
+        $draftsCount = Notification::drafts($userId)->count();
+
+        return view('admin.notifications.show', compact('notification', 'unreadCount', 'sentCount', 'draftsCount'));
     }
 
     public function create()

@@ -31,6 +31,7 @@ return [
     'subject_placeholder' => 'Xabar mavzusini kiriting',
     'body' => 'Matn',
     'body_placeholder' => 'Xabar matnini kiriting...',
+    'search_placeholder' => 'Xabarlardan qidirish...',
     'from' => 'Kimdan',
     'to' => 'Kimga',
     'date' => 'Sana',

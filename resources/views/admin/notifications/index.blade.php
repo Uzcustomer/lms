@@ -17,9 +17,8 @@
             @endif
 
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex" style="min-height: 520px;">
-                <!-- Left sidebar navigation -->
+                <!-- Chap panel -->
                 <div class="hidden sm:flex flex-col w-52 border-r border-gray-200 bg-gray-50/80 flex-shrink-0">
-                    <!-- Compose button -->
                     <div class="p-3">
                         <a href="{{ route('admin.notifications.create') }}"
                            class="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
@@ -29,8 +28,6 @@
                             {{ __('notifications.compose') }}
                         </a>
                     </div>
-
-                    <!-- Nav links -->
                     <nav class="flex-1 px-2 pb-3 space-y-0.5">
                         <a href="{{ route('admin.notifications.index', ['tab' => 'inbox']) }}"
                            class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors {{ $tab === 'inbox' ? 'bg-blue-100/80 text-blue-800 font-semibold' : 'text-gray-600 hover:bg-gray-100 font-medium' }}">
@@ -61,57 +58,58 @@
                     </nav>
                 </div>
 
-                <!-- Main content area -->
+                <!-- Asosiy qism -->
                 <div class="flex-1 flex flex-col min-w-0">
-                    <!-- Mobile tabs + toolbar -->
-                    <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-white">
-                        <!-- Mobile tabs -->
-                        <div class="flex items-center gap-1 sm:hidden overflow-x-auto">
+                    <!-- Mobil tablar -->
+                    <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-white sm:hidden">
+                        <div class="flex items-center gap-1 overflow-x-auto">
                             <a href="{{ route('admin.notifications.index', ['tab' => 'inbox']) }}"
                                class="px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap {{ $tab === 'inbox' ? 'bg-blue-100 text-blue-700' : 'text-gray-500' }}">
-                                {{ __('notifications.inbox') }}
-                                @if($unreadCount > 0)
-                                <span class="ml-0.5 text-[10px] font-bold">{{ $unreadCount }}</span>
-                                @endif
+                                {{ __('notifications.inbox') }}@if($unreadCount > 0)<span class="ml-0.5 text-[10px] font-bold">{{ $unreadCount }}</span>@endif
                             </a>
                             <a href="{{ route('admin.notifications.index', ['tab' => 'sent']) }}"
-                               class="px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap {{ $tab === 'sent' ? 'bg-blue-100 text-blue-700' : 'text-gray-500' }}">
-                                {{ __('notifications.sent') }}
-                            </a>
+                               class="px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap {{ $tab === 'sent' ? 'bg-blue-100 text-blue-700' : 'text-gray-500' }}">{{ __('notifications.sent') }}</a>
                             <a href="{{ route('admin.notifications.index', ['tab' => 'drafts']) }}"
-                               class="px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap {{ $tab === 'drafts' ? 'bg-blue-100 text-blue-700' : 'text-gray-500' }}">
-                                {{ __('notifications.drafts') }}
-                            </a>
+                               class="px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap {{ $tab === 'drafts' ? 'bg-blue-100 text-blue-700' : 'text-gray-500' }}">{{ __('notifications.drafts') }}</a>
                         </div>
-
-                        <!-- Actions -->
-                        <div class="hidden sm:flex items-center gap-2">
-                            @if($tab === 'inbox' && $unreadCount > 0)
-                            <form method="POST" action="{{ route('admin.notifications.mark-all-read') }}">
-                                @csrf
-                                <button type="submit" class="text-xs text-gray-500 hover:text-blue-600 font-medium px-2 py-1 rounded hover:bg-gray-100 transition-colors">
-                                    {{ __('notifications.mark_all_read') }}
-                                </button>
-                            </form>
-                            @endif
-                        </div>
-
-                        <!-- Mobile compose -->
-                        <a href="{{ route('admin.notifications.create') }}"
-                           class="sm:hidden inline-flex items-center px-2.5 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700">
-                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                            </svg>
+                        <a href="{{ route('admin.notifications.create') }}" class="sm:hidden inline-flex items-center px-2.5 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md hover:bg-blue-700">
+                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                             {{ __('notifications.compose') }}
                         </a>
+                    </div>
 
-                        <!-- Info -->
-                        <span class="hidden sm:inline text-xs text-gray-400">
-                            {{ $notifications->firstItem() ?? 0 }}-{{ $notifications->lastItem() ?? 0 }} / {{ $notifications->total() }}
+                    <!-- Qidiruv va amallar -->
+                    <div class="flex items-center gap-2 px-3 sm:px-4 py-2 border-b border-gray-200 bg-white">
+                        <form method="GET" action="{{ route('admin.notifications.index') }}" class="flex-1 flex items-center gap-2">
+                            <input type="hidden" name="tab" value="{{ $tab }}">
+                            <div class="flex-1 relative">
+                                <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                                <input type="text" name="search" value="{{ $search }}"
+                                       placeholder="{{ __('notifications.search_placeholder') }}"
+                                       class="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors">
+                            </div>
+                            @if($search)
+                            <a href="{{ route('admin.notifications.index', ['tab' => $tab]) }}" class="text-xs text-gray-400 hover:text-gray-600">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </a>
+                            @endif
+                        </form>
+                        @if($tab === 'inbox' && $unreadCount > 0)
+                        <form method="POST" action="{{ route('admin.notifications.mark-all-read') }}">
+                            @csrf
+                            <button type="submit" class="hidden sm:inline text-xs text-gray-500 hover:text-blue-600 font-medium px-2 py-1.5 rounded hover:bg-gray-100 transition-colors whitespace-nowrap">
+                                {{ __('notifications.mark_all_read') }}
+                            </button>
+                        </form>
+                        @endif
+                        <span class="hidden sm:inline text-xs text-gray-400 whitespace-nowrap">
+                            {{ $notifications->firstItem() ?? 0 }}–{{ $notifications->lastItem() ?? 0 }} / {{ $notifications->total() }}
                         </span>
                     </div>
 
-                    <!-- Messages list -->
+                    <!-- Xabarlar ro'yxati -->
                     <div class="flex-1 overflow-y-auto">
                         @forelse($notifications as $notification)
                         @php
@@ -120,19 +118,16 @@
                         @endphp
                         <a href="{{ route('admin.notifications.show', $notification) }}"
                            class="group flex items-center px-3 sm:px-4 py-2.5 border-b border-gray-100 transition-colors cursor-pointer {{ $isUnread ? 'bg-white hover:bg-gray-50' : 'bg-gray-50/30 hover:bg-gray-100/50' }}">
-                            <!-- Unread dot -->
                             <div class="w-5 flex-shrink-0 flex justify-center">
                                 @if($isUnread)
                                 <div class="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
                                 @endif
                             </div>
-                            <!-- Sender -->
                             <div class="w-32 sm:w-44 flex-shrink-0 pr-3 truncate">
                                 <span class="text-sm {{ $isUnread ? 'font-bold text-gray-900' : 'font-normal text-gray-600' }}">
                                     {{ $senderName ?? __('notifications.system') }}
                                 </span>
                             </div>
-                            <!-- Subject + Body preview -->
                             <div class="flex-1 min-w-0 flex items-baseline gap-1.5 truncate">
                                 <span class="text-sm {{ $isUnread ? 'font-bold text-gray-900' : 'font-normal text-gray-700' }} truncate flex-shrink-0" style="max-width: 45%;">
                                     {{ $notification->subject }}
@@ -143,7 +138,6 @@
                                 </span>
                                 @endif
                             </div>
-                            <!-- Date -->
                             <div class="ml-3 flex-shrink-0 text-right">
                                 <span class="text-xs tabular-nums {{ $isUnread ? 'font-semibold text-gray-800' : 'text-gray-400' }}">
                                     @php
@@ -164,31 +158,19 @@
                         @endforelse
                     </div>
 
-                    <!-- Pagination -->
                     @if($notifications->hasPages())
                     <div class="px-4 py-2.5 border-t border-gray-200 bg-gray-50/50 flex items-center justify-between">
-                        <span class="text-xs text-gray-500">
-                            {{ $notifications->firstItem() }}-{{ $notifications->lastItem() }} / {{ $notifications->total() }}
-                        </span>
+                        <span class="text-xs text-gray-500">{{ $notifications->firstItem() }}–{{ $notifications->lastItem() }} / {{ $notifications->total() }}</span>
                         <div class="flex items-center gap-1">
                             @if($notifications->onFirstPage())
-                            <span class="p-1.5 text-gray-300 cursor-not-allowed">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                            </span>
+                            <span class="p-1.5 text-gray-300"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></span>
                             @else
-                            <a href="{{ $notifications->previousPageUrl() }}" class="p-1.5 text-gray-500 hover:bg-gray-200 rounded transition-colors">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                            </a>
+                            <a href="{{ $notifications->withQueryString()->previousPageUrl() }}" class="p-1.5 text-gray-500 hover:bg-gray-200 rounded"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></a>
                             @endif
-
                             @if($notifications->hasMorePages())
-                            <a href="{{ $notifications->nextPageUrl() }}" class="p-1.5 text-gray-500 hover:bg-gray-200 rounded transition-colors">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                            </a>
+                            <a href="{{ $notifications->withQueryString()->nextPageUrl() }}" class="p-1.5 text-gray-500 hover:bg-gray-200 rounded"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></a>
                             @else
-                            <span class="p-1.5 text-gray-300 cursor-not-allowed">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                            </span>
+                            <span class="p-1.5 text-gray-300"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></span>
                             @endif
                         </div>
                     </div>

@@ -56,45 +56,75 @@ class DocumentTemplateService
         $processor->setValue('review_date', $reviewDate->format('d.m.Y'));
         $processor->setValue('review_date_full', $reviewDate->format('Y') . ' yil ' . $reviewDate->format('j') . '-' . ($months[$reviewDate->month] ?? $reviewDate->format('F')));
         $processor->setValue('reviewer_name', $reviewerName);
-        $processor->setValue('order_number', '08-' . str_pad($excuse->id, 5, '0', STR_PAD_LEFT));
         $processor->setValue('academic_year', $academicYear);
         $processor->setValue('verification_url', route('absence-excuse.verify', $excuse->verification_token));
 
-        // Nazoratlar jadvali (cloneRow orqali)
-        $makeups = $excuse->makeups()->orderBy('subject_name')->get();
-        $makeupCount = $makeups->count();
+        // Nazoratlar jadvali — fanlar bo'yicha guruhlash
+        // Bitta fan uchun bir nechta nazorat bo'lsa, bitta qatorda ko'rsatiladi
+        $makeups = $excuse->makeups()->orderBy('subject_name')->orderBy('assessment_type')->get();
+        $grouped = $makeups->groupBy('subject_name');
+        $groupCount = $grouped->count();
 
-        if ($makeupCount > 0) {
-            $typeLabels = [
-                'jn' => 'Joriy nazorat',
-                'mt' => 'Mustaqil ta\'lim',
-                'oski' => 'YN (OSKE)',
-                'test' => 'YN (Test)',
-            ];
+        $typeLabels = [
+            'jn' => 'JN',
+            'mt' => 'MT',
+            'oski' => 'YN(OSKE)',
+            'test' => 'YN(Test)',
+        ];
 
-            $processor->cloneRow('m_num', $makeupCount);
+        if ($groupCount > 0) {
+            // cloneRow AVVAL chaqiriladi (order_number jadvalda ham, tashqarida ham ishlatiladi)
+            $processor->cloneRow('order_number', $groupCount);
 
-            foreach ($makeups->values() as $i => $makeup) {
-                $idx = $i + 1;
-                $processor->setValue("m_num#{$idx}", (string) $idx);
-                $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
-                $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
+            $idx = 0;
+            foreach ($grouped as $subjectName => $subjectMakeups) {
+                $idx++;
 
-                // Sana formati
-                if ($makeup->makeup_date) {
-                    $makeupDateStr = $makeup->makeup_date->format('d.m.Y');
-                } else {
-                    $makeupDateStr = 'Belgilanmagan';
+                // T/r — tartib raqami
+                $processor->setValue("order_number#{$idx}", (string) $idx);
+
+                // Fan nomi
+                $processor->setValue("subject_name#{$idx}", $subjectName);
+
+                // Nazorat turlari, muddatlari va sanalari — har biri newline bilan
+                $types = [];
+                $periods = [];
+                $singleDates = [];
+
+                foreach ($subjectMakeups as $makeup) {
+                    $types[] = $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type;
+
+                    if ($makeup->assessment_type === 'jn') {
+                        // JN uchun muddat: start_date dan end_date gacha (excuse davri)
+                        $periods[] = $excuse->start_date->format('d.m.Y') . ' dan ' . $excuse->end_date->format('d.m.Y') . ' gacha';
+                        $singleDates[] = '';
+                    } else {
+                        // Boshqa turlar uchun bitta sana
+                        $periods[] = '';
+                        $singleDates[] = $makeup->makeup_date
+                            ? $makeup->makeup_date->format('d.m.Y')
+                            : 'Belgilanmagan';
+                    }
                 }
-                $processor->setValue("m_date#{$idx}", $makeupDateStr);
+
+                // Word ichida yangi qator uchun XML break
+                $br = '</w:t><w:br/><w:t>';
+
+                $processor->setValue("test_type#{$idx}", implode($br, $types));
+                $processor->setValue("test_date_period#{$idx}", implode($br, $periods));
+                $processor->setValue("test_single_date#{$idx}", implode($br, $singleDates));
             }
         } else {
             // Agar nazoratlar bo'lmasa placeholder'larni tozalash
-            $processor->setValue('m_num', '');
-            $processor->setValue('m_subject', '');
-            $processor->setValue('m_type', '');
-            $processor->setValue('m_date', '');
+            $processor->setValue('order_number', '');
+            $processor->setValue('subject_name', '');
+            $processor->setValue('test_type', '');
+            $processor->setValue('test_date_period', '');
+            $processor->setValue('test_single_date', '');
         }
+
+        // Buyruq raqami — jadvaldan tashqarida qolgan ${order_number} uchun
+        $processor->setValue('order_number', '08-' . str_pad($excuse->id, 5, '0', STR_PAD_LEFT));
 
         // QR kod rasm sifatida
         if ($qrImagePath && file_exists($qrImagePath)) {

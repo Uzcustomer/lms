@@ -743,6 +743,67 @@ class KtrController extends Controller
     }
 
     /**
+     * Kafedra nomiga qarab tegishli fakultetni topish (aniq ro'yxat asosida)
+     *
+     * 1-son Davolash: Akusherlik, Ichki kasalliklar propedevtikasi, Ijtimoiy-gumanitar, Patologik anatomiya, Xirurgik kasalliklar
+     * 2-son Davolash: Anatomiya va klinik, Ichki kasalliklar/harbiy dala, Travmatologiya, Umumiy xirurgiya, Yuqumli kasalliklar
+     * Pediatriya: Bolalar kasalliklari, Mikrobiologiya, Normal va patologik fiziologiya, Otorinolaringologiya, Tibbiy psixologiya
+     * Xalqaro ta'lim: Farmakologiya, O'zbek va xorijiy tillar, Tibbiy biologiya, Tibbiy va biologik kimyo
+     */
+    private function findFacultyByKafedraName(string $kafedraName): ?Department
+    {
+        $kafedraName = mb_strtolower($kafedraName);
+
+        // Kafedra nomi kalit so'zlari -> fakultet nomi LIKE pattern
+        $mappings = [
+            // 1-SON DAVOLASH FAKULTETI
+            ['keywords' => ['akusherlik', 'ginekologiya'], 'faculty' => '%1-son Davolash%'],
+            ['keywords' => ['ichki kasalliklar', 'propedevtikasi', 'reabilitologiya'], 'faculty' => '%1-son Davolash%'],
+            ['keywords' => ['ijtimoiy', 'gumanitar'], 'faculty' => '%1-son Davolash%'],
+            ['keywords' => ['patologik anatomiya', 'sud tibbiyoti'], 'faculty' => '%1-son Davolash%'],
+            ['keywords' => ['xirurgik kasalliklar', 'oilaviy shifokorlikda xirurgiya'], 'faculty' => '%1-son Davolash%'],
+
+            // 2-SON DAVOLASH FAKULTETI
+            ['keywords' => ['anatomiya', 'klinik anatomiya'], 'faculty' => '%2-son Davolash%'],
+            ['keywords' => ['ichki kasalliklar', 'harbiy dala terapiyasi', 'gematologiya'], 'faculty' => '%2-son Davolash%'],
+            ['keywords' => ['travmatologiya', 'ortopediya', 'harbiy dala jarrohligi'], 'faculty' => '%2-son Davolash%'],
+            ['keywords' => ['umumiy xirurgiya', 'bolalar xirurgiyasi', 'urologiya'], 'faculty' => '%2-son Davolash%'],
+            ['keywords' => ['yuqumli kasalliklar', 'dermatovenerologiya'], 'faculty' => '%2-son Davolash%'],
+
+            // PEDIATRIYA FAKULTETI
+            ['keywords' => ['bolalar kasalliklari', 'propedevtikasi', 'pediatriya'], 'faculty' => '%Pediatriya%'],
+            ['keywords' => ['mikrobiologiya', 'jamoat salomatligi', 'gigiyena'], 'faculty' => '%Pediatriya%'],
+            ['keywords' => ['normal', 'patologik fiziologiya'], 'faculty' => '%Pediatriya%'],
+            ['keywords' => ['otorinolaringologiya', 'oftalmologiya', 'onkologiya'], 'faculty' => '%Pediatriya%'],
+            ['keywords' => ['tibbiy psixologiya', 'nevrologiya', 'psixiatriya'], 'faculty' => '%Pediatriya%'],
+
+            // XALQARO TA'LIM FAKULTETI
+            ['keywords' => ['farmakologiya', 'klinik farmakologiya'], 'faculty' => '%Xalqaro%'],
+            ['keywords' => ['xorijiy tillar'], 'faculty' => '%Xalqaro%'],
+            ['keywords' => ['tibbiy biologiya', 'gistologiya'], 'faculty' => '%Xalqaro%'],
+            ['keywords' => ['tibbiy va biologik kimyo'], 'faculty' => '%Xalqaro%'],
+        ];
+
+        foreach ($mappings as $mapping) {
+            $allMatch = true;
+            foreach ($mapping['keywords'] as $keyword) {
+                if (!str_contains($kafedraName, mb_strtolower($keyword))) {
+                    $allMatch = false;
+                    break;
+                }
+            }
+
+            if ($allMatch) {
+                return Department::where('structure_type_code', '11')
+                    ->where('name', 'LIKE', $mapping['faculty'])
+                    ->first();
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Kafedra mudiri, dekan va registrator ma'lumotlarini olish
      */
     private function getApproverInfo(CurriculumSubject $cs): array
@@ -786,29 +847,22 @@ class KtrController extends Controller
                 }
             }
 
-            // Fakultetni topish: kafedra parent_id orqali (parent_id = HEMIS parent ID)
-            // ImportSpecialtiesDepartments: 'parent_id' => $departmentData['parent'] (HEMIS ID)
+            // Fakultetni topish: kafedra nomi asosida aniq ro'yxat bo'yicha
             $faculty = null;
-            if ($kafedra && $kafedra->parent_id) {
+            if ($kafedra) {
+                $faculty = $this->findFacultyByKafedraName($kafedra->name);
+            }
+
+            // Fallback: parent_id orqali
+            if (!$faculty && $kafedra && $kafedra->parent_id) {
                 $faculty = Department::where('department_hemis_id', $kafedra->parent_id)
                     ->where('structure_type_code', '11')
                     ->first();
-                // parent_id ba'zan local ID bo'lishi mumkin (HemisService orqali)
                 if (!$faculty) {
                     $parent = Department::find($kafedra->parent_id);
                     if ($parent && $parent->structure_type_code == '11') {
                         $faculty = $parent;
                     }
-                }
-            }
-
-            // Fallback: Curriculum orqali
-            if (!$faculty) {
-                $curriculum = Curriculum::where('curricula_hemis_id', $cs->curricula_hemis_id)->first();
-                if ($curriculum && $curriculum->department_hemis_id) {
-                    $faculty = Department::where('department_hemis_id', $curriculum->department_hemis_id)
-                        ->where('structure_type_code', '11')
-                        ->first();
                 }
             }
 

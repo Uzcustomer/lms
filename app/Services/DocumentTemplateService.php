@@ -38,7 +38,13 @@ class DocumentTemplateService
         $month = now()->month;
         $academicYear = $month >= 9 ? $year . '.' . ($year + 1) : ($year - 1) . '.' . $year;
 
-        $daysCount = $excuse->start_date->diffInDays($excuse->end_date) + 1;
+        // Yakshanbasiz kunlar soni
+        $daysCount = 0;
+        $d = $excuse->start_date->copy();
+        while ($d->lte($excuse->end_date)) {
+            if (!$d->isSunday()) $daysCount++;
+            $d->addDay();
+        }
 
         // PhpWord TemplateProcessor
         $processor = new TemplateProcessor($templatePath);

@@ -43,6 +43,11 @@ class DocumentTemplateService
         // PhpWord TemplateProcessor
         $processor = new TemplateProcessor($templatePath);
 
+        // Word shablon ichida ${m_num} kabi makrolar bo'linib ketishi mumkin — tuzatish
+        $this->fixBrokenTemplateMacros($processor);
+
+        \Log::info('Template variables found: ' . implode(', ', $processor->getVariables()));
+
         // Matn placeholder'larni almashtirish
         $processor->setValue('student_name', $excuse->student_full_name);
         $processor->setValue('student_hemis_id', $excuse->student_hemis_id);
@@ -72,21 +77,27 @@ class DocumentTemplateService
                 'test' => 'YN (Test)',
             ];
 
-            $processor->cloneRow('m_num', $makeupCount);
+            try {
+                $processor->cloneRow('m_num', $makeupCount);
 
-            foreach ($makeups->values() as $i => $makeup) {
-                $idx = $i + 1;
-                $processor->setValue("m_num#{$idx}", (string) $idx);
-                $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
-                $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
+                foreach ($makeups->values() as $i => $makeup) {
+                    $idx = $i + 1;
+                    $processor->setValue("m_num#{$idx}", (string) $idx);
+                    $processor->setValue("m_subject#{$idx}", $makeup->subject_name ?? '');
+                    $processor->setValue("m_type#{$idx}", $typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type);
 
-                // Sana formati
-                if ($makeup->makeup_date) {
-                    $makeupDateStr = $makeup->makeup_date->format('d.m.Y');
-                } else {
-                    $makeupDateStr = 'Belgilanmagan';
+                    if ($makeup->makeup_date) {
+                        $makeupDateStr = $makeup->makeup_date->format('d.m.Y');
+                    } else {
+                        $makeupDateStr = 'Belgilanmagan';
+                    }
+                    $processor->setValue("m_date#{$idx}", $makeupDateStr);
                 }
-                $processor->setValue("m_date#{$idx}", $makeupDateStr);
+            } catch (\Throwable $e) {
+                \Log::warning('cloneRow failed, using manual XML row cloning: ' . $e->getMessage());
+
+                // cloneRow ishlamadi — Reflection orqali XML da qo'lda qatorlarni klonlash
+                $this->manualCloneRow($processor, $makeups, $typeLabels);
             }
         } else {
             // Agar nazoratlar bo'lmasa placeholder'larni tozalash
@@ -280,6 +291,134 @@ class DocumentTemplateService
         }
 
         $zip->close();
+    }
+
+    /**
+     * Word shablon ichidagi buzilgan ${...} makrolarni tuzatish
+     *
+     * Word ko'pincha ${m_num} ni XML run'lar orasida bo'ladi:
+     *   <w:t>${m_</w:t></w:r><w:r><w:rPr>...</w:rPr><w:t>num}</w:t>
+     * PhpWord fixBrokenMacros() buni har doim ham tuzatmaydi.
+     */
+    private function fixBrokenTemplateMacros(TemplateProcessor $processor): void
+    {
+        $reflection = new \ReflectionClass($processor);
+        $property = $reflection->getProperty('tempDocumentMainPart');
+        $property->setAccessible(true);
+
+        $xml = $property->getValue($processor);
+        $xml = $this->mergeBrokenMacros($xml);
+        $property->setValue($processor, $xml);
+
+        // Header/footer'larni ham tuzatish
+        try {
+            $headersProp = $reflection->getProperty('tempDocumentHeaders');
+            $headersProp->setAccessible(true);
+            $headers = $headersProp->getValue($processor);
+            foreach ($headers as $key => $header) {
+                $headers[$key] = $this->mergeBrokenMacros($header);
+            }
+            $headersProp->setValue($processor, $headers);
+        } catch (\Throwable $e) {
+            // Header yo'q bo'lsa e'tibor bermaslik
+        }
+    }
+
+    /**
+     * XML ichidagi bo'lingan ${...} makrolarni birlashtirish
+     */
+    private function mergeBrokenMacros(string $xml): string
+    {
+        // Run break pattern: </w:t>...</w:r> <w:r...><w:rPr?>...</w:rPr> <w:t...>
+        $runBreak = '<\/w:t>\s*(?:<\/w:r>\s*<w:r\b[^>]*>\s*(?:<w:rPr\b[^>]*\/>\s*|<w:rPr\b[^>]*>.*?<\/w:rPr>\s*)?)?<w:t(?:\s[^>]*)?>';
+
+        // 1-qadam: $ va { orasidagi run break'ni olib tashlash
+        $xml = preg_replace(
+            '#(\$)' . $runBreak . '(\{)#su',
+            '$1$2',
+            $xml
+        ) ?? $xml;
+
+        // 2-qadam: ${ va } orasidagi run break'larni takroriy olib tashlash
+        for ($i = 0; $i < 15; $i++) {
+            $before = $xml;
+            $result = preg_replace(
+                '#(\$\{(?:[^}<])*?)' . $runBreak . '([^<]*?\})#su',
+                '$1$2',
+                $xml
+            );
+            $xml = $result ?? $before;
+
+            if ($xml === $before) {
+                break;
+            }
+        }
+
+        return $xml;
+    }
+
+    /**
+     * cloneRow ishlamaganda qo'lda XML ichida jadval qatorlarini klonlash
+     */
+    private function manualCloneRow(TemplateProcessor $processor, $makeups, array $typeLabels): void
+    {
+        $reflection = new \ReflectionClass($processor);
+        $property = $reflection->getProperty('tempDocumentMainPart');
+        $property->setAccessible(true);
+
+        $xml = $property->getValue($processor);
+
+        // m_num, m_subject, m_type, m_date bo'lgan <w:tr> qatorni topish
+        // Har qanday shaklda: ${m_num} yoki bo'lingan holda
+        $rowPattern = '#<w:tr\b[^>]*>(?:(?!<w:tr\b).)*?m_num(?:(?!<w:tr\b).)*?</w:tr>#su';
+
+        if (!preg_match($rowPattern, $xml, $match)) {
+            // Qatorni topa olmadik — placeholder'larni tozalash
+            \Log::warning('manualCloneRow: template row not found, clearing placeholders');
+            try {
+                $processor->setValue('m_num', '');
+                $processor->setValue('m_subject', '');
+                $processor->setValue('m_type', '');
+                $processor->setValue('m_date', '');
+            } catch (\Throwable $e) {
+                // Ignore
+            }
+            return;
+        }
+
+        $templateRow = $match[0];
+        $newRows = '';
+
+        foreach ($makeups->values() as $i => $makeup) {
+            $idx = $i + 1;
+            $row = $templateRow;
+
+            // Placeholder'larni almashtirish (${...} yoki bo'lingan holda)
+            $row = preg_replace('#\$\{m_num\}#u', (string) $idx, $row);
+            $row = preg_replace('#\$\{m_subject\}#u', htmlspecialchars($makeup->subject_name ?? '', ENT_XML1), $row);
+            $row = preg_replace('#\$\{m_type\}#u', htmlspecialchars($typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type, ENT_XML1), $row);
+
+            if ($makeup->makeup_date) {
+                $dateStr = $makeup->makeup_date->format('d.m.Y');
+            } else {
+                $dateStr = 'Belgilanmagan';
+            }
+            $row = preg_replace('#\$\{m_date\}#u', htmlspecialchars($dateStr, ENT_XML1), $row);
+
+            // Agar ${...} hali ham qolgan bo'lsa (bo'lingan holda) — XML taglarini olib tashlab almashtirish
+            $row = preg_replace_callback('#\$\{[^}]*m_num[^}]*\}#u', fn() => (string) $idx, $row);
+            $row = preg_replace_callback('#\$\{[^}]*m_subject[^}]*\}#u', fn() => htmlspecialchars($makeup->subject_name ?? '', ENT_XML1), $row);
+            $row = preg_replace_callback('#\$\{[^}]*m_type[^}]*\}#u', fn() => htmlspecialchars($typeLabels[$makeup->assessment_type] ?? $makeup->assessment_type, ENT_XML1), $row);
+            $row = preg_replace_callback('#\$\{[^}]*m_date[^}]*\}#u', fn() => htmlspecialchars($dateStr, ENT_XML1), $row);
+
+            $newRows .= $row;
+        }
+
+        // Eski shablon qatorni yangi qatorlar bilan almashtirish
+        $xml = str_replace($templateRow, $newRows, $xml);
+        $property->setValue($processor, $xml);
+
+        \Log::info('manualCloneRow: successfully cloned ' . $makeups->count() . ' rows');
     }
 
     /**

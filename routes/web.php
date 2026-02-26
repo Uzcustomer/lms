@@ -31,6 +31,7 @@ use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\LectureScheduleController;
 use App\Http\Controllers\Admin\TimetableViewController;
+use App\Http\Controllers\Admin\ExcuseRequestController;
 use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\Admin\ServerDebugController;
@@ -370,6 +371,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/top-students', [ReportController::class, 'topStudents'])->name('reports.top-students');
         Route::get('/reports/top-students/data', [ReportController::class, 'topStudentsData'])->name('reports.top-students.data');
+
+        // Sababli arizalar (excuse requests from mobile app)
+        Route::prefix('excuse-requests')->name('excuse-requests.')->group(function () {
+            Route::get('/', [ExcuseRequestController::class, 'index'])->name('index');
+            Route::put('/{id}/status', [ExcuseRequestController::class, 'updateStatus'])->name('update-status');
+        });
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 

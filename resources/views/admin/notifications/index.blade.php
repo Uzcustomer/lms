@@ -56,6 +56,34 @@
                             <span class="text-xs text-gray-400">{{ $draftsCount }}</span>
                         </a>
                     </nav>
+
+                    @if($tab === 'inbox' && $senders->count() > 0)
+                    <div class="border-t border-gray-200 px-2 pt-2 pb-3">
+                        <div class="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('notifications.senders') }}</div>
+                        <div class="space-y-0.5 max-h-48 overflow-y-auto">
+                            <a href="{{ route('admin.notifications.index', ['tab' => 'inbox', 'search' => $search]) }}"
+                               class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors {{ !$senderFilter ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-500 hover:bg-gray-100' }}">
+                                <span class="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 flex-shrink-0">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                </span>
+                                <span class="truncate">Barchasi</span>
+                            </a>
+                            @foreach($senders as $sender)
+                            @php
+                                $sName = $sender->name ?? '-';
+                                $initials = mb_strtoupper(mb_substr($sName, 0, 1));
+                                $colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-red-400'];
+                                $color = $colors[$sender->id % count($colors)];
+                            @endphp
+                            <a href="{{ route('admin.notifications.index', ['tab' => 'inbox', 'sender_id' => $sender->id, 'search' => $search]) }}"
+                               class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors {{ $senderFilter == $sender->id ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-100' }}">
+                                <span class="w-5 h-5 rounded-full {{ $color }} flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">{{ $initials }}</span>
+                                <span class="truncate">{{ $sName }}</span>
+                            </a>
+                            @endforeach
+                        </div>
+                    </div>
+                    @endif
                 </div>
 
                 <!-- Asosiy qism -->

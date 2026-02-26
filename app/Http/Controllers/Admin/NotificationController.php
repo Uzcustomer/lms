@@ -25,6 +25,7 @@ class NotificationController extends Controller
         [$userId, $userType] = $this->getUserInfo();
         $tab = $request->get('tab', 'inbox');
         $search = $request->get('search', '');
+        $senderFilter = $request->get('sender_id');
 
         $query = Notification::with('sender');
 
@@ -41,10 +42,18 @@ class NotificationController extends Controller
         }
 
         if ($search) {
-            $query->where(function ($q) use ($search) {
+            $matchingSenderIds = User::where('name', 'like', "%{$search}%")->pluck('id')
+                ->merge(Teacher::where('full_name', 'like', "%{$search}%")->pluck('id'));
+
+            $query->where(function ($q) use ($search, $matchingSenderIds) {
                 $q->where('subject', 'like', "%{$search}%")
-                  ->orWhere('body', 'like', "%{$search}%");
+                  ->orWhere('body', 'like', "%{$search}%")
+                  ->orWhereIn('sender_id', $matchingSenderIds);
             });
+        }
+
+        if ($senderFilter) {
+            $query->where('sender_id', $senderFilter);
         }
 
         $notifications = $query->paginate(20);
@@ -54,8 +63,19 @@ class NotificationController extends Controller
         $sentCount = Notification::sent($userId)->count();
         $draftsCount = Notification::drafts($userId)->count();
 
+        // Kelgan xabarlar uchun jo'natuvchilar ro'yxati (filtr uchun)
+        $senders = collect();
+        if ($tab === 'inbox') {
+            $inboxSenderIds = Notification::inbox($userId)->distinct()->pluck('sender_id');
+            $senders = User::whereIn('id', $inboxSenderIds)->orderBy('name')->get(['id', 'name'])
+                ->merge(
+                    Teacher::whereIn('id', $inboxSenderIds)->orderBy('full_name')
+                        ->get(['id', 'full_name'])->map(fn ($t) => (object) ['id' => $t->id, 'name' => $t->full_name])
+                );
+        }
+
         return view('admin.notifications.index', compact(
-            'notifications', 'tab', 'search', 'unreadCount', 'inboxCount', 'sentCount', 'draftsCount'
+            'notifications', 'tab', 'search', 'senderFilter', 'unreadCount', 'inboxCount', 'sentCount', 'draftsCount', 'senders'
         ));
     }
 

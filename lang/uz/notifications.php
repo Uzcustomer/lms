@@ -32,6 +32,7 @@ return [
     'body' => 'Matn',
     'body_placeholder' => 'Xabar matnini kiriting...',
     'search_placeholder' => 'Xabarlardan qidirish...',
+    'senders' => "Jo'natuvchilar",
     'from' => 'Kimdan',
     'to' => 'Kimga',
     'date' => 'Sana',

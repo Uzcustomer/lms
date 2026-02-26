@@ -32,6 +32,7 @@ return [
     'body' => 'Body',
     'body_placeholder' => 'Enter message text...',
     'search_placeholder' => 'Search messages...',
+    'senders' => 'Senders',
     'from' => 'From',
     'to' => 'To',
     'date' => 'Date',

@@ -199,20 +199,20 @@
                                             <p class="text-sm font-medium text-gray-900 truncate" x-text="n.title"></p>
                                             <p class="text-xs text-gray-600 mt-0.5" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" x-text="n.message"></p>
                                             <p class="text-xs text-gray-400 mt-1" x-text="n.created_at"></p>
+                                            <!-- Tasdiqlash/Rad etish tugmalari - xabar matnidan pastda -->
+                                            <template x-if="n.data && n.data.approval_id && !n.is_read">
+                                                <div class="flex gap-1 mt-2" @click.stop>
+                                                    <button @click="approveRequest(n, 'approved')"
+                                                            class="px-2 py-1 text-xs font-medium text-white bg-green-500 rounded hover:bg-green-600 transition">
+                                                        Tasdiqlash
+                                                    </button>
+                                                    <button @click="approveRequest(n, 'rejected')"
+                                                            class="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition">
+                                                        Rad etish
+                                                    </button>
+                                                </div>
+                                            </template>
                                         </div>
-                                        <!-- Tasdiqlash/Rad etish tugmalari -->
-                                        <template x-if="n.data && n.data.approval_id && !n.is_read">
-                                            <div class="flex-shrink-0 flex gap-1" @click.stop>
-                                                <button @click="approveRequest(n, 'approved')"
-                                                        class="px-2 py-1 text-xs font-medium text-white bg-green-500 rounded hover:bg-green-600 transition">
-                                                    Tasdiqlash
-                                                </button>
-                                                <button @click="approveRequest(n, 'rejected')"
-                                                        class="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition">
-                                                    Rad etish
-                                                </button>
-                                            </div>
-                                        </template>
                                     </div>
                                 </div>
                             </template>

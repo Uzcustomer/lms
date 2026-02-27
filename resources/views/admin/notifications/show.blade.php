@@ -59,150 +59,102 @@
                     </div>
                 </div>
 
-                {{-- KTR tasdiqlash tugmalari - xodimning barcha rollari uchun --}}
+                {{-- KTR tasdiqlash tugmalari - faqat shu notificationga tegishli approval --}}
                 @if(($notification->data['action'] ?? null) === 'ktr_change_approval')
                     @php
-                        $changeRequestId = $notification->data['change_request_id'] ?? null;
-                        $user = auth()->user();
-
-                        // Joriy foydalanuvchiga tegishli approval larni topish
-                        $userApprovals = collect();
-                        if ($changeRequestId) {
-                            $allApprovals = \App\Models\KtrChangeApproval::where('change_request_id', $changeRequestId)->get();
-                            foreach ($allApprovals as $appr) {
-                                $canAct = false;
-
-                                if ($appr->role === 'registrator_ofisi') {
-                                    // Registrator ofisi - rol orqali tekshirish (har qanday registrator tasdiqlashi mumkin)
-                                    if ($user->hasRole('registrator_ofisi')) {
-                                        $canAct = true;
-                                    }
-                                } else {
-                                    // Kafedra mudiri va dekan - faqat aniq tayinlangan shaxs
-                                    if ($appr->approver_id && $user->id == $appr->approver_id) {
-                                        $canAct = true;
-                                    }
-                                }
-
-                                // Admin har doim
-                                if ($user->hasRole(['superadmin', 'admin'])) {
-                                    $canAct = true;
-                                }
-
-                                if ($canAct) {
-                                    $userApprovals->push($appr);
-                                }
-                            }
-                        }
-
-                        // Agar foydalanuvchiga tegishli approval topilmasa, xabarnomadagi approval ni ko'rsatish
-                        if ($userApprovals->isEmpty()) {
-                            $fallbackApproval = $notification->data['approval_id'] ?? null;
-                            if ($fallbackApproval) {
-                                $appr = \App\Models\KtrChangeApproval::find($fallbackApproval);
-                                if ($appr) $userApprovals->push($appr);
-                            }
-                        }
+                        $approvalId = $notification->data['approval_id'] ?? null;
+                        $approval = $approvalId ? \App\Models\KtrChangeApproval::find($approvalId) : null;
 
                         $roleLabels = [
                             'kafedra_mudiri' => 'Kafedra mudiri',
                             'dekan' => 'Dekan',
                             'registrator_ofisi' => 'Registrator ofisi',
                         ];
-
-                        $hasPending = $userApprovals->contains(fn ($a) => $a->status === 'pending');
                     @endphp
 
-                    @if($userApprovals->isNotEmpty())
+                    @if($approval)
                         <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
                             <p class="text-sm font-medium text-gray-700 mb-3">Fan: <strong>{{ $notification->data['subject_name'] ?? '' }}</strong></p>
+                            <p class="text-xs text-gray-500 mb-3">Rol: <strong>{{ $roleLabels[$approval->role] ?? $approval->role }}</strong></p>
 
-                            @foreach($userApprovals as $idx => $approval)
-                                <div class="flex items-center justify-between py-2 {{ !$loop->last ? 'border-b border-gray-200' : '' }}">
-                                    <p class="text-xs text-gray-500">Rol: <strong>{{ $roleLabels[$approval->role] ?? $approval->role }}</strong></p>
-
-                                    @if($approval->status === 'pending')
-                                        <div class="flex items-center gap-2" id="ktr-approval-actions-{{ $approval->id }}">
-                                            <button onclick="ktrApprove({{ $approval->id }}, 'approved')"
-                                                    class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors">
-                                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                                </svg>
-                                                Tasdiqlash
-                                            </button>
-                                            <button onclick="ktrApprove({{ $approval->id }}, 'rejected')"
-                                                    class="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors">
-                                                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                                </svg>
-                                                Rad etish
-                                            </button>
-                                        </div>
-                                        <div id="ktr-approval-result-{{ $approval->id }}" class="hidden"></div>
-                                    @elseif($approval->status === 'approved')
-                                        <span class="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 text-sm font-medium rounded-lg">
-                                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                            </svg>
-                                            Tasdiqlangan
-                                            @if($approval->responded_at)
-                                                ({{ $approval->responded_at->format('d.m.Y H:i') }})
-                                            @endif
-                                        </span>
-                                    @elseif($approval->status === 'rejected')
-                                        <span class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-800 text-sm font-medium rounded-lg">
-                                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                            </svg>
-                                            Rad etilgan
-                                            @if($approval->responded_at)
-                                                ({{ $approval->responded_at->format('d.m.Y H:i') }})
-                                            @endif
-                                        </span>
-                                    @endif
+                            @if($approval->status === 'pending')
+                                <div class="flex items-center gap-2" id="ktr-approval-actions-{{ $approval->id }}">
+                                    <button onclick="ktrApprove({{ $approval->id }}, 'approved')"
+                                            class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors">
+                                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                        </svg>
+                                        Tasdiqlash
+                                    </button>
+                                    <button onclick="ktrApprove({{ $approval->id }}, 'rejected')"
+                                            class="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors">
+                                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                        Rad etish
+                                    </button>
                                 </div>
-                            @endforeach
-                        </div>
+                                <div id="ktr-approval-result-{{ $approval->id }}" class="hidden"></div>
 
-                        @if($hasPending)
-                        <script>
-                            function ktrApprove(approvalId, status) {
-                                if (!confirm(status === 'approved' ? 'Rostdan ham tasdiqlaysizmi?' : 'Rostdan ham rad etasizmi?')) return;
+                                <script>
+                                    function ktrApprove(approvalId, status) {
+                                        if (!confirm(status === 'approved' ? 'Rostdan ham tasdiqlaysizmi?' : 'Rostdan ham rad etasizmi?')) return;
 
-                                const actionsEl = document.getElementById('ktr-approval-actions-' + approvalId);
-                                const resultEl = document.getElementById('ktr-approval-result-' + approvalId);
+                                        const actionsEl = document.getElementById('ktr-approval-actions-' + approvalId);
+                                        const resultEl = document.getElementById('ktr-approval-result-' + approvalId);
 
-                                actionsEl.innerHTML = '<span class="text-sm text-gray-500">Yuborilmoqda...</span>';
+                                        actionsEl.innerHTML = '<span class="text-sm text-gray-500">Yuborilmoqda...</span>';
 
-                                fetch(`/admin/ktr/change-approve/${approvalId}`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                                        'Accept': 'application/json',
-                                    },
-                                    body: JSON.stringify({ status: status })
-                                })
-                                .then(r => r.json())
-                                .then(data => {
-                                    actionsEl.classList.add('hidden');
-                                    resultEl.classList.remove('hidden');
-                                    if (data.success) {
-                                        const color = status === 'approved' ? 'green' : 'red';
-                                        const text = status === 'approved' ? 'Tasdiqlandi!' : 'Rad etildi!';
-                                        resultEl.innerHTML = `<span class="inline-flex items-center px-3 py-1.5 bg-${color}-100 text-${color}-800 text-sm font-medium rounded-lg">${text}</span>`;
-                                    } else {
-                                        resultEl.innerHTML = `<span class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-800 text-sm font-medium rounded-lg">${data.message || 'Xatolik yuz berdi'}</span>`;
+                                        fetch(`/admin/ktr/change-approve/${approvalId}`, {
+                                            method: 'POST',
+                                            headers: {
+                                                'Content-Type': 'application/json',
+                                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                                'Accept': 'application/json',
+                                            },
+                                            body: JSON.stringify({ status: status })
+                                        })
+                                        .then(r => r.json())
+                                        .then(data => {
+                                            actionsEl.classList.add('hidden');
+                                            resultEl.classList.remove('hidden');
+                                            if (data.success) {
+                                                const color = status === 'approved' ? 'green' : 'red';
+                                                const text = status === 'approved' ? 'Tasdiqlandi!' : 'Rad etildi!';
+                                                resultEl.innerHTML = `<span class="inline-flex items-center px-3 py-1.5 bg-${color}-100 text-${color}-800 text-sm font-medium rounded-lg">${text}</span>`;
+                                            } else {
+                                                resultEl.innerHTML = `<span class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-800 text-sm font-medium rounded-lg">${data.message || 'Xatolik yuz berdi'}</span>`;
+                                            }
+                                        })
+                                        .catch(() => {
+                                            actionsEl.classList.add('hidden');
+                                            resultEl.classList.remove('hidden');
+                                            resultEl.innerHTML = '<span class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-800 text-sm font-medium rounded-lg">Tarmoq xatoligi</span>';
+                                        });
                                     }
-                                })
-                                .catch(() => {
-                                    actionsEl.classList.add('hidden');
-                                    resultEl.classList.remove('hidden');
-                                    resultEl.innerHTML = '<span class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-800 text-sm font-medium rounded-lg">Tarmoq xatoligi</span>';
-                                });
-                            }
-                        </script>
-                        @endif
+                                </script>
+                            @elseif($approval->status === 'approved')
+                                <span class="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 text-sm font-medium rounded-lg">
+                                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Tasdiqlangan
+                                    @if($approval->responded_at)
+                                        ({{ $approval->responded_at->format('d.m.Y H:i') }})
+                                    @endif
+                                </span>
+                            @elseif($approval->status === 'rejected')
+                                <span class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-800 text-sm font-medium rounded-lg">
+                                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                    Rad etilgan
+                                    @if($approval->responded_at)
+                                        ({{ $approval->responded_at->format('d.m.Y H:i') }})
+                                    @endif
+                                </span>
+                            @endif
+                        </div>
                     @endif
                 @endif
             </div>

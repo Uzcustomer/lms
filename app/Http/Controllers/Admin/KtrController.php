@@ -1123,21 +1123,21 @@ class KtrController extends Controller
                 }
             }
 
-            // Xabar tanasini tuzish
+            // Xabar tanasini tuzish (tartib: Fakultet → Yo'nalish → Kurs → Semestr → Fan)
             $detailParts = [];
-            $detailParts[] = "Fan: {$cs->subject_name}";
-            if ($semesterName) {
-                $detailParts[] = "Semestr: {$semesterName}";
-            }
-            if ($levelName) {
-                $detailParts[] = "Kurs: {$levelName}";
+            if ($facultyName) {
+                $detailParts[] = "Fakultet: {$facultyName}";
             }
             if ($specialtyName) {
                 $detailParts[] = "Yo'nalish: {$specialtyName}";
             }
-            if ($facultyName) {
-                $detailParts[] = "Fakultet: {$facultyName}";
+            if ($levelName) {
+                $detailParts[] = "Kurs: {$levelName}";
             }
+            if ($semesterName) {
+                $detailParts[] = "Semestr: {$semesterName}";
+            }
+            $detailParts[] = "Fan: {$cs->subject_name}";
             $detailLine = implode(' | ', $detailParts);
 
             // O'zgarishlar diffini hisoblash

@@ -10,7 +10,10 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="overflow: visible;">
 
                 <!-- Filters -->
-                @if(!($isFanMasuli ?? false))
+                @php
+                    $isFanMasuli = !auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']) && auth()->user()->hasRole('fan_masuli');
+                @endphp
+                @if(!$isFanMasuli)
                 <form id="filter-form" method="GET" action="{{ route('admin.ktr.index') }}">
                     <div class="filter-container">
 

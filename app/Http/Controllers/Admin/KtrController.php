@@ -466,12 +466,7 @@ class KtrController extends Controller
             return true;
         }
 
-        // Fan mas'uli - faqat ko'rish, tahrirlash mumkin emas
-        if (is_active_fan_masuli()) {
-            return false;
-        }
-
-        // Kafedra mudiri va boshqa rollar - teacher_responsible_subjects jadvalidan tekshirish
+        // Kafedra mudiri, fan mas'uli va boshqa rollar - teacher_responsible_subjects jadvalidan tekshirish
         if ($user instanceof Teacher) {
             try {
                 // 1. teacher_responsible_subjects (roli orqali biriktirilgan)

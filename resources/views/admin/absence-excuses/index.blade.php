@@ -110,7 +110,7 @@
                      @keydown.escape.window="openReviewer = null">
                     <div class="flex items-center justify-center min-h-screen px-4 py-4">
                         <div class="fixed inset-0 bg-gray-900 bg-opacity-50 transition-opacity" @click="openReviewer = null; filterStatus = null"></div>
-                        <div class="relative bg-white rounded-lg shadow-2xl w-full z-10 max-h-[95vh] flex flex-col mx-4">
+                        <div class="relative bg-white rounded-lg shadow-2xl w-full z-10 flex flex-col mx-4" style="height: 600px;">
                             <div class="flex items-center justify-between p-4 border-b bg-indigo-50 rounded-t-lg flex-shrink-0">
                                 <h3 class="text-lg font-semibold text-indigo-800" x-text="openName + ' — arizalari'"></h3>
                                 <div class="flex items-center gap-3">

@@ -9,7 +9,6 @@ use App\Models\Teacher;
 use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class NotificationController extends Controller
 {
@@ -35,6 +34,9 @@ class NotificationController extends Controller
         $senderFilter = $request->get('sender_id');
         $readStatus = $request->get('status'); // 'unread'
         $subjectFilter = $request->get('subject'); // mavzu bo'yicha filtr
+
+        $subjects = collect();
+        $senders = collect();
 
         try {
             $query = Notification::with('sender');
@@ -70,13 +72,25 @@ class NotificationController extends Controller
                 $query->where('is_read', false);
             }
 
+            // Mavzular ro'yxati — xuddi shu so'rovdan olish (subject filtr qo'yilmasdan OLDIN)
+            // Bu usul kafolatlaydi: agar xabarlar ko'rinsa, mavzular ham chiqadi
+            $subjects = (clone $query)
+                ->pluck('subject')
+                ->filter(fn ($s) => $s !== null && $s !== '')
+                ->countBy()
+                ->sortDesc()
+                ->take(20)
+                ->map(fn ($count, $subject) => (object) ['subject' => $subject, 'subject_count' => $count])
+                ->values();
+
+            // Mavzu filtri — mavzular ro'yxati olinganidan KEYIN qo'yiladi
             if ($subjectFilter) {
                 $query->where('subject', $subjectFilter);
             }
 
             $notifications = $query->paginate(20);
         } catch (\Throwable $e) {
-            \Log::error('NotificationController@index query error: ' . $e->getMessage());
+            \Log::error('NotificationController@index query error: ' . $e->getMessage() . ' | ' . $e->getTraceAsString());
             $notifications = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
         }
 
@@ -90,47 +104,8 @@ class NotificationController extends Controller
             $unreadCount = $inboxCount = $sentCount = $draftsCount = 0;
         }
 
-        // Kelgan xabarlar uchun jo'natuvchilar ro'yxati (filtr uchun)
-        $senders = collect();
-        $subjects = collect();
+        // Jo'natuvchilar ro'yxati (filtr uchun)
         try {
-            // Mavzular ro'yxati — DB::table() orqali (Eloquent scope/clone muammolarini oldini olish)
-            $subjectsRaw = DB::table('notifications')
-                ->whereNull('deleted_at')
-                ->whereNotNull('subject')
-                ->where('subject', '!=', '');
-
-            switch ($tab) {
-                case 'sent':
-                    $subjectsRaw->where('sender_id', $userId)
-                                ->where('is_draft', 0);
-                    if ($userType) {
-                        $subjectsRaw->where('sender_type', $userType);
-                    }
-                    break;
-                case 'drafts':
-                    $subjectsRaw->where('sender_id', $userId)
-                                ->where('is_draft', 1);
-                    if ($userType) {
-                        $subjectsRaw->where('sender_type', $userType);
-                    }
-                    break;
-                default:
-                    $subjectsRaw->where('recipient_id', $userId)
-                                ->where('is_draft', 0);
-                    if ($userType) {
-                        $subjectsRaw->where('recipient_type', $userType);
-                    }
-                    break;
-            }
-
-            $subjects = $subjectsRaw
-                ->select('subject', DB::raw('count(*) as subject_count'))
-                ->groupBy('subject')
-                ->orderByDesc('subject_count')
-                ->limit(20)
-                ->get();
-
             if ($tab === 'inbox') {
                 $inboxSenderIds = Notification::inbox($userId, $userType)->distinct()->pluck('sender_id');
                 $senders = User::whereIn('id', $inboxSenderIds)->orderBy('name')->get(['id', 'name'])
@@ -140,9 +115,8 @@ class NotificationController extends Controller
                     );
             }
         } catch (\Throwable $e) {
-            \Log::error('NotificationController@index subjects/senders error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+            \Log::error('NotificationController@index senders error: ' . $e->getMessage());
             $senders = collect();
-            $subjects = collect();
         }
 
         return view('admin.notifications.index', compact(
@@ -195,25 +169,36 @@ class NotificationController extends Controller
             abort(500, 'Auth error: ' . $e->getMessage());
         }
 
+        // Xodimlar ro'yxatini JSON-xavfsiz massiv sifatida tayyorlash
+        $teachersJson = [];
         try {
-            // Faqat xodimlar (Teacher) ro'yxati, rollari bilan
             $teachers = Teacher::with('roles')
                 ->whereNotNull('full_name')
                 ->where('full_name', '!=', '')
                 ->orderBy('full_name')
                 ->get();
-        } catch (\Throwable $e) {
-            \Log::error('NotificationController@create teachers error: ' . $e->getMessage());
-            // Rollarsiz yuklash (fallback)
-            try {
-                $teachers = Teacher::whereNotNull('full_name')
-                    ->where('full_name', '!=', '')
-                    ->orderBy('full_name')
-                    ->get();
-            } catch (\Throwable $e2) {
-                \Log::error('NotificationController@create teachers fallback error: ' . $e2->getMessage());
-                $teachers = collect();
+
+            foreach ($teachers as $t) {
+                try {
+                    $roles = $t->relationLoaded('roles') ? $t->roles->pluck('name')->toArray() : [];
+                } catch (\Throwable $e) {
+                    $roles = [];
+                }
+                $name = $t->full_name ?? $t->short_name ?? ('ID: ' . $t->id);
+                // UTF-8 xavfsizligi
+                $name = mb_convert_encoding($name, 'UTF-8', 'UTF-8');
+                $position = mb_convert_encoding($t->staff_position ?? '', 'UTF-8', 'UTF-8');
+
+                $teachersJson[] = [
+                    'id' => (int) $t->id,
+                    'name' => $name,
+                    'position' => $position,
+                    'roles' => $roles,
+                ];
             }
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@create teachers error: ' . $e->getMessage() . ' | ' . $e->getTraceAsString());
+            $teachersJson = [];
         }
 
         // Rollar ro'yxati (talabadan tashqari)
@@ -231,7 +216,7 @@ class NotificationController extends Controller
             $unreadCount = $sentCount = $draftsCount = 0;
         }
 
-        return view('admin.notifications.create', compact('teachers', 'roles', 'unreadCount', 'sentCount', 'draftsCount'));
+        return view('admin.notifications.create', compact('teachersJson', 'roles', 'unreadCount', 'sentCount', 'draftsCount'));
     }
 
     public function store(Request $request)

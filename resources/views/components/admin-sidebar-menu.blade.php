@@ -237,17 +237,7 @@
         </a>
         @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
-        <div x-data="{ open: @json(request()->routeIs(['admin.independent.*', 'teacher.independent.*', 'admin.oraliqnazorat.*', 'teacher.oraliqnazorat.*', 'admin.oski.*', 'teacher.oski.*', 'admin.examtest.*', 'teacher.examtest.*', 'admin.vedomost.*', 'teacher.vedomost.*', 'admin.diagnostika.*', 'teacher.diagnostika.*', 'admin.saqlangan-hisobot.*', 'teacher.saqlangan-hisobot.*', 'admin.yuklanmagan-natijalar.*', 'teacher.yuklanmagan-natijalar.*'])) }">
-            <button @click="open = !open" class="sidebar-section-btn" type="button">
-                <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                <span class="flex-1 text-left">Qo'shimcha</span>
-                <svg class="w-3.5 h-3.5 transition-transform duration-200 sidebar-chevron-sm" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </button>
-            <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="sidebar-collapse-items">
+        <div class="sidebar-section">Qo'shimcha</div>
 
         <a href="{{ $r('admin.independent.index', 'teacher.independent.index') }}"
            class="sidebar-link {{ $isActive('admin.independent.*', 'teacher.independent.*') ? 'sidebar-active' : '' }}">
@@ -314,25 +304,11 @@
             Yuklanmagan natijalar
         </a>
         @endif
-
-            </div>
-        </div>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'oquv_bolimi', 'registrator_ofisi']))
-        <div x-data="{ open: @json(request()->routeIs(['admin.lessons.*', 'admin.lesson.*', 'admin.lecture-schedule.*', 'teacher.lecture-schedule.*', 'admin.timetable-view.*', 'teacher.timetable-view.*'])) }">
-            <button @click="open = !open" class="sidebar-section-btn" type="button">
-                <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-                </svg>
-                <span class="flex-1 text-left">Darslar</span>
-                <svg class="w-3.5 h-3.5 transition-transform duration-200 sidebar-chevron-sm" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </button>
-            <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="sidebar-collapse-items">
-
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+        <div class="sidebar-section">Darslar</div>
+
         <a href="{{ route('admin.lessons.create') }}"
            class="sidebar-link {{ request()->routeIs('admin.lessons.create') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -370,10 +346,6 @@
         </a>
         @endif
 
-            </div>
-        </div>
-        @endif
-
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
         <div class="sidebar-section">Monitoring</div>
 
@@ -397,17 +369,7 @@
         @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oquv_bolimi']))
-        <div x-data="{ open: @json(request()->routeIs(['admin.reports.*', 'admin.absence_report.*', 'admin.document-templates.*'])) }">
-            <button @click="open = !open" class="sidebar-section-btn" type="button">
-                <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                </svg>
-                <span class="flex-1 text-left">Hisobotlar</span>
-                <svg class="w-3.5 h-3.5 transition-transform duration-200 sidebar-chevron-sm" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </button>
-            <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="sidebar-collapse-items">
+        <div class="sidebar-section">Hisobotlar</div>
 
         @if(!$hasActiveRole('oquv_bolimi'))
         <a href="{{ route('admin.reports.jn') }}"
@@ -498,6 +460,19 @@
         </a>
         @endif
 
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        <a href="{{ route('admin.absence-excuses.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}" style="position: relative;">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            Sababli arizalar
+            @if(($pendingExcusesCount ?? 0) > 0)
+                <span class="sidebar-badge">{{ $pendingExcusesCount }}</span>
+            @endif
+        </a>
+        @endif
+
         @if($hasActiveRole(['superadmin', 'admin']))
         <a href="{{ route('admin.document-templates.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.document-templates.*') ? 'sidebar-active' : '' }}">
@@ -507,37 +482,6 @@
             Shablonlar
         </a>
         @endif
-        @endif
-
-            </div>
-        </div>
-
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
-        <div x-data="{ open: @json(request()->routeIs(['admin.absence-excuses.*'])) }">
-            <button @click="open = !open" class="sidebar-section-btn" type="button">
-                <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                <span class="flex-1 text-left">Arizalar</span>
-                @if(($pendingExcusesCount ?? 0) > 0)
-                    <span class="sidebar-badge mr-1">{{ $pendingExcusesCount }}</span>
-                @endif
-                <svg class="w-3.5 h-3.5 transition-transform duration-200 sidebar-chevron-sm" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </button>
-            <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="sidebar-collapse-items">
-
-        <a href="{{ route('admin.absence-excuses.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-            </svg>
-            Sababli arizalar
-        </a>
-
-            </div>
-        </div>
         @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya', 'registrator_ofisi']))
@@ -991,56 +935,6 @@
         @keyframes badge-pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.1); }
-        }
-
-        /* ===== COLLAPSIBLE SECTION STYLES ===== */
-        .sidebar-section-btn {
-            display: flex;
-            align-items: center;
-            width: 100%;
-            padding: 10px 16px;
-            margin-top: 12px;
-            margin-bottom: 2px;
-            border-radius: 8px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            border: none;
-            background: none;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            border-left: 3px solid transparent;
-        }
-        .sidebar-collapse-items {
-            padding-left: 4px;
-        }
-        .sidebar-chevron-sm {
-            flex-shrink: 0;
-        }
-
-        /* Kosmik theme - collapsible */
-        .sidebar-themed[data-theme="kosmik"] .sidebar-section-btn {
-            color: rgba(96,165,250,0.8);
-        }
-        .sidebar-themed[data-theme="kosmik"] .sidebar-section-btn:hover {
-            background-color: rgba(255,255,255,0.06);
-            color: rgba(96,165,250,1);
-        }
-        .sidebar-themed[data-theme="kosmik"] .sidebar-chevron-sm {
-            color: rgba(255,255,255,0.4);
-        }
-
-        /* Yorug' theme - collapsible */
-        .sidebar-themed[data-theme="yorug"] .sidebar-section-btn {
-            color: #3b82f6;
-        }
-        .sidebar-themed[data-theme="yorug"] .sidebar-section-btn:hover {
-            background-color: #f3f4f6;
-            color: #2563eb;
-        }
-        .sidebar-themed[data-theme="yorug"] .sidebar-chevron-sm {
-            color: #9ca3af;
         }
 
         /* ===== BASE STYLES (shared) ===== */

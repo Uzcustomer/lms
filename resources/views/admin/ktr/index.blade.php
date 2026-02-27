@@ -606,12 +606,12 @@
 
         function onKtrEditClick() {
             var cr = ktrState.changeRequest;
-            // So'rov allaqachon jo'natilgan (draft saqlangan) - panelni ko'rsatish
-            if (cr && !cr.is_approved) {
+            // So'rov allaqachon jo'natilgan va hali kutilmoqda - panelni ko'rsatish
+            if (cr && cr.status === 'pending' && !cr.is_approved) {
                 renderChangePanel();
                 return;
             }
-            // So'rov yo'q - ogohlantirish ko'rsatish va tahrirlashga ruxsat berish
+            // So'rov yo'q yoki rad etilgan - ogohlantirish ko'rsatish va tahrirlashga ruxsat berish
             showEditWarningAndEnable();
         }
 
@@ -679,6 +679,9 @@
             var leftHtml = '<div style="flex:1; min-width:280px;">';
             if (cr.is_approved) {
                 leftHtml += '<div class="ktr-change-title" style="color:#059669;">Barcha tasdiqlar olingan! KTR yangilandi.</div>';
+            } else if (cr.status === 'rejected') {
+                leftHtml += '<div class="ktr-change-title" style="color:#dc2626;">O\'zgartirish so\'rovi rad etildi</div>';
+                leftHtml += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280; margin-bottom:8px;">So\'rov rad etilgan. Yangi o\'zgartirish kiritib qayta yuborishingiz mumkin.</div>';
             } else {
                 leftHtml += '<div class="ktr-change-title">Tasdiqlash kutilmoqda</div>';
                 leftHtml += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280; margin-bottom:8px;">O\'zgarishlar draft sifatida saqlangan. Barcha tasdiqlar olingandan keyin KTR yangilanadi.</div>';
@@ -713,7 +716,12 @@
 
             html += '</div>';
             $('#ktr-change-panel').html(html).show();
-            $('#ktr-edit-btn').hide();
+            // Rad etilgan bo'lsa, tahrirlash tugmasini ko'rsatish (qayta yuborish uchun)
+            if (cr.status === 'rejected' && ktrState.canEdit) {
+                $('#ktr-edit-btn').show();
+            } else {
+                $('#ktr-edit-btn').hide();
+            }
         }
 
         function renderDraftDiff(cr) {

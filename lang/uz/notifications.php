@@ -56,4 +56,11 @@ return [
     'no_permission' => 'Sizda bu amalni bajarish huquqi yo\'q',
     'all_marked_read' => 'Barcha xabarlar o\'qilgan deb belgilandi',
     'confirm_delete' => 'Haqiqatan ham o\'chirmoqchimisiz?',
+
+    // Reply
+    'reply' => 'Javob berish',
+    'reply_to' => 'Javob:',
+    'reply_placeholder' => 'Javob matnini kiriting...',
+    'reply_sent' => 'Javob muvaffaqiyatli jo\'natildi',
+    'cancel' => 'Bekor qilish',
 ];

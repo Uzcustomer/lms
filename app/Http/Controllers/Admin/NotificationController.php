@@ -199,6 +199,37 @@ class NotificationController extends Controller
         return redirect()->back()->with('error', __('notifications.no_permission'));
     }
 
+    public function reply(Request $request, Notification $notification)
+    {
+        $validated = $request->validate([
+            'body' => 'required|string',
+        ]);
+
+        [$senderId, $senderType] = $this->getUserInfo();
+
+        // Javob mavzusi: "Re: ..." shaklida
+        $subject = $notification->subject;
+        if (!str_starts_with($subject, 'Re: ')) {
+            $subject = 'Re: ' . $subject;
+        }
+
+        // Jo'natuvchiga javob qaytarish
+        Notification::create([
+            'sender_id' => $senderId,
+            'sender_type' => $senderType,
+            'recipient_id' => $notification->sender_id,
+            'recipient_type' => $notification->sender_type,
+            'subject' => $subject,
+            'body' => $validated['body'],
+            'type' => Notification::TYPE_MESSAGE,
+            'is_draft' => false,
+            'sent_at' => now(),
+        ]);
+
+        return redirect()->route('admin.notifications.show', $notification)
+                         ->with('success', __('notifications.reply_sent'));
+    }
+
     public function markAsRead(Notification $notification)
     {
         $notification->markAsRead();

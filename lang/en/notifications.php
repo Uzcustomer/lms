@@ -56,4 +56,11 @@ return [
     'no_permission' => 'You do not have permission to perform this action',
     'all_marked_read' => 'All messages marked as read',
     'confirm_delete' => 'Are you sure you want to delete?',
+
+    // Reply
+    'reply' => 'Reply',
+    'reply_to' => 'Reply to:',
+    'reply_placeholder' => 'Type your reply...',
+    'reply_sent' => 'Reply sent successfully',
+    'cancel' => 'Cancel',
 ];

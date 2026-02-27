@@ -54,8 +54,9 @@
 
                             <div class="filter-item" style="min-width: 160px;">
                                 <label class="filter-label">&nbsp;</label>
-                                <input type="hidden" name="current_semester" id="current_semester_input" value="{{ request('current_semester', '1') }}">
-                                <div class="toggle-switch {{ request('current_semester', '1') == '1' ? 'active' : '' }}" id="current-semester-toggle" onclick="toggleCurrentSemester()">
+                                @php $csDefault = ($isFanMasuli ?? false) ? '0' : '1'; @endphp
+                                <input type="hidden" name="current_semester" id="current_semester_input" value="{{ request('current_semester', $csDefault) }}">
+                                <div class="toggle-switch {{ request('current_semester', $csDefault) == '1' ? 'active' : '' }}" id="current-semester-toggle" onclick="toggleCurrentSemester()">
                                     <div class="toggle-track">
                                         <div class="toggle-thumb"></div>
                                     </div>
@@ -98,10 +99,11 @@
                                 <label class="filter-label fl-slate">
                                     <span class="fl-dot" style="background:#94a3b8;"></span> Holati
                                 </label>
+                                @php $afDefault = ($isFanMasuli ?? false) ? 'all' : 'active'; @endphp
                                 <select name="active_filter" id="active_filter" class="select2" style="width: 100%;">
-                                    <option value="active" {{ request('active_filter', 'active') == 'active' ? 'selected' : '' }}>Faol</option>
+                                    <option value="active" {{ request('active_filter', $afDefault) == 'active' ? 'selected' : '' }}>Faol</option>
                                     <option value="inactive" {{ request('active_filter') == 'inactive' ? 'selected' : '' }}>Nofaol</option>
-                                    <option value="all" {{ request('active_filter') == 'all' ? 'selected' : '' }}>Barchasi</option>
+                                    <option value="all" {{ request('active_filter', $afDefault) == 'all' ? 'selected' : '' }}>Barchasi</option>
                                 </select>
                             </div>
 

@@ -41,14 +41,22 @@ class KtrController extends Controller
     {
         $this->checkKtrAccess();
 
+        // Faol rolga qarab tekshirish
+        $user = auth()->user();
+        $activeRole = session('active_role', '');
+        $isAdmin = in_array($activeRole, ['superadmin', 'admin', 'kichik_admin']);
+        $isFanMasuli = $activeRole === 'fan_masuli';
+        $fanMasuliSubjectIds = $isFanMasuli ? get_fan_masuli_subject_ids() : [];
+
         // Ta'lim turlari
         $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
             ->whereNotNull('education_type_code')
             ->groupBy('education_type_code', 'education_type_name')
             ->get();
 
+        // Fan masuli uchun standart filtrlar bo'sh bo'lsin (barcha fanlar ko'rinsin)
         $selectedEducationType = $request->get('education_type');
-        if (!$request->has('education_type')) {
+        if (!$request->has('education_type') && !$isFanMasuli) {
             $selectedEducationType = $educationTypes
                 ->first(function ($type) {
                     return str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr');
@@ -73,13 +81,6 @@ class KtrController extends Controller
                 ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id');
         };
-
-        // Faol rolga qarab tekshirish
-        $user = auth()->user();
-        $activeRole = session('active_role', '');
-        $isAdmin = in_array($activeRole, ['superadmin', 'admin', 'kichik_admin']);
-        $isFanMasuli = $activeRole === 'fan_masuli';
-        $fanMasuliSubjectIds = $isFanMasuli ? get_fan_masuli_subject_ids() : [];
 
         // Natija query
         $query = $baseQuery()
@@ -129,16 +130,18 @@ class KtrController extends Controller
             $query->where('cs.subject_name', 'like', '%' . $request->subject_name . '%');
         }
 
-        // Faol/nofaol fanlar filtri (default: faol)
-        $activeFilter = $request->get('active_filter', 'active');
+        // Faol/nofaol fanlar filtri (adminlar uchun default: faol, fan masuli: barchasi)
+        $activeFilterDefault = $isFanMasuli ? 'all' : 'active';
+        $activeFilter = $request->get('active_filter', $activeFilterDefault);
         if ($activeFilter === 'active') {
             $query->where('cs.is_active', true);
         } elseif ($activeFilter === 'inactive') {
             $query->where('cs.is_active', false);
         }
 
-        // Joriy semestr (default ON)
-        if ($request->get('current_semester', '1') == '1') {
+        // Joriy semestr (adminlar uchun default ON, fan masuli uchun default OFF)
+        $currentSemesterDefault = $isFanMasuli ? '0' : '1';
+        if ($request->get('current_semester', $currentSemesterDefault) == '1') {
             $query->where('s.current', true);
         }
 

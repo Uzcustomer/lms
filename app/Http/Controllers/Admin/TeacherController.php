@@ -271,39 +271,85 @@ class TeacherController extends Controller
         $levelCode = $request->input('level_code', '');
         $teacherId = $request->input('teacher_id');
 
-        $query = CurriculumSubject::active();
+        $teacher = $teacherId ? Teacher::find($teacherId) : null;
 
-        // O'qituvchining kafedrasidagi fanlarni filtrlash
-        if ($teacherId) {
-            $teacher = Teacher::find($teacherId);
-            if ($teacher) {
+        // Asosiy query yaratish funksiyasi
+        $buildQuery = function ($filterByDept = true) use ($search, $levelCode, $teacher) {
+            $query = CurriculumSubject::query();
+
+            // is_active filtri: avval active, agar bo'lmasa hammasidan qidiradi
+            $activeCount = CurriculumSubject::where('is_active', true)->count();
+            if ($activeCount > 0) {
+                $query->where('is_active', true);
+            }
+
+            // Kafedra bo'yicha filtrlash
+            if ($filterByDept && $teacher) {
                 $query->where(function ($q) use ($teacher) {
+                    $hasDeptFilter = false;
                     if ($teacher->department_hemis_id) {
                         $q->where('department_id', $teacher->department_hemis_id);
+                        $hasDeptFilter = true;
                     }
                     if ($teacher->department) {
-                        $q->orWhere('department_name', $teacher->department);
+                        if ($hasDeptFilter) {
+                            $q->orWhere('department_name', $teacher->department);
+                        } else {
+                            $q->where('department_name', $teacher->department);
+                        }
                     }
                 });
             }
-        }
 
-        $subjects = $query
-            ->when($search, function ($q, $search) {
-                $q->where('subject_name', 'like', "%{$search}%");
-            })
-            ->when($levelCode, function ($q, $levelCode) {
+            // Fan nomi bo'yicha qidirish
+            if ($search) {
+                $query->where('subject_name', 'like', "%{$search}%");
+            }
+
+            // Kurs (level) bo'yicha filtr
+            if ($levelCode) {
                 $semesterCodes = Semester::where('level_code', $levelCode)
                     ->pluck('code')
                     ->unique()
                     ->toArray();
-                $q->whereIn('semester_code', $semesterCodes);
-            })
+                $query->whereIn('semester_code', $semesterCodes);
+            }
+
+            return $query;
+        };
+
+        // Avval kafedra bo'yicha qidirish
+        $subjects = $buildQuery(true)
             ->selectRaw('MIN(id) as id, subject_name, subject_code, semester_code, semester_name, MIN(department_name) as department_name')
             ->groupBy('subject_name', 'subject_code', 'semester_code', 'semester_name')
             ->orderBy('subject_name')
             ->limit(200)
             ->get();
+
+        // Agar kafedra bo'yicha natija bo'lmasa — barcha fanlardan qidirish
+        if ($subjects->isEmpty() && $teacher) {
+            $subjects = $buildQuery(false)
+                ->selectRaw('MIN(id) as id, subject_name, subject_code, semester_code, semester_name, MIN(department_name) as department_name')
+                ->groupBy('subject_name', 'subject_code', 'semester_code', 'semester_name')
+                ->orderBy('subject_name')
+                ->limit(200)
+                ->get();
+        }
+
+        // Debug ma'lumot (vaqtinchalik)
+        if ($request->has('debug')) {
+            return response()->json([
+                'teacher_department' => $teacher ? $teacher->department : null,
+                'teacher_department_hemis_id' => $teacher ? $teacher->department_hemis_id : null,
+                'total_curriculum_subjects' => CurriculumSubject::count(),
+                'active_curriculum_subjects' => CurriculumSubject::where('is_active', true)->count(),
+                'sample_departments' => CurriculumSubject::select('department_id', 'department_name')
+                    ->distinct()
+                    ->limit(10)
+                    ->get(),
+                'subjects_count' => $subjects->count(),
+            ]);
+        }
 
         return response()->json($subjects);
     }

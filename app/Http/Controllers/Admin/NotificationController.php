@@ -109,6 +109,11 @@ class NotificationController extends Controller
             $notification->markAsRead();
         }
 
+        // URL bo'lsa — to'g'ridan-to'g'ri o'sha sahifaga yo'naltirish
+        if ($notification->url) {
+            return redirect($notification->url);
+        }
+
         $notification->load(['sender', 'recipient']);
 
         try {

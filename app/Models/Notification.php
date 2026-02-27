@@ -18,6 +18,7 @@ class Notification extends Model
         'subject',
         'body',
         'type',
+        'url',
         'data',
         'is_read',
         'read_at',

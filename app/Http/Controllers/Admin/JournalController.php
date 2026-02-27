@@ -5232,6 +5232,7 @@ class JournalController extends Controller
             'weight_on' => 'nullable|integer|min:0|max:100',
             'weight_oski' => 'nullable|integer|min:0|max:100',
             'weight_test' => 'nullable|integer|min:0|max:100',
+            'shakl' => 'nullable|integer|min:1|max:7',
         ]);
 
         $weightJn = (int) ($request->weight_jn ?? 30);
@@ -5326,6 +5327,18 @@ class JournalController extends Controller
             ->groupBy('s.employee_id')
             ->get();
 
+        // FISH qisqartirish funksiyasi: "Rasulov Shomurod Maxmudovich" -> "Rasulov Sh.M."
+        $abbreviateName = function ($fullName) {
+            $parts = preg_split('/\s+/', trim($fullName));
+            if (count($parts) <= 1) return $fullName;
+            $surname = $parts[0];
+            $initials = '';
+            for ($i = 1; $i < count($parts); $i++) {
+                $initials .= mb_strtoupper(mb_substr($parts[$i], 0, 1)) . '.';
+            }
+            return $surname . ' ' . $initials;
+        };
+
         $otherTeacherNames = [];
         foreach ($otherTeachers as $t) {
             foreach (explode(', ', $t->full_names) as $name) {
@@ -5333,6 +5346,21 @@ class JournalController extends Controller
                 if ($name && !in_array($name, $otherTeacherNames)) {
                     $otherTeacherNames[] = $name;
                 }
+            }
+        }
+
+        // O'qituvchi ismlarini qisqartirish
+        $abbreviatedOtherTeachers = array_map($abbreviateName, $otherTeacherNames);
+        $abbreviatedMaruza = $maruzaTeacher ? $abbreviateName($maruzaTeacher->full_names) : '';
+
+        // Shakl (urinish turi)
+        $shaklId = (int) ($request->shakl ?? 1);
+        $shakllar = config('app.shakllar', []);
+        $shaklName = '12-shakl';
+        foreach ($shakllar as $sh) {
+            if ($sh['id'] === $shaklId) {
+                $shaklName = $sh['name'];
+                break;
             }
         }
 
@@ -5353,16 +5381,23 @@ class JournalController extends Controller
         $sheet->setCellValue('C8', '         ' . ($specialty->name ?? ''));
         $sheet->setCellValue('N8', $semester->level_code ?? '');
         $sheet->setCellValue('Q8', $semester->code ?? '');
+        $sheet->setCellValue('W8', $group->name ?? '');
+        $sheet->setCellValue('Y1', $shaklName);
         $sheet->setCellValue('C10', '  ' . ($subject->subject_name ?? ''));
-        $sheet->setCellValue('P10', implode(', ', $otherTeacherNames));
+        $sheet->setCellValue('P10', implode(', ', $abbreviatedOtherTeachers));
+        $sheet->setCellValue('U10', implode(', ', $abbreviatedOtherTeachers));
         $sheet->setCellValue('A11', "Ma'ruzachi:");
-        $sheet->setCellValue('C11', '         ' . ($maruzaTeacher->full_names ?? ''));
-        $sheet->setCellValue('D13', $subject->total_credit ?? 0);
-        $sheet->setCellValue('G13', $subject->total_acload ?? 0);
+        $sheet->setCellValue('C11', '         ' . $abbreviatedMaruza);
+        $sheet->setCellValue('D13', $subject->total_acload ?? 0);
+        $sheet->setCellValue('G13', $subject->total_credit ?? 0);
 
         // Vaznlar haqida ma'lumot
         $sheet->setCellValue('V18', 'Yakuniy ball');
-        $sheet->setCellValue('V19', "JN={$weightJn}, MT={$weightMt}, ON={$weightOn}, OSKI={$weightOski}, Test={$weightTest}");
+        $sheet->setCellValue('D19', $weightJn);
+        $sheet->setCellValue('G19', $weightMt);
+        $sheet->setCellValue('J19', $weightOn);
+        $sheet->setCellValue('P19', $weightOski);
+        $sheet->setCellValue('S19', $weightTest);
 
         // Ma'lumotlarni joylashtirish
         $startRow = 20;
@@ -5375,7 +5410,7 @@ class JournalController extends Controller
             $hemisId = $student->hemis_id;
 
             $sheet->setCellValue('B' . $row, $student->full_name);
-            $sheet->setCellValue('C' . $row, $student->student_id_number);
+            $sheet->setCellValueExplicit('C' . $row, $student->student_id_number, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
             $jnRaw = $savedJnGrades[$hemisId] ?? null;
             $mtRaw = $savedMtGrades[$hemisId] ?? null;

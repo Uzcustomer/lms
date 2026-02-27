@@ -1648,6 +1648,16 @@
                             </div>
                             <div class="px-6 py-4 space-y-3">
                                 <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">Shakl</label>
+                                    <select id="yn-shakl"
+                                        class="w-48 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        @foreach(config('app.shakllar', []) as $sh)
+                                            <option value="{{ $sh['id'] }}">{{ $sh['name'] }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="border-t border-gray-200 my-2"></div>
+                                <div class="flex items-center justify-between">
                                     <label class="text-sm font-semibold text-gray-700 w-20">JN</label>
                                     <input type="number" id="yn-weight-jn" min="0" max="100" value="30"
                                         class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -4187,6 +4197,7 @@
                     subject_id: '{{ $subjectId }}',
                     semester_code: '{{ $semesterCode }}',
                     group_hemis_id: '{{ $group->group_hemis_id }}',
+                    shakl: parseInt(document.getElementById('yn-shakl').value) || 1,
                     weight_jn: jn,
                     weight_mt: mt,
                     weight_on: on,

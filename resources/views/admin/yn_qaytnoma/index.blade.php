@@ -107,6 +107,12 @@
                         </span>
                     </div>
                     <div class="action-right">
+                        <button type="button" id="btn-yn-oldi-word" class="btn-yn-oldi-word" onclick="generateYnOldiWord()" disabled>
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            YN oldi word
+                        </button>
                         <button type="button" id="btn-ruxsatnoma" class="btn-ruxsatnoma" onclick="generateRuxsatnoma()" disabled>
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -131,7 +137,7 @@
                         <svg style="width: 48px; height: 48px; margin: 0 auto 12px; color: #cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                         </svg>
-                        <p style="color: #94a3b8; font-size: 14px;">YN yuborilgan guruhlarni ko'rish uchun filtrlarni tanlang va "Ko'rsatish" tugmasini bosing.</p>
+                        <p style="color: #94a3b8; font-size: 14px;">Guruhlarni ko'rish uchun filtrlarni tanlang va "Qidirish" tugmasini bosing.</p>
                     </div>
 
                     <table id="groups-table" class="yn-table" style="display: none;">
@@ -148,6 +154,7 @@
                                 <th>Semestr</th>
                                 <th>Guruh</th>
                                 <th>Fanlar soni</th>
+                                <th>Holat</th>
                                 <th>Yuborilgan sana</th>
                             </tr>
                         </thead>
@@ -159,7 +166,7 @@
                         <svg style="width: 48px; height: 48px; margin: 0 auto 12px; color: #cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
                         </svg>
-                        <p style="color: #94a3b8; font-size: 14px;">Tanlangan filtrlar bo'yicha YN yuborilgan guruhlar topilmadi.</p>
+                        <p style="color: #94a3b8; font-size: 14px;">Tanlangan filtrlar bo'yicha guruhlar topilmadi.</p>
                     </div>
                 </div>
 
@@ -317,6 +324,18 @@
 
             data.forEach(function (row, index) {
                 var submittedDate = row.last_submitted_at ? new Date(row.last_submitted_at).toLocaleDateString('uz-UZ') : '-';
+                var submitted = parseInt(row.submitted_subject_count) || 0;
+                var total = parseInt(row.total_subject_count) || 0;
+
+                var statusBadge = '';
+                if (submitted === 0) {
+                    statusBadge = '<span class="badge badge-status-red">Yuborilmagan</span>';
+                } else if (submitted >= total) {
+                    statusBadge = '<span class="badge badge-status-green">Yuborilgan</span>';
+                } else {
+                    statusBadge = '<span class="badge badge-status-yellow">Jarayonda (' + submitted + '/' + total + ')</span>';
+                }
+
                 var tr = '<tr>' +
                     '<td style="text-align:center;">' +
                         '<input type="checkbox" class="group-checkbox" ' +
@@ -332,7 +351,8 @@
                     '<td><span class="badge badge-violet">' + (row.level_name || '-') + '</span></td>' +
                     '<td><span class="badge badge-teal">' + (row.semester_name || '-') + '</span></td>' +
                     '<td><span class="badge badge-indigo">' + (row.group_name || '-') + '</span></td>' +
-                    '<td><span class="badge badge-subject">' + (row.subject_count || 0) + ' ta fan</span></td>' +
+                    '<td><span class="badge badge-subject">' + submitted + ' / ' + total + ' ta fan</span></td>' +
+                    '<td>' + statusBadge + '</td>' +
                     '<td><span class="text-cell text-date">' + submittedDate + '</span></td>' +
                     '</tr>';
                 tbody.append(tr);
@@ -353,6 +373,7 @@
 
             $('#selected-count').text(count);
             $('#btn-ruxsatnoma').prop('disabled', count === 0);
+            $('#btn-yn-oldi-word').prop('disabled', count === 0);
             $('#select-all').prop('checked', count === total && total > 0);
             $('#select-all-header').prop('checked', count === total && total > 0);
         }
@@ -394,6 +415,71 @@
 
                 var contentDisposition = response.headers.get('Content-Disposition');
                 var fileName = 'ruxsatnoma.docx';
+                if (contentDisposition) {
+                    var match = contentDisposition.match(/filename="?([^";\n]+)"?/);
+                    if (match && match[1]) fileName = match[1];
+                }
+
+                return response.blob().then(function (blob) {
+                    return { blob: blob, fileName: fileName };
+                });
+            })
+            .then(function (result) {
+                var url = window.URL.createObjectURL(result.blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = result.fileName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(function (err) {
+                alert('Xatolik yuz berdi: ' + err.message);
+            })
+            .finally(function () {
+                btn.prop('disabled', false).html(originalText);
+                updateSelection();
+            });
+        }
+
+        function generateYnOldiWord() {
+            var selected = [];
+            $('.group-checkbox:checked').each(function () {
+                selected.push({
+                    group_hemis_id: $(this).data('group-hemis-id'),
+                    semester_code: String($(this).data('semester-code')),
+                });
+            });
+
+            if (selected.length === 0) {
+                alert('Kamida bitta guruhni tanlang');
+                return;
+            }
+
+            var btn = $('#btn-yn-oldi-word');
+            var originalText = btn.html();
+            btn.prop('disabled', true).html(
+                '<svg class="animate-spin" style="height:14px;width:14px;display:inline-block;margin-right:4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">' +
+                '<circle style="opacity:0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+                '<path style="opacity:0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>' +
+                '</svg> Yuklanmoqda...'
+            );
+
+            fetch('{{ route($routePrefix . ".yn-qaytnoma.generate-yn-oldi-word") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/octet-stream',
+                },
+                body: JSON.stringify({ groups: selected })
+            })
+            .then(function (response) {
+                if (!response.ok) throw new Error('Server xatosi');
+
+                var contentDisposition = response.headers.get('Content-Disposition');
+                var fileName = 'yn_oldi_qaydnoma.docx';
                 if (contentDisposition) {
                     var match = contentDisposition.match(/filename="?([^";\n]+)"?/);
                     if (match && match[1]) fileName = match[1];
@@ -583,6 +669,34 @@
             font-weight: 500;
         }
 
+        /* ===== YN oldi word Button ===== */
+        .btn-yn-oldi-word {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 18px;
+            background: linear-gradient(135deg, #2563eb, #3b82f6);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(37,99,235,0.3);
+            white-space: nowrap;
+        }
+        .btn-yn-oldi-word:hover:not(:disabled) {
+            background: linear-gradient(135deg, #1d4ed8, #2563eb);
+            box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+            transform: translateY(-1px);
+        }
+        .btn-yn-oldi-word:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         /* ===== Ruxsatnoma Button ===== */
         .btn-ruxsatnoma {
             display: inline-flex;
@@ -696,6 +810,24 @@
             background: #fef3c7;
             color: #92400e;
             border: 1px solid #fde68a;
+        }
+        .badge-status-green {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            white-space: nowrap;
+        }
+        .badge-status-red {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+            white-space: nowrap;
+        }
+        .badge-status-yellow {
+            background: #fef9c3;
+            color: #854d0e;
+            border: 1px solid #fde68a;
+            white-space: nowrap;
         }
 
         /* ===== Text Cells ===== */

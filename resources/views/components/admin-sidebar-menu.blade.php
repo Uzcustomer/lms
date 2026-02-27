@@ -1,9 +1,9 @@
 @php
     $isTeacher = auth()->guard('teacher')->check();
-    $user = auth()->user();
+    $user = auth()->user() ?? auth()->guard('teacher')->user();
 
     // Foydalanuvchi rollari va faol rol
-    $userRoles = $user->getRoleNames()->toArray();
+    $userRoles = $user ? $user->getRoleNames()->toArray() : [];
     $activeRole = session('active_role', $userRoles[0] ?? '');
     // Session dagi rol foydalanuvchida mavjud ekanligini tekshirish
     if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
@@ -54,19 +54,58 @@
     }
 
     // Foydalanuvchi to'liq ismi
-    $userName = $user->name ?? ($user->full_name ?? $user->short_name ?? 'Foydalanuvchi');
+    $userName = $user ? ($user->name ?? ($user->full_name ?? $user->short_name ?? 'Foydalanuvchi')) : 'Foydalanuvchi';
 @endphp
+<!-- Mobile backdrop -->
+<div x-data x-show="$store.sidebar.open"
+     x-transition:enter="transition-opacity ease-linear duration-200"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="transition-opacity ease-linear duration-200"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0"
+     @click="$store.sidebar.open = false"
+     class="sidebar-backdrop"
+     style="display: none;"></div>
+
 <aside x-data="sidebarTheme()" :data-theme="theme"
+       :class="$store.sidebar.open ? 'sidebar-open' : ''"
        class="sidebar-themed w-64 flex flex-col fixed left-0 top-0 z-50"
        style="height: 100vh;">
     <!-- Logo Section -->
-    <div class="p-4 flex flex-col items-center flex-shrink-0 sidebar-logo-section">
+    <div class="p-4 flex flex-col items-center flex-shrink-0 sidebar-logo-section" style="position: relative;">
+        <!-- Mobile close button -->
+        <button x-data @click="$store.sidebar.close()"
+                class="sidebar-close-btn">
+            <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
         <img src="{{ asset('logo.png') }}" alt="Logo" class="w-16 h-16 rounded-full mb-2 sidebar-logo-img">
         <h1 class="sidebar-logo-text">LMS</h1>
     </div>
 
     <!-- Navigation Menu -->
-    <nav class="flex-1 py-3 px-3 overflow-y-auto sidebar-nav">
+    <nav class="flex-1 py-3 px-3 overflow-y-auto sidebar-nav"
+         x-data @click="if($event.target.closest('a')) { if(window.innerWidth < 768) $store.sidebar.close() }">
+        <!-- Xabarnomalar (Notifications) -->
+        @php
+            $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
+                ->where('is_draft', false)
+                ->where('is_read', false)
+                ->count();
+        @endphp
+        <a href="{{ route('admin.notifications.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.notifications.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+            </svg>
+            {{ __('notifications.notifications') }}
+            @if($sidebarUnreadCount > 0)
+            <span class="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">{{ $sidebarUnreadCount }}</span>
+            @endif
+        </a>
+
         <a href="{{ $r('admin.dashboard', 'teacher.dashboard') }}"
            class="sidebar-link {{ $isActive('admin.dashboard', 'teacher.dashboard') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,13 +124,23 @@
         </a>
         @endif
 
-        @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi']))
+        @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi', 'oqituvchi']))
         <a href="{{ $r('admin.students.index', $hasActiveRole('registrator_ofisi') ? null : 'teacher.students') }}"
            class="sidebar-link {{ $isActive('admin.students.*', 'teacher.students') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
             </svg>
             Talabalar
+        </a>
+        @endif
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'buxgalteriya']))
+        <a href="{{ route('admin.contracts.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.contracts.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            Kontraktlar
         </a>
         @endif
 
@@ -118,6 +167,17 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
             </svg>
             Baholar
+        </a>
+
+        @endif
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'fan_masuli', 'oqituvchi', 'kafedra_mudiri']))
+        <a href="{{ route('admin.ktr.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.ktr.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            KTR
         </a>
         @endif
 
@@ -156,7 +216,26 @@
             </svg>
             YN qaytnomasi
         </a>
-        @elseif(!$hasActiveRole('oquv_bolimi'))
+
+        <a href="{{ $r('admin.academic-schedule.test-center', 'teacher.academic-schedule.test-center') }}"
+           class="sidebar-link {{ $isActive('admin.academic-schedule.test-center', 'teacher.academic-schedule.test-center') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            YN jadvali
+        </a>
+        @elseif($hasActiveRole('oquv_bolimi'))
+        {{-- O'quv bo'limi roli uchun --}}
+        <div class="sidebar-section">O'quv bo'limi</div>
+
+        <a href="{{ $r('admin.academic-schedule.index', 'teacher.academic-schedule.index') }}"
+           class="sidebar-link {{ $isActive('admin.academic-schedule.index', 'teacher.academic-schedule.index') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            YN kunini belgilash
+        </a>
+        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         <div class="sidebar-section">Qo'shimcha</div>
 
@@ -279,7 +358,7 @@
         </a>
         @endif
 
-        @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi']))
+        @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi', 'oqituvchi']))
         <a href="{{ $r('admin.qaytnoma.index', 'teacher.qaytnoma.index') }}"
            class="sidebar-link {{ $isActive('admin.qaytnoma.*', 'teacher.qaytnoma.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -380,6 +459,29 @@
             Sababli check
         </a>
         @endif
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        <a href="{{ route('admin.absence-excuses.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}" style="position: relative;">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            Sababli arizalar
+            @if(($pendingExcusesCount ?? 0) > 0)
+                <span class="sidebar-badge">{{ $pendingExcusesCount }}</span>
+            @endif
+        </a>
+        @endif
+
+        @if($hasActiveRole(['superadmin', 'admin']))
+        <a href="{{ route('admin.document-templates.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.document-templates.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"></path>
+            </svg>
+            Shablonlar
+        </a>
+        @endif
         @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya', 'registrator_ofisi']))
@@ -392,6 +494,7 @@
         </a>
         @endif
         @endif
+
     </nav>
 
     <!-- User Section with Profile Dropdown -->
@@ -812,6 +915,28 @@
             color: #3b82f6;
         }
 
+        /* ===== BADGE (notification count) ===== */
+        .sidebar-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            margin-left: auto;
+            font-size: 0.7rem;
+            font-weight: 700;
+            line-height: 1;
+            color: #ffffff;
+            background-color: #ef4444;
+            border-radius: 10px;
+            animation: badge-pulse 2s ease-in-out infinite;
+        }
+        @keyframes badge-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
         /* ===== BASE STYLES (shared) ===== */
         .sidebar-link {
             display: flex;
@@ -853,9 +978,110 @@
             background: none;
             border: none;
         }
+
+        /* ===== RESPONSIVE SIDEBAR ===== */
+        .sidebar-themed {
+            transform: translateX(-100%);
+            transition: transform 0.2s ease-in-out;
+        }
+        .sidebar-themed.sidebar-open {
+            transform: translateX(0);
+        }
+        .sidebar-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 40;
+        }
+        .sidebar-close-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            padding: 6px;
+            border-radius: 8px;
+            color: rgba(255,255,255,0.6);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .sidebar-close-btn:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-close-btn {
+            color: #9ca3af;
+        }
+        .sidebar-themed[data-theme="yorug"] .sidebar-close-btn:hover {
+            color: #111827;
+            background: #f3f4f6;
+        }
+        .mobile-top-bar {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 12px 16px;
+        }
+        .mobile-top-bar .hamburger-btn {
+            padding: 8px;
+            border-radius: 8px;
+            color: #4b5563;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+        .mobile-top-bar .hamburger-btn:hover {
+            background: #f3f4f6;
+        }
+
+        /* Desktop (>=768px): sidebar always visible */
+        @media (min-width: 768px) {
+            .sidebar-themed {
+                transform: translateX(0) !important;
+            }
+            .sidebar-main-content {
+                margin-left: 256px;
+            }
+            .mobile-top-bar {
+                display: none !important;
+            }
+            .sidebar-backdrop {
+                display: none !important;
+            }
+            .sidebar-close-btn {
+                display: none !important;
+            }
+        }
+
+        /* Mobile (<768px): no margin, full width */
+        @media (max-width: 767px) {
+            .sidebar-main-content {
+                margin-left: 0 !important;
+            }
+            .desktop-only-header {
+                display: none !important;
+            }
+        }
     </style>
 
     <script>
+        // Alpine.js global store for sidebar toggle
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('sidebar', {
+                open: false,
+                toggle() {
+                    this.open = !this.open;
+                },
+                close() {
+                    this.open = false;
+                }
+            });
+        });
+
         // Cascade submenu pozitsiyasini aniqlash - viewport ga sig'masa tepaga ochadi
         function positionSubmenu(el) {
             const btn = el.previousElementSibling;

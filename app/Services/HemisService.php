@@ -158,6 +158,95 @@ class HemisService
         ];
     }
 
+    /**
+     * Guruh bo'yicha talabalar ro'yxatini HEMIS dan sinxronlash
+     */
+    public function importStudentsForGroup(int $groupHemisId): array
+    {
+        $page = 1;
+        $hasMore = true;
+        $totalImported = 0;
+        $importedHemisIds = [];
+
+        while ($hasMore) {
+            $response = $this->fetchStudentsForGroup($groupHemisId, $page);
+
+            if ($response && ($response['success'] ?? false)) {
+                foreach ($response['data']['items'] as $studentData) {
+                    $this->updateOrCreateStudent($studentData);
+                    $importedHemisIds[] = $studentData['id'];
+                    $totalImported++;
+                }
+
+                $pagination = $response['data']['pagination'];
+                $hasMore = $pagination['page'] < $pagination['pageCount'];
+                $page++;
+            } else {
+                Log::warning('Failed to fetch students for group from HEMIS', [
+                    'group_id' => $groupHemisId,
+                    'page' => $page,
+                ]);
+                break;
+            }
+        }
+
+        // Faqat SHU guruhdagi HEMIS da topilmagan talabalarni chetlashgan deb belgilash
+        $deactivated = 0;
+        if (!empty($importedHemisIds)) {
+            $studentsToDeactivate = Student::where('group_id', $groupHemisId)
+                ->whereNotIn('hemis_id', $importedHemisIds)
+                ->where('student_status_code', '!=', '60')
+                ->get();
+
+            foreach ($studentsToDeactivate as $student) {
+                $originalName = preg_replace('/\s*\(chetlashgan\)$/u', '', $student->full_name);
+                $student->update([
+                    'student_status_code' => '60',
+                    'student_status_name' => "Chetlashgan (HEMIS da yo'q)",
+                    'full_name' => $originalName . ' (chetlashgan)',
+                ]);
+                $deactivated++;
+            }
+
+            Log::info("Group {$groupHemisId}: imported {$totalImported}, deactivated {$deactivated} students");
+        }
+
+        return [
+            'imported' => $totalImported,
+            'deactivated' => $deactivated,
+        ];
+    }
+
+    protected function fetchStudentsForGroup(int $groupHemisId, int $page)
+    {
+        try {
+            $response = Http::withoutVerifying()
+                ->timeout(30)
+                ->withToken($this->token)
+                ->get($this->baseUrl . '/v1/data/student-list', [
+                    'page' => $page,
+                    'limit' => 200,
+                    '_group' => $groupHemisId,
+                ]);
+
+            if (!$response->successful()) {
+                Log::error('HEMIS student-list request failed for group', [
+                    'group_id' => $groupHemisId,
+                    'status' => $response->status(),
+                ]);
+                return ['success' => false];
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('Exception fetching students for group', [
+                'group_id' => $groupHemisId,
+                'message' => $e->getMessage(),
+            ]);
+            return ['success' => false];
+        }
+    }
+
     public function importSemesters()
     {
         $page = 1;
@@ -511,5 +600,45 @@ class HemisService
                 'gpa_limit' => $data['gpa_limit'] ?? 2.0,
             ]
         );
+    }
+
+    /**
+     * HEMIS dan kontrakt ro'yxatini olish
+     */
+    public function fetchContracts(array $params = []): array
+    {
+        try {
+            $response = Http::withoutVerifying()
+                ->timeout(30)
+                ->withToken($this->token)
+                ->get($this->baseUrl . '/v1/data/contract-list', array_merge([
+                    'page' => $params['page'] ?? 1,
+                    'limit' => $params['limit'] ?? 50,
+                ], array_filter([
+                    '_student' => $params['_student'] ?? null,
+                    '_education_year' => $params['_education_year'] ?? null,
+                    '_education_type' => $params['_education_type'] ?? null,
+                    '_department' => $params['_department'] ?? null,
+                    '_specialty' => $params['_specialty'] ?? null,
+                    '_group' => $params['_group'] ?? null,
+                    '_level' => $params['_level'] ?? null,
+                    '_semester' => $params['_semester'] ?? null,
+                ])));
+
+            if (!$response->successful()) {
+                Log::error('HEMIS contract-list request failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return ['success' => false, 'error' => 'HEMIS API so\'rov xatosi: HTTP ' . $response->status()];
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('Exception fetching contracts from HEMIS', [
+                'message' => $e->getMessage(),
+            ]);
+            return ['success' => false, 'error' => 'HEMIS bilan bog\'lanishda xatolik: ' . $e->getMessage()];
+        }
     }
 }

@@ -208,7 +208,15 @@ class StudentController extends Controller
 
     public function show(Student $student)
     {
-        return view('admin.students.show', compact('student'));
+        $user = auth()->user();
+        $userRoles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $userRoles[0] ?? '');
+        if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
+            $activeRole = $userRoles[0];
+        }
+        $canToggleFive = in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'dekan']);
+
+        return view('admin.students.show', compact('student', 'canToggleFive'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)
@@ -237,6 +245,26 @@ class StudentController extends Controller
             Log::error('Parolni tiklashda xatolik: ' . $e->getMessage());
             return back()->with('error', "Parolni tiklashda xatolik yuz berdi. Iltimos, migratsiyalar ishga tushirilganligini tekshiring.");
         }
+    }
+
+    public function toggleFiveCandidate(Request $request, Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'dekan'])) {
+            return back()->with('error', "Sizda bu amalni bajarish huquqi yo'q.");
+        }
+
+        $student->is_five_candidate = !$student->is_five_candidate;
+        $student->save();
+
+        $status = $student->is_five_candidate ? "ro'yxatga kiritildi" : "ro'yxatdan chiqarildi";
+        return back()->with('success', "{$student->full_name} 5 ga da'vogar {$status}.");
     }
 
     public function bulkResetLocalPassword(Request $request)
@@ -300,7 +328,7 @@ class StudentController extends Controller
         $curriculumId = $request->input('curriculum_id');
 
         if ($curriculumId) {
-            $subjects = CurriculumSubject::where('curricula_hemis_id', $curriculumId)->get(['subject_id as id', 'subject_name as name']);
+            $subjects = CurriculumSubject::where('curricula_hemis_id', $curriculumId)->where('is_active', true)->get(['subject_id as id', 'subject_name as name']);
             return response()->json($subjects);
         }
 
@@ -494,7 +522,24 @@ class StudentController extends Controller
             $semester = Semester::findOrFail($request->semester);
             $subject = CurriculumSubject::findOrFail($request->subject);
 
+            // Education year code aniqlash (jurnal bilan bir xil mantiq)
+            $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
+            $educationYearCode = $curriculum?->education_year_code;
+            $scheduleEducationYear = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subject->subject_id)
+                ->where('semester_code', $semester->code)
+                ->whereNull('deleted_at')
+                ->whereNotNull('lesson_date')
+                ->whereNotNull('education_year_code')
+                ->orderBy('lesson_date', 'desc')
+                ->value('education_year_code');
+            if ($scheduleEducationYear) {
+                $educationYearCode = $scheduleEducationYear;
+            }
+
             $teacher = StudentGrade::where('subject_id', $subject->subject_id)
+                ->where('semester_code', $semester->code)
                 ->whereNotNull('employee_name')
                 ->first();
 
@@ -542,8 +587,13 @@ class StudentController extends Controller
             if ($traning_type == 'joriy') {
                 $grades = StudentGrade::whereIn('student_hemis_id', $studentIds)
                     ->where('subject_id', $subject->subject_id)
+                    ->where('semester_code', $semester->code)
                     ->whereNotIn('training_type_code', config('app.training_type_code'))
                     ->whereBetween('lesson_date', [$startDate, $endDate])
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhereNull('education_year_code');
+                    }))
                     ->get();
                 $gradesPerStudent = [];
                 $gradesPerStudentPerPeriod = [];
@@ -613,6 +663,10 @@ class StudentController extends Controller
                     ->where('subject_id', $subject->subject_id)
                     ->where('training_type_code', 99)
                     ->where('semester_code', $semester->code)
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhereNull('education_year_code');
+                    }))
                     ->select(DB::raw('avg(grade) as grade'), 'student_hemis_id', 'lesson_date')
                     ->groupBy('student_hemis_id', 'lesson_date')
                     ->get();
@@ -627,6 +681,10 @@ class StudentController extends Controller
                     ->where('subject_id', $subject->subject_id)
                     ->where('training_type_code', 100)
                     ->where('semester_code', $semester->code)
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhereNull('education_year_code');
+                    }))
                     ->get();
                 $data = $this->studentGradeService->g_averageGradesPerStudentPerPeriod($grades);
                 $averageGradesPerStudentPerPeriod = $data[0];
@@ -638,6 +696,10 @@ class StudentController extends Controller
                     ->where('subject_id', $subject->subject_id)
                     ->where('training_type_code', 101)
                     ->where('semester_code', $semester->code)
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhereNull('education_year_code');
+                    }))
                     ->get();
                 $data = $this->studentGradeService->g_averageGradesPerStudentPerPeriod($grades);
                 $averageGradesPerStudentPerPeriod = $data[0];
@@ -650,6 +712,10 @@ class StudentController extends Controller
                     ->where('subject_id', $subject->subject_id)
                     ->where('training_type_code', 102)
                     ->where('semester_code', $semester->code)
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhereNull('education_year_code');
+                    }))
                     ->get();
                 $data = $this->studentGradeService->g_averageGradesPerStudentPerPeriod($grades);
                 $averageGradesPerStudentPerPeriod = $data[0];
@@ -793,6 +859,7 @@ class StudentController extends Controller
 
         $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
             ->where('semester_code', $semester->code)
+            ->where('is_active', true)
             ->pluck('subject_name', 'id');
 
         return response()->json($subjects);
@@ -805,6 +872,7 @@ class StudentController extends Controller
 
         $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
             ->where('semester_code', $semester->code)
+            ->where('is_active', true)
             ->pluck('subject_name', 'curriculum_subject_hemis_id');
 
         return response()->json($subjects);

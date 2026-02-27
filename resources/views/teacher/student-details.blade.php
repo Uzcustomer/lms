@@ -119,7 +119,18 @@
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $grade->student->curriculum->marking_system_name}}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $grade->training_type_name }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $grade->lesson_pair_name }}
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $grade->deadline }}
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        @if($grade->deadline)
+                                            @php $deadlineExpired = now()->greaterThan($grade->deadline); @endphp
+                                            <span class="{{ $deadlineExpired ? 'text-red-600 font-semibold' : 'text-gray-500' }}">
+                                                {{ \Carbon\Carbon::parse($grade->deadline)->format('d.m.Y H:i') }}
+                                            </span>
+                                            @if($deadlineExpired)
+                                                <span class="text-xs text-red-500 block">Muddat o'tgan</span>
+                                            @endif
+                                        @else
+                                            -
+                                        @endif
                                     </td>
 {{--                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $grade->grade ?? 'N/A' }}</td>--}}
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -146,9 +157,27 @@
                                     </td>
                                     @if($grade->status === 'pending'))
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <button onclick="openModal('{{ $grade->id }}')"
-                                                    class="text-indigo-600 hover:text-indigo-900">Baho qo'yish
-                                            </button>
+                                            @php
+                                                $teacher = auth()->guard('teacher')->user();
+                                                $studentLevel = $grade->student->level_code ?? null;
+                                                $dlSettings = $studentLevel ? \App\Models\Deadline::where('level_code', $studentLevel)->first() : null;
+                                                $roleAllowed = true;
+                                                if ($dlSettings) {
+                                                    $roleAllowed = false;
+                                                    if ($teacher->hasRole('test_markazi') && $dlSettings->retake_by_test_markazi) $roleAllowed = true;
+                                                    if ($teacher->hasRole('oqituvchi') && $dlSettings->retake_by_oqituvchi) $roleAllowed = true;
+                                                    if ($grade->reason === 'teacher_victim') $roleAllowed = true;
+                                                }
+                                            @endphp
+                                            @if($grade->deadline && now()->greaterThan($grade->deadline))
+                                                <span class="text-red-500 text-xs">Muddat o'tgan</span>
+                                            @elseif(!$roleAllowed)
+                                                <span class="text-orange-500 text-xs">Ruxsat yo'q</span>
+                                            @else
+                                                <button onclick="openModal('{{ $grade->id }}')"
+                                                        class="text-indigo-600 hover:text-indigo-900">Baho qo'yish
+                                                </button>
+                                            @endif
                                         </td>
                                     @endif
                                 </tr>

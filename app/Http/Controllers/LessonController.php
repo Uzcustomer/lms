@@ -321,6 +321,7 @@ class LessonController extends Controller
             'status' => 'pending',
             'grade' => 0,
             'deadline' => Carbon::now()->addWeek()->endOfDay(),
+            'is_final' => true,
         ]);
     }
 

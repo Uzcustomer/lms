@@ -16,7 +16,7 @@
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .login-card { width: 340px; animation: fadeUp .4s ease-out; }
+        .login-card { width: 400px; animation: fadeUp .4s ease-out; }
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(12px); }
             to { opacity: 1; transform: translateY(0); }
@@ -216,8 +216,11 @@
                 </div>
             @endif
 
+            {{-- Formalar konteyneri — tab almashtirganda bounce bo'lmasligi uchun --}}
+            <div style="min-height: 320px;">
+
             {{-- Student forma --}}
-            <form x-show="tab === 'student'" x-transition.opacity.duration.200ms method="POST" action="{{ route('student.login.post') }}">
+            <form x-show="tab === 'student'" method="POST" action="{{ route('student.login.post') }}">
                 @csrf
                 <input type="hidden" name="_profile" value="student">
 
@@ -245,10 +248,26 @@
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3-3l3-3m0 0l-3-3m3 3H9" /></svg>
                     Kirish
                 </button>
+
+                {{-- Ajratuvchi --}}
+                <div style="display:flex; align-items:center; margin:14px 0;">
+                    <div style="flex:1; height:1px; background:#e5e7eb;"></div>
+                    <span style="padding:0 10px; font-size:11px; color:#9ca3af;">yoki</span>
+                    <div style="flex:1; height:1px; background:#e5e7eb;"></div>
+                </div>
+
+                {{-- HEMIS OAuth tugmasi --}}
+                <a href="{{ route('auth.hemis.redirect') }}"
+                   style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:12px 0; background:linear-gradient(135deg, #065f46 0%, #047857 100%); color:#fff; font-size:14px; font-weight:700; border-radius:14px; text-decoration:none; letter-spacing:0.3px; transition:all .25s ease;"
+                   onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 24px rgba(6,95,70,0.4)'"
+                   onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
+                    Hemis orqali kirish
+                </a>
             </form>
 
             {{-- Xodim forma --}}
-            <form x-show="tab === 'teacher'" x-transition.opacity.duration.200ms method="POST" action="{{ route('teacher.login.post') }}">
+            <form x-show="tab === 'teacher'" method="POST" action="{{ route('teacher.login.post') }}">
                 @csrf
                 <input type="hidden" name="_profile" value="teacher">
 
@@ -277,6 +296,7 @@
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3-3l3-3m0 0l-3-3m3 3H9" /></svg>
                     Kirish
                 </button>
+
             </form>
 
             {{-- Admin forma (yashirin) --}}
@@ -311,11 +331,16 @@
                     </button>
                 </form>
             </template>
+
+            </div>{{-- /formalar konteyneri --}}
         </div>
 
         {{-- Pastki izoh --}}
         <p x-show="tab === 'student'" x-transition.opacity class="text-center text-[10px] text-gray-400 mt-3.5 leading-relaxed">
-            HEMIS login va parol bilan kiring. Parol esdan chiqqan bo'lsa,<br>admin yoki dekanatga murojaat qiling.
+            Lokal parol bilan kiring yoki "Hemis orqali kirish" tugmasini bosing.<br>Parol esdan chiqqan bo'lsa, admin yoki dekanatga murojaat qiling.
+        </p>
+        <p x-show="tab === 'teacher'" x-transition.opacity class="text-center text-[10px] text-gray-400 mt-3.5 leading-relaxed">
+            Login va parol bilan kiring.<br>Parol esdan chiqqan bo'lsa, admin yoki dekanatga murojaat qiling.
         </p>
     </div>
 </div>

@@ -12,6 +12,7 @@ use App\Models\Department;
 use App\Models\Group;
 use App\Models\Schedule;
 use App\Models\Semester;
+use App\Models\Deadline;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\Teacher;
@@ -190,8 +191,42 @@ class TeacherMainController extends Controller
 
         $grade = StudentGrade::findOrFail($gradeId);
 
-        if ($grade->status !== 'pending' || ($grade->student->level_code < 14 && $grade->reason !== 'teacher_victim')) {
+        if ($grade->status !== 'pending') {
             return back()->with('error', 'Bu bahoni o\'zgartirish mumkin emas.');
+        }
+
+        // Muddat tekshirish: deadline o'tgan bo'lsa, baho qo'yishga ruxsat bermash
+        if ($grade->deadline && now()->greaterThan($grade->deadline)) {
+            $deadlineFormatted = \Carbon\Carbon::parse($grade->deadline)->format('d.m.Y H:i');
+            return back()->with('error', "Otrabotka muddati o'tgan ({$deadlineFormatted}). Baho qo'yish mumkin emas.");
+        }
+
+        // Rol tekshirish: kurs darajasiga qarab kim otrabotka baho qo'ya olishini tekshirish
+        $teacher = Auth::guard('teacher')->user();
+        $studentLevelCode = $grade->student->level_code ?? null;
+        if ($studentLevelCode) {
+            $deadlineSettings = Deadline::where('level_code', $studentLevelCode)->first();
+            if ($deadlineSettings) {
+                $isOqituvchi = $teacher->hasRole('oqituvchi');
+                $isTestMarkazi = $teacher->hasRole('test_markazi');
+
+                $hasAccess = false;
+                if ($isTestMarkazi && $deadlineSettings->retake_by_test_markazi) {
+                    $hasAccess = true;
+                }
+                if ($isOqituvchi && $deadlineSettings->retake_by_oqituvchi) {
+                    $hasAccess = true;
+                }
+                // teacher_victim hollarda o'qituvchiga har doim ruxsat
+                if ($grade->reason === 'teacher_victim') {
+                    $hasAccess = true;
+                }
+
+                if (!$hasAccess) {
+                    $levelName = $grade->student->level_name ?? $studentLevelCode;
+                    return back()->with('error', "{$levelName} talabalari uchun otrabotka bahosini qo'yish huquqingiz yo'q.");
+                }
+            }
         }
 
         $grade->update([
@@ -269,6 +304,7 @@ class TeacherMainController extends Controller
 
             $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('semester_code', $semester->code)
+                ->where('is_active', true)
                 ->get();
         }
 
@@ -322,10 +358,17 @@ class TeacherMainController extends Controller
                     }
                 }
             } else {
-                // whereHas('studentGrades')->
+                $semesterWeeks = CurriculumWeek::where('semester_hemis_id', $semester->semester_hemis_id)
+                    ->orderBy('start_date')
+                    ->get();
+                $semesterStartDate = $semesterWeeks->first()?->start_date;
+                $semesterEndDate = $semesterWeeks->last()?->end_date;
+
                 $lessonDates = Schedule::where('subject_id', $subject->subject_id)
                     ->where('group_id', $group->group_hemis_id)
-                    ->where('semester_code', $semester->code)
+                    ->when($semesterStartDate && $semesterEndDate, function ($query) use ($semesterStartDate, $semesterEndDate) {
+                        $query->whereBetween('lesson_date', [$semesterStartDate, $semesterEndDate]);
+                    })
                     ->whereNotIn('training_type_code', config('app.training_type_code'))
                     ->distinct('lesson_date')
                     ->pluck('lesson_date')
@@ -555,6 +598,7 @@ class TeacherMainController extends Controller
         if ($teacher->hasRole('dekan') or $teacher->groups->contains($group)) {
             $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('semester_code', $semester->code)
+                ->where('is_active', true)
                 ->pluck('subject_name', 'id');
         } else {
             $subject_ids = StudentGrade::join('students', 'student_grades.student_hemis_id', '=', 'students.hemis_id')
@@ -565,7 +609,7 @@ class TeacherMainController extends Controller
                 ->pluck('student_grades.subject_id');
 
             $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
-                ->where('semester_code', $semester->code)->whereIn('subject_id', $subject_ids)->pluck('subject_name', 'id');
+                ->where('semester_code', $semester->code)->where('is_active', true)->whereIn('subject_id', $subject_ids)->pluck('subject_name', 'id');
 
         }
 

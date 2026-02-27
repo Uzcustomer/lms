@@ -30,6 +30,9 @@
                     <x-nav-link :href="route('student.independents')" :active="request()->routeIs('student.independents')">
                         {{ __('Mustaqil ta\'lim') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('student.absence-excuses.index')" :active="request()->routeIs('student.absence-excuses.*')">
+                        {{ __('Sababli ariza') }}
+                    </x-nav-link>
                 </div>
             </div>
 
@@ -51,6 +54,7 @@
                         <x-dropdown-link :href="route('student.profile')">
                             {{ __('Talaba ma\'lumoti') }}
                         </x-dropdown-link>
+
                         @if(session('impersonating'))
                             <form method="POST" action="{{ route('impersonate.stop') }}">
                                 @csrf
@@ -108,6 +112,9 @@
             <x-responsive-nav-link :href="route('student.independents')" :active="request()->routeIs('student.independents')">
                 {{ __('Mustaqil ta\'lim') }}
             </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('student.absence-excuses.index')" :active="request()->routeIs('student.absence-excuses.*')">
+                {{ __('Sababli ariza') }}
+            </x-responsive-nav-link>
         </div>
 
         <!-- Responsive Settings Options (Mobile) -->
@@ -121,6 +128,7 @@
                 <x-responsive-nav-link :href="route('student.profile')">
                     {{ __('Talaba ma\'lumoti') }}
                 </x-responsive-nav-link>
+
                 @if(session('impersonating'))
                     <form method="POST" action="{{ route('impersonate.stop') }}">
                         @csrf

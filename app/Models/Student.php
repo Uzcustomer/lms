@@ -38,6 +38,7 @@ class Student extends Authenticatable
         'roommate_count',
         'total_acload',
         'is_graduate',
+        'is_five_candidate',
         'other',
         'phone',
         'telegram_username',
@@ -58,6 +59,7 @@ class Student extends Authenticatable
         'local_password' => 'hashed',
         'local_password_expires_at' => 'datetime',
         'must_change_password' => 'boolean',
+        'is_five_candidate' => 'boolean',
         'telegram_verified_at' => 'datetime',
         'login_code_expires_at' => 'datetime',
     ];
@@ -92,9 +94,15 @@ class Student extends Authenticatable
 
     public function getAverageGradeForWeek($subjectId, $startDate, $endDate)
     {
+        $educationYearCode = $this->education_year_code;
         return $this->studentGrades()
             ->where('subject_id', $subjectId)
+            ->where('semester_code', $this->semester_code)
             ->whereBetween('lesson_date', [$startDate, $endDate])
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->avg('grade');
     }
 
@@ -170,10 +178,16 @@ class Student extends Authenticatable
 
     public function getGradeForDate($subjectId, $date): float|string|null
     {
+        $educationYearCode = $this->education_year_code;
         $grades = $this->studentGrades()
             ->where('subject_id', $subjectId)
+            ->where('semester_code', $this->semester_code)
             ->where('training_type_code', "<>", 11)
             ->whereDate('lesson_date', $date)
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->get();
 
         $totalGrade = 0;
@@ -231,9 +245,15 @@ class Student extends Authenticatable
 
     public function getAverageGradeForSubject($subjectId): float|string|null
     {
+        $educationYearCode = $this->education_year_code;
         $grades = $this->studentGrades()
             ->where('training_type_code', "<>", 11)
             ->where('subject_id', $subjectId)
+            ->where('semester_code', $this->semester_code)
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->get();
 
         $totalGrade = 0;

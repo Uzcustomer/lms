@@ -104,17 +104,14 @@
                         <div class="filter-item" style="min-width: 320px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
-                                <button type="button" id="btn-sync" class="btn-sync" onclick="syncSchedules()" title="HEMIS dan dars jadvalini yangilash">
-                                    <svg id="sync-icon" style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                                    <span id="sync-text">Yangilash</span>
+                                <button type="button" id="btn-calculate" class="btn-calc" onclick="startCalculation()">
+                                    <svg id="calc-icon" style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                    <span id="calc-text">Hisoblash</span>
+                                    <span id="calc-percent" style="display:none;margin-left:4px;font-size:11px;opacity:0.9;"></span>
                                 </button>
                                 <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                     Excel
-                                </button>
-                                <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
-                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                                    Hisoblash
                                 </button>
                             </div>
                         </div>
@@ -126,6 +123,7 @@
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
+                        <p style="color:#94a3b8;font-size:12px;margin-top:4px;">HEMIS dan yangilanadi va avtomatik hisoblanadi</p>
                         <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Natijalar shu yerda ko'rsatiladi</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
@@ -151,6 +149,8 @@
                                         <th><a href="#" class="sort-link" data-sort="department_name">Kafedra <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="training_type">Mashg'ulot turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="lesson_pair_time">Juftlik vaqti <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="student_count">Talaba soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="has_attendance">Davomat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="has_grades">Baho <span class="sort-icon">&#9650;&#9660;</span></a></th>
@@ -229,7 +229,6 @@
             $('#empty-state').hide();
             $('#table-area').hide();
             $('#loading-state').show();
-            $('#btn-calculate').prop('disabled', true).css('opacity', '0.6');
 
             var startTime = performance.now();
 
@@ -241,7 +240,8 @@
                 success: function(res) {
                     var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
                     $('#loading-state').hide();
-                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+
+                    calcReset();
 
                     if (!res.data || res.data.length === 0) {
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
@@ -259,13 +259,19 @@
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
-                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
                     $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                    calcReset();
                 }
             });
         }
 
-        function syncSchedules() {
+        // ==========================================
+        // Birlashtirilgan "Hisoblash" tugmasi logikasi
+        // Avval HEMIS sync → keyin avtomatik hisoblash
+        // ==========================================
+        var syncPollTimer = null;
+
+        function startCalculation() {
             var dateFrom = $('#date_from').val();
             var dateTo = $('#date_to').val();
             if (!dateFrom || !dateTo) {
@@ -273,13 +279,17 @@
                 return;
             }
 
-            var btn = $('#btn-sync');
-            var icon = $('#sync-icon');
-            var text = $('#sync-text');
+            var btn = $('#btn-calculate');
+            var icon = $('#calc-icon');
+            var text = $('#calc-text');
+            var pct = $('#calc-percent');
 
             btn.prop('disabled', true).css('opacity', '0.7');
             icon.css('animation', 'spin 0.8s linear infinite');
             text.text('Yangilanmoqda...');
+            pct.show().text('');
+            $('#empty-state').hide();
+            $('#table-area').hide();
 
             $.ajax({
                 url: '{{ route("admin.reports.lesson-assignment.sync-schedules") }}',
@@ -289,26 +299,15 @@
                     date_from: dateFrom,
                     date_to: dateTo,
                 },
-                timeout: 180000,
+                timeout: 30000,
                 success: function(res) {
-                    icon.css('animation', '');
-                    text.text('Yangilash');
-                    btn.prop('disabled', false).css('opacity', '1');
-
                     if (res.success) {
-                        text.text('Yangilandi!');
-                        btn.css('background', 'linear-gradient(135deg, #16a34a, #22c55e)');
-                        setTimeout(function() {
-                            text.text('Yangilash');
-                            btn.css('background', '');
-                        }, 3000);
-                        loadReport(1);
+                        text.text('Yangilanmoqda...');
+                        startSyncPolling();
                     }
                 },
                 error: function(xhr) {
-                    icon.css('animation', '');
-                    text.text('Yangilash');
-                    btn.prop('disabled', false).css('opacity', '1');
+                    calcReset();
                     var msg = 'Xatolik yuz berdi';
                     if (xhr.responseJSON && xhr.responseJSON.message) {
                         msg = xhr.responseJSON.message;
@@ -318,9 +317,64 @@
             });
         }
 
+        function startSyncPolling() {
+            if (syncPollTimer) clearInterval(syncPollTimer);
+            syncPollTimer = setInterval(pollSyncStatus, 2000);
+        }
+
+        function pollSyncStatus() {
+            $.ajax({
+                url: '{{ route("admin.reports.lesson-assignment.sync-status") }}',
+                type: 'GET',
+                timeout: 10000,
+                success: function(res) {
+                    var text = $('#calc-text');
+                    var pct = $('#calc-percent');
+
+                    if (res.status === 'running') {
+                        text.text(res.message || 'Yangilanmoqda...');
+                        if (res.percent > 0) {
+                            pct.show().text(res.percent + '%');
+                        }
+                    } else if (res.status === 'done') {
+                        clearInterval(syncPollTimer);
+                        syncPollTimer = null;
+                        // Sync tugadi — endi hisoblash
+                        text.text('Hisoblanmoqda...');
+                        pct.hide();
+                        loadReport(1);
+                    } else if (res.status === 'failed') {
+                        clearInterval(syncPollTimer);
+                        syncPollTimer = null;
+                        calcReset();
+                        alert(res.message || 'Sinxronlashda xatolik yuz berdi');
+                    }
+                },
+                error: function() {
+                    // Tarmoq xatosi — polling davom etadi
+                }
+            });
+        }
+
+        function calcReset() {
+            var btn = $('#btn-calculate');
+            var icon = $('#calc-icon');
+            var text = $('#calc-text');
+            var pct = $('#calc-percent');
+
+            icon.css('animation', '');
+            text.text('Hisoblash');
+            pct.hide();
+            btn.prop('disabled', false).css('opacity', '1');
+            btn.css('background', '');
+        }
+
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
-        function statusBadge(val, type) {
+        function statusBadge(val) {
+            if (val === null) {
+                return '<span class="badge" style="background:#e2e8f0;color:#64748b;">-</span>';
+            }
             if (val) {
                 return '<span class="badge badge-status-yes">Ha</span>';
             }
@@ -341,6 +395,8 @@
                 html += '<td><span class="text-cell" style="color:#92400e;">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td><span class="badge badge-training">' + esc(r.training_type) + '</span></td>';
+                html += '<td><span class="badge badge-pair">' + esc(r.lesson_pair_time) + '</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.student_count + '</td>';
                 html += '<td style="text-align:center;">' + statusBadge(r.has_attendance) + '</td>';
                 html += '<td style="text-align:center;">' + statusBadge(r.has_grades) + '</td>';
@@ -453,12 +509,9 @@
         .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
         .date-input::placeholder { color: #94a3b8; font-weight: 400; }
 
-        .btn-sync { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(245,158,11,0.3); height: 36px; }
-        .btn-sync:hover:not(:disabled) { background: linear-gradient(135deg, #d97706, #ea580c); box-shadow: 0 4px 12px rgba(245,158,11,0.4); transform: translateY(-1px); }
-        .btn-sync:disabled { cursor: not-allowed; }
-
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
-        .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
+        .btn-calc:hover:not(:disabled) { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
+        .btn-calc:disabled { cursor: not-allowed; }
 
         .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
@@ -506,6 +559,8 @@
         .badge-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #99f6e4; white-space: nowrap; }
         .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
         .badge-date { background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; white-space: nowrap; font-weight: 500; }
+        .badge-training { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; white-space: nowrap; }
+        .badge-pair { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
         .badge-status-yes { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 4px 12px; font-size: 12px; font-weight: 700; }
         .badge-status-no { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 12px; font-size: 12px; font-weight: 700; }

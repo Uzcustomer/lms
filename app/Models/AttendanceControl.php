@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AttendanceControl extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'hemis_id',
@@ -33,9 +34,11 @@ class AttendanceControl extends Model
         'lesson_pair_end_time',
         'lesson_date',
         'load',
+        'is_final',
     ];
 
     protected $casts = [
         'lesson_date' => 'datetime',
+        'is_final' => 'boolean',
     ];
 }

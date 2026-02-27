@@ -70,6 +70,7 @@ class ImportCurriculumSubjects extends Command
                             'credit' => $subjectData['credit'],
                             'in_group' => $subjectData['in_group'],
                             'at_semester' => $subjectData['at_semester'],
+                            'is_active' => $subjectData['active'] ?? true,
                             'subject_details' => ($subjectData['subjectDetails']),
                             'subject_exam_types' => ($subjectData['subjectExamTypes']),
                             'rating_grade_code' => $subjectData['ratingGrade']['code'] ?? null,

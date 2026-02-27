@@ -21,7 +21,7 @@
 
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="overflow: visible;">
 
                 <!-- Filters -->
                 <form id="filter-form" method="GET" action="{{ route('admin.journal.index') }}">
@@ -159,7 +159,7 @@
                 </form>
 
                 <!-- Table -->
-                <div style="max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: auto;">
+                <div style="max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch;">
                     @if($journals->isEmpty())
                         <div style="padding: 60px 20px; text-align: center;">
                             <svg style="width: 48px; height: 48px; margin: 0 auto 12px; color: #cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24">

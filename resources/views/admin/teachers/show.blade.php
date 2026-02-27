@@ -84,6 +84,16 @@
                                         </span>
                                     @endforeach
                                 @endif
+                                @if($teacher->hasRole('fan_masuli') && $teacher->relationLoaded('responsibleSubjects'))
+                                    @foreach($teacher->responsibleSubjects as $subject)
+                                        <span class="badge badge-subject">
+                                            <svg style="width: 12px; height: 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                                            </svg>
+                                            {{ $subject->subject_name }}
+                                        </span>
+                                    @endforeach
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -141,6 +151,14 @@
                                 <span class="info-label">Dekan fakultet{{ $teacher->deanFaculties->count() > 1 ? 'lari' : 'i' }}</span>
                                 <span class="info-value" style="color: #0369a1;">
                                     {{ $teacher->deanFaculties->pluck('name')->join(', ') }}
+                                </span>
+                            </div>
+                        @endif
+                        @if($teacher->hasRole('fan_masuli') && $teacher->relationLoaded('responsibleSubjects') && $teacher->responsibleSubjects->count())
+                            <div class="info-row">
+                                <span class="info-label">Mas'ul fan{{ $teacher->responsibleSubjects->count() > 1 ? 'lar' : '' }}</span>
+                                <span class="info-value" style="color: #92400e;">
+                                    {{ $teacher->responsibleSubjects->pluck('subject_name')->join(', ') }}
                                 </span>
                             </div>
                         @endif
@@ -331,6 +349,11 @@
                         Rollarni boshqarish
                     </div>
                     <div class="card-body">
+                        @if(session('error'))
+                            <div style="padding: 10px; background: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 10px; font-size: 12px; color: #dc2626;">
+                                <strong>Xatolik:</strong> {{ session('error') }}
+                            </div>
+                        @endif
                         <form action="{{ route('admin.teachers.update-roles', $teacher) }}" method="POST" onsubmit="return validateRolesForm()">
                             @csrf
                             @method('PUT')
@@ -361,21 +384,61 @@
 
                             @php
                                 $oldDeanFaculties = old('dean_faculties', $teacher->deanFaculties->pluck('department_hemis_id')->toArray());
+                                $isDekanChecked = in_array('dekan', $oldRoles);
                             @endphp
-                            <div id="department-section" style="display: none; margin-top: 10px;">
+                            <div id="department-section" style="display: {{ $isDekanChecked ? 'block' : 'none' }}; margin-top: 10px;">
                                 <div style="padding: 10px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">
                                     <label style="font-size: 11px; font-weight: 600; color: #1e40af; display: block; margin-bottom: 6px;">Dekan roli uchun fakultetlar (bir nechta tanlash mumkin):</label>
-                                    <div style="display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;">
-                                        @foreach($departments as $department)
-                                            <label style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px;"
-                                                   onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='transparent'">
-                                                <input type="checkbox" name="dean_faculties[]" value="{{ $department->department_hemis_id }}"
-                                                    {{ in_array($department->department_hemis_id, $oldDeanFaculties) ? 'checked' : '' }}
-                                                    style="accent-color: #2563eb;">
-                                                {{ $department->name }}
-                                            </label>
+                                    @if($departments->isEmpty())
+                                        <div style="padding: 8px; background: #fef9c3; border: 1px solid #fde68a; border-radius: 6px; font-size: 12px; color: #854d0e;">
+                                            Fakultetlar ro'yxati topilmadi. Iltimos, avval <strong>import:specialties-departments</strong> buyrug'ini ishga tushiring.
+                                        </div>
+                                    @else
+                                        <div style="display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;">
+                                            @foreach($departments as $department)
+                                                <label style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                                                       onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='transparent'">
+                                                    <input type="checkbox" name="dean_faculties[]" value="{{ $department->department_hemis_id }}"
+                                                        {{ in_array($department->department_hemis_id, $oldDeanFaculties) ? 'checked' : '' }}
+                                                        style="accent-color: #2563eb;">
+                                                    {{ $department->name }}
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            @php
+                                $oldResponsibleSubjects = old('responsible_subjects', $teacher->relationLoaded('responsibleSubjects') ? $teacher->responsibleSubjects->pluck('id')->toArray() : []);
+                                $isFanMasuliChecked = in_array('fan_masuli', $oldRoles);
+                            @endphp
+                            <div id="subject-section" style="display: {{ $isFanMasuliChecked ? 'block' : 'none' }}; margin-top: 10px;">
+                                <div style="padding: 10px; background: #fef3c7; border-radius: 8px; border: 1px solid #fde68a;">
+                                    <label style="font-size: 11px; font-weight: 600; color: #92400e; display: block; margin-bottom: 6px;">Fan mas'uli roli uchun fanlar:</label>
+
+                                    <div id="selected-subjects" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+                                        @foreach(($teacher->relationLoaded('responsibleSubjects') ? $teacher->responsibleSubjects : []) as $subject)
+                                            <div class="selected-subject-item" data-id="{{ $subject->id }}">
+                                                <input type="hidden" name="responsible_subjects[]" value="{{ $subject->id }}">
+                                                <div style="flex: 1; min-width: 0;">
+                                                    <span style="font-weight: 600; font-size: 12px; color: #1e293b;">{{ $subject->subject_name }}</span>
+                                                    <span style="font-size: 10px; color: #64748b; margin-left: 4px;">{{ $subject->subject_code }}</span>
+                                                    @if($subject->semester_name)
+                                                        <span style="font-size: 10px; color: #64748b;"> | {{ $subject->semester_name }}</span>
+                                                    @endif
+                                                </div>
+                                                <button type="button" onclick="removeSubject(this)" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: #fee2e2; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1;">&times;</button>
+                                            </div>
                                         @endforeach
                                     </div>
+
+                                    <button type="button" onclick="openSubjectModal()" class="btn-add-subject">
+                                        <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                        </svg>
+                                        Fan qo'shish
+                                    </button>
                                 </div>
                             </div>
 
@@ -395,7 +458,43 @@
         </div>
     </div>
 
+    {{-- Fan qidirish modal oynasi --}}
+    <div id="subject-modal" class="subject-modal-overlay" style="display: none;">
+        <div class="subject-modal">
+            <div class="subject-modal-header">
+                <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: #1e293b;">Fan tanlash</h3>
+                <button type="button" onclick="closeSubjectModal()" class="subject-modal-close">&times;</button>
+            </div>
+            <div style="padding: 0 16px; padding-top: 12px;">
+                <label style="font-size: 11px; font-weight: 600; color: #64748b; display: block; margin-bottom: 4px;">Kurs bo'yicha filtr:</label>
+                <select id="subject-course-filter" onchange="searchSubjects()" style="width: 100%; padding: 7px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; color: #334155; background: #fff; outline: none; cursor: pointer;">
+                    <option value="">Barcha kurslar</option>
+                </select>
+            </div>
+            <div class="subject-modal-search">
+                <svg style="width: 16px; height: 16px; color: #94a3b8; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" id="subject-search-input" placeholder="Fan nomini kiriting..." oninput="searchSubjects()" class="subject-search-input">
+            </div>
+            <div id="subject-search-results" class="subject-search-results">
+                <div class="subject-search-empty">Fan nomini kiriting va qidiring</div>
+            </div>
+            <div class="subject-modal-footer">
+                <span id="subject-selected-count" style="font-size: 12px; color: #64748b;">0 ta fan tanlangan</span>
+                <button type="button" id="subject-save-btn" onclick="saveSelectedSubjects()" class="subject-save-btn" disabled>
+                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Saqlash
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        var subjectSearchTimeout = null;
+
         function handleResetSubmit(form) {
             if (!confirm('Parolni tiklashni tasdiqlaysizmi? Yangi parol: tug\'ilgan sana (ddmmyyyy)')) {
                 return false;
@@ -432,31 +531,272 @@
                     return false;
                 }
             }
+
+            var fanMasuliCheckbox = document.querySelector('input[value="fan_masuli"]');
+            if (fanMasuliCheckbox && fanMasuliCheckbox.checked) {
+                var subjectInputs = document.querySelectorAll('input[name="responsible_subjects[]"]');
+                if (subjectInputs.length === 0) {
+                    alert("Fan mas'uli roli uchun kamida bitta fanni tanlash majburiy!");
+                    return false;
+                }
+            }
+
             return true;
         }
 
         function toggleRole(checkbox) {
-            var card = checkbox.closest('.role-card');
-            var icon = card.querySelector('[data-icon]');
-            var check = card.querySelector('.check-indicator');
+            try {
+                var card = checkbox.closest('.role-card');
+                var icon = card.querySelector('[data-icon]');
+                var check = card.querySelector('.check-indicator');
 
-            card.classList.toggle('role-active', checkbox.checked);
-            icon.classList.toggle('role-icon-active', checkbox.checked);
-            check.classList.toggle('hidden', !checkbox.checked);
+                card.classList.toggle('role-active', checkbox.checked);
+                icon.classList.toggle('role-icon-active', checkbox.checked);
+                check.classList.toggle('hidden', !checkbox.checked);
+            } catch (e) {
+                console.error('toggleRole card error:', e);
+            }
 
-            var dekanCheckbox = document.querySelector('input[value="dekan"]');
-            var dept = document.getElementById('department-section');
-            if (dept && dekanCheckbox) {
-                dept.style.display = dekanCheckbox.checked ? 'block' : 'none';
+            try {
+                var dekanCheckbox = document.querySelector('input[value="dekan"]');
+                var dept = document.getElementById('department-section');
+                if (dept && dekanCheckbox) {
+                    dept.style.display = dekanCheckbox.checked ? 'block' : 'none';
+                }
+            } catch (e) {
+                console.error('toggleRole dept error:', e);
+            }
+
+            try {
+                var fanMasuliCheckbox = document.querySelector('input[value="fan_masuli"]');
+                var subjectSection = document.getElementById('subject-section');
+                if (subjectSection && fanMasuliCheckbox) {
+                    subjectSection.style.display = fanMasuliCheckbox.checked ? 'block' : 'none';
+                }
+            } catch (e) {
+                console.error('toggleRole subject error:', e);
             }
         }
 
-        document.addEventListener('DOMContentLoaded', function () {
-            var dekanCheckbox = document.querySelector('input[value="dekan"]');
-            var dept = document.getElementById('department-section');
-            if (dept && dekanCheckbox) {
-                dept.style.display = dekanCheckbox.checked ? 'block' : 'none';
+        var subjectCoursesLoaded = false;
+
+        function loadSubjectCourses() {
+            if (subjectCoursesLoaded) return;
+            fetch('{{ route("admin.teachers.subject-courses") }}', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(courses) {
+                var select = document.getElementById('subject-course-filter');
+                courses.forEach(function(course) {
+                    var option = document.createElement('option');
+                    option.value = course.level_code;
+                    option.textContent = course.level_name;
+                    select.appendChild(option);
+                });
+                subjectCoursesLoaded = true;
+            })
+            .catch(function(error) {
+                console.error('Course load error:', error);
+            });
+        }
+
+        // Vaqtincha tanlangan fanlar (modal ichida)
+        var pendingSubjects = [];
+
+        function openSubjectModal() {
+            pendingSubjects = [];
+            updateSelectedCount();
+            document.getElementById('subject-modal').style.display = 'flex';
+            document.getElementById('subject-search-input').value = '';
+            document.getElementById('subject-course-filter').value = '';
+            loadSubjectCourses();
+            searchSubjects();
+            setTimeout(function() {
+                document.getElementById('subject-search-input').focus();
+            }, 100);
+        }
+
+        function closeSubjectModal() {
+            document.getElementById('subject-modal').style.display = 'none';
+            pendingSubjects = [];
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            var count = pendingSubjects.length;
+            var countEl = document.getElementById('subject-selected-count');
+            var btn = document.getElementById('subject-save-btn');
+            countEl.textContent = count + ' ta fan tanlangan';
+            btn.disabled = count === 0;
+        }
+
+        function toggleSubjectCheck(id, name, code, semester) {
+            var idx = -1;
+            for (var i = 0; i < pendingSubjects.length; i++) {
+                if (pendingSubjects[i].id === id) { idx = i; break; }
             }
+
+            if (idx >= 0) {
+                pendingSubjects.splice(idx, 1);
+            } else {
+                pendingSubjects.push({ id: id, name: name, code: code, semester: semester });
+            }
+
+            // Checkbox ko'rinishini yangilash
+            var checkbox = document.getElementById('subject-check-' + id);
+            if (checkbox) {
+                checkbox.checked = idx < 0;
+            }
+            var item = document.getElementById('subject-item-' + id);
+            if (item) {
+                if (idx < 0) {
+                    item.classList.add('subject-result-checked');
+                } else {
+                    item.classList.remove('subject-result-checked');
+                }
+            }
+            updateSelectedCount();
+        }
+
+        function isPendingSubject(id) {
+            for (var i = 0; i < pendingSubjects.length; i++) {
+                if (pendingSubjects[i].id === id) return true;
+            }
+            return false;
+        }
+
+        function saveSelectedSubjects() {
+            var container = document.getElementById('selected-subjects');
+            pendingSubjects.forEach(function(subject) {
+                if (isSubjectSelected(subject.id)) return;
+
+                var div = document.createElement('div');
+                div.className = 'selected-subject-item';
+                div.setAttribute('data-id', subject.id);
+                div.innerHTML =
+                    '<input type="hidden" name="responsible_subjects[]" value="' + subject.id + '">' +
+                    '<div style="flex: 1; min-width: 0;">' +
+                    '<span style="font-weight: 600; font-size: 12px; color: #1e293b;">' + escapeHtml(subject.name) + '</span>' +
+                    (subject.code ? '<span style="font-size: 10px; color: #64748b; margin-left: 4px;">' + escapeHtml(subject.code) + '</span>' : '') +
+                    (subject.semester ? '<span style="font-size: 10px; color: #64748b;"> | ' + escapeHtml(subject.semester) + '</span>' : '') +
+                    '</div>' +
+                    '<button type="button" onclick="removeSubject(this)" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: #fee2e2; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1;">&times;</button>';
+                container.appendChild(div);
+            });
+
+            pendingSubjects = [];
+            document.getElementById('subject-modal').style.display = 'none';
+            updateSelectedCount();
+        }
+
+        function searchSubjects() {
+            clearTimeout(subjectSearchTimeout);
+            var query = document.getElementById('subject-search-input').value.trim();
+            var levelCode = document.getElementById('subject-course-filter').value;
+
+            document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Qidirilmoqda...</div>';
+
+            subjectSearchTimeout = setTimeout(function() {
+                var url = '{{ route("admin.teachers.search-subjects") }}?q=' + encodeURIComponent(query) + '&teacher_id={{ $teacher->id }}';
+                if (levelCode) {
+                    url += '&level_code=' + encodeURIComponent(levelCode);
+                }
+                fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(subjects) {
+                    var resultsDiv = document.getElementById('subject-search-results');
+
+                    if (subjects.length === 0) {
+                        resultsDiv.innerHTML = '<div class="subject-search-empty">Hech narsa topilmadi</div>';
+                        return;
+                    }
+
+                    var html = '';
+                    subjects.forEach(function(subject) {
+                        var isAlreadyAdded = isSubjectSelected(subject.id);
+                        var isPending = isPendingSubject(subject.id);
+
+                        if (isAlreadyAdded) {
+                            html += '<div class="subject-result-item subject-result-disabled">' +
+                                '<div style="flex: 1; min-width: 0;">' +
+                                '<div style="font-weight: 600; font-size: 13px; color: #1e293b;">' + escapeHtml(subject.subject_name) + '</div>' +
+                                '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">' +
+                                (subject.subject_code ? 'Kod: ' + escapeHtml(subject.subject_code) : '') +
+                                (subject.semester_name ? ' | ' + escapeHtml(subject.semester_name) : '') +
+                                '</div>' +
+                                '</div>' +
+                                '<span style="font-size: 11px; color: #059669; font-weight: 600;">Qo\'shilgan</span>' +
+                                '</div>';
+                        } else {
+                            html += '<div id="subject-item-' + subject.id + '" class="subject-result-item' + (isPending ? ' subject-result-checked' : '') + '" ' +
+                                'onclick="toggleSubjectCheck(' + subject.id + ', \'' + escapeJsString(subject.subject_name) + '\', \'' + escapeJsString(subject.subject_code || '') + '\', \'' + escapeJsString(subject.semester_name || '') + '\')">' +
+                                '<input type="checkbox" id="subject-check-' + subject.id + '" ' + (isPending ? 'checked' : '') + ' class="subject-checkbox" onclick="event.stopPropagation(); toggleSubjectCheck(' + subject.id + ', \'' + escapeJsString(subject.subject_name) + '\', \'' + escapeJsString(subject.subject_code || '') + '\', \'' + escapeJsString(subject.semester_name || '') + '\')">' +
+                                '<div style="flex: 1; min-width: 0;">' +
+                                '<div style="font-weight: 600; font-size: 13px; color: #1e293b;">' + escapeHtml(subject.subject_name) + '</div>' +
+                                '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">' +
+                                (subject.subject_code ? 'Kod: ' + escapeHtml(subject.subject_code) : '') +
+                                (subject.semester_name ? ' | ' + escapeHtml(subject.semester_name) : '') +
+                                '</div>' +
+                                '</div>' +
+                                '</div>';
+                        }
+                    });
+
+                    resultsDiv.innerHTML = html;
+                })
+                .catch(function(error) {
+                    document.getElementById('subject-search-results').innerHTML = '<div class="subject-search-empty">Xatolik yuz berdi</div>';
+                    console.error('Subject search error:', error);
+                });
+            }, 300);
+        }
+
+        function isSubjectSelected(id) {
+            return !!document.querySelector('#selected-subjects .selected-subject-item[data-id="' + id + '"]');
+        }
+
+        function escapeJsString(str) {
+            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        function removeSubject(btn) {
+            btn.closest('.selected-subject-item').remove();
+        }
+
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(text));
+            return div.innerHTML;
+        }
+
+        // Fallback: event delegation for checkbox changes (in case inline onchange doesn't fire)
+        document.addEventListener('click', function (e) {
+            var label = e.target.closest('.role-card');
+            if (!label) return;
+            // Small delay to let the checkbox state update first
+            setTimeout(function () {
+                var cb = label.querySelector('input[type="checkbox"]');
+                if (cb) toggleRole(cb);
+            }, 10);
+        });
+
+        // Close modal on overlay click
+        document.getElementById('subject-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeSubjectModal();
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeSubjectModal();
         });
     </script>
 
@@ -835,5 +1175,186 @@
         }
         .role-name { font-size: 11.5px; font-weight: 600; color: #334155; flex: 1; }
         .hidden { display: none !important; }
+
+        /* ===== Subject Selection ===== */
+        .selected-subject-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 6px;
+        }
+        .btn-add-subject {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #92400e;
+            background: #fff;
+            border: 1px dashed #d97706;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-add-subject:hover {
+            background: #fffbeb;
+            border-color: #92400e;
+        }
+        .badge-subject {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: linear-gradient(135deg, #92400e, #d97706);
+            color: #ffffff;
+            border: none;
+        }
+
+        /* ===== Subject Modal ===== */
+        .subject-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .subject-modal {
+            background: #fff;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 560px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        .subject-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .subject-modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: none;
+            background: #f1f5f9;
+            color: #64748b;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .subject-modal-close:hover {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .subject-modal-search {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .subject-search-input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 14px;
+            color: #1e293b;
+            background: transparent;
+        }
+        .subject-search-input::placeholder {
+            color: #94a3b8;
+        }
+        .subject-search-results {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+            max-height: 400px;
+        }
+        .subject-search-empty {
+            padding: 30px 20px;
+            text-align: center;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .subject-result-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }
+        .subject-result-item:hover {
+            background: #f0f9ff;
+            border-color: #bae6fd;
+        }
+        .subject-result-checked {
+            background: #eff6ff;
+            border-color: #93c5fd;
+        }
+        .subject-result-checked:hover {
+            background: #dbeafe;
+            border-color: #60a5fa;
+        }
+        .subject-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: #3b82f6;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .subject-result-disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+        .subject-result-disabled:hover {
+            background: transparent;
+            border-color: transparent;
+        }
+        .subject-modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-top: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        .subject-save-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: none;
+            background: #3b82f6;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .subject-save-btn:hover:not(:disabled) {
+            background: #2563eb;
+        }
+        .subject-save-btn:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
+        }
     </style>
 </x-app-layout>

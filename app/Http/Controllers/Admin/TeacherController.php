@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\ProjectRole;
 use App\Exports\TeacherExport;
 use App\Http\Controllers\Controller;
+use App\Models\CurriculumSubject;
 use App\Models\Department;
+use App\Models\Semester;
 use App\Models\Teacher;
 use App\Services\ActivityLogService;
 use App\Services\TelegramService;
@@ -14,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
 
 class TeacherController extends Controller
@@ -65,14 +68,25 @@ class TeacherController extends Controller
 
     public function show(Teacher $teacher)
     {
-        $departments = Department::where('structure_type_code', 11)->get();
+        try {
+            $teacher->load('responsibleSubjects');
+        } catch (\Exception $e) {
+            // teacher_responsible_subjects jadvali mavjud bo'lmasa
+        }
+        $departments = Department::where('structure_type_code', '11')
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
         $roles = ProjectRole::staffRoles();
         return view('admin.teachers.show', compact('teacher', 'departments', 'roles'));
     }
 
     public function edit(Teacher $teacher)
     {
-        $departments = Department::where('structure_type_code', 11)->get();
+        $departments = Department::where('structure_type_code', '11')
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
         $roles = ProjectRole::staffRoles();
         return view('admin.teachers.edit', compact('teacher', 'departments', 'roles'));
     }
@@ -161,31 +175,68 @@ class TeacherController extends Controller
 
         $roles = $request->input('roles', []);
         $isDean = in_array(ProjectRole::DEAN->value, $roles);
+        $isSubjectResponsible = in_array(ProjectRole::SUBJECT_RESPONSIBLE->value, $roles);
 
         $request->validate([
             'roles' => 'nullable|array',
             'roles.*' => 'in:' . implode(',', $validRoleValues),
             'dean_faculties' => [$isDean ? 'required' : 'nullable', 'array'],
             'dean_faculties.*' => 'exists:departments,department_hemis_id',
+            'responsible_subjects' => [$isSubjectResponsible ? 'required' : 'nullable', 'array'],
+            'responsible_subjects.*' => 'exists:curriculum_subjects,id',
         ], [
             'dean_faculties.required' => 'Dekan roli uchun kamida bitta fakultetni tanlash majburiy.',
+            'responsible_subjects.required' => "Fan mas'uli roli uchun kamida bitta fanni tanlash majburiy.",
         ]);
 
-        foreach ($roles as $roleName) {
-            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+        try {
+            foreach ($roles as $roleName) {
+                Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+            }
+
+            $oldRoles = $teacher->getRoleNames()->toArray();
+            $teacher->syncRoles($roles);
+        } catch (\Throwable $e) {
+            Log::error('updateRoles - syncRoles xatolik: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'Rollarni saqlashda xatolik: ' . $e->getMessage());
         }
 
-        $oldRoles = $teacher->getRoleNames()->toArray();
-        $teacher->syncRoles($roles);
-
         if ($isDean) {
-            $teacher->deanFaculties()->sync($request->input('dean_faculties', []));
+            try {
+                $teacher->deanFaculties()->sync($request->input('dean_faculties', []));
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - deanFaculties xatolik: ' . $e->getMessage());
+                return redirect()->back()->withInput()->with('error', 'Dekan fakultetlarini saqlashda xatolik: ' . $e->getMessage());
+            }
         } else {
-            $teacher->deanFaculties()->detach();
+            try {
+                $teacher->deanFaculties()->detach();
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - deanFaculties detach xatolik: ' . $e->getMessage());
+            }
+        }
+
+        if ($isSubjectResponsible) {
+            if (!Schema::hasTable('teacher_responsible_subjects')) {
+                Log::error('updateRoles - teacher_responsible_subjects jadvali mavjud emas');
+                return redirect()->back()->withInput()->with('error', "teacher_responsible_subjects jadvali mavjud emas. Serverda 'php artisan migrate' buyrug'ini ishga tushiring.");
+            }
+            try {
+                $teacher->responsibleSubjects()->sync($request->input('responsible_subjects', []));
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - responsibleSubjects xatolik: ' . $e->getMessage());
+                return redirect()->back()->withInput()->with('error', "Fanlarni saqlashda xatolik: " . $e->getMessage());
+            }
+        } else {
+            try {
+                $teacher->responsibleSubjects()->detach();
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - responsibleSubjects detach xatolik: ' . $e->getMessage());
+            }
         }
 
         ActivityLogService::log('update', 'teacher', "Xodim rollari yangilandi: {$teacher->full_name}", $teacher, [
-            'roles' => $oldRoles,
+            'roles' => $oldRoles ?? [],
         ], [
             'roles' => $roles,
         ]);
@@ -212,6 +263,55 @@ class TeacherController extends Controller
         $teacher->save();
 
         return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Aloqa ma\'lumotlari yangilandi');
+    }
+
+    public function searchSubjects(Request $request)
+    {
+        $search = $request->input('q', '');
+        $levelCode = $request->input('level_code', '');
+        $teacherId = $request->input('teacher_id');
+
+        $query = CurriculumSubject::active();
+
+        // O'qituvchining kafedrasidagi fanlarni filtrlash
+        if ($teacherId) {
+            $teacher = Teacher::find($teacherId);
+            if ($teacher && $teacher->department_hemis_id) {
+                $query->where('department_id', $teacher->department_hemis_id);
+            }
+        }
+
+        $subjects = $query
+            ->when($search, function ($q, $search) {
+                $q->where('subject_name', 'like', "%{$search}%");
+            })
+            ->when($levelCode, function ($q, $levelCode) {
+                $semesterCodes = Semester::where('level_code', $levelCode)
+                    ->pluck('code')
+                    ->unique()
+                    ->toArray();
+                $q->whereIn('semester_code', $semesterCodes);
+            })
+            ->selectRaw('MIN(id) as id, subject_name, MIN(subject_code) as subject_code, semester_code, semester_name, MIN(department_name) as department_name')
+            ->groupBy('subject_name', 'semester_code', 'semester_name')
+            ->orderBy('subject_name')
+            ->orderBy('semester_code')
+            ->limit(50)
+            ->get();
+
+        return response()->json($subjects);
+    }
+
+    public function getSubjectCourses()
+    {
+        $courses = Semester::whereNotNull('level_code')
+            ->whereNotNull('level_name')
+            ->select('level_code', 'level_name')
+            ->distinct()
+            ->orderBy('level_code')
+            ->get();
+
+        return response()->json($courses);
     }
 
     public function exportExcel(Request $request)

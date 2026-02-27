@@ -316,19 +316,19 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
             @if (session('success'))
-                <div style="margin-bottom: 16px; padding: 10px 16px; background: #ecfdf5; border: 1px solid #6ee7b7; color: #065f46; border-radius: 8px; font-size: 13px;">
+                <div id="flash-message" style="margin-bottom: 16px; padding: 12px 16px; background: #ecfdf5; border: 2px solid #6ee7b7; color: #065f46; border-radius: 8px; font-size: 14px; font-weight: 600;">
                     {{ session('success') }}
                 </div>
             @endif
 
             @if (session('error'))
-                <div style="margin-bottom: 16px; padding: 10px 16px; background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; border-radius: 8px; font-size: 13px;">
+                <div id="flash-message" style="margin-bottom: 16px; padding: 12px 16px; background: #fef2f2; border: 2px solid #fca5a5; color: #991b1b; border-radius: 8px; font-size: 14px; font-weight: 600;">
                     {{ session('error') }}
                 </div>
             @endif
 
             @if ($errors->any())
-                <div style="margin-bottom: 16px; padding: 10px 16px; background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; border-radius: 8px; font-size: 13px;">
+                <div id="flash-message" style="margin-bottom: 16px; padding: 12px 16px; background: #fef2f2; border: 2px solid #fca5a5; color: #991b1b; border-radius: 8px; font-size: 14px; font-weight: 600;">
                     <ul style="list-style: disc; padding-left: 20px;">
                         @foreach ($errors->all() as $error)
                             <li>{{ $error }}</li>
@@ -422,12 +422,14 @@
                                         <div class="g-value {{ $gradeClass($v, $v === null) }}">{{ $v !== null ? $v : '-' }}</div>
                                     </div>
                                     <div class="g-item">
+                                        @php $v = $subject['oski']; @endphp
                                         <div class="g-label">OSKI</div>
-                                        <div class="g-value g-none">-</div>
+                                        <div class="g-value {{ $gradeClass($v, $v === null) }}">{{ $v !== null ? $v : '-' }}</div>
                                     </div>
                                     <div class="g-item">
+                                        @php $v = $subject['test']; @endphp
                                         <div class="g-label">Test</div>
-                                        <div class="g-value g-none">-</div>
+                                        <div class="g-value {{ $gradeClass($v, $v === null) }}">{{ $v !== null ? $v : '-' }}</div>
                                     </div>
                                     <div class="g-item">
                                         <div class="g-label">YN</div>
@@ -971,6 +973,12 @@
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') closeAllMtPopovers();
         });
+
+        // Xato yoki muvaffaqiyat xabari bo'lsa, sahifani tepaga scroll qilish
+        var flashMessage = document.getElementById('flash-message');
+        if (flashMessage) {
+            flashMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
 
         // MT file upload auto-compression
         (function() {

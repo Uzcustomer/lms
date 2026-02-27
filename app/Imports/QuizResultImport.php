@@ -97,6 +97,22 @@ class QuizResultImport implements ToCollection, WithHeadingRow, WithValidation
                 }
             }
 
+            // Quiz type dan training_type_code va name aniqlash
+            $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+            $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+            $quizType = $quizResult?->quiz_type;
+
+            if (in_array($quizType, $oskiTypes)) {
+                $trainingTypeCode = 101;
+                $trainingTypeName = 'Oski';
+            } elseif (in_array($quizType, $testTypes)) {
+                $trainingTypeCode = 102;
+                $trainingTypeName = 'Yakuniy test';
+            } else {
+                $trainingTypeCode = 103;
+                $trainingTypeName = 'Quiz test';
+            }
+
             // Student grade yaratish
             StudentGrade::create([
                 'student_id' => $student->id,
@@ -108,8 +124,8 @@ class QuizResultImport implements ToCollection, WithHeadingRow, WithValidation
                 'subject_id' => $subject->subject_id,
                 'subject_name' => $subject->subject_name,
                 'subject_code' => $subject->subject_code ?? '',
-                'training_type_code' => 103,
-                'training_type_name' => 'Quiz test',
+                'training_type_code' => $trainingTypeCode,
+                'training_type_name' => $trainingTypeName,
                 'employee_id' => 0,
                 'employee_name' => auth()->user()->name ?? 'Test markazi',
                 'lesson_pair_name' => '',
@@ -123,6 +139,7 @@ class QuizResultImport implements ToCollection, WithHeadingRow, WithValidation
                 'grade' => round($grade),
                 'deadline' => now(),
                 'quiz_result_id' => $quizResult?->id,
+                'is_final' => true,
             ]);
 
             $this->successCount++;

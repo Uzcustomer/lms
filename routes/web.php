@@ -14,6 +14,7 @@ use App\Http\Controllers\QaytnomaController;
 use App\Http\Controllers\AbsenceReportController;
 use App\Http\Controllers\VedomostController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Student\HemisOAuthController;
 use App\Http\Controllers\Student\StudentAuthController;
 use App\Http\Controllers\Student\StudentController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
+use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -30,7 +32,14 @@ use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\LectureScheduleController;
 use App\Http\Controllers\Admin\TimetableViewController;
 use App\Http\Controllers\Admin\ImpersonateController;
+use App\Http\Controllers\Admin\AcademicScheduleController;
+use App\Http\Controllers\Admin\ServerDebugController;
+use App\Http\Controllers\Admin\ContractController;
+use App\Http\Controllers\Admin\KtrController;
+use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\MoodleImportController;
+use App\Http\Controllers\Admin\NotificationController;
+use App\Http\Controllers\LanguageController;
 
 
 Route::get('/', function () {
@@ -45,6 +54,17 @@ Route::get('/', function () {
 Route::get('/refresh-csrf', function () {
     return response()->json(['token' => csrf_token()]);
 });
+
+// Sababli ariza tekshirish (QR kod orqali, public)
+Route::get('/absence-excuse/verify/{token}', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'verify'])->name('absence-excuse.verify');
+Route::get('/absence-excuse/verify/{token}/pdf', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'viewPdf'])->name('absence-excuse.verify.pdf');
+
+// Hujjat haqiqiyligini tekshirish (QR kod orqali, public)
+Route::get('/document/verify/{token}', [\App\Http\Controllers\DocumentVerificationController::class, 'verify'])->name('document.verify');
+Route::get('/document/verify/{token}/pdf', [\App\Http\Controllers\DocumentVerificationController::class, 'viewPdf'])->name('document.verify.pdf');
+
+// Til almashtirish (Language switch)
+Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->name('language.switch');
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
@@ -88,6 +108,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/students/filter/semesters', [AdminStudentController::class, 'getFilterSemesters'])->name('students.filter.semesters');
         Route::get('/students/{student}', [AdminStudentController::class, 'show'])->name('students.show');
         Route::post('/students/{student}/reset-local-password', [AdminStudentController::class, 'resetLocalPassword'])->name('students.reset-local-password');
+        Route::post('/students/{student}/toggle-five-candidate', [AdminStudentController::class, 'toggleFiveCandidate'])->name('students.toggle-five-candidate');
         Route::post('/students/bulk-reset-password', [AdminStudentController::class, 'bulkResetLocalPassword'])->name('students.bulk-reset-password');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
@@ -102,6 +123,36 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/absence-report', [AbsenceReportController::class, 'index'])->name('absence_report.index');
         Route::get('/absence-report/data', [AbsenceReportController::class, 'data'])->name('absence_report.data');
         Route::get('/absence-report/detail', [AbsenceReportController::class, 'detail'])->name('absence_report.detail');
+
+        // Hujjat shablonlari
+        Route::prefix('document-templates')->name('document-templates.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'index'])->name('index');
+            Route::get('/create', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'create'])->name('create');
+            Route::get('/download-sample', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'downloadSample'])->name('download-sample');
+            Route::post('/', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'store'])->name('store');
+            Route::get('/{documentTemplate}', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'show'])->name('show');
+            Route::get('/{documentTemplate}/edit', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'edit'])->name('edit');
+            Route::put('/{documentTemplate}', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'update'])->name('update');
+            Route::delete('/{documentTemplate}', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'destroy'])->name('destroy');
+            Route::get('/{documentTemplate}/download', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'download'])->name('download');
+            Route::post('/{documentTemplate}/activate', [\App\Http\Controllers\Admin\DocumentTemplateController::class, 'activate'])->name('activate');
+        });
+
+        // Sababli dars qoldirish arizalari (Registrator ofisi)
+        Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'index'])->name('index');
+            Route::get('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'show'])->name('show');
+            Route::post('/{id}/approve', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'approve'])->name('approve');
+            Route::post('/{id}/reject', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'reject'])->name('reject');
+            Route::get('/{id}/download', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'download'])->name('download');
+            Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
+        });
+
+        // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)
+        Route::prefix('contracts')->name('contracts.')->group(function () {
+            Route::get('/', [ContractController::class, 'index'])->name('index');
+            Route::get('/data', [ContractController::class, 'data'])->name('data');
+        });
 
         Route::prefix('independent')->name('independent.')->group(function () {
             Route::get('', [IndependentController::class, 'index'])->name('index');
@@ -169,6 +220,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/show/{groupId}/{subjectId}/{semesterCode}', [JournalController::class, 'show'])->name('show');
             Route::post('/save-mt-grade', [JournalController::class, 'saveMtGrade'])->name('save-mt-grade');
             Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade');
+            Route::post('/delete-retake-grade', [JournalController::class, 'deleteRetakeGrade'])->name('delete-retake-grade');
             Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
             Route::post('/open-lesson', [JournalController::class, 'openLesson'])->name('open-lesson');
             Route::post('/close-lesson', [JournalController::class, 'closeLesson'])->name('close-lesson');
@@ -195,6 +247,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
             Route::get('/get-yn-consents', [JournalController::class, 'getYnConsents'])->name('get-yn-consents');
+            Route::post('/save-excuse-grade', [JournalController::class, 'saveExcuseGrade'])->name('save-excuse-grade');
+            Route::post('/submit-excuse-to-yn', [JournalController::class, 'submitExcuseToYn'])->name('submit-excuse-to-yn');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');
@@ -217,6 +271,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/teachers', [TeacherController::class, 'index'])->name('teachers.index');
         Route::get('/teachers/export-excel', [TeacherController::class, 'exportExcel'])->name('teachers.export-excel');
+        Route::get('/teachers/search-subjects', [TeacherController::class, 'searchSubjects'])->name('teachers.search-subjects');
+        Route::get('/teachers/subject-courses', [TeacherController::class, 'getSubjectCourses'])->name('teachers.subject-courses');
         Route::get('/teachers/{teacher}', [TeacherController::class, 'show'])->name('teachers.show');
         Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
         Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
@@ -225,6 +281,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/teachers/{teacher}/contact', [TeacherController::class, 'updateContact'])->name('teachers.update-contact');
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
+
+        // Xabarnomalar (Notifications)
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
+        Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
+        Route::get('/notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
+        Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
+        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+        Route::post('/notifications/{notification}/reply', [NotificationController::class, 'reply'])->name('notifications.reply');
+        Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
+        Route::get('/notifications-unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
 
         // Unified settings page
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
@@ -250,6 +317,26 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/student-grades-week/export-box', [AdminStudentController::class, 'exportStudentGradesBox'])->name('student-grades-week.export-box');
         Route::post('/student-grades-update-via-excel/import', [AdminStudentController::class, 'import'])->name('student-import-grades');
 
+        // KTR (Kalendar tematik reja)
+        Route::prefix('ktr')->name('ktr.')->group(function () {
+            Route::get('/', [KtrController::class, 'index'])->name('index');
+            Route::get('/get-specialties', [KtrController::class, 'getSpecialties'])->name('get-specialties');
+            Route::get('/get-level-codes', [KtrController::class, 'getLevelCodes'])->name('get-level-codes');
+            Route::get('/get-semesters', [KtrController::class, 'getSemesters'])->name('get-semesters');
+            Route::get('/get-subjects', [KtrController::class, 'getSubjects'])->name('get-subjects');
+            Route::get('/export', [KtrController::class, 'export'])->name('export');
+            Route::get('/export-word/{curriculumSubjectId}', [KtrController::class, 'exportWord'])->name('export-word');
+            Route::get('/plan/{curriculumSubjectId}', [KtrController::class, 'getPlan'])->name('get-plan');
+            Route::post('/plan/{curriculumSubjectId}', [KtrController::class, 'savePlan'])->name('save-plan');
+            Route::post('/change-request/{curriculumSubjectId}', [KtrController::class, 'requestChange'])->name('request-change');
+            Route::post('/change-approve/{approvalId}', [KtrController::class, 'approveChange'])->name('approve-change');
+        });
+
+        // Kafedra (Fakultet va kafedralar tuzilmasi)
+        Route::prefix('kafedra')->name('kafedra.')->group(function () {
+            Route::get('/', [KafedraController::class, 'index'])->name('index');
+            Route::post('/transfer', [KafedraController::class, 'transfer'])->name('transfer');
+        });
 
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');
         Route::get('/reports/jn/data', [ReportController::class, 'jnReportData'])->name('reports.jn.data');
@@ -257,6 +344,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/lesson-assignment', [ReportController::class, 'lessonAssignment'])->name('reports.lesson-assignment');
         Route::get('/reports/lesson-assignment/data', [ReportController::class, 'lessonAssignmentData'])->name('reports.lesson-assignment.data');
         Route::post('/reports/lesson-assignment/sync-schedules', [ReportController::class, 'syncSchedulesForReport'])->name('reports.lesson-assignment.sync-schedules');
+        Route::get('/reports/lesson-assignment/sync-status', [ReportController::class, 'syncSchedulesStatus'])->name('reports.lesson-assignment.sync-status');
         Route::get('/reports/lesson-assignment/diagnostic', [ReportController::class, 'lessonAssignmentDiagnostic'])->name('reports.lesson-assignment.diagnostic');
 
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
@@ -283,6 +371,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');
 
         Route::get('/reports/top-students', [ReportController::class, 'topStudents'])->name('reports.top-students');
+        Route::get('/reports/top-students/data', [ReportController::class, 'topStudentsData'])->name('reports.top-students.data');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
@@ -349,6 +438,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-subjects', [YnQaytnomaController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/get-groups', [YnQaytnomaController::class, 'getFilterGroups'])->name('get-groups');
             Route::post('/generate-ruxsatnoma', [YnQaytnomaController::class, 'generateRuxsatnoma'])->name('generate-ruxsatnoma');
+            Route::post('/generate-yn-oldi-word', [YnQaytnomaController::class, 'generateYnOldiWord'])->name('generate-yn-oldi-word');
         });
 
         // Ma'ruza jadvalini joylashtirish
@@ -378,6 +468,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/filter-options', [TimetableViewController::class, 'filterOptions'])->name('filter-options');
         });
 
+        // O'quv bo'limi: YN kunini belgilash (imtihon jadvali)
+        Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
+            Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
+            Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
+            Route::get('/get-filter-options', [AcademicScheduleController::class, 'getFilterOptions'])->name('get-filter-options');
+            Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
+            Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
+            Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
+        });
+
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
         Route::post('/impersonate/student/{student}', [ImpersonateController::class, 'impersonateStudent'])->name('impersonate.student');
         Route::post('/impersonate/teacher/{teacher}', [ImpersonateController::class, 'impersonateTeacher'])->name('impersonate.teacher');
@@ -387,7 +487,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari
-    Route::middleware(['auth:web', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
+        // Server debug & monitoring
+        Route::get('/server-debug', [ServerDebugController::class, 'index'])->name('server-debug');
+        Route::get('/server-debug/ping', [ServerDebugController::class, 'ping'])->name('server-debug.ping');
+        Route::post('/server-debug/clear-logs', [ServerDebugController::class, 'clearLogs'])->name('server-debug.clear-logs');
         // Old routes — redirect to unified settings
         Route::get('/password-settings', fn () => redirect()->route('admin.settings', ['tab' => 'password']))->name('password-settings.index');
         Route::post('/password-settings', [SettingsController::class, 'updatePassword'])->name('password-settings.update');
@@ -417,6 +521,11 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+// HEMIS OAuth routes (talabalar — student.ttatf.uz)
+Route::get('/auth/hemis/redirect', [HemisOAuthController::class, 'redirect'])->name('auth.hemis.redirect');
+Route::get('/auth/oauth-callback', [HemisOAuthController::class, 'callback'])->name('auth.hemis.callback');
+
 
 Route::prefix('student')->name('student.')->group(function () {
 
@@ -467,6 +576,19 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::post('/yn-consent', [StudentController::class, 'submitYnConsent'])->name('yn-consent');
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
 
+        // Sababli dars qoldirish arizasi
+        Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'index'])->name('index');
+            Route::get('/create', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'create'])->name('create');
+            Route::post('/store', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'store'])->name('store');
+            Route::post('/missed-assessments', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'missedAssessments'])->name('missed-assessments');
+            Route::get('/{id}', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'show'])->name('show');
+            Route::get('/{id}/download', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'download'])->name('download');
+            Route::get('/{id}/download-pdf', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
+            Route::get('/{id}/schedule-check', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'scheduleCheck'])->name('schedule-check');
+            Route::post('/{id}/store-makeup-dates', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'storeMakeupDates'])->name('store-makeup-dates');
+        });
+
         Route::post('/logout', [StudentAuthController::class, 'logout'])->name('logout');
     });
 });
@@ -506,6 +628,14 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             }
             return back();
         })->name('switch-role');
+        // Xabarnomalar
+        Route::prefix('notifications')->name('notifications.')->group(function () {
+            Route::get('/unread-count', [TeacherNotificationController::class, 'unreadCount'])->name('unread-count');
+            Route::get('/list', [TeacherNotificationController::class, 'index'])->name('list');
+            Route::post('/{id}/read', [TeacherNotificationController::class, 'markAsRead'])->name('mark-read');
+            Route::post('/mark-all-read', [TeacherNotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+        });
+
         Route::get('/students', [TeacherMainController::class, 'students'])->name('students');
         Route::get('/student/{studentId}/subject/{subjectId}', [TeacherMainController::class, 'studentDetails'])->name('student.details');
         Route::put('/student-grades/{gradeId}', [TeacherMainController::class, 'updateGrade'])->name('update.grade');
@@ -618,6 +748,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/get-subjects', [YnQaytnomaController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/get-groups', [YnQaytnomaController::class, 'getFilterGroups'])->name('get-groups');
             Route::post('/generate-ruxsatnoma', [YnQaytnomaController::class, 'generateRuxsatnoma'])->name('generate-ruxsatnoma');
+            Route::post('/generate-yn-oldi-word', [YnQaytnomaController::class, 'generateYnOldiWord'])->name('generate-yn-oldi-word');
         });
 
         // Ma'ruza jadvalini joylashtirish
@@ -651,6 +782,16 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::get('/get-students', [LessonController::class, 'getStudents'])->name('get.students');
         // Route::get('/get-semesters', [LessonController::class, 'getSemesters'])->name('get.semesters');
         // Route::get('/get-subjects', [LessonController::class, 'getSubjects'])->name('get.subjects');
+
+        // O'quv bo'limi: YN kunini belgilash (imtihon jadvali)
+        Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
+            Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
+            Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
+            Route::get('/get-filter-options', [AcademicScheduleController::class, 'getFilterOptions'])->name('get-filter-options');
+            Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
+            Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
+            Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
+        });
     });
 });
 

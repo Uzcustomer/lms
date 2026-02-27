@@ -61,6 +61,10 @@
         </div>
     </form>
 
+    <p style="margin-top: 12px; font-size: 11px; color: #9ca3af; line-height: 1.5;">
+        Login va parol bilan kiring.
+    </p>
+
     <script>
         function togglePassword() {
             const input = document.getElementById('password');

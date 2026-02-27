@@ -38,7 +38,7 @@ class SettingsController extends Controller
 
     public function updateDeadlines(Request $request)
     {
-        $validated = $request->validate([
+        $request->validate([
             'deadlines' => 'required|array',
             'deadlines.*.days' => 'required|integer|min:1',
         ]);
@@ -63,16 +63,24 @@ class SettingsController extends Controller
             Setting::set('lesson_opening_days', (int) $request->lesson_opening_days);
         }
 
-        foreach ($validated['deadlines'] as $levelCode => $deadlineData) {
+        $deadlines = $request->input('deadlines', []);
+        $hasRetakeColumns = \Schema::hasColumn('deadlines', 'retake_by_test_markazi');
+
+        foreach ($deadlines as $levelCode => $deadlineData) {
+            $data = ['deadline_days' => $deadlineData['days']];
+
+            if ($hasRetakeColumns) {
+                $data['retake_by_test_markazi'] = !empty($deadlineData['retake_by_test_markazi']);
+                $data['retake_by_oqituvchi'] = !empty($deadlineData['retake_by_oqituvchi']);
+            }
+
             Deadline::updateOrCreate(
                 ['level_code' => $levelCode],
-                [
-                    'deadline_days' => $deadlineData['days'],
-                ]
+                $data
             );
         }
 
-        return redirect()->route('admin.settings')->with('success', 'Muddatlar muvaffaqiyatli yangilandi!');
+        return redirect()->route('admin.settings', ['tab' => 'deadlines'])->with('success', 'Muddatlar muvaffaqiyatli yangilandi!');
     }
 
     public function updateMarkingSystemScores(Request $request)

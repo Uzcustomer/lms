@@ -534,7 +534,7 @@ class ReportController extends Controller
     /**
      * Dars jadvali yangilash — HEMIS dan tanlangan sana oralig'idagi jadvallarni sinxronlash
      */
-    public function syncSchedulesForReport(Request $request, ScheduleImportService $service)
+    public function syncSchedulesForReport(Request $request)
     {
         $request->validate([
             'date_from' => 'required|date',
@@ -544,7 +544,6 @@ class ReportController extends Controller
         $from = Carbon::parse($request->date_from)->startOfDay();
         $to = Carbon::parse($request->date_to)->endOfDay();
 
-        // Maksimal 31 kun — juda katta oraliq bo'lmasligi uchun
         if ($from->diffInDays($to) > 31) {
             return response()->json([
                 'success' => false,
@@ -552,19 +551,51 @@ class ReportController extends Controller
             ], 422);
         }
 
-        try {
-            $service->importBetween($from, $to);
+        $syncKey = 'report_sync_' . auth()->id();
 
+        // Allaqachon ishlab turgan sync bormi?
+        $existing = \Illuminate\Support\Facades\Cache::get($syncKey);
+        if ($existing && $existing['status'] === 'running') {
             return response()->json([
                 'success' => true,
-                'message' => "Jadval muvaffaqiyatli yangilandi ({$from->toDateString()} — {$to->toDateString()}).",
+                'sync_key' => $syncKey,
+                'message' => 'Sinxronlash allaqachon jarayonda.',
             ]);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'HEMIS bilan sinxronlashda xatolik: ' . $e->getMessage(),
-            ], 500);
         }
+
+        // Darhol "boshlandi" holatini yozish
+        \Illuminate\Support\Facades\Cache::put($syncKey, [
+            'status' => 'running',
+            'message' => 'Navbatga qo\'shildi...',
+            'current' => 0,
+            'total' => 0,
+            'percent' => 0,
+            'updated_at' => now()->toDateTimeString(),
+        ], 600);
+
+        \App\Jobs\SyncReportDataJob::dispatch(
+            $request->date_from,
+            $request->date_to,
+            $syncKey
+        );
+
+        return response()->json([
+            'success' => true,
+            'sync_key' => $syncKey,
+            'message' => 'Sinxronlash boshlandi.',
+        ]);
+    }
+
+    public function syncSchedulesStatus(Request $request)
+    {
+        $syncKey = 'report_sync_' . auth()->id();
+        $data = \Illuminate\Support\Facades\Cache::get($syncKey);
+
+        if (!$data) {
+            return response()->json(['status' => 'none']);
+        }
+
+        return response()->json($data);
     }
 
     /**
@@ -576,7 +607,8 @@ class ReportController extends Controller
     public function lessonAssignmentDiagnostic(Request $request)
     {
         $date = $request->get('date', now()->subDay()->format('Y-m-d'));
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
+        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         // 1. Barcha schedulelar (shu sanadagi)
         $schedules = DB::table('schedules as sch')
@@ -613,6 +645,7 @@ class ReportController extends Controller
 
         // 2. attendance_controls da bor schedule IDlar
         $acRecords = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleIds)
             ->select('subject_schedule_id', 'load', 'employee_name', 'group_name', 'subject_name', 'lesson_date')
             ->get()
@@ -633,7 +666,9 @@ class ReportController extends Controller
         foreach ($schedules as $sch) {
             $hasAC = isset($acRecords[$sch->schedule_hemis_id]);
             $acLoad = $hasAC ? $acRecords[$sch->schedule_hemis_id]->load : null;
-            $hasGrade = isset($gradeRecords[$sch->schedule_hemis_id]);
+            // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
+            $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+            $hasGrade = $skipGradeCheck ? null : isset($gradeRecords[$sch->schedule_hemis_id]);
 
             $rows[] = [
                 'schedule_hemis_id' => $sch->schedule_hemis_id,
@@ -645,7 +680,7 @@ class ReportController extends Controller
                 'lesson_date' => $sch->lesson_date,
                 'ac_exists' => $hasAC ? 'HA' : 'YO\'Q',
                 'ac_load' => $acLoad,
-                'has_grade' => $hasGrade ? 'HA' : 'YO\'Q',
+                'has_grade' => $hasGrade === null ? '-' : ($hasGrade ? 'HA' : 'YO\'Q'),
             ];
         }
 
@@ -720,7 +755,9 @@ class ReportController extends Controller
             $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
+        // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi (ma'ruza va h.k.)
+        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         // 1-QADAM: Jadvallardan ma'lumot olish
         $scheduleQuery = DB::table('schedules as sch')
@@ -785,11 +822,11 @@ class ReportController extends Controller
         }
 
         if ($request->filled('date_from')) {
-            $scheduleQuery->where('sch.lesson_date', '>=', $request->date_from);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) >= ?', [$request->date_from]);
         }
 
         if ($request->filled('date_to')) {
-            $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$request->date_to]);
         }
 
         // Dars jadvalini olish (guruh bo'yicha aggregatsiya)
@@ -807,6 +844,11 @@ class ReportController extends Controller
             'sch.subject_name',
             'sch.group_id',
             'sch.group_name',
+            'sch.training_type_code',
+            'sch.training_type_name',
+            'sch.lesson_pair_code',
+            'sch.lesson_pair_start_time',
+            'sch.lesson_pair_end_time',
             'g.id as group_db_id',
             DB::raw('DATE(sch.lesson_date) as lesson_date_str')
         )->get();
@@ -815,35 +857,57 @@ class ReportController extends Controller
             return response()->json(['data' => [], 'total' => 0]);
         }
 
-        // 2-QADAM: schedule_hemis_id lar bo'yicha davomat va baho mavjudligini tekshirish
-        $allScheduleIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
+        // 2-QADAM: Davomat va baho mavjudligini tekshirish
+        $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
+        $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
+        $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
+        $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
+        $minDate = $schedules->min('lesson_date_str');
+        $maxDate = $schedules->max('lesson_date_str');
 
-        // Chunk bo'yicha davomat mavjudligini tekshirish (attendance_controls da load bo'lsa = davomat olingan)
-        $attendanceExists = collect();
-        foreach (array_chunk($allScheduleIds, 5000) as $chunk) {
-            $result = DB::table('attendance_controls')
-                ->whereIn('subject_schedule_id', $chunk)
-                ->where('load', '>', 0)
-                ->select('subject_schedule_id')
-                ->distinct()
-                ->pluck('subject_schedule_id');
-            $attendanceExists = $attendanceExists->merge($result);
-        }
-        $attendanceSet = $attendanceExists->flip();
+        // Davomat (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        // Bu HEMIS dagi davomat nazoratini jadval bilan aniq bog'laydi
+        $attendanceByScheduleId = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->where('load', '>', 0)
+            ->pluck('subject_schedule_id')
+            ->flip();
 
-        // Chunk bo'yicha baho mavjudligini tekshirish
-        $gradeExists = collect();
-        foreach (array_chunk($allScheduleIds, 5000) as $chunk) {
-            $result = DB::table('student_grades')
-                ->whereIn('subject_schedule_id', $chunk)
-                ->whereNotNull('grade')
-                ->where('grade', '>', 0)
-                ->select('subject_schedule_id')
-                ->distinct()
-                ->pluck('subject_schedule_id');
-            $gradeExists = $gradeExists->merge($result);
-        }
-        $gradeSet = $gradeExists->flip();
+        // Davomat (2-usul): atribut kalitlari orqali tekshirish (zaxira)
+        // subject_schedule_id bo'lmagan yozuvlar uchun
+        $attendanceByKey = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('group_id', $groupHemisIds)
+            ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->where('load', '>', 0)
+            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as ck"))
+            ->pluck('ck')
+            ->flip();
+
+        // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $gradeByScheduleId = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->whereNotNull('grade')
+            ->where('grade', '>', 0)
+            ->pluck('subject_schedule_id')
+            ->unique()
+            ->flip();
+
+        // Baho (2-usul): employee + group (student orqali) + subject + date + training_type + lesson_pair
+        $gradeByKey = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
+            ->whereIn('sg.employee_id', $employeeIds)
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->whereNotNull('sg.grade')
+            ->where('sg.grade', '>', 0)
+            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
+            ->pluck('gk')
+            ->flip();
 
         // 3-QADAM: Talaba sonini guruh bo'yicha hisoblash
         $groupIds = $schedules->pluck('group_id')->unique()->values()->toArray();
@@ -854,10 +918,32 @@ class ReportController extends Controller
             ->groupBy('group_id')
             ->pluck('cnt', 'group_id');
 
-        // 4-QADAM: Ma'lumotlarni guruhlash (employee + group + subject + date)
+        // 4-QADAM: Ma'lumotlarni guruhlash (employee + group + subject + date + mashg'ulot turi + juftlik)
         $grouped = [];
         foreach ($schedules as $sch) {
-            $key = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str;
+            $key = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+                 . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+
+            $pairStart = $sch->lesson_pair_start_time ? substr($sch->lesson_pair_start_time, 0, 5) : '';
+            $pairEnd = $sch->lesson_pair_end_time ? substr($sch->lesson_pair_end_time, 0, 5) : '';
+            $pairTime = ($pairStart && $pairEnd) ? ($pairStart . '-' . $pairEnd) : '';
+
+            // Davomat va baho tekshirish uchun kalitlar
+            $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+                    . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+            $gradeKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+                      . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+
+            // Davomat: schedule_hemis_id orqali yoki atribut kaliti orqali tekshirish
+            $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
+                   || isset($attendanceByKey[$attKey]);
+
+            // Baho: schedule_hemis_id orqali yoki atribut kaliti (group_id bilan) orqali
+            $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+            $hasGrade = $skipGradeCheck ? null : (
+                isset($gradeByScheduleId[$sch->schedule_hemis_id])
+                || isset($gradeByKey[$gradeKey])
+            );
 
             if (!isset($grouped[$key])) {
                 $grouped[$key] = [
@@ -873,22 +959,23 @@ class ReportController extends Controller
                     'group_id' => $sch->group_id,
                     'group_db_id' => $sch->group_db_id,
                     'group_name' => $sch->group_name,
+                    'training_type' => $sch->training_type_name,
+                    'lesson_pair_time' => $pairTime,
                     'semester_code' => $sch->semester_code,
                     'lesson_date' => $sch->lesson_date_str,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
-                    'has_attendance' => false,
-                    'has_grades' => false,
-                    'schedule_ids' => [],
+                    'has_attendance' => $hasAtt,
+                    'has_grades' => $hasGrade,
                 ];
-            }
-
-            $grouped[$key]['schedule_ids'][] = $sch->schedule_hemis_id;
-
-            if (isset($attendanceSet[$sch->schedule_hemis_id])) {
-                $grouped[$key]['has_attendance'] = true;
-            }
-            if (isset($gradeSet[$sch->schedule_hemis_id])) {
-                $grouped[$key]['has_grades'] = true;
+            } else {
+                // Dublikat schedule (bir xil kalit, boshqa schedule_hemis_id) —
+                // agar biror dublikatda davomat/baho topilsa, "Ha" deb belgilash
+                if ($hasAtt && !$grouped[$key]['has_attendance']) {
+                    $grouped[$key]['has_attendance'] = true;
+                }
+                if ($hasGrade === true && $grouped[$key]['has_grades'] === false) {
+                    $grouped[$key]['has_grades'] = true;
+                }
             }
         }
 
@@ -898,11 +985,11 @@ class ReportController extends Controller
         if ($request->filled('status_filter')) {
             $results = array_values(array_filter($results, function ($r) use ($request) {
                 return match ($request->status_filter) {
-                    'any_missing' => !$r['has_attendance'] || !$r['has_grades'],
+                    'any_missing' => !$r['has_attendance'] || $r['has_grades'] === false,
                     'attendance_missing' => !$r['has_attendance'],
-                    'grade_missing' => !$r['has_grades'],
-                    'both_missing' => !$r['has_attendance'] && !$r['has_grades'],
-                    'all_done' => $r['has_attendance'] && $r['has_grades'],
+                    'grade_missing' => $r['has_grades'] === false,
+                    'both_missing' => !$r['has_attendance'] && $r['has_grades'] === false,
+                    'all_done' => $r['has_attendance'] && $r['has_grades'] !== false,
                     default => true,
                 };
             }));
@@ -933,7 +1020,6 @@ class ReportController extends Controller
 
         foreach ($pageData as $i => &$item) {
             $item['row_num'] = $offset + $i + 1;
-            unset($item['schedule_ids']);
         }
         unset($item);
 
@@ -955,7 +1041,7 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Dars belgilash');
 
-        $headers = ['#', 'Xodim FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Kafedra', 'Fan', 'Guruh', 'Talaba soni', 'Davomat', 'Baho', 'Dars sanasi'];
+        $headers = ['#', 'Xodim FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Kafedra', 'Fan', 'Guruh', "Mashg'ulot turi", 'Juftlik vaqti', 'Talaba soni', 'Davomat', 'Baho', 'Dars sanasi'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -966,7 +1052,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:O1')->applyFromArray($headerStyle);
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -979,20 +1065,22 @@ class ReportController extends Controller
             $sheet->setCellValue([7, $row], $r['department_name']);
             $sheet->setCellValue([8, $row], $r['subject_name']);
             $sheet->setCellValue([9, $row], $r['group_name']);
-            $sheet->setCellValue([10, $row], $r['student_count']);
-            $sheet->setCellValue([11, $row], $r['has_attendance'] ? 'Ha' : "Yo'q");
-            $sheet->setCellValue([12, $row], $r['has_grades'] ? 'Ha' : "Yo'q");
-            $sheet->setCellValue([13, $row], $r['lesson_date']);
+            $sheet->setCellValue([10, $row], $r['training_type'] ?? '');
+            $sheet->setCellValue([11, $row], $r['lesson_pair_time'] ?? '');
+            $sheet->setCellValue([12, $row], $r['student_count']);
+            $sheet->setCellValue([13, $row], $r['has_attendance'] ? 'Ha' : "Yo'q");
+            $sheet->setCellValue([14, $row], $r['has_grades'] === null ? '-' : ($r['has_grades'] ? 'Ha' : "Yo'q"));
+            $sheet->setCellValue([15, $row], $r['lesson_date']);
         }
 
-        $widths = [5, 30, 25, 30, 8, 10, 25, 35, 15, 12, 10, 10, 14];
+        $widths = [5, 30, 25, 30, 8, 10, 25, 35, 15, 16, 13, 12, 10, 10, 14];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:O{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }
@@ -1166,10 +1254,10 @@ class ReportController extends Controller
             ->whereNull('sch.deleted_at');
 
         if ($request->filled('date_from')) {
-            $scheduleQuery->where('sch.lesson_date', '>=', $request->date_from);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) >= ?', [$request->date_from]);
         }
         if ($request->filled('date_to')) {
-            $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$request->date_to]);
         }
         if ($request->filled('auditorium')) {
             $scheduleQuery->where('sch.auditorium_code', $request->auditorium);
@@ -1929,6 +2017,7 @@ class ReportController extends Controller
         $allGroupHemisIds = array_unique(array_values($studentGroupMap));
         foreach (array_chunk($allGroupHemisIds, 1000) as $groupChunk) {
             $acRecords = DB::table('attendance_controls')
+                ->whereNull('deleted_at')
                 ->whereIn('group_id', $groupChunk)
                 ->where('load', '>', 0)
                 ->whereNotNull('lesson_date')
@@ -2291,6 +2380,7 @@ class ReportController extends Controller
             $cl = 'utf8mb4_unicode_ci';
 
             $query = DB::table('attendance_controls as ac')
+                ->whereNull('ac.deleted_at')
                 ->leftJoin('groups as g', function ($join) use ($cl) {
                     $join->whereRaw("g.group_hemis_id COLLATE $cl = ac.group_id COLLATE $cl");
                 })
@@ -2967,7 +3057,7 @@ class ReportController extends Controller
                     'subject_id' => $data['subject_id'],
                     'subject_name' => $data['subject_name'],
                     'semester_code' => $data['semester_code'],
-                    'group_id' => $data['group_id'],
+                    'group_id' => $groupDbIdMap[$data['group_id']] ?? $data['group_id'],
                     'jb' => round($jbAvg),
                     'mt' => round($mtAvg),
                     'on' => $hasOn ? round($onAvg) : null,
@@ -3539,8 +3629,594 @@ class ReportController extends Controller
     /**
      * 5 ga da'vogar talabalar sahifasi
      */
-    public function topStudents()
+    public function topStudents(Request $request)
     {
-        return view('admin.reports.top-students');
+        $dekanFacultyId = get_dekan_faculty_id();
+
+        $facultyQuery = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name');
+
+        if ($dekanFacultyId) {
+            $facultyQuery->where('id', $dekanFacultyId);
+        }
+
+        $faculties = $facultyQuery->get();
+
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $selectedEducationType = $request->get('education_type');
+        if (!$request->has('education_type')) {
+            $selectedEducationType = $educationTypes
+                ->first(fn($type) => str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr'))
+                ?->education_type_code;
+        }
+
+        $kafedraQuery = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
+            ->whereNotNull('cs.department_id')
+            ->whereNotNull('cs.department_name');
+
+        if ($selectedEducationType) {
+            $kafedraQuery->where('c.education_type_code', $selectedEducationType);
+        }
+        if ($dekanFacultyId) {
+            $kafedraQuery->where('f.id', $dekanFacultyId);
+        } elseif ($request->filled('faculty')) {
+            $kafedraQuery->where('f.id', $request->faculty);
+        }
+        $kafedraQuery->where('s.current', true);
+
+        $kafedras = $kafedraQuery
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
+            ->get();
+
+        $studentStatuses = DB::table('students')
+            ->select('student_status_code', 'student_status_name')
+            ->whereNotNull('student_status_code')
+            ->groupBy('student_status_code', 'student_status_name')
+            ->orderBy('student_status_name')
+            ->get();
+
+        return view('admin.reports.top-students', compact(
+            'faculties',
+            'educationTypes',
+            'selectedEducationType',
+            'kafedras',
+            'studentStatuses',
+            'dekanFacultyId'
+        ));
+    }
+
+    /**
+     * AJAX: 5 ga da'vogar talabalar hisobot ma'lumotlarini hisoblash
+     * Har bir talaba uchun barcha fanlar bo'yicha kunlik baholarni ko'rsatadi
+     * < 90 (yoki tanlangan chegaradan past) bo'lgan kunlarni ajratib ko'rsatadi
+     */
+    public function topStudentsData(Request $request)
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyId]);
+        }
+
+        try {
+            ini_set('memory_limit', '512M');
+            set_time_limit(120);
+
+            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+            $scoreLimit = (int) $request->get('score_limit', 90);
+
+            // 1-QADAM: Schedule dan unique (group, subject, semester) olish
+            $scheduleQuery = DB::table('schedules as sch')
+                ->whereNotIn('sch.training_type_code', $excludedCodes)
+                ->whereNotNull('sch.lesson_date')
+                ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code')
+                ->distinct();
+
+            $isCurrentSemester = $request->get('current_semester', '1') == '1';
+            if ($isCurrentSemester) {
+                $scheduleQuery
+                    ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
+                    ->join('semesters as sem', function ($join) {
+                        $join->on('sem.code', '=', 'sch.semester_code')
+                            ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
+                    })
+                    ->where('sem.current', true)
+                    ->where('sch.education_year_current', true);
+            }
+
+            if ($request->filled('education_type')) {
+                $educationGroupIds = DB::table('groups')
+                    ->whereIn('curriculum_hemis_id',
+                        Curriculum::where('education_type_code', $request->education_type)
+                            ->pluck('curricula_hemis_id')
+                    )
+                    ->pluck('group_hemis_id')
+                    ->toArray();
+                $scheduleQuery->whereIn('sch.group_id', $educationGroupIds);
+            }
+            if ($request->filled('semester_code')) {
+                $scheduleQuery->where('sch.semester_code', $request->semester_code);
+            }
+            if ($request->filled('group')) {
+                $scheduleQuery->where('sch.group_id', $request->group);
+            }
+            if ($request->filled('subject')) {
+                $scheduleQuery->where('sch.subject_id', $request->subject);
+            }
+            if ($request->filled('department')) {
+                $deptSubjectIds = DB::table('curriculum_subjects')
+                    ->where('department_id', $request->department)
+                    ->pluck('subject_id')
+                    ->unique()
+                    ->values()
+                    ->toArray();
+                if (!empty($deptSubjectIds)) {
+                    $scheduleQuery->whereIn('sch.subject_id', $deptSubjectIds);
+                }
+            }
+
+            $scheduleCombos = $scheduleQuery->get();
+            if ($scheduleCombos->isEmpty()) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $scheduleGroupIds = $scheduleCombos->pluck('group_id')->unique()->toArray();
+            $validSubjectIds = $scheduleCombos->pluck('subject_id')->unique()->toArray();
+            $validSemesterCodes = $scheduleCombos->pluck('semester_code')->unique()->toArray();
+
+            // Vedomost ma'lumotlarini olish
+            $groupNameMap = DB::table('groups')
+                ->whereIn('group_hemis_id', $scheduleGroupIds)
+                ->pluck('name', 'group_hemis_id')
+                ->toArray();
+
+            $groupsData = DB::table('groups')
+                ->whereIn('group_hemis_id', $scheduleGroupIds)
+                ->select('id', 'group_hemis_id', 'curriculum_hemis_id')
+                ->get();
+
+            $groupCurriculumMap = [];
+            $groupDbIdMap = [];
+            foreach ($groupsData as $g) {
+                $groupCurriculumMap[$g->group_hemis_id] = $g->curriculum_hemis_id;
+                $groupDbIdMap[$g->group_hemis_id] = $g->id;
+            }
+
+            $vedomosts = DB::table('vedomosts')
+                ->whereIn('semester_code', $validSemesterCodes)
+                ->select('group_name', 'subject_name', 'semester_code',
+                    'oski_percent', 'test_percent', 'oraliq_percent',
+                    'jb_percent', 'independent_percent', 'shakl')
+                ->get();
+
+            $vedomostMap = [];
+            foreach ($vedomosts as $v) {
+                $vKey = $v->group_name . '|' . $v->subject_name . '|' . $v->semester_code;
+                if (!isset($vedomostMap[$vKey]) || $v->shakl > ($vedomostMap[$vKey]->shakl ?? 0)) {
+                    $vedomostMap[$vKey] = $v;
+                }
+            }
+
+            // 2-QADAM: Faqat "5 ga da'vogar" ro'yxatidagi talabalar
+            $studentQuery = DB::table('students as s')
+                ->select('s.hemis_id', 's.group_id', 's.level_code', 's.student_status_code')
+                ->where('s.is_five_candidate', true);
+
+            if ($request->filled('student_status')) {
+                $studentQuery->where('s.student_status_code', $request->student_status);
+            }
+            if ($request->filled('faculty')) {
+                $faculty = Department::find($request->faculty);
+                if ($faculty) {
+                    $studentQuery->where('s.department_id', $faculty->department_hemis_id);
+                }
+            }
+            if ($request->filled('specialty')) {
+                $studentQuery->where('s.specialty_id', $request->specialty);
+            }
+            if ($request->filled('level_code')) {
+                $studentQuery->where('s.level_code', $request->level_code);
+            }
+            if ($request->filled('group')) {
+                $studentQuery->where('s.group_id', $request->group);
+            }
+            if ($request->filled('education_type')) {
+                $studentQuery->where('s.education_type_code', $request->education_type);
+            }
+
+            $students = $studentQuery->whereIn('s.group_id', $scheduleGroupIds)->get();
+            if ($students->isEmpty()) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $studentHemisIds = $students->pluck('hemis_id')->toArray();
+            $studentGroupMap = $students->pluck('group_id', 'hemis_id')->toArray();
+
+            // 3-QADAM: student_grades dan baholarni olish
+            // Joriy semestr bo'lsa, faqat joriy semestr dars sanalaridan filtrlash
+            $minScheduleDate = null;
+            if ($isCurrentSemester) {
+                $minScheduleDate = DB::table('schedules as sch2')
+                    ->join('groups as gr2', 'gr2.group_hemis_id', '=', 'sch2.group_id')
+                    ->join('semesters as sem2', function ($join) {
+                        $join->on('sem2.code', '=', 'sch2.semester_code')
+                            ->on('sem2.curriculum_hemis_id', '=', 'gr2.curriculum_hemis_id');
+                    })
+                    ->where('sem2.current', true)
+                    ->where('sch2.education_year_current', true)
+                    ->whereNull('sch2.deleted_at')
+                    ->whereNotNull('sch2.lesson_date')
+                    ->min('sch2.lesson_date');
+            }
+
+            // Har bir talaba, fan, kun, dars turi bo'yicha
+            $allGrades = [];
+
+            foreach (array_chunk($studentHemisIds, 1000) as $hemisChunk) {
+                $gradesChunk = DB::table('student_grades')
+                    ->whereIn('student_hemis_id', $hemisChunk)
+                    ->whereIn('subject_id', $validSubjectIds)
+                    ->whereIn('semester_code', $validSemesterCodes)
+                    ->whereNotNull('lesson_date')
+                    ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
+                    ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
+                        'training_type_code', 'grade', 'lesson_date', 'reason')
+                    ->get();
+
+                foreach ($gradesChunk as $g) {
+                    $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
+                    if (!$groupId) continue;
+
+                    $code = (int) $g->training_type_code;
+                    $dateKey = substr($g->lesson_date, 0, 10);
+
+                    // Dars turini aniqlash
+                    if (!in_array($code, $excludedCodes)) {
+                        $lessonType = 'JN';
+                    } elseif ($code === 99) {
+                        $lessonType = 'MT';
+                    } elseif ($code === 100) {
+                        $lessonType = 'ON';
+                    } elseif ($code === 101) {
+                        $lessonType = 'OSKI';
+                    } elseif ($code === 102) {
+                        $lessonType = 'Test';
+                    } else {
+                        continue;
+                    }
+
+                    $studentKey = $g->student_hemis_id;
+                    $subjectKey = $g->subject_id . '|' . $g->semester_code;
+
+                    if (!isset($allGrades[$studentKey])) {
+                        $allGrades[$studentKey] = [];
+                    }
+                    if (!isset($allGrades[$studentKey][$subjectKey])) {
+                        $allGrades[$studentKey][$subjectKey] = [
+                            'subject_id' => $g->subject_id,
+                            'subject_name' => $g->subject_name,
+                            'semester_code' => $g->semester_code,
+                            'group_id' => $groupId,
+                            'days' => [],
+                        ];
+                    }
+
+                    $dayTypeKey = $dateKey . '|' . $lessonType;
+                    if (!isset($allGrades[$studentKey][$subjectKey]['days'][$dayTypeKey])) {
+                        $allGrades[$studentKey][$subjectKey]['days'][$dayTypeKey] = [
+                            'date' => $dateKey,
+                            'lesson_type' => $lessonType,
+                            'grades' => [],
+                            'absent' => false,
+                        ];
+                    }
+
+                    if ($g->reason === 'absent') {
+                        $allGrades[$studentKey][$subjectKey]['days'][$dayTypeKey]['absent'] = true;
+                    }
+                    if ($g->grade !== null && $g->grade > 0) {
+                        $allGrades[$studentKey][$subjectKey]['days'][$dayTypeKey]['grades'][] = (float) $g->grade;
+                    }
+                }
+                unset($gradesChunk);
+            }
+
+            // 4-QADAM: Har bir talaba uchun < scoreLimit bo'lgan kunlarni hisoblash
+            $studentResults = [];
+
+            foreach ($allGrades as $hemisId => $subjects) {
+                $lowDays = [];
+                $totalDays = 0;
+                $lowDayCount = 0;
+
+                foreach ($subjects as $subjectKey => $subjectData) {
+                    $groupName = $groupNameMap[$subjectData['group_id']] ?? '';
+                    $vKey = $groupName . '|' . $subjectData['subject_name'] . '|' . $subjectData['semester_code'];
+                    $vedomost = $vedomostMap[$vKey] ?? null;
+
+                    foreach ($subjectData['days'] as $dayTypeKey => $dayData) {
+                        $totalDays++;
+                        $dayAvg = 0;
+
+                        if (!empty($dayData['grades'])) {
+                            $dayAvg = round(array_sum($dayData['grades']) / count($dayData['grades']));
+                        }
+
+                        if ($dayData['absent']) {
+                            $dayAvg = 0;
+                        }
+
+                        if ($dayAvg < $scoreLimit) {
+                            $lowDayCount++;
+                            $lowDays[] = [
+                                'subject_name' => $subjectData['subject_name'],
+                                'subject_id' => $subjectData['subject_id'],
+                                'semester_code' => $subjectData['semester_code'],
+                                'group_id' => $subjectData['group_id'],
+                                'lesson_type' => $dayData['lesson_type'],
+                                'date' => $dayData['date'],
+                                'grade' => $dayAvg,
+                                'absent' => $dayData['absent'],
+                            ];
+                        }
+                    }
+                }
+
+                if ($lowDayCount > 0) {
+                    // Kunlarni sana bo'yicha saralash
+                    usort($lowDays, function ($a, $b) {
+                        return strcmp($a['date'], $b['date']);
+                    });
+
+                    $studentResults[$hemisId] = [
+                        'low_days' => $lowDays,
+                        'low_day_count' => $lowDayCount,
+                        'total_days' => $totalDays,
+                    ];
+                }
+            }
+            unset($allGrades);
+
+            if (empty($studentResults)) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            // Talaba ma'lumotlarini biriktirish
+            $hemisIds = array_keys($studentResults);
+            $studentInfo = DB::table('students')
+                ->whereIn('hemis_id', $hemisIds)
+                ->select('hemis_id', 'full_name', 'student_id_number', 'department_name',
+                    'specialty_name', 'level_name', 'semester_name', 'group_name', 'group_id')
+                ->get()
+                ->keyBy('hemis_id');
+
+            // Har bir kun alohida qator bo'lsin (flat format)
+            $finalResults = [];
+            foreach ($studentResults as $hemisId => $result) {
+                $st = $studentInfo[$hemisId] ?? null;
+                if (!$st) continue;
+
+                foreach ($result['low_days'] as $day) {
+                    $finalResults[] = [
+                        'hemis_id' => $hemisId,
+                        'full_name' => $st->full_name ?? 'Noma\'lum',
+                        'student_id_number' => $st->student_id_number ?? '-',
+                        'department_name' => $st->department_name ?? '-',
+                        'specialty_name' => $st->specialty_name ?? '-',
+                        'level_name' => $st->level_name ?? '-',
+                        'semester_name' => $st->semester_name ?? '-',
+                        'group_name' => $st->group_name ?? '-',
+                        'group_id' => $groupDbIdMap[$st->group_id] ?? '',
+                        'subject_name' => $day['subject_name'],
+                        'subject_id' => $day['subject_id'],
+                        'semester_code' => $day['semester_code'],
+                        'grade' => $day['grade'],
+                        'lesson_date' => \Carbon\Carbon::parse($day['date'])->format('d.m.Y'),
+                        'lesson_date_raw' => $day['date'],
+                        'lesson_type' => $day['lesson_type'],
+                        'absent' => $day['absent'],
+                    ];
+                }
+            }
+
+            // Saralash
+            $sortColumn = $request->get('sort', 'lesson_date');
+            $sortDirection = $request->get('direction', 'desc');
+            // lesson_date bo'yicha saralashda raw (yyyy-mm-dd) qiymatdan foydalanamiz
+            $actualSortColumn = $sortColumn === 'lesson_date' ? 'lesson_date_raw' : $sortColumn;
+
+            usort($finalResults, function ($a, $b) use ($actualSortColumn, $sortDirection) {
+                $valA = $a[$actualSortColumn] ?? '';
+                $valB = $b[$actualSortColumn] ?? '';
+                $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
+                return $sortDirection === 'desc' ? -$cmp : $cmp;
+            });
+
+            // Excel eksport
+            if ($request->get('export') === 'summary') {
+                return $this->exportTopStudentsSummaryExcel($finalResults, $scoreLimit);
+            }
+            if ($request->get('export') === 'full') {
+                return $this->exportTopStudentsFullExcel($finalResults, $scoreLimit);
+            }
+
+            // Sahifalash
+            $page = $request->get('page', 1);
+            $perPage = $request->get('per_page', 50);
+            $total = count($finalResults);
+            $offset = ($page - 1) * $perPage;
+            $pageData = array_slice($finalResults, $offset, $perPage);
+
+            foreach ($pageData as $i => &$item) {
+                $item['row_num'] = $offset + $i + 1;
+            }
+            unset($item);
+
+            return response()->json([
+                'data' => $pageData,
+                'total' => $total,
+                'per_page' => $perPage,
+                'current_page' => (int) $page,
+                'last_page' => ceil($total / $perPage),
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Top students report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 5 ga da'vogar - Excel (qisqacha)
+     */
+    private function exportTopStudentsSummaryExcel(array $data, int $scoreLimit)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('5 ga davogar');
+
+        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
+            'Fan', 'Joriy bahosi', 'Dars sanasi'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+
+        $redFill = [
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFF0F0']],
+        ];
+
+        foreach ($data as $i => $r) {
+            $row = $i + 2;
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $r['full_name']);
+            $sheet->setCellValueExplicit([3, $row], $r['student_id_number'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $sheet->setCellValue([4, $row], $r['department_name']);
+            $sheet->setCellValue([5, $row], $r['specialty_name']);
+            $sheet->setCellValue([6, $row], $r['level_name']);
+            $sheet->setCellValue([7, $row], $r['semester_name']);
+            $sheet->setCellValue([8, $row], $r['group_name']);
+            $sheet->setCellValue([9, $row], $r['subject_name']);
+            $sheet->setCellValue([10, $row], $r['grade']);
+            $sheet->setCellValue([11, $row], $r['lesson_date']);
+
+            if ($r['grade'] < $scoreLimit) {
+                $sheet->getStyle("J{$row}")->applyFromArray($redFill);
+            }
+        }
+
+        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 25, 12, 14];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
+
+        $lastRow = count($data) + 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            ]);
+        }
+
+        $fileName = '5_ga_davogar_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'top_');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * 5 ga da'vogar - Excel (to'liq)
+     */
+    private function exportTopStudentsFullExcel(array $data, int $scoreLimit)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('5 ga davogar toliq');
+
+        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
+            'Fan', 'Dars turi', 'Joriy bahosi', 'Dars sanasi', 'Holat'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
+
+        $redFill = [
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFF0F0']],
+        ];
+
+        foreach ($data as $i => $r) {
+            $row = $i + 2;
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $r['full_name']);
+            $sheet->setCellValueExplicit([3, $row], $r['student_id_number'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $sheet->setCellValue([4, $row], $r['department_name']);
+            $sheet->setCellValue([5, $row], $r['specialty_name']);
+            $sheet->setCellValue([6, $row], $r['level_name']);
+            $sheet->setCellValue([7, $row], $r['semester_name']);
+            $sheet->setCellValue([8, $row], $r['group_name']);
+            $sheet->setCellValue([9, $row], $r['subject_name']);
+            $sheet->setCellValue([10, $row], $r['lesson_type']);
+            $sheet->setCellValue([11, $row], $r['grade']);
+            $sheet->setCellValue([12, $row], $r['lesson_date']);
+            $sheet->setCellValue([13, $row], $r['absent'] ? 'Sababsiz' : ($r['grade'] < $scoreLimit ? "< {$scoreLimit}" : ''));
+
+            if ($r['grade'] < $scoreLimit) {
+                $sheet->getStyle("K{$row}")->applyFromArray($redFill);
+            }
+        }
+
+        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 25, 10, 12, 14, 12];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
+
+        $lastRow = count($data) + 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            ]);
+        }
+
+        $fileName = '5_ga_davogar_toliq_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'topf_');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 }

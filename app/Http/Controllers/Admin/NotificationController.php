@@ -32,6 +32,9 @@ class NotificationController extends Controller
         $tab = $request->get('tab', 'inbox');
         $search = $request->get('search', '');
         $senderFilter = $request->get('sender_id');
+        $readStatus = $request->get('status'); // 'unread', 'read'
+        $typeFilter = $request->get('type');   // 'message', 'system', 'alert', 'info'
+        $subjectFilter = $request->get('subject'); // mavzu bo'yicha filtr
 
         try {
             $query = Notification::with('sender');
@@ -63,6 +66,20 @@ class NotificationController extends Controller
                 $query->where('sender_id', $senderFilter);
             }
 
+            if ($readStatus === 'unread') {
+                $query->where('is_read', false);
+            } elseif ($readStatus === 'read') {
+                $query->where('is_read', true);
+            }
+
+            if ($typeFilter && in_array($typeFilter, ['message', 'system', 'alert', 'info'])) {
+                $query->where('type', $typeFilter);
+            }
+
+            if ($subjectFilter) {
+                $query->where('subject', $subjectFilter);
+            }
+
             $notifications = $query->paginate(20);
         } catch (\Throwable $e) {
             \Log::error('NotificationController@index query error: ' . $e->getMessage());
@@ -81,6 +98,7 @@ class NotificationController extends Controller
 
         // Kelgan xabarlar uchun jo'natuvchilar ro'yxati (filtr uchun)
         $senders = collect();
+        $subjects = collect();
         try {
             if ($tab === 'inbox') {
                 $inboxSenderIds = Notification::inbox($userId)->distinct()->pluck('sender_id');
@@ -89,14 +107,25 @@ class NotificationController extends Controller
                         Teacher::whereIn('id', $inboxSenderIds)->orderBy('full_name')
                             ->get(['id', 'full_name'])->map(fn ($t) => (object) ['id' => $t->id, 'name' => $t->full_name])
                     );
+
+                // Unikal mavzular ro'yxati (har bir mavzu nechta xabar borligini ham ko'rsatish)
+                $subjects = Notification::inbox($userId)
+                    ->select('subject')
+                    ->selectRaw('count(*) as count')
+                    ->groupBy('subject')
+                    ->orderByDesc('count')
+                    ->limit(20)
+                    ->get();
             }
         } catch (\Throwable $e) {
             \Log::error('NotificationController@index senders error: ' . $e->getMessage());
             $senders = collect();
+            $subjects = collect();
         }
 
         return view('admin.notifications.index', compact(
-            'notifications', 'tab', 'search', 'senderFilter', 'unreadCount', 'inboxCount', 'sentCount', 'draftsCount', 'senders'
+            'notifications', 'tab', 'search', 'senderFilter', 'readStatus', 'typeFilter', 'subjectFilter',
+            'unreadCount', 'inboxCount', 'sentCount', 'draftsCount', 'senders', 'subjects'
         ));
     }
 

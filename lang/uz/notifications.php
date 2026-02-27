@@ -57,6 +57,14 @@ return [
     'all_marked_read' => 'Barcha xabarlar o\'qilgan deb belgilandi',
     'confirm_delete' => 'Haqiqatan ham o\'chirmoqchimisiz?',
 
+    // Filters
+    'filter_status' => 'Holati',
+    'filter_unread' => "O'qilmagan",
+    'filter_read' => "O'qilgan",
+    'filter_type' => 'Turi',
+    'clear_filters' => 'Tozalash',
+    'subjects' => 'Mavzular',
+
     // Reply
     'reply' => 'Javob berish',
     'reply_to' => 'Javob:',

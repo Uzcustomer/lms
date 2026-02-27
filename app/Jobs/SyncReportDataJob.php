@@ -42,35 +42,29 @@ class SyncReportDataJob implements ShouldQueue
         $includestoday = $to->gte($today) && $from->lte($today);
 
         // Qadamlarni hisoblash:
-        // jadval(1) + davomat(totalDays) + baholar(faqat bugungi kun uchun 0 yoki 1)
+        // jadval(1) + davomat(1) + baholar(faqat bugungi kun uchun 0 yoki 1)
         $gradeSteps = $includestoday ? 1 : 0;
-        $totalSteps = 1 + $totalDays + $gradeSteps;
+        $totalSteps = 1 + 1 + $gradeSteps;
         $currentStep = 0;
 
         try {
-            // 1-bosqich: Jadval (schedules) yangilash
+            // 1-bosqich: Jadval (schedules) yangilash — butun oraliq bitta so'rov
             $this->updateProgress('Jadval yangilanmoqda...', $currentStep, $totalSteps);
             $service->importBetween($from, $to);
             $currentStep++;
 
-            // 2-bosqich: Davomat nazorati (attendance_controls) har bir kun
-            $current = $from->copy();
-            while ($current->lte($to)) {
-                $dateStr = $current->toDateString();
-                $this->updateProgress("Davomat: {$dateStr}", $currentStep, $totalSteps);
-
-                try {
-                    Artisan::call(ImportAttendanceControls::class, [
-                        '--date' => $dateStr,
-                        '--silent' => true,
-                    ]);
-                } catch (\Throwable $e) {
-                    Log::warning("[SyncReportDataJob] Davomat xato ({$dateStr}): {$e->getMessage()}");
-                }
-
-                $currentStep++;
-                $current->addDay();
+            // 2-bosqich: Davomat nazorati — butun oraliq bitta API chaqiruv
+            $this->updateProgress("Davomat: {$from->toDateString()} — {$to->toDateString()}", $currentStep, $totalSteps);
+            try {
+                Artisan::call(ImportAttendanceControls::class, [
+                    '--date-from' => $from->toDateString(),
+                    '--date-to' => $to->toDateString(),
+                    '--silent' => true,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning("[SyncReportDataJob] Davomat xato: {$e->getMessage()}");
             }
+            $currentStep++;
 
             // 3-bosqich: Baholar — faqat bugungi kun uchun va shartli
             // O'tgan kunlar: nightly final import allaqachon qilgan, skip

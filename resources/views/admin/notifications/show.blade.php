@@ -91,10 +91,10 @@
                             @php
                                 $senderName = $notification->sender?->name ?? $notification->sender?->short_name ?? $notification->sender?->full_name ?? null;
                                 $initial = $senderName ? mb_strtoupper(mb_substr($senderName, 0, 1)) : '?';
-                                $colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500'];
-                                $colorIndex = $notification->sender_id ? ($notification->sender_id % count($colors)) : 0;
+                                $avatarColors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500'];
+                                $colorIndex = $notification->sender_id ? ($notification->sender_id % count($avatarColors)) : 0;
                             @endphp
-                            <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0 {{ $colors[$colorIndex] }}">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0 {{ $avatarColors[$colorIndex] }}">
                                 {{ $initial }}
                             </div>
                             <div class="flex-1 min-w-0" x-data="{ showDetails: false }">

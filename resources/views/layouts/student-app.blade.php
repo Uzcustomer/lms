@@ -117,12 +117,12 @@
         elseif (request()->routeIs('student.independents')) $activeTab = 'mt';
         elseif (request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
     @endphp
-    <div x-data="{ foydaliOpen: false }" class="sm:hidden" style="position:fixed;bottom:0;left:0;right:0;z-index:50;">
+    <div x-data="{ boshqalarOpen: false }" class="sm:hidden" style="position:fixed !important;bottom:0 !important;left:0 !important;right:0 !important;z-index:9999 !important;">
         <!-- Boshqalar popup overlay -->
-        <div x-show="foydaliOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @click="foydaliOpen = false" style="position:fixed;inset:0;z-index:40;" class="bg-black/30" x-cloak></div>
+        <div x-show="boshqalarOpen" @click="boshqalarOpen = false" style="position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.3);display:none;"></div>
 
         <!-- Boshqalar popup menu -->
-        <div x-show="foydaliOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-4" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:50;" class="mx-auto max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-4" x-cloak @click.away="foydaliOpen = false">
+        <div x-show="boshqalarOpen" @click.away="boshqalarOpen = false" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:9999;display:none;" class="mx-auto max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-4">
             <div class="grid grid-cols-3 gap-3">
                 <a href="{{ route('student.absence-excuses.index') }}" class="flex flex-col items-center gap-2 px-2 py-3 rounded-xl transition {{ request()->routeIs('student.absence-excuses.*') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
                     <div class="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
@@ -222,7 +222,7 @@
             </a>
 
             <!-- 5. Boshqalar (popup) -->
-            <button @click="foydaliOpen = !foydaliOpen" class="flex flex-col items-center justify-center w-16 {{ $activeTab === 'foydali' ? '-mt-3' : 'gap-0.5' }}">
+            <button @click="boshqalarOpen = !boshqalarOpen" class="flex flex-col items-center justify-center w-16 {{ $activeTab === 'foydali' ? '-mt-3' : 'gap-0.5' }}">
                 @if($activeTab === 'foydali')
                     <div class="w-12 h-12 rounded-full flex items-center justify-center bg-indigo-600 text-white shadow-lg shadow-indigo-300 dark:shadow-indigo-900">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">

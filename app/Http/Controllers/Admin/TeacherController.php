@@ -271,33 +271,42 @@ class TeacherController extends Controller
         $levelCode = $request->input('level_code', '');
         $teacherId = $request->input('teacher_id');
 
-        $query = CurriculumSubject::active();
+        $teacher = $teacherId ? Teacher::find($teacherId) : null;
 
-        // O'qituvchining kafedrasidagi fanlarni filtrlash
-        if ($teacherId) {
-            $teacher = Teacher::find($teacherId);
-            if ($teacher && $teacher->department_hemis_id) {
+        // Query yaratish funksiyasi
+        $buildQuery = function ($filterByDept = true) use ($search, $levelCode, $teacher) {
+            $query = CurriculumSubject::active();
+
+            // Kafedra bo'yicha filtrlash
+            if ($filterByDept && $teacher && $teacher->department_hemis_id) {
                 $query->where('department_id', $teacher->department_hemis_id);
             }
-        }
 
-        $subjects = $query
-            ->when($search, function ($q, $search) {
-                $q->where('subject_name', 'like', "%{$search}%");
-            })
-            ->when($levelCode, function ($q, $levelCode) {
-                $semesterCodes = Semester::where('level_code', $levelCode)
-                    ->pluck('code')
-                    ->unique()
-                    ->toArray();
-                $q->whereIn('semester_code', $semesterCodes);
-            })
-            ->selectRaw('MIN(id) as id, subject_name, MIN(subject_code) as subject_code, semester_code, semester_name, MIN(department_name) as department_name')
-            ->groupBy('subject_name', 'semester_code', 'semester_name')
-            ->orderBy('subject_name')
-            ->orderBy('semester_code')
-            ->limit(50)
-            ->get();
+            return $query
+                ->when($search, function ($q, $search) {
+                    $q->where('subject_name', 'like', "%{$search}%");
+                })
+                ->when($levelCode, function ($q, $levelCode) {
+                    $semesterCodes = Semester::where('level_code', $levelCode)
+                        ->pluck('code')
+                        ->unique()
+                        ->toArray();
+                    $q->whereIn('semester_code', $semesterCodes);
+                })
+                ->selectRaw('MIN(id) as id, subject_name, MIN(subject_code) as subject_code, semester_code, semester_name, MIN(department_name) as department_name')
+                ->groupBy('subject_name', 'semester_code', 'semester_name')
+                ->orderBy('subject_name')
+                ->orderBy('semester_code')
+                ->limit(50);
+        };
+
+        // Avval kafedra bo'yicha qidirish
+        $subjects = $buildQuery(true)->get();
+
+        // Agar kafedrada fan topilmasa — barcha fanlardan ko'rsatish
+        if ($subjects->isEmpty() && $teacher) {
+            $subjects = $buildQuery(false)->get();
+        }
 
         return response()->json($subjects);
     }

@@ -571,18 +571,13 @@
 
         function onKtrEditClick() {
             var cr = ktrState.changeRequest;
-            // Agar tasdiqlangan so'rov bo'lsa - tahrirlashga ruxsat
-            if (cr && cr.is_approved) {
-                enableKtrEdit();
-                return;
-            }
-            // So'rov allaqachon jo'natilgan - panelni ko'rsatish
+            // So'rov allaqachon jo'natilgan (draft saqlangan) - panelni ko'rsatish
             if (cr && !cr.is_approved) {
                 renderChangePanel();
                 return;
             }
-            // So'rov yo'q - ogohlantirish va ruxsat so'rash paneli
-            showChangeRequestPrompt();
+            // So'rov yo'q - ogohlantirish ko'rsatish va tahrirlashga ruxsat berish
+            showEditWarningAndEnable();
         }
 
         function enableKtrEdit() {
@@ -610,11 +605,11 @@
             return '<span class="ktr-approval-badge ktr-pending">Kutilmoqda</span>';
         }
 
-        function showChangeRequestPrompt() {
+        function showEditWarningAndEnable() {
             var info = ktrState.approverInfo;
-            var html = '<div class="ktr-change-box">';
-            html += '<div class="ktr-change-title">KTR o\'zgartirish uchun ruxsat kerak</div>';
-            html += '<div class="ktr-change-desc">Siz KTRni o\'zgartirish uchun quyidagilardan ruxsat so\'rashingiz kerak:</div>';
+            var html = '<div class="ktr-change-box" style="border-left: 4px solid #f59e0b; background: #fffbeb;">';
+            html += '<div class="ktr-change-title" style="color:#b45309;"><svg style="width:18px;height:18px;vertical-align:middle;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>Diqqat!</div>';
+            html += '<div class="ktr-change-desc" style="margin-bottom:10px;">O\'zgartirgan KTRingizni saqlash uchun quyidagilardan ruxsat so\'rashingiz kerak:</div>';
             if (info.kafedra_name || info.faculty_name) {
                 html += '<div style="margin-bottom:8px; font-size:13px; color:#374151;">';
                 if (info.faculty_name) html += '<div><b>Fakultet:</b> ' + info.faculty_name + '</div>';
@@ -626,9 +621,15 @@
             html += '<li><b>Dekan</b>: ' + (info.dekan ? info.dekan.name : 'Topilmadi') + '</li>';
             html += '<li><b>Registrator ofisi</b></li>';
             html += '</ul>';
-            html += '<button type="button" class="ktr-btn ktr-btn-primary" onclick="sendChangeRequest()" id="ktr-request-btn">Ruxsat so\'rash</button>';
+            html += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280; margin-bottom:10px;">Tahrirlashdan so\'ng "Saqlash" tugmasini bossangiz, o\'zgarishlar draft sifatida saqlanadi va tasdiqlash so\'rovi yuboriladi. Tasdiqlangandan keyin KTR yangilanadi.</div>';
+            html += '<button type="button" class="ktr-btn ktr-btn-primary" onclick="confirmAndEnableEdit()">Tushundim, davom etish</button>';
             html += '</div>';
             $('#ktr-change-panel').html(html).show();
+        }
+
+        function confirmAndEnableEdit() {
+            $('#ktr-change-panel').hide().html('');
+            enableKtrEdit();
         }
 
         function renderChangePanel() {
@@ -636,11 +637,17 @@
             if (!cr) return;
             var html = '<div class="ktr-change-box">';
             if (cr.is_approved) {
-                html += '<div class="ktr-change-title" style="color:#059669;">Barcha tasdiqlar olingan!</div>';
-                html += '<div class="ktr-change-desc">Endi "O\'zgartirish" tugmasini bosib tahrirlashingiz mumkin.</div>';
+                html += '<div class="ktr-change-title" style="color:#059669;">Barcha tasdiqlar olingan! KTR yangilandi.</div>';
             } else {
-                html += '<div class="ktr-change-title">Ruxsat holati</div>';
+                html += '<div class="ktr-change-title">Tasdiqlash kutilmoqda (draft saqlangan)</div>';
+                html += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280;">O\'zgarishlar draft sifatida saqlangan. Barcha tasdiqlar olingandan keyin KTR yangilanadi.</div>';
             }
+
+            // O'zgarishlar diffini ko'rsatish
+            if (cr.draft_plan_data && ktrState.savedHours) {
+                html += renderDraftDiff(cr);
+            }
+
             var info = ktrState.approverInfo;
             html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Bo\'lim</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
             cr.approvals.forEach(function(a) {
@@ -659,15 +666,60 @@
                 html += '</tr>';
             });
             html += '</tbody></table>';
-            if (cr.is_approved) {
-                html += '<div style="margin-top:10px; text-align:right;"><button type="button" class="ktr-btn ktr-btn-primary" onclick="enableKtrEdit()">Tahrirlashni boshlash</button></div>';
-            }
             html += '</div>';
             $('#ktr-change-panel').html(html).show();
-            // Tasdiqlangan bo'lsa tugmani ham yangilash
-            if (cr.is_approved) {
-                $('#ktr-edit-btn').hide();
+            $('#ktr-edit-btn').hide();
+        }
+
+        function renderDraftDiff(cr) {
+            var oldHours = ktrState.savedHours;
+            var newData = cr.draft_plan_data;
+            var newHours = newData.hours || newData;
+            var types = ktrState.trainingTypes;
+            var codes = ktrState.filteredCodes;
+            var changes = [];
+
+            // Hafta soni tekshirish
+            if (ktrState.hasPlan && cr.draft_week_count) {
+                var oldWeekCount = Object.keys(oldHours).length;
+                if (oldWeekCount != cr.draft_week_count) {
+                    changes.push('<b>Hafta soni:</b> ' + oldWeekCount + ' → ' + cr.draft_week_count);
+                }
             }
+
+            // Har bir hafta va tur bo'yicha soatlar farqi
+            var allWeeks = [];
+            for (var k in oldHours) allWeeks.push(k);
+            for (var k in newHours) { if (allWeeks.indexOf(k) === -1) allWeeks.push(k); }
+            allWeeks.sort(function(a,b) { return parseInt(a) - parseInt(b); });
+
+            allWeeks.forEach(function(week) {
+                var oldW = oldHours[week] || {};
+                var newW = newHours[week] || {};
+                codes.forEach(function(code) {
+                    var oldVal = parseInt(oldW[code]) || 0;
+                    var newVal = parseInt(newW[code]) || 0;
+                    if (oldVal !== newVal) {
+                        var typeName = types[code] ? types[code].name : code;
+                        changes.push(week + '-hafta <b>' + typeName + '</b>: <span style="color:#dc2626;text-decoration:line-through;">' + oldVal + '</span> → <span style="color:#059669;font-weight:600;">' + newVal + '</span> soat');
+                    }
+                });
+            });
+
+            if (changes.length === 0) return '';
+
+            var html = '<div style="margin:10px 0; padding:10px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">';
+            html += '<div style="font-weight:600; margin-bottom:6px; color:#0369a1;">O\'zgarishlar:</div>';
+            html += '<ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.8;">';
+            var maxShow = Math.min(changes.length, 15);
+            for (var i = 0; i < maxShow; i++) {
+                html += '<li>' + changes[i] + '</li>';
+            }
+            if (changes.length > 15) {
+                html += '<li style="color:#6b7280;">... va yana ' + (changes.length - 15) + ' ta o\'zgarish</li>';
+            }
+            html += '</ul></div>';
+            return html;
         }
 
         function sendChangeRequest() {
@@ -927,10 +979,22 @@
                         $('#ktr-validation-msg')
                             .html(resp.message)
                             .removeClass('ktr-msg-error').addClass('ktr-msg-success').show();
-                        // Saqlangandan keyin Word eksport tugmasini ko'rsatish
-                        ktrState.hasPlan = true;
-                        $('#ktr-word-export-btn').show();
-                        setTimeout(function() { $('#ktr-modal-overlay').fadeOut(200); }, 1000);
+
+                        if (resp.is_draft && resp.change_request) {
+                            // Draft sifatida saqlandi - approval panelni ko'rsatish
+                            ktrState.changeRequest = resp.change_request;
+                            ktrState.editMode = false;
+                            $('#ktr-save-btn').hide();
+                            $('#ktr-edit-btn').hide();
+                            $('#ktr-week-selector').hide();
+                            $('.ktr-hours').prop('readonly', true).prop('disabled', true);
+                            renderChangePanel();
+                        } else {
+                            // To'g'ridan-to'g'ri saqlandi (yangi reja yoki admin)
+                            ktrState.hasPlan = true;
+                            $('#ktr-word-export-btn').show();
+                            setTimeout(function() { $('#ktr-modal-overlay').fadeOut(200); }, 1000);
+                        }
                     }
                 },
                 error: function(xhr) {

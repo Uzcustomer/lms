@@ -4392,27 +4392,44 @@ class ReportController extends Controller
         $minDate = $schedules->min('lesson_date_str');
         $maxDate = $schedules->max('lesson_date_str');
 
-        // Baho (1-usul): subject_schedule_id orqali
+        // Baho (1-usul): subject_schedule_id orqali (grade YOKI retake_grade mavjud)
         $gradeByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
-            ->whereNotNull('grade')
-            ->where('grade', '>', 0)
+            ->where(function ($q) {
+                $q->where('grade', '>', 0)
+                  ->orWhere('retake_grade', '>', 0)
+                  ->orWhere('status', 'recorded');
+            })
             ->pluck('subject_schedule_id')
             ->unique()
             ->flip();
 
-        // Baho (2-usul): guruh + fan + sana orqali (kim qo'ygani va mashg'ulot turidan qat'iy nazar)
-        $gradeByKey = DB::table('student_grades as sg')
+        // Baho (2-usul): guruh + fan + sana orqali (PHP Carbon bilan sanani normalize qilamiz)
+        // TIMESTAMP va DATETIME ustunlar orasidagi timezone farqlarini bartaraf etish uchun
+        // SQL DATE() o'rniga PHP Carbon::parse ishlatamiz (jurnal bilan bir xil usul).
+        $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
+        $gradeRecords = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('st.group_id', $groupHemisIds)
-            ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
-            ->whereNotNull('sg.grade')
-            ->where('sg.grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date)) as gk"))
-            ->pluck('gk')
-            ->flip();
+            ->whereIn('sg.subject_id', $subjectIds)
+            ->whereNotNull('sg.lesson_date')
+            ->where(function ($q) {
+                $q->where('sg.grade', '>', 0)
+                  ->orWhere('sg.retake_grade', '>', 0)
+                  ->orWhere('sg.status', 'recorded');
+            })
+            ->select('st.group_id', 'sg.subject_id', 'sg.lesson_date')
+            ->distinct()
+            ->get();
+
+        $gradeByKey = [];
+        foreach ($gradeRecords as $row) {
+            $date = \Carbon\Carbon::parse($row->lesson_date)->format('Y-m-d');
+            $key = $row->group_id . '|' . $row->subject_id . '|' . $date;
+            $gradeByKey[$key] = true;
+        }
 
         // Dars ochilganlarni tekshirish (barcha statuslar — umuman ochilganmi)
         $openingsByKey = DB::table('lesson_openings')

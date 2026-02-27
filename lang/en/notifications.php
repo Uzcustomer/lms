@@ -65,6 +65,12 @@ return [
     'clear_filters' => 'Clear',
     'subjects' => 'Subjects',
 
+    // Multi-select
+    'select_all' => 'Select all',
+    'deselect_all' => 'Deselect all',
+    'selected_count' => 'selected',
+    'search_recipients' => 'Search employees...',
+
     // Reply
     'reply' => 'Reply',
     'reply_to' => 'Reply to:',

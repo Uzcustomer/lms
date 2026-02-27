@@ -101,14 +101,14 @@ class NotificationController extends Controller
                             ->get(['id', 'full_name'])->map(fn ($t) => (object) ['id' => $t->id, 'name' => $t->full_name])
                     );
 
-                // Unikal mavzular ro'yxati (har bir mavzu nechta xabar borligini ham ko'rsatish)
-                $subjects = Notification::inbox($userId)
+                // Unikal mavzular ro'yxati
+                $subjects = Notification::where('recipient_id', $userId)
+                    ->where('is_draft', false)
                     ->whereNotNull('subject')
                     ->where('subject', '!=', '')
-                    ->select('subject')
-                    ->selectRaw('count(*) as count')
+                    ->selectRaw('subject, count(*) as subject_count')
                     ->groupBy('subject')
-                    ->orderByDesc('count')
+                    ->orderByRaw('subject_count DESC')
                     ->limit(20)
                     ->get();
             }
@@ -156,8 +156,8 @@ class NotificationController extends Controller
     {
         [$userId, $userType] = $this->getUserInfo();
 
-        $users = User::with('roles')->orderBy('name')->get();
-        $teachers = Teacher::orderBy('full_name')->get(['id', 'full_name']);
+        // Faqat xodimlar (Teacher) ro'yxati, rollari bilan
+        $teachers = Teacher::with('roles')->orderBy('full_name')->get();
 
         // Rollar ro'yxati (talabadan tashqari)
         $roles = collect(ProjectRole::staffRoles())->map(fn ($role) => [
@@ -174,38 +174,35 @@ class NotificationController extends Controller
             $unreadCount = $sentCount = $draftsCount = 0;
         }
 
-        return view('admin.notifications.create', compact('users', 'teachers', 'roles', 'unreadCount', 'sentCount', 'draftsCount'));
+        return view('admin.notifications.create', compact('teachers', 'roles', 'unreadCount', 'sentCount', 'draftsCount'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'recipient_id' => 'required|integer',
-            'recipient_type' => 'required|string|in:user,teacher',
+            'recipient_ids' => 'required|array|min:1',
+            'recipient_ids.*' => 'integer|exists:teachers,id',
             'subject' => 'required|string|max:255',
             'body' => 'nullable|string',
         ]);
-
-        $typeMap = [
-            'user' => User::class,
-            'teacher' => Teacher::class,
-        ];
 
         [$senderId, $senderType] = $this->getUserInfo();
 
         $isDraft = $request->has('save_draft');
 
-        $notification = Notification::create([
-            'sender_id' => $senderId,
-            'sender_type' => $senderType,
-            'recipient_id' => $validated['recipient_id'],
-            'recipient_type' => $typeMap[$validated['recipient_type']],
-            'subject' => $validated['subject'],
-            'body' => $validated['body'] ?? '',
-            'type' => Notification::TYPE_MESSAGE,
-            'is_draft' => $isDraft,
-            'sent_at' => $isDraft ? null : now(),
-        ]);
+        foreach ($validated['recipient_ids'] as $recipientId) {
+            Notification::create([
+                'sender_id' => $senderId,
+                'sender_type' => $senderType,
+                'recipient_id' => $recipientId,
+                'recipient_type' => Teacher::class,
+                'subject' => $validated['subject'],
+                'body' => $validated['body'] ?? '',
+                'type' => Notification::TYPE_MESSAGE,
+                'is_draft' => $isDraft,
+                'sent_at' => $isDraft ? null : now(),
+            ]);
+        }
 
         if ($isDraft) {
             return redirect()->route('admin.notifications.index', ['tab' => 'drafts'])

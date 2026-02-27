@@ -65,6 +65,12 @@ return [
     'clear_filters' => 'Сбросить',
     'subjects' => 'Темы',
 
+    // Multi-select
+    'select_all' => 'Выбрать все',
+    'deselect_all' => 'Снять выбор',
+    'selected_count' => 'выбрано',
+    'search_recipients' => 'Поиск сотрудников...',
+
     // Reply
     'reply' => 'Ответить',
     'reply_to' => 'Ответ:',

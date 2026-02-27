@@ -1659,7 +1659,7 @@
                                 <div class="border-t border-gray-200 my-2"></div>
                                 <div class="flex items-center justify-between">
                                     <label class="text-sm font-semibold text-gray-700 w-20">JN</label>
-                                    <input type="number" id="yn-weight-jn" min="0" max="100" value="30"
+                                    <input type="number" id="yn-weight-jn" min="0" max="100" value="60"
                                         class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         oninput="updateYnWeightsTotal()">
                                 </div>
@@ -1677,13 +1677,13 @@
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <label class="text-sm font-semibold text-gray-700 w-20">OSKI</label>
-                                    <input type="number" id="yn-weight-oski" min="0" max="100" value="0"
+                                    <input type="number" id="yn-weight-oski" min="0" max="100" value="15"
                                         class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         oninput="updateYnWeightsTotal()">
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <label class="text-sm font-semibold text-gray-700 w-20">Test</label>
-                                    <input type="number" id="yn-weight-test" min="0" max="100" value="60"
+                                    <input type="number" id="yn-weight-test" min="0" max="100" value="15"
                                         class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         oninput="updateYnWeightsTotal()">
                                 </div>

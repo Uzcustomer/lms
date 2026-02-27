@@ -5429,6 +5429,25 @@ class JournalController extends Controller
             ->get()
             ->keyBy('student_hemis_id');
 
+        // DEBUG: JB data tekshirish
+        $debugData = [
+            'educationYearCode' => $educationYearCode,
+            'jbScheduleRows_count' => $jbScheduleRows->count(),
+            'jbLessonDates' => $jbLessonDates,
+            'jbLessonDatesForAverage' => $jbLessonDatesForAverage,
+            'totalJbDaysForAverage' => $totalJbDaysForAverage,
+            'jbPairsPerDay' => $jbPairsPerDay,
+            'jbDatePairSet_keys' => array_keys($jbDatePairSet),
+            'allGradesRaw_count' => $allGradesRaw->count(),
+            'jbGrades_student_count' => count($jbGrades),
+            'mtScheduleRows_count' => $mtScheduleRows->count(),
+            'mtLessonDates' => $mtLessonDates,
+            'totalMtDays' => $totalMtDays,
+            'first_student_hemisId' => $studentHemisIds[0] ?? null,
+            'first_student_jbGrades' => $jbGrades[$studentHemisIds[0] ?? ''] ?? 'NO_DATA',
+        ];
+        \Log::info('YN_QAYDNOMA_DEBUG', $debugData);
+
         // Har bir talaba uchun JN va MT hisoblash (jurnal logikasi bilan bir xil)
         $calculatedJnGrades = [];
         $calculatedMtGrades = [];

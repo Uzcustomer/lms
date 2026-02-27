@@ -615,6 +615,12 @@
             var html = '<div class="ktr-change-box">';
             html += '<div class="ktr-change-title">KTR o\'zgartirish uchun ruxsat kerak</div>';
             html += '<div class="ktr-change-desc">Siz KTRni o\'zgartirish uchun quyidagilardan ruxsat so\'rashingiz kerak:</div>';
+            if (info.kafedra_name || info.faculty_name) {
+                html += '<div style="margin-bottom:8px; font-size:13px; color:#374151;">';
+                if (info.faculty_name) html += '<div><b>Fakultet:</b> ' + info.faculty_name + '</div>';
+                if (info.kafedra_name) html += '<div><b>Kafedra:</b> ' + info.kafedra_name + '</div>';
+                html += '</div>';
+            }
             html += '<ul class="ktr-approver-list">';
             html += '<li><b>Kafedra mudiri</b>: ' + (info.kafedra_mudiri ? info.kafedra_mudiri.name : 'Topilmadi') + '</li>';
             html += '<li><b>Dekan</b>: ' + (info.dekan ? info.dekan.name : 'Topilmadi') + '</li>';

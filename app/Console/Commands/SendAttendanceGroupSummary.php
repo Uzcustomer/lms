@@ -31,8 +31,8 @@ class SendAttendanceGroupSummary extends Command
 
         $this->info("Bugungi sana: {$todayStr}");
 
-        // Progress reporter: bitta Telegram xabar yuborib, har bosqichda yangilab turadi
-        $progressChatId = $this->option('chat-id') ?: config('services.telegram.attendance_group_id');
+        // Progress reporter: admin chatga yuboriladi (guruhga emas)
+        $progressChatId = $this->option('chat-id') ?: config('services.telegram.chat_id');
         $reporter = new ImportProgressReporter($telegram, $progressChatId, $todayStr);
 
         if ($progressChatId) {

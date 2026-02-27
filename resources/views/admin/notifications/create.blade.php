@@ -192,12 +192,19 @@
     <script>
         function composeForm() {
             return {
-                allTeachers: @json($teachers->map(fn($t) => [
-                    'id' => $t->id,
-                    'name' => $t->full_name ?? $t->short_name ?? ('ID: '.$t->id),
-                    'position' => $t->staff_position ?? '',
-                    'roles' => method_exists($t, 'getRoleNames') ? $t->getRoleNames()->toArray() : [],
-                ])),
+                allTeachers: @json($teachers->map(function($t) {
+                    try {
+                        $roles = $t->relationLoaded('roles') ? $t->roles->pluck('name')->toArray() : [];
+                    } catch (\Throwable $e) {
+                        $roles = [];
+                    }
+                    return [
+                        'id' => $t->id,
+                        'name' => $t->full_name ?? $t->short_name ?? ('ID: '.$t->id),
+                        'position' => $t->staff_position ?? '',
+                        'roles' => $roles,
+                    ];
+                })),
                 selectedRole: '',
                 searchQuery: '',
                 selectedIds: [],

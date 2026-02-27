@@ -9,6 +9,7 @@ use App\Models\Teacher;
 use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class NotificationController extends Controller
 {
@@ -93,25 +94,40 @@ class NotificationController extends Controller
         $senders = collect();
         $subjects = collect();
         try {
-            // Mavzular ro'yxati (barcha tablar uchun)
-            $subjectsQuery = Notification::query();
+            // Mavzular ro'yxati — DB::table() orqali (Eloquent scope/clone muammolarini oldini olish)
+            $subjectsRaw = DB::table('notifications')
+                ->whereNull('deleted_at')
+                ->whereNotNull('subject')
+                ->where('subject', '!=', '');
+
             switch ($tab) {
                 case 'sent':
-                    $subjectsQuery->sent($userId, $userType);
+                    $subjectsRaw->where('sender_id', $userId)
+                                ->where('is_draft', 0);
+                    if ($userType) {
+                        $subjectsRaw->where('sender_type', $userType);
+                    }
                     break;
                 case 'drafts':
-                    $subjectsQuery->drafts($userId, $userType);
+                    $subjectsRaw->where('sender_id', $userId)
+                                ->where('is_draft', 1);
+                    if ($userType) {
+                        $subjectsRaw->where('sender_type', $userType);
+                    }
                     break;
                 default:
-                    $subjectsQuery->inbox($userId, $userType);
+                    $subjectsRaw->where('recipient_id', $userId)
+                                ->where('is_draft', 0);
+                    if ($userType) {
+                        $subjectsRaw->where('recipient_type', $userType);
+                    }
                     break;
             }
-            $subjects = (clone $subjectsQuery)
-                ->whereNotNull('subject')
-                ->where('subject', '!=', '')
-                ->selectRaw('subject, count(*) as subject_count')
+
+            $subjects = $subjectsRaw
+                ->select('subject', DB::raw('count(*) as subject_count'))
                 ->groupBy('subject')
-                ->orderByRaw('subject_count DESC')
+                ->orderByDesc('subject_count')
                 ->limit(20)
                 ->get();
 
@@ -124,7 +140,7 @@ class NotificationController extends Controller
                     );
             }
         } catch (\Throwable $e) {
-            \Log::error('NotificationController@index senders error: ' . $e->getMessage());
+            \Log::error('NotificationController@index subjects/senders error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
             $senders = collect();
             $subjects = collect();
         }
@@ -172,14 +188,33 @@ class NotificationController extends Controller
 
     public function create()
     {
-        [$userId, $userType] = $this->getUserInfo();
+        try {
+            [$userId, $userType] = $this->getUserInfo();
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@create getUserInfo error: ' . $e->getMessage());
+            abort(500, 'Auth error: ' . $e->getMessage());
+        }
 
-        // Faqat xodimlar (Teacher) ro'yxati, rollari bilan
-        $teachers = Teacher::with('roles')
-            ->whereNotNull('full_name')
-            ->where('full_name', '!=', '')
-            ->orderBy('full_name')
-            ->get();
+        try {
+            // Faqat xodimlar (Teacher) ro'yxati, rollari bilan
+            $teachers = Teacher::with('roles')
+                ->whereNotNull('full_name')
+                ->where('full_name', '!=', '')
+                ->orderBy('full_name')
+                ->get();
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@create teachers error: ' . $e->getMessage());
+            // Rollarsiz yuklash (fallback)
+            try {
+                $teachers = Teacher::whereNotNull('full_name')
+                    ->where('full_name', '!=', '')
+                    ->orderBy('full_name')
+                    ->get();
+            } catch (\Throwable $e2) {
+                \Log::error('NotificationController@create teachers fallback error: ' . $e2->getMessage());
+                $teachers = collect();
+            }
+        }
 
         // Rollar ro'yxati (talabadan tashqari)
         $roles = collect(ProjectRole::staffRoles())->map(fn ($role) => [

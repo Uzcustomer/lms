@@ -4488,6 +4488,14 @@ class ReportController extends Controller
 
         $results = array_values($grouped);
 
+        // "Dars ochilgan" filtri
+        if ($request->filled('lesson_opened')) {
+            $filterOpened = $request->lesson_opened === '1';
+            $results = array_values(array_filter($results, function ($item) use ($filterOpened) {
+                return $item['has_opening'] === $filterOpened;
+            }));
+        }
+
         // Saralash
         $sortColumn = $request->get('sort', 'lesson_date');
         $sortDirection = $request->get('direction', 'desc');

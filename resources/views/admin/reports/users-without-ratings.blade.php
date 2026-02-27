@@ -90,6 +90,14 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                        <div class="filter-item" style="min-width: 140px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#16a34a;"></span> Dars ochilgan</label>
+                            <select id="lesson_opened" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="1">Ha</option>
+                                <option value="0">Yo'q</option>
+                            </select>
+                        </div>
                         <div class="filter-item" style="min-width: 290px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
@@ -188,6 +196,7 @@
                 group: $('#group').val() || '',
                 department: $('#department').val() || '',
                 subject: $('#subject').val() || '',
+                lesson_opened: $('#lesson_opened').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,

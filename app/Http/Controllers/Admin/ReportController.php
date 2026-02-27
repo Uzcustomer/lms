@@ -822,11 +822,11 @@ class ReportController extends Controller
         }
 
         if ($request->filled('date_from')) {
-            $scheduleQuery->where('sch.lesson_date', '>=', $request->date_from);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) >= ?', [$request->date_from]);
         }
 
         if ($request->filled('date_to')) {
-            $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$request->date_to]);
         }
 
         // Dars jadvalini olish (guruh bo'yicha aggregatsiya)
@@ -886,14 +886,26 @@ class ReportController extends Controller
             ->pluck('ck')
             ->flip();
 
-        // Baho: employee + subject + date + training_type + lesson_pair
-        $gradeSet = DB::table('student_grades')
-            ->whereIn('employee_id', $employeeIds)
-            ->whereIn('subject_id', $subjectIds)
-            ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+        // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $gradeByScheduleId = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
             ->whereNotNull('grade')
             ->where('grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as gk"))
+            ->pluck('subject_schedule_id')
+            ->unique()
+            ->flip();
+
+        // Baho (2-usul): employee + group (student orqali) + subject + date + training_type + lesson_pair
+        $gradeByKey = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
+            ->whereIn('sg.employee_id', $employeeIds)
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->whereNotNull('sg.grade')
+            ->where('sg.grade', '>', 0)
+            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -919,16 +931,19 @@ class ReportController extends Controller
             // Davomat va baho tekshirish uchun kalitlar
             $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                     . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
-            $gradeKey = $sch->employee_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+            $gradeKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                       . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
 
             // Davomat: schedule_hemis_id orqali yoki atribut kaliti orqali tekshirish
             $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
                    || isset($attendanceByKey[$attKey]);
 
-            // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
+            // Baho: schedule_hemis_id orqali yoki atribut kaliti (group_id bilan) orqali
             $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
-            $hasGrade = $skipGradeCheck ? null : isset($gradeSet[$gradeKey]);
+            $hasGrade = $skipGradeCheck ? null : (
+                isset($gradeByScheduleId[$sch->schedule_hemis_id])
+                || isset($gradeByKey[$gradeKey])
+            );
 
             if (!isset($grouped[$key])) {
                 $grouped[$key] = [
@@ -1239,10 +1254,10 @@ class ReportController extends Controller
             ->whereNull('sch.deleted_at');
 
         if ($request->filled('date_from')) {
-            $scheduleQuery->where('sch.lesson_date', '>=', $request->date_from);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) >= ?', [$request->date_from]);
         }
         if ($request->filled('date_to')) {
-            $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$request->date_to]);
         }
         if ($request->filled('auditorium')) {
             $scheduleQuery->where('sch.auditorium_code', $request->auditorium);

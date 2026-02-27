@@ -9,6 +9,7 @@ use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -72,19 +73,45 @@ class SendAttendanceGroupSummary extends Command
             $this->warn("Davomat nazorati yangilashda xato: " . $e->getMessage());
         }
 
-        // 1.6-QADAM: Bugungi baholarni HEMIS dan yangilash (student_grades)
-        $reporter->startStep('HEMIS dan bugungi baholar yangilanmoqda', 'Baholar muvaffaqiyatli yangilandi');
-        $this->info("HEMIS dan bugungi baholar yangilanmoqda...");
-        try {
-            \Illuminate\Support\Facades\Artisan::call('student:import-data', [
-                '--mode' => 'live',
-            ]);
+        // 1.6-QADAM: Bugungi baholar — avval crondagi live import muvaffaqiyatini tekshirish
+        // Live import har 30 daqiqada ishlaydi (bootstrap/app.php), shuning uchun odatda tayyor bo'ladi
+        $liveImportSuccess = Cache::get('live_import_last_success');
+        $liveImportRecent = $liveImportSuccess && Carbon::parse($liveImportSuccess)->diffInMinutes(Carbon::now()) <= 60;
+
+        if ($liveImportRecent) {
+            $reporter->startStep('Baholar: crondagi live import tayyor', 'Baholar mavjud (oxirgi: ' . $liveImportSuccess . ')');
             $reporter->completeStep();
-            $this->info("Baholar yangilandi.");
-        } catch (\Throwable $e) {
-            $reporter->failStep($e->getMessage());
-            Log::warning('Baholar yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
-            $this->warn("Baholar yangilashda xato: " . $e->getMessage());
+            $this->info("Baholar: crondagi live import tayyor (oxirgi: {$liveImportSuccess})");
+        } else {
+            // Live import yaqinda muvaffaqiyatli bo'lmagan — o'zimiz ishlatib ko'ramiz
+            $reporter->startStep('Baholar: live import yaqinda bo\'lmagan, qayta import qilinmoqda', 'Baholar muvaffaqiyatli yangilandi');
+            $this->warn("Live import yaqinda muvaffaqiyatli bo'lmagan (oxirgi: " . ($liveImportSuccess ?: 'topilmadi') . "). Import boshlanmoqda...");
+            try {
+                \Illuminate\Support\Facades\Artisan::call('student:import-data', [
+                    '--mode' => 'live',
+                    '--silent' => true,
+                ]);
+                $reporter->completeStep();
+                $this->info("Baholar yangilandi.");
+            } catch (\Throwable $e) {
+                $reporter->failStep($e->getMessage());
+                Log::error('Baholar import crash: ' . $e->getMessage());
+                $this->error("Baholar import crash: " . $e->getMessage());
+
+                // Admin chatga xato haqida xabar yuborish va hisobotni to'xtatish
+                $adminChatId = config('services.telegram.chat_id');
+                if ($adminChatId) {
+                    $telegram->sendToUser($adminChatId,
+                        "❌ GURUH HISOBOTI TO'XTATILDI\n\n"
+                        . "Sana: {$todayStr}\n"
+                        . "Sabab: Baholar live import crash bo'ldi\n"
+                        . "Oxirgi muvaffaqiyatli live import: " . ($liveImportSuccess ?: 'topilmadi') . "\n\n"
+                        . "Xato: " . substr($e->getMessage(), 0, 300)
+                    );
+                }
+
+                return 1;
+            }
         }
 
         // Progress reporter ni tozalash

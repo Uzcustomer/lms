@@ -11,6 +11,7 @@ use App\Models\KtrChangeApproval;
 use App\Models\KtrChangeRequest;
 use App\Models\KtrPlan;
 use App\Models\Teacher;
+use App\Models\Notification;
 use App\Models\TeacherNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -543,6 +544,8 @@ class KtrController extends Controller
                             'responded_at' => $a->responded_at?->format('d.m.Y H:i'),
                         ]),
                         'is_approved' => $cr->isFullyApproved(),
+                        'draft_week_count' => $cr->draft_week_count,
+                        'draft_plan_data' => $cr->draft_plan_data,
                     ];
                 }
             }
@@ -638,6 +641,7 @@ class KtrController extends Controller
 
     /**
      * Fan uchun KTR rejasini saqlash
+     * Mavjud reja bo'lsa - draft sifatida saqlanadi va tasdiqlash so'rovi yuboriladi
      */
     public function savePlan(Request $request, $curriculumSubjectId)
     {
@@ -650,30 +654,10 @@ class KtrController extends Controller
             ], 403);
         }
 
-        // Mavjud reja bo'lsa, o'zgartirish uchun tasdiqlangan so'rov kerak (adminlar bundan mustasno)
         $user = auth()->user();
-        $isAdmin = $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
         $existingPlan = Schema::hasTable('ktr_plans')
-            ? KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->exists()
-            : false;
-
-        if ($existingPlan && !$isAdmin && Schema::hasTable('ktr_change_requests')) {
-            $approvedRequest = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
-                ->where('requested_by', $user->id)
-                ->where('status', 'pending')
-                ->latest()
-                ->first();
-
-            if (!$approvedRequest || !$approvedRequest->isFullyApproved()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'KTR o\'zgartirish uchun barcha tasdiqlar olinmagan.',
-                ], 403);
-            }
-
-            // Tasdiqlangan so'rovni yakunlash
-            $approvedRequest->update(['status' => 'approved']);
-        }
+            ? KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first()
+            : null;
 
         $request->validate([
             'week_count' => 'required|integer|min:1|max:18',
@@ -727,6 +711,84 @@ class KtrController extends Controller
             });
         }
 
+        // Mavjud reja bo'lsa - DRAFT sifatida saqlash (barcha foydalanuvchilar uchun)
+        if ($existingPlan && Schema::hasTable('ktr_change_requests')) {
+            // Draft ustunlari mavjudligini tekshirish va qo'shish
+            if (!Schema::hasColumn('ktr_change_requests', 'draft_plan_data')) {
+                Schema::table('ktr_change_requests', function (\Illuminate\Database\Schema\Blueprint $table) {
+                    $table->unsignedSmallInteger('draft_week_count')->nullable()->after('status');
+                    $table->json('draft_plan_data')->nullable()->after('draft_week_count');
+                });
+            }
+
+            // Allaqachon pending so'rov bormi?
+            $existingRequest = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
+                ->where('status', 'pending')
+                ->first();
+
+            if ($existingRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Allaqachon tasdiqlash kutilayotgan so\'rov mavjud.',
+                ], 422);
+            }
+
+            // Approver ma'lumotlarini olish
+            $approverInfo = $this->getApproverInfo($cs);
+
+            // Change request yaratish (draft bilan)
+            $cr = KtrChangeRequest::create([
+                'curriculum_subject_id' => $curriculumSubjectId,
+                'requested_by' => $user->id,
+                'requested_by_guard' => $user instanceof Teacher ? 'teacher' : 'web',
+                'draft_week_count' => $request->week_count,
+                'draft_plan_data' => $request->plan_data,
+            ]);
+
+            // Tasdiqlash yozuvlarini yaratish
+            foreach (['kafedra_mudiri' => $approverInfo['kafedra_mudiri'] ?? [], 'dekan' => $approverInfo['dekan'] ?? []] as $role => $data) {
+                KtrChangeApproval::create([
+                    'change_request_id' => $cr->id,
+                    'role' => $role,
+                    'approver_name' => $data['name'] ?? 'Topilmadi',
+                    'approver_id' => $data['id'] ?? null,
+                ]);
+            }
+
+            KtrChangeApproval::create([
+                'change_request_id' => $cr->id,
+                'role' => 'registrator_ofisi',
+                'approver_name' => 'Registrator ofisi xodimlari',
+                'approver_id' => null,
+            ]);
+
+            $cr->load('approvals');
+
+            // Xabarnoma yuborish (o'zgarishlar bilan)
+            $this->sendApproverNotifications($cr, $cs, $user, $approverInfo);
+
+            return response()->json([
+                'success' => true,
+                'is_draft' => true,
+                'message' => 'O\'zgarishlar draft sifatida saqlandi. Tasdiqlash so\'rovi jo\'natildi!',
+                'change_request' => [
+                    'id' => $cr->id,
+                    'status' => $cr->status,
+                    'approvals' => $cr->approvals->map(fn ($a) => [
+                        'id' => $a->id,
+                        'role' => $a->role,
+                        'approver_name' => $a->approver_name,
+                        'status' => $a->status,
+                        'responded_at' => null,
+                    ]),
+                    'is_approved' => false,
+                    'draft_week_count' => $cr->draft_week_count,
+                    'draft_plan_data' => $cr->draft_plan_data,
+                ],
+            ]);
+        }
+
+        // Yangi reja yoki admin - to'g'ridan-to'g'ri saqlash
         KtrPlan::updateOrCreate(
             ['curriculum_subject_id' => $curriculumSubjectId],
             [
@@ -981,20 +1043,23 @@ class KtrController extends Controller
         ]);
 
         // Har bir tasdiqlash uchun yozuv
-        $approvers = [
-            ['role' => 'kafedra_mudiri', 'data' => $approverInfo['kafedra_mudiri']],
-            ['role' => 'dekan', 'data' => $approverInfo['dekan']],
-            ['role' => 'registrator_ofisi', 'data' => $approverInfo['registrator']],
-        ];
-
-        foreach ($approvers as $approver) {
+        // Kafedra mudiri va dekan - aniq shaxsga
+        foreach (['kafedra_mudiri' => $approverInfo['kafedra_mudiri'], 'dekan' => $approverInfo['dekan']] as $role => $data) {
             KtrChangeApproval::create([
                 'change_request_id' => $cr->id,
-                'role' => $approver['role'],
-                'approver_name' => $approver['data']['name'] ?? 'Topilmadi',
-                'approver_id' => $approver['data']['id'] ?? null,
+                'role' => $role,
+                'approver_name' => $data['name'] ?? 'Topilmadi',
+                'approver_id' => $data['id'] ?? null,
             ]);
         }
+
+        // Registrator ofisi - har qanday registrator xodimi tasdiqlashi mumkin
+        KtrChangeApproval::create([
+            'change_request_id' => $cr->id,
+            'role' => 'registrator_ofisi',
+            'approver_name' => 'Registrator ofisi xodimlari',
+            'approver_id' => null,
+        ]);
 
         $cr->load('approvals');
 
@@ -1026,81 +1091,168 @@ class KtrController extends Controller
     private function sendApproverNotifications(KtrChangeRequest $cr, CurriculumSubject $cs, $requestedBy, array $approverInfo = []): void
     {
         try {
-            if (!Schema::hasTable('teacher_notifications')) {
-                Schema::create('teacher_notifications', function (\Illuminate\Database\Schema\Blueprint $table) {
-                    $table->id();
-                    $table->unsignedBigInteger('teacher_id');
-                    $table->string('type')->default('ktr_change_request');
-                    $table->string('title');
-                    $table->text('message');
-                    $table->string('link')->nullable();
-                    $table->json('data')->nullable();
-                    $table->timestamp('read_at')->nullable();
-                    $table->timestamps();
-                    $table->index('teacher_id');
-                    $table->index(['teacher_id', 'read_at']);
-                });
-            }
-
-            $requesterName = $requestedBy instanceof Teacher ? $requestedBy->full_name : 'Noma\'lum';
+            $senderId = $requestedBy->id;
+            $senderType = get_class($requestedBy);
+            $requesterName = $requestedBy instanceof Teacher ? $requestedBy->full_name : ($requestedBy->name ?? 'Noma\'lum');
             $roleNames = [
                 'kafedra_mudiri' => 'Kafedra mudiri',
                 'dekan' => 'Dekan',
                 'registrator_ofisi' => 'Registrator ofisi',
             ];
 
-            // Xabarnoma yuborilgan teacher_id larni kuzatish (duplikatdan saqlash)
-            $notifiedTeacherIds = [];
+            // Qo'shimcha ma'lumotlarni olish: semestr, kurs, yo'nalish, fakultet
+            $semesterName = $cs->semester_name ?? '';
+            $levelName = '';
+            $specialtyName = '';
+            $facultyName = $approverInfo['faculty_name'] ?? '';
+
+            $curriculum = Curriculum::where('curricula_hemis_id', $cs->curricula_hemis_id)->first();
+            if ($curriculum) {
+                $semester = DB::table('semesters')
+                    ->where('curriculum_hemis_id', $curriculum->curricula_hemis_id)
+                    ->where('code', $cs->semester_code)
+                    ->first();
+                if ($semester) {
+                    $levelName = $semester->level_name ?? '';
+                }
+                $specialty = DB::table('specialties')
+                    ->where('specialty_hemis_id', $curriculum->specialty_hemis_id)
+                    ->first();
+                if ($specialty) {
+                    $specialtyName = $specialty->name ?? '';
+                }
+            }
+
+            // Xabar tanasini tuzish (tartib: Fakultet → Yo'nalish → Kurs → Semestr → Fan)
+            $detailParts = [];
+            if ($facultyName) {
+                $detailParts[] = "Fakultet: {$facultyName}";
+            }
+            if ($specialtyName) {
+                $detailParts[] = "Yo'nalish: {$specialtyName}";
+            }
+            if ($levelName) {
+                $detailParts[] = "Kurs: {$levelName}";
+            }
+            if ($semesterName) {
+                $detailParts[] = "Semestr: {$semesterName}";
+            }
+            $detailParts[] = "Fan: {$cs->subject_name}";
+            $detailLine = implode(' | ', $detailParts);
+
+            // O'zgarishlar diffini hisoblash
+            $changeSummary = '';
+            if ($cr->draft_plan_data) {
+                $changeSummary = $this->buildChangeSummary($cs, $cr);
+            }
+
+            $hasTeacherNotifications = Schema::hasTable('teacher_notifications');
+
+            // Bitta xodimga bitta xabarnoma (duplikatdan saqlash)
+            $notifiedIds = [];
 
             foreach ($cr->approvals as $approval) {
+                $roleName = $roleNames[$approval->role] ?? $approval->role;
+
                 if ($approval->role === 'registrator_ofisi') {
                     // Registrator ofisi - HAMMA xodimlarga xabarnoma yuborish
                     $registrators = $approverInfo['registrators'] ?? [];
                     foreach ($registrators as $registrator) {
-                        if (!$registrator['id'] || in_array($registrator['id'], $notifiedTeacherIds)) {
+                        if (!$registrator['id'] || in_array($registrator['id'], $notifiedIds)) {
                             continue;
                         }
-                        TeacherNotification::create([
-                            'teacher_id' => $registrator['id'],
-                            'type' => 'ktr_change_request',
-                            'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                            'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz Registrator ofisi sifatida tasdiqlashingiz kerak.",
-                            'link' => route('admin.ktr.index'),
+
+                        $bodyText = "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n{$detailLine}\nSiz {$roleName} sifatida tasdiqlashingiz kerak.";
+                        if ($changeSummary) {
+                            $bodyText .= "\n\nO'zgarishlar:\n{$changeSummary}";
+                        }
+
+                        $notification = Notification::create([
+                            'sender_id' => $senderId,
+                            'sender_type' => $senderType,
+                            'recipient_id' => $registrator['id'],
+                            'recipient_type' => Teacher::class,
+                            'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                            'body' => $bodyText,
+                            'type' => Notification::TYPE_ALERT,
                             'data' => [
+                                'action' => 'ktr_change_approval',
                                 'change_request_id' => $cr->id,
                                 'approval_id' => $approval->id,
                                 'curriculum_subject_id' => $cs->id,
                                 'subject_name' => $cs->subject_name,
                                 'role' => 'registrator_ofisi',
-                                'requested_by' => $requesterName,
                             ],
+                            'is_draft' => false,
+                            'sent_at' => now(),
                         ]);
-                        $notifiedTeacherIds[] = $registrator['id'];
+
+                        // Teacher notification panelida ham ko'rsatish (qaysi rolda tursa ham ko'radi)
+                        if ($hasTeacherNotifications) {
+                            TeacherNotification::create([
+                                'teacher_id' => $registrator['id'],
+                                'type' => 'ktr_approval',
+                                'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                                'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. {$detailLine}" . ($changeSummary ? "\n{$changeSummary}" : ''),
+                                'link' => route('admin.notifications.show', $notification->id),
+                                'data' => [
+                                    'action' => 'ktr_change_approval',
+                                    'approval_id' => $approval->id,
+                                    'notification_id' => $notification->id,
+                                ],
+                            ]);
+                        }
+
+                        $notifiedIds[] = $registrator['id'];
                     }
                 } else {
                     // Kafedra mudiri va dekan - faqat tegishli shaxsga
-                    if (!$approval->approver_id || in_array($approval->approver_id, $notifiedTeacherIds)) {
+                    if (!$approval->approver_id || in_array($approval->approver_id, $notifiedIds)) {
                         continue;
                     }
 
-                    $roleName = $roleNames[$approval->role] ?? $approval->role;
+                    $bodyText2 = "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n{$detailLine}\nSiz {$roleName} sifatida tasdiqlashingiz kerak.";
+                    if ($changeSummary) {
+                        $bodyText2 .= "\n\nO'zgarishlar:\n{$changeSummary}";
+                    }
 
-                    TeacherNotification::create([
-                        'teacher_id' => $approval->approver_id,
-                        'type' => 'ktr_change_request',
-                        'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                        'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
-                        'link' => route('admin.ktr.index'),
+                    $notification = Notification::create([
+                        'sender_id' => $senderId,
+                        'sender_type' => $senderType,
+                        'recipient_id' => $approval->approver_id,
+                        'recipient_type' => Teacher::class,
+                        'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                        'body' => $bodyText2,
+                        'type' => Notification::TYPE_ALERT,
                         'data' => [
+                            'action' => 'ktr_change_approval',
                             'change_request_id' => $cr->id,
                             'approval_id' => $approval->id,
                             'curriculum_subject_id' => $cs->id,
                             'subject_name' => $cs->subject_name,
                             'role' => $approval->role,
-                            'requested_by' => $requesterName,
                         ],
+                        'is_draft' => false,
+                        'sent_at' => now(),
                     ]);
-                    $notifiedTeacherIds[] = $approval->approver_id;
+
+                    // Teacher notification panelida ham ko'rsatish (qaysi rolda tursa ham ko'radi)
+                    if ($hasTeacherNotifications) {
+                        TeacherNotification::create([
+                            'teacher_id' => $approval->approver_id,
+                            'type' => 'ktr_approval',
+                            'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                            'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. {$detailLine}" . ($changeSummary ? "\n{$changeSummary}" : ''),
+                            'link' => route('admin.notifications.show', $notification->id),
+                            'data' => [
+                                'action' => 'ktr_change_approval',
+                                'approval_id' => $approval->id,
+                                'notification_id' => $notification->id,
+                            ],
+                        ]);
+                    }
+
+                    $notifiedIds[] = $approval->approver_id;
                 }
             }
         } catch (\Exception $e) {
@@ -1109,8 +1261,347 @@ class KtrController extends Controller
     }
 
     /**
-     * KTR o'zgartirish so'rovini tasdiqlash/rad etish
+     * Eski va yangi KTR o'rtasidagi farqlarni hisoblash
      */
+    private function buildChangeSummary(CurriculumSubject $cs, KtrChangeRequest $cr): string
+    {
+        $existingPlan = KtrPlan::where('curriculum_subject_id', $cs->id)->first();
+        if (!$existingPlan) {
+            return '';
+        }
+
+        $oldData = $existingPlan->plan_data;
+        $newData = $cr->draft_plan_data;
+        if (!$oldData || !$newData) {
+            return '';
+        }
+
+        $oldHours = $oldData['hours'] ?? $oldData;
+        $newHours = $newData['hours'] ?? $newData;
+
+        // Training type nomlarini olish
+        $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+        $typeNames = [];
+        if (is_array($details)) {
+            foreach ($details as $detail) {
+                $code = (string) ($detail['trainingType']['code'] ?? '');
+                $name = $detail['trainingType']['name'] ?? $code;
+                if ($code) {
+                    $typeNames[$code] = $name;
+                }
+            }
+        }
+
+        $changes = [];
+
+        // Hafta soni o'zgargan bo'lsa
+        if ($existingPlan->week_count != $cr->draft_week_count) {
+            $changes[] = "Hafta soni: {$existingPlan->week_count} → {$cr->draft_week_count}";
+        }
+
+        // Har bir hafta va tur bo'yicha soatlar farqini tekshirish
+        $allWeeks = array_unique(array_merge(array_keys($oldHours), array_keys($newHours)));
+        sort($allWeeks, SORT_NUMERIC);
+
+        foreach ($allWeeks as $week) {
+            $oldWeek = $oldHours[$week] ?? [];
+            $newWeek = $newHours[$week] ?? [];
+            $allCodes = array_unique(array_merge(array_keys($oldWeek), array_keys($newWeek)));
+
+            foreach ($allCodes as $code) {
+                $oldVal = (int) ($oldWeek[$code] ?? 0);
+                $newVal = (int) ($newWeek[$code] ?? 0);
+                if ($oldVal !== $newVal) {
+                    $typeName = $typeNames[$code] ?? $code;
+                    $changes[] = "{$week}-hafta {$typeName}: {$oldVal} → {$newVal} soat";
+                }
+            }
+        }
+
+        if (empty($changes)) {
+            return 'O\'zgarish yo\'q';
+        }
+
+        // Maksimum 10 ta o'zgarishni ko'rsatish
+        if (count($changes) > 10) {
+            $shown = array_slice($changes, 0, 10);
+            $remaining = count($changes) - 10;
+            $shown[] = "... va yana {$remaining} ta o'zgarish";
+            return implode("\n", $shown);
+        }
+
+        return implode("\n", $changes);
+    }
+
+    /**
+     * KTR rejasini Word formatida eksport qilish
+     */
+    public function exportWord($curriculumSubjectId)
+    {
+        $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
+
+        $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
+        if (!$plan) {
+            return back()->with('error', 'KTR rejasi topilmadi.');
+        }
+
+        // Mashg'ulot turlarini olish
+        $trainingTypes = [];
+        $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+        if (is_array($details)) {
+            foreach ($details as $detail) {
+                $code = (string) ($detail['trainingType']['code'] ?? '');
+                $name = $detail['trainingType']['name'] ?? '';
+                $hours = (int) ($detail['academic_load'] ?? 0);
+                if ($code !== '' && $name !== '') {
+                    $trainingTypes[$code] = ['name' => $name, 'hours' => $hours];
+                }
+            }
+        }
+
+        // Tartibda saralash
+        $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar', 'mustaqil'];
+        $normalize = function ($str) {
+            return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower($str));
+        };
+        if (count($trainingTypes) > 1) {
+            uksort($trainingTypes, function ($a, $b) use ($trainingTypes, $typeOrder, $normalize) {
+                $nameA = $normalize($trainingTypes[$a]['name']);
+                $nameB = $normalize($trainingTypes[$b]['name']);
+                $posA = count($typeOrder);
+                $posB = count($typeOrder);
+                foreach ($typeOrder as $i => $keyword) {
+                    if ($posA === count($typeOrder) && str_contains($nameA, $keyword)) $posA = $i;
+                    if ($posB === count($typeOrder) && str_contains($nameB, $keyword)) $posB = $i;
+                }
+                return $posA <=> $posB;
+            });
+        }
+
+        // Mustaqil va mustaqil bo'lmaganlarni ajratish
+        $filteredTypes = [];
+        $mustaqilTypes = [];
+        foreach ($trainingTypes as $code => $type) {
+            if (preg_match('/mustaqil/i', $normalize($type['name']))) {
+                $mustaqilTypes[$code] = $type;
+            } else {
+                $filteredTypes[$code] = $type;
+            }
+        }
+        $typeCodes = array_keys($filteredTypes);
+
+        // Kafedra va fakultet ma'lumotlari
+        $approverInfo = $this->getApproverInfo($cs);
+
+        // Curriculum va semestr ma'lumotlari
+        $curriculum = Curriculum::where('curricula_hemis_id', $cs->curricula_hemis_id)->first();
+        $semesterName = $cs->semester_name ?? '';
+        $levelName = '';
+        $educationYear = '';
+        $specialtyName = '';
+
+        if ($curriculum) {
+            $educationYear = $curriculum->education_year_name ?? '';
+            $semester = DB::table('semesters')
+                ->where('curriculum_hemis_id', $curriculum->curricula_hemis_id)
+                ->where('code', $cs->semester_code)
+                ->first();
+            if ($semester) {
+                $levelName = $semester->level_name ?? '';
+            }
+            $specialty = DB::table('specialties')
+                ->where('specialty_hemis_id', $curriculum->specialty_hemis_id)
+                ->first();
+            if ($specialty) {
+                $specialtyName = $specialty->name ?? '';
+            }
+        }
+
+        $planData = $plan->plan_data;
+        $hoursData = $planData['hours'] ?? $planData;
+        $topicsData = $planData['topics'] ?? [];
+
+        // ---- PhpWord hujjat yaratish ----
+        $phpWord = new \PhpOffice\PhpWord\PhpWord();
+        $phpWord->setDefaultFontName('Times New Roman');
+        $phpWord->setDefaultFontSize(12);
+
+        $section = $phpWord->addSection([
+            'orientation' => 'landscape',
+            'marginTop' => 800,
+            'marginBottom' => 600,
+            'marginLeft' => 800,
+            'marginRight' => 600,
+        ]);
+
+        $center = ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0];
+        $left = ['spaceAfter' => 0, 'spaceBefore' => 0];
+
+        // ---- SARLAVHA ----
+        $section->addText('KALENDAR-TEMATIK REJA', ['bold' => true, 'size' => 14], $center);
+        $section->addText($educationYear . " o'quv yili", ['size' => 12], $center);
+        $section->addTextBreak(1);
+
+        // Fan ma'lumotlari
+        $section->addText('Fan: ' . $cs->subject_name, ['bold' => true, 'size' => 12], $left);
+        $section->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['size' => 12], $left);
+        $section->addText("Yo'nalish: " . $specialtyName . '  ' . $levelName . '-kurs  ' . $semesterName, ['size' => 12], $left);
+        $section->addTextBreak(0);
+
+        // Semestr uchun ajratilgan soatlar
+        $section->addText($semesterName . ' uchun ajratilgan soat:', ['bold' => true, 'size' => 12], $left);
+        foreach ($filteredTypes as $code => $type) {
+            $section->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['size' => 12], $left);
+        }
+        foreach ($mustaqilTypes as $code => $type) {
+            $section->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['size' => 12], $left);
+        }
+        $section->addTextBreak(1);
+
+        // ---- JADVAL SARLAVHASI ----
+        $typeNames = [];
+        foreach ($filteredTypes as $code => $type) {
+            $typeNames[] = mb_strtoupper($type['name']);
+        }
+        $section->addText(
+            implode(', ', $typeNames) . ' MASHG\'ULOTLAR MAVZULARI',
+            ['bold' => true, 'size' => 12],
+            $center
+        );
+        $section->addTextBreak(0);
+
+        // ---- JADVAL ----
+        $typeCount = count($typeCodes);
+        $cellBorder = ['borderSize' => 6, 'borderColor' => '000000', 'valign' => 'center'];
+        $hBold = ['bold' => true, 'size' => 10];
+        $hNormal = ['size' => 10];
+        $dStyle = ['size' => 10];
+        $cp = ['alignment' => 'center', 'spaceAfter' => 20, 'spaceBefore' => 20];
+        $lp = ['spaceAfter' => 20, 'spaceBefore' => 20];
+
+        // Ustun kengliklari
+        $haftaW = 700;
+        $kunlariW = 1600;
+        $soatEachW = 700;
+        $soatTotalW = $soatEachW * $typeCount;
+        $mavzuW = 14000 - $haftaW - $kunlariW - $soatTotalW;
+        if ($mavzuW < 3000) $mavzuW = 3000;
+
+        $table = $section->addTable([
+            'borderSize' => 6,
+            'borderColor' => '000000',
+            'cellMarginTop' => 20,
+            'cellMarginBottom' => 20,
+            'cellMarginLeft' => 40,
+            'cellMarginRight' => 40,
+        ]);
+
+        // 1-qator sarlavha: Hafta | Hafta kunlari | Mashg'ulotlar mavzulari | Soat (gridSpan)
+        $table->addRow(null, ['tblHeader' => true]);
+        $table->addCell($haftaW, array_merge($cellBorder, ['vMerge' => 'restart']))
+            ->addText('Hafta', $hBold, $cp);
+        $table->addCell($kunlariW, array_merge($cellBorder, ['vMerge' => 'restart']))
+            ->addText('Hafta kunlari', $hBold, $cp);
+        $table->addCell($mavzuW, array_merge($cellBorder, ['vMerge' => 'restart']))
+            ->addText('Mashg\'ulotlar mavzulari ' . $semesterName, $hBold, $cp);
+        if ($typeCount > 0) {
+            $table->addCell($soatTotalW, array_merge($cellBorder, ['gridSpan' => $typeCount]))
+                ->addText('Soat', $hBold, $cp);
+        }
+
+        // 2-qator sarlavha: (merge) | (merge) | (merge) | Ma'ruza | Amaliy | ...
+        // Vertikal yozuv: har bir harfni alohida qatorga qo'yish
+        $table->addRow(null, ['tblHeader' => true]);
+        $table->addCell($haftaW, array_merge($cellBorder, ['vMerge' => 'continue']));
+        $table->addCell($kunlariW, array_merge($cellBorder, ['vMerge' => 'continue']));
+        $table->addCell($mavzuW, array_merge($cellBorder, ['vMerge' => 'continue']));
+        foreach ($typeCodes as $code) {
+            $name = $filteredTypes[$code]['name'];
+            $cell = $table->addCell($soatEachW, $cellBorder);
+            // Har bir harfni alohida qator qilib vertikal yozish
+            $chars = mb_str_split($name);
+            foreach ($chars as $char) {
+                $cell->addText(
+                    $char,
+                    ['bold' => true, 'size' => 9],
+                    ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0, 'lineHeight' => 0.8]
+                );
+            }
+        }
+
+        // ---- MA'LUMOTLAR QATORLARI ----
+        for ($w = 1; $w <= $plan->week_count; $w++) {
+            $table->addRow();
+
+            // Hafta raqami
+            $table->addCell($haftaW, $cellBorder)->addText($w, $dStyle, $cp);
+
+            // Hafta kunlari (bo'sh - foydalanuvchi to'ldiradi)
+            $table->addCell($kunlariW, $cellBorder)->addText('', $dStyle, $cp);
+
+            // Mashg'ulotlar mavzulari - barcha turlar bitta katakda
+            $topicCell = $table->addCell($mavzuW, $cellBorder);
+            $hasContent = false;
+            foreach ($typeCodes as $code) {
+                $hrs = (int) ($hoursData[$w][$code] ?? 0);
+                $topic = $topicsData[$w][$code] ?? '';
+                if ($hrs > 0 && $topic !== '') {
+                    $textRun = $topicCell->addTextRun($lp);
+                    $textRun->addText($filteredTypes[$code]['name'] . ': ', ['bold' => true, 'size' => 10]);
+                    $textRun->addText($topic, ['size' => 10, 'underline' => 'single']);
+                    $hasContent = true;
+                } elseif ($hrs > 0) {
+                    $textRun = $topicCell->addTextRun($lp);
+                    $textRun->addText($filteredTypes[$code]['name'] . ': ', ['bold' => true, 'size' => 10]);
+                    $textRun->addText('-', ['size' => 10]);
+                    $hasContent = true;
+                }
+            }
+            if (!$hasContent) {
+                $topicCell->addText('', $dStyle, $lp);
+            }
+
+            // Soat ustunlari
+            foreach ($typeCodes as $code) {
+                $hrs = (int) ($hoursData[$w][$code] ?? 0);
+                $table->addCell($soatEachW, $cellBorder)
+                    ->addText($hrs > 0 ? $hrs : '', $dStyle, $cp);
+            }
+        }
+
+        // Jami qator
+        $table->addRow();
+        $jamiCell = array_merge($cellBorder, ['bgColor' => 'D9D9D9']);
+        $table->addCell($haftaW + $kunlariW + $mavzuW, array_merge($jamiCell, ['gridSpan' => 3]))
+            ->addText('JAMI:', ['bold' => true, 'size' => 10], $cp);
+        foreach ($typeCodes as $code) {
+            $colTotal = 0;
+            for ($w = 1; $w <= $plan->week_count; $w++) {
+                $colTotal += (int) ($hoursData[$w][$code] ?? 0);
+            }
+            $table->addCell($soatEachW, $jamiCell)
+                ->addText($colTotal, ['bold' => true, 'size' => 10], $cp);
+        }
+
+        // ---- IMZOLAR ----
+        $section->addTextBreak(2);
+
+        $user = auth()->user();
+        $teacherName = ($user instanceof Teacher) ? ($user->full_name ?? $user->name) : '';
+
+        $section->addText("Tuzuvchi o'qituvchi:  ______________  " . $teacherName, ['size' => 12], $left);
+        $section->addTextBreak(1);
+        $section->addText("Kafedra mudiri:  ______________  " . ($approverInfo['kafedra_mudiri']['name'] ?? ''), ['size' => 12], $left);
+
+        // ---- FAYLNI YUKLASH ----
+        $filename = 'KTR_' . preg_replace('/[^a-zA-Z0-9\x{0400}-\x{04FF}]/u', '_', $cs->subject_name) . '_' . date('Y-m-d') . '.docx';
+        $tempFile = tempnam(sys_get_temp_dir(), 'ktr_') . '.docx';
+        $objWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'Word2007');
+        $objWriter->save($tempFile);
+
+        return response()->download($tempFile, $filename)->deleteFileAfterSend(true);
+    }
+
     public function approveChange(Request $request, $approvalId)
     {
         $approval = KtrChangeApproval::findOrFail($approvalId);
@@ -1118,13 +1609,21 @@ class KtrController extends Controller
 
         // Faqat tegishli rol egasi tasdiqlashi mumkin
         $canApprove = false;
-        if ($approval->approver_id && $user instanceof Teacher && $user->id == $approval->approver_id) {
-            $canApprove = true;
+
+        if ($approval->role === 'registrator_ofisi') {
+            // Registrator ofisi - registrator_ofisi roli bor xodim tasdiqlashi mumkin
+            if ($user->hasRole('registrator_ofisi')) {
+                $canApprove = true;
+            }
+        } else {
+            // Kafedra mudiri va dekan - faqat aniq tayinlangan shaxs
+            if ($approval->approver_id && $user instanceof Teacher && $user->id == $approval->approver_id) {
+                $canApprove = true;
+            }
         }
+
+        // Admin har doim tasdiqlashi mumkin
         if ($user->hasRole(['superadmin', 'admin'])) {
-            $canApprove = true;
-        }
-        if ($user->hasRole($approval->role)) {
             $canApprove = true;
         }
 
@@ -1137,10 +1636,18 @@ class KtrController extends Controller
             $status = 'approved';
         }
 
-        $approval->update([
+        $updateData = [
             'status' => $status,
             'responded_at' => now(),
-        ]);
+        ];
+
+        // Registrator ofisi tasdiqlaganda kim tasdiqlaganini saqlash
+        if ($approval->role === 'registrator_ofisi' && !$approval->approver_id) {
+            $updateData['approver_id'] = $user->id;
+            $updateData['approver_name'] = $user->full_name ?? $user->name ?? 'Noma\'lum';
+        }
+
+        $approval->update($updateData);
 
         // Agar rad etilsa, butun so'rovni ham rad etish
         $cr = $approval->changeRequest;
@@ -1148,9 +1655,49 @@ class KtrController extends Controller
             $cr->update(['status' => 'rejected']);
         }
 
+        // Barcha approval holatini qaytarish (jadval yangilanishi uchun)
+        $cr->load('approvals');
+
+        $isFullyApproved = $cr->isFullyApproved();
+
+        // Agar barcha tasdiqlar olingan bo'lsa va draft mavjud bo'lsa - KTR ni yangilash
+        if ($isFullyApproved && $cr->draft_plan_data) {
+            if (!Schema::hasTable('ktr_plans')) {
+                Schema::create('ktr_plans', function (\Illuminate\Database\Schema\Blueprint $table) {
+                    $table->id();
+                    $table->unsignedBigInteger('curriculum_subject_id');
+                    $table->unsignedSmallInteger('week_count');
+                    $table->json('plan_data');
+                    $table->unsignedBigInteger('created_by')->nullable();
+                    $table->timestamps();
+                    $table->unique('curriculum_subject_id');
+                });
+            }
+
+            KtrPlan::updateOrCreate(
+                ['curriculum_subject_id' => $cr->curriculum_subject_id],
+                [
+                    'week_count' => $cr->draft_week_count,
+                    'plan_data' => $cr->draft_plan_data,
+                    'created_by' => $cr->requested_by,
+                ]
+            );
+
+            $cr->update(['status' => 'approved']);
+        }
+
         return response()->json([
             'success' => true,
             'message' => $status === 'approved' ? 'Tasdiqlandi!' : 'Rad etildi.',
+            'approvals' => $cr->approvals->map(fn ($a) => [
+                'id' => $a->id,
+                'role' => $a->role,
+                'approver_name' => $a->approver_name,
+                'status' => $a->status,
+                'responded_at' => $a->responded_at?->format('d.m.Y H:i'),
+            ]),
+            'is_approved' => $isFullyApproved,
+            'ktr_applied' => $isFullyApproved && $cr->draft_plan_data ? true : false,
         ]);
     }
 }

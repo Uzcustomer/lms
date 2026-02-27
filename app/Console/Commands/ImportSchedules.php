@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 class ImportSchedules extends Command
 {
-    protected $signature = 'import:schedules';
+    protected $signature = 'import:schedules {--silent : Telegram xabar yubormaslik}';
 
     protected $description = 'Import schedules from HEMIS API by current education year';
 
@@ -16,7 +16,7 @@ class ImportSchedules extends Command
         $this->info('Jadval importi boshlanmoqda (joriy o\'quv yili bo\'yicha)...');
 
         try {
-            $service->importByEducationYear(fn($msg) => $this->line($msg));
+            $service->importByEducationYear(fn($msg) => $this->line($msg), (bool)$this->option('silent'));
             $this->info('Jadval importi muvaffaqiyatli yakunlandi.');
             return self::SUCCESS;
         } catch (\Throwable $e) {

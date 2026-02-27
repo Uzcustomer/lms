@@ -90,7 +90,9 @@
          x-data @click="if($event.target.closest('a')) { if(window.innerWidth < 768) $store.sidebar.close() }">
         <!-- Xabarnomalar (Notifications) -->
         @php
+            $sidebarUserType = get_class($user);
             $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
+                ->where('recipient_type', $sidebarUserType)
                 ->where('is_draft', false)
                 ->where('is_read', false)
                 ->count();
@@ -169,6 +171,9 @@
             Baholar
         </a>
 
+        @endif
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'fan_masuli', 'oqituvchi', 'kafedra_mudiri']))
         <a href="{{ route('admin.ktr.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.ktr.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -176,7 +181,6 @@
             </svg>
             KTR
         </a>
-
         @endif
 
         @if($hasActiveRole('test_markazi'))

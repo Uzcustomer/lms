@@ -18,6 +18,8 @@ class Notification extends Model
         'subject',
         'body',
         'type',
+        'url',
+        'data',
         'is_read',
         'read_at',
         'is_draft',
@@ -29,6 +31,7 @@ class Notification extends Model
         'is_draft' => 'boolean',
         'read_at' => 'datetime',
         'sent_at' => 'datetime',
+        'data' => 'array',
     ];
 
     // Notification types

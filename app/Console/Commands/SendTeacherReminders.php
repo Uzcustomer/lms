@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Teacher;
+use App\Services\ScheduleImportService;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -17,7 +18,7 @@ class SendTeacherReminders extends Command
 
     protected $description = 'Davomat olmagan yoki baho qo\'ymagan o\'qituvchilarga Telegram orqali eslatma yuborish';
 
-    public function handle(TelegramService $telegram): int
+    public function handle(TelegramService $telegram, ScheduleImportService $importService): int
     {
         $today = Carbon::today()->format('Y-m-d');
 
@@ -28,7 +29,20 @@ class SendTeacherReminders extends Command
 
         $this->info("Bugungi sana: {$today}");
 
-        // 1-QADAM: Davomat nazoratini yangilash (guruh hisoboti bilan bir xil)
+        // 1-QADAM: HEMIS dan bugungi jadval ma'lumotlarini yangilash
+        $this->info("HEMIS dan bugungi jadval yangilanmoqda ({$today})...");
+        try {
+            $importService->importBetween(
+                Carbon::today()->startOfDay(),
+                Carbon::today()->endOfDay(),
+            );
+            $this->info("Jadval muvaffaqiyatli yangilandi.");
+        } catch (\Throwable $e) {
+            Log::warning('HEMIS jadval sinxronlashda xato (davom etadi): ' . $e->getMessage());
+            $this->warn("HEMIS jadval yangilashda xato: " . $e->getMessage());
+        }
+
+        // 1.5-QADAM: Davomat nazoratini yangilash (guruh hisoboti bilan bir xil)
         $this->info("HEMIS dan bugungi davomat nazorati yangilanmoqda...");
         try {
             Artisan::call('import:attendance-controls', [
@@ -43,9 +57,10 @@ class SendTeacherReminders extends Command
 
         $this->info("O'qituvchilarga eslatma yuborilmoqda...");
 
-        // 2-QADAM: Jadvaldan ma'lumot olish (hisobot va guruh xabari bilan bir xil logika)
+        // 2-QADAM: Jadvaldan ma'lumot olish (yakuniy hisobot bilan bir xil logika)
         $schedules = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
+            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
             ->leftJoin('semesters as sem', function ($join) {
                 $join->on('sem.code', '=', 'sch.semester_code')
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
@@ -54,11 +69,13 @@ class SendTeacherReminders extends Command
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->whereRaw('DATE(sch.lesson_date) = ?', [$today])
+            ->whereRaw('LOWER(c.education_type_name) LIKE ?', ['%bakalavr%'])
             ->where(function ($q) {
                 $q->where('sem.current', true)
                   ->orWhereNull('sem.id');
             })
             ->select(
+                'sch.schedule_hemis_id',
                 'sch.employee_id',
                 'sch.subject_id',
                 'sch.subject_name',
@@ -78,13 +95,22 @@ class SendTeacherReminders extends Command
             return 0;
         }
 
-        // 3-QADAM: Davomat va baho tekshirish (hisobot bilan bir xil logika)
+        // 3-QADAM: Davomat va baho tekshirish (yakuniy hisobot bilan bir xil logika)
         $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
         $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
+        $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
 
-        // Davomat: attendance_controls jadvalidan (hisobot bilan bir xil)
-        $attendanceSet = DB::table('attendance_controls')
+        // Davomat (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $attendanceByScheduleId = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->where('load', '>', 0)
+            ->pluck('subject_schedule_id')
+            ->flip();
+
+        // Davomat (2-usul): atribut kalitlari orqali tekshirish (zaxira)
+        $attendanceByKey = DB::table('attendance_controls')
             ->whereNull('deleted_at')
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
@@ -94,14 +120,26 @@ class SendTeacherReminders extends Command
             ->pluck('ck')
             ->flip();
 
-        // Baho: student_grades jadvalidan (hisobot bilan bir xil)
-        $gradeSet = DB::table('student_grades')
-            ->whereIn('employee_id', $employeeIds)
-            ->whereIn('subject_id', $subjectIds)
-            ->whereRaw('DATE(lesson_date) = ?', [$today])
+        // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        $gradeByScheduleId = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
             ->whereNotNull('grade')
             ->where('grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as gk"))
+            ->pluck('subject_schedule_id')
+            ->unique()
+            ->flip();
+
+        // Baho (2-usul): student → group orqali tekshirish (zaxira)
+        $gradeByKey = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
+            ->whereIn('sg.employee_id', $employeeIds)
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereRaw('DATE(sg.lesson_date) = ?', [$today])
+            ->whereNotNull('sg.grade')
+            ->where('sg.grade', '>', 0)
+            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -126,22 +164,26 @@ class SendTeacherReminders extends Command
             foreach ($teacherSchedules as $schedule) {
                 $trainingTypeCode = (int) $schedule->training_type_code;
 
-                // DAVOMAT tekshirish: attendance_controls orqali (hisobot bilan bir xil kalit)
+                // DAVOMAT tekshirish: schedule_hemis_id yoki atribut kaliti orqali
                 $attKey = $schedule->employee_id . '|' . $schedule->group_id . '|' . $schedule->subject_id . '|' . $schedule->lesson_date_str
                         . '|' . $schedule->training_type_code . '|' . $schedule->lesson_pair_code;
 
-                if (!isset($attendanceSet[$attKey])) {
+                $hasAttendance = isset($attendanceByScheduleId[$schedule->schedule_hemis_id])
+                              || isset($attendanceByKey[$attKey]);
+
+                if (!$hasAttendance) {
                     $missingAttendance[] = $schedule;
                 }
 
                 // BAHO tekshirish: faqat amaliyot turlari uchun
-                // Ma'ruza (11), Mustaqil ta'lim (99), Oraliq nazorat (100), Oski (101), Yakuniy test (102)
-                // — bu turlarga baho qo'yilmaydi, shuning uchun tekshirilmaydi
                 if (!in_array($trainingTypeCode, $gradeExcludedTypes)) {
-                    $gradeKey = $schedule->employee_id . '|' . $schedule->subject_id . '|' . $schedule->lesson_date_str
+                    $gradeKey = $schedule->employee_id . '|' . $schedule->group_id . '|' . $schedule->subject_id . '|' . $schedule->lesson_date_str
                               . '|' . $schedule->training_type_code . '|' . $schedule->lesson_pair_code;
 
-                    if (!isset($gradeSet[$gradeKey])) {
+                    $hasGrade = isset($gradeByScheduleId[$schedule->schedule_hemis_id])
+                             || isset($gradeByKey[$gradeKey]);
+
+                    if (!$hasGrade) {
                         $missingGrades[] = $schedule;
                     }
                 }

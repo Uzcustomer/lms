@@ -151,30 +151,6 @@ class AppLocalizations {
   String get attempt => get('attempt');
   String get absent => get('absent');
 
-  // Excuse request getters
-  String get excuseRequests => get('excuse_requests');
-  String get excuseRequestsDesc => get('excuse_requests_desc');
-  String get createRequest => get('create_request');
-  String get noRequests => get('no_requests');
-  String get createRequestHint => get('create_request_hint');
-  String get requestType => get('request_type');
-  String get typeExamTest => get('type_exam_test');
-  String get typeOski => get('type_oski');
-  String get subjectNameLabel => get('subject_name_label');
-  String get subjectNameHint => get('subject_name_hint');
-  String get reasonLabel => get('reason_label');
-  String get reasonHint => get('reason_hint');
-  String get attachFile => get('attach_file');
-  String get selectFile => get('select_file');
-  String get fileFormats => get('file_formats');
-  String get sendRequest => get('send_request');
-  String get requestSentSuccess => get('request_sent_success');
-  String get fieldRequired => get('field_required');
-  String get fileRequired => get('file_required');
-  String get statusPending => get('status_pending');
-  String get statusApproved => get('status_approved');
-  String get statusRejected => get('status_rejected');
-
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
       'app_title': 'Tashmedunitf Lms',
@@ -306,29 +282,6 @@ class AppLocalizations {
       'file': 'Fayl',
       'attempt': 'urinish',
       'absent': 'NB',
-      // Excuse requests
-      'excuse_requests': 'Sababli ariza',
-      'excuse_requests_desc': 'Sababli ariza yaratish va ko\'rish',
-      'create_request': 'Ariza yaratish',
-      'no_requests': 'Arizalar topilmadi',
-      'create_request_hint': 'Yangi ariza yaratish uchun + tugmasini bosing',
-      'request_type': 'Ariza turi',
-      'type_exam_test': 'Yakuniy test',
-      'type_oski': 'OSKI',
-      'subject_name_label': 'Fan nomi',
-      'subject_name_hint': 'Fan nomini kiriting',
-      'reason_label': 'Sabab',
-      'reason_hint': 'Sababni batafsil yozing...',
-      'attach_file': 'Fayl biriktirish',
-      'select_file': 'Faylni tanlang (PDF, DOC, JPG...)',
-      'file_formats': 'PDF, DOC, DOCX, JPG, JPEG, PNG, ZIP (max 10MB)',
-      'send_request': 'Ariza yuborish',
-      'request_sent_success': 'Ariza muvaffaqiyatli yuborildi',
-      'field_required': 'Bu maydonni to\'ldiring',
-      'file_required': 'Fayl yuklang',
-      'status_pending': 'Kutilmoqda',
-      'status_approved': 'Qabul qilingan',
-      'status_rejected': 'Rad etilgan',
     },
     'ru': {
       'app_title': 'Tashmedunitf Lms',
@@ -460,29 +413,6 @@ class AppLocalizations {
       'file': 'Файл',
       'attempt': 'попытка',
       'absent': 'Н',
-      // Excuse requests
-      'excuse_requests': 'Заявление об уважительной причине',
-      'excuse_requests_desc': 'Создание и просмотр заявлений',
-      'create_request': 'Создать заявление',
-      'no_requests': 'Заявления не найдены',
-      'create_request_hint': 'Нажмите + чтобы создать новое заявление',
-      'request_type': 'Тип заявления',
-      'type_exam_test': 'Итоговый тест',
-      'type_oski': 'ОСКИ',
-      'subject_name_label': 'Название предмета',
-      'subject_name_hint': 'Введите название предмета',
-      'reason_label': 'Причина',
-      'reason_hint': 'Опишите причину подробно...',
-      'attach_file': 'Прикрепить файл',
-      'select_file': 'Выберите файл (PDF, DOC, JPG...)',
-      'file_formats': 'PDF, DOC, DOCX, JPG, JPEG, PNG, ZIP (макс 10МБ)',
-      'send_request': 'Отправить заявление',
-      'request_sent_success': 'Заявление успешно отправлено',
-      'field_required': 'Заполните это поле',
-      'file_required': 'Загрузите файл',
-      'status_pending': 'На рассмотрении',
-      'status_approved': 'Одобрено',
-      'status_rejected': 'Отклонено',
     },
     'en': {
       'app_title': 'Tashmedunitf Lms',
@@ -614,29 +544,6 @@ class AppLocalizations {
       'file': 'File',
       'attempt': 'attempt',
       'absent': 'A',
-      // Excuse requests
-      'excuse_requests': 'Excuse Requests',
-      'excuse_requests_desc': 'Create and view excuse requests',
-      'create_request': 'Create Request',
-      'no_requests': 'No requests found',
-      'create_request_hint': 'Tap + to create a new request',
-      'request_type': 'Request Type',
-      'type_exam_test': 'Final Test',
-      'type_oski': 'OSKI',
-      'subject_name_label': 'Subject Name',
-      'subject_name_hint': 'Enter subject name',
-      'reason_label': 'Reason',
-      'reason_hint': 'Describe the reason in detail...',
-      'attach_file': 'Attach File',
-      'select_file': 'Select a file (PDF, DOC, JPG...)',
-      'file_formats': 'PDF, DOC, DOCX, JPG, JPEG, PNG, ZIP (max 10MB)',
-      'send_request': 'Send Request',
-      'request_sent_success': 'Request sent successfully',
-      'field_required': 'This field is required',
-      'file_required': 'Please upload a file',
-      'status_pending': 'Pending',
-      'status_approved': 'Approved',
-      'status_rejected': 'Rejected',
     },
   };
 

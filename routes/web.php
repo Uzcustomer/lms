@@ -31,7 +31,6 @@ use App\Http\Controllers\LessonController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\LectureScheduleController;
 use App\Http\Controllers\Admin\TimetableViewController;
-use App\Http\Controllers\Admin\ExcuseRequestController;
 use App\Http\Controllers\Admin\ImpersonateController;
 use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\Admin\ServerDebugController;
@@ -326,6 +325,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-semesters', [KtrController::class, 'getSemesters'])->name('get-semesters');
             Route::get('/get-subjects', [KtrController::class, 'getSubjects'])->name('get-subjects');
             Route::get('/export', [KtrController::class, 'export'])->name('export');
+            Route::get('/export-word/{curriculumSubjectId}', [KtrController::class, 'exportWord'])->name('export-word');
             Route::get('/plan/{curriculumSubjectId}', [KtrController::class, 'getPlan'])->name('get-plan');
             Route::post('/plan/{curriculumSubjectId}', [KtrController::class, 'savePlan'])->name('save-plan');
             Route::post('/change-request/{curriculumSubjectId}', [KtrController::class, 'requestChange'])->name('request-change');
@@ -372,12 +372,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/top-students', [ReportController::class, 'topStudents'])->name('reports.top-students');
         Route::get('/reports/top-students/data', [ReportController::class, 'topStudentsData'])->name('reports.top-students.data');
-
-        // Sababli arizalar (excuse requests from mobile app)
-        Route::prefix('excuse-requests')->name('excuse-requests.')->group(function () {
-            Route::get('/', [ExcuseRequestController::class, 'index'])->name('index');
-            Route::put('/{id}/status', [ExcuseRequestController::class, 'updateStatus'])->name('update-status');
-        });
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 

@@ -49,7 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:semesters')->weekly();
         $schedule->command('import:specialties-departments')->weekly();
         $schedule->command('students:import')->weekly();
-        $schedule->command('import:schedules')->daily()->withoutOverlapping(120);
+        // import:schedules — nightly:run ichiga ko'chirildi (routes/console.php)
         $schedule->command('import:curriculum-subject-teachers')->dailyAt('22:00');
 
         // Live import — har 30 daqiqada bugungi baholarni yangilaydi (faqat 8:30 — 00:00)

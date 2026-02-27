@@ -74,71 +74,95 @@
                         <div class="flex-1 overflow-y-auto">
                             {{-- Qabul qiluvchi tanlash --}}
                             <div class="border-b border-gray-100 px-4 sm:px-5 py-3">
-                                <div class="flex items-center gap-3 mb-3">
-                                    <label class="text-sm text-gray-500 font-medium w-16 flex-shrink-0">{{ __('notifications.role') }}</label>
+                                {{-- Rol filtr + barchasi tanlash + qidiruv — bir qatorda --}}
+                                <div class="flex items-center gap-2 mb-2">
+                                    <label class="text-sm text-gray-500 font-medium flex-shrink-0">{{ __('notifications.to') }}:</label>
                                     <select x-model="selectedRole" @change="onRoleChange()"
-                                            class="flex-1 border border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-lg text-sm py-1.5 px-3 max-w-xs">
-                                        <option value="">{{ __('notifications.all') }}</option>
+                                            class="border border-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-lg text-xs py-1.5 px-2.5 w-40">
+                                        <option value="">{{ __('notifications.all') }} ({{ __('notifications.role') }})</option>
                                         @foreach($roles as $role)
                                         <option value="{{ $role['value'] }}">{{ $role['label'] }}</option>
                                         @endforeach
                                     </select>
+                                    <div class="relative flex-1">
+                                        <svg class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                        <input type="text" x-model="searchQuery"
+                                               placeholder="{{ __('notifications.search_recipients') }}"
+                                               class="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors">
+                                    </div>
                                     <button type="button" @click="selectAll()"
-                                            class="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                                            class="text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
                                             :class="allFilteredSelected ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'">
                                         <span x-text="allFilteredSelected ? '{{ __('notifications.deselect_all') }}' : '{{ __('notifications.select_all') }}'"></span>
                                     </button>
                                 </div>
 
-                                {{-- Tanlangan qabul qiluvchilar --}}
-                                <div x-show="selectedIds.length > 0" class="flex items-start gap-3 mb-3">
-                                    <label class="text-sm text-gray-500 font-medium w-16 flex-shrink-0 pt-1">{{ __('notifications.to') }}</label>
-                                    <div class="flex-1 flex flex-wrap gap-1">
-                                        <template x-for="id in selectedIds" :key="id">
-                                            <span class="inline-flex items-center gap-1 pl-1 pr-2 py-0.5 bg-blue-50 border border-blue-200/60 text-blue-700 text-xs font-medium rounded-md">
-                                                <span class="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
+                                {{-- Tanlangan qabul qiluvchilar (ixcham ko'rinish) --}}
+                                <div x-show="selectedIds.length > 0" class="mb-2">
+                                    {{-- 5 tagacha chip ko'rsatish, qolganlari "+N ta" --}}
+                                    <div class="flex items-center flex-wrap gap-1">
+                                        <template x-for="id in selectedIds.slice(0, 5)" :key="id">
+                                            <span class="inline-flex items-center gap-0.5 pl-1 pr-1.5 py-0.5 bg-blue-50 border border-blue-200/60 text-blue-700 text-[11px] font-medium rounded-md">
+                                                <span class="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0"
                                                       :class="['bg-blue-500','bg-green-500','bg-purple-500','bg-orange-500','bg-pink-500','bg-teal-500','bg-indigo-500'][id % 7]"
                                                       x-text="getTeacherName(id).charAt(0).toUpperCase()"></span>
-                                                <span x-text="getTeacherName(id)" class="max-w-[120px] truncate"></span>
-                                                <button type="button" @click="removeSelected(id)" class="text-blue-400 hover:text-blue-600 ml-0.5">
-                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                                <span x-text="getTeacherName(id)" class="max-w-[100px] truncate"></span>
+                                                <button type="button" @click="removeSelected(id)" class="text-blue-400 hover:text-blue-600">
+                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                                </button>
+                                            </span>
+                                        </template>
+                                        <span x-show="selectedIds.length > 5"
+                                              @click="showAllSelected = !showAllSelected"
+                                              class="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-600 text-[11px] font-medium rounded-md cursor-pointer hover:bg-gray-200 transition-colors">
+                                            +<span x-text="selectedIds.length - 5"></span> ta
+                                            <svg class="w-3 h-3 ml-0.5 transition-transform" :class="showAllSelected ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                        </span>
+                                        <button type="button" x-show="selectedIds.length > 1" @click="selectedIds = []"
+                                                class="text-[11px] text-red-400 hover:text-red-600 ml-1">{{ __('notifications.deselect_all') }}</button>
+                                    </div>
+                                    {{-- Kengaytirilgan ro'yxat --}}
+                                    <div x-show="showAllSelected && selectedIds.length > 5" x-collapse
+                                         class="flex items-center flex-wrap gap-1 mt-1 max-h-20 overflow-y-auto">
+                                        <template x-for="id in selectedIds.slice(5)" :key="'extra_' + id">
+                                            <span class="inline-flex items-center gap-0.5 pl-1 pr-1.5 py-0.5 bg-blue-50 border border-blue-200/60 text-blue-700 text-[11px] font-medium rounded-md">
+                                                <span class="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0"
+                                                      :class="['bg-blue-500','bg-green-500','bg-purple-500','bg-orange-500','bg-pink-500','bg-teal-500','bg-indigo-500'][id % 7]"
+                                                      x-text="getTeacherName(id).charAt(0).toUpperCase()"></span>
+                                                <span x-text="getTeacherName(id)" class="max-w-[100px] truncate"></span>
+                                                <button type="button" @click="removeSelected(id)" class="text-blue-400 hover:text-blue-600">
+                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                                 </button>
                                             </span>
                                         </template>
                                     </div>
                                 </div>
 
-                                {{-- Qidirish va ro'yxat --}}
-                                <div class="flex items-start gap-3">
-                                    <span class="text-sm text-gray-500 font-medium w-16 flex-shrink-0 pt-2">{{ __('notifications.recipient') }}</span>
-                                    <div class="flex-1">
-                                        <div class="relative mb-1.5">
-                                            <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                            <input type="text" x-model="searchQuery"
-                                                   placeholder="{{ __('notifications.search_recipients') }}"
-                                                   class="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-colors">
-                                        </div>
-                                        <div class="border border-gray-200 rounded-lg overflow-hidden max-h-44 overflow-y-auto bg-white">
-                                            <template x-for="teacher in filteredTeachers" :key="teacher.id">
-                                                <label class="flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors border-b border-gray-50 last:border-0"
-                                                       :class="isSelected(teacher.id) ? 'bg-blue-50/50' : 'hover:bg-gray-50'">
-                                                    <input type="checkbox" :value="teacher.id" @change="toggle(teacher.id)"
-                                                           :checked="isSelected(teacher.id)"
-                                                           class="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                                                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                                                         :class="['bg-blue-500','bg-green-500','bg-purple-500','bg-orange-500','bg-pink-500','bg-teal-500','bg-indigo-500'][teacher.id % 7]">
-                                                        <span x-text="teacher.name.charAt(0).toUpperCase()"></span>
-                                                    </div>
-                                                    <div class="flex-1 min-w-0">
-                                                        <div class="text-sm text-gray-800 truncate" x-text="teacher.name"></div>
-                                                        <div class="text-[11px] text-gray-400 truncate" x-text="teacher.position || teacher.roles.join(', ') || ''"></div>
-                                                    </div>
-                                                </label>
-                                            </template>
-                                            <div x-show="filteredTeachers.length === 0" class="px-4 py-4 text-center text-sm text-gray-400">
-                                                {{ __('notifications.no_messages') }}
-                                            </div>
-                                        </div>
+                                {{-- Xodimlar ro'yxati (ixcham, scroll bilan) --}}
+                                <div class="border border-gray-200 rounded-lg overflow-hidden">
+                                    <div class="max-h-48 overflow-y-auto divide-y divide-gray-50">
+                                        <template x-for="teacher in filteredTeachers" :key="teacher.id">
+                                            <label class="flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors"
+                                                   :class="isSelected(teacher.id) ? 'bg-blue-50/60' : 'hover:bg-gray-50'">
+                                                <input type="checkbox" :value="teacher.id" @change="toggle(teacher.id)"
+                                                       :checked="isSelected(teacher.id)"
+                                                       class="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0">
+                                                <div class="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
+                                                     :class="['bg-blue-500','bg-green-500','bg-purple-500','bg-orange-500','bg-pink-500','bg-teal-500','bg-indigo-500'][teacher.id % 7]">
+                                                    <span x-text="teacher.name.charAt(0).toUpperCase()"></span>
+                                                </div>
+                                                <span class="text-sm text-gray-800 truncate flex-1" x-text="teacher.name"></span>
+                                                <span class="text-[10px] text-gray-400 truncate max-w-[140px] flex-shrink-0" x-text="teacher.position || teacher.roles.join(', ') || ''"></span>
+                                            </label>
+                                        </template>
+                                    </div>
+                                    <div x-show="filteredTeachers.length === 0" class="px-4 py-3 text-center text-xs text-gray-400">
+                                        {{ __('notifications.no_messages') }}
+                                    </div>
+                                    {{-- Ro'yxat sonini ko'rsatish --}}
+                                    <div class="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-400">
+                                        <span x-text="filteredTeachers.length + ' ta xodim'"></span>
+                                        <span x-show="selectedIds.length > 0" class="text-blue-600 font-medium" x-text="selectedIds.length + ' ta tanlandi'"></span>
                                     </div>
                                 </div>
                             </div>
@@ -196,6 +220,7 @@
                 selectedRole: '',
                 searchQuery: '',
                 selectedIds: [],
+                showAllSelected: false,
 
                 get filteredTeachers() {
                     var role = this.selectedRole;

@@ -139,6 +139,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'reject'])->name('reject');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'download'])->name('download');
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
+            Route::delete('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'destroy'])->name('destroy');
         });
 
         // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)

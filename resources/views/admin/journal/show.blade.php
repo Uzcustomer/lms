@@ -802,10 +802,11 @@
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Nazad tugma -->
             <div class="mb-2">
-                <a href="javascript:void(0)" onclick="window.history.back()" style="display: inline-flex; align-items: center; gap: 6px; color: #1e40af; font-size: 14px; font-weight: 500; text-decoration: none;">
+                <a href="javascript:void(0)" onclick="goBack()" style="display: inline-flex; align-items: center; gap: 6px; color: #1e40af; font-size: 14px; font-weight: 500; text-decoration: none;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                     Jurnal
                 </a>
+                <script>function goBack(){var r=new URLSearchParams(window.location.search).get('ref');if(r){window.location.href=r;}else{window.history.back();}}</script>
             </div>
             <!-- Full-width Tabs with View Toggle -->
             <div class="mb-4">

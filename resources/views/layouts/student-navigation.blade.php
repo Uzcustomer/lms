@@ -6,7 +6,7 @@
                 <!-- Logo -->
                 <div class="shrink-0 flex items-center">
                     <a href="{{ route('student.dashboard') }}">
-                        <x-application-logo class="block h-9 w-auto fill-current text-gray-800 dark:text-gray-200" />
+                        <x-application-logo class="block h-11 sm:h-9 w-auto fill-current text-gray-800 dark:text-gray-200" />
                     </a>
                 </div>
 
@@ -79,12 +79,10 @@
                 </x-dropdown>
             </div>
 
-            <!-- Mobile Top Header: Profile icon (right side) -->
+            <!-- Mobile Top Header: Student avatar (right side) -->
             <div class="flex items-center sm:hidden">
-                <a href="{{ route('student.profile') }}" class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                    </svg>
+                <a href="{{ route('student.profile') }}">
+                    <img src="{{ Auth::guard('student')->user()->image ?? asset('images/default-avatar.png') }}" alt="{{ Auth::guard('student')->user()->full_name }}" class="w-9 h-9 rounded-full object-cover border-2 border-indigo-200 dark:border-indigo-700">
                 </a>
             </div>
         </div>

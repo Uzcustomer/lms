@@ -544,6 +544,8 @@ class KtrController extends Controller
                             'responded_at' => $a->responded_at?->format('d.m.Y H:i'),
                         ]),
                         'is_approved' => $cr->isFullyApproved(),
+                        'draft_week_count' => $cr->draft_week_count,
+                        'draft_plan_data' => $cr->draft_plan_data,
                     ];
                 }
             }
@@ -639,6 +641,7 @@ class KtrController extends Controller
 
     /**
      * Fan uchun KTR rejasini saqlash
+     * Mavjud reja bo'lsa - draft sifatida saqlanadi va tasdiqlash so'rovi yuboriladi
      */
     public function savePlan(Request $request, $curriculumSubjectId)
     {
@@ -651,30 +654,11 @@ class KtrController extends Controller
             ], 403);
         }
 
-        // Mavjud reja bo'lsa, o'zgartirish uchun tasdiqlangan so'rov kerak (adminlar bundan mustasno)
         $user = auth()->user();
         $isAdmin = $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
         $existingPlan = Schema::hasTable('ktr_plans')
-            ? KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->exists()
-            : false;
-
-        if ($existingPlan && !$isAdmin && Schema::hasTable('ktr_change_requests')) {
-            $approvedRequest = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
-                ->where('requested_by', $user->id)
-                ->where('status', 'pending')
-                ->latest()
-                ->first();
-
-            if (!$approvedRequest || !$approvedRequest->isFullyApproved()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'KTR o\'zgartirish uchun barcha tasdiqlar olinmagan.',
-                ], 403);
-            }
-
-            // Tasdiqlangan so'rovni yakunlash
-            $approvedRequest->update(['status' => 'approved']);
-        }
+            ? KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first()
+            : null;
 
         $request->validate([
             'week_count' => 'required|integer|min:1|max:18',
@@ -728,6 +712,76 @@ class KtrController extends Controller
             });
         }
 
+        // Mavjud reja bo'lsa va admin bo'lmasa - DRAFT sifatida saqlash
+        if ($existingPlan && !$isAdmin && Schema::hasTable('ktr_change_requests')) {
+            // Allaqachon pending so'rov bormi?
+            $existingRequest = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
+                ->where('status', 'pending')
+                ->first();
+
+            if ($existingRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Allaqachon tasdiqlash kutilayotgan so\'rov mavjud.',
+                ], 422);
+            }
+
+            // Approver ma'lumotlarini olish
+            $approverInfo = $this->getApproverInfo($cs);
+
+            // Change request yaratish (draft bilan)
+            $cr = KtrChangeRequest::create([
+                'curriculum_subject_id' => $curriculumSubjectId,
+                'requested_by' => $user->id,
+                'requested_by_guard' => $user instanceof Teacher ? 'teacher' : 'web',
+                'draft_week_count' => $request->week_count,
+                'draft_plan_data' => $request->plan_data,
+            ]);
+
+            // Tasdiqlash yozuvlarini yaratish
+            foreach (['kafedra_mudiri' => $approverInfo['kafedra_mudiri'] ?? [], 'dekan' => $approverInfo['dekan'] ?? []] as $role => $data) {
+                KtrChangeApproval::create([
+                    'change_request_id' => $cr->id,
+                    'role' => $role,
+                    'approver_name' => $data['name'] ?? 'Topilmadi',
+                    'approver_id' => $data['id'] ?? null,
+                ]);
+            }
+
+            KtrChangeApproval::create([
+                'change_request_id' => $cr->id,
+                'role' => 'registrator_ofisi',
+                'approver_name' => 'Registrator ofisi xodimlari',
+                'approver_id' => null,
+            ]);
+
+            $cr->load('approvals');
+
+            // Xabarnoma yuborish (o'zgarishlar bilan)
+            $this->sendApproverNotifications($cr, $cs, $user, $approverInfo);
+
+            return response()->json([
+                'success' => true,
+                'is_draft' => true,
+                'message' => 'O\'zgarishlar draft sifatida saqlandi. Tasdiqlash so\'rovi jo\'natildi!',
+                'change_request' => [
+                    'id' => $cr->id,
+                    'status' => $cr->status,
+                    'approvals' => $cr->approvals->map(fn ($a) => [
+                        'id' => $a->id,
+                        'role' => $a->role,
+                        'approver_name' => $a->approver_name,
+                        'status' => $a->status,
+                        'responded_at' => null,
+                    ]),
+                    'is_approved' => false,
+                    'draft_week_count' => $cr->draft_week_count,
+                    'draft_plan_data' => $cr->draft_plan_data,
+                ],
+            ]);
+        }
+
+        // Yangi reja yoki admin - to'g'ridan-to'g'ri saqlash
         KtrPlan::updateOrCreate(
             ['curriculum_subject_id' => $curriculumSubjectId],
             [
@@ -1079,6 +1133,12 @@ class KtrController extends Controller
             }
             $detailLine = implode(' | ', $detailParts);
 
+            // O'zgarishlar diffini hisoblash
+            $changeSummary = '';
+            if ($cr->draft_plan_data) {
+                $changeSummary = $this->buildChangeSummary($cs, $cr);
+            }
+
             $hasTeacherNotifications = Schema::hasTable('teacher_notifications');
 
             // Bitta xodimga bitta xabarnoma (duplikatdan saqlash)
@@ -1095,13 +1155,18 @@ class KtrController extends Controller
                             continue;
                         }
 
+                        $bodyText = "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n{$detailLine}\nSiz {$roleName} sifatida tasdiqlashingiz kerak.";
+                        if ($changeSummary) {
+                            $bodyText .= "\n\nO'zgarishlar:\n{$changeSummary}";
+                        }
+
                         $notification = Notification::create([
                             'sender_id' => $senderId,
                             'sender_type' => $senderType,
                             'recipient_id' => $registrator['id'],
                             'recipient_type' => Teacher::class,
                             'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                            'body' => "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n{$detailLine}\nSiz {$roleName} sifatida tasdiqlashingiz kerak.",
+                            'body' => $bodyText,
                             'type' => Notification::TYPE_ALERT,
                             'data' => [
                                 'action' => 'ktr_change_approval',
@@ -1121,7 +1186,7 @@ class KtrController extends Controller
                                 'teacher_id' => $registrator['id'],
                                 'type' => 'ktr_approval',
                                 'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                                'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. {$detailLine}",
+                                'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. {$detailLine}" . ($changeSummary ? "\n{$changeSummary}" : ''),
                                 'link' => route('admin.notifications.show', $notification->id),
                                 'data' => [
                                     'action' => 'ktr_change_approval',
@@ -1139,13 +1204,18 @@ class KtrController extends Controller
                         continue;
                     }
 
+                    $bodyText2 = "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n{$detailLine}\nSiz {$roleName} sifatida tasdiqlashingiz kerak.";
+                    if ($changeSummary) {
+                        $bodyText2 .= "\n\nO'zgarishlar:\n{$changeSummary}";
+                    }
+
                     $notification = Notification::create([
                         'sender_id' => $senderId,
                         'sender_type' => $senderType,
                         'recipient_id' => $approval->approver_id,
                         'recipient_type' => Teacher::class,
                         'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                        'body' => "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n{$detailLine}\nSiz {$roleName} sifatida tasdiqlashingiz kerak.",
+                        'body' => $bodyText2,
                         'type' => Notification::TYPE_ALERT,
                         'data' => [
                             'action' => 'ktr_change_approval',
@@ -1165,7 +1235,7 @@ class KtrController extends Controller
                             'teacher_id' => $approval->approver_id,
                             'type' => 'ktr_approval',
                             'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                            'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. {$detailLine} Siz {$roleName} sifatida tasdiqlashingiz kerak.",
+                            'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. {$detailLine}" . ($changeSummary ? "\n{$changeSummary}" : ''),
                             'link' => route('admin.notifications.show', $notification->id),
                             'data' => [
                                 'action' => 'ktr_change_approval',
@@ -1184,8 +1254,78 @@ class KtrController extends Controller
     }
 
     /**
-     * KTR o'zgartirish so'rovini tasdiqlash/rad etish
+     * Eski va yangi KTR o'rtasidagi farqlarni hisoblash
      */
+    private function buildChangeSummary(CurriculumSubject $cs, KtrChangeRequest $cr): string
+    {
+        $existingPlan = KtrPlan::where('curriculum_subject_id', $cs->id)->first();
+        if (!$existingPlan) {
+            return '';
+        }
+
+        $oldData = $existingPlan->plan_data;
+        $newData = $cr->draft_plan_data;
+        if (!$oldData || !$newData) {
+            return '';
+        }
+
+        $oldHours = $oldData['hours'] ?? $oldData;
+        $newHours = $newData['hours'] ?? $newData;
+
+        // Training type nomlarini olish
+        $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+        $typeNames = [];
+        if (is_array($details)) {
+            foreach ($details as $detail) {
+                $code = (string) ($detail['trainingType']['code'] ?? '');
+                $name = $detail['trainingType']['name'] ?? $code;
+                if ($code) {
+                    $typeNames[$code] = $name;
+                }
+            }
+        }
+
+        $changes = [];
+
+        // Hafta soni o'zgargan bo'lsa
+        if ($existingPlan->week_count != $cr->draft_week_count) {
+            $changes[] = "Hafta soni: {$existingPlan->week_count} → {$cr->draft_week_count}";
+        }
+
+        // Har bir hafta va tur bo'yicha soatlar farqini tekshirish
+        $allWeeks = array_unique(array_merge(array_keys($oldHours), array_keys($newHours)));
+        sort($allWeeks, SORT_NUMERIC);
+
+        foreach ($allWeeks as $week) {
+            $oldWeek = $oldHours[$week] ?? [];
+            $newWeek = $newHours[$week] ?? [];
+            $allCodes = array_unique(array_merge(array_keys($oldWeek), array_keys($newWeek)));
+
+            foreach ($allCodes as $code) {
+                $oldVal = (int) ($oldWeek[$code] ?? 0);
+                $newVal = (int) ($newWeek[$code] ?? 0);
+                if ($oldVal !== $newVal) {
+                    $typeName = $typeNames[$code] ?? $code;
+                    $changes[] = "{$week}-hafta {$typeName}: {$oldVal} → {$newVal} soat";
+                }
+            }
+        }
+
+        if (empty($changes)) {
+            return 'O\'zgarish yo\'q';
+        }
+
+        // Maksimum 10 ta o'zgarishni ko'rsatish
+        if (count($changes) > 10) {
+            $shown = array_slice($changes, 0, 10);
+            $remaining = count($changes) - 10;
+            $shown[] = "... va yana {$remaining} ta o'zgarish";
+            return implode("\n", $shown);
+        }
+
+        return implode("\n", $changes);
+    }
+
     /**
      * KTR rejasini Word formatida eksport qilish
      */
@@ -1511,6 +1651,34 @@ class KtrController extends Controller
         // Barcha approval holatini qaytarish (jadval yangilanishi uchun)
         $cr->load('approvals');
 
+        $isFullyApproved = $cr->isFullyApproved();
+
+        // Agar barcha tasdiqlar olingan bo'lsa va draft mavjud bo'lsa - KTR ni yangilash
+        if ($isFullyApproved && $cr->draft_plan_data) {
+            if (!Schema::hasTable('ktr_plans')) {
+                Schema::create('ktr_plans', function (\Illuminate\Database\Schema\Blueprint $table) {
+                    $table->id();
+                    $table->unsignedBigInteger('curriculum_subject_id');
+                    $table->unsignedSmallInteger('week_count');
+                    $table->json('plan_data');
+                    $table->unsignedBigInteger('created_by')->nullable();
+                    $table->timestamps();
+                    $table->unique('curriculum_subject_id');
+                });
+            }
+
+            KtrPlan::updateOrCreate(
+                ['curriculum_subject_id' => $cr->curriculum_subject_id],
+                [
+                    'week_count' => $cr->draft_week_count,
+                    'plan_data' => $cr->draft_plan_data,
+                    'created_by' => $cr->requested_by,
+                ]
+            );
+
+            $cr->update(['status' => 'approved']);
+        }
+
         return response()->json([
             'success' => true,
             'message' => $status === 'approved' ? 'Tasdiqlandi!' : 'Rad etildi.',
@@ -1521,7 +1689,8 @@ class KtrController extends Controller
                 'status' => $a->status,
                 'responded_at' => $a->responded_at?->format('d.m.Y H:i'),
             ]),
-            'is_approved' => $cr->isFullyApproved(),
+            'is_approved' => $isFullyApproved,
+            'ktr_applied' => $isFullyApproved && $cr->draft_plan_data ? true : false,
         ]);
     }
 }

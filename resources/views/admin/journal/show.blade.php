@@ -1530,14 +1530,22 @@
                                 </div>
                             @elseif($canSubmitYn ?? false)
                                 <div class="flex items-center space-x-3">
-                                    <div>
-                                        <label for="yn-exam-date" class="block text-xs font-medium text-gray-600 mb-1">YN o'tkazish sanasi</label>
-                                        <input type="date" id="yn-exam-date"
-                                            class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                            min="{{ now()->format('Y-m-d') }}" required>
-                                    </div>
+                                    @if(isset($examSchedule) && $examSchedule)
+                                        <div class="text-sm text-gray-600 mr-2">
+                                            @if($examSchedule->oski_date)
+                                                <span>OSKI: <strong>{{ $examSchedule->oski_date->format('d.m.Y') }}</strong></span>
+                                            @elseif($examSchedule->oski_na)
+                                                <span>OSKI: <strong class="text-gray-400">n/a</strong></span>
+                                            @endif
+                                            @if($examSchedule->test_date)
+                                                <span class="ml-2">Test: <strong>{{ $examSchedule->test_date->format('d.m.Y') }}</strong></span>
+                                            @elseif($examSchedule->test_na)
+                                                <span class="ml-2">Test: <strong class="text-gray-400">n/a</strong></span>
+                                            @endif
+                                        </div>
+                                    @endif
                                     <button type="button" id="btn-submit-yn"
-                                        class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm mt-4"
+                                        class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
                                         onclick="submitToYn()">
                                         YN ga yuborish
                                     </button>
@@ -1551,41 +1559,61 @@
                 {{-- YN natijalari paneli — YN yuborilgandan keyin ko'rinadi --}}
                 @if(isset($ynSubmission) && $ynSubmission)
                 @php
-                    $examDate = $ynSubmission->exam_date;
-                    $examDatePassed = $examDate && $examDate->isPast();
                     $resultsFetched = $ynSubmission->results_fetched;
+                    $es = $examSchedule ?? null;
+                    $oskiDatePassed = $es && $es->oski_date && $es->oski_date->isPast();
+                    $testDatePassed = $es && $es->test_date && $es->test_date->isPast();
+                    $anyDatePassed = $oskiDatePassed || $testDatePassed;
                 @endphp
-                <div class="mt-4 p-4 {{ $resultsFetched ? 'bg-green-50 border-green-200' : ($examDatePassed ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200') }} border rounded-lg">
+                <div class="mt-4 p-4 {{ $resultsFetched ? 'bg-green-50 border-green-200' : ($anyDatePassed ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200') }} border rounded-lg">
                     <div class="flex items-center justify-between flex-wrap gap-3">
                         <div>
-                            <h4 class="font-semibold {{ $resultsFetched ? 'text-green-800' : ($examDatePassed ? 'text-indigo-800' : 'text-gray-800') }} flex items-center">
+                            <h4 class="font-semibold {{ $resultsFetched ? 'text-green-800' : ($anyDatePassed ? 'text-indigo-800' : 'text-gray-800') }} flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" /></svg>
                                 OSKI va Test natijalari
                             </h4>
-                            @if($examDate)
-                                <p class="text-sm mt-1 {{ $examDatePassed ? 'text-indigo-700' : 'text-gray-600' }}">
-                                    YN o'tkazish sanasi: <span class="font-semibold">{{ $examDate->format('d.m.Y') }}</span>
-                                    @if($examDatePassed)
-                                        <span class="ml-2 text-green-600 font-semibold">(O'tgan)</span>
-                                    @else
-                                        <span class="ml-2 text-yellow-600 font-semibold">({{ $examDate->diffForHumans() }})</span>
+                            @if($es)
+                                <div class="text-sm mt-1 flex flex-wrap gap-x-4">
+                                    @if($es->oski_date)
+                                        <span class="{{ $oskiDatePassed ? 'text-indigo-700' : 'text-gray-600' }}">
+                                            OSKI: <span class="font-semibold">{{ $es->oski_date->format('d.m.Y') }}</span>
+                                            @if($oskiDatePassed)
+                                                <span class="text-green-600 font-semibold">(O'tgan)</span>
+                                            @else
+                                                <span class="text-yellow-600 font-semibold">({{ $es->oski_date->diffForHumans() }})</span>
+                                            @endif
+                                        </span>
+                                    @elseif($es->oski_na)
+                                        <span class="text-gray-400">OSKI: n/a</span>
                                     @endif
-                                </p>
+                                    @if($es->test_date)
+                                        <span class="{{ $testDatePassed ? 'text-indigo-700' : 'text-gray-600' }}">
+                                            Test: <span class="font-semibold">{{ $es->test_date->format('d.m.Y') }}</span>
+                                            @if($testDatePassed)
+                                                <span class="text-green-600 font-semibold">(O'tgan)</span>
+                                            @else
+                                                <span class="text-yellow-600 font-semibold">({{ $es->test_date->diffForHumans() }})</span>
+                                            @endif
+                                        </span>
+                                    @elseif($es->test_na)
+                                        <span class="text-gray-400">Test: n/a</span>
+                                    @endif
+                                </div>
                             @else
-                                <p class="text-sm text-gray-500 mt-1">YN o'tkazish sanasi belgilanmagan</p>
+                                <p class="text-sm text-gray-500 mt-1">OSKI/Test sanalari belgilanmagan</p>
                             @endif
                             @if($resultsFetched)
                                 <p class="text-sm text-green-700 mt-1 font-medium">OSKI va Test natijalari muvaffaqiyatli yuklangan</p>
                             @endif
                         </div>
                         <div class="flex items-center space-x-3">
-                            @if($examDatePassed && !$resultsFetched)
+                            @if($anyDatePassed && !$resultsFetched)
                                 <button type="button" id="btn-fetch-yn-results"
                                     class="px-5 py-2.5 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm text-sm"
                                     onclick="fetchYnResults()">
                                     Natijalarni tortish
                                 </button>
-                            @elseif($examDatePassed && $resultsFetched)
+                            @elseif($anyDatePassed && $resultsFetched)
                                 <button type="button" id="btn-fetch-yn-results-refresh"
                                     class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm"
                                     onclick="fetchYnResults()">
@@ -3773,21 +3801,6 @@
 
         // YN ga yuborish funksiyasi
         function submitToYn() {
-            // Exam date tekshirish
-            const examDateInput = document.getElementById('yn-exam-date');
-            if (!examDateInput || !examDateInput.value) {
-                alert('Iltimos, YN o\'tkazish sanasini kiriting.');
-                if (examDateInput) examDateInput.focus();
-                return;
-            }
-
-            const examDate = examDateInput.value;
-            const today = new Date().toISOString().split('T')[0];
-            if (examDate < today) {
-                alert('YN o\'tkazish sanasi bugungi sanadan oldin bo\'lishi mumkin emas.');
-                return;
-            }
-
             // 1-bosqich: Ogohlantirish
             const warn = confirm(
                 'DIQQAT!\n\n' +
@@ -3796,7 +3809,6 @@
                 '2. Barcha talabalarning MT (mustaqil ta\'lim) baholari qulflanadi\n' +
                 '3. Talabalar MT uchun fayl yuklashi taqiqlanadi\n' +
                 '4. Retake (qayta topshirish) baholari qulflanadi\n\n' +
-                'YN o\'tkazish sanasi: ' + examDate + '\n\n' +
                 'Bu amalni bekor qilib bo\'lmaydi!\n\n' +
                 'Davom etasizmi?'
             );
@@ -3827,7 +3839,6 @@
                     subject_id: '{{ $subjectId }}',
                     semester_code: '{{ $semesterCode }}',
                     group_hemis_id: '{{ $group->group_hemis_id }}',
-                    exam_date: examDate,
                 })
             })
             .then(r => r.json().then(data => ({ok: r.ok, data})))
@@ -4099,8 +4110,14 @@
             }, 3000);
         }
 
-        // Sahifa yuklanganda — agar YN o'tkazish sanasi o'tgan va natijalar tortilmagan bo'lsa, avtomatik tortish
-        @if(isset($ynSubmission) && $ynSubmission && $ynSubmission->exam_date && $ynSubmission->exam_date->isPast() && !$ynSubmission->results_fetched)
+        // Sahifa yuklanganda — agar OSKI/Test sanasi o'tgan va natijalar tortilmagan bo'lsa, avtomatik tortish
+        @php
+            $autoFetchEs = $examSchedule ?? null;
+            $autoFetchOskiPassed = $autoFetchEs && $autoFetchEs->oski_date && $autoFetchEs->oski_date->isPast();
+            $autoFetchTestPassed = $autoFetchEs && $autoFetchEs->test_date && $autoFetchEs->test_date->isPast();
+            $autoFetchAnyPassed = $autoFetchOskiPassed || $autoFetchTestPassed;
+        @endphp
+        @if(isset($ynSubmission) && $ynSubmission && $autoFetchAnyPassed && !$ynSubmission->results_fetched)
         document.addEventListener('DOMContentLoaded', function() {
             // Avtomatik natijalarni tortish
             fetchYnResults();

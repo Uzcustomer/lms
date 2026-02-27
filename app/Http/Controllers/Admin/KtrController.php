@@ -11,6 +11,8 @@ use App\Models\KtrChangeApproval;
 use App\Models\KtrChangeRequest;
 use App\Models\KtrPlan;
 use App\Models\Teacher;
+use App\Models\Notification;
+use App\Models\TeacherNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -455,10 +457,15 @@ class KtrController extends Controller
 
         // O'qituvchi/fan mas'uli - faqat o'z fanlari uchun
         if ($user instanceof Teacher && $user->hemis_id) {
-            return CurriculumSubjectTeacher::where('employee_id', $user->hemis_id)
-                ->where('subject_id', $cs->subject_id)
-                ->where('active', true)
-                ->exists();
+            try {
+                return CurriculumSubjectTeacher::where('employee_id', $user->hemis_id)
+                    ->where('subject_id', $cs->subject_id)
+                    ->where('active', true)
+                    ->exists();
+            } catch (\Exception $e) {
+                Log::warning('canEditSubjectKtr: curriculum_subject_teachers query failed', ['error' => $e->getMessage()]);
+                return false;
+            }
         }
 
         // Registrator ofisi va boshqa rollar - faqat ko'rish
@@ -470,90 +477,103 @@ class KtrController extends Controller
      */
     public function getPlan($curriculumSubjectId)
     {
-        $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
+        try {
+            $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
 
-        // Mashg'ulot turlarini subject_details dan olish
-        $trainingTypes = [];
-        $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
-        if (is_array($details)) {
-            foreach ($details as $detail) {
-                $code = (string) ($detail['trainingType']['code'] ?? '');
-                $name = $detail['trainingType']['name'] ?? '';
-                $hours = (int) ($detail['academic_load'] ?? 0);
-                if ($code !== '' && $name !== '') {
-                    $trainingTypes[$code] = [
-                        'name' => $name,
-                        'hours' => $hours,
+            // Mashg'ulot turlarini subject_details dan olish
+            $trainingTypes = [];
+            $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+            if (is_array($details)) {
+                foreach ($details as $detail) {
+                    $code = (string) ($detail['trainingType']['code'] ?? '');
+                    $name = $detail['trainingType']['name'] ?? '';
+                    $hours = (int) ($detail['academic_load'] ?? 0);
+                    if ($code !== '' && $name !== '') {
+                        $trainingTypes[$code] = [
+                            'name' => $name,
+                            'hours' => $hours,
+                        ];
+                    }
+                }
+            }
+
+            // Belgilangan tartibda saralash
+            $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar', 'mustaqil'];
+            $normalize = function ($str) {
+                return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower($str));
+            };
+            if (count($trainingTypes) > 1) {
+                uksort($trainingTypes, function ($a, $b) use ($trainingTypes, $typeOrder, $normalize) {
+                    $nameA = $normalize($trainingTypes[$a]['name']);
+                    $nameB = $normalize($trainingTypes[$b]['name']);
+                    $posA = count($typeOrder);
+                    $posB = count($typeOrder);
+                    foreach ($typeOrder as $i => $keyword) {
+                        if ($posA === count($typeOrder) && str_contains($nameA, $keyword)) $posA = $i;
+                        if ($posB === count($typeOrder) && str_contains($nameB, $keyword)) $posB = $i;
+                    }
+                    return $posA <=> $posB;
+                });
+            }
+
+            $plan = null;
+            if (Schema::hasTable('ktr_plans')) {
+                $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
+            }
+
+            // HEMIS dan mavzularni olish
+            $hemisTopics = $this->fetchHemisTopics($cs);
+
+            // O'zgartirish so'rovi holati
+            $changeRequest = null;
+            if ($plan && Schema::hasTable('ktr_change_requests') && Schema::hasTable('ktr_change_approvals')) {
+                $cr = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
+                    ->where('status', 'pending')
+                    ->latest()
+                    ->with('approvals')
+                    ->first();
+                if ($cr) {
+                    $changeRequest = [
+                        'id' => $cr->id,
+                        'status' => $cr->status,
+                        'approvals' => $cr->approvals->map(fn ($a) => [
+                            'id' => $a->id,
+                            'role' => $a->role,
+                            'approver_name' => $a->approver_name,
+                            'status' => $a->status,
+                            'responded_at' => $a->responded_at?->format('d.m.Y H:i'),
+                        ]),
+                        'is_approved' => $cr->isFullyApproved(),
                     ];
                 }
             }
+
+            // Kafedra va fakultet ma'lumotlari
+            $approverInfo = $this->getApproverInfo($cs);
+
+            return response()->json([
+                'subject_name' => $cs->subject_name,
+                'total_acload' => (int) $cs->total_acload,
+                'training_types' => $trainingTypes,
+                'hemis_topics' => $hemisTopics,
+                'can_edit' => $this->canEditSubjectKtr($cs),
+                'approver_info' => $approverInfo,
+                'change_request' => $changeRequest,
+                'plan' => $plan ? [
+                    'week_count' => $plan->week_count,
+                    'plan_data' => $plan->plan_data,
+                ] : null,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('KTR getPlan xatolik', [
+                'curriculum_subject_id' => $curriculumSubjectId,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ]);
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 500);
         }
-
-        // Belgilangan tartibda saralash
-        $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar', 'mustaqil'];
-        $normalize = function ($str) {
-            return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower($str));
-        };
-        uksort($trainingTypes, function ($a, $b) use ($trainingTypes, $typeOrder, $normalize) {
-            $nameA = $normalize($trainingTypes[$a]['name']);
-            $nameB = $normalize($trainingTypes[$b]['name']);
-            $posA = count($typeOrder);
-            $posB = count($typeOrder);
-            foreach ($typeOrder as $i => $keyword) {
-                if ($posA === count($typeOrder) && str_contains($nameA, $keyword)) $posA = $i;
-                if ($posB === count($typeOrder) && str_contains($nameB, $keyword)) $posB = $i;
-            }
-            return $posA <=> $posB;
-        });
-
-        $plan = null;
-        if (Schema::hasTable('ktr_plans')) {
-            $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
-        }
-
-        // HEMIS dan mavzularni olish
-        $hemisTopics = $this->fetchHemisTopics($cs);
-
-        // O'zgartirish so'rovi holati
-        $changeRequest = null;
-        if ($plan && Schema::hasTable('ktr_change_requests')) {
-            $cr = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
-                ->where('status', 'pending')
-                ->latest()
-                ->with('approvals')
-                ->first();
-            if ($cr) {
-                $changeRequest = [
-                    'id' => $cr->id,
-                    'status' => $cr->status,
-                    'approvals' => $cr->approvals->map(fn ($a) => [
-                        'id' => $a->id,
-                        'role' => $a->role,
-                        'approver_name' => $a->approver_name,
-                        'status' => $a->status,
-                        'responded_at' => $a->responded_at?->format('d.m.Y H:i'),
-                    ]),
-                    'is_approved' => $cr->isFullyApproved(),
-                ];
-            }
-        }
-
-        // Kafedra va fakultet ma'lumotlari
-        $approverInfo = $this->getApproverInfo($cs);
-
-        return response()->json([
-            'subject_name' => $cs->subject_name,
-            'total_acload' => (int) $cs->total_acload,
-            'training_types' => $trainingTypes,
-            'hemis_topics' => $hemisTopics,
-            'can_edit' => $this->canEditSubjectKtr($cs),
-            'approver_info' => $approverInfo,
-            'change_request' => $changeRequest,
-            'plan' => $plan ? [
-                'week_count' => $plan->week_count,
-                'plan_data' => $plan->plan_data,
-            ] : null,
-        ]);
     }
 
     /**
@@ -724,6 +744,67 @@ class KtrController extends Controller
     }
 
     /**
+     * Kafedra nomiga qarab tegishli fakultetni topish (aniq ro'yxat asosida)
+     *
+     * 1-son Davolash: Akusherlik, Ichki kasalliklar propedevtikasi, Ijtimoiy-gumanitar, Patologik anatomiya, Xirurgik kasalliklar
+     * 2-son Davolash: Anatomiya va klinik, Ichki kasalliklar/harbiy dala, Travmatologiya, Umumiy xirurgiya, Yuqumli kasalliklar
+     * Pediatriya: Bolalar kasalliklari, Mikrobiologiya, Normal va patologik fiziologiya, Otorinolaringologiya, Tibbiy psixologiya
+     * Xalqaro ta'lim: Farmakologiya, O'zbek va xorijiy tillar, Tibbiy biologiya, Tibbiy va biologik kimyo
+     */
+    private function findFacultyByKafedraName(string $kafedraName): ?Department
+    {
+        $kafedraName = mb_strtolower($kafedraName);
+
+        // Kafedra nomi kalit so'zlari -> fakultet nomi LIKE pattern
+        $mappings = [
+            // 1-SON DAVOLASH FAKULTETI
+            ['keywords' => ['akusherlik', 'ginekologiya'], 'faculty' => '%1-son Davolash%'],
+            ['keywords' => ['ichki kasalliklar', 'propedevtikasi', 'reabilitologiya'], 'faculty' => '%1-son Davolash%'],
+            ['keywords' => ['ijtimoiy', 'gumanitar'], 'faculty' => '%1-son Davolash%'],
+            ['keywords' => ['patologik anatomiya', 'sud tibbiyoti'], 'faculty' => '%1-son Davolash%'],
+            ['keywords' => ['xirurgik kasalliklar', 'oilaviy shifokorlikda xirurgiya'], 'faculty' => '%1-son Davolash%'],
+
+            // 2-SON DAVOLASH FAKULTETI
+            ['keywords' => ['anatomiya', 'klinik anatomiya'], 'faculty' => '%2-son Davolash%'],
+            ['keywords' => ['ichki kasalliklar', 'harbiy dala terapiyasi', 'gematologiya'], 'faculty' => '%2-son Davolash%'],
+            ['keywords' => ['travmatologiya', 'ortopediya', 'harbiy dala jarrohligi'], 'faculty' => '%2-son Davolash%'],
+            ['keywords' => ['umumiy xirurgiya', 'bolalar xirurgiyasi', 'urologiya'], 'faculty' => '%2-son Davolash%'],
+            ['keywords' => ['yuqumli kasalliklar', 'dermatovenerologiya'], 'faculty' => '%2-son Davolash%'],
+
+            // PEDIATRIYA FAKULTETI
+            ['keywords' => ['bolalar kasalliklari', 'propedevtikasi', 'pediatriya'], 'faculty' => '%Pediatriya%'],
+            ['keywords' => ['mikrobiologiya', 'jamoat salomatligi', 'gigiyena'], 'faculty' => '%Pediatriya%'],
+            ['keywords' => ['normal', 'patologik fiziologiya'], 'faculty' => '%Pediatriya%'],
+            ['keywords' => ['otorinolaringologiya', 'oftalmologiya', 'onkologiya'], 'faculty' => '%Pediatriya%'],
+            ['keywords' => ['tibbiy psixologiya', 'nevrologiya', 'psixiatriya'], 'faculty' => '%Pediatriya%'],
+
+            // XALQARO TA'LIM FAKULTETI
+            ['keywords' => ['farmakologiya', 'klinik farmakologiya'], 'faculty' => '%Xalqaro%'],
+            ['keywords' => ['xorijiy tillar'], 'faculty' => '%Xalqaro%'],
+            ['keywords' => ['tibbiy biologiya', 'gistologiya'], 'faculty' => '%Xalqaro%'],
+            ['keywords' => ['tibbiy va biologik kimyo'], 'faculty' => '%Xalqaro%'],
+        ];
+
+        foreach ($mappings as $mapping) {
+            $allMatch = true;
+            foreach ($mapping['keywords'] as $keyword) {
+                if (!str_contains($kafedraName, mb_strtolower($keyword))) {
+                    $allMatch = false;
+                    break;
+                }
+            }
+
+            if ($allMatch) {
+                return Department::where('structure_type_code', '11')
+                    ->where('name', 'LIKE', $mapping['faculty'])
+                    ->first();
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Kafedra mudiri, dekan va registrator ma'lumotlarini olish
      */
     private function getApproverInfo(CurriculumSubject $cs): array
@@ -734,31 +815,85 @@ class KtrController extends Controller
             'kafedra_mudiri' => null,
             'dekan' => null,
             'registrator' => null,
+            'registrators' => [],
         ];
 
-        // Kafedra
-        $kafedra = Department::where('department_hemis_id', $cs->department_id)->first();
-        if ($kafedra) {
-            $info['kafedra_name'] = $kafedra->name;
+        try {
+            // Kafedra (CurriculumSubject.department_id = kafedra HEMIS ID)
+            $kafedra = Department::where('department_hemis_id', $cs->department_id)->first();
+            if ($kafedra) {
+                $info['kafedra_name'] = $kafedra->name;
 
-            // Kafedra mudiri
-            $mudiri = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'kafedra_mudiri'))
-                ->where('department_hemis_id', $kafedra->department_hemis_id)
-                ->where('is_active', true)
-                ->first();
-            if ($mudiri) {
-                $info['kafedra_mudiri'] = ['id' => $mudiri->id, 'name' => $mudiri->full_name];
+                // Kafedra mudiri - Spatie role orqali
+                $mudiri = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'kafedra_mudiri'))
+                    ->where('department_hemis_id', $kafedra->department_hemis_id)
+                    ->where('is_active', true)
+                    ->first();
+                // Fallback: role ustuni orqali
+                if (!$mudiri) {
+                    $mudiri = Teacher::where('role', 'kafedra_mudiri')
+                        ->where('department_hemis_id', $kafedra->department_hemis_id)
+                        ->where('is_active', true)
+                        ->first();
+                }
+                // Fallback: HEMIS staff_position ustuni orqali
+                if (!$mudiri) {
+                    $mudiri = Teacher::where('staff_position', 'LIKE', '%mudiri%')
+                        ->where('department_hemis_id', $kafedra->department_hemis_id)
+                        ->where('is_active', true)
+                        ->first();
+                }
+                if ($mudiri) {
+                    $info['kafedra_mudiri'] = ['id' => $mudiri->id, 'name' => $mudiri->full_name];
+                }
             }
 
-            // Fakultet (kafedra uchun parent)
-            if ($kafedra->parent_id) {
-                $faculty = Department::find($kafedra->parent_id);
-                if ($faculty) {
-                    $info['faculty_name'] = $faculty->name;
+            // Fakultetni topish: kafedra nomi asosida aniq ro'yxat bo'yicha
+            $faculty = null;
+            if ($kafedra) {
+                $faculty = $this->findFacultyByKafedraName($kafedra->name);
+            }
 
-                    // Dekan
+            // Fallback: parent_id orqali
+            if (!$faculty && $kafedra && $kafedra->parent_id) {
+                $faculty = Department::where('department_hemis_id', $kafedra->parent_id)
+                    ->where('structure_type_code', '11')
+                    ->first();
+                if (!$faculty) {
+                    $parent = Department::find($kafedra->parent_id);
+                    if ($parent && $parent->structure_type_code == '11') {
+                        $faculty = $parent;
+                    }
+                }
+            }
+
+            if ($faculty) {
+                $info['faculty_name'] = $faculty->name;
+
+                // Dekan
+                if (Schema::hasTable('dean_faculties')) {
                     $dekan = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'dekan'))
-                        ->whereHas('deanFaculties', fn ($q) => $q->where('department_hemis_id', $faculty->department_hemis_id))
+                        ->whereHas('deanFaculties', fn ($q) => $q->where('dean_faculties.department_hemis_id', $faculty->department_hemis_id))
+                        ->where('is_active', true)
+                        ->first();
+                    if ($dekan) {
+                        $info['dekan'] = ['id' => $dekan->id, 'name' => $dekan->full_name];
+                    }
+                }
+                // Fallback: role ustuni orqali
+                if (!$info['dekan']) {
+                    $dekan = Teacher::where('role', 'dekan')
+                        ->where('department_hemis_id', $faculty->department_hemis_id)
+                        ->where('is_active', true)
+                        ->first();
+                    if ($dekan) {
+                        $info['dekan'] = ['id' => $dekan->id, 'name' => $dekan->full_name];
+                    }
+                }
+                // Fallback: HEMIS staff_position ustuni orqali
+                if (!$info['dekan']) {
+                    $dekan = Teacher::where('staff_position', 'LIKE', '%ekan%')
+                        ->where('department_hemis_id', $faculty->department_hemis_id)
                         ->where('is_active', true)
                         ->first();
                     if ($dekan) {
@@ -766,14 +901,24 @@ class KtrController extends Controller
                     }
                 }
             }
-        }
 
-        // Registrator ofisi
-        $registrator = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'registrator_ofisi'))
-            ->where('is_active', true)
-            ->first();
-        if ($registrator) {
-            $info['registrator'] = ['id' => $registrator->id, 'name' => $registrator->full_name];
+            // Registrator ofisi - HAMMA xodimlarni olish
+            $registrators = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'registrator_ofisi'))
+                ->where('is_active', true)
+                ->get();
+            if ($registrators->isEmpty()) {
+                $registrators = Teacher::where('role', 'registrator_ofisi')
+                    ->where('is_active', true)
+                    ->get();
+            }
+            if ($registrators->isNotEmpty()) {
+                // Birinchisini asosiy tasdiqlash uchun saqlash (approval record uchun)
+                $info['registrator'] = ['id' => $registrators->first()->id, 'name' => $registrators->first()->full_name];
+                // Hammasini xabarnoma uchun saqlash
+                $info['registrators'] = $registrators->map(fn ($r) => ['id' => $r->id, 'name' => $r->full_name])->toArray();
+            }
+        } catch (\Exception $e) {
+            Log::warning('getApproverInfo xatolik', ['error' => $e->getMessage()]);
         }
 
         return $info;
@@ -837,22 +982,28 @@ class KtrController extends Controller
         ]);
 
         // Har bir tasdiqlash uchun yozuv
-        $approvers = [
-            ['role' => 'kafedra_mudiri', 'data' => $approverInfo['kafedra_mudiri']],
-            ['role' => 'dekan', 'data' => $approverInfo['dekan']],
-            ['role' => 'registrator_ofisi', 'data' => $approverInfo['registrator']],
-        ];
-
-        foreach ($approvers as $approver) {
+        // Kafedra mudiri va dekan - aniq shaxsga
+        foreach (['kafedra_mudiri' => $approverInfo['kafedra_mudiri'], 'dekan' => $approverInfo['dekan']] as $role => $data) {
             KtrChangeApproval::create([
                 'change_request_id' => $cr->id,
-                'role' => $approver['role'],
-                'approver_name' => $approver['data']['name'] ?? 'Topilmadi',
-                'approver_id' => $approver['data']['id'] ?? null,
+                'role' => $role,
+                'approver_name' => $data['name'] ?? 'Topilmadi',
+                'approver_id' => $data['id'] ?? null,
             ]);
         }
 
+        // Registrator ofisi - har qanday registrator xodimi tasdiqlashi mumkin
+        KtrChangeApproval::create([
+            'change_request_id' => $cr->id,
+            'role' => 'registrator_ofisi',
+            'approver_name' => 'Registrator ofisi xodimlari',
+            'approver_id' => null,
+        ]);
+
         $cr->load('approvals');
+
+        // Xabarnoma yuborish (har bir tasdiqlash uchun, registrator - hammaga)
+        $this->sendApproverNotifications($cr, $cs, $user, $approverInfo);
 
         return response()->json([
             'success' => true,
@@ -873,8 +1024,397 @@ class KtrController extends Controller
     }
 
     /**
+     * Tasdiqlash kerak bo'lgan xodimlarga xabarnoma yuborish
+     * Registrator ofisi xodimlariga - HAMMAGA xabarnoma yuboriladi
+     */
+    private function sendApproverNotifications(KtrChangeRequest $cr, CurriculumSubject $cs, $requestedBy, array $approverInfo = []): void
+    {
+        try {
+            $senderId = $requestedBy->id;
+            $senderType = get_class($requestedBy);
+            $requesterName = $requestedBy instanceof Teacher ? $requestedBy->full_name : ($requestedBy->name ?? 'Noma\'lum');
+            $roleNames = [
+                'kafedra_mudiri' => 'Kafedra mudiri',
+                'dekan' => 'Dekan',
+                'registrator_ofisi' => 'Registrator ofisi',
+            ];
+
+            $hasTeacherNotifications = Schema::hasTable('teacher_notifications');
+
+            // Bitta xodimga bitta xabarnoma (duplikatdan saqlash)
+            $notifiedIds = [];
+
+            foreach ($cr->approvals as $approval) {
+                $roleName = $roleNames[$approval->role] ?? $approval->role;
+
+                if ($approval->role === 'registrator_ofisi') {
+                    // Registrator ofisi - HAMMA xodimlarga xabarnoma yuborish
+                    $registrators = $approverInfo['registrators'] ?? [];
+                    foreach ($registrators as $registrator) {
+                        if (!$registrator['id'] || in_array($registrator['id'], $notifiedIds)) {
+                            continue;
+                        }
+
+                        $notification = Notification::create([
+                            'sender_id' => $senderId,
+                            'sender_type' => $senderType,
+                            'recipient_id' => $registrator['id'],
+                            'recipient_type' => Teacher::class,
+                            'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                            'body' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
+                            'type' => Notification::TYPE_ALERT,
+                            'data' => [
+                                'action' => 'ktr_change_approval',
+                                'change_request_id' => $cr->id,
+                                'approval_id' => $approval->id,
+                                'curriculum_subject_id' => $cs->id,
+                                'subject_name' => $cs->subject_name,
+                                'role' => 'registrator_ofisi',
+                            ],
+                            'is_draft' => false,
+                            'sent_at' => now(),
+                        ]);
+
+                        // Teacher notification panelida ham ko'rsatish (qaysi rolda tursa ham ko'radi)
+                        if ($hasTeacherNotifications) {
+                            TeacherNotification::create([
+                                'teacher_id' => $registrator['id'],
+                                'type' => 'ktr_approval',
+                                'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                                'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish ruxsatini so'ramoqda.",
+                                'link' => route('admin.notifications.show', $notification->id),
+                                'data' => [
+                                    'action' => 'ktr_change_approval',
+                                    'approval_id' => $approval->id,
+                                    'notification_id' => $notification->id,
+                                ],
+                            ]);
+                        }
+
+                        $notifiedIds[] = $registrator['id'];
+                    }
+                } else {
+                    // Kafedra mudiri va dekan - faqat tegishli shaxsga
+                    if (!$approval->approver_id || in_array($approval->approver_id, $notifiedIds)) {
+                        continue;
+                    }
+
+                    $notification = Notification::create([
+                        'sender_id' => $senderId,
+                        'sender_type' => $senderType,
+                        'recipient_id' => $approval->approver_id,
+                        'recipient_type' => Teacher::class,
+                        'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                        'body' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
+                        'type' => Notification::TYPE_ALERT,
+                        'data' => [
+                            'action' => 'ktr_change_approval',
+                            'change_request_id' => $cr->id,
+                            'approval_id' => $approval->id,
+                            'curriculum_subject_id' => $cs->id,
+                            'subject_name' => $cs->subject_name,
+                            'role' => $approval->role,
+                        ],
+                        'is_draft' => false,
+                        'sent_at' => now(),
+                    ]);
+
+                    // Teacher notification panelida ham ko'rsatish (qaysi rolda tursa ham ko'radi)
+                    if ($hasTeacherNotifications) {
+                        TeacherNotification::create([
+                            'teacher_id' => $approval->approver_id,
+                            'type' => 'ktr_approval',
+                            'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
+                            'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish ruxsatini so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
+                            'link' => route('admin.notifications.show', $notification->id),
+                            'data' => [
+                                'action' => 'ktr_change_approval',
+                                'approval_id' => $approval->id,
+                                'notification_id' => $notification->id,
+                            ],
+                        ]);
+                    }
+
+                    $notifiedIds[] = $approval->approver_id;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('Xabarnoma yuborishda xatolik', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
      * KTR o'zgartirish so'rovini tasdiqlash/rad etish
      */
+    /**
+     * KTR rejasini Word formatida eksport qilish
+     */
+    public function exportWord($curriculumSubjectId)
+    {
+        $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
+
+        $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();
+        if (!$plan) {
+            return back()->with('error', 'KTR rejasi topilmadi.');
+        }
+
+        // Mashg'ulot turlarini olish
+        $trainingTypes = [];
+        $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+        if (is_array($details)) {
+            foreach ($details as $detail) {
+                $code = (string) ($detail['trainingType']['code'] ?? '');
+                $name = $detail['trainingType']['name'] ?? '';
+                $hours = (int) ($detail['academic_load'] ?? 0);
+                if ($code !== '' && $name !== '') {
+                    $trainingTypes[$code] = ['name' => $name, 'hours' => $hours];
+                }
+            }
+        }
+
+        // Tartibda saralash
+        $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar', 'mustaqil'];
+        $normalize = function ($str) {
+            return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower($str));
+        };
+        if (count($trainingTypes) > 1) {
+            uksort($trainingTypes, function ($a, $b) use ($trainingTypes, $typeOrder, $normalize) {
+                $nameA = $normalize($trainingTypes[$a]['name']);
+                $nameB = $normalize($trainingTypes[$b]['name']);
+                $posA = count($typeOrder);
+                $posB = count($typeOrder);
+                foreach ($typeOrder as $i => $keyword) {
+                    if ($posA === count($typeOrder) && str_contains($nameA, $keyword)) $posA = $i;
+                    if ($posB === count($typeOrder) && str_contains($nameB, $keyword)) $posB = $i;
+                }
+                return $posA <=> $posB;
+            });
+        }
+
+        // Mustaqil va mustaqil bo'lmaganlarni ajratish
+        $filteredTypes = [];
+        $mustaqilTypes = [];
+        foreach ($trainingTypes as $code => $type) {
+            if (preg_match('/mustaqil/i', $normalize($type['name']))) {
+                $mustaqilTypes[$code] = $type;
+            } else {
+                $filteredTypes[$code] = $type;
+            }
+        }
+        $typeCodes = array_keys($filteredTypes);
+
+        // Kafedra va fakultet ma'lumotlari
+        $approverInfo = $this->getApproverInfo($cs);
+
+        // Curriculum va semestr ma'lumotlari
+        $curriculum = Curriculum::where('curricula_hemis_id', $cs->curricula_hemis_id)->first();
+        $semesterName = $cs->semester_name ?? '';
+        $levelName = '';
+        $educationYear = '';
+        $specialtyName = '';
+
+        if ($curriculum) {
+            $educationYear = $curriculum->education_year_name ?? '';
+            $semester = DB::table('semesters')
+                ->where('curriculum_hemis_id', $curriculum->curricula_hemis_id)
+                ->where('code', $cs->semester_code)
+                ->first();
+            if ($semester) {
+                $levelName = $semester->level_name ?? '';
+            }
+            $specialty = DB::table('specialties')
+                ->where('specialty_hemis_id', $curriculum->specialty_hemis_id)
+                ->first();
+            if ($specialty) {
+                $specialtyName = $specialty->name ?? '';
+            }
+        }
+
+        $planData = $plan->plan_data;
+        $hoursData = $planData['hours'] ?? $planData;
+        $topicsData = $planData['topics'] ?? [];
+
+        // ---- PhpWord hujjat yaratish ----
+        $phpWord = new \PhpOffice\PhpWord\PhpWord();
+        $phpWord->setDefaultFontName('Times New Roman');
+        $phpWord->setDefaultFontSize(12);
+
+        $section = $phpWord->addSection([
+            'orientation' => 'landscape',
+            'marginTop' => 800,
+            'marginBottom' => 600,
+            'marginLeft' => 800,
+            'marginRight' => 600,
+        ]);
+
+        $center = ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0];
+        $left = ['spaceAfter' => 0, 'spaceBefore' => 0];
+
+        // ---- SARLAVHA ----
+        $section->addText('KALENDAR-TEMATIK REJA', ['bold' => true, 'size' => 14], $center);
+        $section->addText($educationYear . " o'quv yili", ['size' => 12], $center);
+        $section->addTextBreak(1);
+
+        // Fan ma'lumotlari
+        $section->addText('Fan: ' . $cs->subject_name, ['bold' => true, 'size' => 12], $left);
+        $section->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['size' => 12], $left);
+        $section->addText("Yo'nalish: " . $specialtyName . '  ' . $levelName . '-kurs  ' . $semesterName, ['size' => 12], $left);
+        $section->addTextBreak(0);
+
+        // Semestr uchun ajratilgan soatlar
+        $section->addText($semesterName . ' uchun ajratilgan soat:', ['bold' => true, 'size' => 12], $left);
+        foreach ($filteredTypes as $code => $type) {
+            $section->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['size' => 12], $left);
+        }
+        foreach ($mustaqilTypes as $code => $type) {
+            $section->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['size' => 12], $left);
+        }
+        $section->addTextBreak(1);
+
+        // ---- JADVAL SARLAVHASI ----
+        $typeNames = [];
+        foreach ($filteredTypes as $code => $type) {
+            $typeNames[] = mb_strtoupper($type['name']);
+        }
+        $section->addText(
+            implode(', ', $typeNames) . ' MASHG\'ULOTLAR MAVZULARI',
+            ['bold' => true, 'size' => 12],
+            $center
+        );
+        $section->addTextBreak(0);
+
+        // ---- JADVAL ----
+        $typeCount = count($typeCodes);
+        $cellBorder = ['borderSize' => 6, 'borderColor' => '000000', 'valign' => 'center'];
+        $hBold = ['bold' => true, 'size' => 10];
+        $hNormal = ['size' => 10];
+        $dStyle = ['size' => 10];
+        $cp = ['alignment' => 'center', 'spaceAfter' => 20, 'spaceBefore' => 20];
+        $lp = ['spaceAfter' => 20, 'spaceBefore' => 20];
+
+        // Ustun kengliklari
+        $haftaW = 700;
+        $kunlariW = 1600;
+        $soatEachW = 700;
+        $soatTotalW = $soatEachW * $typeCount;
+        $mavzuW = 14000 - $haftaW - $kunlariW - $soatTotalW;
+        if ($mavzuW < 3000) $mavzuW = 3000;
+
+        $table = $section->addTable([
+            'borderSize' => 6,
+            'borderColor' => '000000',
+            'cellMarginTop' => 20,
+            'cellMarginBottom' => 20,
+            'cellMarginLeft' => 40,
+            'cellMarginRight' => 40,
+        ]);
+
+        // 1-qator sarlavha: Hafta | Hafta kunlari | Mashg'ulotlar mavzulari | Soat (gridSpan)
+        $table->addRow(null, ['tblHeader' => true]);
+        $table->addCell($haftaW, array_merge($cellBorder, ['vMerge' => 'restart']))
+            ->addText('Hafta', $hBold, $cp);
+        $table->addCell($kunlariW, array_merge($cellBorder, ['vMerge' => 'restart']))
+            ->addText('Hafta kunlari', $hBold, $cp);
+        $table->addCell($mavzuW, array_merge($cellBorder, ['vMerge' => 'restart']))
+            ->addText('Mashg\'ulotlar mavzulari ' . $semesterName, $hBold, $cp);
+        if ($typeCount > 0) {
+            $table->addCell($soatTotalW, array_merge($cellBorder, ['gridSpan' => $typeCount]))
+                ->addText('Soat', $hBold, $cp);
+        }
+
+        // 2-qator sarlavha: (merge) | (merge) | (merge) | Ma'ruza | Amaliy | ...
+        // Vertikal yozuv: har bir harfni alohida qatorga qo'yish
+        $table->addRow(null, ['tblHeader' => true]);
+        $table->addCell($haftaW, array_merge($cellBorder, ['vMerge' => 'continue']));
+        $table->addCell($kunlariW, array_merge($cellBorder, ['vMerge' => 'continue']));
+        $table->addCell($mavzuW, array_merge($cellBorder, ['vMerge' => 'continue']));
+        foreach ($typeCodes as $code) {
+            $name = $filteredTypes[$code]['name'];
+            $cell = $table->addCell($soatEachW, $cellBorder);
+            // Har bir harfni alohida qator qilib vertikal yozish
+            $chars = mb_str_split($name);
+            foreach ($chars as $char) {
+                $cell->addText(
+                    $char,
+                    ['bold' => true, 'size' => 9],
+                    ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0, 'lineHeight' => 0.8]
+                );
+            }
+        }
+
+        // ---- MA'LUMOTLAR QATORLARI ----
+        for ($w = 1; $w <= $plan->week_count; $w++) {
+            $table->addRow();
+
+            // Hafta raqami
+            $table->addCell($haftaW, $cellBorder)->addText($w, $dStyle, $cp);
+
+            // Hafta kunlari (bo'sh - foydalanuvchi to'ldiradi)
+            $table->addCell($kunlariW, $cellBorder)->addText('', $dStyle, $cp);
+
+            // Mashg'ulotlar mavzulari - barcha turlar bitta katakda
+            $topicCell = $table->addCell($mavzuW, $cellBorder);
+            $hasContent = false;
+            foreach ($typeCodes as $code) {
+                $hrs = (int) ($hoursData[$w][$code] ?? 0);
+                $topic = $topicsData[$w][$code] ?? '';
+                if ($hrs > 0 && $topic !== '') {
+                    $textRun = $topicCell->addTextRun($lp);
+                    $textRun->addText($filteredTypes[$code]['name'] . ': ', ['bold' => true, 'size' => 10]);
+                    $textRun->addText($topic, ['size' => 10, 'underline' => 'single']);
+                    $hasContent = true;
+                } elseif ($hrs > 0) {
+                    $textRun = $topicCell->addTextRun($lp);
+                    $textRun->addText($filteredTypes[$code]['name'] . ': ', ['bold' => true, 'size' => 10]);
+                    $textRun->addText('-', ['size' => 10]);
+                    $hasContent = true;
+                }
+            }
+            if (!$hasContent) {
+                $topicCell->addText('', $dStyle, $lp);
+            }
+
+            // Soat ustunlari
+            foreach ($typeCodes as $code) {
+                $hrs = (int) ($hoursData[$w][$code] ?? 0);
+                $table->addCell($soatEachW, $cellBorder)
+                    ->addText($hrs > 0 ? $hrs : '', $dStyle, $cp);
+            }
+        }
+
+        // Jami qator
+        $table->addRow();
+        $jamiCell = array_merge($cellBorder, ['bgColor' => 'D9D9D9']);
+        $table->addCell($haftaW + $kunlariW + $mavzuW, array_merge($jamiCell, ['gridSpan' => 3]))
+            ->addText('JAMI:', ['bold' => true, 'size' => 10], $cp);
+        foreach ($typeCodes as $code) {
+            $colTotal = 0;
+            for ($w = 1; $w <= $plan->week_count; $w++) {
+                $colTotal += (int) ($hoursData[$w][$code] ?? 0);
+            }
+            $table->addCell($soatEachW, $jamiCell)
+                ->addText($colTotal, ['bold' => true, 'size' => 10], $cp);
+        }
+
+        // ---- IMZOLAR ----
+        $section->addTextBreak(2);
+
+        $user = auth()->user();
+        $teacherName = ($user instanceof Teacher) ? ($user->full_name ?? $user->name) : '';
+
+        $section->addText("Tuzuvchi o'qituvchi:  ______________  " . $teacherName, ['size' => 12], $left);
+        $section->addTextBreak(1);
+        $section->addText("Kafedra mudiri:  ______________  " . ($approverInfo['kafedra_mudiri']['name'] ?? ''), ['size' => 12], $left);
+
+        // ---- FAYLNI YUKLASH ----
+        $filename = 'KTR_' . preg_replace('/[^a-zA-Z0-9\x{0400}-\x{04FF}]/u', '_', $cs->subject_name) . '_' . date('Y-m-d') . '.docx';
+        $tempFile = tempnam(sys_get_temp_dir(), 'ktr_') . '.docx';
+        $objWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'Word2007');
+        $objWriter->save($tempFile);
+
+        return response()->download($tempFile, $filename)->deleteFileAfterSend(true);
+    }
+
     public function approveChange(Request $request, $approvalId)
     {
         $approval = KtrChangeApproval::findOrFail($approvalId);
@@ -882,13 +1422,21 @@ class KtrController extends Controller
 
         // Faqat tegishli rol egasi tasdiqlashi mumkin
         $canApprove = false;
-        if ($approval->approver_id && $user instanceof Teacher && $user->id == $approval->approver_id) {
-            $canApprove = true;
+
+        if ($approval->role === 'registrator_ofisi') {
+            // Registrator ofisi - registrator_ofisi roli bor xodim tasdiqlashi mumkin
+            if ($user->hasRole('registrator_ofisi')) {
+                $canApprove = true;
+            }
+        } else {
+            // Kafedra mudiri va dekan - faqat aniq tayinlangan shaxs
+            if ($approval->approver_id && $user instanceof Teacher && $user->id == $approval->approver_id) {
+                $canApprove = true;
+            }
         }
+
+        // Admin har doim tasdiqlashi mumkin
         if ($user->hasRole(['superadmin', 'admin'])) {
-            $canApprove = true;
-        }
-        if ($user->hasRole($approval->role)) {
             $canApprove = true;
         }
 
@@ -901,10 +1449,18 @@ class KtrController extends Controller
             $status = 'approved';
         }
 
-        $approval->update([
+        $updateData = [
             'status' => $status,
             'responded_at' => now(),
-        ]);
+        ];
+
+        // Registrator ofisi tasdiqlaganda kim tasdiqlaganini saqlash
+        if ($approval->role === 'registrator_ofisi' && !$approval->approver_id) {
+            $updateData['approver_id'] = $user->id;
+            $updateData['approver_name'] = $user->full_name ?? $user->name ?? 'Noma\'lum';
+        }
+
+        $approval->update($updateData);
 
         // Agar rad etilsa, butun so'rovni ham rad etish
         $cr = $approval->changeRequest;
@@ -912,9 +1468,20 @@ class KtrController extends Controller
             $cr->update(['status' => 'rejected']);
         }
 
+        // Barcha approval holatini qaytarish (jadval yangilanishi uchun)
+        $cr->load('approvals');
+
         return response()->json([
             'success' => true,
             'message' => $status === 'approved' ? 'Tasdiqlandi!' : 'Rad etildi.',
+            'approvals' => $cr->approvals->map(fn ($a) => [
+                'id' => $a->id,
+                'role' => $a->role,
+                'approver_name' => $a->approver_name,
+                'status' => $a->status,
+                'responded_at' => $a->responded_at?->format('d.m.Y H:i'),
+            ]),
+            'is_approved' => $cr->isFullyApproved(),
         ]);
     }
 }

@@ -47,7 +47,7 @@
                         padding: 8px;
                         min-height: 200px;
                     ">
-                        @php $facultyKafedras = $kafedras->get($faculty->department_hemis_id, collect()); @endphp
+                        @php $facultyKafedras = $kafedras->get(strval($faculty->department_hemis_id), collect()); @endphp
                         @foreach($facultyKafedras as $kIndex => $kafedra)
                         <div class="kafedra-card" data-kafedra-id="{{ $kafedra->id }}" style="
                             background: {{ ['#eff6ff', '#ecfdf5', '#fffbeb', '#f5f3ff'][$index % 4] }};

@@ -31,8 +31,14 @@ return [
     'subject_placeholder' => 'Enter message subject',
     'body' => 'Body',
     'body_placeholder' => 'Enter message text...',
+    'search_placeholder' => 'Search messages...',
+    'senders' => 'Senders',
+    'role' => 'Role',
+    'all' => 'All',
     'from' => 'From',
+    'to' => 'To',
     'date' => 'Date',
+    'type' => 'Type',
     'system' => 'System',
 
     // Types
@@ -50,4 +56,11 @@ return [
     'no_permission' => 'You do not have permission to perform this action',
     'all_marked_read' => 'All messages marked as read',
     'confirm_delete' => 'Are you sure you want to delete?',
+
+    // Reply
+    'reply' => 'Reply',
+    'reply_to' => 'Reply to:',
+    'reply_placeholder' => 'Type your reply...',
+    'reply_sent' => 'Reply sent successfully',
+    'cancel' => 'Cancel',
 ];

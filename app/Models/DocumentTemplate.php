@@ -29,6 +29,7 @@ class DocumentTemplate extends Model
         'absence_excuse' => [
             'label' => 'Sababli ariza farmoyishi',
             'placeholders' => [
+                '${student_id}' => 'Talaba ID raqami (student_id_number)',
                 '${student_name}' => 'Talaba to\'liq ismi',
                 '${student_hemis_id}' => 'HEMIS ID raqami',
                 '${group_name}' => 'Guruh nomi',
@@ -45,6 +46,11 @@ class DocumentTemplate extends Model
                 '${academic_year}' => 'O\'quv yili (2025.2026)',
                 '${qr_code}' => 'QR kod rasmi (rasm sifatida)',
                 '${verification_url}' => 'Tekshirish URL manzili',
+                // Nazoratlar jadvali (Word jadvalda cloneRow bilan ishlaydi)
+                '${m_num}' => 'Nazorat tartib raqami (1, 2, 3...)',
+                '${m_subject}' => 'Fan nomi',
+                '${m_type}' => 'Nazorat turi (Joriy nazorat, YN (OSKE), ...)',
+                '${m_date}' => 'Qayta topshirish sanasi (01.01.2026 yoki 01.01.2026 — 05.01.2026)',
             ],
         ],
     ];

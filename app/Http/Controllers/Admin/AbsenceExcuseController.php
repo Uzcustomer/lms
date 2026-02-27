@@ -21,6 +21,10 @@ class AbsenceExcuseController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('student_id')) {
+            $query->where('student_id', $request->student_id);
+        }
+
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -41,6 +45,11 @@ class AbsenceExcuseController extends Controller
             $query->whereDate('end_date', '<=', $request->date_to);
         }
 
+        // Filtrlash: reviewed_by bo'yicha
+        if ($request->filled('reviewed_by')) {
+            $query->where('reviewed_by', $request->reviewed_by);
+        }
+
         $excuses = $query->paginate(20)->withQueryString();
 
         $stats = [
@@ -49,16 +58,44 @@ class AbsenceExcuseController extends Controller
             'rejected' => AbsenceExcuse::where('status', 'rejected')->count(),
         ];
 
+        // Reviewer statistikasi — kim qancha ariza tasdiqlagan/rad etgan
+        $reviewerStats = AbsenceExcuse::whereNotNull('reviewed_by')
+            ->selectRaw('reviewed_by, reviewed_by_name,
+                SUM(CASE WHEN status = "approved" THEN 1 ELSE 0 END) as approved_count,
+                SUM(CASE WHEN status = "rejected" THEN 1 ELSE 0 END) as rejected_count,
+                COUNT(*) as total_count')
+            ->groupBy('reviewed_by', 'reviewed_by_name')
+            ->orderByDesc('total_count')
+            ->get();
+
+        // Har bir reviewer uchun arizalar ro'yxati (modal ichida ko'rsatish uchun)
+        $reviewerExcuses = AbsenceExcuse::whereNotNull('reviewed_by')
+            ->whereIn('status', ['approved', 'rejected'])
+            ->orderByDesc('reviewed_at')
+            ->get()
+            ->groupBy('reviewed_by');
+
         $reasons = AbsenceExcuse::reasonLabels();
 
-        return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons'));
+        return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats', 'reviewerExcuses'));
     }
 
     public function show($id)
     {
-        $excuse = AbsenceExcuse::findOrFail($id);
+        $excuse = AbsenceExcuse::with(['student', 'makeups' => function ($q) {
+            $q->orderBy('subject_name')
+              ->orderByRaw("FIELD(assessment_type, 'jn', 'mt', 'oski', 'test')");
+        }])->findOrFail($id);
 
-        return view('admin.absence-excuses.show', compact('excuse'));
+        // Yakshanbasiz kunlar soni
+        $daysCount = 0;
+        $d = $excuse->start_date->copy();
+        while ($d->lte($excuse->end_date)) {
+            if (!$d->isSunday()) $daysCount++;
+            $d->addDay();
+        }
+
+        return view('admin.absence-excuses.show', compact('excuse', 'daysCount'));
     }
 
     public function approve($id)
@@ -104,7 +141,12 @@ class AbsenceExcuseController extends Controller
                     $wordTemplateSuccess = true;
                 } catch (\Throwable $e) {
                     // Word shablon orqali ishlamadi — Blade fallback ga o'tish
-                    \Log::warning('Word template PDF failed, falling back to Blade: ' . $e->getMessage());
+                    $templateError = $e->getMessage();
+                    \Log::error('Word template PDF failed, falling back to Blade: ' . $templateError, [
+                        'exception' => $e::class,
+                        'file' => $e->getFile() . ':' . $e->getLine(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
                 }
             }
 
@@ -147,7 +189,12 @@ class AbsenceExcuseController extends Controller
                 'approved_pdf_path' => $pdfPath,
             ]);
 
-            return back()->with('success', 'Ariza muvaffaqiyatli tasdiqlandi. PDF hujjat yaratildi.');
+            $successMsg = 'Ariza muvaffaqiyatli tasdiqlandi. PDF hujjat yaratildi.';
+            if (!$wordTemplateSuccess && isset($templateError)) {
+                $successMsg .= ' (Shablon xatosi: ' . $templateError . ' — Blade shablon ishlatildi)';
+            }
+
+            return back()->with('success', $successMsg);
         } catch (\Throwable $e) {
             return back()->with('error', 'PDF generatsiyada xatolik: ' . $e->getMessage());
         }
@@ -189,7 +236,9 @@ class AbsenceExcuseController extends Controller
             abort(404, 'Fayl serverda topilmadi');
         }
 
-        return response()->download($filePath, $excuse->file_original_name);
+        return response()->file($filePath, [
+            'Content-Disposition' => 'inline; filename="' . $excuse->file_original_name . '"',
+        ]);
     }
 
     public function downloadPdf($id)
@@ -205,6 +254,8 @@ class AbsenceExcuseController extends Controller
             abort(404, 'PDF fayl serverda topilmadi');
         }
 
-        return response()->download($filePath, 'sababli_ariza_' . $excuse->id . '.pdf');
+        return response()->file($filePath, [
+            'Content-Disposition' => 'inline; filename="sababli_ariza_' . $excuse->id . '.pdf"',
+        ]);
     }
 }

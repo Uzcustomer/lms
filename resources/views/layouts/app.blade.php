@@ -32,19 +32,53 @@
 
             <!-- Main Content -->
             <div class="flex-1 overflow-x-hidden overflow-y-auto sidebar-main-content">
+                <!-- Mobile Top Bar -->
+                <div class="mobile-top-bar" x-data>
+                    <button @click="$store.sidebar.toggle()" class="hamburger-btn">
+                        <svg style="width: 24px; height: 24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <span style="margin-left: 12px; font-size: 1.125rem; font-weight: 600; color: #1f2937;">LMS</span>
+                    <span style="margin-left: auto; font-size: 0.875rem; color: #6b7280;">
+                        {{ Auth::user()->name ?? '' }}
+                    </span>
+                </div>
 
                 <!-- Xabarnomalar ikonchasi — o'ng yuqori burchak -->
                 @php
                     $notifUser = auth()->user();
                     $notifUserId = $notifUser->id ?? 0;
-                    $notifUserType = get_class($notifUser);
-                    $notifUnreadCount = \App\Models\Notification::where('recipient_id', $notifUserId)
-                        ->where('recipient_type', $notifUserType)
-                        ->where('is_draft', false)
-                        ->where('is_read', false)
-                        ->count();
+                    $notifUserType = $notifUser ? get_class($notifUser) : 'App\\Models\\User';
+                    $notifUnreadCount = 0;
+                    try {
+                        $notifUnreadCount = \App\Models\Notification::where('recipient_id', $notifUserId)
+                            ->where('is_draft', false)
+                            ->where('is_read', false)
+                            ->count();
+                    } catch (\Exception $e) {}
                 @endphp
-                <div x-data="{ notifOpen: false }" style="position:fixed;top:10px;right:16px;z-index:9999;">
+                <div style="position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:6px;">
+                    <!-- Til almashtirgich -->
+                    <div x-data="{ langOpen: false }" style="position:relative;">
+                        @php $currentLocale = app()->getLocale(); @endphp
+                        <button @click.stop="langOpen = !langOpen"
+                                style="width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(0,0,0,0.08);cursor:pointer;transition:all 0.15s;font-size:11px;font-weight:700;color:#4b5563;text-transform:uppercase;"
+                                onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fff'">
+                            {{ $currentLocale }}
+                        </button>
+                        <div x-show="langOpen" x-cloak @click.outside="langOpen = false"
+                             x-transition:enter="transition ease-out duration-100"
+                             x-transition:enter-start="opacity-0 transform scale-95"
+                             x-transition:enter-end="opacity-100 transform scale-100"
+                             style="position:absolute;top:42px;right:0;width:130px;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);overflow:hidden;">
+                            <a href="{{ route('language.switch', 'uz') }}" style="display:block;padding:8px 12px;font-size:13px;color:#374151;text-decoration:none;{{ $currentLocale === 'uz' ? 'background:#eff6ff;font-weight:600;color:#2563eb;' : '' }}" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='{{ $currentLocale === 'uz' ? '#eff6ff' : '#fff' }}'">O'zbekcha</a>
+                            <a href="{{ route('language.switch', 'ru') }}" style="display:block;padding:8px 12px;font-size:13px;color:#374151;text-decoration:none;{{ $currentLocale === 'ru' ? 'background:#eff6ff;font-weight:600;color:#2563eb;' : '' }}" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='{{ $currentLocale === 'ru' ? '#eff6ff' : '#fff' }}'">Русский</a>
+                            <a href="{{ route('language.switch', 'en') }}" style="display:block;padding:8px 12px;font-size:13px;color:#374151;text-decoration:none;{{ $currentLocale === 'en' ? 'background:#eff6ff;font-weight:600;color:#2563eb;' : '' }}" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='{{ $currentLocale === 'en' ? '#eff6ff' : '#fff' }}'">English</a>
+                        </div>
+                    </div>
+                    <!-- Xabarnomalar -->
+                <div x-data="{ notifOpen: false }" style="position:relative;">
                     <button @click.stop="notifOpen = !notifOpen"
                             style="position:relative;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(0,0,0,0.08);cursor:pointer;transition:all 0.15s;"
                             onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fff'">
@@ -52,7 +86,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                         </svg>
                         @if($notifUnreadCount > 0)
-                        <span style="position:absolute;top:2px;right:2px;width:9px;height:9px;background:#ef4444;border-radius:50%;border:2px solid #fff;"></span>
+                        <span style="position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;background:#ef4444;border-radius:9px;border:2px solid #fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;line-height:1;">{{ $notifUnreadCount > 99 ? '99+' : $notifUnreadCount }}</span>
                         @endif
                     </button>
 
@@ -76,12 +110,15 @@
                         </div>
                         <div style="max-height:280px;overflow-y:auto;">
                             @php
-                                $recentNotifs = \App\Models\Notification::where('recipient_id', $notifUserId)
-                                    ->where('recipient_type', $notifUserType)
-                                    ->where('is_draft', false)
-                                    ->orderByDesc('sent_at')
-                                    ->take(6)
-                                    ->get();
+                                $recentNotifs = collect();
+                                try {
+                                    $recentNotifs = \App\Models\Notification::with('sender')
+                                        ->where('recipient_id', $notifUserId)
+                                        ->where('is_draft', false)
+                                        ->orderByDesc('sent_at')
+                                        ->take(6)
+                                        ->get();
+                                } catch (\Exception $e) {}
                             @endphp
                             @forelse($recentNotifs as $notif)
                             <a href="{{ route('admin.notifications.show', $notif) }}"
@@ -94,6 +131,7 @@
                                     <span style="width:6px;height:6px;flex-shrink:0;margin-top:5px;"></span>
                                     @endif
                                     <div style="flex:1;min-width:0;">
+                                        <p style="font-size:0.7rem;color:#6b7280;margin:0 0 1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ $notif->sender?->name ?? $notif->sender?->short_name ?? $notif->sender?->full_name ?? __('notifications.system') }}</p>
                                         <p style="font-size:0.8rem;font-weight:{{ !$notif->is_read ? '600' : '400' }};color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;">{{ $notif->subject }}</p>
                                         <p style="font-size:0.65rem;color:#6b7280;margin:2px 0 0;">{{ $notif->sent_at ? $notif->sent_at->diffForHumans() : '' }}</p>
                                     </div>
@@ -111,6 +149,7 @@
                             {{ __('notifications.view_all') }}
                         </a>
                     </div>
+                </div>
                 </div>
 
                 <!-- Page Heading -->

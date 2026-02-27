@@ -926,10 +926,11 @@ class ReportController extends Controller
             $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
                    || isset($attendanceByKey[$attKey]);
 
-            if (!isset($grouped[$key])) {
-                // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
-                $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+            // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
+            $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+            $hasGrade = $skipGradeCheck ? null : isset($gradeSet[$gradeKey]);
 
+            if (!isset($grouped[$key])) {
                 $grouped[$key] = [
                     'employee_id' => $sch->employee_id,
                     'employee_name' => $sch->employee_name,
@@ -949,8 +950,17 @@ class ReportController extends Controller
                     'lesson_date' => $sch->lesson_date_str,
                     'student_count' => $studentCounts[$sch->group_id] ?? 0,
                     'has_attendance' => $hasAtt,
-                    'has_grades' => $skipGradeCheck ? null : isset($gradeSet[$gradeKey]),
+                    'has_grades' => $hasGrade,
                 ];
+            } else {
+                // Dublikat schedule (bir xil kalit, boshqa schedule_hemis_id) —
+                // agar biror dublikatda davomat/baho topilsa, "Ha" deb belgilash
+                if ($hasAtt && !$grouped[$key]['has_attendance']) {
+                    $grouped[$key]['has_attendance'] = true;
+                }
+                if ($hasGrade === true && $grouped[$key]['has_grades'] === false) {
+                    $grouped[$key]['has_grades'] = true;
+                }
             }
         }
 

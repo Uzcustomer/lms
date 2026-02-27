@@ -200,7 +200,15 @@ class ImportGrades extends Command
             ->count();
 
         $elapsed = round((microtime(true) - $liveStartTime) / 60, 1);
-        $this->sendDailyLiveReport($gradeCount, $nbCount, $gradeError, $attendanceError, $elapsed);
+
+        // Cache ni AVVAL yozish — sendDailyLiveReport crash qilsa ham data muvaffaqiyati saqlansin
+        if (!$gradeError && !$attendanceError) {
+            \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), now()->addHours(2));
+        }
+
+        if (!$this->option('silent')) {
+            $this->sendDailyLiveReport($gradeCount, $nbCount, $gradeError, $attendanceError, $elapsed);
+        }
         Log::info('[LiveImport] Completed at ' . Carbon::now());
     }
 
@@ -211,12 +219,55 @@ class ImportGrades extends Command
     // =========================================================================
     private function handleFinalImport()
     {
+        // Final import ko'p xotira ishlatadi (7 kunlik API ma'lumotlari) — OOM oldini olish
+        $currentLimit = trim(ini_get('memory_limit'));
+        if ($currentLimit !== '-1') {
+            ini_set('memory_limit', '512M');
+        }
+
         // Reporter faqat mustaqil chaqirilganda boshlanadi,
         // SendAttendanceFinalDailyReport dan chaqirilganda reporter allaqachon boshqarilmoqda
         $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
 
         $this->info('Starting FINAL import...');
         Log::info('[FinalImport] Starting at ' . Carbon::now());
+
+        // Crash detection: agar process o'lib qolsa (OOM, fatal error),
+        // Telegram ga xabar yuboriladi
+        $crashDetected = true; // sendProgressDone() dan keyin false bo'ladi
+        $shutdownChatId = config('services.telegram.chat_id');
+        $shutdownMsgId = &$this->telegramProgressMsgId;
+        $shutdownDayStatuses = &$this->dayStatuses;
+        $shutdownStartTime = &$this->importStartTime;
+        register_shutdown_function(function () use (&$crashDetected, $shutdownChatId, &$shutdownMsgId, &$shutdownDayStatuses, &$shutdownStartTime) {
+            if (!$crashDetected) return;
+
+            $error = error_get_last();
+            $errorMsg = $error ? "{$error['type']}: {$error['message']}" : 'process killed';
+            Log::critical("[FinalImport] CRASH detected in shutdown handler: {$errorMsg}");
+
+            if (!$shutdownMsgId || !$shutdownChatId) return;
+
+            try {
+                $elapsed = $shutdownStartTime ? round((microtime(true) - $shutdownStartTime) / 60, 1) : 0;
+                $lines = [];
+                foreach ($shutdownDayStatuses as $d => $s) {
+                    $label = (strlen($d) === 10 && ($d[4] ?? '') === '-') ? substr($d, 5) : $d;
+                    $lines[] = "{$label} {$s}";
+                }
+
+                $msg = "💀 FINAL import CRASH\n"
+                     . Carbon::now()->format('d.m.Y H:i') . "\n\n"
+                     . implode("\n", $lines) . "\n\n"
+                     . "❌ Process o'lib qoldi\n"
+                     . "⏱ {$elapsed} daq\n\n"
+                     . "Sabab: " . substr($errorMsg, 0, 200);
+
+                app(TelegramService::class)->editMessage($shutdownChatId, $shutdownMsgId, $msg);
+            } catch (\Throwable $e) {
+                // Shutdown handler ichida exception tashlash xavfli
+            }
+        });
 
         // Oxirgi 7 kunni tekshirish (bugundan tashqari)
         // LIVE importga bog'liq emas — har bir kunni mustaqil tekshiramiz
@@ -302,7 +353,8 @@ class ImportGrades extends Command
 
                     // Oxirgi 3 kun DOIM API dan tortiladi (to'liq ishonch uchun)
                     // Eski kunlar (4+ kun) uchun — yetarli yozuv bo'lsa skip
-                    $daysAgo = Carbon::today()->diffInDays($date);
+                    // Carbon 3: diffInDays() manfiy qaytaradi, shuning uchun abs()
+                    $daysAgo = abs(Carbon::today()->diffInDays($date));
                     if ($finalizedCount >= 500 && $daysAgo >= 3) {
                         $this->importDayAttendance($dateStr, $date, true);
                         $this->updateDayProgress($dateStr, '✅', "tozalandi ({$cleaned})", $dayNum, $originalTotal);
@@ -316,12 +368,13 @@ class ImportGrades extends Command
                 // ─── Stsenariy B: Faqat is_final=true mavjud ───
                 // Oxirgi 3 kun DOIM API dan qayta tortiladi (race condition yoki API xato bo'lgan bo'lishi mumkin)
                 // Eski kunlar (4+ kun) — yetarli yozuv bo'lsa skip
-                $daysAgo = Carbon::today()->diffInDays($date);
+                // Carbon 3: diffInDays() manfiy qaytaradi, shuning uchun abs()
+                $daysAgo = abs(Carbon::today()->diffInDays($date));
                 if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500 && $daysAgo >= 3) {
                     $this->importDayAttendance($dateStr, $date, true);
                     $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv, {$daysAgo} kun oldin), o'tkazildi.");
                     $this->updateDayProgress($dateStr, '✅', "to'liq ({$finalizedCount})", $dayNum, $originalTotal);
-                    $totalDays--;
+                    $successDays++;
                     continue;
                 }
 
@@ -379,7 +432,9 @@ class ImportGrades extends Command
                 if ($reporter) {
                     $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), bazaga yozilmoqda " . count($gradeItems) . " ta yozuv...");
                 }
+                $gradeCount = count($gradeItems);
                 $this->applyGrades($gradeItems, $date, true);
+                unset($gradeItems); // Xotirani bo'shatish — keyingi kun uchun joy
 
                 // Attendance
                 if ($reporter) {
@@ -387,7 +442,7 @@ class ImportGrades extends Command
                 }
                 $this->importDayAttendance($dateStr, $date, true);
 
-                $this->updateDayProgress($dateStr, '✅', count($gradeItems) . " ta baho", $dayNum, $originalTotal);
+                $this->updateDayProgress($dateStr, '✅', "{$gradeCount} ta baho", $dayNum, $originalTotal);
                 $successDays++;
                 $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
             } catch (\Throwable $e) {
@@ -473,6 +528,7 @@ class ImportGrades extends Command
         ];
 
         $this->sendProgressDone('final', $successDays, $originalTotal, $failedDays);
+        $crashDetected = false; // Normal tugatish — shutdown handler ishlamasligi kerak
         $this->sendTelegramReport();
         Log::info("[FinalImport] Completed at " . Carbon::now() . ": {$successDays}/{$totalDays} days finalized.");
 
@@ -504,7 +560,7 @@ class ImportGrades extends Command
         }
 
         $period = CarbonPeriod::create($startDate, $endDate);
-        $totalDays = $startDate->diffInDays($endDate) + 1;
+        $totalDays = abs($startDate->diffInDays($endDate)) + 1;
 
         $this->info("BACKFILL: {$startDate->toDateString()} → {$endDate->toDateString()} ({$totalDays} kun)");
         Log::info("[Backfill] Starting from {$startDate->toDateString()} to {$endDate->toDateString()}");
@@ -636,7 +692,10 @@ class ImportGrades extends Command
                             $skippedByFilter += $beforeCount - count($data);
                         }
 
-                        $allItems = array_merge($allItems, $data);
+                        // array_merge o'rniga push — xotira tejash (har merge da yangi massiv yaratilmaydi)
+                        foreach ($data as $item) {
+                            $allItems[] = $item;
+                        }
                         $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
                         $this->info("Fetched {$endpoint} page {$currentPage}/{$totalPages}");
                         if ($reporter) {
@@ -897,20 +956,20 @@ class ImportGrades extends Command
         // ====================================================================
         $activeKeysAfterImport = StudentGrade::where('lesson_date', '>=', $dateStart)
             ->where('lesson_date', '<=', $dateEnd)
-            ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code'])
+            ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code', 'training_type_code'])
             ->map(fn ($g) => $g->student_hemis_id . '_' . $g->subject_id . '_' .
-                Carbon::parse($g->lesson_date)->toDateString() . '_' . $g->lesson_pair_code)
+                Carbon::parse($g->lesson_date)->toDateString() . '_' . $g->lesson_pair_code . '_' . $g->training_type_code)
             ->flip()
             ->toArray();
 
         $orphanCandidates = StudentGrade::onlyTrashed()
             ->whereIn('id', $activeIdsBeforeDelete)
-            ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code']);
+            ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code', 'training_type_code']);
 
         $orphanIds = [];
         foreach ($orphanCandidates as $orphan) {
             $key = $orphan->student_hemis_id . '_' . $orphan->subject_id . '_' .
-                Carbon::parse($orphan->lesson_date)->toDateString() . '_' . $orphan->lesson_pair_code;
+                Carbon::parse($orphan->lesson_date)->toDateString() . '_' . $orphan->lesson_pair_code . '_' . $orphan->training_type_code;
             if (!isset($activeKeysAfterImport[$key])) {
                 $orphanIds[] = $orphan->id;
             }
@@ -1239,6 +1298,7 @@ class ImportGrades extends Command
         $this->info("╚══════════════════════════════════════════════════════════╝");
 
         // Telegram — yangi xabar yuborish va ID saqlash
+        if ($this->option('silent')) return;
         $chatId = config('services.telegram.chat_id');
         if (!$chatId) return;
 
@@ -1254,6 +1314,9 @@ class ImportGrades extends Command
     private function updateDayProgress(string $key, string $icon, string $details, int $current, int $total): void
     {
         $this->dayStatuses[$key] = "{$icon} {$details}";
+
+        // Nightly wrapper ga progress yuborish (--silent rejimda)
+        $this->reportToNightly($current, $total);
 
         // Faqat Telegram yangilash — console allaqachon info() orqali yozilmoqda
         $chatId = config('services.telegram.chat_id');
@@ -1299,6 +1362,9 @@ class ImportGrades extends Command
             ? round((microtime(true) - $this->importStartTime) / 60, 1)
             : 0;
         $hasErrors = !empty($failedDays);
+
+        // Nightly wrapper ga yakuniy progress yuborish
+        $this->reportToNightly($successDays, $totalDays, true);
 
         // Console
         $this->newLine();
@@ -1347,6 +1413,29 @@ class ImportGrades extends Command
         if ($total <= 0) return '[' . str_repeat('░', $width) . ']';
         $filled = min($width, (int) round($current / $total * $width));
         return '[' . str_repeat('█', $filled) . str_repeat('░', $width - $filled) . ']';
+    }
+
+    /**
+     * Nightly wrapper ga progress yuborish (nightly:run ichidan chaqirilganda)
+     */
+    private function reportToNightly(int $current, int $total, bool $isDone = false): void
+    {
+        if (!app()->bound('nightly.progress')) return;
+
+        $bar = $this->makeProgressBar($current, $total);
+        $lines = ["{$bar} {$current}/{$total}"];
+
+        foreach ($this->dayStatuses as $d => $s) {
+            $label = (strlen($d) === 10 && ($d[4] ?? '') === '-') ? substr($d, 5) : $d;
+            $lines[] = "{$label} {$s}";
+        }
+
+        if ($isDone) {
+            $lines[] = "📊 {$current}/{$total} muvaffaqiyatli";
+        }
+
+        $callback = app('nightly.progress');
+        $callback(implode("\n", $lines));
     }
 
     // =========================================================================
@@ -1402,7 +1491,12 @@ class ImportGrades extends Command
         }
 
         // Holatni saqlash
-        file_put_contents($stateFile, json_encode($state));
+        try {
+            file_put_contents($stateFile, json_encode($state));
+        } catch (\Throwable $e) {
+            Log::warning("[LiveImport] telegram_live_daily.json yozishda xato: {$e->getMessage()}");
+            $this->warn("State fayl yozishda xato (hisobot davom etadi): {$e->getMessage()}");
+        }
 
         // Console uchun ham chiqarish
         $this->info($line);
@@ -1418,6 +1512,7 @@ class ImportGrades extends Command
 
     private function sendTelegramReport()
     {
+        if ($this->option('silent')) return;
         $mode = $this->option('mode');
         $lines = ["{$mode} import natijasi (" . Carbon::now()->format('d.m.Y H:i') . "):"];
 

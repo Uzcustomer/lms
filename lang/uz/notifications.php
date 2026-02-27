@@ -8,9 +8,9 @@ return [
     'logout' => 'Chiqish',
 
     // Tabs
-    'inbox' => 'Kelgan xabarlar',
+    'inbox' => 'Kelgan',
     'sent' => "Jo'natilgan",
-    'drafts' => 'Qoralamalar',
+    'drafts' => 'Qoralama',
 
     // Actions
     'compose' => 'Yangi xabar',
@@ -31,8 +31,14 @@ return [
     'subject_placeholder' => 'Xabar mavzusini kiriting',
     'body' => 'Matn',
     'body_placeholder' => 'Xabar matnini kiriting...',
+    'search_placeholder' => 'Xabarlardan qidirish...',
+    'senders' => "Jo'natuvchilar",
+    'role' => 'Rol',
+    'all' => 'Barchasi',
     'from' => 'Kimdan',
+    'to' => 'Kimga',
     'date' => 'Sana',
+    'type' => 'Turi',
     'system' => 'Tizim',
 
     // Types
@@ -50,4 +56,11 @@ return [
     'no_permission' => 'Sizda bu amalni bajarish huquqi yo\'q',
     'all_marked_read' => 'Barcha xabarlar o\'qilgan deb belgilandi',
     'confirm_delete' => 'Haqiqatan ham o\'chirmoqchimisiz?',
+
+    // Reply
+    'reply' => 'Javob berish',
+    'reply_to' => 'Javob:',
+    'reply_placeholder' => 'Javob matnini kiriting...',
+    'reply_sent' => 'Javob muvaffaqiyatli jo\'natildi',
+    'cancel' => 'Bekor qilish',
 ];

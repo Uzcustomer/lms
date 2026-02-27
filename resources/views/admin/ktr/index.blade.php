@@ -289,12 +289,12 @@
 
                     <!-- Tugmalar -->
                     <div style="display: flex; justify-content: space-between; margin-top: 16px; align-items: center;">
-                        <button type="button" class="ktr-btn ktr-btn-export" onclick="exportKtrPlan()">
+                        <a id="ktr-word-export-btn" href="#" class="ktr-btn ktr-btn-export" target="_blank" style="text-decoration:none; display:none;">
                             <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
-                            Excel
-                        </button>
+                            Word
+                        </a>
                         <div style="display: flex; gap: 10px;">
                             <button type="button" class="ktr-btn ktr-btn-edit" id="ktr-edit-btn" onclick="onKtrEditClick()" style="display:none;">
                                 <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -502,6 +502,14 @@
                     ktrState.canEdit = data.can_edit || false;
                     ktrState.hasPlan = !!(data.plan && data.plan.week_count);
                     ktrState.approverInfo = data.approver_info || {};
+
+                    // Word eksport linkini yangilash (faqat reja bo'lsa ko'rsatish)
+                    $('#ktr-word-export-btn').attr('href', '/admin/ktr/export-word/' + csId);
+                    if (ktrState.hasPlan) {
+                        $('#ktr-word-export-btn').show();
+                    } else {
+                        $('#ktr-word-export-btn').hide();
+                    }
                     ktrState.changeRequest = data.change_request || null;
 
                     // Saqlangan ma'lumotlarni yuklash
@@ -607,10 +615,16 @@
             var html = '<div class="ktr-change-box">';
             html += '<div class="ktr-change-title">KTR o\'zgartirish uchun ruxsat kerak</div>';
             html += '<div class="ktr-change-desc">Siz KTRni o\'zgartirish uchun quyidagilardan ruxsat so\'rashingiz kerak:</div>';
+            if (info.kafedra_name || info.faculty_name) {
+                html += '<div style="margin-bottom:8px; font-size:13px; color:#374151;">';
+                if (info.faculty_name) html += '<div><b>Fakultet:</b> ' + info.faculty_name + '</div>';
+                if (info.kafedra_name) html += '<div><b>Kafedra:</b> ' + info.kafedra_name + '</div>';
+                html += '</div>';
+            }
             html += '<ul class="ktr-approver-list">';
-            html += '<li><b>Kafedra mudiri</b>: ' + (info.kafedra_mudiri ? info.kafedra_mudiri.name : 'Topilmadi') + ' <span style="color:#94a3b8;">(' + (info.kafedra_name || '') + ')</span></li>';
-            html += '<li><b>Dekan</b>: ' + (info.dekan ? info.dekan.name : 'Topilmadi') + ' <span style="color:#94a3b8;">(' + (info.faculty_name || '') + ')</span></li>';
-            html += '<li><b>Registrator ofisi</b>: ' + (info.registrator ? info.registrator.name : 'Topilmadi') + '</li>';
+            html += '<li><b>Kafedra mudiri</b>: ' + (info.kafedra_mudiri ? info.kafedra_mudiri.name : 'Topilmadi') + '</li>';
+            html += '<li><b>Dekan</b>: ' + (info.dekan ? info.dekan.name : 'Topilmadi') + '</li>';
+            html += '<li><b>Registrator ofisi</b></li>';
             html += '</ul>';
             html += '<button type="button" class="ktr-btn ktr-btn-primary" onclick="sendChangeRequest()" id="ktr-request-btn">Ruxsat so\'rash</button>';
             html += '</div>';
@@ -625,13 +639,21 @@
                 html += '<div class="ktr-change-title" style="color:#059669;">Barcha tasdiqlar olingan!</div>';
                 html += '<div class="ktr-change-desc">Endi "O\'zgartirish" tugmasini bosib tahrirlashingiz mumkin.</div>';
             } else {
-                html += '<div class="ktr-change-title">O\'zgartirish so\'rovi holati</div>';
+                html += '<div class="ktr-change-title">Ruxsat holati</div>';
             }
-            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
+            var info = ktrState.approverInfo;
+            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Bo\'lim</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
             cr.approvals.forEach(function(a) {
+                var bolim = '-';
+                if (a.role === 'kafedra_mudiri') {
+                    bolim = info.kafedra_name || '-';
+                } else if (a.role === 'dekan') {
+                    bolim = info.faculty_name || '-';
+                }
                 html += '<tr>';
                 html += '<td>' + getRoleName(a.role) + '</td>';
                 html += '<td>' + a.approver_name + '</td>';
+                html += '<td>' + bolim + '</td>';
                 html += '<td>' + getStatusBadge(a.status) + '</td>';
                 html += '<td>' + (a.responded_at || '-') + '</td>';
                 html += '</tr>';
@@ -905,6 +927,9 @@
                         $('#ktr-validation-msg')
                             .html(resp.message)
                             .removeClass('ktr-msg-error').addClass('ktr-msg-success').show();
+                        // Saqlangandan keyin Word eksport tugmasini ko'rsatish
+                        ktrState.hasPlan = true;
+                        $('#ktr-word-export-btn').show();
                         setTimeout(function() { $('#ktr-modal-overlay').fadeOut(200); }, 1000);
                     }
                 },
@@ -1556,6 +1581,26 @@
             border-radius: 6px;
             font-size: 11px;
             font-weight: 600;
+        }
+        .ktr-info-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .ktr-info-item {
+            display: inline-flex;
+            align-items: center;
+            font-size: 13px;
+            color: #334155;
+        }
+        .ktr-info-item b {
+            margin-right: 4px;
+            color: #475569;
         }
         .ktr-approved { background: #dcfce7; color: #166534; }
         .ktr-rejected { background: #fef2f2; color: #dc2626; }

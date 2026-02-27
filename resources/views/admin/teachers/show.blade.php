@@ -480,6 +480,15 @@
             <div id="subject-search-results" class="subject-search-results">
                 <div class="subject-search-empty">Fan nomini kiriting va qidiring</div>
             </div>
+            <div class="subject-modal-footer">
+                <span id="subject-selected-count" style="font-size: 12px; color: #64748b;">0 ta fan tanlangan</span>
+                <button type="button" id="subject-save-btn" onclick="saveSelectedSubjects()" class="subject-save-btn" disabled>
+                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Saqlash
+                </button>
+            </div>
         </div>
     </div>
 
@@ -595,7 +604,12 @@
             });
         }
 
+        // Vaqtincha tanlangan fanlar (modal ichida)
+        var pendingSubjects = [];
+
         function openSubjectModal() {
+            pendingSubjects = [];
+            updateSelectedCount();
             document.getElementById('subject-modal').style.display = 'flex';
             document.getElementById('subject-search-input').value = '';
             document.getElementById('subject-course-filter').value = '';
@@ -608,6 +622,74 @@
 
         function closeSubjectModal() {
             document.getElementById('subject-modal').style.display = 'none';
+            pendingSubjects = [];
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            var count = pendingSubjects.length;
+            var countEl = document.getElementById('subject-selected-count');
+            var btn = document.getElementById('subject-save-btn');
+            countEl.textContent = count + ' ta fan tanlangan';
+            btn.disabled = count === 0;
+        }
+
+        function toggleSubjectCheck(id, name, code) {
+            var idx = -1;
+            for (var i = 0; i < pendingSubjects.length; i++) {
+                if (pendingSubjects[i].id === id) { idx = i; break; }
+            }
+
+            if (idx >= 0) {
+                pendingSubjects.splice(idx, 1);
+            } else {
+                pendingSubjects.push({ id: id, name: name, code: code });
+            }
+
+            // Checkbox ko'rinishini yangilash
+            var checkbox = document.getElementById('subject-check-' + id);
+            if (checkbox) {
+                checkbox.checked = idx < 0;
+            }
+            var item = document.getElementById('subject-item-' + id);
+            if (item) {
+                if (idx < 0) {
+                    item.classList.add('subject-result-checked');
+                } else {
+                    item.classList.remove('subject-result-checked');
+                }
+            }
+            updateSelectedCount();
+        }
+
+        function isPendingSubject(id) {
+            for (var i = 0; i < pendingSubjects.length; i++) {
+                if (pendingSubjects[i].id === id) return true;
+            }
+            return false;
+        }
+
+        function saveSelectedSubjects() {
+            var container = document.getElementById('selected-subjects');
+            pendingSubjects.forEach(function(subject) {
+                if (isSubjectSelected(subject.id)) return;
+
+                var div = document.createElement('div');
+                div.className = 'selected-subject-item';
+                div.setAttribute('data-id', subject.id);
+                div.innerHTML =
+                    '<input type="hidden" name="responsible_subjects[]" value="' + subject.id + '">' +
+                    '<div style="flex: 1; min-width: 0;">' +
+                    '<span style="font-weight: 600; font-size: 12px; color: #1e293b;">' + escapeHtml(subject.name) + '</span>' +
+                    (subject.code ? '<span style="font-size: 10px; color: #64748b; margin-left: 4px;">' + escapeHtml(subject.code) + '</span>' : '') +
+                    '</div>' +
+                    '<button type="button" onclick="removeSubject(this)" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: #fee2e2; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1;">&times;</button>';
+                container.appendChild(div);
+            });
+
+            pendingSubjects = [];
+            document.getElementById('subject-modal').style.display = 'none';
+            updateSelectedCount();
         }
 
         function searchSubjects() {
@@ -639,20 +721,27 @@
 
                     var html = '';
                     subjects.forEach(function(subject) {
-                        var isAlreadySelected = isSubjectSelected(subject.id);
-                        html += '<div class="subject-result-item ' + (isAlreadySelected ? 'subject-result-disabled' : '') + '" ' +
-                            (isAlreadySelected ? '' : 'onclick="selectSubject(' + subject.id + ', \'' + escapeHtml(subject.subject_name) + '\', \'' + escapeHtml(subject.subject_code || '') + '\', \'' + escapeHtml(subject.semester_name || '') + '\')"') + '>' +
-                            '<div style="flex: 1; min-width: 0;">' +
-                            '<div style="font-weight: 600; font-size: 13px; color: #1e293b;">' + escapeHtml(subject.subject_name) + '</div>' +
-                            '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">' +
-                            (subject.subject_code ? 'Kod: ' + escapeHtml(subject.subject_code) : '') +
-                            (subject.semester_name ? ' | ' + escapeHtml(subject.semester_name) : '') +
-                            (subject.department_name ? ' | ' + escapeHtml(subject.department_name) : '') +
-                            '</div>' +
-                            '</div>' +
-                            (isAlreadySelected ? '<span style="font-size: 11px; color: #059669; font-weight: 600;">Tanlangan</span>' :
-                            '<svg style="width: 16px; height: 16px; color: #3b82f6; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>') +
-                            '</div>';
+                        var isAlreadyAdded = isSubjectSelected(subject.id);
+                        var isPending = isPendingSubject(subject.id);
+
+                        if (isAlreadyAdded) {
+                            html += '<div class="subject-result-item subject-result-disabled">' +
+                                '<div style="flex: 1; min-width: 0;">' +
+                                '<div style="font-weight: 600; font-size: 13px; color: #1e293b;">' + escapeHtml(subject.subject_name) + '</div>' +
+                                (subject.subject_code ? '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">Kod: ' + escapeHtml(subject.subject_code) + '</div>' : '') +
+                                '</div>' +
+                                '<span style="font-size: 11px; color: #059669; font-weight: 600;">Qo\'shilgan</span>' +
+                                '</div>';
+                        } else {
+                            html += '<div id="subject-item-' + subject.id + '" class="subject-result-item' + (isPending ? ' subject-result-checked' : '') + '" ' +
+                                'onclick="toggleSubjectCheck(' + subject.id + ', \'' + escapeJsString(subject.subject_name) + '\', \'' + escapeJsString(subject.subject_code || '') + '\')">' +
+                                '<input type="checkbox" id="subject-check-' + subject.id + '" ' + (isPending ? 'checked' : '') + ' class="subject-checkbox" onclick="event.stopPropagation(); toggleSubjectCheck(' + subject.id + ', \'' + escapeJsString(subject.subject_name) + '\', \'' + escapeJsString(subject.subject_code || '') + '\')">' +
+                                '<div style="flex: 1; min-width: 0;">' +
+                                '<div style="font-weight: 600; font-size: 13px; color: #1e293b;">' + escapeHtml(subject.subject_name) + '</div>' +
+                                (subject.subject_code ? '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">Kod: ' + escapeHtml(subject.subject_code) + '</div>' : '') +
+                                '</div>' +
+                                '</div>';
+                        }
                     });
 
                     resultsDiv.innerHTML = html;
@@ -668,24 +757,8 @@
             return !!document.querySelector('#selected-subjects .selected-subject-item[data-id="' + id + '"]');
         }
 
-        function selectSubject(id, name, code, semester) {
-            if (isSubjectSelected(id)) return;
-
-            var container = document.getElementById('selected-subjects');
-            var div = document.createElement('div');
-            div.className = 'selected-subject-item';
-            div.setAttribute('data-id', id);
-            div.innerHTML =
-                '<input type="hidden" name="responsible_subjects[]" value="' + id + '">' +
-                '<div style="flex: 1; min-width: 0;">' +
-                '<span style="font-weight: 600; font-size: 12px; color: #1e293b;">' + escapeHtml(name) + '</span>' +
-                (code ? '<span style="font-size: 10px; color: #64748b; margin-left: 4px;">' + escapeHtml(code) + '</span>' : '') +
-                (semester ? '<span style="font-size: 10px; color: #64748b;"> | ' + escapeHtml(semester) + '</span>' : '') +
-                '</div>' +
-                '<button type="button" onclick="removeSubject(this)" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: #fee2e2; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1;">&times;</button>';
-            container.appendChild(div);
-
-            closeSubjectModal();
+        function escapeJsString(str) {
+            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
 
         function removeSubject(btn) {
@@ -1224,6 +1297,21 @@
             background: #f0f9ff;
             border-color: #bae6fd;
         }
+        .subject-result-checked {
+            background: #eff6ff;
+            border-color: #93c5fd;
+        }
+        .subject-result-checked:hover {
+            background: #dbeafe;
+            border-color: #60a5fa;
+        }
+        .subject-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: #3b82f6;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
         .subject-result-disabled {
             opacity: 0.5;
             cursor: default;
@@ -1231,6 +1319,35 @@
         .subject-result-disabled:hover {
             background: transparent;
             border-color: transparent;
+        }
+        .subject-modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-top: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        .subject-save-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: none;
+            background: #3b82f6;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .subject-save-btn:hover:not(:disabled) {
+            background: #2563eb;
+        }
+        .subject-save-btn:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
         }
     </style>
 </x-app-layout>

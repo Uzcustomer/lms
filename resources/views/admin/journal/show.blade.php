@@ -1,5 +1,16 @@
 <x-app-layout>
     <style>
+        /* Sababli NB katakchalar uchun stil */
+        .excuse-nb-cell {
+            background: #dbeafe;
+            color: #1e40af;
+            border-radius: 2px;
+            padding: 1px 2px;
+        }
+        .excuse-nb-cell:hover {
+            background: #bfdbfe;
+        }
+
         .tab-content {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -1138,8 +1149,13 @@
                                                                     break;
                                                                 }
                                                             }
+                                                            $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                         @endphp
-                                                        <span class="{{ $daySababli ? 'text-green-600' : 'text-red-600' }} font-medium">NB</span>
+                                                        @if($hasApprovedExcuse)
+                                                            <span class="excuse-nb-cell font-medium" title="Sababli (tasdiqlangan hujjat)">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
+                                                        @else
+                                                            <span class="{{ $daySababli ? 'text-green-600' : 'text-red-600' }} font-medium">NB</span>
+                                                        @endif
                                                     @else
                                                         <span class="text-gray-300">-</span>
                                                     @endif
@@ -1402,8 +1418,18 @@
                                                             $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
                                                             $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
                                                             $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                            $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
+                                                            $excuseAlreadySaved = isset($excuseGradeSnapshots[$student->hemis_id]);
                                                         @endphp
-                                                        @if($showRatingInput)
+                                                        @if($hasApprovedExcuse && !$hasRetake && !$excuseAlreadySaved)
+                                                            {{-- Sababli NB — modal orqali baho kiritish --}}
+                                                            <div class="excuse-nb-cell editable-cell cursor-pointer hover:bg-amber-100"
+                                                                 onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }})"
+                                                                 title="Sababli — bosib baho kiriting">
+                                                                <span class="font-medium">NB</span>
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                                            </div>
+                                                        @elseif($showRatingInput)
                                                             {{-- NB — otrabotka qilish mumkin --}}
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
                                                                 <span class="{{ $nbColorClass }} font-medium">NB</span>
@@ -1507,6 +1533,48 @@
                                     class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
                                     onclick="submitToYn()">
                                     YN ga yuborish
+                                </button>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+                @endif
+
+                {{-- Sababli baholar paneli — YN yuborilgandan keyin ko'rinadi --}}
+                @if(isset($ynSubmission) && $ynSubmission && $approvedExcuses->isNotEmpty())
+                <div class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="font-semibold text-amber-800 flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                Sababli baholar (tasdiqlangan hujjatlar)
+                            </h4>
+                            <p class="text-sm text-amber-700 mt-1">
+                                {{ $approvedExcuses->count() }} ta talabaning sababli hujjati tasdiqlangan.
+                                NB katakchalarni bosib baho kiriting, keyin "YN ga yuborish" tugmasini bosing.
+                            </p>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                @foreach($approvedExcuses as $excuse)
+                                    @php
+                                        $alreadySaved = isset($excuseGradeSnapshots[$excuse->student_hemis_id]);
+                                    @endphp
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {{ $alreadySaved ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800' }}">
+                                        {{ $excuse->student_full_name }}
+                                        @if($alreadySaved) &#10003; @endif
+                                    </span>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div>
+                            @if($excuseGradeSnapshots->isNotEmpty() && $excuseGradeSnapshots->count() >= $approvedExcuses->count())
+                                <div class="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-medium text-sm">
+                                    Sababli baholar YN ga yuborilgan
+                                </div>
+                            @elseif($canSubmitYn ?? false)
+                                <button type="button" id="btn-submit-excuse-yn"
+                                    class="px-6 py-3 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700 transition shadow-sm"
+                                    onclick="submitExcuseToYn()">
+                                    Sababli baholarni YN ga yuborish
                                 </button>
                             @endif
                         </div>
@@ -3697,5 +3765,204 @@
                 btn.style.opacity = '1';
             });
         }
+        // === SABABLI BAHO MODAL ===
+        function openExcuseModal(studentHemisId, studentName, gradeId, excuseId) {
+            document.getElementById('excuse-modal-student-name').textContent = studentName;
+            document.getElementById('excuse-modal-hemis-id').textContent = studentHemisId;
+            document.getElementById('excuse-modal-grade-input').value = '';
+            document.getElementById('excuse-modal-comment').value = '';
+            document.getElementById('excuse-modal-save-btn').disabled = false;
+            document.getElementById('excuse-modal-save-btn').textContent = 'Saqlash';
+
+            // Data atributlarga yozish
+            const modal = document.getElementById('excuse-modal');
+            modal.dataset.studentHemisId = studentHemisId;
+            modal.dataset.gradeId = gradeId;
+            modal.dataset.excuseId = excuseId;
+
+            // Sababli hujjat ma'lumotlarini ko'rsatish
+            @if(isset($approvedExcuses) && $approvedExcuses->isNotEmpty())
+            @php
+                $excuseDataJson = $approvedExcuses->map(function($e) {
+                    return [
+                        'id' => $e->id,
+                        'hemis_id' => $e->student_hemis_id,
+                        'reason' => $e->reason_label,
+                        'start' => $e->start_date ? $e->start_date->format('d.m.Y') : '',
+                        'end' => $e->end_date ? $e->end_date->format('d.m.Y') : '',
+                        'doc_number' => $e->doc_number,
+                    ];
+                })->keyBy('hemis_id');
+            @endphp
+            const excuseData = @json($excuseDataJson);
+            const info = excuseData[studentHemisId];
+            if (info) {
+                document.getElementById('excuse-modal-reason').textContent = info.reason;
+                document.getElementById('excuse-modal-dates').textContent = info.start + ' \u2014 ' + info.end;
+                document.getElementById('excuse-modal-doc').textContent = info.doc_number || '\u2014';
+            }
+            @endif
+
+            modal.classList.remove('hidden');
+            document.getElementById('excuse-modal-grade-input').focus();
+        }
+
+        function closeExcuseModal() {
+            document.getElementById('excuse-modal').classList.add('hidden');
+        }
+
+        function saveExcuseGrade() {
+            const modal = document.getElementById('excuse-modal');
+            const grade = parseFloat(document.getElementById('excuse-modal-grade-input').value);
+            const comment = document.getElementById('excuse-modal-comment').value.trim();
+
+            if (isNaN(grade) || grade < 0 || grade > 100) {
+                alert('Baho 0 dan 100 gacha bo\'lishi kerak.');
+                return;
+            }
+
+            const btn = document.getElementById('excuse-modal-save-btn');
+            btn.disabled = true;
+            btn.textContent = 'Saqlanmoqda...';
+
+            fetch('{{ route("admin.journal.save-excuse-grade") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    student_hemis_id: modal.dataset.studentHemisId,
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                    grade_id: parseInt(modal.dataset.gradeId),
+                    grade: grade,
+                    comment: comment,
+                    absence_excuse_id: parseInt(modal.dataset.excuseId),
+                })
+            })
+            .then(r => r.json().then(data => ({ok: r.ok, data})))
+            .then(({ok, data}) => {
+                if (ok && data.success) {
+                    closeExcuseModal();
+                    // Muvaffaqiyat xabari
+                    const notif = document.createElement('div');
+                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#f59e0b; color:#fff; padding:12px 24px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.2); font-size:14px; font-weight:600;';
+                    notif.textContent = 'Sababli baho saqlandi: ' + data.grade;
+                    document.body.appendChild(notif);
+                    setTimeout(() => { notif.remove(); location.reload(); }, 1500);
+                } else {
+                    alert(data.message || 'Xatolik yuz berdi');
+                    btn.disabled = false;
+                    btn.textContent = 'Saqlash';
+                }
+            })
+            .catch(err => {
+                alert('Xatolik: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Saqlash';
+            });
+        }
+
+        function submitExcuseToYn() {
+            const warn = confirm(
+                'Sababli talabalarning yangilangan baholari YN ga yuboriladi.\n\n' +
+                'Davom etasizmi?'
+            );
+            if (!warn) return;
+
+            const btn = document.getElementById('btn-submit-excuse-yn');
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+            btn.style.opacity = '0.6';
+
+            fetch('{{ route("admin.journal.submit-excuse-to-yn") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                })
+            })
+            .then(r => r.json().then(data => ({ok: r.ok, data})))
+            .then(({ok, data}) => {
+                if (ok && data.success) {
+                    const notif = document.createElement('div');
+                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#10b981; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
+                    notif.textContent = data.message;
+                    document.body.appendChild(notif);
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    alert(data.message || 'Xatolik yuz berdi');
+                    btn.disabled = false;
+                    btn.textContent = 'Sababli baholarni YN ga yuborish';
+                    btn.style.opacity = '1';
+                }
+            })
+            .catch(err => {
+                alert('Xatolik: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Sababli baholarni YN ga yuborish';
+                btn.style.opacity = '1';
+            });
+        }
     </script>
+
+    {{-- Sababli baho kiritish modal oynasi --}}
+    <div id="excuse-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onclick="if(event.target===this) closeExcuseModal()">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div class="bg-amber-500 px-6 py-4 text-white">
+                <h3 class="text-lg font-bold">Sababli baho kiritish</h3>
+                <p class="text-amber-100 text-sm">Tasdiqlangan sababli hujjat asosida</p>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                {{-- Talaba ma'lumotlari --}}
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <div class="text-sm text-gray-600">Talaba:</div>
+                    <div class="font-semibold text-gray-900" id="excuse-modal-student-name"></div>
+                    <div class="text-xs text-gray-500">HEMIS ID: <span id="excuse-modal-hemis-id"></span></div>
+                </div>
+                {{-- Sababli hujjat ma'lumotlari --}}
+                <div class="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                    <div class="text-sm font-medium text-amber-800 mb-1">Sababli hujjat:</div>
+                    <div class="text-sm text-amber-700">
+                        <div>Sabab: <span class="font-medium" id="excuse-modal-reason"></span></div>
+                        <div>Muddat: <span class="font-medium" id="excuse-modal-dates"></span></div>
+                        <div>Hujjat №: <span class="font-medium" id="excuse-modal-doc"></span></div>
+                    </div>
+                </div>
+                {{-- Baho kiritish --}}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Baho (0-100)</label>
+                    <input type="number" id="excuse-modal-grade-input" min="0" max="100" step="1"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-lg font-semibold text-center"
+                           placeholder="Bahoni kiriting"
+                           onkeydown="if(event.key==='Enter') saveExcuseGrade(); if(event.key==='Escape') closeExcuseModal();">
+                </div>
+                {{-- Izoh --}}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Izoh (ixtiyoriy)</label>
+                    <textarea id="excuse-modal-comment" rows="2"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+                              placeholder="Qo'shimcha izoh..."></textarea>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
+                <button type="button" onclick="closeExcuseModal()" class="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                    Bekor qilish
+                </button>
+                <button type="button" id="excuse-modal-save-btn" onclick="saveExcuseGrade()"
+                        class="px-6 py-2 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700 transition">
+                    Saqlash
+                </button>
+            </div>
+        </div>
+    </div>
 </x-app-layout>

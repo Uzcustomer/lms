@@ -53,8 +53,20 @@ class AbsenceExcuseController extends Controller
 
         $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
 
+        // Shu muddat ichidagi barcha darslardan unique fanlarni olish (JN uchun)
+        $jnSubjects = Schedule::where('group_id', $groupId)
+            ->whereDate('lesson_date', '>=', $startDate)
+            ->whereDate('lesson_date', '<=', $endDate)
+            ->select('subject_name', 'subject_id')
+            ->distinct()
+            ->get()
+            ->map(fn($s) => ['subject_name' => $s->subject_name, 'subject_id' => $s->subject_id])
+            ->values()
+            ->toArray();
+
         return response()->json([
             'assessments' => $missedAssessments->values()->toArray(),
+            'jn_subjects' => $jnSubjects,
         ]);
     }
 
@@ -78,7 +90,7 @@ class AbsenceExcuseController extends Controller
                         if ($reasonData && $reasonData['max_days']) {
                             $start = Carbon::parse($request->start_date);
                             $end = Carbon::parse($value);
-                            $days = $start->diffInDays($end) + 1;
+                            $days = $this->countNonSundays($start, $end);
                             if ($days > $reasonData['max_days']) {
                                 $fail("Tanlangan sabab uchun maksimum {$reasonData['max_days']} kun ruxsat etiladi. Siz {$days} kun belgiladingiz.");
                             }
@@ -110,11 +122,11 @@ class AbsenceExcuseController extends Controller
                 'file',
                 'max:10240',
                 function ($attribute, $value, $fail) {
-                    $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'];
+                    $allowedExtensions = ['pdf', 'jpg', 'jpeg'];
                     $clientExt = strtolower($value->getClientOriginalExtension());
                     $guessedExt = $value->guessExtension();
                     if (!in_array($clientExt, $allowedExtensions) && !in_array($guessedExt, $allowedExtensions)) {
-                        $fail('Faqat PDF, JPG, PNG, DOC, DOCX formatdagi fayllar qabul qilinadi.');
+                        $fail('Faqat PDF va JPG formatdagi fayllar qabul qilinadi.');
                     }
                 },
             ],
@@ -124,7 +136,9 @@ class AbsenceExcuseController extends Controller
             'makeup_dates.*.assessment_type' => 'required|string',
             'makeup_dates.*.assessment_type_code' => 'required|string',
             'makeup_dates.*.original_date' => 'required|date',
-            'makeup_dates.*.makeup_date' => 'required|date|after_or_equal:today',
+            'makeup_dates.*.makeup_date' => 'nullable|date|after_or_equal:today',
+            'makeup_dates.*.makeup_start' => 'nullable|date|after_or_equal:today',
+            'makeup_dates.*.makeup_end' => 'nullable|date|after_or_equal:today',
         ], [
             'reason.required' => 'Sababni tanlang',
             'reason.in' => 'Noto\'g\'ri sabab tanlangan',
@@ -135,9 +149,28 @@ class AbsenceExcuseController extends Controller
             'end_date.after_or_equal' => 'Tugash sanasi boshlanish sanasidan oldin bo\'lmasligi kerak',
             'file.required' => 'Hujjat yuklash majburiy',
             'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak',
-            'makeup_dates.*.makeup_date.required' => 'Har bir nazorat uchun qayta topshirish sanasini tanlang',
             'makeup_dates.*.makeup_date.after_or_equal' => 'Qayta topshirish sanasi bugungi kundan oldin bo\'lmasligi kerak',
+            'makeup_dates.*.makeup_start.after_or_equal' => 'JN boshlanish sanasi bugungi kundan oldin bo\'lmasligi kerak',
+            'makeup_dates.*.makeup_end.after_or_equal' => 'JN tugash sanasi bugungi kundan oldin bo\'lmasligi kerak',
         ]);
+
+        // Har bir makeup uchun sana mavjudligini tekshirish
+        $makeupDates = $request->input('makeup_dates', []);
+        foreach ($makeupDates as $i => $makeup) {
+            if (($makeup['assessment_type'] ?? '') === 'jn') {
+                if (empty($makeup['makeup_start']) || empty($makeup['makeup_end'])) {
+                    return back()->withErrors([
+                        "makeup_dates.{$i}.makeup_start" => ($makeup['subject_name'] ?? 'JN') . ' uchun sana oralig\'ini tanlang',
+                    ])->withInput();
+                }
+            } else {
+                if (empty($makeup['makeup_date'])) {
+                    return back()->withErrors([
+                        "makeup_dates.{$i}.makeup_date" => ($makeup['subject_name'] ?? 'Nazorat') . ' uchun qayta topshirish sanasini tanlang',
+                    ])->withInput();
+                }
+            }
+        }
 
         $file = $request->file('file');
         $filePath = $file->store('absence-excuses/' . $student->hemis_id, 'public');
@@ -161,12 +194,20 @@ class AbsenceExcuseController extends Controller
             ]);
 
             // Makeup sanalarni saqlash
-            $makeupDates = $request->input('makeup_dates', []);
             foreach ($makeupDates as $makeup) {
-                // Yakshanba tekshiruvi
-                $makeupDate = Carbon::parse($makeup['makeup_date']);
-                if ($makeupDate->isSunday()) {
+                // JN uchun makeup_start, boshqalar uchun makeup_date
+                $dateToSave = ($makeup['assessment_type'] === 'jn')
+                    ? ($makeup['makeup_start'] ?? $makeup['makeup_date'])
+                    : $makeup['makeup_date'];
+
+                $parsedDate = Carbon::parse($dateToSave);
+                if ($parsedDate->isSunday()) {
                     throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
+                }
+
+                $makeupEndDate = null;
+                if (($makeup['assessment_type'] ?? '') === 'jn' && !empty($makeup['makeup_end'])) {
+                    $makeupEndDate = $makeup['makeup_end'];
                 }
 
                 AbsenceExcuseMakeup::create([
@@ -177,7 +218,8 @@ class AbsenceExcuseController extends Controller
                     'assessment_type' => $makeup['assessment_type'],
                     'assessment_type_code' => $makeup['assessment_type_code'],
                     'original_date' => $makeup['original_date'],
-                    'makeup_date' => $makeup['makeup_date'],
+                    'makeup_date' => $dateToSave,
+                    'makeup_end_date' => $makeupEndDate,
                     'status' => 'scheduled',
                 ]);
             }
@@ -224,7 +266,7 @@ class AbsenceExcuseController extends Controller
             $excuse->load('makeups');
         }
 
-        $absentDaysCount = $startDate->diffInDays($endDate) + 1;
+        $absentDaysCount = $this->countNonSundays($startDate, $endDate);
 
         return view('student.absence-excuses.schedule-check', compact('excuse', 'missedAssessments', 'absentDaysCount'));
     }
@@ -262,7 +304,7 @@ class AbsenceExcuseController extends Controller
         }
 
         $uniqueDates = collect($makeupDates)->unique()->count();
-        $absentDaysCount = $excuse->start_date->diffInDays($excuse->end_date) + 1;
+        $absentDaysCount = $this->countNonSundays($excuse->start_date, $excuse->end_date);
 
         if ($uniqueDates > $absentDaysCount) {
             return back()->withErrors([
@@ -347,6 +389,22 @@ class AbsenceExcuseController extends Controller
                 'sent_at' => now(),
             ]);
         }
+    }
+
+    /**
+     * Yakshanbalarni hisobdan chiqarib, kunlarni sanash
+     */
+    private function countNonSundays(Carbon $start, Carbon $end): int
+    {
+        $days = 0;
+        $current = $start->copy();
+        while ($current->lte($end)) {
+            if ($current->dayOfWeek !== Carbon::SUNDAY) {
+                $days++;
+            }
+            $current->addDay();
+        }
+        return $days;
     }
 
     /**

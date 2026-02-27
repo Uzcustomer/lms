@@ -86,17 +86,18 @@
         .rc-day.rc-taken { background: #fef3c7; color: #92400e; cursor: not-allowed; }
 
         /* ======= MINI CALENDAR (assessment cards) ======= */
-        .rc-mini .rc-header { padding: 5px 8px; }
-        .rc-mini .rc-header-title { font-size: 11px; }
-        .rc-mini .rc-nav { width: 22px; height: 22px; border-radius: 5px; }
-        .rc-mini .rc-weekdays { padding: 3px 4px 2px; }
-        .rc-mini .rc-weekdays span { font-size: 8px; }
-        .rc-mini .rc-grid { gap: 0; padding: 2px 4px 4px; }
-        .rc-mini .rc-day { font-size: 10px; min-height: 24px; border-radius: 4px; }
-        .rc-mini .rc-day.rc-start { border-radius: 4px 1px 1px 4px; }
-        .rc-mini .rc-day.rc-end { border-radius: 1px 4px 4px 1px; }
-        .rc-mini .rc-day.rc-start.rc-end { border-radius: 4px; }
-        .rc-mini .rc-day.rc-in-range { border-radius: 1px; }
+        .rc-mini { height: 250px; display: flex; flex-direction: column; }
+        .rc-mini .rc-header { padding: 6px 10px; flex-shrink: 0; }
+        .rc-mini .rc-header-title { font-size: 12px; }
+        .rc-mini .rc-nav { width: 24px; height: 24px; border-radius: 5px; }
+        .rc-mini .rc-weekdays { padding: 4px 6px 3px; flex-shrink: 0; }
+        .rc-mini .rc-weekdays span { font-size: 9px; }
+        .rc-mini .rc-grid { gap: 0; padding: 2px 6px 6px; flex: 1; align-content: start; }
+        .rc-mini .rc-day { font-size: 11px; min-height: 30px; border-radius: 5px; }
+        .rc-mini .rc-day.rc-start { border-radius: 5px 2px 2px 5px; }
+        .rc-mini .rc-day.rc-end { border-radius: 2px 5px 5px 2px; }
+        .rc-mini .rc-day.rc-start.rc-end { border-radius: 5px; }
+        .rc-mini .rc-day.rc-in-range { border-radius: 2px; }
 
         /* ======= CARD STYLES ======= */
         .ae-card {
@@ -135,17 +136,31 @@
         .ae-file-zone:hover { border-color: #818cf8; background: #eef2ff; }
         .ae-file-zone.has-file { border-color: #34d399; background: #ecfdf5; }
 
-        /* ======= ASSESSMENT CARD ======= */
-        .assessment-card {
-            background: #fff; border: 1.5px solid #e2e8f0; border-radius: 16px;
-            transition: all .2s; overflow: visible;
+        /* ======= FAN CARD GRID ======= */
+        .ae-fan-grid {
+            display: grid; gap: 14px;
         }
-        .assessment-card:hover { border-color: #c7d2fe; box-shadow: 0 4px 14px rgba(0,0,0,.05); }
-        .assessment-card-head {
-            padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
-            border-bottom: 1px solid #f1f5f9; flex-wrap: wrap; gap: 6px;
-            border-radius: 16px 16px 0 0; background: #fff;
+        .ae-fan-card {
+            background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px;
+            overflow: visible; min-width: 0;
         }
+        .ae-fan-header {
+            padding: 12px 16px; font-size: 14px; font-weight: 700; color: #1e293b;
+            background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+            border-radius: 14px 14px 0 0; display: flex; align-items: center; gap: 10px;
+            text-transform: uppercase; line-height: 1.3;
+        }
+        .ae-fan-num {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 26px; height: 26px; border-radius: 8px; font-size: 13px;
+            font-weight: 700; color: #6366f1; background: #eef2ff; flex-shrink: 0;
+        }
+        .ae-fan-name { flex: 1; min-width: 0; }
+        .ae-fan-item {
+            padding: 12px 16px; border-bottom: 1px solid #f1f5f9;
+        }
+        .ae-fan-item:last-child { border-bottom: none; }
+        .ae-fan-item .cal-dropdown { z-index: 100; }
 
         /* ======= SUBMIT BTN ======= */
         .ae-submit {
@@ -171,18 +186,65 @@
 
         /* ======= MOBILE ======= */
         @media (max-width: 640px) {
-            .ae-card-header { padding: 14px 16px; }
-            .ae-card-body { padding: 16px; }
+            /* Card */
+            .ae-card { border-radius: 12px; margin-bottom: 5px !important; }
+            .ae-card-header { padding: 12px 14px; gap: 8px; border-radius: 12px 12px 0 0; }
+            .ae-card-header-icon { width: 32px; height: 32px; border-radius: 8px; }
+            .ae-card-header-icon svg { width: 16px; height: 16px; }
+            .ae-card-header h3 { font-size: 14px; }
+            .ae-card-header p { font-size: 11px; }
+            .ae-card-body { padding: 14px; }
+
+            /* Form elements */
+            .ae-label { font-size: 13px; margin-bottom: 5px; }
+            .ae-input, .ae-select, .ae-textarea { font-size: 14px; padding: 10px 12px; border-radius: 10px; }
+            .ae-file-zone { min-height: 42px; padding: 8px 12px; border-radius: 10px; }
+            .ae-file-zone span { font-size: 12px !important; }
+
+            /* Calendar trigger */
+            .cal-trigger { font-size: 14px; padding: 10px 12px; border-radius: 10px; }
+
+            /* Calendar */
+            .cal-dropdown { border-radius: 10px; }
             .rc-header { padding: 6px 8px; }
             .rc-header-title { font-size: 11px; }
+            .rc-nav { width: 24px; height: 24px; }
             .rc-grid { padding: 3px 3px 4px; gap: 0; }
             .rc-day { font-size: 11px; min-height: 24px; }
             .rc-weekdays { padding: 3px 3px 2px; }
             .rc-weekdays span { font-size: 9px; }
-            .rc-mini .rc-day { font-size: 9px; min-height: 20px; }
-            .rc-mini .rc-header { padding: 4px 6px; }
-            .rc-mini .rc-header-title { font-size: 10px; }
-            .assessment-card-head { padding: 12px 14px; }
+
+            /* Mini calendar */
+            .rc-mini { height: 220px; }
+            .rc-mini .rc-day { font-size: 10px; min-height: 26px; }
+            .rc-mini .rc-header { padding: 5px 8px; }
+            .rc-mini .rc-header-title { font-size: 11px; }
+
+            /* Fan grid mobile */
+            .ae-fan-grid { gap: 10px !important; grid-template-columns: 1fr !important; }
+            .ae-fan-header { font-size: 12px; padding: 8px 12px; border-radius: 10px 10px 0 0; }
+            .ae-fan-card { border-radius: 10px; }
+            .ae-fan-item { padding: 8px 12px; }
+            .ae-fan-num { width: 20px; height: 20px; font-size: 10px; border-radius: 6px; }
+
+            /* Submit */
+            .ae-submit { font-size: 15px; padding: 12px 24px; border-radius: 12px; }
+
+            /* Sabab info */
+            .ae-card-body > div[x-show="selectedReason"] { padding: 12px; border-radius: 10px; gap: 8px; }
+            .ae-card-body > div[x-show="selectedReason"] .w-9 { width: 28px; height: 28px; border-radius: 6px; }
+            .ae-card-body > div[x-show="selectedReason"] .text-base { font-size: 13px !important; }
+            .ae-card-body > div[x-show="selectedReason"] .text-sm { font-size: 11px !important; }
+
+            /* Section header counter */
+            .ae-card-header .text-lg { font-size: 14px !important; }
+            .ae-card-header .text-sm { font-size: 11px !important; }
+
+            /* Deadline warning */
+            .ae-card-body .text-xs { font-size: 11px; }
+
+            /* Grid gaps */
+            .ae-card-body .gap-6 { gap: 16px; }
         }
     </style>
     @endpush
@@ -256,7 +318,7 @@
                                         <svg class="w-5 h-5 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                                         </svg>
-                                        <span class="text-sm text-gray-500">Faylni <span class="text-indigo-600 font-semibold">tanlang</span></span>
+                                        <span class="text-sm text-gray-500">Faylni <span class="text-indigo-600 font-semibold">tanlang</span> <span class="text-gray-400">(PDF, JPG)</span></span>
                                     </div>
                                     <div x-show="fileName" class="flex items-center gap-2">
                                         <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -265,7 +327,7 @@
                                         <span class="text-sm font-semibold text-emerald-700 truncate" x-text="fileName"></span>
                                     </div>
                                 </label>
-                                <input type="file" name="file" id="file" required accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                <input type="file" name="file" id="file" required accept=".pdf,.jpg,.jpeg"
                                        class="hidden" @change="fileName = $event.target.files[0]?.name || ''">
                                 @error('file')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
@@ -273,7 +335,31 @@
                             </div>
                         </div>
 
-                        {{-- ROW 2: Sana oralig'i + Sabab info (bitta qator) --}}
+                        {{-- Sabab info --}}
+                        <div x-show="selectedReason" x-transition x-cloak
+                             class="flex items-start gap-3 bg-indigo-50/60 border border-indigo-100 rounded-xl p-4">
+                            <div class="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="font-semibold text-indigo-900 text-base">Talab qilinadigan hujjat:</p>
+                                <p class="text-indigo-700 mt-1 text-base" x-text="selectedReason?.document"></p>
+                                <div class="flex flex-wrap gap-2 mt-2">
+                                    <template x-if="selectedReason?.max_days">
+                                        <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-indigo-100 text-indigo-700 rounded-lg">
+                                            Maksimum: <span x-text="selectedReason?.max_days" class="ml-1"></span> kun
+                                        </span>
+                                    </template>
+                                </div>
+                                <template x-if="selectedReason?.note">
+                                    <p class="mt-2 text-sm text-indigo-600 italic" x-text="selectedReason?.note"></p>
+                                </template>
+                            </div>
+                        </div>
+
+                        {{-- ROW 2: Sana oralig'i (dropdown calendar) --}}
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="cal-dropdown-wrap" @click.outside="showMainCal = false">
                                 <label class="ae-label">Sana oralig'i <span class="req">*</span></label>
@@ -377,30 +463,7 @@
                                 <input type="hidden" name="start_date" :value="startDate">
                                 <input type="hidden" name="end_date" :value="endDate">
                             </div>
-
-                            {{-- Sabab info (o'ng tomonda) --}}
-                            <div x-show="selectedReason" x-transition x-cloak
-                                 class="flex items-start gap-3 bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 self-start">
-                                <div class="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p class="font-semibold text-indigo-900 text-base">Talab qilinadigan hujjat:</p>
-                                    <p class="text-indigo-700 mt-1 text-base" x-text="selectedReason?.document"></p>
-                                    <div class="flex flex-wrap gap-2 mt-2">
-                                        <template x-if="selectedReason?.max_days">
-                                            <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-indigo-100 text-indigo-700 rounded-lg">
-                                                Maksimum: <span x-text="selectedReason?.max_days" class="ml-1"></span> kun
-                                            </span>
-                                        </template>
-                                    </div>
-                                    <template x-if="selectedReason?.note">
-                                        <p class="mt-2 text-sm text-indigo-600 italic" x-text="selectedReason?.note"></p>
-                                    </template>
-                                </div>
-                            </div>
+                            <div></div>
                         </div>
                     </div>
                 </div>
@@ -440,126 +503,25 @@
                         </div>
                     </div>
 
-                    {{-- Assessment cards --}}
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-                        <template x-for="(item, index) in assessments" :key="index">
-                            <div class="assessment-card">
-                                <div class="assessment-card-head">
-                                    <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="text-base font-bold text-gray-900" x-text="item.subject_name"></span>
-                                        <span class="px-2 py-0.5 text-xs font-bold rounded-lg"
-                                              :class="'badge-' + item.assessment_type"
-                                              x-text="getLabel(item.assessment_type)"></span>
-                                    </div>
-                                    <span class="text-sm text-gray-400">
-                                        <span class="font-semibold text-gray-600" x-text="fmtDate(item.original_date)"></span>
-                                    </span>
+                    {{-- ===== GRID: Fan cards ===== --}}
+                    <div class="ae-fan-grid mb-6"
+                         :style="'grid-template-columns: repeat(' + (groupedAssessments.length >= 3 ? 3 : 2) + ', 1fr)'">
+                        <template x-for="(group, gi) in groupedAssessments" :key="gi">
+                            <div class="ae-fan-card">
+                                <div class="ae-fan-header">
+                                    <span class="ae-fan-num" x-text="gi + 1"></span>
+                                    <span class="ae-fan-name" x-text="group.subject_name"></span>
                                 </div>
-                                <div class="px-4 py-3">
-                                    <div class="cal-dropdown-wrap" @click.outside="item.show_cal = false">
-                                        {{-- JN: input trigger for range --}}
-                                        <template x-if="item.assessment_type === 'jn'">
-                                            <div>
-                                                <div class="cal-trigger" :class="item.show_cal ? 'active' : ''" @click="item.show_cal = !item.show_cal"
-                                                     style="padding: 10px 14px; font-size: 14px; border-radius: 10px;">
-                                                    <div>
-                                                        <template x-if="item.makeup_start && item.makeup_end">
-                                                            <span class="cal-trigger-text" x-text="fmtDate(item.makeup_start) + ' — ' + fmtDate(item.makeup_end)"></span>
-                                                        </template>
-                                                        <template x-if="item.makeup_start && !item.makeup_end">
-                                                            <span class="cal-trigger-text"><span x-text="fmtDate(item.makeup_start)"></span> <span class="text-gray-400 font-normal">— tugash?</span></span>
-                                                        </template>
-                                                        <template x-if="!item.makeup_start">
-                                                            <span class="cal-trigger-placeholder">Sana oralig'ini tanlang</span>
-                                                        </template>
-                                                    </div>
-                                                    <div class="flex items-center gap-2">
-                                                        <template x-if="item.makeup_start || item.makeup_end">
-                                                            <button type="button" @click.stop="clearMiniDates(index); item.show_cal = false"
-                                                                    class="text-xs text-red-400 hover:text-red-600 font-medium">Tozalash</button>
-                                                        </template>
-                                                        <svg class="w-4 h-4 text-gray-400" :class="item.show_cal ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </template>
-
-                                        {{-- Non-JN: input trigger for single date --}}
-                                        <template x-if="item.assessment_type !== 'jn'">
-                                            <div>
-                                                <div class="cal-trigger" :class="item.show_cal ? 'active' : ''" @click="item.show_cal = !item.show_cal"
-                                                     style="padding: 10px 14px; font-size: 14px; border-radius: 10px;">
-                                                    <div>
-                                                        <template x-if="item.makeup_date">
-                                                            <span class="cal-trigger-text flex items-center gap-1.5">
-                                                                <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                                                <span x-text="fmtDate(item.makeup_date)"></span>
-                                                            </span>
-                                                        </template>
-                                                        <template x-if="!item.makeup_date">
-                                                            <span class="cal-trigger-placeholder">Sanani tanlang</span>
-                                                        </template>
-                                                    </div>
-                                                    <div class="flex items-center gap-2">
-                                                        <template x-if="item.makeup_date">
-                                                            <button type="button" @click.stop="item.makeup_date = ''; item.show_cal = false"
-                                                                    class="text-xs text-red-400 hover:text-red-600 font-medium">Bekor qilish</button>
-                                                        </template>
-                                                        <svg class="w-4 h-4 text-gray-400" :class="item.show_cal ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </template>
-
-                                        {{-- Dropdown mini calendar --}}
-                                        <div x-show="item.show_cal" x-transition.origin.top x-cloak class="cal-dropdown">
-                                            <div class="rc-calendar rc-mini">
-                                                <div class="rc-header">
-                                                    <button type="button" @click="miniPrevMonth(index)" class="rc-nav">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
-                                                    </button>
-                                                    <span class="rc-header-title" x-text="getMiniMonthLabel(index)"></span>
-                                                    <button type="button" @click="miniNextMonth(index)" class="rc-nav">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
-                                                    </button>
-                                                </div>
-                                                <div class="rc-weekdays">
-                                                    <span>Du</span><span>Se</span><span>Cho</span><span>Pa</span><span>Ju</span><span>Sha</span><span>Ya</span>
-                                                </div>
-                                                <div class="rc-grid">
-                                                    <template x-for="cell in getMiniCells(index)" :key="cell.key">
-                                                        <button type="button"
-                                                                @click="cell.date && !cell.disabled && miniPickDate(index, cell.dateStr)"
-                                                                :disabled="cell.disabled || !cell.date"
-                                                                :class="{
-                                                                    'rc-empty': !cell.date,
-                                                                    'rc-disabled': cell.disabled && cell.date,
-                                                                    'rc-sunday': cell.isSunday && cell.date,
-                                                                    'rc-today': cell.isToday,
-                                                                    'rc-start': item.assessment_type === 'jn' && cell.dateStr === item.makeup_start,
-                                                                    'rc-end': item.assessment_type === 'jn' && cell.dateStr === item.makeup_end,
-                                                                    'rc-in-range': item.assessment_type === 'jn' && miniInRange(index, cell.dateStr),
-                                                                    'rc-picked-single': item.assessment_type !== 'jn' && cell.dateStr === item.makeup_date,
-                                                                    'rc-taken': cell.takenByJn
-                                                                }"
-                                                                class="rc-day"
-                                                                x-text="cell.day"></button>
-                                                    </template>
-                                                </div>
-                                            </div>
+                                <template x-for="(item, ri) in group.items" :key="item._idx">
+                                    <div class="ae-fan-item">
+                                        <div style="margin-bottom:6px;">
+                                            <span class="px-2 py-0.5 text-xs font-bold rounded-lg inline-block"
+                                                  :class="'badge-' + item.assessment_type"
+                                                  x-text="getLabel(item.assessment_type)"></span>
                                         </div>
+                                        @include('student.absence-excuses._calendar-cell')
                                     </div>
-
-                                    {{-- Hidden inputs --}}
-                                    <input type="hidden" :name="'makeup_dates['+index+'][subject_name]'" :value="item.subject_name">
-                                    <input type="hidden" :name="'makeup_dates['+index+'][subject_id]'" :value="item.subject_id || ''">
-                                    <input type="hidden" :name="'makeup_dates['+index+'][assessment_type]'" :value="item.assessment_type">
-                                    <input type="hidden" :name="'makeup_dates['+index+'][assessment_type_code]'" :value="item.assessment_type_code">
-                                    <input type="hidden" :name="'makeup_dates['+index+'][original_date]'" :value="item.original_date">
-                                    <input type="hidden" :name="'makeup_dates['+index+'][makeup_date]'" :value="item.assessment_type !== 'jn' ? (item.makeup_date || '') : ''">
-                                    <input type="hidden" :name="'makeup_dates['+index+'][makeup_start]'" :value="item.assessment_type === 'jn' ? (item.makeup_start || '') : ''">
-                                    <input type="hidden" :name="'makeup_dates['+index+'][makeup_end]'" :value="item.assessment_type === 'jn' ? (item.makeup_end || '') : ''">
-                                </div>
+                                </template>
                             </div>
                         </template>
                     </div>
@@ -649,6 +611,33 @@
             get totalDays() {
                 if (!this.startDate || !this.endDate) return 0;
                 return this._countNonSundays(this.startDate, this.endDate);
+            },
+            get groupedAssessments() {
+                const typeOrder = { jn: 0, mt: 1, oski: 2, test: 3 };
+                const groups = [];
+                const map = {};
+                this.assessments.forEach((item, idx) => {
+                    item._idx = idx;
+                    const key = item.subject_name;
+                    if (!map[key]) {
+                        map[key] = { subject_name: key, items: [] };
+                        groups.push(map[key]);
+                    }
+                    map[key].items.push(item);
+                });
+                // Har bir fan ichida: JN birinchi, keyin MT, OSKI, Test
+                groups.forEach(g => {
+                    g.items.sort((a, b) => (typeOrder[a.assessment_type] ?? 9) - (typeOrder[b.assessment_type] ?? 9));
+                });
+                // Non-JN testlari bor fanlar birinchi, faqat JN bor fanlar oxirida
+                groups.sort((a, b) => {
+                    const aHasNonJn = a.items.some(i => i.assessment_type !== 'jn');
+                    const bHasNonJn = b.items.some(i => i.assessment_type !== 'jn');
+                    if (aHasNonJn && !bHasNonJn) return -1;
+                    if (!aHasNonJn && bHasNonJn) return 1;
+                    return 0;
+                });
+                return groups;
             },
             get allDatesSelected() {
                 return this.assessments.length > 0 && this.assessments.every(a => {
@@ -850,21 +839,24 @@
                             ...a, makeup_date: '', makeup_start: '', makeup_end: '',
                             jn_selecting: 'start', cal_month: cm, cal_year: cy, show_cal: false
                         }));
+                        // Serverdan JN topilmagan fanlar uchun JN card qo'shish
+                        const jnSubjects = data.jn_subjects || [];
+                        const existingJnSubjects = this.assessments
+                            .filter(a => a.assessment_type === 'jn')
+                            .map(a => a.subject_name);
+                        jnSubjects.forEach(sub => {
+                            if (!existingJnSubjects.includes(sub.subject_name)) {
+                                this.assessments.push({
+                                    subject_name: sub.subject_name, subject_id: sub.subject_id || '',
+                                    assessment_type: 'jn', assessment_type_code: '100',
+                                    original_date: this.startDate, makeup_date: '',
+                                    makeup_start: '', makeup_end: '', jn_selecting: 'start',
+                                    cal_month: cm, cal_year: cy, show_cal: false, is_default_jn: true
+                                });
+                            }
+                        });
                     }
                 } catch (e) { console.error('Xatolik:', e); }
-                // Har doim JN birinchi bo'lib chiqsin
-                const hasJn = this.assessments.some(a => a.assessment_type === 'jn');
-                if (!hasJn) {
-                    this.assessments.unshift({
-                        subject_name: 'Joriy nazorat', subject_id: '',
-                        assessment_type: 'jn', assessment_type_code: 'jn',
-                        original_date: this.startDate, makeup_date: '',
-                        makeup_start: '', makeup_end: '', jn_selecting: 'start',
-                        cal_month: cm, cal_year: cy, show_cal: false, is_default_jn: true
-                    });
-                }
-                // JN har doim birinchi
-                this.assessments.sort((a, b) => a.assessment_type === 'jn' ? -1 : b.assessment_type === 'jn' ? 1 : 0);
                 this.loading = false; this.searched = true;
             },
 
@@ -911,10 +903,15 @@
                 const today = new Date(); today.setHours(0,0,0,0);
                 const todayStr = this._toStr(today);
                 const maxDate = this.miniMaxDateStr;
-                // JN range for restricting others
-                const jnItem = this.assessments.find(a => a.assessment_type === 'jn');
-                const jnStart = jnItem?.makeup_start || '';
-                const jnEnd = jnItem?.makeup_end || '';
+                // Shu fan ichidagi JN range ni topish (faqat non-JN lar uchun)
+                let jnStart = '', jnEnd = '';
+                if (item.assessment_type !== 'jn') {
+                    const sameSubjectJn = this.assessments.find(
+                        a => a.assessment_type === 'jn' && a.subject_name === item.subject_name
+                    );
+                    jnStart = sameSubjectJn?.makeup_start || '';
+                    jnEnd = sameSubjectJn?.makeup_end || '';
+                }
                 for (let i = 0; i < startWd; i++) {
                     cells.push({ key: 'e' + i, date: null, day: '', disabled: true });
                 }
@@ -923,17 +920,16 @@
                     const ds = this._toStr(dt);
                     const isSun = dt.getDay() === 0;
                     const isPast = dt < today;
-                    // Period-length cheklovi: bugundan boshlab totalDays ta yakshanbasiz kundan keyingilar disabled
                     const beyondLimit = maxDate ? ds > maxDate : false;
-                    // Non-JN: JN range dates are taken
+                    // Non-JN: shu fan JN range ichidagi sanalar band
                     let takenByJn = false;
-                    if (item.assessment_type !== 'jn' && jnStart && jnEnd) {
+                    if (jnStart && jnEnd) {
                         takenByJn = ds >= jnStart && ds <= jnEnd && !isSun;
                     }
                     cells.push({
                         key: ds, date: dt, dateStr: ds, day: d,
                         isSunday: isSun, isToday: ds === todayStr,
-                        disabled: isPast || isSun || takenByJn || beyondLimit,
+                        disabled: isPast || isSun || beyondLimit || takenByJn,
                         takenByJn: takenByJn
                     });
                 }
@@ -956,9 +952,9 @@
                         item.makeup_end = dateStr;
                         item.jn_selecting = 'start';
                         item.show_cal = false;
-                        // JN range o'zgarganda, ichiga tushgan boshqa testlar tozalanadi
+                        // Shu fan ichidagi boshqa testlarning JN range ga tushgan sanalarini tozalash
                         this.assessments.forEach(a => {
-                            if (a.assessment_type !== 'jn' && a.makeup_date) {
+                            if (a.assessment_type !== 'jn' && a.subject_name === item.subject_name && a.makeup_date) {
                                 if (a.makeup_date >= item.makeup_start && a.makeup_date <= item.makeup_end) {
                                     a.makeup_date = '';
                                 }
@@ -998,7 +994,7 @@
             },
 
             getLabel(t) {
-                return {jn:"Joriy nazorat",mt:"Mustaqil ta'lim",oski:"OSKI",test:"Yakuniy test"}[t] || t;
+                return {jn:"Joriy nazorat",mt:"Mustaqil ta'lim",oski:"YN (OSKE)",test:"YN (Test)"}[t] || t;
             },
             fmtDate(s) {
                 if (!s) return '';

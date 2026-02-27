@@ -5227,7 +5227,24 @@ class JournalController extends Controller
             'subject_id' => 'required',
             'semester_code' => 'required',
             'group_hemis_id' => 'required',
+            'weight_jn' => 'nullable|integer|min:0|max:100',
+            'weight_mt' => 'nullable|integer|min:0|max:100',
+            'weight_on' => 'nullable|integer|min:0|max:100',
+            'weight_oski' => 'nullable|integer|min:0|max:100',
+            'weight_test' => 'nullable|integer|min:0|max:100',
+            'shakl' => 'nullable|integer|min:1|max:7',
         ]);
+
+        $weightJn = (int) ($request->weight_jn ?? 30);
+        $weightMt = (int) ($request->weight_mt ?? 10);
+        $weightOn = (int) ($request->weight_on ?? 0);
+        $weightOski = (int) ($request->weight_oski ?? 0);
+        $weightTest = (int) ($request->weight_test ?? 60);
+
+        $totalWeight = $weightJn + $weightMt + $weightOn + $weightOski + $weightTest;
+        if ($totalWeight !== 100) {
+            return response()->json(['error' => 'Vaznlar jami 100 bo\'lishi kerak'], 422);
+        }
 
         $subjectId = $request->subject_id;
         $semesterCode = $request->semester_code;
@@ -5310,6 +5327,18 @@ class JournalController extends Controller
             ->groupBy('s.employee_id')
             ->get();
 
+        // FISH qisqartirish funksiyasi: "Rasulov Shomurod Maxmudovich" -> "Rasulov Sh.M."
+        $abbreviateName = function ($fullName) {
+            $parts = preg_split('/\s+/', trim($fullName));
+            if (count($parts) <= 1) return $fullName;
+            $surname = $parts[0];
+            $initials = '';
+            for ($i = 1; $i < count($parts); $i++) {
+                $initials .= mb_strtoupper(mb_substr($parts[$i], 0, 1)) . '.';
+            }
+            return $surname . ' ' . $initials;
+        };
+
         $otherTeacherNames = [];
         foreach ($otherTeachers as $t) {
             foreach (explode(', ', $t->full_names) as $name) {
@@ -5317,6 +5346,21 @@ class JournalController extends Controller
                 if ($name && !in_array($name, $otherTeacherNames)) {
                     $otherTeacherNames[] = $name;
                 }
+            }
+        }
+
+        // O'qituvchi ismlarini qisqartirish
+        $abbreviatedOtherTeachers = array_map($abbreviateName, $otherTeacherNames);
+        $abbreviatedMaruza = $maruzaTeacher ? $abbreviateName($maruzaTeacher->full_names) : '';
+
+        // Shakl (urinish turi)
+        $shaklId = (int) ($request->shakl ?? 1);
+        $shakllar = config('app.shakllar', []);
+        $shaklName = '12-shakl';
+        foreach ($shakllar as $sh) {
+            if ($sh['id'] === $shaklId) {
+                $shaklName = $sh['name'];
+                break;
             }
         }
 
@@ -5337,12 +5381,23 @@ class JournalController extends Controller
         $sheet->setCellValue('C8', '         ' . ($specialty->name ?? ''));
         $sheet->setCellValue('N8', $semester->level_code ?? '');
         $sheet->setCellValue('Q8', $semester->code ?? '');
+        $sheet->setCellValue('W8', $group->name ?? '');
+        $sheet->setCellValue('Y1', $shaklName);
         $sheet->setCellValue('C10', '  ' . ($subject->subject_name ?? ''));
-        $sheet->setCellValue('P10', implode(', ', $otherTeacherNames));
+        $sheet->setCellValue('P10', implode(', ', $abbreviatedOtherTeachers));
+        $sheet->setCellValue('U10', implode(', ', $abbreviatedOtherTeachers));
         $sheet->setCellValue('A11', "Ma'ruzachi:");
-        $sheet->setCellValue('C11', '         ' . ($maruzaTeacher->full_names ?? ''));
-        $sheet->setCellValue('D13', $subject->total_credit ?? 0);
-        $sheet->setCellValue('G13', $subject->total_acload ?? 0);
+        $sheet->setCellValue('C11', '         ' . $abbreviatedMaruza);
+        $sheet->setCellValue('D13', $subject->total_acload ?? 0);
+        $sheet->setCellValue('G13', $subject->total_credit ?? 0);
+
+        // Vaznlar haqida ma'lumot
+        $sheet->setCellValue('V18', 'Yakuniy ball');
+        $sheet->setCellValue('D19', $weightJn);
+        $sheet->setCellValue('G19', $weightMt);
+        $sheet->setCellValue('J19', $weightOn);
+        $sheet->setCellValue('P19', $weightOski);
+        $sheet->setCellValue('S19', $weightTest);
 
         // Ma'lumotlarni joylashtirish
         $startRow = 20;
@@ -5355,32 +5410,45 @@ class JournalController extends Controller
             $hemisId = $student->hemis_id;
 
             $sheet->setCellValue('B' . $row, $student->full_name);
-            $sheet->setCellValue('C' . $row, $student->student_id_number);
+            $sheet->setCellValueExplicit('C' . $row, $student->student_id_number, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
-            $jn = $savedJnGrades[$hemisId] ?? null;
-            if ($jn !== null) {
-                $sheet->setCellValue('D' . $row, (int) $jn);
+            $jnRaw = $savedJnGrades[$hemisId] ?? null;
+            $mtRaw = $savedMtGrades[$hemisId] ?? null;
+            $onRaw = $gradesByType[100][$hemisId] ?? null;
+            $oskiRaw = $gradesByType[101][$hemisId] ?? null;
+            $testRaw = $gradesByType[102][$hemisId] ?? null;
+
+            $jnVal = $jnRaw !== null ? (int) $jnRaw : 0;
+            $mtVal = $mtRaw !== null ? (int) $mtRaw : 0;
+            $onVal = $onRaw !== null ? round((float) $onRaw) : 0;
+            $oskiVal = $oskiRaw !== null ? round((float) $oskiRaw) : 0;
+            $testVal = $testRaw !== null ? round((float) $testRaw) : 0;
+
+            if ($jnRaw !== null) {
+                $sheet->setCellValue('D' . $row, $jnVal);
+            }
+            if ($mtRaw !== null) {
+                $sheet->setCellValue('G' . $row, $mtVal);
+            }
+            if ($onRaw !== null) {
+                $sheet->setCellValue('J' . $row, $onVal);
+            }
+            if ($oskiRaw !== null) {
+                $sheet->setCellValue('P' . $row, $oskiVal);
+            }
+            if ($testRaw !== null) {
+                $sheet->setCellValue('S' . $row, $testVal);
             }
 
-            $mt = $savedMtGrades[$hemisId] ?? null;
-            if ($mt !== null) {
-                $sheet->setCellValue('G' . $row, (int) $mt);
-            }
-
-            $on = $gradesByType[100][$hemisId] ?? null;
-            if ($on !== null) {
-                $sheet->setCellValue('J' . $row, round((float) $on));
-            }
-
-            $oski = $gradesByType[101][$hemisId] ?? null;
-            if ($oski !== null) {
-                $sheet->setCellValue('P' . $row, round((float) $oski));
-            }
-
-            $test = $gradesByType[102][$hemisId] ?? null;
-            if ($test !== null) {
-                $sheet->setCellValue('S' . $row, round((float) $test));
-            }
+            // Vaznli yakuniy ball hisoblash
+            $yakuniyBall = round(
+                ($jnVal * $weightJn / 100) +
+                ($mtVal * $weightMt / 100) +
+                ($onVal * $weightOn / 100) +
+                ($oskiVal * $weightOski / 100) +
+                ($testVal * $weightTest / 100)
+            );
+            $sheet->setCellValue('V' . $row, $yakuniyBall);
         }
 
         $tempDir = storage_path('app/public/yn_qaydnoma_excel');

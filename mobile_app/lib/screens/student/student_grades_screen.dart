@@ -850,9 +850,9 @@ class _JnGradesSheet extends StatefulWidget {
 class _JnGradesSheetState extends State<_JnGradesSheet> {
   bool _isLoading = true;
   String? _error;
-  String _debugInfo = '';
-  List<Map<String, dynamic>> _amaliyGrades = [];
-  List<Map<String, dynamic>> _maruzaGrades = [];
+  // Daily averages: [{date: '2025-02-20', avg: 72}, ...]
+  List<Map<String, dynamic>> _amaliyDaily = [];
+  List<Map<String, dynamic>> _maruzaDaily = [];
 
   @override
   void initState() {
@@ -865,7 +865,7 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
       final service = StudentService(ApiService());
       final response = await service.getSubjectGrades(widget.subjectId);
 
-      // Handle various API response structures
+      // Parse API response
       List<dynamic> grades = [];
       final data = response['data'];
       if (data is Map<String, dynamic>) {
@@ -877,32 +877,26 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
         grades = (response['grades'] as List<dynamic>?) ?? [];
       }
 
-      // Debug: collect type codes for diagnostics
-      final typeCodes = <String>[];
-      final amaliy = <Map<String, dynamic>>[];
-      final maruza = <Map<String, dynamic>>[];
+      // Separate by type
+      final amaliyRaw = <Map<String, dynamic>>[];
+      final maruzaRaw = <Map<String, dynamic>>[];
 
       for (final g in grades) {
         final grade = g as Map<String, dynamic>;
         final typeCode = grade['training_type_code'];
         final typeName = grade['training_type_name']?.toString() ?? '';
-        typeCodes.add('$typeCode:$typeName');
 
         if (typeCode == 11 || typeName.contains("Ma'ruza") || typeName.contains('Maruza')) {
-          maruza.add(grade);
+          maruzaRaw.add(grade);
         } else if (typeCode != 99 && typeCode != 100 && typeCode != 101 && typeCode != 102) {
-          amaliy.add(grade);
+          amaliyRaw.add(grade);
         }
       }
 
-      amaliy.sort((a, b) => (a['lesson_date'] ?? '').compareTo(b['lesson_date'] ?? ''));
-      maruza.sort((a, b) => (a['lesson_date'] ?? '').compareTo(b['lesson_date'] ?? ''));
-
       if (mounted) {
         setState(() {
-          _amaliyGrades = amaliy;
-          _maruzaGrades = maruza;
-          _debugInfo = 'API: ${grades.length} ta baho. Types: ${typeCodes.toSet().join(', ')}';
+          _amaliyDaily = _computeDailyAverages(amaliyRaw);
+          _maruzaDaily = _computeDailyAverages(maruzaRaw);
           _isLoading = false;
         });
       }
@@ -914,6 +908,45 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
         });
       }
     }
+  }
+
+  /// Group grades by lesson_date and compute daily average (like web journal)
+  List<Map<String, dynamic>> _computeDailyAverages(List<Map<String, dynamic>> grades) {
+    // Group by date
+    final byDate = <String, List<num>>{};
+    for (final g in grades) {
+      final date = g['lesson_date']?.toString() ?? '';
+      if (date.isEmpty) continue;
+
+      final retake = g['retake_grade'];
+      final grade = g['grade'];
+      final reason = g['reason']?.toString();
+      final status = g['status']?.toString();
+
+      // Match web journal logic for effective grade
+      if (status == 'pending' && reason == 'low_grade' && grade is num) {
+        byDate.putIfAbsent(date, () => []).add(grade);
+      } else if (status == 'pending') {
+        continue;
+      } else if (retake != null && retake is num && retake > 0) {
+        byDate.putIfAbsent(date, () => []).add(retake);
+      } else if (reason == 'absent' && (grade == null || grade == 0)) {
+        // NB - don't add to average
+        byDate.putIfAbsent(date, () => []);
+      } else if (grade != null && grade is num) {
+        byDate.putIfAbsent(date, () => []).add(grade);
+      }
+    }
+
+    // Sort by date and compute averages
+    final dates = byDate.keys.toList()..sort();
+    return dates.map((date) {
+      final vals = byDate[date]!;
+      final avg = vals.isNotEmpty
+          ? (vals.reduce((a, b) => a + b) / vals.length).round()
+          : 0;
+      return {'date': date, 'avg': avg, 'hasGrades': vals.isNotEmpty};
+    }).toList();
   }
 
   String _formatDate(String? dateStr) {
@@ -999,36 +1032,28 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_amaliyGrades.isNotEmpty) ...[
+                    if (_amaliyDaily.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Text(widget.l.practicalClasses,
                           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textColor)),
                       ),
-                      _buildGradesTable(_amaliyGrades, headerBg, bgColor, textColor, borderColor),
+                      _buildDailyTable(_amaliyDaily, headerBg, bgColor, textColor, borderColor),
                     ],
-                    if (_maruzaGrades.isNotEmpty) ...[
+                    if (_maruzaDaily.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Text(widget.l.lectures,
                           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textColor)),
                       ),
-                      _buildGradesTable(_maruzaGrades, headerBg, bgColor, textColor, borderColor),
+                      _buildDailyTable(_maruzaDaily, headerBg, bgColor, textColor, borderColor),
                     ],
-                    if (_amaliyGrades.isEmpty && _maruzaGrades.isEmpty)
+                    if (_amaliyDaily.isEmpty && _maruzaDaily.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(20),
                         child: Center(
-                          child: Column(
-                            children: [
-                              Text(widget.l.noData, style: TextStyle(color: secondaryText, fontSize: 14)),
-                              if (_debugInfo.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                Text(_debugInfo, style: TextStyle(color: secondaryText, fontSize: 11)),
-                              ],
-                            ],
-                          ),
+                          child: Text(widget.l.noData, style: TextStyle(color: secondaryText, fontSize: 14)),
                         ),
                       ),
                   ],
@@ -1040,8 +1065,8 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
     );
   }
 
-  Widget _buildGradesTable(
-    List<Map<String, dynamic>> grades,
+  Widget _buildDailyTable(
+    List<Map<String, dynamic>> dailyData,
     Color headerBg,
     Color cellBg,
     Color cellText,
@@ -1051,56 +1076,48 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
       scrollDirection: Axis.horizontal,
       child: Table(
         border: TableBorder.all(color: borderColor, width: 1),
-        defaultColumnWidth: const FixedColumnWidth(60),
+        defaultColumnWidth: const FixedColumnWidth(56),
         children: [
-          // Header
+          // Header - dates
           TableRow(
             decoration: BoxDecoration(color: headerBg),
-            children: grades.map((g) => Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            children: dailyData.map((d) => Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
               alignment: Alignment.center,
               child: Text(
-                _formatDate(g['lesson_date']),
+                _formatDate(d['date'] as String?),
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
                 textAlign: TextAlign.center,
               ),
             )).toList(),
           ),
-          // Values
+          // Values - daily averages
           TableRow(
             decoration: BoxDecoration(color: cellBg),
-            children: grades.map((g) {
-              final grade = g['grade'];
-              final retake = g['retake_grade'];
-              final reason = g['reason']?.toString();
-              final displayGrade = retake ?? grade;
+            children: dailyData.map((d) {
+              final avg = d['avg'] as int;
+              final hasGrades = d['hasGrades'] as bool;
 
-              String text;
-              Color color;
+              final String text;
+              final Color color;
 
-              if (reason == 'absent' && (grade == null || grade == 0)) {
+              if (!hasGrades) {
                 text = 'NB';
                 color = AppTheme.errorColor;
-              } else if (displayGrade != null && displayGrade is num) {
-                text = displayGrade % 1 == 0
-                    ? displayGrade.toInt().toString()
-                    : displayGrade.toStringAsFixed(1);
-                color = _gradeColor(displayGrade);
+              } else if (avg > 0) {
+                text = avg.toString();
+                color = _gradeColor(avg);
               } else {
                 text = '-';
                 color = cellText;
               }
 
               return Container(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
                 alignment: Alignment.center,
                 child: Text(
                   text,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: retake != null ? FontWeight.bold : FontWeight.w500,
-                    color: color,
-                  ),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color),
                   textAlign: TextAlign.center,
                 ),
               );

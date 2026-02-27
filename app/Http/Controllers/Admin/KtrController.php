@@ -585,7 +585,7 @@ class KtrController extends Controller
             $changeRequest = null;
             if ($plan && Schema::hasTable('ktr_change_requests') && Schema::hasTable('ktr_change_approvals')) {
                 $cr = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
-                    ->where('status', 'pending')
+                    ->whereIn('status', ['pending', 'rejected'])
                     ->latest()
                     ->with('approvals')
                     ->first();

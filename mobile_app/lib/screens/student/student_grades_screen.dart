@@ -1022,38 +1022,36 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
               child: Text(_error!, style: TextStyle(color: secondaryText)),
             )
           else
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_amaliyDaily.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(widget.l.practicalClasses,
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textColor)),
-                      ),
-                      _buildDailyTable(_amaliyDaily, headerBg, bgColor, textColor, borderColor),
-                    ],
-                    if (_maruzaDaily.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(widget.l.lectures,
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textColor)),
-                      ),
-                      _buildDailyTable(_maruzaDaily, headerBg, bgColor, textColor, borderColor),
-                    ],
-                    if (_amaliyDaily.isEmpty && _maruzaDaily.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Center(
-                          child: Text(widget.l.noData, style: TextStyle(color: secondaryText, fontSize: 14)),
-                        ),
-                      ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_amaliyDaily.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(widget.l.practicalClasses,
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textColor)),
+                    ),
+                    _buildDailyTable(_amaliyDaily, headerBg, bgColor, textColor, borderColor),
                   ],
-                ),
+                  if (_maruzaDaily.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(widget.l.lectures,
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textColor)),
+                    ),
+                    _buildDailyTable(_maruzaDaily, headerBg, bgColor, textColor, borderColor),
+                  ],
+                  if (_amaliyDaily.isEmpty && _maruzaDaily.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Center(
+                        child: Text(widget.l.noData, style: TextStyle(color: secondaryText, fontSize: 14)),
+                      ),
+                    ),
+                ],
               ),
             ),
         ],

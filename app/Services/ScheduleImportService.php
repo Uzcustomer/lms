@@ -192,6 +192,12 @@ class ScheduleImportService
 
             if ($log) $log("  ✓ Sahifa {$page}/{$pages} — {$count} ta yozuv (jami: {$total})");
 
+            // Nightly wrapper ga progress yuborish
+            if (app()->bound('nightly.progress')) {
+                $nightlyCallback = app('nightly.progress');
+                $nightlyCallback("{$page}/{$pages} sahifa ({$total} ta yozuv)");
+            }
+
             if ($page % 50 === 0 || $page === $pages) {
                 $elapsed = microtime(true) - $startTime;
                 $remaining = max(0, $pages - $page);
@@ -223,6 +229,16 @@ class ScheduleImportService
         }
         $this->notifyTelegram($msg);
         if ($log) $log($msg);
+
+        // Nightly wrapper ga yakuniy natija
+        if (app()->bound('nightly.progress')) {
+            $detail = "{$pages} sahifa, {$totalImported} ta yozuv";
+            if ($failedCount > 0) {
+                $detail .= " ({$failedCount} xato)";
+            }
+            $nightlyCallback = app('nightly.progress');
+            $nightlyCallback($detail);
+        }
     }
 
     /**

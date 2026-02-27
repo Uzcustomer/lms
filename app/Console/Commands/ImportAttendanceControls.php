@@ -127,6 +127,12 @@ class ImportAttendanceControls extends Command
             $successDays++;
             $totalRecords += $dateItems->count();
             $this->info("  {$dateStr} — {$dateItems->count()} yozuv yakunlandi ({$successDays}/{$totalDays})");
+
+            // Nightly wrapper ga progress yuborish
+            if (app()->bound('nightly.progress')) {
+                $nightlyCallback = app('nightly.progress');
+                $nightlyCallback("{$successDays}/{$totalDays} kun ({$totalRecords} yozuv)");
+            }
         }
 
         $msg = "✅ Davomat nazorati FINAL import: {$successDays} kun, {$totalRecords} yozuv (butun semestr)";
@@ -134,6 +140,12 @@ class ImportAttendanceControls extends Command
             $telegram->notify($msg);
         }
         $this->info($msg);
+
+        // Nightly wrapper ga yakuniy natija
+        if (app()->bound('nightly.progress')) {
+            $nightlyCallback = app('nightly.progress');
+            $nightlyCallback("{$successDays} kun, {$totalRecords} yozuv");
+        }
     }
 
     // =========================================================================
@@ -178,6 +190,11 @@ class ImportAttendanceControls extends Command
                         $this->info("Fetched page {$page}/{$totalPages} (" . count($items) . " items)");
                         if ($reporter) {
                             $reporter->updateProgress($page, $totalPages);
+                        }
+                        // Nightly wrapper ga API progress
+                        if (app()->bound('nightly.progress')) {
+                            $nightlyCallback = app('nightly.progress');
+                            $nightlyCallback("API: {$page}/{$totalPages} sahifa (" . count($allItems) . " yozuv)");
                         }
                         $pageSuccess = true;
                         sleep(1);

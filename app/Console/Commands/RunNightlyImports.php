@@ -19,6 +19,7 @@ class RunNightlyImports extends Command
     private ?int $messageId = null;
     private array $steps = [];
     private float $startTime;
+    private float $lastProgressUpdate = 0;
 
     public function handle(TelegramService $telegram): int
     {
@@ -69,16 +70,34 @@ class RunNightlyImports extends Command
             'start' => Carbon::now()->format('H:i'),
             'end' => null,
             'error' => null,
+            'detail' => '',
         ];
 
-        $this->updateMessage("⏳ {$name} ishlamoqda...");
+        // Sub-commandlar o'z progressini shu callback orqali yuboradi
+        app()->instance('nightly.progress', function (string $detail) use ($stepIdx) {
+            $this->steps[$stepIdx]['detail'] = $detail;
+
+            // Telegram rate limit: 5 sekund
+            $now = microtime(true);
+            if ($now - $this->lastProgressUpdate >= 5) {
+                $this->updateMessage();
+                $this->lastProgressUpdate = $now;
+            }
+        });
+
+        $this->updateMessage();
         $this->info("{$name} boshlanmoqda...");
 
         try {
-            $callback();
-            $this->steps[$stepIdx]['status'] = 'done';
+            $exitCode = $callback();
+            if ($exitCode !== 0 && $exitCode !== null) {
+                $this->steps[$stepIdx]['status'] = 'failed';
+                $this->steps[$stepIdx]['error'] = "Exit code: {$exitCode}";
+            } else {
+                $this->steps[$stepIdx]['status'] = 'done';
+            }
             $this->steps[$stepIdx]['end'] = Carbon::now()->format('H:i');
-            $this->info("{$name} muvaffaqiyatli tugadi.");
+            $this->info("{$name} tugadi (exit: {$exitCode}).");
         } catch (\Throwable $e) {
             $this->steps[$stepIdx]['status'] = 'failed';
             $this->steps[$stepIdx]['end'] = Carbon::now()->format('H:i');
@@ -87,6 +106,11 @@ class RunNightlyImports extends Command
             Log::error("[NightlyImports] {$name} failed: " . $e->getMessage());
         }
 
+        // Callback ni tozalash
+        app()->forgetInstance('nightly.progress');
+
+        // Yakuniy yangilash (rate limit o'tkazib)
+        $this->lastProgressUpdate = 0;
         $this->updateMessage();
     }
 
@@ -111,17 +135,19 @@ class RunNightlyImports extends Command
             $name = $step['name'];
 
             if ($step['status'] === 'done') {
-                $start = $step['start'];
-                $end = $step['end'];
-                $lines[] = "✅ {$num}. {$name}  ({$start} → {$end})";
+                $lines[] = "✅ {$num}. {$name}  ({$step['start']} → {$step['end']})";
             } elseif ($step['status'] === 'failed') {
-                $start = $step['start'];
-                $end = $step['end'];
                 $error = $step['error'] ? "\n     ↳ {$step['error']}" : '';
-                $lines[] = "❌ {$num}. {$name}  ({$start} → {$end}){$error}";
+                $lines[] = "❌ {$num}. {$name}  ({$step['start']} → {$step['end']}){$error}";
             } elseif ($step['status'] === 'running') {
-                $start = $step['start'];
-                $lines[] = "⏳ {$num}. {$name}...  ({$start})";
+                $lines[] = "⏳ {$num}. {$name}...  ({$step['start']})";
+            }
+
+            // Batafsil ma'lumot (kunlik progress va h.k.)
+            if (!empty($step['detail'])) {
+                foreach (explode("\n", $step['detail']) as $dl) {
+                    $lines[] = "     {$dl}";
+                }
             }
         }
 

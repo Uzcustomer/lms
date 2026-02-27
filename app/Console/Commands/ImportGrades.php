@@ -1315,6 +1315,9 @@ class ImportGrades extends Command
     {
         $this->dayStatuses[$key] = "{$icon} {$details}";
 
+        // Nightly wrapper ga progress yuborish (--silent rejimda)
+        $this->reportToNightly($current, $total);
+
         // Faqat Telegram yangilash — console allaqachon info() orqali yozilmoqda
         $chatId = config('services.telegram.chat_id');
         if (!$this->telegramProgressMsgId || !$chatId) return;
@@ -1359,6 +1362,9 @@ class ImportGrades extends Command
             ? round((microtime(true) - $this->importStartTime) / 60, 1)
             : 0;
         $hasErrors = !empty($failedDays);
+
+        // Nightly wrapper ga yakuniy progress yuborish
+        $this->reportToNightly($successDays, $totalDays, true);
 
         // Console
         $this->newLine();
@@ -1407,6 +1413,29 @@ class ImportGrades extends Command
         if ($total <= 0) return '[' . str_repeat('░', $width) . ']';
         $filled = min($width, (int) round($current / $total * $width));
         return '[' . str_repeat('█', $filled) . str_repeat('░', $width - $filled) . ']';
+    }
+
+    /**
+     * Nightly wrapper ga progress yuborish (nightly:run ichidan chaqirilganda)
+     */
+    private function reportToNightly(int $current, int $total, bool $isDone = false): void
+    {
+        if (!app()->bound('nightly.progress')) return;
+
+        $bar = $this->makeProgressBar($current, $total);
+        $lines = ["{$bar} {$current}/{$total}"];
+
+        foreach ($this->dayStatuses as $d => $s) {
+            $label = (strlen($d) === 10 && ($d[4] ?? '') === '-') ? substr($d, 5) : $d;
+            $lines[] = "{$label} {$s}";
+        }
+
+        if ($isDone) {
+            $lines[] = "📊 {$current}/{$total} muvaffaqiyatli";
+        }
+
+        $callback = app('nightly.progress');
+        $callback(implode("\n", $lines));
     }
 
     // =========================================================================

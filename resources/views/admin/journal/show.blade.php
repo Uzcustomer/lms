@@ -1634,6 +1634,15 @@
                                     Qaydnoma yaratish
                                 </button>
                             @endif
+
+                            <button type="button" id="btn-export-yn-qaydnoma"
+                                class="px-5 py-2.5 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition shadow-sm text-sm"
+                                onclick="exportYnQaydnoma()">
+                                <svg style="width:14px;height:14px;display:inline-block;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                Vedomost yaratish
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -4055,6 +4064,61 @@
                 alert('Xatolik: ' + err.message);
                 btn.disabled = false;
                 btn.textContent = originalText;
+                btn.style.opacity = '1';
+            });
+        }
+
+        // Vedomost yaratish (YN qaydnoma Excel)
+        function exportYnQaydnoma() {
+            const btn = document.getElementById('btn-export-yn-qaydnoma');
+            if (!btn) return;
+
+            btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<svg class="animate-spin" style="height:14px;width:14px;display:inline-block;margin-right:4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle style="opacity:0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path style="opacity:0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Yuklanmoqda...';
+            btn.style.opacity = '0.6';
+
+            fetch('{{ route("admin.journal.export-yn-qaydnoma") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/octet-stream',
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                })
+            })
+            .then(function(response) {
+                if (!response.ok) throw new Error('Server xatosi');
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let fileName = 'yn_qaydnoma.xlsx';
+                if (contentDisposition) {
+                    const match = contentDisposition.match(/filename="?([^";\n]+)"?/);
+                    if (match && match[1]) fileName = match[1];
+                }
+                return response.blob().then(function(blob) {
+                    return { blob: blob, fileName: fileName };
+                });
+            })
+            .then(function(result) {
+                const url = window.URL.createObjectURL(result.blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = result.fileName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(function(err) {
+                alert('Xatolik yuz berdi: ' + err.message);
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
                 btn.style.opacity = '1';
             });
         }

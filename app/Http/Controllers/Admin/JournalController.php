@@ -37,6 +37,7 @@ use App\Models\Attendance;
 use App\Models\Teacher;
 use App\Models\DocumentVerification;
 use App\Enums\ProjectRole;
+use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\SimpleType\Jc;
@@ -3988,13 +3989,6 @@ class JournalController extends Controller
             }
         }
 
-        if (!$submittedByUserId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Foydalanuvchi topilmadi. Iltimos, qayta kiring.',
-            ], 403);
-        }
-
         // --- JN/MT hisoblash (jurnal logikasi bilan bir xil) ---
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
@@ -5223,4 +5217,186 @@ class JournalController extends Controller
         return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
     }
 
+    /**
+     * YN qaydnoma Excel eksport — jurnal sahifasidan bitta guruh + fan uchun.
+     * D20 - JN, G20 - MT, J20 - ON, P20 - OSKI, S20 - Test
+     */
+    public function exportYnQaydnoma(Request $request)
+    {
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+        ]);
+
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $groupHemisId = $request->group_hemis_id;
+
+        $group = Group::where('group_hemis_id', $groupHemisId)->first();
+        if (!$group) {
+            return back()->with('error', 'Guruh topilmadi');
+        }
+
+        $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+            ->where('code', $semesterCode)
+            ->first();
+
+        $subject = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+
+        if (!$subject) {
+            return back()->with('error', 'Fan topilmadi');
+        }
+
+        $department = Department::where('department_hemis_id', $group->department_hemis_id)
+            ->where('structure_type_code', 11)
+            ->first();
+
+        $specialty = Specialty::where('specialty_hemis_id', $group->specialty_hemis_id)->first();
+
+        // Talabalar
+        $students = Student::where('group_id', $groupHemisId)->orderBy('full_name')->get();
+        $studentHemisIds = $students->pluck('hemis_id')->toArray();
+
+        // YN submission dan JN/MT
+        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->first();
+
+        $savedJnGrades = [];
+        $savedMtGrades = [];
+        if ($ynSubmission) {
+            $latestSnapshots = YnStudentGrade::latestPerStudent($ynSubmission->id)->get();
+            $savedJnGrades = $latestSnapshots->pluck('jn', 'student_hemis_id')->toArray();
+            $savedMtGrades = $latestSnapshots->pluck('mt', 'student_hemis_id')->toArray();
+        }
+
+        // ON (100), OSKI (101), Test (102) baholarni olish
+        $gradesByType = [];
+        foreach ([100, 101, 102] as $typeCode) {
+            $gradesByType[$typeCode] = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', $typeCode)
+                ->select('student_hemis_id', DB::raw('MAX(grade) as grade'))
+                ->groupBy('student_hemis_id')
+                ->pluck('grade', 'student_hemis_id')
+                ->toArray();
+        }
+
+        // O'qituvchilar
+        $maruzaTeacher = DB::table('student_grades as s')
+            ->leftJoin('teachers as t', 't.hemis_id', '=', 's.employee_id')
+            ->select(DB::raw('GROUP_CONCAT(DISTINCT t.full_name SEPARATOR ", ") AS full_names'))
+            ->where('s.subject_id', $subjectId)
+            ->where('s.training_type_code', 11)
+            ->whereIn('s.student_hemis_id', $studentHemisIds)
+            ->groupBy('s.employee_id')
+            ->first();
+
+        $otherTeachers = DB::table('student_grades as s')
+            ->leftJoin('teachers as t', 't.hemis_id', '=', 's.employee_id')
+            ->select(DB::raw('GROUP_CONCAT(DISTINCT t.full_name SEPARATOR ", ") AS full_names'))
+            ->where('s.subject_id', $subjectId)
+            ->where('s.training_type_code', '!=', 11)
+            ->whereNotIn('s.training_type_code', [99, 100, 101, 102, 103])
+            ->whereIn('s.student_hemis_id', $studentHemisIds)
+            ->groupBy('s.employee_id')
+            ->get();
+
+        $otherTeacherNames = [];
+        foreach ($otherTeachers as $t) {
+            foreach (explode(', ', $t->full_names) as $name) {
+                $name = trim($name);
+                if ($name && !in_array($name, $otherTeacherNames)) {
+                    $otherTeacherNames[] = $name;
+                }
+            }
+        }
+
+        // Shablon yuklash
+        $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
+        if (!file_exists($templatePath)) {
+            return back()->with('error', 'Shablon fayli topilmadi');
+        }
+
+        $spreadsheet = SpreadsheetIOFactory::load($templatePath);
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Sheet'), 0, 31);
+        $sheet->setTitle($sheetName);
+
+        // Header
+        $sheet->setCellValue('A4', ($department->name ?? '') . ' FAKULTETI');
+        $sheet->setCellValue('C8', '         ' . ($specialty->name ?? ''));
+        $sheet->setCellValue('N8', $semester->level_code ?? '');
+        $sheet->setCellValue('Q8', $semester->code ?? '');
+        $sheet->setCellValue('C10', '  ' . ($subject->subject_name ?? ''));
+        $sheet->setCellValue('P10', implode(', ', $otherTeacherNames));
+        $sheet->setCellValue('A11', "Ma'ruzachi:");
+        $sheet->setCellValue('C11', '         ' . ($maruzaTeacher->full_names ?? ''));
+        $sheet->setCellValue('D13', $subject->total_credit ?? 0);
+        $sheet->setCellValue('G13', $subject->total_acload ?? 0);
+
+        // Ma'lumotlarni joylashtirish
+        $startRow = 20;
+        $maxRow = 49;
+
+        foreach ($students as $index => $student) {
+            $row = $startRow + $index;
+            if ($row > $maxRow) break;
+
+            $hemisId = $student->hemis_id;
+
+            $sheet->setCellValue('B' . $row, $student->full_name);
+            $sheet->setCellValue('C' . $row, $student->student_id_number);
+
+            $jn = $savedJnGrades[$hemisId] ?? null;
+            if ($jn !== null) {
+                $sheet->setCellValue('D' . $row, (int) $jn);
+            }
+
+            $mt = $savedMtGrades[$hemisId] ?? null;
+            if ($mt !== null) {
+                $sheet->setCellValue('G' . $row, (int) $mt);
+            }
+
+            $on = $gradesByType[100][$hemisId] ?? null;
+            if ($on !== null) {
+                $sheet->setCellValue('J' . $row, round((float) $on));
+            }
+
+            $oski = $gradesByType[101][$hemisId] ?? null;
+            if ($oski !== null) {
+                $sheet->setCellValue('P' . $row, round((float) $oski));
+            }
+
+            $test = $gradesByType[102][$hemisId] ?? null;
+            if ($test !== null) {
+                $sheet->setCellValue('S' . $row, round((float) $test));
+            }
+        }
+
+        $tempDir = storage_path('app/public/yn_qaydnoma_excel');
+        if (!file_exists($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        $groupName = str_replace(['/', '\\', ' '], '_', $group->name ?? 'guruh');
+        $subjectName = str_replace(['/', '\\', ' '], '_', $subject->subject_name ?? 'fan');
+        $fileName = 'YN_qaydnoma_' . $groupName . '_' . $subjectName . '.xlsx';
+        $tempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_' . $fileName;
+
+        $writer = SpreadsheetIOFactory::createWriter($spreadsheet, 'Xlsx');
+        $writer->save($tempPath);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
+    }
 }

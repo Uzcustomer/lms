@@ -246,7 +246,7 @@
             var journalBase = '{{ url("/admin/journal/show") }}';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
-                var journalUrl = journalBase + '/' + encodeURIComponent(r.group_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code);
+                var journalUrl = journalBase + '/' + encodeURIComponent(r.group_db_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code);
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.employee_name) + '</span></td>';

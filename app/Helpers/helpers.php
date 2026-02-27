@@ -128,9 +128,8 @@ if (!function_exists('get_fan_masuli_subject_ids')) {
      */
     function get_fan_masuli_subject_ids(): array
     {
-        if (!is_active_fan_masuli()) return [];
-
         $user = auth()->user();
+        if (!$user || !$user->hasRole('fan_masuli')) return [];
 
         // Teacher modelda responsibleSubjects() mavjud
         if ($user instanceof \App\Models\Teacher) {

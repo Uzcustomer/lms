@@ -18,6 +18,11 @@
         return in_array($activeRole, (array) $roles);
     };
 
+    // Foydalanuvchida rol mavjudligini tekshirish (faol bo'lmasa ham)
+    $hasAnyRole = function($roles) use ($userRoles) {
+        return count(array_intersect((array) $roles, $userRoles)) > 0;
+    };
+
     // Route resolver - teacher yoki admin guardga qarab route aniqlash
     $r = function($adminRoute, $teacherRoute = null) use ($isTeacher, $activeRole, $adminRoles) {
         if ($isTeacher && $teacherRoute && !in_array($activeRole, $adminRoles)) {
@@ -173,7 +178,7 @@
 
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'fan_masuli']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']) || $hasAnyRole('fan_masuli'))
         <a href="{{ route('admin.ktr.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.ktr.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

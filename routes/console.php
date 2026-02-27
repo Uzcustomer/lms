@@ -9,18 +9,17 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote')->hourly();
 
-// Baholar: kechasi 00:30 da FINAL import (kechagi va yakunlanmagan kunlarni is_final=true qiladi)
-// bootstrap/app.php da ham 00:30 ga withoutOverlapping bilan scheduled
+// Kechki import — bitta command ichida ketma-ket ishlatiladi (bitta Telegram xabar):
+// 1. Jadval import (import:schedules)
+// 2. Final import — baholar (student:import-data --mode=final)
+// 3. Davomat nazorati FINAL (import:attendance-controls --mode=final)
+Schedule::command('nightly:run')->dailyAt('00:00')->withoutOverlapping(180);
+
 // 04:00 da retry: FAQAT oldingi run xato bergan bo'lsa qayta ishlaydi
-Schedule::command('student:import-data --mode=final')->dailyAt('00:30');
 Schedule::command('student:import-data --mode=final')->dailyAt('04:00')->when(function () {
-    // Faqat agar bugun 00:30 run muvaffaqiyatsiz bo'lgan yoki ishlamagan bo'lsa
     $lastSuccess = \Illuminate\Support\Facades\Cache::get('final_import_last_success');
     return !$lastSuccess || !Carbon::parse($lastSuccess)->isToday();
 });
-
-// Davomat nazorati: kechasi 02:00 da FINAL import (kechagi va yakunlanmagan kunlarni is_final=true qiladi)
-Schedule::command('import:attendance-controls --mode=final')->dailyAt('02:00');
 Schedule::command('command:independent-auto-create')->dailyAt('06:00');
 
 // O'qituvchilarga davomat va baho eslatmalari (har kuni 13:00, 15:00, 17:00, 19:00, 21:00, 23:00)

@@ -1298,6 +1298,7 @@ class ImportGrades extends Command
         $this->info("╚══════════════════════════════════════════════════════════╝");
 
         // Telegram — yangi xabar yuborish va ID saqlash
+        if ($this->option('silent')) return;
         $chatId = config('services.telegram.chat_id');
         if (!$chatId) return;
 
@@ -1482,6 +1483,7 @@ class ImportGrades extends Command
 
     private function sendTelegramReport()
     {
+        if ($this->option('silent')) return;
         $mode = $this->option('mode');
         $lines = ["{$mode} import natijasi (" . Carbon::now()->format('d.m.Y H:i') . "):"];
 

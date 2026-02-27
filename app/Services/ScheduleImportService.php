@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Log;
 
 class ScheduleImportService
 {
+    private bool $silent = false;
+
     public function importBetween(Carbon $from, Carbon $to, ?\Closure $onProgress = null): void
     {
         $message = "🟢 Jadval importi boshlandi: {$from->toDateString()} — {$to->toDateString()}";
@@ -109,8 +111,10 @@ class ScheduleImportService
     /**
      * Joriy o'quv yili bo'yicha jadval import (cron uchun)
      */
-    public function importByEducationYear(?\Closure $log = null): void
+    public function importByEducationYear(?\Closure $log = null, bool $silent = false): void
     {
+        $this->silent = $silent;
+
         $educationYearCode = DB::table('semesters')
             ->where('current', true)
             ->value('education_year');
@@ -375,6 +379,8 @@ class ScheduleImportService
 
     protected function notifyTelegram(string $message): void
     {
+        if ($this->silent) return;
+
         $botToken = config('services.telegram.bot_token');
         $chatId = config('services.telegram.chat_id');
 

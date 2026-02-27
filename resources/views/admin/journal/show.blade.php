@@ -1529,10 +1529,81 @@
                                     YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
                                 </div>
                             @elseif($canSubmitYn ?? false)
-                                <button type="button" id="btn-submit-yn"
-                                    class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
-                                    onclick="submitToYn()">
-                                    YN ga yuborish
+                                <div class="flex items-center space-x-3">
+                                    <div>
+                                        <label for="yn-exam-date" class="block text-xs font-medium text-gray-600 mb-1">YN o'tkazish sanasi</label>
+                                        <input type="date" id="yn-exam-date"
+                                            class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                            min="{{ now()->format('Y-m-d') }}" required>
+                                    </div>
+                                    <button type="button" id="btn-submit-yn"
+                                        class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm mt-4"
+                                        onclick="submitToYn()">
+                                        YN ga yuborish
+                                    </button>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+                @endif
+
+                {{-- YN natijalari paneli — YN yuborilgandan keyin ko'rinadi --}}
+                @if(isset($ynSubmission) && $ynSubmission)
+                @php
+                    $examDate = $ynSubmission->exam_date;
+                    $examDatePassed = $examDate && $examDate->isPast();
+                    $resultsFetched = $ynSubmission->results_fetched;
+                @endphp
+                <div class="mt-4 p-4 {{ $resultsFetched ? 'bg-green-50 border-green-200' : ($examDatePassed ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200') }} border rounded-lg">
+                    <div class="flex items-center justify-between flex-wrap gap-3">
+                        <div>
+                            <h4 class="font-semibold {{ $resultsFetched ? 'text-green-800' : ($examDatePassed ? 'text-indigo-800' : 'text-gray-800') }} flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" /></svg>
+                                OSKI va Test natijalari
+                            </h4>
+                            @if($examDate)
+                                <p class="text-sm mt-1 {{ $examDatePassed ? 'text-indigo-700' : 'text-gray-600' }}">
+                                    YN o'tkazish sanasi: <span class="font-semibold">{{ $examDate->format('d.m.Y') }}</span>
+                                    @if($examDatePassed)
+                                        <span class="ml-2 text-green-600 font-semibold">(O'tgan)</span>
+                                    @else
+                                        <span class="ml-2 text-yellow-600 font-semibold">({{ $examDate->diffForHumans() }})</span>
+                                    @endif
+                                </p>
+                            @else
+                                <p class="text-sm text-gray-500 mt-1">YN o'tkazish sanasi belgilanmagan</p>
+                            @endif
+                            @if($resultsFetched)
+                                <p class="text-sm text-green-700 mt-1 font-medium">OSKI va Test natijalari muvaffaqiyatli yuklangan</p>
+                            @endif
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            @if($examDatePassed && !$resultsFetched)
+                                <button type="button" id="btn-fetch-yn-results"
+                                    class="px-5 py-2.5 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm text-sm"
+                                    onclick="fetchYnResults()">
+                                    Natijalarni tortish
+                                </button>
+                            @elseif($examDatePassed && $resultsFetched)
+                                <button type="button" id="btn-fetch-yn-results-refresh"
+                                    class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm"
+                                    onclick="fetchYnResults()">
+                                    Yangilash
+                                </button>
+                            @endif
+
+                            @if($resultsFetched)
+                                <button type="button" id="btn-generate-qaydnoma"
+                                    class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
+                                    onclick="generateYakuniyQaydnoma()">
+                                    Qaydnoma yaratish
+                                </button>
+                            @else
+                                <button type="button" disabled
+                                    class="px-5 py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed text-sm"
+                                    title="Avval OSKI va Test natijalarini tortish kerak">
+                                    Qaydnoma yaratish
                                 </button>
                             @endif
                         </div>
@@ -3702,6 +3773,21 @@
 
         // YN ga yuborish funksiyasi
         function submitToYn() {
+            // Exam date tekshirish
+            const examDateInput = document.getElementById('yn-exam-date');
+            if (!examDateInput || !examDateInput.value) {
+                alert('Iltimos, YN o\'tkazish sanasini kiriting.');
+                if (examDateInput) examDateInput.focus();
+                return;
+            }
+
+            const examDate = examDateInput.value;
+            const today = new Date().toISOString().split('T')[0];
+            if (examDate < today) {
+                alert('YN o\'tkazish sanasi bugungi sanadan oldin bo\'lishi mumkin emas.');
+                return;
+            }
+
             // 1-bosqich: Ogohlantirish
             const warn = confirm(
                 'DIQQAT!\n\n' +
@@ -3710,6 +3796,7 @@
                 '2. Barcha talabalarning MT (mustaqil ta\'lim) baholari qulflanadi\n' +
                 '3. Talabalar MT uchun fayl yuklashi taqiqlanadi\n' +
                 '4. Retake (qayta topshirish) baholari qulflanadi\n\n' +
+                'YN o\'tkazish sanasi: ' + examDate + '\n\n' +
                 'Bu amalni bekor qilib bo\'lmaydi!\n\n' +
                 'Davom etasizmi?'
             );
@@ -3740,6 +3827,7 @@
                     subject_id: '{{ $subjectId }}',
                     semester_code: '{{ $semesterCode }}',
                     group_hemis_id: '{{ $group->group_hemis_id }}',
+                    exam_date: examDate,
                 })
             })
             .then(r => r.json().then(data => ({ok: r.ok, data})))
@@ -3913,6 +4001,111 @@
                 btn.style.opacity = '1';
             });
         }
+
+        // OSKI va Test natijalarini tortish
+        function fetchYnResults() {
+            const btn = document.getElementById('btn-fetch-yn-results') || document.getElementById('btn-fetch-yn-results-refresh');
+            if (!btn) return;
+
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Yuklanmoqda...';
+            btn.style.opacity = '0.6';
+
+            fetch('{{ route("admin.journal.fetch-yn-results") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                })
+            })
+            .then(r => r.json().then(data => ({ok: r.ok, data})))
+            .then(({ok, data}) => {
+                if (ok && data.success) {
+                    const notif = document.createElement('div');
+                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#10b981; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
+                    notif.textContent = data.message;
+                    document.body.appendChild(notif);
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    alert(data.message || 'Natijalarni yuklashda xatolik yuz berdi');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    btn.style.opacity = '1';
+                }
+            })
+            .catch(err => {
+                alert('Xatolik: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = originalText;
+                btn.style.opacity = '1';
+            });
+        }
+
+        // Yakuniy baholash qaydnomasini yaratish
+        function generateYakuniyQaydnoma() {
+            const btn = document.getElementById('btn-generate-qaydnoma');
+            if (!btn) return;
+
+            btn.disabled = true;
+            btn.textContent = 'Yaratilmoqda...';
+            btn.style.opacity = '0.6';
+
+            // Form yaratib POST orqali fayl yuklash
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ route("admin.journal.generate-yakuniy-qaydnoma") }}';
+            form.style.display = 'none';
+
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_token';
+            csrfInput.value = '{{ csrf_token() }}';
+            form.appendChild(csrfInput);
+
+            const subjectInput = document.createElement('input');
+            subjectInput.type = 'hidden';
+            subjectInput.name = 'subject_id';
+            subjectInput.value = '{{ $subjectId }}';
+            form.appendChild(subjectInput);
+
+            const semesterInput = document.createElement('input');
+            semesterInput.type = 'hidden';
+            semesterInput.name = 'semester_code';
+            semesterInput.value = '{{ $semesterCode }}';
+            form.appendChild(semesterInput);
+
+            const groupInput = document.createElement('input');
+            groupInput.type = 'hidden';
+            groupInput.name = 'group_hemis_id';
+            groupInput.value = '{{ $group->group_hemis_id }}';
+            form.appendChild(groupInput);
+
+            document.body.appendChild(form);
+            form.submit();
+
+            // Tugmani qayta faollashtirish
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = 'Qaydnoma yaratish';
+                btn.style.opacity = '1';
+                form.remove();
+            }, 3000);
+        }
+
+        // Sahifa yuklanganda — agar YN o'tkazish sanasi o'tgan va natijalar tortilmagan bo'lsa, avtomatik tortish
+        @if(isset($ynSubmission) && $ynSubmission && $ynSubmission->exam_date && $ynSubmission->exam_date->isPast() && !$ynSubmission->results_fetched)
+        document.addEventListener('DOMContentLoaded', function() {
+            // Avtomatik natijalarni tortish
+            fetchYnResults();
+        });
+        @endif
     </script>
 
     {{-- Sababli baho kiritish modal oynasi --}}

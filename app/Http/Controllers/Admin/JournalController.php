@@ -29,6 +29,16 @@ use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnConsent;
 use App\Models\YnStudentGrade;
 use App\Models\YnSubmission;
+use App\Models\Student;
+use App\Models\StudentGrade;
+use App\Models\HemisQuizResult;
+use App\Models\Attendance;
+use App\Models\Teacher;
+use App\Models\DocumentVerification;
+use App\Enums\ProjectRole;
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\IOFactory;
+use PhpOffice\PhpWord\SimpleType\Jc;
 
 class JournalController extends Controller
 {
@@ -3903,6 +3913,7 @@ class JournalController extends Controller
             'subject_id' => 'required',
             'semester_code' => 'required',
             'group_hemis_id' => 'required',
+            'exam_date' => 'required|date|after_or_equal:today',
         ]);
 
         // Faqat biriktirilgan o'qituvchi YN ga yuborishi mumkin
@@ -4151,6 +4162,7 @@ class JournalController extends Controller
                 'group_hemis_id' => $groupHemisId,
                 'submitted_by' => $submittedByUserId,
                 'submitted_at' => now(),
+                'exam_date' => $request->exam_date,
             ]);
 
             // Har bir talaba uchun JN/MT snapshot saqlash
@@ -4553,6 +4565,604 @@ class JournalController extends Controller
             'yn_submitted' => $ynSubmission !== null,
             'yn_submitted_at' => $ynSubmission?->submitted_at?->format('d.m.Y H:i'),
         ]);
+    }
+
+    /**
+     * YN o'tkazish sanasi o'tgandan keyin OSKI va Test natijalarini avtomatik tortish.
+     * hemis_quiz_results dan student_grades ga yuklanmagan natijalarni topib, student_grades ga saqlaydi.
+     */
+    public function fetchYnResults(Request $request)
+    {
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+        ]);
+
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $groupHemisId = $request->group_hemis_id;
+
+        // YN yuborilganligini tekshirish
+        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->first();
+
+        if (!$ynSubmission) {
+            return response()->json([
+                'success' => false,
+                'message' => 'YN hali yuborilmagan.',
+            ], 400);
+        }
+
+        // exam_date o'tganligini tekshirish
+        if (!$ynSubmission->exam_date || $ynSubmission->exam_date->isFuture()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'YN o\'tkazish sanasi hali kelmagan.',
+            ], 400);
+        }
+
+        // Guruh talabalarini olish
+        $students = Student::where('group_id', $groupHemisId)->get();
+        if ($students->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Guruhda talabalar topilmadi.',
+            ], 404);
+        }
+
+        $studentHemisIds = $students->pluck('hemis_id')->toArray();
+        $studentIdNumbers = $students->pluck('student_id_number')->filter()->toArray();
+
+        // hemis_quiz_results dan natijalarni olish (OSKI va Test turlari)
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+
+        $quizResults = HemisQuizResult::where('is_active', 1)
+            ->where('fan_id', $subjectId)
+            ->where(function ($q) use ($studentHemisIds, $studentIdNumbers) {
+                $q->whereIn('student_id', $studentHemisIds);
+                if (!empty($studentIdNumbers)) {
+                    $q->orWhereIn('student_id', $studentIdNumbers);
+                }
+            })
+            ->whereIn('quiz_type', array_merge($oskiTypes, $testTypes))
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('student_grades')
+                    ->whereColumn('student_grades.quiz_result_id', 'hemis_quiz_results.id')
+                    ->where('student_grades.reason', 'quiz_result');
+            })
+            ->get();
+
+        if ($quizResults->isEmpty()) {
+            // Natijalar yo'q — ammo allaqachon yuklanganlarni tekshirish
+            $existingCount = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereIn('training_type_code', [101, 102])
+                ->where('reason', 'quiz_result')
+                ->count();
+
+            if ($existingCount > 0) {
+                $ynSubmission->update(['results_fetched' => true]);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Natijalar avval yuklangan. Jami: ' . $existingCount . ' ta.',
+                    'fetched_count' => 0,
+                    'existing_count' => $existingCount,
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'OSKI va Test natijalari topilmadi. Natijalar hali tizimga yuklanmagan bo\'lishi mumkin.',
+            ], 404);
+        }
+
+        // Student lookup
+        $studentLookup = [];
+        foreach ($students as $student) {
+            $studentLookup[$student->hemis_id] = $student;
+            if ($student->student_id_number) {
+                $studentLookup[$student->student_id_number] = $student;
+            }
+        }
+
+        $group = Group::where('group_hemis_id', $groupHemisId)->first();
+        $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+            ->where('code', $semesterCode)
+            ->first();
+
+        $subject = CurriculumSubject::where('subject_id', $subjectId)
+            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+            ->where('semester_code', $semesterCode)
+            ->first();
+
+        $successCount = 0;
+        $errors = [];
+        $duplicateTracker = [];
+
+        foreach ($quizResults as $result) {
+            $student = $studentLookup[$result->student_id] ?? null;
+            if (!$student) {
+                continue;
+            }
+
+            // Dublikat tekshirish
+            $key = $result->student_id . '_' . $result->fan_id;
+            $ynTuri = in_array($result->quiz_type, $oskiTypes) ? 'oski' : 'test';
+            $dupKey = $key . '_' . $ynTuri;
+            if (isset($duplicateTracker[$dupKey])) {
+                continue;
+            }
+            $duplicateTracker[$dupKey] = $result->id;
+
+            // training_type_code aniqlash
+            if (in_array($result->quiz_type, $oskiTypes)) {
+                $trainingTypeCode = 101;
+                $trainingTypeName = 'Oski';
+            } elseif (in_array($result->quiz_type, $testTypes)) {
+                $trainingTypeCode = 102;
+                $trainingTypeName = 'Yakuniy test';
+            } else {
+                continue;
+            }
+
+            StudentGrade::create([
+                'student_id' => $student->id,
+                'student_hemis_id' => $student->hemis_id,
+                'hemis_id' => 999999999,
+                'semester_code' => $semester->code ?? $student->semester_code,
+                'semester_name' => $semester->name ?? $student->semester_name,
+                'subject_schedule_id' => 0,
+                'subject_id' => $subject->subject_id ?? $subjectId,
+                'subject_name' => $subject->subject_name ?? '',
+                'subject_code' => $subject->subject_code ?? '',
+                'training_type_code' => $trainingTypeCode,
+                'training_type_name' => $trainingTypeName,
+                'employee_id' => 0,
+                'employee_name' => auth()->user()->name ?? 'Avtomatik yuklash',
+                'lesson_pair_name' => '',
+                'lesson_pair_code' => '',
+                'lesson_pair_start_time' => '',
+                'lesson_pair_end_time' => '',
+                'lesson_date' => $result->date_finish ?? now(),
+                'created_at_api' => $result->created_at ?? now(),
+                'reason' => 'quiz_result',
+                'status' => 'recorded',
+                'grade' => round($result->grade),
+                'deadline' => now(),
+                'quiz_result_id' => $result->id,
+                'is_final' => true,
+                'is_yn_locked' => true,
+            ]);
+
+            $successCount++;
+        }
+
+        if ($successCount > 0) {
+            $ynSubmission->update(['results_fetched' => true]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $successCount . ' ta natija muvaffaqiyatli yuklandi.',
+            'fetched_count' => $successCount,
+            'error_count' => count($errors),
+        ]);
+    }
+
+    /**
+     * Yakuniy baholash qaydnomasini yaratish (DOCX).
+     * JN, MT, OSKI, Test natijalarini o'z ichiga oladi.
+     */
+    public function generateYakuniyQaydnoma(Request $request)
+    {
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+        ]);
+
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $groupHemisId = $request->group_hemis_id;
+
+        // YN yuborilganligini tekshirish
+        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->first();
+
+        if (!$ynSubmission) {
+            return response()->json(['error' => 'YN hali yuborilmagan.'], 400);
+        }
+
+        if (!$ynSubmission->results_fetched) {
+            return response()->json(['error' => 'OSKI va Test natijalari hali yuklanmagan.'], 400);
+        }
+
+        $group = Group::where('group_hemis_id', $groupHemisId)->first();
+        if (!$group) {
+            return response()->json(['error' => 'Guruh topilmadi.'], 404);
+        }
+
+        $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+            ->where('code', $semesterCode)
+            ->first();
+
+        $department = Department::where('department_hemis_id', $group->department_hemis_id)
+            ->where('structure_type_code', 11)
+            ->first();
+
+        $specialty = Specialty::where('specialty_hemis_id', $group->specialty_hemis_id)->first();
+
+        $subject = CurriculumSubject::where('subject_id', $subjectId)
+            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+            ->where('semester_code', $semesterCode)
+            ->first();
+
+        if (!$subject) {
+            return response()->json(['error' => 'Fan topilmadi.'], 404);
+        }
+
+        // YN snapshot baholarini olish (JN va MT)
+        $latestSnapshots = YnStudentGrade::latestPerStudent($ynSubmission->id)->get();
+        $savedJn = $latestSnapshots->pluck('jn', 'student_hemis_id')->toArray();
+        $savedMt = $latestSnapshots->pluck('mt', 'student_hemis_id')->toArray();
+
+        // Talabalarni olish
+        $students = Student::select('full_name as student_name', 'student_id_number as student_id', 'hemis_id', 'id')
+            ->where('group_id', $groupHemisId)
+            ->groupBy('id')
+            ->orderBy('full_name')
+            ->get();
+
+        // OSKI va Test natijalarini olish
+        $studentHemisIds = $students->pluck('hemis_id')->toArray();
+
+        $oskiGrades = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 101)
+            ->select('student_hemis_id', DB::raw('ROUND(AVG(grade)) as avg_grade'))
+            ->groupBy('student_hemis_id')
+            ->pluck('avg_grade', 'student_hemis_id')
+            ->toArray();
+
+        $testGrades = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 102)
+            ->select('student_hemis_id', DB::raw('ROUND(AVG(grade)) as avg_grade'))
+            ->groupBy('student_hemis_id')
+            ->pluck('avg_grade', 'student_hemis_id')
+            ->toArray();
+
+        // Davomat
+        $attendanceData = [];
+        foreach ($students as $student) {
+            $qoldirgan = (int) Attendance::where('group_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('student_hemis_id', $student->hemis_id)
+                ->sum('absent_off');
+
+            $totalAcload = $subject->total_acload ?: 1;
+            $attendanceData[$student->hemis_id] = round($qoldirgan * 100 / $totalAcload, 2);
+        }
+
+        // O'qituvchilarni olish
+        $studentIds = $students->pluck('hemis_id');
+
+        $maruzaTeacher = DB::table('student_grades as s')
+            ->leftJoin('teachers as t', 't.hemis_id', '=', 's.employee_id')
+            ->select(DB::raw('GROUP_CONCAT(DISTINCT t.full_name SEPARATOR ", ") AS full_names'))
+            ->where('s.subject_id', $subjectId)
+            ->where('s.training_type_code', 11)
+            ->whereIn('s.student_hemis_id', $studentIds)
+            ->groupBy('s.employee_id')
+            ->first();
+
+        $otherTeachers = DB::table('student_grades as s')
+            ->leftJoin('teachers as t', 't.hemis_id', '=', 's.employee_id')
+            ->select(DB::raw('GROUP_CONCAT(DISTINCT t.full_name SEPARATOR ", ") AS full_names'))
+            ->where('s.subject_id', $subjectId)
+            ->where('s.training_type_code', '!=', 11)
+            ->whereNotIn('s.training_type_code', [99, 100, 101, 102, 103])
+            ->whereIn('s.student_hemis_id', $studentIds)
+            ->groupBy('s.employee_id')
+            ->get();
+
+        $otherTeacherNames = [];
+        foreach ($otherTeachers as $t) {
+            foreach (explode(', ', $t->full_names) as $name) {
+                $name = trim($name);
+                if ($name && !in_array($name, $otherTeacherNames)) {
+                    $otherTeacherNames[] = $name;
+                }
+            }
+        }
+
+        $maruzaText = $maruzaTeacher->full_names ?? '-';
+        $otherText = implode(', ', $otherTeacherNames) ?: '-';
+
+        // Word hujjat yaratish
+        $phpWord = new PhpWord();
+        $phpWord->setDefaultFontName('Times New Roman');
+        $phpWord->setDefaultFontSize(12);
+
+        $section = $phpWord->addSection([
+            'orientation' => 'landscape',
+            'marginTop' => 600,
+            'marginBottom' => 600,
+            'marginLeft' => 800,
+            'marginRight' => 600,
+        ]);
+
+        // Sarlavha
+        $section->addText(
+            '12-shakl',
+            ['bold' => true, 'size' => 11],
+            ['alignment' => Jc::END, 'spaceAfter' => 100]
+        );
+
+        $section->addText(
+            'YAKUNIY BAHOLASH QAYDNOMASI',
+            ['bold' => true, 'size' => 14],
+            ['alignment' => Jc::CENTER, 'spaceAfter' => 200]
+        );
+
+        // Ma'lumotlar
+        $infoStyle = ['size' => 11];
+        $infoBold = ['bold' => true, 'size' => 11];
+        $infoParaStyle = ['spaceAfter' => 40];
+
+        $textRun = $section->addTextRun($infoParaStyle);
+        $textRun->addText('Fakultet: ', $infoBold);
+        $textRun->addText($department->name ?? '-', $infoStyle);
+
+        $textRun = $section->addTextRun($infoParaStyle);
+        $textRun->addText('Kurs: ', $infoBold);
+        $textRun->addText($semester->level_name ?? '-', $infoStyle);
+        $textRun->addText('     Semestr: ', $infoBold);
+        $textRun->addText($semester->name ?? '-', $infoStyle);
+        $textRun->addText('     Guruh: ', $infoBold);
+        $textRun->addText($group->name ?? '-', $infoStyle);
+
+        $textRun = $section->addTextRun($infoParaStyle);
+        $textRun->addText('Fan: ', $infoBold);
+        $textRun->addText($subject->subject_name ?? '-', $infoStyle);
+
+        $textRun = $section->addTextRun($infoParaStyle);
+        $textRun->addText("Ma'ruzachi: ", $infoBold);
+        $textRun->addText($maruzaText, $infoStyle);
+
+        $textRun = $section->addTextRun($infoParaStyle);
+        $textRun->addText("Amaliyot o'qituvchilari: ", $infoBold);
+        $textRun->addText($otherText, $infoStyle);
+
+        $textRun = $section->addTextRun($infoParaStyle);
+        $textRun->addText('Soatlar soni: ', $infoBold);
+        $textRun->addText($subject->total_acload ?? '-', $infoStyle);
+
+        $textRun = $section->addTextRun(['spaceAfter' => 100]);
+        $textRun->addText('YN o\'tkazish sanasi: ', $infoBold);
+        $textRun->addText($ynSubmission->exam_date ? $ynSubmission->exam_date->format('d.m.Y') : '-', $infoStyle);
+
+        $section->addText(
+            'Sana: ' . now()->format('d.m.Y'),
+            $infoStyle,
+            ['alignment' => Jc::END, 'spaceAfter' => 150]
+        );
+
+        // Jadval
+        $tableStyle = [
+            'borderSize' => 6,
+            'borderColor' => '000000',
+            'cellMargin' => 40,
+        ];
+        $phpWord->addTableStyle('YakuniyTable', $tableStyle);
+        $table = $section->addTable('YakuniyTable');
+
+        $headerFont = ['bold' => true, 'size' => 10];
+        $cellFont = ['size' => 10];
+        $cellFontRed = ['size' => 10, 'color' => 'FF0000'];
+        $cellFontGreen = ['size' => 10, 'color' => '008000'];
+        $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
+        $cellCenter = ['alignment' => Jc::CENTER];
+        $cellLeft = ['alignment' => Jc::START];
+
+        // Sarlavha qatori
+        $headerRow = $table->addRow(400);
+        $headerRow->addCell(500, $headerBg)->addText('№', $headerFont, $cellCenter);
+        $headerRow->addCell(3500, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
+        $headerRow->addCell(1500, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
+        $headerRow->addCell(900, $headerBg)->addText('JN', $headerFont, $cellCenter);
+        $headerRow->addCell(900, $headerBg)->addText("O'N", $headerFont, $cellCenter);
+        $headerRow->addCell(900, $headerBg)->addText('OSKI', $headerFont, $cellCenter);
+        $headerRow->addCell(900, $headerBg)->addText('Test', $headerFont, $cellCenter);
+        $headerRow->addCell(1200, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
+        $headerRow->addCell(1200, $headerBg)->addText('Yakuniy ball', $headerFont, $cellCenter);
+        $headerRow->addCell(1500, $headerBg)->addText('Xulosa', $headerFont, $cellCenter);
+
+        $rowNum = 1;
+        foreach ($students as $student) {
+            $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+
+            $jn = $savedJn[$student->hemis_id] ?? 0;
+            $mt = $savedMt[$student->hemis_id] ?? 0;
+            $oski = $oskiGrades[$student->hemis_id] ?? 0;
+            $test = $testGrades[$student->hemis_id] ?? 0;
+            $davomat = $attendanceData[$student->hemis_id] ?? 0;
+
+            // Yakuniy ball hisoblash: JN(30%) + MT(10%) + OSKI/Test(60%)
+            // Agar OSKI va Test ikkalasi ham bo'lsa, o'rtachasini olish
+            $ynBall = 0;
+            if ($oski > 0 && $test > 0) {
+                $ynBall = round(($oski + $test) / 2);
+            } elseif ($test > 0) {
+                $ynBall = $test;
+            } elseif ($oski > 0) {
+                $ynBall = $oski;
+            }
+
+            $yakuniyBall = round($jn * 0.3 + $mt * 0.1 + $ynBall * 0.6);
+
+            // Xulosa
+            $jnFailed = $jn < $markingScore->effectiveLimit('jn');
+            $mtFailed = $mt < $markingScore->effectiveLimit('mt');
+            $davomatFailed = $davomat > 25;
+            $oskiFailed = $oski > 0 && $oski < $markingScore->effectiveLimit('oski');
+            $testFailed = $test > 0 && $test < $markingScore->effectiveLimit('test');
+
+            $xulosa = 'O\'tdi';
+            if ($jnFailed || $mtFailed || $davomatFailed || $oskiFailed || $testFailed || $yakuniyBall < ($markingScore->minimum_limit ?? 60)) {
+                $xulosa = 'O\'tmadi';
+            }
+
+            $dataRow = $table->addRow();
+            $dataRow->addCell(500)->addText($rowNum, $cellFont, $cellCenter);
+            $dataRow->addCell(3500)->addText($student->student_name, $cellFont, $cellLeft);
+            $dataRow->addCell(1500)->addText($student->student_id, $cellFont, $cellCenter);
+            $dataRow->addCell(900)->addText($jn, $jnFailed ? $cellFontRed : $cellFont, $cellCenter);
+            $dataRow->addCell(900)->addText($mt, $mtFailed ? $cellFontRed : $cellFont, $cellCenter);
+            $dataRow->addCell(900)->addText($oski ?: '-', $cellFont, $cellCenter);
+            $dataRow->addCell(900)->addText($test ?: '-', $cellFont, $cellCenter);
+            $dataRow->addCell(1200)->addText(
+                ($davomat != 0 ? $davomat . '%' : '0%'),
+                $davomatFailed ? $cellFontRed : $cellFont,
+                $cellCenter
+            );
+            $dataRow->addCell(1200)->addText(
+                $yakuniyBall,
+                $yakuniyBall < 60 ? $cellFontRed : $cellFontGreen,
+                $cellCenter
+            );
+            $dataRow->addCell(1500)->addText(
+                $xulosa,
+                $xulosa === 'O\'tmadi' ? $cellFontRed : $cellFontGreen,
+                $cellCenter
+            );
+
+            $rowNum++;
+        }
+
+        // Imzolar
+        $section->addTextBreak(1);
+
+        $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $department->department_hemis_id ?? ''))
+            ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
+            ->first();
+
+        $signTable = $section->addTable();
+
+        $signRow = $signTable->addRow();
+        $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
+        $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . $maruzaText, ['size' => 11]);
+
+        // QR code
+        $generatedBy = null;
+        if (auth()->guard('teacher')->check()) {
+            $generatedBy = auth()->guard('teacher')->user()->full_name ?? auth()->guard('teacher')->user()->name ?? null;
+        } elseif (auth()->guard('web')->check()) {
+            $generatedBy = auth()->guard('web')->user()->name ?? null;
+        }
+
+        $tempDir = storage_path('app/public/yn_qaydnoma');
+        if (!file_exists($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        $verification = DocumentVerification::createForDocument([
+            'document_type' => 'Yakuniy baholash qaydnomasi',
+            'subject_name' => $subject->subject_name,
+            'group_names' => $group->name,
+            'semester_name' => $semester->name ?? null,
+            'department_name' => $department->name ?? null,
+            'generated_by' => $generatedBy,
+        ]);
+
+        $verificationUrl = $verification->getVerificationUrl();
+        $qrImagePath = null;
+
+        try {
+            $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data=' . urlencode($verificationUrl) . '&size=200x200';
+            $client = new \GuzzleHttp\Client();
+            $qrTempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_qr.png';
+            $response = $client->request('GET', $qrApiUrl, [
+                'verify' => false,
+                'sink' => $qrTempPath,
+                'timeout' => 10,
+            ]);
+            if ($response->getStatusCode() == 200 && file_exists($qrTempPath) && filesize($qrTempPath) > 0) {
+                $qrImagePath = $qrTempPath;
+            }
+        } catch (\Exception $e) {
+            // QR code generatsiyasi muvaffaqiyatsiz bo'lsa, davom etamiz
+        }
+
+        if ($qrImagePath) {
+            $section->addTextBreak(1);
+            $section->addImage($qrImagePath, [
+                'width' => 80,
+                'height' => 80,
+                'alignment' => Jc::START,
+            ]);
+            $section->addText(
+                'Hujjat haqiqiyligini tekshirish uchun QR kodni skanerlang',
+                ['size' => 8, 'italic' => true, 'color' => '666666'],
+                ['spaceAfter' => 0]
+            );
+        }
+
+        $groupNameStr = str_replace(['/', '\\', ' '], '_', $group->name);
+        $subjectNameStr = str_replace(['/', '\\', ' '], '_', $subject->subject_name);
+        $fileName = 'Yakuniy_baholash_qaydnomasi_' . $groupNameStr . '_' . $subjectNameStr . '.docx';
+        $tempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_' . $fileName;
+
+        $objWriter = IOFactory::createWriter($phpWord, 'Word2007');
+        $objWriter->save($tempPath);
+
+        // PDF ga aylantirish
+        try {
+            $pdfStorageDir = storage_path('app/public/documents/verified');
+            if (!is_dir($pdfStorageDir)) {
+                mkdir($pdfStorageDir, 0755, true);
+            }
+
+            $pdfCommand = sprintf(
+                'soffice --headless --convert-to pdf --outdir %s %s 2>&1',
+                escapeshellarg($pdfStorageDir),
+                escapeshellarg($tempPath)
+            );
+            exec($pdfCommand, $pdfOutput, $pdfReturnCode);
+
+            $generatedPdfName = pathinfo(basename($tempPath), PATHINFO_FILENAME) . '.pdf';
+            $generatedPdfFullPath = $pdfStorageDir . '/' . $generatedPdfName;
+
+            if ($pdfReturnCode === 0 && file_exists($generatedPdfFullPath)) {
+                $permanentPdfName = $verification->token . '.pdf';
+                $permanentPdfPath = $pdfStorageDir . '/' . $permanentPdfName;
+                rename($generatedPdfFullPath, $permanentPdfPath);
+                $verification->update(['document_path' => 'documents/verified/' . $permanentPdfName]);
+            }
+        } catch (\Throwable $e) {
+            // PDF saqlash muvaffaqiyatsiz bo'lsa, davom etamiz
+        }
+
+        // QR vaqtinchalik faylni tozalash
+        if ($qrImagePath) {
+            @unlink($qrImagePath);
+        }
+
+        return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
     }
 
 }

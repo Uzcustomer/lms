@@ -112,6 +112,19 @@ class KtrController extends Controller
             $query->where('s.current', true);
         }
 
+        // Fan masuli / kafedra mudiri - faqat o'z fanlarini ko'rsatish
+        $user = auth()->user();
+        if (!$user->hasRole(['superadmin', 'admin', 'kichik_admin'])) {
+            if ($user->hasRole('fan_masuli') && $user instanceof Teacher) {
+                // teacher_responsible_subjects jadvalidan fan_masuli ga biriktirilgan fanlarni olish
+                $responsibleCsIds = DB::table('teacher_responsible_subjects')
+                    ->where('teacher_id', $user->id)
+                    ->pluck('curriculum_subject_id')
+                    ->toArray();
+                $query->whereIn('cs.id', $responsibleCsIds);
+            }
+        }
+
         // Sorting
         $sortColumn = $request->get('sort', 'faculty_name');
         $sortDirection = $request->get('direction', 'asc');
@@ -455,15 +468,29 @@ class KtrController extends Controller
             return true;
         }
 
-        // O'qituvchi/fan mas'uli - faqat o'z fanlari uchun
-        if ($user instanceof Teacher && $user->hemis_id) {
+        // Fan mas'uli - teacher_responsible_subjects jadvalidan tekshirish
+        if ($user instanceof Teacher) {
             try {
-                return CurriculumSubjectTeacher::where('employee_id', $user->hemis_id)
-                    ->where('subject_id', $cs->subject_id)
-                    ->where('active', true)
-                    ->exists();
+                // 1. teacher_responsible_subjects (fan_masuli roli orqali biriktirilgan)
+                if (Schema::hasTable('teacher_responsible_subjects')) {
+                    $isResponsible = DB::table('teacher_responsible_subjects')
+                        ->where('teacher_id', $user->id)
+                        ->where('curriculum_subject_id', $cs->id)
+                        ->exists();
+                    if ($isResponsible) {
+                        return true;
+                    }
+                }
+
+                // 2. curriculum_subject_teachers (HEMIS orqali biriktirilgan)
+                if ($user->hemis_id) {
+                    return CurriculumSubjectTeacher::where('employee_id', $user->hemis_id)
+                        ->where('subject_id', $cs->subject_id)
+                        ->where('active', true)
+                        ->exists();
+                }
             } catch (\Exception $e) {
-                Log::warning('canEditSubjectKtr: curriculum_subject_teachers query failed', ['error' => $e->getMessage()]);
+                Log::warning('canEditSubjectKtr: query failed', ['error' => $e->getMessage()]);
                 return false;
             }
         }

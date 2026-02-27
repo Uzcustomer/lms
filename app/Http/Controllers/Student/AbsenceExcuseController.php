@@ -7,9 +7,11 @@ use App\Models\AbsenceExcuse;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\ExamSchedule;
 use App\Models\ExamTest;
+use App\Models\Notification;
 use App\Models\OraliqNazorat;
 use App\Models\Oski;
 use App\Models\Schedule;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -181,6 +183,9 @@ class AbsenceExcuseController extends Controller
             }
 
             DB::commit();
+
+            // Barcha admin va registrator_ofisi rollariga xabarnoma jo'natish
+            $this->notifyAdmins($excuse);
         } catch (\Throwable $e) {
             DB::rollBack();
             return back()->withErrors(['error' => $e->getMessage()])->withInput();
@@ -316,6 +321,32 @@ class AbsenceExcuseController extends Controller
         }
 
         return response()->download($filePath, 'sababli_ariza_' . $excuse->id . '.pdf');
+    }
+
+    /**
+     * Admin va registrator_ofisi rollariga yangi ariza haqida xabarnoma jo'natish
+     */
+    private function notifyAdmins(AbsenceExcuse $excuse): void
+    {
+        $adminUsers = User::role(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'])->get();
+
+        $reasonLabel = $excuse->reason_label;
+        $url = route('admin.absence-excuses.show', $excuse->id);
+
+        foreach ($adminUsers as $user) {
+            Notification::create([
+                'sender_id' => null,
+                'sender_type' => null,
+                'recipient_id' => $user->id,
+                'recipient_type' => User::class,
+                'subject' => "Yangi sababli ariza: {$excuse->student_full_name}",
+                'body' => "Talaba: {$excuse->student_full_name}\nGuruh: {$excuse->group_name}\nSabab: {$reasonLabel}\nSana: {$excuse->start_date->format('d.m.Y')} — {$excuse->end_date->format('d.m.Y')}",
+                'type' => Notification::TYPE_SYSTEM,
+                'url' => $url,
+                'is_draft' => false,
+                'sent_at' => now(),
+            ]);
+        }
     }
 
     /**

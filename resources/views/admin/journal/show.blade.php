@@ -1617,7 +1617,8 @@
                             @elseif($anyDatePassed && $resultsFetched)
                                 <button type="button" id="btn-fetch-yn-results-refresh"
                                     class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm"
-                                    onclick="fetchYnResults()">
+                                    onclick="fetchYnResults()"
+                                    title="HEMIS tizimidan OSKI va Test natijalarini qayta yuklash">
                                     Yangilash
                                 </button>
                             @endif
@@ -1625,7 +1626,8 @@
                             @if($resultsFetched)
                                 <button type="button" id="btn-generate-qaydnoma"
                                     class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
-                                    onclick="generateYakuniyQaydnoma()">
+                                    onclick="generateYakuniyQaydnoma()"
+                                    title="Yakuniy baholash qaydnomasi (Shakl 12) Word hujjat sifatida yuklab olish">
                                     Qaydnoma yaratish
                                 </button>
                             @else
@@ -1638,7 +1640,8 @@
 
                             <button type="button" id="btn-export-yn-qaydnoma"
                                 class="px-5 py-2.5 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition shadow-sm text-sm"
-                                onclick="exportYnQaydnoma()">
+                                onclick="exportYnQaydnoma()"
+                                title="Vedomostni Excel (XLSX) jadval sifatida yuklab olish">
                                 <svg style="width:14px;height:14px;display:inline-block;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                 </svg>

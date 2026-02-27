@@ -4297,7 +4297,8 @@ class ReportController extends Controller
             })
             ->whereNotIn('sch.training_type_code', $gradeExcludedTypes)
             ->whereNotNull('sch.lesson_date')
-            ->whereNull('sch.deleted_at');
+            ->whereNull('sch.deleted_at')
+            ->whereRaw('DATE(sch.lesson_date) < CURDATE()');
 
         if ($request->get('current_semester', '1') == '1') {
             $scheduleQuery->where(function ($q) {

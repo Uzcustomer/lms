@@ -258,23 +258,4 @@ class AbsenceExcuseController extends Controller
             'Content-Disposition' => 'inline; filename="sababli_ariza_' . $excuse->id . '.pdf"',
         ]);
     }
-
-    public function destroy($id)
-    {
-        $excuse = AbsenceExcuse::findOrFail($id);
-
-        // Fayllarni o'chirish
-        if ($excuse->file_path && Storage::disk('public')->exists($excuse->file_path)) {
-            Storage::disk('public')->delete($excuse->file_path);
-        }
-        if ($excuse->approved_pdf_path && Storage::disk('public')->exists($excuse->approved_pdf_path)) {
-            Storage::disk('public')->delete($excuse->approved_pdf_path);
-        }
-
-        // Makeup larni o'chirish
-        $excuse->makeups()->delete();
-        $excuse->delete();
-
-        return back()->with('success', 'Ariza o\'chirildi. (ID: ' . $id . ')');
-    }
 }

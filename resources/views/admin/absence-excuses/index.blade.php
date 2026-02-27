@@ -320,16 +320,8 @@
                                             {{ $excuse->created_at->format('d.m.Y H:i') }}
                                         </td>
                                         <td class="px-4 py-3 whitespace-nowrap text-sm">
-                                            <div class="flex items-center gap-2">
-                                                <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
-                                                   class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
-                                                <form method="POST" action="{{ route('admin.absence-excuses.destroy', $excuse->id) }}"
-                                                      onsubmit="return confirm('ID: {{ $excuse->id }} — O\'chirishni tasdiqlaysizmi?')">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
-                                                </form>
-                                            </div>
+                                            <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
+                                               class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
                                         </td>
                                     </tr>
                                 @endforeach

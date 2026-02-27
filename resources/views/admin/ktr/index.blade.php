@@ -11,7 +11,7 @@
 
                 <!-- Filters -->
                 @php
-                    $isFanMasuli = !auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']) && auth()->user()->hasRole('fan_masuli');
+                    $isFanMasuli = $isFanMasuli ?? is_active_fan_masuli();
                 @endphp
                 @if(!$isFanMasuli)
                 <form id="filter-form" method="GET" action="{{ route('admin.ktr.index') }}">

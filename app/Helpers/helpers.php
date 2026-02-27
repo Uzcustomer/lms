@@ -132,7 +132,19 @@ if (!function_exists('get_fan_masuli_subject_ids')) {
 
         $user = auth()->user();
 
-        return $user->responsibleSubjects()->pluck('curriculum_subjects.id')->toArray();
+        // Teacher modelda responsibleSubjects() mavjud
+        if ($user instanceof \App\Models\Teacher) {
+            return $user->responsibleSubjects()->pluck('curriculum_subjects.id')->toArray();
+        }
+
+        // User model (web guard) — teachers jadvalidan qidirish
+        // User.email == Teacher.login yoki User.id orqali
+        $teacher = \App\Models\Teacher::where('login', $user->email)->first();
+        if ($teacher) {
+            return $teacher->responsibleSubjects()->pluck('curriculum_subjects.id')->toArray();
+        }
+
+        return [];
     }
 }
 

@@ -78,8 +78,9 @@ class KtrController extends Controller
                 's.level_code',
             ]);
 
-        if ($isFanMasuli && !empty($fanMasuliSubjectIds)) {
-            // Fan masuli - faqat biriktirilgan fanlar, filtrlar kerak emas
+        if ($isFanMasuli) {
+            // Fan masuli - faqat biriktirilgan fanlar
+            // Agar bo'sh bo'lsa ham, hech narsa ko'rsatmaslik (whereIn([]) = 0 natija)
             $query->whereIn('cs.id', $fanMasuliSubjectIds);
         } else {
             // Admin/kafedra_mudiri - barcha filtrlar qo'llaniladi
@@ -465,10 +466,15 @@ class KtrController extends Controller
             return true;
         }
 
-        // Fan mas'uli - teacher_responsible_subjects jadvalidan tekshirish
+        // Fan mas'uli - faqat ko'rish, tahrirlash mumkin emas
+        if (is_active_fan_masuli()) {
+            return false;
+        }
+
+        // Kafedra mudiri va boshqa rollar - teacher_responsible_subjects jadvalidan tekshirish
         if ($user instanceof Teacher) {
             try {
-                // 1. teacher_responsible_subjects (fan_masuli roli orqali biriktirilgan)
+                // 1. teacher_responsible_subjects (roli orqali biriktirilgan)
                 if (Schema::hasTable('teacher_responsible_subjects')) {
                     $isResponsible = DB::table('teacher_responsible_subjects')
                         ->where('teacher_id', $user->id)
@@ -492,7 +498,7 @@ class KtrController extends Controller
             }
         }
 
-        // Registrator ofisi va boshqa rollar - faqat ko'rish
+        // Boshqa rollar - faqat ko'rish
         return false;
     }
 

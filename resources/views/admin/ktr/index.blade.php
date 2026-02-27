@@ -646,9 +646,9 @@
             cr.approvals.forEach(function(a) {
                 var bolim = '-';
                 if (a.role === 'kafedra_mudiri') {
-                    bolim = info.kafedra_name || '-';
+                    bolim = info.kafedra_name ? (info.kafedra_name + ' fakulteti') : '-';
                 } else if (a.role === 'dekan') {
-                    bolim = info.faculty_name || '-';
+                    bolim = info.faculty_name ? (info.faculty_name + ' fakulteti') : '-';
                 }
                 html += '<tr>';
                 html += '<td>' + getRoleName(a.role) + '</td>';

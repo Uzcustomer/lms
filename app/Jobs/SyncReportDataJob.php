@@ -37,54 +37,58 @@ class SyncReportDataJob implements ShouldQueue
     {
         $from = Carbon::parse($this->dateFrom)->startOfDay();
         $to = Carbon::parse($this->dateTo)->endOfDay();
+        $today = Carbon::today();
         $totalDays = $from->diffInDays($to) + 1;
+        $includestoday = $to->gte($today) && $from->lte($today);
 
-        // Jami qadamlar: jadval(1) + davomat(totalDays) + baholar(totalDays)
-        $totalSteps = 1 + $totalDays + $totalDays;
+        // Qadamlarni hisoblash:
+        // jadval(1) + davomat(1) + baholar(faqat bugungi kun uchun 0 yoki 1)
+        $gradeSteps = $includestoday ? 1 : 0;
+        $totalSteps = 1 + 1 + $gradeSteps;
         $currentStep = 0;
 
         try {
-            // 1-bosqich: Jadval (schedules) yangilash
+            // 1-bosqich: Jadval (schedules) yangilash — butun oraliq bitta so'rov
             $this->updateProgress('Jadval yangilanmoqda...', $currentStep, $totalSteps);
             $service->importBetween($from, $to);
             $currentStep++;
 
-            // 2-bosqich: Davomat nazorati (attendance_controls) har bir kun
-            $current = $from->copy();
-            while ($current->lte($to)) {
-                $dateStr = $current->toDateString();
-                $this->updateProgress("Davomat: {$dateStr}", $currentStep, $totalSteps);
-
-                try {
-                    Artisan::call(ImportAttendanceControls::class, [
-                        '--date' => $dateStr,
-                        '--silent' => true,
-                    ]);
-                } catch (\Throwable $e) {
-                    Log::warning("[SyncReportDataJob] Davomat xato ({$dateStr}): {$e->getMessage()}");
-                }
-
-                $currentStep++;
-                $current->addDay();
+            // 2-bosqich: Davomat nazorati — butun oraliq bitta API chaqiruv
+            $this->updateProgress("Davomat: {$from->toDateString()} — {$to->toDateString()}", $currentStep, $totalSteps);
+            try {
+                Artisan::call(ImportAttendanceControls::class, [
+                    '--date-from' => $from->toDateString(),
+                    '--date-to' => $to->toDateString(),
+                    '--silent' => true,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning("[SyncReportDataJob] Davomat xato: {$e->getMessage()}");
             }
+            $currentStep++;
 
-            // 3-bosqich: Baholar (student_grades) har bir kun
-            $current = $from->copy();
-            while ($current->lte($to)) {
-                $dateStr = $current->toDateString();
-                $this->updateProgress("Baholar: {$dateStr}", $currentStep, $totalSteps);
+            // 3-bosqich: Baholar — faqat bugungi kun uchun va shartli
+            // O'tgan kunlar: nightly final import allaqachon qilgan, skip
+            // Bugungi kun: live_import_last_success tekshiruv
+            if ($includestoday) {
+                $todayStr = $today->toDateString();
+                $liveImportSuccess = Cache::get('live_import_last_success');
+                $isRecent = $liveImportSuccess && Carbon::parse($liveImportSuccess)->diffInMinutes(now()) <= 60;
 
-                try {
-                    Artisan::call(ImportGrades::class, [
-                        '--date' => $dateStr,
-                        '--silent' => true,
-                    ]);
-                } catch (\Throwable $e) {
-                    Log::warning("[SyncReportDataJob] Baholar xato ({$dateStr}): {$e->getMessage()}");
+                if ($isRecent) {
+                    $this->updateProgress("Baholar: DB da yangi ({$todayStr})", $currentStep, $totalSteps);
+                    Log::info("[SyncReportDataJob] Bugungi baholar skip — live import yaqinda muvaffaqiyatli: {$liveImportSuccess}");
+                } else {
+                    $this->updateProgress("Baholar: {$todayStr}", $currentStep, $totalSteps);
+                    try {
+                        Artisan::call(ImportGrades::class, [
+                            '--date' => $todayStr,
+                            '--silent' => true,
+                        ]);
+                    } catch (\Throwable $e) {
+                        Log::warning("[SyncReportDataJob] Baholar xato ({$todayStr}): {$e->getMessage()}");
+                    }
                 }
-
                 $currentStep++;
-                $current->addDay();
             }
 
             $this->updateProgress('Tayyor', $totalSteps, $totalSteps, 'done');
@@ -107,7 +111,7 @@ class SyncReportDataJob implements ShouldQueue
             'total' => $total,
             'percent' => $total > 0 ? round($current / $total * 100) : 0,
             'updated_at' => now()->toDateTimeString(),
-        ], 600); // 10 daqiqa saqlanadi
+        ], 600);
     }
 
     public function failed(\Throwable $exception): void

@@ -65,6 +65,12 @@ return [
     'clear_filters' => 'Tozalash',
     'subjects' => 'Mavzular',
 
+    // Multi-select
+    'select_all' => 'Barchasini tanlash',
+    'deselect_all' => 'Bekor qilish',
+    'selected_count' => 'ta tanlandi',
+    'search_recipients' => 'Xodimlarni qidirish...',
+
     // Reply
     'reply' => 'Javob berish',
     'reply_to' => 'Javob:',

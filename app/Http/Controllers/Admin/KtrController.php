@@ -30,10 +30,9 @@ class KtrController extends Controller
         if (!$user) {
             abort(403);
         }
-        $isAdmin = $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
-        $hasFanMasuliRole = $user->hasRole('fan_masuli');
-        $hasViewRole = $user->hasRole(['kafedra_mudiri', 'dekan']);
-        if (!$isAdmin && !$hasFanMasuliRole && !$hasViewRole) {
+        $activeRole = session('active_role', '');
+        $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'fan_masuli', 'kafedra_mudiri', 'dekan'];
+        if (!in_array($activeRole, $allowedRoles)) {
             abort(403, 'KTR sahifasiga faqat fan mas\'ullari kirishi mumkin.');
         }
     }
@@ -75,10 +74,11 @@ class KtrController extends Controller
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id');
         };
 
-        // Fan mas'uli uchun faqat mas'ul fanlarni ko'rsatish
+        // Faol rolga qarab tekshirish
         $user = auth()->user();
-        $isAdmin = $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
-        $isFanMasuli = !$isAdmin && $user->hasRole('fan_masuli');
+        $activeRole = session('active_role', '');
+        $isAdmin = in_array($activeRole, ['superadmin', 'admin', 'kichik_admin']);
+        $isFanMasuli = $activeRole === 'fan_masuli';
         $fanMasuliSubjectIds = $isFanMasuli ? get_fan_masuli_subject_ids() : [];
 
         // Natija query
@@ -101,46 +101,45 @@ class KtrController extends Controller
 
         if ($isFanMasuli) {
             // Fan masuli - faqat biriktirilgan fanlar
-            // Agar bo'sh bo'lsa ham, hech narsa ko'rsatmaslik (whereIn([]) = 0 natija)
             $query->whereIn('cs.id', $fanMasuliSubjectIds);
-        } else {
-            // Admin/kafedra_mudiri - barcha filtrlar qo'llaniladi
-            if ($selectedEducationType) {
-                $query->where('c.education_type_code', $selectedEducationType);
-            }
+        }
 
-            if ($request->filled('faculty')) {
-                $query->where('f.id', $request->faculty);
-            }
+        // Filtrlar (barcha rollar uchun)
+        if ($selectedEducationType) {
+            $query->where('c.education_type_code', $selectedEducationType);
+        }
 
-            if ($request->filled('specialty')) {
-                $query->where('sp.specialty_hemis_id', $request->specialty);
-            }
+        if ($request->filled('faculty')) {
+            $query->where('f.id', $request->faculty);
+        }
 
-            if ($request->filled('level_code')) {
-                $query->where('s.level_code', $request->level_code);
-            }
+        if ($request->filled('specialty')) {
+            $query->where('sp.specialty_hemis_id', $request->specialty);
+        }
 
-            if ($request->filled('semester_code')) {
-                $query->where('cs.semester_code', $request->semester_code);
-            }
+        if ($request->filled('level_code')) {
+            $query->where('s.level_code', $request->level_code);
+        }
 
-            if ($request->filled('subject_name')) {
-                $query->where('cs.subject_name', 'like', '%' . $request->subject_name . '%');
-            }
+        if ($request->filled('semester_code')) {
+            $query->where('cs.semester_code', $request->semester_code);
+        }
 
-            // Faol/nofaol fanlar filtri (default: faol)
-            $activeFilter = $request->get('active_filter', 'active');
-            if ($activeFilter === 'active') {
-                $query->where('cs.is_active', true);
-            } elseif ($activeFilter === 'inactive') {
-                $query->where('cs.is_active', false);
-            }
+        if ($request->filled('subject_name')) {
+            $query->where('cs.subject_name', 'like', '%' . $request->subject_name . '%');
+        }
 
-            // Joriy semestr (default ON)
-            if ($request->get('current_semester', '1') == '1') {
-                $query->where('s.current', true);
-            }
+        // Faol/nofaol fanlar filtri (default: faol)
+        $activeFilter = $request->get('active_filter', 'active');
+        if ($activeFilter === 'active') {
+            $query->where('cs.is_active', true);
+        } elseif ($activeFilter === 'inactive') {
+            $query->where('cs.is_active', false);
+        }
+
+        // Joriy semestr (default ON)
+        if ($request->get('current_semester', '1') == '1') {
+            $query->where('s.current', true);
         }
 
         // Sorting
@@ -490,10 +489,16 @@ class KtrController extends Controller
     private function canEditSubjectKtr(CurriculumSubject $cs): bool
     {
         $user = auth()->user();
+        $activeRole = session('active_role', '');
 
         // Superadmin/admin har doim tahrirlashi mumkin
-        if ($user->hasRole(['superadmin', 'admin', 'kichik_admin'])) {
+        if (in_array($activeRole, ['superadmin', 'admin', 'kichik_admin'])) {
             return true;
+        }
+
+        // Kafedra mudiri va dekan - faqat ko'rish
+        if (in_array($activeRole, ['kafedra_mudiri', 'dekan'])) {
+            return false;
         }
 
         // Kafedra mudiri, fan mas'uli va boshqa rollar - teacher_responsible_subjects jadvalidan tekshirish

@@ -10,10 +10,6 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="overflow: visible;">
 
                 <!-- Filters -->
-                @php
-                    $isFanMasuli = $isFanMasuli ?? is_active_fan_masuli();
-                @endphp
-                @if(!$isFanMasuli)
                 <form id="filter-form" method="GET" action="{{ route('admin.ktr.index') }}">
                     <div class="filter-container">
 
@@ -145,15 +141,6 @@
                         </div>
                     </div>
                 </form>
-                @else
-                {{-- Fan masuli uchun filtr yo'q - faqat sarlavha --}}
-                <div style="padding: 12px 20px; border-bottom: 1px solid #f1f5f9;">
-                    <div style="font-size: 14px; color: #374151;">
-                        <span style="color: #059669; font-weight: 600;">Sizga biriktirilgan fanlar</span>
-                        <span style="color: #9ca3af; margin-left: 8px; font-size: 13px;">({{ $subjects->total() }} ta fan)</span>
-                    </div>
-                </div>
-                @endif
 
                 <!-- Table -->
                 <div style="max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch;">
@@ -350,6 +337,31 @@
             <div class="ktr-warning-modal-footer">
                 <button type="button" class="ktr-btn ktr-btn-secondary" onclick="closeWarningModal()">Bekor qilish</button>
                 <button type="button" class="ktr-btn ktr-btn-primary" onclick="confirmAndEnableEdit()">Tushundim, davom etish</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEMIS mavzular ogohlantirish modali -->
+    <div id="ktr-topics-modal-overlay" class="ktr-modal-overlay" style="display:none;z-index:10001;" onclick="closeTopicsModal(event)">
+        <div class="ktr-warning-modal" onclick="event.stopPropagation()" style="max-width:500px;">
+            <div class="ktr-warning-modal-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;">
+                        <svg style="width:18px;height:18px;color:#dc2626;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size:16px;font-weight:700;color:#dc2626;margin:0;">Mavzular topilmadi!</h3>
+                </div>
+                <button style="background:none;border:none;font-size:22px;color:#9ca3af;cursor:pointer;padding:0;line-height:1;" onclick="closeTopicsModal()">&times;</button>
+            </div>
+            <div class="ktr-warning-modal-body">
+                <p style="margin:0 0 12px;color:#374151;font-size:14px;">Quyidagi mashg'ulot turlari uchun HEMIS tizimida mavzular kiritilmagan:</p>
+                <div id="ktr-missing-topics-list" style="margin-bottom:12px;"></div>
+                <p style="margin:0;color:#6b7280;font-size:13px;">Iltimos, avval <b>HEMIS</b> tizimiga mavzularni kiriting, so'ng KTR ni saqlang.</p>
+            </div>
+            <div class="ktr-warning-modal-footer">
+                <button type="button" class="ktr-btn ktr-btn-secondary" onclick="closeTopicsModal()">Yopish</button>
             </div>
         </div>
     </div>
@@ -668,6 +680,36 @@
         function confirmAndEnableEdit() {
             $('#ktr-warning-modal-overlay').fadeOut(200);
             enableKtrEdit();
+        }
+
+        function closeTopicsModal(event) {
+            if (event && event.target !== document.getElementById('ktr-topics-modal-overlay')) return;
+            $('#ktr-topics-modal-overlay').fadeOut(200);
+        }
+
+        // Saqlashdan oldin HEMIS mavzularini tekshirish
+        function checkHemisTopics() {
+            var codes = ktrState.filteredCodes;
+            var types = ktrState.trainingTypes;
+            var missingTypes = [];
+
+            codes.forEach(function(code) {
+                // Bu tur uchun soat kiritilganmi?
+                var hasHours = false;
+                for (var w = 1; w <= ktrState.weekCount; w++) {
+                    var val = parseInt($('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val()) || 0;
+                    if (val > 0) { hasHours = true; break; }
+                }
+                if (!hasHours) return;
+
+                // HEMIS da mavzular bormi?
+                var topics = ktrState.hemisTopics[code];
+                if (!topics || !topics.length) {
+                    missingTypes.push(types[code] ? types[code].name : code);
+                }
+            });
+
+            return missingTypes;
         }
 
         function renderChangePanel() {
@@ -1034,6 +1076,18 @@
         }
 
         function saveKtrPlan() {
+            // HEMIS mavzulari tekshiruvi
+            var missingTypes = checkHemisTopics();
+            if (missingTypes.length > 0) {
+                var listHtml = '';
+                missingTypes.forEach(function(name) {
+                    listHtml += '<div style="padding:6px 12px;margin-bottom:4px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;color:#dc2626;font-size:13px;font-weight:500;">' + name + '</div>';
+                });
+                $('#ktr-missing-topics-list').html(listHtml);
+                $('#ktr-topics-modal-overlay').fadeIn(200);
+                return;
+            }
+
             var codes = ktrState.filteredCodes;
             var hours = {};
             var topics = {};
@@ -1499,7 +1553,8 @@
         /* Plan table */
         .ktr-plan-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             margin-top: 16px;
             font-size: 13px;
         }
@@ -1514,8 +1569,13 @@
             color: #475569;
             border: 1px solid #e2e8f0;
             position: sticky;
-            top: 0;
             z-index: 5;
+        }
+        .ktr-plan-table thead tr:first-child th {
+            top: 0;
+        }
+        .ktr-plan-table thead tr:nth-child(2) th {
+            top: 35px;
         }
         .ktr-th-hours {
             font-size: 10px;

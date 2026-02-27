@@ -175,7 +175,11 @@ class NotificationController extends Controller
         [$userId, $userType] = $this->getUserInfo();
 
         // Faqat xodimlar (Teacher) ro'yxati, rollari bilan
-        $teachers = Teacher::with('roles')->orderBy('full_name')->get();
+        $teachers = Teacher::with('roles')
+            ->whereNotNull('full_name')
+            ->where('full_name', '!=', '')
+            ->orderBy('full_name')
+            ->get();
 
         // Rollar ro'yxati (talabadan tashqari)
         $roles = collect(ProjectRole::staffRoles())->map(fn ($role) => [

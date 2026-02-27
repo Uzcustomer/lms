@@ -292,8 +292,8 @@ class TeacherController extends Controller
                     ->toArray();
                 $q->whereIn('semester_code', $semesterCodes);
             })
-            ->selectRaw('MIN(id) as id, subject_name, subject_code, semester_code, semester_name, MIN(department_name) as department_name')
-            ->groupBy('subject_name', 'subject_code', 'semester_code', 'semester_name')
+            ->selectRaw('MIN(id) as id, subject_name, MIN(subject_code) as subject_code, MIN(department_name) as department_name')
+            ->groupBy('subject_name')
             ->orderBy('subject_name')
             ->limit(50)
             ->get();

@@ -57,28 +57,23 @@
                     <div class="prose max-w-none text-gray-700 text-sm leading-relaxed">
                         {!! nl2br(e($notification->body)) !!}
                     </div>
-                </div>
 
-                {{-- KTR tasdiqlash tugmalari - faqat shu notificationga tegishli approval --}}
-                @if(($notification->data['action'] ?? null) === 'ktr_change_approval')
-                    @php
-                        $approvalId = $notification->data['approval_id'] ?? null;
-                        $approval = $approvalId ? \App\Models\KtrChangeApproval::find($approvalId) : null;
+                    {{-- KTR tasdiqlash tugmalari - xabar matni tagida --}}
+                    @if(($notification->data['action'] ?? null) === 'ktr_change_approval')
+                        @php
+                            $approvalId = $notification->data['approval_id'] ?? null;
+                            $approval = $approvalId ? \App\Models\KtrChangeApproval::find($approvalId) : null;
 
-                        $roleLabels = [
-                            'kafedra_mudiri' => 'Kafedra mudiri',
-                            'dekan' => 'Dekan',
-                            'registrator_ofisi' => 'Registrator ofisi',
-                        ];
-                    @endphp
+                            $roleLabels = [
+                                'kafedra_mudiri' => 'Kafedra mudiri',
+                                'dekan' => 'Dekan',
+                                'registrator_ofisi' => 'Registrator ofisi',
+                            ];
+                        @endphp
 
-                    @if($approval)
-                        <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
-                            <p class="text-sm font-medium text-gray-700 mb-3">Fan: <strong>{{ $notification->data['subject_name'] ?? '' }}</strong></p>
-                            <p class="text-xs text-gray-500 mb-3">Rol: <strong>{{ $roleLabels[$approval->role] ?? $approval->role }}</strong></p>
-
+                        @if($approval)
                             @if($approval->status === 'pending')
-                                <div class="flex items-center gap-2" id="ktr-approval-actions-{{ $approval->id }}">
+                                <div class="flex items-center gap-2 mt-5" id="ktr-approval-actions-{{ $approval->id }}">
                                     <button onclick="ktrApprove({{ $approval->id }}, 'approved')"
                                             class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors">
                                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,7 +89,7 @@
                                         Rad etish
                                     </button>
                                 </div>
-                                <div id="ktr-approval-result-{{ $approval->id }}" class="hidden"></div>
+                                <div id="ktr-approval-result-{{ $approval->id }}" class="hidden mt-3"></div>
 
                                 <script>
                                     function ktrApprove(approvalId, status) {
@@ -134,30 +129,33 @@
                                     }
                                 </script>
                             @elseif($approval->status === 'approved')
-                                <span class="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 text-sm font-medium rounded-lg">
-                                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                    Tasdiqlangan
-                                    @if($approval->responded_at)
-                                        ({{ $approval->responded_at->format('d.m.Y H:i') }})
-                                    @endif
-                                </span>
+                                <div class="mt-5">
+                                    <span class="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 text-sm font-medium rounded-lg">
+                                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                        </svg>
+                                        Tasdiqlangan
+                                        @if($approval->responded_at)
+                                            ({{ $approval->responded_at->format('d.m.Y H:i') }})
+                                        @endif
+                                    </span>
+                                </div>
                             @elseif($approval->status === 'rejected')
-                                <span class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-800 text-sm font-medium rounded-lg">
-                                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                    </svg>
-                                    Rad etilgan
-                                    @if($approval->responded_at)
-                                        ({{ $approval->responded_at->format('d.m.Y H:i') }})
-                                    @endif
-                                </span>
+                                <div class="mt-5">
+                                    <span class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-800 text-sm font-medium rounded-lg">
+                                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                        Rad etilgan
+                                        @if($approval->responded_at)
+                                            ({{ $approval->responded_at->format('d.m.Y H:i') }})
+                                        @endif
+                                    </span>
+                                </div>
                             @endif
-                        </div>
+                        @endif
                     @endif
-                @endif
-            </div>
+                </div>
         </div>
     </div>
 </x-app-layout>

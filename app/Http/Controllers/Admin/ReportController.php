@@ -4401,16 +4401,15 @@ class ReportController extends Controller
             ->unique()
             ->flip();
 
-        // Baho (2-usul): atribut kaliti orqali
+        // Baho (2-usul): guruh + fan + sana + mashg'ulot turi orqali (employee va pair_code dan qat'iy nazar)
         $gradeByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
-            ->whereIn('sg.employee_id', $employeeIds)
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
             ->whereNotNull('sg.grade')
             ->where('sg.grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
+            ->select(DB::raw("DISTINCT CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -4428,8 +4427,8 @@ class ReportController extends Controller
             $key = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                  . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
 
-            $gradeKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
-                      . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+            $gradeKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+                      . '|' . $sch->training_type_code;
 
             $hasGrade = isset($gradeByScheduleId[$sch->schedule_hemis_id])
                 || isset($gradeByKey[$gradeKey]);

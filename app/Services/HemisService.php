@@ -604,9 +604,9 @@ class HemisService
     }
 
     /**
-     * HEMIS dan akademik qaydlar ro'yxatini import qilish
+     * HEMIS dan akademik qaydlar ro'yxatini import qilish (bulk upsert)
      */
-    public function importAcademicRecords(): int
+    public function importAcademicRecords(?callable $onProgress = null): int
     {
         $page = 1;
         $hasMore = true;
@@ -616,16 +616,40 @@ class HemisService
             $response = $this->fetchAcademicRecords($page);
 
             if ($response && ($response['success'] ?? false)) {
-                foreach ($response['data']['items'] as $item) {
-                    $this->updateOrCreateAcademicRecord($item);
-                    $totalImported++;
+                $items = $response['data']['items'];
+                $pagination = $response['data']['pagination'];
+
+                $records = array_map([$this, 'transformAcademicRecord'], $items);
+
+                AcademicRecord::upsert($records, ['hemis_id'], [
+                    'curriculum_id',
+                    'education_year',
+                    'semester_id',
+                    'student_id',
+                    'subject_id',
+                    'employee_id',
+                    'employee_name',
+                    'semester_name',
+                    'student_name',
+                    'subject_name',
+                    'total_acload',
+                    'credit',
+                    'total_point',
+                    'grade',
+                    'finish_credit_status',
+                    'retraining_status',
+                    'hemis_created_at',
+                    'hemis_updated_at',
+                ]);
+
+                $totalImported += count($items);
+                $hasMore = $pagination['page'] < $pagination['pageCount'];
+
+                if ($onProgress) {
+                    $onProgress($page, $pagination['pageCount'], $totalImported, $pagination['totalCount']);
                 }
 
-                $pagination = $response['data']['pagination'];
-                $hasMore = $pagination['page'] < $pagination['pageCount'];
                 $page++;
-
-                sleep(1);
             } else {
                 Log::error('Failed to fetch academic records from HEMIS', $response ?? []);
                 break;
@@ -639,7 +663,7 @@ class HemisService
     {
         try {
             $response = Http::withoutVerifying()
-                ->timeout(30)
+                ->timeout(60)
                 ->withToken($this->token)
                 ->get($this->baseUrl . 'v1/data/academic-record-list', [
                     'page' => $page,
@@ -663,31 +687,31 @@ class HemisService
         }
     }
 
-    protected function updateOrCreateAcademicRecord(array $data): void
+    protected function transformAcademicRecord(array $data): array
     {
-        AcademicRecord::updateOrCreate(
-            ['hemis_id' => $data['id']],
-            [
-                'curriculum_id' => $data['_curriculum'] ?? null,
-                'education_year' => $data['_education_year'] ?? null,
-                'semester_id' => $data['_semester'] ?? null,
-                'student_id' => $data['_student'] ?? null,
-                'subject_id' => $data['_subject'] ?? null,
-                'employee_id' => $data['_employee'] ?? null,
-                'employee_name' => $data['employee_name'] ?? null,
-                'semester_name' => $data['semester_name'] ?? null,
-                'student_name' => $data['student_name'] ?? null,
-                'subject_name' => $data['subject_name'] ?? null,
-                'total_acload' => $data['total_acload'] ?? null,
-                'credit' => $data['credit'] ?? null,
-                'total_point' => $data['total_point'] ?? null,
-                'grade' => $data['grade'] ?? null,
-                'finish_credit_status' => $data['finish_credit_status'] ?? false,
-                'retraining_status' => $data['retraining_status'] ?? false,
-                'hemis_created_at' => isset($data['created_at']) ? date('Y-m-d H:i:s', $data['created_at']) : null,
-                'hemis_updated_at' => isset($data['updated_at']) ? date('Y-m-d H:i:s', $data['updated_at']) : null,
-            ]
-        );
+        return [
+            'hemis_id' => $data['id'],
+            'curriculum_id' => $data['_curriculum'] ?? null,
+            'education_year' => $data['_education_year'] ?? null,
+            'semester_id' => $data['_semester'] ?? null,
+            'student_id' => $data['_student'] ?? null,
+            'subject_id' => $data['_subject'] ?? null,
+            'employee_id' => $data['_employee'] ?? null,
+            'employee_name' => $data['employee_name'] ?? null,
+            'semester_name' => $data['semester_name'] ?? null,
+            'student_name' => $data['student_name'] ?? null,
+            'subject_name' => $data['subject_name'] ?? null,
+            'total_acload' => $data['total_acload'] ?? null,
+            'credit' => $data['credit'] ?? null,
+            'total_point' => $data['total_point'] ?? null,
+            'grade' => $data['grade'] ?? null,
+            'finish_credit_status' => $data['finish_credit_status'] ?? false,
+            'retraining_status' => $data['retraining_status'] ?? false,
+            'hemis_created_at' => isset($data['created_at']) ? date('Y-m-d H:i:s', $data['created_at']) : null,
+            'hemis_updated_at' => isset($data['updated_at']) ? date('Y-m-d H:i:s', $data['updated_at']) : null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
     }
 
     /**

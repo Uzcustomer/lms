@@ -31,7 +31,7 @@ return [
     'subject_placeholder' => 'Xabar mavzusini kiriting',
     'body' => 'Matn',
     'body_placeholder' => 'Xabar matnini kiriting...',
-    'search_placeholder' => 'Xabarlardan qidirish...',
+    'search_placeholder' => 'Qidirish...',
     'senders' => "Jo'natuvchilar",
     'role' => 'Rol',
     'all' => 'Barchasi',

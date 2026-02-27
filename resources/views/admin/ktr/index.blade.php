@@ -332,6 +332,28 @@
         </div>
     </div>
 
+    <!-- KTR Warning Modal (fan masuli uchun) -->
+    <div id="ktr-warning-modal-overlay" class="ktr-modal-overlay" style="display:none;z-index:60;" onclick="closeWarningModal(event)">
+        <div class="ktr-warning-modal" onclick="event.stopPropagation()">
+            <div class="ktr-warning-modal-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:36px;height:36px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <svg style="width:20px;height:20px;color:#d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size:16px;font-weight:700;color:#92400e;margin:0;">Diqqat!</h3>
+                </div>
+                <button style="background:none;border:none;font-size:22px;color:#9ca3af;cursor:pointer;padding:0;line-height:1;" onclick="closeWarningModal()">&times;</button>
+            </div>
+            <div class="ktr-warning-modal-body" id="ktr-warning-modal-body"></div>
+            <div class="ktr-warning-modal-footer">
+                <button type="button" class="ktr-btn ktr-btn-secondary" onclick="closeWarningModal()">Bekor qilish</button>
+                <button type="button" class="ktr-btn ktr-btn-primary" onclick="confirmAndEnableEdit()">Tushundim, davom etish</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -620,28 +642,31 @@
 
         function showEditWarningAndEnable() {
             var info = ktrState.approverInfo;
-            var html = '<div class="ktr-change-box" style="border-left: 4px solid #f59e0b; background: #fffbeb;">';
-            html += '<div class="ktr-change-title" style="color:#b45309;"><svg style="width:18px;height:18px;vertical-align:middle;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>Diqqat!</div>';
-            html += '<div class="ktr-change-desc" style="margin-bottom:10px;">O\'zgartirgan KTRingizni saqlash uchun quyidagilardan ruxsat so\'rashingiz kerak:</div>';
+            var html = '';
+            html += '<p style="margin:0 0 12px;color:#374151;font-size:14px;">O\'zgartirgan KTRingizni saqlash uchun quyidagilardan ruxsat so\'rashingiz kerak:</p>';
             if (info.kafedra_name || info.faculty_name) {
-                html += '<div style="margin-bottom:8px; font-size:13px; color:#374151;">';
+                html += '<div style="margin-bottom:10px;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;color:#374151;">';
                 if (info.faculty_name) html += '<div><b>Fakultet:</b> ' + info.faculty_name + '</div>';
                 if (info.kafedra_name) html += '<div><b>Kafedra:</b> ' + info.kafedra_name + '</div>';
                 html += '</div>';
             }
-            html += '<ul class="ktr-approver-list">';
+            html += '<ul class="ktr-approver-list" style="margin:0 0 12px;">';
             html += '<li><b>Kafedra mudiri</b>: ' + (info.kafedra_mudiri ? info.kafedra_mudiri.name : 'Topilmadi') + '</li>';
             html += '<li><b>Dekan</b>: ' + (info.dekan ? info.dekan.name : 'Topilmadi') + '</li>';
             html += '<li><b>Registrator ofisi</b></li>';
             html += '</ul>';
-            html += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280; margin-bottom:10px;">Tahrirlashdan so\'ng "Saqlash" tugmasini bossangiz, o\'zgarishlar draft sifatida saqlanadi va tasdiqlash so\'rovi yuboriladi. Tasdiqlangandan keyin KTR yangilanadi.</div>';
-            html += '<button type="button" class="ktr-btn ktr-btn-primary" onclick="confirmAndEnableEdit()">Tushundim, davom etish</button>';
-            html += '</div>';
-            $('#ktr-change-panel').html(html).show();
+            html += '<p style="font-size:12px;color:#6b7280;margin:0;">Tahrirlashdan so\'ng "Saqlash" tugmasini bossangiz, o\'zgarishlar draft sifatida saqlanadi va tasdiqlash so\'rovi yuboriladi. Tasdiqlangandan keyin KTR yangilanadi.</p>';
+            $('#ktr-warning-modal-body').html(html);
+            $('#ktr-warning-modal-overlay').fadeIn(200);
+        }
+
+        function closeWarningModal(event) {
+            if (event && event.target !== document.getElementById('ktr-warning-modal-overlay')) return;
+            $('#ktr-warning-modal-overlay').fadeOut(200);
         }
 
         function confirmAndEnableEdit() {
-            $('#ktr-change-panel').hide().html('');
+            $('#ktr-warning-modal-overlay').fadeOut(200);
             enableKtrEdit();
         }
 
@@ -1630,6 +1655,37 @@
             background: #f0fdf4;
             color: #16a34a;
             border: 1px solid #bbf7d0;
+        }
+
+        /* Warning Modal (fan masuli uchun) */
+        .ktr-warning-modal {
+            background: #fff;
+            border-radius: 16px;
+            width: 480px;
+            max-width: 92vw;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .ktr-warning-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #fde68a;
+            background: #fffbeb;
+        }
+        .ktr-warning-modal-body {
+            padding: 20px;
+        }
+        .ktr-warning-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 14px 20px;
+            border-top: 1px solid #e5e7eb;
+            background: #f9fafb;
         }
 
         /* O'zgartirish so'rovi paneli */

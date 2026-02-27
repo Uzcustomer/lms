@@ -1348,81 +1348,97 @@ class KtrController extends Controller
             foreach ($details as $detail) {
                 $code = (string) ($detail['trainingType']['code'] ?? '');
                 $name = $detail['trainingType']['name'] ?? $code;
-                if ($code) {
+                if ($code && !preg_match('/mustaqil/i', preg_replace('/[^a-zA-Z\x{0400}-\x{04FF}]/u', '', $name))) {
                     $typeNames[$code] = $name;
                 }
             }
         }
 
-        $changes = [];
+        // Hafta soni o'zgarishi
+        $weekCountChanged = $existingPlan->week_count != $cr->draft_week_count;
 
-        // Hafta soni o'zgargan bo'lsa
-        if ($existingPlan->week_count != $cr->draft_week_count) {
-            $changes[] = [
-                'week' => '-',
-                'type' => 'Hafta soni',
-                'old' => $existingPlan->week_count,
-                'new' => $cr->draft_week_count,
-            ];
-        }
-
-        // Har bir hafta va tur bo'yicha soatlar farqini tekshirish
+        // O'zgargan haftalarni yig'ish: week => [code => [old, new]]
         $allWeeks = array_unique(array_merge(array_keys($oldHours), array_keys($newHours)));
         sort($allWeeks, SORT_NUMERIC);
+
+        $changedWeeks = [];
+        $changedCodes = [];
 
         foreach ($allWeeks as $week) {
             $oldWeek = $oldHours[$week] ?? [];
             $newWeek = $newHours[$week] ?? [];
-            $allCodes = array_unique(array_merge(array_keys($oldWeek), array_keys($newWeek)));
 
-            foreach ($allCodes as $code) {
+            foreach ($typeNames as $code => $name) {
                 $oldVal = (int) ($oldWeek[$code] ?? 0);
                 $newVal = (int) ($newWeek[$code] ?? 0);
                 if ($oldVal !== $newVal) {
-                    $typeName = $typeNames[$code] ?? $code;
-                    $changes[] = [
-                        'week' => $week,
-                        'type' => $typeName,
-                        'old' => $oldVal . ' soat',
-                        'new' => $newVal . ' soat',
-                    ];
+                    $changedWeeks[$week][$code] = ['old' => $oldVal, 'new' => $newVal];
+                    $changedCodes[$code] = true;
                 }
             }
         }
 
-        if (empty($changes)) {
+        if (empty($changedWeeks) && !$weekCountChanged) {
             return 'O\'zgarish yo\'q';
         }
 
-        return $this->formatChangesAsHtmlTable($changes);
+        return $this->formatChangesAsHtmlTable($changedWeeks, $changedCodes, $typeNames, $weekCountChanged, $existingPlan->week_count, $cr->draft_week_count);
     }
 
     /**
-     * O'zgarishlarni HTML jadval shaklida formatlash
+     * O'zgarishlarni HTML jadval shaklida formatlash — har bir tur alohida ustunda
      */
-    private function formatChangesAsHtmlTable(array $changes): string
+    private function formatChangesAsHtmlTable(array $changedWeeks, array $changedCodes, array $typeNames, bool $weekCountChanged, $oldWeekCount, $newWeekCount): string
     {
-        $html = '<table style="border-collapse:collapse;width:100%;margin-top:8px;font-size:13px;">';
+        $html = '';
+
+        if ($weekCountChanged) {
+            $html .= '<div style="font-size:13px;margin-bottom:8px;padding:4px 8px;background:#fef3c7;border-radius:4px;">Hafta soni: <span style="color:#dc2626;text-decoration:line-through;">' . e($oldWeekCount) . '</span> → <span style="color:#059669;font-weight:600;">' . e($newWeekCount) . '</span></div>';
+        }
+
+        if (empty($changedWeeks)) {
+            return $html;
+        }
+
+        // Faqat o'zgargan turlarni ko'rsatish
+        $activeCodes = array_keys($changedCodes);
+
+        $html .= '<table style="border-collapse:collapse;width:100%;margin-top:8px;font-size:13px;">';
+        // Header 1: Hafta + tur nomlari (har biri 2 ustun)
         $html .= '<thead><tr style="background:#f3f4f6;">';
-        $html .= '<th style="border:1px solid #d1d5db;padding:6px 10px;text-align:center;">Hafta</th>';
-        $html .= '<th style="border:1px solid #d1d5db;padding:6px 10px;text-align:left;">Tur</th>';
-        $html .= '<th style="border:1px solid #d1d5db;padding:6px 10px;text-align:center;">Eski</th>';
-        $html .= '<th style="border:1px solid #d1d5db;padding:6px 10px;text-align:center;">Yangi</th>';
+        $html .= '<th rowspan="2" style="border:1px solid #d1d5db;padding:6px 10px;text-align:center;">Hafta</th>';
+        foreach ($activeCodes as $code) {
+            $html .= '<th colspan="2" style="border:1px solid #d1d5db;padding:6px 10px;text-align:center;">' . e($typeNames[$code] ?? $code) . '</th>';
+        }
+        $html .= '</tr>';
+        // Header 2: Eski/Yangi juftliklari
+        $html .= '<tr style="background:#f9fafb;">';
+        foreach ($activeCodes as $code) {
+            $html .= '<th style="border:1px solid #d1d5db;padding:4px 8px;text-align:center;font-size:11px;color:#dc2626;">Eski</th>';
+            $html .= '<th style="border:1px solid #d1d5db;padding:4px 8px;text-align:center;font-size:11px;color:#059669;">Yangi</th>';
+        }
         $html .= '</tr></thead><tbody>';
 
-        $shown = array_slice($changes, 0, 15);
-        foreach ($shown as $c) {
+        $shown = array_slice($changedWeeks, 0, 18, true);
+        foreach ($shown as $week => $codes) {
             $html .= '<tr>';
-            $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;">' . e($c['week']) . '</td>';
-            $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;">' . e($c['type']) . '</td>';
-            $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#dc2626;">' . e($c['old']) . '</td>';
-            $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#059669;">' . e($c['new']) . '</td>';
+            $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;font-weight:500;">' . e($week) . '</td>';
+            foreach ($activeCodes as $code) {
+                if (isset($codes[$code])) {
+                    $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#dc2626;">' . $codes[$code]['old'] . '</td>';
+                    $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#059669;font-weight:600;">' . $codes[$code]['new'] . '</td>';
+                } else {
+                    $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#9ca3af;">-</td>';
+                    $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#9ca3af;">-</td>';
+                }
+            }
             $html .= '</tr>';
         }
 
-        if (count($changes) > 15) {
-            $remaining = count($changes) - 15;
-            $html .= '<tr><td colspan="4" style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#6b7280;font-style:italic;">... va yana ' . $remaining . ' ta o\'zgarish</td></tr>';
+        if (count($changedWeeks) > 18) {
+            $remaining = count($changedWeeks) - 18;
+            $colSpan = 1 + count($activeCodes) * 2;
+            $html .= '<tr><td colspan="' . $colSpan . '" style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#6b7280;font-style:italic;">... va yana ' . $remaining . ' ta hafta</td></tr>';
         }
 
         $html .= '</tbody></table>';

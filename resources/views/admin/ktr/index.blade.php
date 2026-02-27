@@ -723,9 +723,6 @@
             var types = ktrState.trainingTypes;
             var codes = ktrState.filteredCodes;
 
-            // O'zgargan haftalarni yig'ish
-            var changedRows = [];
-
             // Hafta soni
             var oldWeekCount = Object.keys(oldHours).length;
             var newWeekCount = cr.draft_week_count || oldWeekCount;
@@ -735,6 +732,10 @@
             for (var k in newHours) { if (allWeeks.indexOf(k) === -1) allWeeks.push(k); }
             allWeeks.sort(function(a,b) { return parseInt(a) - parseInt(b); });
 
+            // O'zgargan haftalarni yig'ish: week => {code: {old, new}}
+            var changedWeeks = {};
+            var changedCodes = {};
+
             allWeeks.forEach(function(week) {
                 var oldW = oldHours[week] || {};
                 var newW = newHours[week] || {};
@@ -742,19 +743,19 @@
                     var oldVal = parseInt(oldW[code]) || 0;
                     var newVal = parseInt(newW[code]) || 0;
                     if (oldVal !== newVal) {
-                        changedRows.push({
-                            week: week,
-                            typeName: types[code] ? types[code].name : code,
-                            oldVal: oldVal,
-                            newVal: newVal
-                        });
+                        if (!changedWeeks[week]) changedWeeks[week] = {};
+                        changedWeeks[week][code] = { old: oldVal, new: newVal };
+                        changedCodes[code] = true;
                     }
                 });
             });
 
-            if (changedRows.length === 0 && oldWeekCount == newWeekCount) return '';
+            var changedWeekKeys = Object.keys(changedWeeks).sort(function(a,b) { return parseInt(a) - parseInt(b); });
+            var activeCodesList = Object.keys(changedCodes);
 
-            var html = '<div style="flex:1; min-width:260px; max-width:400px;">';
+            if (changedWeekKeys.length === 0 && oldWeekCount == newWeekCount) return '';
+
+            var html = '<div style="flex:1; min-width:260px;">';
             html += '<div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:12px;">';
             html += '<div style="font-weight:600; margin-bottom:8px; color:#0369a1; font-size:14px;">O\'zgarishlar</div>';
 
@@ -762,27 +763,43 @@
                 html += '<div style="font-size:13px; margin-bottom:8px; padding:4px 8px; background:#fef3c7; border-radius:4px;">Hafta soni: <span style="color:#dc2626;text-decoration:line-through;">' + oldWeekCount + '</span> → <span style="color:#059669;font-weight:600;">' + newWeekCount + '</span></div>';
             }
 
-            if (changedRows.length > 0) {
+            if (changedWeekKeys.length > 0) {
                 html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+                // Header 1: Hafta + tur nomlari
                 html += '<thead><tr style="background:#e0f2fe;">';
-                html += '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #bae6fd;">Hafta</th>';
-                html += '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #bae6fd;">Tur</th>';
-                html += '<th style="padding:5px 8px; text-align:center; border-bottom:1px solid #bae6fd;">Eski</th>';
-                html += '<th style="padding:5px 8px; text-align:center; border-bottom:1px solid #bae6fd;">Yangi</th>';
+                html += '<th rowspan="2" style="padding:5px 8px; text-align:center; border:1px solid #bae6fd;">Hafta</th>';
+                activeCodesList.forEach(function(code) {
+                    html += '<th colspan="2" style="padding:5px 8px; text-align:center; border:1px solid #bae6fd;">' + (types[code] ? types[code].name : code) + '</th>';
+                });
+                html += '</tr>';
+                // Header 2: Eski/Yangi
+                html += '<tr style="background:#dbeafe;">';
+                activeCodesList.forEach(function() {
+                    html += '<th style="padding:3px 6px; text-align:center; border:1px solid #bae6fd; font-size:10px; color:#dc2626;">Eski</th>';
+                    html += '<th style="padding:3px 6px; text-align:center; border:1px solid #bae6fd; font-size:10px; color:#059669;">Yangi</th>';
+                });
                 html += '</tr></thead><tbody>';
 
-                var maxShow = Math.min(changedRows.length, 20);
+                var maxShow = Math.min(changedWeekKeys.length, 20);
                 for (var i = 0; i < maxShow; i++) {
-                    var r = changedRows[i];
+                    var week = changedWeekKeys[i];
+                    var weekData = changedWeeks[week];
                     html += '<tr style="border-bottom:1px solid #e0f2fe;">';
-                    html += '<td style="padding:4px 8px;">' + r.week + '-hafta</td>';
-                    html += '<td style="padding:4px 8px;">' + r.typeName + '</td>';
-                    html += '<td style="padding:4px 8px; text-align:center; color:#dc2626; text-decoration:line-through;">' + r.oldVal + '</td>';
-                    html += '<td style="padding:4px 8px; text-align:center; color:#059669; font-weight:600;">' + r.newVal + '</td>';
+                    html += '<td style="padding:4px 8px; text-align:center; font-weight:500; border:1px solid #e0f2fe;">' + week + '</td>';
+                    activeCodesList.forEach(function(code) {
+                        if (weekData[code]) {
+                            html += '<td style="padding:4px 8px; text-align:center; color:#dc2626; border:1px solid #e0f2fe;">' + weekData[code].old + '</td>';
+                            html += '<td style="padding:4px 8px; text-align:center; color:#059669; font-weight:600; border:1px solid #e0f2fe;">' + weekData[code].new + '</td>';
+                        } else {
+                            html += '<td style="padding:4px 8px; text-align:center; color:#9ca3af; border:1px solid #e0f2fe;">-</td>';
+                            html += '<td style="padding:4px 8px; text-align:center; color:#9ca3af; border:1px solid #e0f2fe;">-</td>';
+                        }
+                    });
                     html += '</tr>';
                 }
-                if (changedRows.length > 20) {
-                    html += '<tr><td colspan="4" style="padding:4px 8px; color:#6b7280; text-align:center;">... va yana ' + (changedRows.length - 20) + ' ta o\'zgarish</td></tr>';
+                if (changedWeekKeys.length > 20) {
+                    var colSpan = 1 + activeCodesList.length * 2;
+                    html += '<tr><td colspan="' + colSpan + '" style="padding:4px 8px; color:#6b7280; text-align:center; border:1px solid #e0f2fe;">... va yana ' + (changedWeekKeys.length - 20) + ' ta hafta</td></tr>';
                 }
                 html += '</tbody></table>';
             }

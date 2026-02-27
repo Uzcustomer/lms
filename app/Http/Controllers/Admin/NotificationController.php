@@ -32,6 +32,8 @@ class NotificationController extends Controller
         $tab = $request->get('tab', 'inbox');
         $search = $request->get('search', '');
         $senderFilter = $request->get('sender_id');
+        $readStatus = $request->get('status'); // 'unread', 'read'
+        $typeFilter = $request->get('type');   // 'message', 'system', 'alert', 'info'
 
         try {
             $query = Notification::with('sender');
@@ -61,6 +63,16 @@ class NotificationController extends Controller
 
             if ($senderFilter) {
                 $query->where('sender_id', $senderFilter);
+            }
+
+            if ($readStatus === 'unread') {
+                $query->where('is_read', false);
+            } elseif ($readStatus === 'read') {
+                $query->where('is_read', true);
+            }
+
+            if ($typeFilter && in_array($typeFilter, ['message', 'system', 'alert', 'info'])) {
+                $query->where('type', $typeFilter);
             }
 
             $notifications = $query->paginate(20);
@@ -96,7 +108,8 @@ class NotificationController extends Controller
         }
 
         return view('admin.notifications.index', compact(
-            'notifications', 'tab', 'search', 'senderFilter', 'unreadCount', 'inboxCount', 'sentCount', 'draftsCount', 'senders'
+            'notifications', 'tab', 'search', 'senderFilter', 'readStatus', 'typeFilter',
+            'unreadCount', 'inboxCount', 'sentCount', 'draftsCount', 'senders'
         ));
     }
 

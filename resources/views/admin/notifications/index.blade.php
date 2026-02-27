@@ -137,6 +137,65 @@
                         </span>
                     </div>
 
+                    <!-- Filtrlar -->
+                    @if($tab === 'inbox')
+                    <div class="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 border-b border-gray-100 bg-gray-50/50 overflow-x-auto">
+                        @php
+                            $baseParams = ['tab' => $tab, 'search' => $search, 'sender_id' => $senderFilter];
+                        @endphp
+                        {{-- O'qilganlik holati --}}
+                        <span class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mr-1 flex-shrink-0">{{ __('notifications.filter_status') }}:</span>
+                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['type' => $typeFilter])) }}"
+                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ !$readStatus ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
+                            {{ __('notifications.all') }}
+                        </a>
+                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => 'unread', 'type' => $typeFilter])) }}"
+                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $readStatus === 'unread' ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
+                            <span class="inline-flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                {{ __('notifications.filter_unread') }}
+                            </span>
+                        </a>
+                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => 'read', 'type' => $typeFilter])) }}"
+                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $readStatus === 'read' ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
+                            {{ __('notifications.filter_read') }}
+                        </a>
+
+                        <span class="w-px h-4 bg-gray-200 mx-1 flex-shrink-0"></span>
+
+                        {{-- Xabar turi --}}
+                        <span class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mr-1 flex-shrink-0">{{ __('notifications.filter_type') }}:</span>
+                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus])) }}"
+                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ !$typeFilter ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
+                            {{ __('notifications.all') }}
+                        </a>
+                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus, 'type' => 'message'])) }}"
+                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $typeFilter === 'message' ? 'bg-gray-200 text-gray-800 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
+                            {{ __('notifications.type_message') }}
+                        </a>
+                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus, 'type' => 'system'])) }}"
+                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $typeFilter === 'system' ? 'bg-purple-100 text-purple-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
+                            {{ __('notifications.type_system') }}
+                        </a>
+                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus, 'type' => 'alert'])) }}"
+                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $typeFilter === 'alert' ? 'bg-red-100 text-red-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
+                            {{ __('notifications.type_alert') }}
+                        </a>
+                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus, 'type' => 'info'])) }}"
+                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $typeFilter === 'info' ? 'bg-cyan-100 text-cyan-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
+                            {{ __('notifications.type_info') }}
+                        </a>
+
+                        @if($readStatus || $typeFilter)
+                        <a href="{{ route('admin.notifications.index', ['tab' => $tab, 'search' => $search, 'sender_id' => $senderFilter]) }}"
+                           class="ml-1 px-2 py-1 text-[10px] text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full font-medium transition-colors whitespace-nowrap flex-shrink-0">
+                            <svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            {{ __('notifications.clear_filters') }}
+                        </a>
+                        @endif
+                    </div>
+                    @endif
+
                     <!-- Xabarlar ro'yxati -->
                     <div class="flex-1 overflow-y-auto">
                         @forelse($notifications as $notification)

@@ -57,6 +57,13 @@ return [
     'all_marked_read' => 'All messages marked as read',
     'confirm_delete' => 'Are you sure you want to delete?',
 
+    // Filters
+    'filter_status' => 'Status',
+    'filter_unread' => 'Unread',
+    'filter_read' => 'Read',
+    'filter_type' => 'Type',
+    'clear_filters' => 'Clear',
+
     // Reply
     'reply' => 'Reply',
     'reply_to' => 'Reply to:',

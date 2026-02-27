@@ -50,7 +50,7 @@
             <div id="reviewerStatsModal" class="hidden fixed inset-0 z-50 overflow-y-auto" x-data="{ openReviewer: null, openName: '', filterStatus: null }">
                 <div class="flex items-center justify-center min-h-screen px-4 py-8">
                     <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="document.getElementById('reviewerStatsModal').classList.add('hidden')"></div>
-                    <div class="relative bg-white rounded-lg shadow-xl w-full z-10 max-h-[90vh] flex flex-col mx-4">
+                    <div class="relative bg-white rounded-lg shadow-xl w-full z-10 max-h-[90vh] flex flex-col mx-4" @click.stop>
                         <div class="flex items-center justify-between p-4 border-b bg-blue-50 rounded-t-lg flex-shrink-0">
                             <h3 class="text-lg font-semibold text-blue-800">Xodimlar statistikasi</h3>
                             <button onclick="document.getElementById('reviewerStatsModal').classList.add('hidden')"
@@ -75,7 +75,7 @@
                                             <tbody class="divide-y divide-gray-200">
                                                 @foreach($reviewerStats as $i => $reviewer)
                                                     <tr class="cursor-pointer transition hover:bg-gray-50"
-                                                        @click="openReviewer = {{ $reviewer->reviewed_by }}; openName = '{{ addslashes($reviewer->reviewed_by_name) }}'; filterStatus = null">
+                                                        @click.stop="openReviewer = {{ $reviewer->reviewed_by }}; openName = '{{ addslashes($reviewer->reviewed_by_name) }}'; filterStatus = null">
                                                         <td class="px-4 py-3 text-sm text-gray-500">{{ $i + 1 }}</td>
                                                         <td class="px-4 py-3 text-sm font-semibold text-gray-900">{{ $reviewer->reviewed_by_name }}</td>
                                                         <td class="px-4 py-3 text-center">
@@ -106,7 +106,7 @@
                      x-transition:leave="transition ease-in duration-150"
                      x-transition:leave-start="opacity-100"
                      x-transition:leave-end="opacity-0"
-                     class="fixed inset-0 z-[60] overflow-y-auto"
+                     class="fixed inset-0 overflow-y-auto" style="z-index: 60;"
                      @keydown.escape.window="openReviewer = null">
                     <div class="flex items-center justify-center min-h-screen px-4 py-4">
                         <div class="fixed inset-0 bg-gray-900 bg-opacity-50 transition-opacity" @click="openReviewer = null; filterStatus = null"></div>

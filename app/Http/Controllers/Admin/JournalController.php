@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Models\MarkingSystemScore;
 use App\Models\AbsenceExcuse;
 use App\Models\AbsenceExcuseMakeup;
+use App\Models\ExamSchedule;
 use App\Models\YnConsent;
 use App\Models\YnStudentGrade;
 use App\Models\YnSubmission;
@@ -1037,6 +1038,12 @@ class JournalController extends Controller
             ->where('group_hemis_id', $group->group_hemis_id)
             ->first();
 
+        // exam_schedules dan OSKI/Test sanalarini olish
+        $examSchedule = ExamSchedule::where('group_hemis_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+
         // YN ga yuborish huquqi: faqat shu fanga biriktirilgan o'qituvchi
         $canSubmitYn = false;
         $isOqituvchi = is_active_oqituvchi();
@@ -1133,6 +1140,7 @@ class JournalController extends Controller
             'minimumLimit',
             'ynConsents',
             'ynSubmission',
+            'examSchedule',
             'canSubmitYn',
             'levelDeadline',
             'approvedExcuses',
@@ -3913,7 +3921,6 @@ class JournalController extends Controller
             'subject_id' => 'required',
             'semester_code' => 'required',
             'group_hemis_id' => 'required',
-            'exam_date' => 'required|date|after_or_equal:today',
         ]);
 
         // Faqat biriktirilgan o'qituvchi YN ga yuborishi mumkin
@@ -4155,6 +4162,25 @@ class JournalController extends Controller
 
         DB::beginTransaction();
         try {
+            // exam_schedules dan OSKI/Test sanalarini olish
+            $examSchedule = ExamSchedule::where('group_hemis_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->first();
+
+            // Eng yaqin sana (OSKI yoki Test) ni exam_date sifatida saqlash
+            $examDate = null;
+            if ($examSchedule) {
+                $dates = array_filter([
+                    $examSchedule->oski_date?->format('Y-m-d'),
+                    $examSchedule->test_date?->format('Y-m-d'),
+                ]);
+                if (!empty($dates)) {
+                    sort($dates);
+                    $examDate = $dates[0];
+                }
+            }
+
             // YN submission yozuvini yaratish
             $ynSubmission = YnSubmission::create([
                 'subject_id' => $subjectId,
@@ -4162,7 +4188,7 @@ class JournalController extends Controller
                 'group_hemis_id' => $groupHemisId,
                 'submitted_by' => $submittedByUserId,
                 'submitted_at' => now(),
-                'exam_date' => $request->exam_date,
+                'exam_date' => $examDate,
             ]);
 
             // Har bir talaba uchun JN/MT snapshot saqlash
@@ -4596,11 +4622,19 @@ class JournalController extends Controller
             ], 400);
         }
 
-        // exam_date o'tganligini tekshirish
-        if (!$ynSubmission->exam_date || $ynSubmission->exam_date->isFuture()) {
+        // exam_schedules dan OSKI/Test sanalarini tekshirish
+        $examSchedule = ExamSchedule::where('group_hemis_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+
+        $oskiDatePassed = $examSchedule && $examSchedule->oski_date && $examSchedule->oski_date->isPast();
+        $testDatePassed = $examSchedule && $examSchedule->test_date && $examSchedule->test_date->isPast();
+
+        if (!$oskiDatePassed && !$testDatePassed) {
             return response()->json([
                 'success' => false,
-                'message' => 'YN o\'tkazish sanasi hali kelmagan.',
+                'message' => 'OSKI yoki Test o\'tkazish sanasi hali kelmagan.',
             ], 400);
         }
 
@@ -4952,9 +4986,33 @@ class JournalController extends Controller
         $textRun->addText('Soatlar soni: ', $infoBold);
         $textRun->addText($subject->total_acload ?? '-', $infoStyle);
 
+        // exam_schedules dan OSKI/Test sanalarini olish
+        $wordExamSchedule = ExamSchedule::where('group_hemis_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+
         $textRun = $section->addTextRun(['spaceAfter' => 100]);
-        $textRun->addText('YN o\'tkazish sanasi: ', $infoBold);
-        $textRun->addText($ynSubmission->exam_date ? $ynSubmission->exam_date->format('d.m.Y') : '-', $infoStyle);
+        if ($wordExamSchedule) {
+            if ($wordExamSchedule->oski_date) {
+                $textRun->addText('OSKI sanasi: ', $infoBold);
+                $textRun->addText($wordExamSchedule->oski_date->format('d.m.Y'), $infoStyle);
+                $textRun->addText('     ', $infoStyle);
+            } elseif ($wordExamSchedule->oski_na) {
+                $textRun->addText('OSKI: ', $infoBold);
+                $textRun->addText('n/a', $infoStyle);
+                $textRun->addText('     ', $infoStyle);
+            }
+            if ($wordExamSchedule->test_date) {
+                $textRun->addText('Test sanasi: ', $infoBold);
+                $textRun->addText($wordExamSchedule->test_date->format('d.m.Y'), $infoStyle);
+            } elseif ($wordExamSchedule->test_na) {
+                $textRun->addText('Test: ', $infoBold);
+                $textRun->addText('n/a', $infoStyle);
+            }
+        } else {
+            $textRun->addText('YN sanalari belgilanmagan', $infoStyle);
+        }
 
         $section->addText(
             'Sana: ' . now()->format('d.m.Y'),

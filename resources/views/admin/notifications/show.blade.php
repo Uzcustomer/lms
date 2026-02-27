@@ -17,7 +17,7 @@
                 </a>
             </div>
 
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg h-fit">
                 <!-- Header -->
                 <div class="px-6 py-4 border-b border-gray-200">
                     <div class="flex items-center justify-between">
@@ -53,7 +53,7 @@
                 </div>
 
                 <!-- Body -->
-                <div class="px-6 py-6">
+                <div class="px-6 py-4">
                     <div class="prose max-w-none text-gray-700 text-sm leading-relaxed">
                         {!! nl2br(e($notification->body)) !!}
                     </div>
@@ -73,7 +73,7 @@
 
                         @if($approval)
                             @if($approval->status === 'pending')
-                                <div class="flex items-center gap-2 mt-5" id="ktr-approval-actions-{{ $approval->id }}">
+                                <div class="flex items-center gap-2 mt-3" id="ktr-approval-actions-{{ $approval->id }}">
                                     <button onclick="ktrApprove({{ $approval->id }}, 'approved')"
                                             class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors">
                                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,7 +129,7 @@
                                     }
                                 </script>
                             @elseif($approval->status === 'approved')
-                                <div class="mt-5">
+                                <div class="mt-3">
                                     <span class="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 text-sm font-medium rounded-lg">
                                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
@@ -141,7 +141,7 @@
                                     </span>
                                 </div>
                             @elseif($approval->status === 'rejected')
-                                <div class="mt-5">
+                                <div class="mt-3">
                                     <span class="inline-flex items-center px-3 py-1.5 bg-red-100 text-red-800 text-sm font-medium rounded-lg">
                                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>

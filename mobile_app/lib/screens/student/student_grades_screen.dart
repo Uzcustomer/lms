@@ -437,36 +437,35 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   }) {
     final displayValue = value?.toString() ?? '-';
 
-    return Material(
-      color: isDark ? color.withAlpha(30) : color,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: textColor),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
-                ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark ? color.withAlpha(30) : color,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: textColor),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: textColor,
               ),
-              Text(
-                displayValue,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
+            ),
+            Text(
+              displayValue,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: textColor,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -851,6 +850,7 @@ class _JnGradesSheet extends StatefulWidget {
 class _JnGradesSheetState extends State<_JnGradesSheet> {
   bool _isLoading = true;
   String? _error;
+  String _debugInfo = '';
   List<Map<String, dynamic>> _amaliyGrades = [];
   List<Map<String, dynamic>> _maruzaGrades = [];
 
@@ -877,6 +877,8 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
         grades = (response['grades'] as List<dynamic>?) ?? [];
       }
 
+      // Debug: collect type codes for diagnostics
+      final typeCodes = <String>[];
       final amaliy = <Map<String, dynamic>>[];
       final maruza = <Map<String, dynamic>>[];
 
@@ -884,6 +886,7 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
         final grade = g as Map<String, dynamic>;
         final typeCode = grade['training_type_code'];
         final typeName = grade['training_type_name']?.toString() ?? '';
+        typeCodes.add('$typeCode:$typeName');
 
         if (typeCode == 11 || typeName.contains("Ma'ruza") || typeName.contains('Maruza')) {
           maruza.add(grade);
@@ -899,6 +902,7 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
         setState(() {
           _amaliyGrades = amaliy;
           _maruzaGrades = maruza;
+          _debugInfo = 'API: ${grades.length} ta baho. Types: ${typeCodes.toSet().join(', ')}';
           _isLoading = false;
         });
       }
@@ -1016,7 +1020,15 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
                       Padding(
                         padding: const EdgeInsets.all(20),
                         child: Center(
-                          child: Text(widget.l.noData, style: TextStyle(color: secondaryText, fontSize: 14)),
+                          child: Column(
+                            children: [
+                              Text(widget.l.noData, style: TextStyle(color: secondaryText, fontSize: 14)),
+                              if (_debugInfo.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(_debugInfo, style: TextStyle(color: secondaryText, fontSize: 11)),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
                   ],

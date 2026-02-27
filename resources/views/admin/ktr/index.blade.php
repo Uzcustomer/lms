@@ -635,21 +635,19 @@
         function renderChangePanel() {
             var cr = ktrState.changeRequest;
             if (!cr) return;
-            var html = '<div class="ktr-change-box">';
-            if (cr.is_approved) {
-                html += '<div class="ktr-change-title" style="color:#059669;">Barcha tasdiqlar olingan! KTR yangilandi.</div>';
-            } else {
-                html += '<div class="ktr-change-title">Tasdiqlash kutilmoqda (draft saqlangan)</div>';
-                html += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280;">O\'zgarishlar draft sifatida saqlangan. Barcha tasdiqlar olingandan keyin KTR yangilanadi.</div>';
-            }
+            var html = '<div class="ktr-change-box" style="display:flex; gap:16px; flex-wrap:wrap;">';
 
-            // O'zgarishlar diffini ko'rsatish
-            if (cr.draft_plan_data && ktrState.savedHours) {
-                html += renderDraftDiff(cr);
+            // Chap tomon - tasdiqlash holati
+            var leftHtml = '<div style="flex:1; min-width:280px;">';
+            if (cr.is_approved) {
+                leftHtml += '<div class="ktr-change-title" style="color:#059669;">Barcha tasdiqlar olingan! KTR yangilandi.</div>';
+            } else {
+                leftHtml += '<div class="ktr-change-title">Tasdiqlash kutilmoqda</div>';
+                leftHtml += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280; margin-bottom:8px;">O\'zgarishlar draft sifatida saqlangan. Barcha tasdiqlar olingandan keyin KTR yangilanadi.</div>';
             }
 
             var info = ktrState.approverInfo;
-            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Bo\'lim</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
+            leftHtml += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Bo\'lim</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
             cr.approvals.forEach(function(a) {
                 var bolim = '-';
                 if (a.role === 'kafedra_mudiri') {
@@ -657,15 +655,24 @@
                 } else if (a.role === 'dekan') {
                     bolim = info.faculty_name ? (info.faculty_name + ' fakulteti') : '-';
                 }
-                html += '<tr>';
-                html += '<td>' + getRoleName(a.role) + '</td>';
-                html += '<td>' + a.approver_name + '</td>';
-                html += '<td>' + bolim + '</td>';
-                html += '<td>' + getStatusBadge(a.status) + '</td>';
-                html += '<td>' + (a.responded_at || '-') + '</td>';
-                html += '</tr>';
+                leftHtml += '<tr>';
+                leftHtml += '<td>' + getRoleName(a.role) + '</td>';
+                leftHtml += '<td>' + a.approver_name + '</td>';
+                leftHtml += '<td>' + bolim + '</td>';
+                leftHtml += '<td>' + getStatusBadge(a.status) + '</td>';
+                leftHtml += '<td>' + (a.responded_at || '-') + '</td>';
+                leftHtml += '</tr>';
             });
-            html += '</tbody></table>';
+            leftHtml += '</tbody></table>';
+            leftHtml += '</div>';
+
+            html += leftHtml;
+
+            // O'ng tomon - o'zgarishlar jadvali
+            if (cr.draft_plan_data && ktrState.savedHours) {
+                html += renderDraftDiff(cr);
+            }
+
             html += '</div>';
             $('#ktr-change-panel').html(html).show();
             $('#ktr-edit-btn').hide();
@@ -677,17 +684,14 @@
             var newHours = newData.hours || newData;
             var types = ktrState.trainingTypes;
             var codes = ktrState.filteredCodes;
-            var changes = [];
 
-            // Hafta soni tekshirish
-            if (ktrState.hasPlan && cr.draft_week_count) {
-                var oldWeekCount = Object.keys(oldHours).length;
-                if (oldWeekCount != cr.draft_week_count) {
-                    changes.push('<b>Hafta soni:</b> ' + oldWeekCount + ' → ' + cr.draft_week_count);
-                }
-            }
+            // O'zgargan haftalarni yig'ish
+            var changedRows = [];
 
-            // Har bir hafta va tur bo'yicha soatlar farqi
+            // Hafta soni
+            var oldWeekCount = Object.keys(oldHours).length;
+            var newWeekCount = cr.draft_week_count || oldWeekCount;
+
             var allWeeks = [];
             for (var k in oldHours) allWeeks.push(k);
             for (var k in newHours) { if (allWeeks.indexOf(k) === -1) allWeeks.push(k); }
@@ -700,25 +704,52 @@
                     var oldVal = parseInt(oldW[code]) || 0;
                     var newVal = parseInt(newW[code]) || 0;
                     if (oldVal !== newVal) {
-                        var typeName = types[code] ? types[code].name : code;
-                        changes.push(week + '-hafta <b>' + typeName + '</b>: <span style="color:#dc2626;text-decoration:line-through;">' + oldVal + '</span> → <span style="color:#059669;font-weight:600;">' + newVal + '</span> soat');
+                        changedRows.push({
+                            week: week,
+                            typeName: types[code] ? types[code].name : code,
+                            oldVal: oldVal,
+                            newVal: newVal
+                        });
                     }
                 });
             });
 
-            if (changes.length === 0) return '';
+            if (changedRows.length === 0 && oldWeekCount == newWeekCount) return '';
 
-            var html = '<div style="margin:10px 0; padding:10px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">';
-            html += '<div style="font-weight:600; margin-bottom:6px; color:#0369a1;">O\'zgarishlar:</div>';
-            html += '<ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.8;">';
-            var maxShow = Math.min(changes.length, 15);
-            for (var i = 0; i < maxShow; i++) {
-                html += '<li>' + changes[i] + '</li>';
+            var html = '<div style="flex:1; min-width:260px; max-width:400px;">';
+            html += '<div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:12px;">';
+            html += '<div style="font-weight:600; margin-bottom:8px; color:#0369a1; font-size:14px;">O\'zgarishlar</div>';
+
+            if (oldWeekCount != newWeekCount) {
+                html += '<div style="font-size:13px; margin-bottom:8px; padding:4px 8px; background:#fef3c7; border-radius:4px;">Hafta soni: <span style="color:#dc2626;text-decoration:line-through;">' + oldWeekCount + '</span> → <span style="color:#059669;font-weight:600;">' + newWeekCount + '</span></div>';
             }
-            if (changes.length > 15) {
-                html += '<li style="color:#6b7280;">... va yana ' + (changes.length - 15) + ' ta o\'zgarish</li>';
+
+            if (changedRows.length > 0) {
+                html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+                html += '<thead><tr style="background:#e0f2fe;">';
+                html += '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #bae6fd;">Hafta</th>';
+                html += '<th style="padding:5px 8px; text-align:left; border-bottom:1px solid #bae6fd;">Tur</th>';
+                html += '<th style="padding:5px 8px; text-align:center; border-bottom:1px solid #bae6fd;">Eski</th>';
+                html += '<th style="padding:5px 8px; text-align:center; border-bottom:1px solid #bae6fd;">Yangi</th>';
+                html += '</tr></thead><tbody>';
+
+                var maxShow = Math.min(changedRows.length, 20);
+                for (var i = 0; i < maxShow; i++) {
+                    var r = changedRows[i];
+                    html += '<tr style="border-bottom:1px solid #e0f2fe;">';
+                    html += '<td style="padding:4px 8px;">' + r.week + '-hafta</td>';
+                    html += '<td style="padding:4px 8px;">' + r.typeName + '</td>';
+                    html += '<td style="padding:4px 8px; text-align:center; color:#dc2626; text-decoration:line-through;">' + r.oldVal + '</td>';
+                    html += '<td style="padding:4px 8px; text-align:center; color:#059669; font-weight:600;">' + r.newVal + '</td>';
+                    html += '</tr>';
+                }
+                if (changedRows.length > 20) {
+                    html += '<tr><td colspan="4" style="padding:4px 8px; color:#6b7280; text-align:center;">... va yana ' + (changedRows.length - 20) + ' ta o\'zgarish</td></tr>';
+                }
+                html += '</tbody></table>';
             }
-            html += '</ul></div>';
+
+            html += '</div></div>';
             return html;
         }
 

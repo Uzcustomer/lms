@@ -8,9 +8,9 @@ return [
     'logout' => 'Chiqish',
 
     // Tabs
-    'inbox' => 'Kelgan xabarlar',
+    'inbox' => 'Kelgan',
     'sent' => "Jo'natilgan",
-    'drafts' => 'Qoralamalar',
+    'drafts' => 'Qoralama',
 
     // Actions
     'compose' => 'Yangi xabar',
@@ -31,8 +31,14 @@ return [
     'subject_placeholder' => 'Xabar mavzusini kiriting',
     'body' => 'Matn',
     'body_placeholder' => 'Xabar matnini kiriting...',
+    'search_placeholder' => 'Xabarlardan qidirish...',
+    'senders' => "Jo'natuvchilar",
+    'role' => 'Rol',
+    'all' => 'Barchasi',
     'from' => 'Kimdan',
+    'to' => 'Kimga',
     'date' => 'Sana',
+    'type' => 'Turi',
     'system' => 'Tizim',
 
     // Types

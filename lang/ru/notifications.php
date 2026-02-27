@@ -31,8 +31,14 @@ return [
     'subject_placeholder' => 'Введите тему сообщения',
     'body' => 'Текст',
     'body_placeholder' => 'Введите текст сообщения...',
+    'search_placeholder' => 'Поиск сообщений...',
+    'senders' => 'Отправители',
+    'role' => 'Роль',
+    'all' => 'Все',
     'from' => 'От кого',
+    'to' => 'Кому',
     'date' => 'Дата',
+    'type' => 'Тип',
     'system' => 'Система',
 
     // Types

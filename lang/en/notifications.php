@@ -31,8 +31,14 @@ return [
     'subject_placeholder' => 'Enter message subject',
     'body' => 'Body',
     'body_placeholder' => 'Enter message text...',
+    'search_placeholder' => 'Search messages...',
+    'senders' => 'Senders',
+    'role' => 'Role',
+    'all' => 'All',
     'from' => 'From',
+    'to' => 'To',
     'date' => 'Date',
+    'type' => 'Type',
     'system' => 'System',
 
     // Types

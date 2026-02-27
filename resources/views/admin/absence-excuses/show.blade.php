@@ -147,7 +147,7 @@
                 </div>
             </div>
 
-            {{-- ═══════ 2-QATOR: Qo'shimcha + Asos hujjati — BITTA QATORDA ═══════ --}}
+            {{-- ═══════ 2-QATOR: Qo'shimcha + Asos hujjati ═══════ --}}
             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
 
                 {{-- Chap card --}}
@@ -165,7 +165,7 @@
                                 </div>
                                 <div class="flex justify-between border-t border-gray-100 dark:border-gray-700 pt-2">
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Sana</dt>
-                                    <dd class="text-sm font-semibold text-gray-900 dark:text-white">{{ $excuse->reviewed_at->format('d.m.Y H:i') }}</dd>
+                                    <dd class="text-sm font-bold text-gray-900 dark:text-white">{{ $excuse->reviewed_at->format('d.m.Y H:i') }}</dd>
                                 </div>
                             </dl>
                             @if($excuse->isRejected() && $excuse->rejection_reason)
@@ -268,9 +268,9 @@
                 </div>
             </div>
 
-            {{-- ═══════ 3-QATOR: Qayta topshirish nazoratlari — full width ═══════ --}}
+            {{-- ═══════ Qayta topshirish nazoratlari — alohida table ═══════ --}}
             @if($excuse->makeups->count() > 0)
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-5">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden" style="margin-bottom: 20px;">
                     <div class="px-4 h-12 flex items-center justify-between rounded-t-xl" style="background-color: #1e40af;">
                         <h3 class="text-base font-bold text-white flex items-center">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
@@ -338,7 +338,7 @@
                 </div>
             @endif
 
-            {{-- ═══════ Tasdiqlash / Rad etish — kichik, o'ng tomonda ═══════ --}}
+            {{-- ═══════ Tasdiqlash / Rad etish ═══════ --}}
             @if($excuse->isPending())
                 <div class="flex justify-end mb-6" x-data="{ showReject: false }">
                     <div class="flex flex-col items-end gap-3">

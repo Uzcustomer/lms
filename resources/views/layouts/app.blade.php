@@ -53,6 +53,7 @@
                     $notifUnreadCount = 0;
                     try {
                         $notifUnreadCount = \App\Models\Notification::where('recipient_id', $notifUserId)
+                            ->where('recipient_type', $notifUserType)
                             ->where('is_draft', false)
                             ->where('is_read', false)
                             ->count();
@@ -114,6 +115,7 @@
                                 try {
                                     $recentNotifs = \App\Models\Notification::with('sender')
                                         ->where('recipient_id', $notifUserId)
+                                        ->where('recipient_type', $notifUserType)
                                         ->where('is_draft', false)
                                         ->orderByDesc('sent_at')
                                         ->take(6)

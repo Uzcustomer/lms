@@ -38,13 +38,13 @@ class NotificationController extends Controller
 
             switch ($tab) {
                 case 'sent':
-                    $query->sent($userId)->orderByDesc('sent_at');
+                    $query->sent($userId, $userType)->orderByDesc('sent_at');
                     break;
                 case 'drafts':
-                    $query->drafts($userId)->orderByDesc('updated_at');
+                    $query->drafts($userId, $userType)->orderByDesc('updated_at');
                     break;
                 default: // inbox
-                    $query->inbox($userId)->orderByDesc('sent_at');
+                    $query->inbox($userId, $userType)->orderByDesc('sent_at');
                     break;
             }
 
@@ -70,10 +70,10 @@ class NotificationController extends Controller
         }
 
         try {
-            $unreadCount = Notification::inbox($userId)->unread()->count();
-            $inboxCount = Notification::inbox($userId)->count();
-            $sentCount = Notification::sent($userId)->count();
-            $draftsCount = Notification::drafts($userId)->count();
+            $unreadCount = Notification::inbox($userId, $userType)->unread()->count();
+            $inboxCount = Notification::inbox($userId, $userType)->count();
+            $sentCount = Notification::sent($userId, $userType)->count();
+            $draftsCount = Notification::drafts($userId, $userType)->count();
         } catch (\Throwable $e) {
             \Log::error('NotificationController@index counts error: ' . $e->getMessage());
             $unreadCount = $inboxCount = $sentCount = $draftsCount = 0;
@@ -83,7 +83,7 @@ class NotificationController extends Controller
         $senders = collect();
         try {
             if ($tab === 'inbox') {
-                $inboxSenderIds = Notification::inbox($userId)->distinct()->pluck('sender_id');
+                $inboxSenderIds = Notification::inbox($userId, $userType)->distinct()->pluck('sender_id');
                 $senders = User::whereIn('id', $inboxSenderIds)->orderBy('name')->get(['id', 'name'])
                     ->merge(
                         Teacher::whereIn('id', $inboxSenderIds)->orderBy('full_name')
@@ -105,7 +105,7 @@ class NotificationController extends Controller
         [$userId, $userType] = $this->getUserInfo();
 
         // Mark as read if recipient
-        if ($notification->recipient_id == $userId) {
+        if ($notification->recipient_id == $userId && $notification->recipient_type == $userType) {
             $notification->markAsRead();
         }
 
@@ -117,9 +117,9 @@ class NotificationController extends Controller
         $notification->load(['sender', 'recipient']);
 
         try {
-            $unreadCount = Notification::inbox($userId)->unread()->count();
-            $sentCount = Notification::sent($userId)->count();
-            $draftsCount = Notification::drafts($userId)->count();
+            $unreadCount = Notification::inbox($userId, $userType)->unread()->count();
+            $sentCount = Notification::sent($userId, $userType)->count();
+            $draftsCount = Notification::drafts($userId, $userType)->count();
         } catch (\Throwable $e) {
             \Log::error('NotificationController@show counts error: ' . $e->getMessage());
             $unreadCount = $sentCount = $draftsCount = 0;
@@ -142,9 +142,9 @@ class NotificationController extends Controller
         ]);
 
         try {
-            $unreadCount = Notification::inbox($userId)->unread()->count();
-            $sentCount = Notification::sent($userId)->count();
-            $draftsCount = Notification::drafts($userId)->count();
+            $unreadCount = Notification::inbox($userId, $userType)->unread()->count();
+            $sentCount = Notification::sent($userId, $userType)->count();
+            $draftsCount = Notification::drafts($userId, $userType)->count();
         } catch (\Throwable $e) {
             \Log::error('NotificationController@create counts error: ' . $e->getMessage());
             $unreadCount = $sentCount = $draftsCount = 0;
@@ -196,7 +196,8 @@ class NotificationController extends Controller
     {
         [$userId, $userType] = $this->getUserInfo();
 
-        if ($notification->sender_id == $userId || $notification->recipient_id == $userId) {
+        if (($notification->sender_id == $userId && $notification->sender_type == $userType)
+            || ($notification->recipient_id == $userId && $notification->recipient_type == $userType)) {
             $notification->delete();
             return redirect()->back()->with('success', __('notifications.deleted'));
         }
@@ -244,7 +245,7 @@ class NotificationController extends Controller
     public function markAllRead()
     {
         [$userId, $userType] = $this->getUserInfo();
-        Notification::inbox($userId)->unread()->update([
+        Notification::inbox($userId, $userType)->unread()->update([
             'is_read' => true,
             'read_at' => now(),
         ]);
@@ -255,7 +256,7 @@ class NotificationController extends Controller
     public function getUnreadCount()
     {
         [$userId, $userType] = $this->getUserInfo();
-        $count = Notification::inbox($userId)->unread()->count();
+        $count = Notification::inbox($userId, $userType)->unread()->count();
 
         return response()->json(['count' => $count]);
     }

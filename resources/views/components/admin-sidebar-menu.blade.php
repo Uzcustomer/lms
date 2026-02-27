@@ -90,7 +90,9 @@
          x-data @click="if($event.target.closest('a')) { if(window.innerWidth < 768) $store.sidebar.close() }">
         <!-- Xabarnomalar (Notifications) -->
         @php
+            $sidebarUserType = get_class($user);
             $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
+                ->where('recipient_type', $sidebarUserType)
                 ->where('is_draft', false)
                 ->where('is_read', false)
                 ->count();

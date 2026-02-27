@@ -1025,75 +1025,79 @@ class _JnGradesPageState extends State<_JnGradesPage> {
     Color textColor,
     Color secondaryText,
   ) {
-    // 2 columns, each row has 2 date-grade items
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        childAspectRatio: 2.8,
-      ),
-      itemCount: dailyData.length,
-      itemBuilder: (context, index) {
-        final d = dailyData[index];
-        final avg = d['avg'] as int;
-        final hasGrades = d['hasGrades'] as bool;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final headerBg = AppTheme.primaryColor;
+    final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFDEDEDE);
+    final cellBg = isDark ? AppTheme.darkCard : Colors.white;
 
-        Color bgColor;
-        Color gradeTextColor;
-        String gradeText;
+    return Table(
+      border: TableBorder.all(color: borderColor, width: 1),
+      columnWidths: const {
+        0: FlexColumnWidth(1),
+        1: FixedColumnWidth(60),
+      },
+      children: [
+        // Header
+        TableRow(
+          decoration: BoxDecoration(color: headerBg),
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              alignment: Alignment.center,
+              child: const Text('Sana', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              alignment: Alignment.center,
+              child: const Text('Baho', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+            ),
+          ],
+        ),
+        // Data rows
+        ...dailyData.map((d) {
+          final avg = d['avg'] as int;
+          final hasGrades = d['hasGrades'] as bool;
 
-        if (!hasGrades) {
-          bgColor = AppTheme.errorColor;
-          gradeTextColor = Colors.white;
-          gradeText = 'NB';
-        } else if (avg >= 70) {
-          bgColor = const Color(0xFF43A047);
-          gradeTextColor = Colors.white;
-          gradeText = avg.toString();
-        } else if (avg > 0) {
-          bgColor = const Color(0xFF1E88E5);
-          gradeTextColor = Colors.white;
-          gradeText = avg.toString();
-        } else {
-          bgColor = cardColor;
-          gradeTextColor = secondaryText;
-          gradeText = '-';
-        }
+          String gradeText;
+          Color gradeColor;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          if (!hasGrades) {
+            gradeText = 'NB';
+            gradeColor = AppTheme.errorColor;
+          } else if (avg >= 70) {
+            gradeText = avg.toString();
+            gradeColor = const Color(0xFF43A047);
+          } else if (avg > 0) {
+            gradeText = avg.toString();
+            gradeColor = const Color(0xFF1E88E5);
+          } else {
+            gradeText = '-';
+            gradeColor = secondaryText;
+          }
+
+          return TableRow(
+            decoration: BoxDecoration(color: cellBg),
             children: [
-              Flexible(
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                alignment: Alignment.centerLeft,
                 child: Text(
                   _formatDate(d['date'] as String?),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: gradeTextColor.withAlpha(200),
-                  ),
+                  style: TextStyle(fontSize: 13, color: textColor),
                 ),
               ),
-              Text(
-                gradeText,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: gradeTextColor,
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                alignment: Alignment.center,
+                child: Text(
+                  gradeText,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: gradeColor),
                 ),
               ),
             ],
-          ),
-        );
-      },
+          );
+        }),
+      ],
     );
   }
 }

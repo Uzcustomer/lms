@@ -1039,6 +1039,46 @@ class KtrController extends Controller
                 'registrator_ofisi' => 'Registrator ofisi',
             ];
 
+            // Qo'shimcha ma'lumotlarni olish: semestr, kurs, yo'nalish, fakultet
+            $semesterName = $cs->semester_name ?? '';
+            $levelName = '';
+            $specialtyName = '';
+            $facultyName = $approverInfo['faculty_name'] ?? '';
+
+            $curriculum = Curriculum::where('curricula_hemis_id', $cs->curricula_hemis_id)->first();
+            if ($curriculum) {
+                $semester = DB::table('semesters')
+                    ->where('curriculum_hemis_id', $curriculum->curricula_hemis_id)
+                    ->where('code', $cs->semester_code)
+                    ->first();
+                if ($semester) {
+                    $levelName = $semester->level_name ?? '';
+                }
+                $specialty = DB::table('specialties')
+                    ->where('specialty_hemis_id', $curriculum->specialty_hemis_id)
+                    ->first();
+                if ($specialty) {
+                    $specialtyName = $specialty->name ?? '';
+                }
+            }
+
+            // Xabar tanasini tuzish
+            $detailParts = [];
+            $detailParts[] = "Fan: {$cs->subject_name}";
+            if ($semesterName) {
+                $detailParts[] = "Semestr: {$semesterName}";
+            }
+            if ($levelName) {
+                $detailParts[] = "Kurs: {$levelName}";
+            }
+            if ($specialtyName) {
+                $detailParts[] = "Yo'nalish: {$specialtyName}";
+            }
+            if ($facultyName) {
+                $detailParts[] = "Fakultet: {$facultyName}";
+            }
+            $detailLine = implode(' | ', $detailParts);
+
             $hasTeacherNotifications = Schema::hasTable('teacher_notifications');
 
             // Bitta xodimga bitta xabarnoma (duplikatdan saqlash)
@@ -1061,7 +1101,7 @@ class KtrController extends Controller
                             'recipient_id' => $registrator['id'],
                             'recipient_type' => Teacher::class,
                             'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                            'body' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
+                            'body' => "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n{$detailLine}\nSiz {$roleName} sifatida tasdiqlashingiz kerak.",
                             'type' => Notification::TYPE_ALERT,
                             'data' => [
                                 'action' => 'ktr_change_approval',
@@ -1081,7 +1121,7 @@ class KtrController extends Controller
                                 'teacher_id' => $registrator['id'],
                                 'type' => 'ktr_approval',
                                 'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                                'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish ruxsatini so'ramoqda.",
+                                'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. {$detailLine}",
                                 'link' => route('admin.notifications.show', $notification->id),
                                 'data' => [
                                     'action' => 'ktr_change_approval',
@@ -1105,7 +1145,7 @@ class KtrController extends Controller
                         'recipient_id' => $approval->approver_id,
                         'recipient_type' => Teacher::class,
                         'subject' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                        'body' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish uchun ruxsat so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
+                        'body' => "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n{$detailLine}\nSiz {$roleName} sifatida tasdiqlashingiz kerak.",
                         'type' => Notification::TYPE_ALERT,
                         'data' => [
                             'action' => 'ktr_change_approval',
@@ -1125,7 +1165,7 @@ class KtrController extends Controller
                             'teacher_id' => $approval->approver_id,
                             'type' => 'ktr_approval',
                             'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                            'message' => "{$requesterName} \"{$cs->subject_name}\" fani uchun KTR o'zgartirish ruxsatini so'ramoqda. Siz {$roleName} sifatida tasdiqlashingiz kerak.",
+                            'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. {$detailLine} Siz {$roleName} sifatida tasdiqlashingiz kerak.",
                             'link' => route('admin.notifications.show', $notification->id),
                             'data' => [
                                 'action' => 'ktr_change_approval',

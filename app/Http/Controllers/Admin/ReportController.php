@@ -4296,6 +4296,7 @@ class ReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_code', $gradeExcludedTypes)
+            ->where('sch.education_year_current', true)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->whereRaw('DATE(sch.lesson_date) < CURDATE()');

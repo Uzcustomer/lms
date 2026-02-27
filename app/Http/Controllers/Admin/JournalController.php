@@ -5278,13 +5278,33 @@ class JournalController extends Controller
         $students = Student::where('group_id', $groupHemisId)->orderBy('full_name')->get();
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
 
+        // O'quv yili kodi (show metodi bilan bir xil logika)
+        $educationYearCode = $curriculum?->education_year_code;
+        $scheduleEducationYear = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('education_year_code')
+            ->orderBy('lesson_date', 'desc')
+            ->value('education_year_code');
+        if ($scheduleEducationYear) {
+            $educationYearCode = $scheduleEducationYear;
+        }
+
+        $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
         // JB (amaliyot) jadval sanalarini olish
         $jbScheduleRows = DB::table('schedules')
             ->where('group_id', $groupHemisId)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->whereNull('deleted_at')
-            ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->whereNotIn('training_type_name', $excludedTrainingTypes)
+            ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->whereNotNull('lesson_date')
             ->select('lesson_date', 'lesson_pair_code')
             ->orderBy('lesson_date')
@@ -5316,6 +5336,7 @@ class JournalController extends Controller
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->whereNull('deleted_at')
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->where('training_type_code', 99)
             ->whereNotNull('lesson_date')
             ->select('lesson_date', 'lesson_pair_code')
@@ -5336,7 +5357,13 @@ class JournalController extends Controller
         }
         $totalMtDays = count($mtLessonDates);
 
-        // Baholarni olish
+        // Eng erta jadval sanasi
+        $minScheduleDate = collect()
+            ->merge($jbScheduleRows->pluck('lesson_date'))
+            ->merge($mtScheduleRows->pluck('lesson_date'))
+            ->min();
+
+        // Baholarni olish (show metodi bilan bir xil logika)
         $allGradesRaw = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
@@ -5344,12 +5371,23 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->whereNotIn('training_type_code', [100, 101, 102, 103])
             ->whereNotNull('lesson_date')
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhere(function ($q3) use ($minScheduleDate) {
+                        $q3->whereNull('education_year_code')
+                            ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                    });
+            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
 
         $getEffectiveGrade = function ($row) {
+            if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {
+                return $row->grade;
+            }
             if ($row->status === 'pending') return null;
             if ($row->reason === 'absent' && $row->grade === null) {
                 return $row->retake_grade !== null ? $row->retake_grade : null;
@@ -5494,7 +5532,13 @@ class JournalController extends Controller
         $sheet->setTitle($sheetName);
 
         // Kurs va semestr raqamlarini hisoblash
-        $kurs = $semester->level_code ?? '';
+        // level_name = "5-kurs" -> 5, yoki level_code dan raqam ajratish
+        $levelName = $semester->level_name ?? '';
+        if (preg_match('/(\d+)/', $levelName, $m)) {
+            $kurs = $m[1];
+        } else {
+            $kurs = preg_replace('/\D/', '', $semester->level_code ?? '');
+        }
         $semesterInYear = ((int)($semester->code ?? 1) % 2 !== 0) ? 1 : 2;
 
         // Header

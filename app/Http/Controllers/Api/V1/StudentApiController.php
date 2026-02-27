@@ -579,7 +579,7 @@ class StudentApiController extends Controller
         $student = $request->user();
         $semester = $student->semester_code;
 
-        $grades = StudentGrade::where('student_id', $student->id)
+        $grades = StudentGrade::where('student_hemis_id', $student->hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
             ->orderBy('lesson_date', 'desc')
@@ -615,7 +615,7 @@ class StudentApiController extends Controller
     {
         $student = $request->user();
 
-        $pendingLessons = StudentGrade::where('student_id', $student->id)
+        $pendingLessons = StudentGrade::where('student_hemis_id', $student->hemis_id)
             ->whereIn('status', ['pending', 'retake'])
             ->orderBy('lesson_date')
             ->get()

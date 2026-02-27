@@ -21,8 +21,22 @@ use Illuminate\Support\Facades\Schema;
 
 class KtrController extends Controller
 {
+    /**
+     * KTR sahifasiga faqat admin va fan mas'uli kirishi mumkin
+     */
+    private function checkKtrAccess(): void
+    {
+        $user = auth()->user();
+        $isAdmin = $user && $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
+        if (!$isAdmin && !is_active_fan_masuli()) {
+            abort(403, 'KTR sahifasiga faqat fan mas\'ullari kirishi mumkin.');
+        }
+    }
+
     public function index(Request $request)
     {
+        $this->checkKtrAccess();
+
         // Ta'lim turlari
         $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
             ->whereNotNull('education_type_code')
@@ -193,6 +207,7 @@ class KtrController extends Controller
      */
     public function getSpecialties(Request $request)
     {
+        $this->checkKtrAccess();
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
@@ -234,6 +249,8 @@ class KtrController extends Controller
      */
     public function getLevelCodes(Request $request)
     {
+        $this->checkKtrAccess();
+
         $levels = DB::table('semesters')
             ->select('level_code', 'level_name')
             ->whereNotNull('level_code')
@@ -254,6 +271,8 @@ class KtrController extends Controller
      */
     public function getSemesters(Request $request)
     {
+        $this->checkKtrAccess();
+
         $query = DB::table('semesters')
             ->whereNotNull('code')
             ->whereNotNull('name');
@@ -281,6 +300,8 @@ class KtrController extends Controller
      */
     public function getSubjects(Request $request)
     {
+        $this->checkKtrAccess();
+
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
@@ -316,6 +337,8 @@ class KtrController extends Controller
      */
     public function export(Request $request)
     {
+        $this->checkKtrAccess();
+
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
@@ -502,6 +525,8 @@ class KtrController extends Controller
      */
     public function getPlan($curriculumSubjectId)
     {
+        $this->checkKtrAccess();
+
         try {
             $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
 
@@ -670,6 +695,8 @@ class KtrController extends Controller
      */
     public function savePlan(Request $request, $curriculumSubjectId)
     {
+        $this->checkKtrAccess();
+
         $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
 
         if (!$this->canEditSubjectKtr($cs)) {
@@ -1015,6 +1042,8 @@ class KtrController extends Controller
      */
     public function requestChange($curriculumSubjectId)
     {
+        $this->checkKtrAccess();
+
         $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
 
         if (!$this->canEditSubjectKtr($cs)) {
@@ -1363,6 +1392,8 @@ class KtrController extends Controller
      */
     public function exportWord($curriculumSubjectId)
     {
+        $this->checkKtrAccess();
+
         $cs = CurriculumSubject::findOrFail($curriculumSubjectId);
 
         $plan = KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first();

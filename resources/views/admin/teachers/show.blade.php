@@ -634,7 +634,7 @@
             btn.disabled = count === 0;
         }
 
-        function toggleSubjectCheck(id, name, code) {
+        function toggleSubjectCheck(id, name, code, semester) {
             var idx = -1;
             for (var i = 0; i < pendingSubjects.length; i++) {
                 if (pendingSubjects[i].id === id) { idx = i; break; }
@@ -643,7 +643,7 @@
             if (idx >= 0) {
                 pendingSubjects.splice(idx, 1);
             } else {
-                pendingSubjects.push({ id: id, name: name, code: code });
+                pendingSubjects.push({ id: id, name: name, code: code, semester: semester });
             }
 
             // Checkbox ko'rinishini yangilash
@@ -682,6 +682,7 @@
                     '<div style="flex: 1; min-width: 0;">' +
                     '<span style="font-weight: 600; font-size: 12px; color: #1e293b;">' + escapeHtml(subject.name) + '</span>' +
                     (subject.code ? '<span style="font-size: 10px; color: #64748b; margin-left: 4px;">' + escapeHtml(subject.code) + '</span>' : '') +
+                    (subject.semester ? '<span style="font-size: 10px; color: #64748b;"> | ' + escapeHtml(subject.semester) + '</span>' : '') +
                     '</div>' +
                     '<button type="button" onclick="removeSubject(this)" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: #fee2e2; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1;">&times;</button>';
                 container.appendChild(div);
@@ -728,17 +729,23 @@
                             html += '<div class="subject-result-item subject-result-disabled">' +
                                 '<div style="flex: 1; min-width: 0;">' +
                                 '<div style="font-weight: 600; font-size: 13px; color: #1e293b;">' + escapeHtml(subject.subject_name) + '</div>' +
-                                (subject.subject_code ? '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">Kod: ' + escapeHtml(subject.subject_code) + '</div>' : '') +
+                                '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">' +
+                                (subject.subject_code ? 'Kod: ' + escapeHtml(subject.subject_code) : '') +
+                                (subject.semester_name ? ' | ' + escapeHtml(subject.semester_name) : '') +
+                                '</div>' +
                                 '</div>' +
                                 '<span style="font-size: 11px; color: #059669; font-weight: 600;">Qo\'shilgan</span>' +
                                 '</div>';
                         } else {
                             html += '<div id="subject-item-' + subject.id + '" class="subject-result-item' + (isPending ? ' subject-result-checked' : '') + '" ' +
-                                'onclick="toggleSubjectCheck(' + subject.id + ', \'' + escapeJsString(subject.subject_name) + '\', \'' + escapeJsString(subject.subject_code || '') + '\')">' +
-                                '<input type="checkbox" id="subject-check-' + subject.id + '" ' + (isPending ? 'checked' : '') + ' class="subject-checkbox" onclick="event.stopPropagation(); toggleSubjectCheck(' + subject.id + ', \'' + escapeJsString(subject.subject_name) + '\', \'' + escapeJsString(subject.subject_code || '') + '\')">' +
+                                'onclick="toggleSubjectCheck(' + subject.id + ', \'' + escapeJsString(subject.subject_name) + '\', \'' + escapeJsString(subject.subject_code || '') + '\', \'' + escapeJsString(subject.semester_name || '') + '\')">' +
+                                '<input type="checkbox" id="subject-check-' + subject.id + '" ' + (isPending ? 'checked' : '') + ' class="subject-checkbox" onclick="event.stopPropagation(); toggleSubjectCheck(' + subject.id + ', \'' + escapeJsString(subject.subject_name) + '\', \'' + escapeJsString(subject.subject_code || '') + '\', \'' + escapeJsString(subject.semester_name || '') + '\')">' +
                                 '<div style="flex: 1; min-width: 0;">' +
                                 '<div style="font-weight: 600; font-size: 13px; color: #1e293b;">' + escapeHtml(subject.subject_name) + '</div>' +
-                                (subject.subject_code ? '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">Kod: ' + escapeHtml(subject.subject_code) + '</div>' : '') +
+                                '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">' +
+                                (subject.subject_code ? 'Kod: ' + escapeHtml(subject.subject_code) : '') +
+                                (subject.semester_name ? ' | ' + escapeHtml(subject.semester_name) : '') +
+                                '</div>' +
                                 '</div>' +
                                 '</div>';
                         }

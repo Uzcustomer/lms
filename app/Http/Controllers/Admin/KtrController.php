@@ -78,59 +78,46 @@ class KtrController extends Controller
                 's.level_code',
             ]);
 
-        // Fan mas'uli filtri
         if ($isFanMasuli && !empty($fanMasuliSubjectIds)) {
+            // Fan masuli - faqat biriktirilgan fanlar, filtrlar kerak emas
             $query->whereIn('cs.id', $fanMasuliSubjectIds);
-        }
+        } else {
+            // Admin/kafedra_mudiri - barcha filtrlar qo'llaniladi
+            if ($selectedEducationType) {
+                $query->where('c.education_type_code', $selectedEducationType);
+            }
 
-        // Filtrlar
-        if ($selectedEducationType) {
-            $query->where('c.education_type_code', $selectedEducationType);
-        }
+            if ($request->filled('faculty')) {
+                $query->where('f.id', $request->faculty);
+            }
 
-        if ($request->filled('faculty')) {
-            $query->where('f.id', $request->faculty);
-        }
+            if ($request->filled('specialty')) {
+                $query->where('sp.specialty_hemis_id', $request->specialty);
+            }
 
-        if ($request->filled('specialty')) {
-            $query->where('sp.specialty_hemis_id', $request->specialty);
-        }
+            if ($request->filled('level_code')) {
+                $query->where('s.level_code', $request->level_code);
+            }
 
-        if ($request->filled('level_code')) {
-            $query->where('s.level_code', $request->level_code);
-        }
+            if ($request->filled('semester_code')) {
+                $query->where('cs.semester_code', $request->semester_code);
+            }
 
-        if ($request->filled('semester_code')) {
-            $query->where('cs.semester_code', $request->semester_code);
-        }
+            if ($request->filled('subject_name')) {
+                $query->where('cs.subject_name', 'like', '%' . $request->subject_name . '%');
+            }
 
-        if ($request->filled('subject_name')) {
-            $query->where('cs.subject_name', 'like', '%' . $request->subject_name . '%');
-        }
+            // Faol/nofaol fanlar filtri (default: faol)
+            $activeFilter = $request->get('active_filter', 'active');
+            if ($activeFilter === 'active') {
+                $query->where('cs.is_active', true);
+            } elseif ($activeFilter === 'inactive') {
+                $query->where('cs.is_active', false);
+            }
 
-        // Faol/nofaol fanlar filtri (default: faol)
-        $activeFilter = $request->get('active_filter', 'active');
-        if ($activeFilter === 'active') {
-            $query->where('cs.is_active', true);
-        } elseif ($activeFilter === 'inactive') {
-            $query->where('cs.is_active', false);
-        }
-
-        // Joriy semestr (default ON)
-        if ($request->get('current_semester', '1') == '1') {
-            $query->where('s.current', true);
-        }
-
-        // Fan masuli / kafedra mudiri - faqat o'z fanlarini ko'rsatish
-        $user = auth()->user();
-        if (!$user->hasRole(['superadmin', 'admin', 'kichik_admin'])) {
-            if ($user->hasRole('fan_masuli') && $user instanceof Teacher) {
-                // teacher_responsible_subjects jadvalidan fan_masuli ga biriktirilgan fanlarni olish
-                $responsibleCsIds = DB::table('teacher_responsible_subjects')
-                    ->where('teacher_id', $user->id)
-                    ->pluck('curriculum_subject_id')
-                    ->toArray();
-                $query->whereIn('cs.id', $responsibleCsIds);
+            // Joriy semestr (default ON)
+            if ($request->get('current_semester', '1') == '1') {
+                $query->where('s.current', true);
             }
         }
 
@@ -195,7 +182,8 @@ class KtrController extends Controller
             'faculties',
             'trainingTypes',
             'sortColumn',
-            'sortDirection'
+            'sortDirection',
+            'isFanMasuli'
         ));
     }
 

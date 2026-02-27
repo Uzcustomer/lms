@@ -121,7 +121,13 @@
 
                         <!-- Xabar matni -->
                         <div class="px-5 sm:px-6 py-6 sm:pl-[4.5rem]">
-                            <div class="text-sm text-gray-800 leading-7 whitespace-pre-line">{{ $notification->body }}</div>
+                            <div class="text-sm text-gray-800 leading-7 whitespace-pre-line">
+                                @if(($notification->data['action'] ?? null) === 'ktr_change_approval')
+                                    {!! $notification->body !!}
+                                @else
+                                    {{ $notification->body }}
+                                @endif
+                            </div>
 
                             {{-- KTR tasdiqlash tugmalari - xabar matni tagida --}}
                             @if(($notification->data['action'] ?? null) === 'ktr_change_approval')

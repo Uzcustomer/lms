@@ -32,7 +32,8 @@ class KtrController extends Controller
         }
         $isAdmin = $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
         $hasFanMasuliRole = $user->hasRole('fan_masuli');
-        if (!$isAdmin && !$hasFanMasuliRole) {
+        $hasViewRole = $user->hasRole(['kafedra_mudiri', 'dekan']);
+        if (!$isAdmin && !$hasFanMasuliRole && !$hasViewRole) {
             abort(403, 'KTR sahifasiga faqat fan mas\'ullari kirishi mumkin.');
         }
     }
@@ -1183,22 +1184,23 @@ class KtrController extends Controller
                 }
             }
 
-            // Xabar tanasini tuzish (tartib: Fakultet → Yo'nalish → Kurs → Semestr → Fan)
-            $detailParts = [];
-            if ($facultyName) {
-                $detailParts[] = "Fakultet: {$facultyName}";
-            }
-            if ($specialtyName) {
-                $detailParts[] = "Yo'nalish: {$specialtyName}";
-            }
-            if ($levelName) {
-                $detailParts[] = "Kurs: {$levelName}";
-            }
-            if ($semesterName) {
-                $detailParts[] = "Semestr: {$semesterName}";
-            }
-            $detailParts[] = "Fan: {$cs->subject_name}";
-            $detailLine = implode(' | ', $detailParts);
+            // Xabar tanasini tuzish — fan nomi birinchi qatorda, keyin jadval shaklida
+            $detailTable = '<table style="border-collapse:collapse;width:100%;margin:8px 0;font-size:13px;">';
+            $detailTable .= '<tr style="background:#eff6ff;">';
+            $detailTable .= '<td colspan="4" style="border:1px solid #d1d5db;padding:8px 10px;font-weight:600;font-size:14px;">' . e($cs->subject_name) . '</td>';
+            $detailTable .= '</tr>';
+            $detailTable .= '<tr style="background:#f9fafb;">';
+            $detailTable .= '<th style="border:1px solid #d1d5db;padding:5px 10px;text-align:left;font-size:12px;color:#6b7280;">Fakultet</th>';
+            $detailTable .= '<th style="border:1px solid #d1d5db;padding:5px 10px;text-align:left;font-size:12px;color:#6b7280;">Yo\'nalish</th>';
+            $detailTable .= '<th style="border:1px solid #d1d5db;padding:5px 10px;text-align:left;font-size:12px;color:#6b7280;">Kurs</th>';
+            $detailTable .= '<th style="border:1px solid #d1d5db;padding:5px 10px;text-align:left;font-size:12px;color:#6b7280;">Semestr</th>';
+            $detailTable .= '</tr>';
+            $detailTable .= '<tr>';
+            $detailTable .= '<td style="border:1px solid #d1d5db;padding:5px 10px;">' . e($facultyName ?: '-') . '</td>';
+            $detailTable .= '<td style="border:1px solid #d1d5db;padding:5px 10px;">' . e($specialtyName ?: '-') . '</td>';
+            $detailTable .= '<td style="border:1px solid #d1d5db;padding:5px 10px;">' . e($levelName ?: '-') . '</td>';
+            $detailTable .= '<td style="border:1px solid #d1d5db;padding:5px 10px;">' . e($semesterName ?: '-') . '</td>';
+            $detailTable .= '</tr></table>';
 
             // O'zgarishlar diffini hisoblash
             $changeSummary = '';
@@ -1222,9 +1224,9 @@ class KtrController extends Controller
                             continue;
                         }
 
-                        $bodyText = "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n{$detailLine}\nSiz {$roleName} sifatida tasdiqlashingiz kerak.";
+                        $bodyText = "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n\nSiz {$roleName} sifatida tasdiqlashingiz kerak.\n\n{$detailTable}";
                         if ($changeSummary) {
-                            $bodyText .= "\n\nO'zgarishlar:\n{$changeSummary}";
+                            $bodyText .= "\n<b>O'zgarishlar:</b>\n{$changeSummary}";
                         }
 
                         $notification = Notification::create([
@@ -1253,7 +1255,7 @@ class KtrController extends Controller
                                 'teacher_id' => $registrator['id'],
                                 'type' => 'ktr_approval',
                                 'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                                'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. {$detailLine}" . ($changeSummary ? "\n{$changeSummary}" : ''),
+                                'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. Fan: {$cs->subject_name}",
                                 'link' => route('admin.notifications.show', $notification->id),
                                 'data' => [
                                     'action' => 'ktr_change_approval',
@@ -1271,9 +1273,9 @@ class KtrController extends Controller
                         continue;
                     }
 
-                    $bodyText2 = "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n{$detailLine}\nSiz {$roleName} sifatida tasdiqlashingiz kerak.";
+                    $bodyText2 = "{$requesterName} KTR o'zgartirish uchun ruxsat so'ramoqda.\n\nSiz {$roleName} sifatida tasdiqlashingiz kerak.\n\n{$detailTable}";
                     if ($changeSummary) {
-                        $bodyText2 .= "\n\nO'zgarishlar:\n{$changeSummary}";
+                        $bodyText2 .= "\n<b>O'zgarishlar:</b>\n{$changeSummary}";
                     }
 
                     $notification = Notification::create([
@@ -1302,7 +1304,7 @@ class KtrController extends Controller
                             'teacher_id' => $approval->approver_id,
                             'type' => 'ktr_approval',
                             'title' => 'KTR o\'zgartirish uchun ruxsat so\'raldi',
-                            'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. {$detailLine}" . ($changeSummary ? "\n{$changeSummary}" : ''),
+                            'message' => "{$requesterName} KTR o'zgartirish ruxsatini so'ramoqda. Fan: {$cs->subject_name}",
                             'link' => route('admin.notifications.show', $notification->id),
                             'data' => [
                                 'action' => 'ktr_change_approval',
@@ -1356,7 +1358,12 @@ class KtrController extends Controller
 
         // Hafta soni o'zgargan bo'lsa
         if ($existingPlan->week_count != $cr->draft_week_count) {
-            $changes[] = "Hafta soni: {$existingPlan->week_count} → {$cr->draft_week_count}";
+            $changes[] = [
+                'week' => '-',
+                'type' => 'Hafta soni',
+                'old' => $existingPlan->week_count,
+                'new' => $cr->draft_week_count,
+            ];
         }
 
         // Har bir hafta va tur bo'yicha soatlar farqini tekshirish
@@ -1373,7 +1380,12 @@ class KtrController extends Controller
                 $newVal = (int) ($newWeek[$code] ?? 0);
                 if ($oldVal !== $newVal) {
                     $typeName = $typeNames[$code] ?? $code;
-                    $changes[] = "{$week}-hafta {$typeName}: {$oldVal} → {$newVal} soat";
+                    $changes[] = [
+                        'week' => $week,
+                        'type' => $typeName,
+                        'old' => $oldVal . ' soat',
+                        'new' => $newVal . ' soat',
+                    ];
                 }
             }
         }
@@ -1382,15 +1394,39 @@ class KtrController extends Controller
             return 'O\'zgarish yo\'q';
         }
 
-        // Maksimum 10 ta o'zgarishni ko'rsatish
-        if (count($changes) > 10) {
-            $shown = array_slice($changes, 0, 10);
-            $remaining = count($changes) - 10;
-            $shown[] = "... va yana {$remaining} ta o'zgarish";
-            return implode("\n", $shown);
+        return $this->formatChangesAsHtmlTable($changes);
+    }
+
+    /**
+     * O'zgarishlarni HTML jadval shaklida formatlash
+     */
+    private function formatChangesAsHtmlTable(array $changes): string
+    {
+        $html = '<table style="border-collapse:collapse;width:100%;margin-top:8px;font-size:13px;">';
+        $html .= '<thead><tr style="background:#f3f4f6;">';
+        $html .= '<th style="border:1px solid #d1d5db;padding:6px 10px;text-align:center;">Hafta</th>';
+        $html .= '<th style="border:1px solid #d1d5db;padding:6px 10px;text-align:left;">Tur</th>';
+        $html .= '<th style="border:1px solid #d1d5db;padding:6px 10px;text-align:center;">Eski</th>';
+        $html .= '<th style="border:1px solid #d1d5db;padding:6px 10px;text-align:center;">Yangi</th>';
+        $html .= '</tr></thead><tbody>';
+
+        $shown = array_slice($changes, 0, 15);
+        foreach ($shown as $c) {
+            $html .= '<tr>';
+            $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;">' . e($c['week']) . '</td>';
+            $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;">' . e($c['type']) . '</td>';
+            $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#dc2626;">' . e($c['old']) . '</td>';
+            $html .= '<td style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#059669;">' . e($c['new']) . '</td>';
+            $html .= '</tr>';
         }
 
-        return implode("\n", $changes);
+        if (count($changes) > 15) {
+            $remaining = count($changes) - 15;
+            $html .= '<tr><td colspan="4" style="border:1px solid #d1d5db;padding:5px 10px;text-align:center;color:#6b7280;font-style:italic;">... va yana ' . $remaining . ' ta o\'zgarish</td></tr>';
+        }
+
+        $html .= '</tbody></table>';
+        return $html;
     }
 
     /**

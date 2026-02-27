@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AcademicRecord;
 use App\Models\Curriculum;
 use App\Models\Department;
 use App\Models\Group;
@@ -598,6 +599,93 @@ class HemisService
                 'marking_system_name' => $data['name'],
                 'minimum_limit' => $minimumLimit,
                 'gpa_limit' => $data['gpa_limit'] ?? 2.0,
+            ]
+        );
+    }
+
+    /**
+     * HEMIS dan akademik qaydlar ro'yxatini import qilish
+     */
+    public function importAcademicRecords(): int
+    {
+        $page = 1;
+        $hasMore = true;
+        $totalImported = 0;
+
+        while ($hasMore) {
+            $response = $this->fetchAcademicRecords($page);
+
+            if ($response && ($response['success'] ?? false)) {
+                foreach ($response['data']['items'] as $item) {
+                    $this->updateOrCreateAcademicRecord($item);
+                    $totalImported++;
+                }
+
+                $pagination = $response['data']['pagination'];
+                $hasMore = $pagination['page'] < $pagination['pageCount'];
+                $page++;
+
+                sleep(1);
+            } else {
+                Log::error('Failed to fetch academic records from HEMIS', $response ?? []);
+                break;
+            }
+        }
+
+        return $totalImported;
+    }
+
+    protected function fetchAcademicRecords(int $page)
+    {
+        try {
+            $response = Http::withoutVerifying()
+                ->timeout(30)
+                ->withToken($this->token)
+                ->get($this->baseUrl . 'v1/data/academic-record-list', [
+                    'page' => $page,
+                    'limit' => 200,
+                ]);
+
+            if (!$response->successful()) {
+                Log::error('HEMIS academic-record-list request failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return ['success' => false, 'error' => 'API request failed'];
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('Exception fetching academic records', [
+                'message' => $e->getMessage(),
+            ]);
+            return ['success' => false, 'error' => 'Exception occurred'];
+        }
+    }
+
+    protected function updateOrCreateAcademicRecord(array $data): void
+    {
+        AcademicRecord::updateOrCreate(
+            ['hemis_id' => $data['id']],
+            [
+                'curriculum_id' => $data['_curriculum'] ?? null,
+                'education_year' => $data['_education_year'] ?? null,
+                'semester_id' => $data['_semester'] ?? null,
+                'student_id' => $data['_student'] ?? null,
+                'subject_id' => $data['_subject'] ?? null,
+                'employee_id' => $data['_employee'] ?? null,
+                'employee_name' => $data['employee_name'] ?? null,
+                'semester_name' => $data['semester_name'] ?? null,
+                'student_name' => $data['student_name'] ?? null,
+                'subject_name' => $data['subject_name'] ?? null,
+                'total_acload' => $data['total_acload'] ?? null,
+                'credit' => $data['credit'] ?? null,
+                'total_point' => $data['total_point'] ?? null,
+                'grade' => $data['grade'] ?? null,
+                'finish_credit_status' => $data['finish_credit_status'] ?? false,
+                'retraining_status' => $data['retraining_status'] ?? false,
+                'hemis_created_at' => isset($data['created_at']) ? date('Y-m-d H:i:s', $data['created_at']) : null,
+                'hemis_updated_at' => isset($data['updated_at']) ? date('Y-m-d H:i:s', $data['updated_at']) : null,
             ]
         );
     }

@@ -10,6 +10,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="overflow: visible;">
 
                 <!-- Filters -->
+                @if(!($isFanMasuli ?? false))
                 <form id="filter-form" method="GET" action="{{ route('admin.ktr.index') }}">
                     <div class="filter-container">
 
@@ -141,6 +142,15 @@
                         </div>
                     </div>
                 </form>
+                @else
+                {{-- Fan masuli uchun filtr yo'q - faqat sarlavha --}}
+                <div style="padding: 12px 20px; border-bottom: 1px solid #f1f5f9;">
+                    <div style="font-size: 14px; color: #374151;">
+                        <span style="color: #059669; font-weight: 600;">Sizga biriktirilgan fanlar</span>
+                        <span style="color: #9ca3af; margin-left: 8px; font-size: 13px;">({{ $subjects->total() }} ta fan)</span>
+                    </div>
+                </div>
+                @endif
 
                 <!-- Table -->
                 <div style="max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch;">

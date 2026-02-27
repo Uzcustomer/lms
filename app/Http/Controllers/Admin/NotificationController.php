@@ -93,6 +93,28 @@ class NotificationController extends Controller
         $senders = collect();
         $subjects = collect();
         try {
+            // Mavzular ro'yxati (barcha tablar uchun)
+            $subjectsQuery = Notification::query();
+            switch ($tab) {
+                case 'sent':
+                    $subjectsQuery->sent($userId, $userType);
+                    break;
+                case 'drafts':
+                    $subjectsQuery->drafts($userId, $userType);
+                    break;
+                default:
+                    $subjectsQuery->inbox($userId, $userType);
+                    break;
+            }
+            $subjects = (clone $subjectsQuery)
+                ->whereNotNull('subject')
+                ->where('subject', '!=', '')
+                ->selectRaw('subject, count(*) as subject_count')
+                ->groupBy('subject')
+                ->orderByRaw('subject_count DESC')
+                ->limit(20)
+                ->get();
+
             if ($tab === 'inbox') {
                 $inboxSenderIds = Notification::inbox($userId, $userType)->distinct()->pluck('sender_id');
                 $senders = User::whereIn('id', $inboxSenderIds)->orderBy('name')->get(['id', 'name'])
@@ -100,18 +122,6 @@ class NotificationController extends Controller
                         Teacher::whereIn('id', $inboxSenderIds)->orderBy('full_name')
                             ->get(['id', 'full_name'])->map(fn ($t) => (object) ['id' => $t->id, 'name' => $t->full_name])
                     );
-
-                // Unikal mavzular ro'yxati
-                $subjects = Notification::where('recipient_id', $userId)
-                    ->where('recipient_type', $userType)
-                    ->where('is_draft', false)
-                    ->whereNotNull('subject')
-                    ->where('subject', '!=', '')
-                    ->selectRaw('subject, count(*) as subject_count')
-                    ->groupBy('subject')
-                    ->orderByRaw('subject_count DESC')
-                    ->limit(20)
-                    ->get();
             }
         } catch (\Throwable $e) {
             \Log::error('NotificationController@index senders error: ' . $e->getMessage());

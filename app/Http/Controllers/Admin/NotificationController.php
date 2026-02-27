@@ -103,6 +103,7 @@ class NotificationController extends Controller
 
                 // Unikal mavzular ro'yxati
                 $subjects = Notification::where('recipient_id', $userId)
+                    ->where('recipient_type', $userType)
                     ->where('is_draft', false)
                     ->whereNotNull('subject')
                     ->where('subject', '!=', '')
@@ -128,8 +129,15 @@ class NotificationController extends Controller
     {
         [$userId, $userType] = $this->getUserInfo();
 
+        // Faqat o'ziga tegishli xabarlarni ko'rish mumkin
+        $isRecipient = $notification->recipient_id == $userId && $notification->recipient_type === $userType;
+        $isSender = $notification->sender_id == $userId && $notification->sender_type === $userType;
+        if (!$isRecipient && !$isSender) {
+            abort(403, __('notifications.no_permission'));
+        }
+
         // Mark as read if recipient
-        if ($notification->recipient_id == $userId && $notification->recipient_type == $userType) {
+        if ($isRecipient) {
             $notification->markAsRead();
         }
 
@@ -217,8 +225,8 @@ class NotificationController extends Controller
     {
         [$userId, $userType] = $this->getUserInfo();
 
-        if (($notification->sender_id == $userId && $notification->sender_type == $userType)
-            || ($notification->recipient_id == $userId && $notification->recipient_type == $userType)) {
+        if (($notification->sender_id == $userId && $notification->sender_type === $userType)
+            || ($notification->recipient_id == $userId && $notification->recipient_type === $userType)) {
             $notification->delete();
             return redirect()->back()->with('success', __('notifications.deleted'));
         }

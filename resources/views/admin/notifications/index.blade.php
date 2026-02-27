@@ -220,7 +220,7 @@
                             $senderName = $notification->sender?->name ?? $notification->sender?->short_name ?? $notification->sender?->full_name ?? null;
                             $isUnread = !$notification->is_read && $tab === 'inbox';
                             $senderInitial = $senderName ? mb_strtoupper(mb_substr($senderName, 0, 1)) : '?';
-                            $avatarColors = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-rose-500'];
+                            $avatarColors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500'];
                             $avatarColor = $avatarColors[($notification->sender_id ?? 0) % count($avatarColors)];
                             $date = $notification->sent_at ?? $notification->updated_at;
                             $isToday = $date->isToday();
@@ -228,7 +228,7 @@
                         <a href="{{ route('admin.notifications.show', $notification) }}"
                            class="group flex items-center gap-3 px-3 sm:px-4 py-3 border-b border-gray-100/80 transition-all cursor-pointer {{ $isUnread ? 'bg-white hover:bg-blue-50/30' : 'bg-gray-50/20 hover:bg-gray-50/60' }}">
                             {{-- Avatar --}}
-                            <div class="w-9 h-9 rounded-full {{ $avatarColor }} flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm">
+                            <div class="w-10 h-10 rounded-full {{ $avatarColor }} flex items-center justify-center text-white text-sm font-semibold flex-shrink-0 shadow-sm">
                                 {{ $senderInitial }}
                             </div>
                             {{-- Kontent --}}

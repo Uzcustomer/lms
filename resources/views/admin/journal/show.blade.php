@@ -1623,34 +1623,79 @@
                                 </button>
                             @endif
 
-                            @if($resultsFetched)
-                                <button type="button" id="btn-generate-qaydnoma"
-                                    class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
-                                    onclick="generateYakuniyQaydnoma()"
-                                    title="Yakuniy baholash qaydnomasi (Shakl 12) Word hujjat sifatida yuklab olish">
-                                    Qaydnoma yaratish
-                                </button>
-                            @else
-                                <button type="button" disabled
-                                    class="px-5 py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed text-sm"
-                                    title="Avval OSKI va Test natijalarini tortish kerak">
-                                    Qaydnoma yaratish
-                                </button>
-                            @endif
-
                             <button type="button" id="btn-export-yn-qaydnoma"
-                                class="px-5 py-2.5 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition shadow-sm text-sm"
-                                onclick="exportYnQaydnoma()"
-                                title="Vedomostni Excel (XLSX) jadval sifatida yuklab olish">
+                                class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
+                                onclick="openYnWeightsModal()"
+                                title="Vaznlarni taqsimlab YN qaydnoma (Excel) yaratish">
                                 <svg style="width:14px;height:14px;display:inline-block;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                 </svg>
-                                Vedomost yaratish
+                                YN qaydnoma yaratish
                             </button>
                         </div>
                     </div>
                 </div>
                 @endif
+
+                {{-- YN qaydnoma vazn taqsimlash modali --}}
+                <div id="yn-weights-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeYnWeightsModal()"></div>
+                    <div class="fixed inset-0 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md relative">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h3 class="text-lg font-bold text-gray-800">Vaznlarni taqsimlang</h3>
+                                <p class="text-sm text-gray-500 mt-1">Jami 100 bo'lishi kerak</p>
+                            </div>
+                            <div class="px-6 py-4 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">JN</label>
+                                    <input type="number" id="yn-weight-jn" min="0" max="100" value="30"
+                                        class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        oninput="updateYnWeightsTotal()">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">MT</label>
+                                    <input type="number" id="yn-weight-mt" min="0" max="100" value="10"
+                                        class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        oninput="updateYnWeightsTotal()">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">ON</label>
+                                    <input type="number" id="yn-weight-on" min="0" max="100" value="0"
+                                        class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        oninput="updateYnWeightsTotal()">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">OSKI</label>
+                                    <input type="number" id="yn-weight-oski" min="0" max="100" value="0"
+                                        class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        oninput="updateYnWeightsTotal()">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">Test</label>
+                                    <input type="number" id="yn-weight-test" min="0" max="100" value="60"
+                                        class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        oninput="updateYnWeightsTotal()">
+                                </div>
+                                <div class="flex items-center justify-between pt-2 border-t border-gray-200">
+                                    <span class="text-sm font-bold text-gray-800">Jami:</span>
+                                    <span id="yn-weights-total" class="text-lg font-bold text-green-600">100</span>
+                                </div>
+                                <p id="yn-weights-error" class="text-sm text-red-600 hidden">Jami 100 bo'lishi kerak!</p>
+                            </div>
+                            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                                <button type="button" onclick="closeYnWeightsModal()"
+                                    class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm">
+                                    Bekor qilish
+                                </button>
+                                <button type="button" id="btn-yn-weights-submit" onclick="submitYnQaydnoma()"
+                                    class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm">
+                                    Yaratish
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 {{-- Sababli baholar paneli — YN yuborilgandan keyin ko'rinadi --}}
                 @if(isset($ynSubmission) && $ynSubmission && $approvedExcuses->isNotEmpty())
@@ -4072,13 +4117,62 @@
             });
         }
 
-        // Vedomost yaratish (YN qaydnoma Excel)
-        function exportYnQaydnoma() {
-            const btn = document.getElementById('btn-export-yn-qaydnoma');
+        // YN qaydnoma vazn modali
+        function openYnWeightsModal() {
+            document.getElementById('yn-weights-modal').classList.remove('hidden');
+            updateYnWeightsTotal();
+        }
+
+        function closeYnWeightsModal() {
+            document.getElementById('yn-weights-modal').classList.add('hidden');
+        }
+
+        function updateYnWeightsTotal() {
+            var jn = parseInt(document.getElementById('yn-weight-jn').value) || 0;
+            var mt = parseInt(document.getElementById('yn-weight-mt').value) || 0;
+            var on = parseInt(document.getElementById('yn-weight-on').value) || 0;
+            var oski = parseInt(document.getElementById('yn-weight-oski').value) || 0;
+            var test = parseInt(document.getElementById('yn-weight-test').value) || 0;
+            var total = jn + mt + on + oski + test;
+
+            var totalEl = document.getElementById('yn-weights-total');
+            var errorEl = document.getElementById('yn-weights-error');
+            var submitBtn = document.getElementById('btn-yn-weights-submit');
+
+            totalEl.textContent = total;
+
+            if (total === 100) {
+                totalEl.className = 'text-lg font-bold text-green-600';
+                errorEl.classList.add('hidden');
+                submitBtn.disabled = false;
+                submitBtn.className = 'px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm';
+            } else {
+                totalEl.className = 'text-lg font-bold text-red-600';
+                errorEl.classList.remove('hidden');
+                submitBtn.disabled = true;
+                submitBtn.className = 'px-5 py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed text-sm';
+            }
+        }
+
+        function submitYnQaydnoma() {
+            var jn = parseInt(document.getElementById('yn-weight-jn').value) || 0;
+            var mt = parseInt(document.getElementById('yn-weight-mt').value) || 0;
+            var on = parseInt(document.getElementById('yn-weight-on').value) || 0;
+            var oski = parseInt(document.getElementById('yn-weight-oski').value) || 0;
+            var test = parseInt(document.getElementById('yn-weight-test').value) || 0;
+
+            if (jn + mt + on + oski + test !== 100) {
+                alert('Vaznlar jami 100 bo\'lishi kerak!');
+                return;
+            }
+
+            closeYnWeightsModal();
+
+            var btn = document.getElementById('btn-export-yn-qaydnoma');
             if (!btn) return;
 
             btn.disabled = true;
-            const originalText = btn.innerHTML;
+            var originalText = btn.innerHTML;
             btn.innerHTML = '<svg class="animate-spin" style="height:14px;width:14px;display:inline-block;margin-right:4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle style="opacity:0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path style="opacity:0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Yuklanmoqda...';
             btn.style.opacity = '0.6';
 
@@ -4093,14 +4187,19 @@
                     subject_id: '{{ $subjectId }}',
                     semester_code: '{{ $semesterCode }}',
                     group_hemis_id: '{{ $group->group_hemis_id }}',
+                    weight_jn: jn,
+                    weight_mt: mt,
+                    weight_on: on,
+                    weight_oski: oski,
+                    weight_test: test,
                 })
             })
             .then(function(response) {
                 if (!response.ok) throw new Error('Server xatosi');
-                const contentDisposition = response.headers.get('Content-Disposition');
-                let fileName = 'yn_qaydnoma.xlsx';
+                var contentDisposition = response.headers.get('Content-Disposition');
+                var fileName = 'yn_qaydnoma.xlsx';
                 if (contentDisposition) {
-                    const match = contentDisposition.match(/filename="?([^";\n]+)"?/);
+                    var match = contentDisposition.match(/filename="?([^";\n]+)"?/);
                     if (match && match[1]) fileName = match[1];
                 }
                 return response.blob().then(function(blob) {
@@ -4108,8 +4207,8 @@
                 });
             })
             .then(function(result) {
-                const url = window.URL.createObjectURL(result.blob);
-                const a = document.createElement('a');
+                var url = window.URL.createObjectURL(result.blob);
+                var a = document.createElement('a');
                 a.href = url;
                 a.download = result.fileName;
                 document.body.appendChild(a);
@@ -4125,57 +4224,6 @@
                 btn.innerHTML = originalText;
                 btn.style.opacity = '1';
             });
-        }
-
-        // Yakuniy baholash qaydnomasini yaratish
-        function generateYakuniyQaydnoma() {
-            const btn = document.getElementById('btn-generate-qaydnoma');
-            if (!btn) return;
-
-            btn.disabled = true;
-            btn.textContent = 'Yaratilmoqda...';
-            btn.style.opacity = '0.6';
-
-            // Form yaratib POST orqali fayl yuklash
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '{{ route("admin.journal.generate-yakuniy-qaydnoma") }}';
-            form.style.display = 'none';
-
-            const csrfInput = document.createElement('input');
-            csrfInput.type = 'hidden';
-            csrfInput.name = '_token';
-            csrfInput.value = '{{ csrf_token() }}';
-            form.appendChild(csrfInput);
-
-            const subjectInput = document.createElement('input');
-            subjectInput.type = 'hidden';
-            subjectInput.name = 'subject_id';
-            subjectInput.value = '{{ $subjectId }}';
-            form.appendChild(subjectInput);
-
-            const semesterInput = document.createElement('input');
-            semesterInput.type = 'hidden';
-            semesterInput.name = 'semester_code';
-            semesterInput.value = '{{ $semesterCode }}';
-            form.appendChild(semesterInput);
-
-            const groupInput = document.createElement('input');
-            groupInput.type = 'hidden';
-            groupInput.name = 'group_hemis_id';
-            groupInput.value = '{{ $group->group_hemis_id }}';
-            form.appendChild(groupInput);
-
-            document.body.appendChild(form);
-            form.submit();
-
-            // Tugmani qayta faollashtirish
-            setTimeout(() => {
-                btn.disabled = false;
-                btn.textContent = 'Qaydnoma yaratish';
-                btn.style.opacity = '1';
-                form.remove();
-            }, 3000);
         }
 
         // Sahifa yuklanganda — agar OSKI/Test sanasi o'tgan va natijalar tortilmagan bo'lsa, avtomatik tortish

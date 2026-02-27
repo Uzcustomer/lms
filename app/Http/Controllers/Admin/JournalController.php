@@ -5227,7 +5227,23 @@ class JournalController extends Controller
             'subject_id' => 'required',
             'semester_code' => 'required',
             'group_hemis_id' => 'required',
+            'weight_jn' => 'nullable|integer|min:0|max:100',
+            'weight_mt' => 'nullable|integer|min:0|max:100',
+            'weight_on' => 'nullable|integer|min:0|max:100',
+            'weight_oski' => 'nullable|integer|min:0|max:100',
+            'weight_test' => 'nullable|integer|min:0|max:100',
         ]);
+
+        $weightJn = (int) ($request->weight_jn ?? 30);
+        $weightMt = (int) ($request->weight_mt ?? 10);
+        $weightOn = (int) ($request->weight_on ?? 0);
+        $weightOski = (int) ($request->weight_oski ?? 0);
+        $weightTest = (int) ($request->weight_test ?? 60);
+
+        $totalWeight = $weightJn + $weightMt + $weightOn + $weightOski + $weightTest;
+        if ($totalWeight !== 100) {
+            return response()->json(['error' => 'Vaznlar jami 100 bo\'lishi kerak'], 422);
+        }
 
         $subjectId = $request->subject_id;
         $semesterCode = $request->semester_code;
@@ -5344,6 +5360,10 @@ class JournalController extends Controller
         $sheet->setCellValue('D13', $subject->total_credit ?? 0);
         $sheet->setCellValue('G13', $subject->total_acload ?? 0);
 
+        // Vaznlar haqida ma'lumot
+        $sheet->setCellValue('V18', 'Yakuniy ball');
+        $sheet->setCellValue('V19', "JN={$weightJn}, MT={$weightMt}, ON={$weightOn}, OSKI={$weightOski}, Test={$weightTest}");
+
         // Ma'lumotlarni joylashtirish
         $startRow = 20;
         $maxRow = 49;
@@ -5357,30 +5377,43 @@ class JournalController extends Controller
             $sheet->setCellValue('B' . $row, $student->full_name);
             $sheet->setCellValue('C' . $row, $student->student_id_number);
 
-            $jn = $savedJnGrades[$hemisId] ?? null;
-            if ($jn !== null) {
-                $sheet->setCellValue('D' . $row, (int) $jn);
+            $jnRaw = $savedJnGrades[$hemisId] ?? null;
+            $mtRaw = $savedMtGrades[$hemisId] ?? null;
+            $onRaw = $gradesByType[100][$hemisId] ?? null;
+            $oskiRaw = $gradesByType[101][$hemisId] ?? null;
+            $testRaw = $gradesByType[102][$hemisId] ?? null;
+
+            $jnVal = $jnRaw !== null ? (int) $jnRaw : 0;
+            $mtVal = $mtRaw !== null ? (int) $mtRaw : 0;
+            $onVal = $onRaw !== null ? round((float) $onRaw) : 0;
+            $oskiVal = $oskiRaw !== null ? round((float) $oskiRaw) : 0;
+            $testVal = $testRaw !== null ? round((float) $testRaw) : 0;
+
+            if ($jnRaw !== null) {
+                $sheet->setCellValue('D' . $row, $jnVal);
+            }
+            if ($mtRaw !== null) {
+                $sheet->setCellValue('G' . $row, $mtVal);
+            }
+            if ($onRaw !== null) {
+                $sheet->setCellValue('J' . $row, $onVal);
+            }
+            if ($oskiRaw !== null) {
+                $sheet->setCellValue('P' . $row, $oskiVal);
+            }
+            if ($testRaw !== null) {
+                $sheet->setCellValue('S' . $row, $testVal);
             }
 
-            $mt = $savedMtGrades[$hemisId] ?? null;
-            if ($mt !== null) {
-                $sheet->setCellValue('G' . $row, (int) $mt);
-            }
-
-            $on = $gradesByType[100][$hemisId] ?? null;
-            if ($on !== null) {
-                $sheet->setCellValue('J' . $row, round((float) $on));
-            }
-
-            $oski = $gradesByType[101][$hemisId] ?? null;
-            if ($oski !== null) {
-                $sheet->setCellValue('P' . $row, round((float) $oski));
-            }
-
-            $test = $gradesByType[102][$hemisId] ?? null;
-            if ($test !== null) {
-                $sheet->setCellValue('S' . $row, round((float) $test));
-            }
+            // Vaznli yakuniy ball hisoblash
+            $yakuniyBall = round(
+                ($jnVal * $weightJn / 100) +
+                ($mtVal * $weightMt / 100) +
+                ($onVal * $weightOn / 100) +
+                ($oskiVal * $weightOski / 100) +
+                ($testVal * $weightTest / 100)
+            );
+            $sheet->setCellValue('V' . $row, $yakuniyBall);
         }
 
         $tempDir = storage_path('app/public/yn_qaydnoma_excel');

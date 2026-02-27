@@ -60,7 +60,6 @@
                             @if($reviewerStats->isEmpty())
                                 <p class="text-gray-500 text-center py-6">Hali hech qanday ariza ko'rib chiqilmagan.</p>
                             @else
-                                {{-- Reviewerlar ro'yxati --}}
                                 <div class="p-4">
                                     <div class="overflow-x-auto">
                                         <table class="min-w-full divide-y divide-gray-200">
@@ -75,9 +74,8 @@
                                             </thead>
                                             <tbody class="divide-y divide-gray-200">
                                                 @foreach($reviewerStats as $i => $reviewer)
-                                                    <tr class="cursor-pointer transition"
-                                                        :class="openReviewer === {{ $reviewer->reviewed_by }} ? 'bg-blue-50' : 'hover:bg-gray-50'"
-                                                        @click="openReviewer === {{ $reviewer->reviewed_by }} ? (openReviewer = null, filterStatus = null) : (openReviewer = {{ $reviewer->reviewed_by }}, openName = '{{ addslashes($reviewer->reviewed_by_name) }}', filterStatus = null)">
+                                                    <tr class="cursor-pointer transition hover:bg-gray-50"
+                                                        @click="openReviewer = {{ $reviewer->reviewed_by }}; openName = '{{ addslashes($reviewer->reviewed_by_name) }}'; filterStatus = null">
                                                         <td class="px-4 py-3 text-sm text-gray-500">{{ $i + 1 }}</td>
                                                         <td class="px-4 py-3 text-sm font-semibold text-gray-900">{{ $reviewer->reviewed_by_name }}</td>
                                                         <td class="px-4 py-3 text-center">
@@ -95,77 +93,90 @@
                                         </table>
                                     </div>
                                 </div>
-
-                                {{-- Tanlangan reviewer arizalari paneli --}}
-                                <template x-if="openReviewer !== null">
-                                    <div class="border-t-2 border-blue-200">
-                                        <div class="bg-blue-50 px-4 py-3 flex items-center justify-between">
-                                            <div class="flex items-center gap-3">
-                                                <span class="text-sm font-semibold text-blue-800" x-text="openName + ' — arizalari'"></span>
-                                            </div>
-                                            <div class="flex gap-2">
-                                                <button @click="filterStatus = null"
-                                                        :class="filterStatus === null ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
-                                                        class="px-2.5 py-1 text-xs rounded-full font-medium transition border">
-                                                    Barchasi
-                                                </button>
-                                                <button @click="filterStatus = 'approved'"
-                                                        :class="filterStatus === 'approved' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-700 hover:bg-green-50 border-green-200'"
-                                                        class="px-2.5 py-1 text-xs rounded-full font-medium transition border">
-                                                    Tasdiqlangan
-                                                </button>
-                                                <button @click="filterStatus = 'rejected'"
-                                                        :class="filterStatus === 'rejected' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-700 hover:bg-red-50 border-red-200'"
-                                                        class="px-2.5 py-1 text-xs rounded-full font-medium transition border">
-                                                    Rad etilgan
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="max-h-80 overflow-y-auto">
-                                            <table class="min-w-full divide-y divide-gray-200 text-xs">
-                                                <thead class="bg-gray-100 sticky top-0">
-                                                    <tr>
-                                                        <th class="px-3 py-2 text-left font-medium text-gray-500">ID</th>
-                                                        <th class="px-3 py-2 text-left font-medium text-gray-500">Talaba</th>
-                                                        <th class="px-3 py-2 text-left font-medium text-gray-500">Guruh</th>
-                                                        <th class="px-3 py-2 text-left font-medium text-gray-500">Sabab</th>
-                                                        <th class="px-3 py-2 text-left font-medium text-gray-500">Sanalar</th>
-                                                        <th class="px-3 py-2 text-center font-medium text-gray-500">Holat</th>
-                                                        <th class="px-3 py-2 text-left font-medium text-gray-500">Ko'rib chiqilgan</th>
-                                                        <th class="px-3 py-2 text-center font-medium text-gray-500"></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody class="divide-y divide-gray-100">
-                                                    @foreach($reviewerStats as $reviewer)
-                                                        @foreach(($reviewerExcuses[$reviewer->reviewed_by] ?? collect()) as $exc)
-                                                            <tr x-show="openReviewer === {{ $reviewer->reviewed_by }} && (filterStatus === null || filterStatus === '{{ $exc->status }}')"
-                                                                class="hover:bg-blue-50 transition">
-                                                                <td class="px-3 py-2 text-gray-500">{{ $exc->id }}</td>
-                                                                <td class="px-3 py-2 font-medium text-gray-900">{{ $exc->student_full_name }}</td>
-                                                                <td class="px-3 py-2 text-gray-500">{{ $exc->group_name }}</td>
-                                                                <td class="px-3 py-2 text-gray-700">{{ $exc->reason_label }}</td>
-                                                                <td class="px-3 py-2 text-gray-500">{{ $exc->start_date->format('d.m') }}-{{ $exc->end_date->format('d.m.Y') }}</td>
-                                                                <td class="px-3 py-2 text-center">
-                                                                    @if($exc->status === 'approved')
-                                                                        <span class="px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">Tasdiqlangan</span>
-                                                                    @else
-                                                                        <span class="px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">Rad etilgan</span>
-                                                                    @endif
-                                                                </td>
-                                                                <td class="px-3 py-2 text-gray-500">{{ $exc->reviewed_at ? $exc->reviewed_at->format('d.m.Y H:i') : '-' }}</td>
-                                                                <td class="px-3 py-2 text-center">
-                                                                    <a href="{{ route('admin.absence-excuses.show', $exc->id) }}"
-                                                                       class="text-indigo-600 hover:text-indigo-800 font-medium">Ko'rish</a>
-                                                                </td>
-                                                            </tr>
-                                                        @endforeach
-                                                    @endforeach
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </template>
                             @endif
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Ikkinchi modal: Reviewer arizalari --}}
+                <div x-show="openReviewer !== null"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="fixed inset-0 z-[60] overflow-y-auto"
+                     @keydown.escape.window="openReviewer = null">
+                    <div class="flex items-center justify-center min-h-screen px-4 py-4">
+                        <div class="fixed inset-0 bg-gray-900 bg-opacity-50 transition-opacity" @click="openReviewer = null; filterStatus = null"></div>
+                        <div class="relative bg-white rounded-lg shadow-2xl w-full z-10 max-h-[95vh] flex flex-col mx-4">
+                            <div class="flex items-center justify-between p-4 border-b bg-indigo-50 rounded-t-lg flex-shrink-0">
+                                <h3 class="text-lg font-semibold text-indigo-800" x-text="openName + ' — arizalari'"></h3>
+                                <div class="flex items-center gap-3">
+                                    <div class="flex gap-2">
+                                        <button @click="filterStatus = null"
+                                                :class="filterStatus === null ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
+                                                class="px-3 py-1.5 text-xs rounded-full font-medium transition border">
+                                            Barchasi
+                                        </button>
+                                        <button @click="filterStatus = 'approved'"
+                                                :class="filterStatus === 'approved' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-green-700 hover:bg-green-50 border-green-200'"
+                                                class="px-3 py-1.5 text-xs rounded-full font-medium transition border">
+                                            Tasdiqlangan
+                                        </button>
+                                        <button @click="filterStatus = 'rejected'"
+                                                :class="filterStatus === 'rejected' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-700 hover:bg-red-50 border-red-200'"
+                                                class="px-3 py-1.5 text-xs rounded-full font-medium transition border">
+                                            Rad etilgan
+                                        </button>
+                                    </div>
+                                    <button @click="openReviewer = null; filterStatus = null"
+                                            class="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-2">&times;</button>
+                                </div>
+                            </div>
+                            <div class="flex-1 overflow-y-auto">
+                                <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                    <thead class="bg-gray-50 sticky top-0">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-500 text-xs">ID</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-500 text-xs">Talaba</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-500 text-xs">Guruh</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-500 text-xs">Sabab</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-500 text-xs">Sanalar</th>
+                                            <th class="px-4 py-3 text-center font-medium text-gray-500 text-xs">Holat</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-500 text-xs">Ko'rib chiqilgan</th>
+                                            <th class="px-4 py-3 text-center font-medium text-gray-500 text-xs"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        @foreach($reviewerStats as $reviewer)
+                                            @foreach(($reviewerExcuses[$reviewer->reviewed_by] ?? collect()) as $exc)
+                                                <tr x-show="openReviewer === {{ $reviewer->reviewed_by }} && (filterStatus === null || filterStatus === '{{ $exc->status }}')"
+                                                    class="hover:bg-blue-50 transition">
+                                                    <td class="px-4 py-3 text-gray-500">{{ $exc->id }}</td>
+                                                    <td class="px-4 py-3 font-medium text-gray-900">{{ $exc->student_full_name }}</td>
+                                                    <td class="px-4 py-3 text-gray-500">{{ $exc->group_name }}</td>
+                                                    <td class="px-4 py-3 text-gray-700">{{ $exc->reason_label }}</td>
+                                                    <td class="px-4 py-3 text-gray-500">{{ $exc->start_date->format('d.m') }}-{{ $exc->end_date->format('d.m.Y') }}</td>
+                                                    <td class="px-4 py-3 text-center">
+                                                        @if($exc->status === 'approved')
+                                                            <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold text-xs">Tasdiqlangan</span>
+                                                        @else
+                                                            <span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold text-xs">Rad etilgan</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="px-4 py-3 text-gray-500">{{ $exc->reviewed_at ? $exc->reviewed_at->format('d.m.Y H:i') : '-' }}</td>
+                                                    <td class="px-4 py-3 text-center">
+                                                        <a href="{{ route('admin.absence-excuses.show', $exc->id) }}"
+                                                           class="text-indigo-600 hover:text-indigo-800 font-medium">Ko'rish</a>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -178,7 +178,7 @@
 
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']) || $hasAnyRole('fan_masuli'))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']) || $hasAnyRole(['fan_masuli', 'kafedra_mudiri', 'dekan']))
         <a href="{{ route('admin.ktr.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.ktr.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

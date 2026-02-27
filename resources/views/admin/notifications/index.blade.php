@@ -57,7 +57,7 @@
                         </a>
                     </nav>
 
-                    @if($tab === 'inbox' && $subjects->count() > 1)
+                    @if($tab === 'inbox' && $subjects->count() > 0)
                     <div class="border-t border-gray-200 px-2 pt-2 pb-3">
                         <div class="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('notifications.subjects') }}</div>
                         <div class="space-y-0.5 max-h-48 overflow-y-auto">
@@ -191,7 +191,7 @@
                         </a>
 
                         {{-- Mavzu filtri --}}
-                        @if($subjects->count() > 1)
+                        @if($subjects->count() > 0)
                         <span class="w-px h-4 bg-gray-200 mx-1 flex-shrink-0"></span>
                         <span class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mr-1 flex-shrink-0">{{ __('notifications.subject') }}:</span>
                         <select onchange="if(this.value){window.location='{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus])) }}&subject='+encodeURIComponent(this.value)}else{window.location='{{ route('admin.notifications.index', ['tab' => $tab, 'search' => $search, 'sender_id' => $senderFilter, 'status' => $readStatus]) }}'}"

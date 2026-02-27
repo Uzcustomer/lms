@@ -103,6 +103,8 @@ class NotificationController extends Controller
 
                 // Unikal mavzular ro'yxati (har bir mavzu nechta xabar borligini ham ko'rsatish)
                 $subjects = Notification::inbox($userId)
+                    ->whereNotNull('subject')
+                    ->where('subject', '!=', '')
                     ->select('subject')
                     ->selectRaw('count(*) as count')
                     ->groupBy('subject')

@@ -20,7 +20,7 @@ class SyncReportDataJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 1;
-    public int $timeout = 600;
+    public int $timeout = 900; // 15 daqiqa — HEMIS API sekin bo'lishi mumkin
 
     private string $dateFrom;
     private string $dateTo;
@@ -116,11 +116,21 @@ class SyncReportDataJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error("[SyncReportDataJob] Failed: {$exception->getMessage()}");
+        Log::error("[SyncReportDataJob] Failed: {$exception->getMessage()}", [
+            'dateFrom' => $this->dateFrom,
+            'dateTo' => $this->dateTo,
+            'trace' => mb_substr($exception->getTraceAsString(), 0, 500),
+        ]);
+
+        $msg = $exception->getMessage();
+        // "attempted too many times" — odatda timeout yoki worker restart sabab
+        if (str_contains($msg, 'attempted too many')) {
+            $msg = "Vaqt tugadi yoki server qayta ishga tushdi. Qayta urinib ko'ring.";
+        }
 
         Cache::put($this->syncKey, [
             'status' => 'failed',
-            'message' => 'Job xato: ' . mb_substr($exception->getMessage(), 0, 120),
+            'message' => mb_substr($msg, 0, 120),
             'current' => 0,
             'total' => 0,
             'percent' => 0,

@@ -627,7 +627,8 @@ class StudentApiController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $grades = StudentGrade::where('student_hemis_id', $student->hemis_id)
+        $grades = DB::table('student_grades')
+            ->where('student_hemis_id', $student->hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
@@ -667,7 +668,8 @@ class StudentApiController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $pendingLessons = StudentGrade::where('student_hemis_id', $student->hemis_id)
+        $pendingLessons = DB::table('student_grades')
+            ->where('student_hemis_id', $student->hemis_id)
             ->whereIn('status', ['pending', 'retake'])
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('lesson_date')

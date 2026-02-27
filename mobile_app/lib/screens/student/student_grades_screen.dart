@@ -1067,79 +1067,74 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
     Color borderColor,
   ) {
     const double cellWidth = 56;
+    const double tableHeight = 80;
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: borderColor, width: 1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: SingleChildScrollView(
+    debugPrint('JN_TABLE: ${dailyData.length} dates, total width=${dailyData.length * cellWidth}');
+
+    return SizedBox(
+      height: tableHeight,
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: SizedBox(
-          width: dailyData.length * cellWidth,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header - dates
-              Container(
-                color: headerBg,
-                child: Row(
-                  children: dailyData.map((d) => SizedBox(
+        physics: const ClampingScrollPhysics(),
+        itemCount: dailyData.length,
+        itemBuilder: (context, index) {
+          final d = dailyData[index];
+          final avg = d['avg'] as int;
+          final hasGrades = d['hasGrades'] as bool;
+
+          final String text;
+          final Color color;
+
+          if (!hasGrades) {
+            text = 'NB';
+            color = AppTheme.errorColor;
+          } else if (avg > 0) {
+            text = avg.toString();
+            color = _gradeColor(avg);
+          } else {
+            text = '-';
+            color = cellText;
+          }
+
+          return Container(
+            width: cellWidth,
+            decoration: BoxDecoration(
+              border: Border(
+                right: BorderSide(color: borderColor, width: 0.5),
+                left: index == 0 ? BorderSide(color: borderColor, width: 0.5) : BorderSide.none,
+              ),
+            ),
+            child: Column(
+              children: [
+                // Date header
+                Container(
+                  width: cellWidth,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  color: headerBg,
+                  child: Text(
+                    _formatDate(d['date'] as String?),
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                Container(height: 1, color: borderColor),
+                // Grade value
+                Expanded(
+                  child: Container(
                     width: cellWidth,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        _formatDate(d['date'] as String?),
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
-                        textAlign: TextAlign.center,
-                      ),
+                    color: cellBg,
+                    alignment: Alignment.center,
+                    child: Text(
+                      text,
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color),
+                      textAlign: TextAlign.center,
                     ),
-                  )).toList(),
+                  ),
                 ),
-              ),
-              // Divider
-              Container(height: 1, color: borderColor),
-              // Values - daily averages
-              Container(
-                color: cellBg,
-                child: Row(
-                  children: dailyData.map((d) {
-                    final avg = d['avg'] as int;
-                    final hasGrades = d['hasGrades'] as bool;
-
-                    final String text;
-                    final Color color;
-
-                    if (!hasGrades) {
-                      text = 'NB';
-                      color = AppTheme.errorColor;
-                    } else if (avg > 0) {
-                      text = avg.toString();
-                      color = _gradeColor(avg);
-                    } else {
-                      text = '-';
-                      color = cellText;
-                    }
-
-                    return SizedBox(
-                      width: cellWidth,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Text(
-                          text,
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

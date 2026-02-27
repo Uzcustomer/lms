@@ -376,6 +376,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/top-students/data', [ReportController::class, 'topStudentsData'])->name('reports.top-students.data');
 
         Route::get('/reports/users-without-ratings', [ReportController::class, 'usersWithoutRatings'])->name('reports.users-without-ratings');
+        Route::get('/reports/users-without-ratings/data', [ReportController::class, 'usersWithoutRatingsData'])->name('reports.users-without-ratings.data');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 

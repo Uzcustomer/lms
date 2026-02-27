@@ -822,11 +822,11 @@ class ReportController extends Controller
         }
 
         if ($request->filled('date_from')) {
-            $scheduleQuery->where('sch.lesson_date', '>=', $request->date_from);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) >= ?', [$request->date_from]);
         }
 
         if ($request->filled('date_to')) {
-            $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$request->date_to]);
         }
 
         // Dars jadvalini olish (guruh bo'yicha aggregatsiya)
@@ -1239,10 +1239,10 @@ class ReportController extends Controller
             ->whereNull('sch.deleted_at');
 
         if ($request->filled('date_from')) {
-            $scheduleQuery->where('sch.lesson_date', '>=', $request->date_from);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) >= ?', [$request->date_from]);
         }
         if ($request->filled('date_to')) {
-            $scheduleQuery->where('sch.lesson_date', '<=', $request->date_to);
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$request->date_to]);
         }
         if ($request->filled('auditorium')) {
             $scheduleQuery->where('sch.auditorium_code', $request->auditorium);

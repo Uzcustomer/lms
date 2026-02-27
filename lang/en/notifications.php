@@ -63,6 +63,7 @@ return [
     'filter_read' => 'Read',
     'filter_type' => 'Type',
     'clear_filters' => 'Clear',
+    'subjects' => 'Subjects',
 
     // Reply
     'reply' => 'Reply',

@@ -63,6 +63,7 @@ return [
     'filter_read' => "O'qilgan",
     'filter_type' => 'Turi',
     'clear_filters' => 'Tozalash',
+    'subjects' => 'Mavzular',
 
     // Reply
     'reply' => 'Javob berish',

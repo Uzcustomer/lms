@@ -63,6 +63,7 @@ return [
     'filter_read' => 'Прочитанные',
     'filter_type' => 'Тип',
     'clear_filters' => 'Сбросить',
+    'subjects' => 'Темы',
 
     // Reply
     'reply' => 'Ответить',

@@ -500,18 +500,16 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   ) {
     final subjectId = subject['subject_id'];
     if (subjectId == null) return;
+    final subjectName = subject['subject_name']?.toString() ?? '';
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      enableDrag: false,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _JnGradesSheet(
-        subjectId: subjectId is int ? subjectId : int.parse(subjectId.toString()),
-        label: label,
-        fullLabel: fullLabel,
-        isDark: isDark,
-        l: l,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _JnGradesPage(
+          subjectId: subjectId is int ? subjectId : int.parse(subjectId.toString()),
+          subjectName: subjectName,
+          fullLabel: fullLabel,
+        ),
       ),
     );
   }
@@ -829,29 +827,24 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   }
 }
 
-class _JnGradesSheet extends StatefulWidget {
+class _JnGradesPage extends StatefulWidget {
   final int subjectId;
-  final String label;
+  final String subjectName;
   final String fullLabel;
-  final bool isDark;
-  final AppLocalizations l;
 
-  const _JnGradesSheet({
+  const _JnGradesPage({
     required this.subjectId,
-    required this.label,
+    required this.subjectName,
     required this.fullLabel,
-    required this.isDark,
-    required this.l,
   });
 
   @override
-  State<_JnGradesSheet> createState() => _JnGradesSheetState();
+  State<_JnGradesPage> createState() => _JnGradesPageState();
 }
 
-class _JnGradesSheetState extends State<_JnGradesSheet> {
+class _JnGradesPageState extends State<_JnGradesPage> {
   bool _isLoading = true;
   String? _error;
-  // Daily averages: [{date: '2025-02-20', avg: 72}, ...]
   List<Map<String, dynamic>> _amaliyDaily = [];
   List<Map<String, dynamic>> _maruzaDaily = [];
 
@@ -866,7 +859,6 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
       final service = StudentService(ApiService());
       final response = await service.getSubjectGrades(widget.subjectId);
 
-      // Parse API response
       List<dynamic> grades = [];
       final data = response['data'];
       if (data is Map<String, dynamic>) {
@@ -878,7 +870,6 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
         grades = (response['grades'] as List<dynamic>?) ?? [];
       }
 
-      // Separate by type
       final amaliyRaw = <Map<String, dynamic>>[];
       final maruzaRaw = <Map<String, dynamic>>[];
 
@@ -911,9 +902,7 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
     }
   }
 
-  /// Group grades by lesson_date and compute daily average (like web journal)
   List<Map<String, dynamic>> _computeDailyAverages(List<Map<String, dynamic>> grades) {
-    // Group by date
     final byDate = <String, List<num>>{};
     for (final g in grades) {
       final date = g['lesson_date']?.toString() ?? '';
@@ -924,7 +913,6 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
       final reason = g['reason']?.toString();
       final status = g['status']?.toString();
 
-      // Match web journal logic for effective grade
       if (status == 'pending' && reason == 'low_grade' && grade is num) {
         byDate.putIfAbsent(date, () => []).add(grade);
       } else if (status == 'pending') {
@@ -932,14 +920,12 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
       } else if (retake != null && retake is num && retake > 0) {
         byDate.putIfAbsent(date, () => []).add(retake);
       } else if (reason == 'absent' && (grade == null || grade == 0)) {
-        // NB - don't add to average
         byDate.putIfAbsent(date, () => []);
       } else if (grade != null && grade is num) {
         byDate.putIfAbsent(date, () => []).add(grade);
       }
     }
 
-    // Sort by date and compute averages
     final dates = byDate.keys.toList()..sort();
     return dates.map((date) {
       final vals = byDate[date]!;
@@ -954,188 +940,160 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
     if (dateStr == null || dateStr.isEmpty) return '-';
     try {
       final date = DateTime.parse(dateStr);
-      return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}';
+      return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
     } catch (_) {
       return dateStr;
     }
   }
 
-  Color _gradeColor(num val) {
-    if (val >= 86) return AppTheme.successColor;
-    if (val >= 71) return AppTheme.primaryColor;
-    if (val >= 56) return AppTheme.warningColor;
-    return AppTheme.errorColor;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final bgColor = widget.isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = widget.isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final secondaryText = widget.isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final headerBg = widget.isDark ? AppTheme.darkSurface : AppTheme.primaryColor;
-    final borderColor = widget.isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final secondaryText = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
-    return Container(
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+    return Scaffold(
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        title: Text(
+          widget.subjectName,
+          style: const TextStyle(fontSize: 15),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        centerTitle: true,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Title bar with close button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
-            child: Row(
-              children: [
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE3F2FD),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.assignment, color: Color(0xFF1565C0), size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(widget.fullLabel,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Icon(Icons.close, color: secondaryText),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Content
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(32),
-              child: CircularProgressIndicator(),
-            )
-          else if (_error != null)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(_error!, style: TextStyle(color: secondaryText)),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_amaliyDaily.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(widget.l.practicalClasses,
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textColor)),
-                    ),
-                    _buildDailyTable(_amaliyDaily, headerBg, bgColor, textColor, borderColor),
-                  ],
-                  if (_maruzaDaily.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(widget.l.lectures,
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textColor)),
-                    ),
-                    _buildDailyTable(_maruzaDaily, headerBg, bgColor, textColor, borderColor),
-                  ],
-                  if (_amaliyDaily.isEmpty && _maruzaDaily.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Center(
-                        child: Text(widget.l.noData, style: TextStyle(color: secondaryText, fontSize: 14)),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(_error!, style: TextStyle(color: secondaryText)),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadGrades,
+                        child: const Text('Qayta yuklash'),
                       ),
-                    ),
-                ],
-              ),
-            ),
-        ],
-      ),
+                    ],
+                  ),
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (_amaliyDaily.isNotEmpty) ...[
+                      Text(
+                        'Amaliy mashg\'ulotlar',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildGradeGrid(_amaliyDaily, cardColor, textColor, secondaryText),
+                    ],
+                    if (_maruzaDaily.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      Text(
+                        'Ma\'ruzalar',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildGradeGrid(_maruzaDaily, cardColor, textColor, secondaryText),
+                    ],
+                    if (_amaliyDaily.isEmpty && _maruzaDaily.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 60),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(Icons.school_outlined, size: 48, color: secondaryText),
+                              const SizedBox(height: 12),
+                              Text('Ma\'lumot topilmadi', style: TextStyle(color: secondaryText)),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
     );
   }
 
-  Widget _buildDailyTable(
+  Widget _buildGradeGrid(
     List<Map<String, dynamic>> dailyData,
-    Color headerBg,
-    Color cellBg,
-    Color cellText,
-    Color borderColor,
+    Color cardColor,
+    Color textColor,
+    Color secondaryText,
   ) {
-    const double cellWidth = 56;
-    const double tableHeight = 80;
-
-    debugPrint('JN_TABLE: ${dailyData.length} dates, total width=${dailyData.length * cellWidth}');
-
-    return SizedBox(
-      height: tableHeight,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        physics: const ClampingScrollPhysics(),
-        itemCount: dailyData.length,
-        itemBuilder: (context, index) {
-          final d = dailyData[index];
-          final avg = d['avg'] as int;
-          final hasGrades = d['hasGrades'] as bool;
-
-          final String text;
-          final Color color;
-
-          if (!hasGrades) {
-            text = 'NB';
-            color = AppTheme.errorColor;
-          } else if (avg > 0) {
-            text = avg.toString();
-            color = _gradeColor(avg);
-          } else {
-            text = '-';
-            color = cellText;
-          }
-
-          return Container(
-            width: cellWidth,
-            decoration: BoxDecoration(
-              border: Border(
-                right: BorderSide(color: borderColor, width: 0.5),
-                left: index == 0 ? BorderSide(color: borderColor, width: 0.5) : BorderSide.none,
-              ),
-            ),
-            child: Column(
-              children: [
-                // Date header
-                Container(
-                  width: cellWidth,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  color: headerBg,
-                  child: Text(
-                    _formatDate(d['date'] as String?),
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                Container(height: 1, color: borderColor),
-                // Grade value
-                Expanded(
-                  child: Container(
-                    width: cellWidth,
-                    color: cellBg,
-                    alignment: Alignment.center,
-                    child: Text(
-                      text,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+    // 2 columns, each row has 2 date-grade items
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        childAspectRatio: 2.8,
       ),
+      itemCount: dailyData.length,
+      itemBuilder: (context, index) {
+        final d = dailyData[index];
+        final avg = d['avg'] as int;
+        final hasGrades = d['hasGrades'] as bool;
+
+        Color bgColor;
+        Color gradeTextColor;
+        String gradeText;
+
+        if (!hasGrades) {
+          bgColor = AppTheme.errorColor;
+          gradeTextColor = Colors.white;
+          gradeText = 'NB';
+        } else if (avg >= 70) {
+          bgColor = const Color(0xFF43A047);
+          gradeTextColor = Colors.white;
+          gradeText = avg.toString();
+        } else if (avg > 0) {
+          bgColor = const Color(0xFF1E88E5);
+          gradeTextColor = Colors.white;
+          gradeText = avg.toString();
+        } else {
+          bgColor = cardColor;
+          gradeTextColor = secondaryText;
+          gradeText = '-';
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  _formatDate(d['date'] as String?),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: gradeTextColor.withAlpha(200),
+                  ),
+                ),
+              ),
+              Text(
+                gradeText,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: gradeTextColor,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

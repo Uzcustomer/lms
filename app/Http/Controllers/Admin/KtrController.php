@@ -27,8 +27,12 @@ class KtrController extends Controller
     private function checkKtrAccess(): void
     {
         $user = auth()->user();
-        $isAdmin = $user && $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
-        if (!$isAdmin && !is_active_fan_masuli()) {
+        if (!$user) {
+            abort(403);
+        }
+        $isAdmin = $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
+        $hasFanMasuliRole = $user->hasRole('fan_masuli');
+        if (!$isAdmin && !$hasFanMasuliRole) {
             abort(403, 'KTR sahifasiga faqat fan mas\'ullari kirishi mumkin.');
         }
     }
@@ -71,7 +75,9 @@ class KtrController extends Controller
         };
 
         // Fan mas'uli uchun faqat mas'ul fanlarni ko'rsatish
-        $isFanMasuli = is_active_fan_masuli();
+        $user = auth()->user();
+        $isAdmin = $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
+        $isFanMasuli = !$isAdmin && $user->hasRole('fan_masuli');
         $fanMasuliSubjectIds = $isFanMasuli ? get_fan_masuli_subject_ids() : [];
 
         // Natija query

@@ -333,7 +333,7 @@
     </div>
 
     <!-- KTR Warning Modal (fan masuli uchun) -->
-    <div id="ktr-warning-modal-overlay" class="ktr-modal-overlay" style="display:none;z-index:60;" onclick="closeWarningModal(event)">
+    <div id="ktr-warning-modal-overlay" class="ktr-modal-overlay" style="display:none;z-index:10000;" onclick="closeWarningModal(event)">
         <div class="ktr-warning-modal" onclick="event.stopPropagation()">
             <div class="ktr-warning-modal-header">
                 <div style="display:flex;align-items:center;gap:8px;">

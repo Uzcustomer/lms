@@ -4414,12 +4414,11 @@ class ReportController extends Controller
             ->pluck('gk')
             ->flip();
 
-        // Dars ochilganlarni tekshirish
+        // Dars ochilganlarni tekshirish (barcha statuslar — umuman ochilganmi)
         $openingsByKey = DB::table('lesson_openings')
-            ->where('status', 'active')
-            ->where('deadline', '>', now())
+            ->whereIn('group_hemis_id', $groupHemisIds)
             ->get()
-            ->keyBy(function ($item) {
+            ->groupBy(function ($item) {
                 return $item->group_hemis_id . '|' . $item->subject_id . '|' . $item->semester_code . '|' . \Carbon\Carbon::parse($item->lesson_date)->format('Y-m-d');
             });
 

@@ -249,6 +249,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-yn-consents', [JournalController::class, 'getYnConsents'])->name('get-yn-consents');
             Route::post('/save-excuse-grade', [JournalController::class, 'saveExcuseGrade'])->name('save-excuse-grade');
             Route::post('/submit-excuse-to-yn', [JournalController::class, 'submitExcuseToYn'])->name('submit-excuse-to-yn');
+            Route::post('/fetch-yn-results', [JournalController::class, 'fetchYnResults'])->name('fetch-yn-results');
+            Route::post('/generate-yakuniy-qaydnoma', [JournalController::class, 'generateYakuniyQaydnoma'])->name('generate-yakuniy-qaydnoma');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');

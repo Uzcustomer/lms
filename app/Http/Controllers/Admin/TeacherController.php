@@ -281,9 +281,16 @@ class TeacherController extends Controller
                 $query->where('is_active', true);
             }
 
-            // Kafedra bo'yicha filtrlash
-            if ($filterByDept && $teacher && $teacher->department_hemis_id) {
-                $query->where('department_id', $teacher->department_hemis_id);
+            // Kafedra bo'yicha filtrlash (department_id yoki department_name)
+            if ($filterByDept && $teacher) {
+                $query->where(function ($q) use ($teacher) {
+                    if ($teacher->department_hemis_id) {
+                        $q->where('department_id', $teacher->department_hemis_id);
+                    }
+                    if ($teacher->department) {
+                        $q->orWhere('department_name', $teacher->department);
+                    }
+                });
             }
 
             return $query

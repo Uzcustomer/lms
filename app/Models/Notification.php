@@ -18,6 +18,7 @@ class Notification extends Model
         'subject',
         'body',
         'type',
+        'url',
         'data',
         'is_read',
         'read_at',
@@ -51,20 +52,38 @@ class Notification extends Model
 
     public function scopeInbox($query, $userId, $userType = null)
     {
-        return $query->where('recipient_id', $userId)
-                     ->where('is_draft', false);
+        $query->where('recipient_id', $userId)
+              ->where('is_draft', false);
+
+        if ($userType) {
+            $query->where('recipient_type', $userType);
+        }
+
+        return $query;
     }
 
     public function scopeSent($query, $userId, $userType = null)
     {
-        return $query->where('sender_id', $userId)
-                     ->where('is_draft', false);
+        $query->where('sender_id', $userId)
+              ->where('is_draft', false);
+
+        if ($userType) {
+            $query->where('sender_type', $userType);
+        }
+
+        return $query;
     }
 
     public function scopeDrafts($query, $userId, $userType = null)
     {
-        return $query->where('sender_id', $userId)
-                     ->where('is_draft', true);
+        $query->where('sender_id', $userId)
+              ->where('is_draft', true);
+
+        if ($userType) {
+            $query->where('sender_type', $userType);
+        }
+
+        return $query;
     }
 
     public function scopeUnread($query)

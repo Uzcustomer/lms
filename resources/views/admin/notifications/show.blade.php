@@ -91,10 +91,10 @@
                             @php
                                 $senderName = $notification->sender?->name ?? $notification->sender?->short_name ?? $notification->sender?->full_name ?? null;
                                 $initial = $senderName ? mb_strtoupper(mb_substr($senderName, 0, 1)) : '?';
-                                $colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500'];
-                                $colorIndex = $notification->sender_id ? ($notification->sender_id % count($colors)) : 0;
+                                $avatarColors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500'];
+                                $colorIndex = $notification->sender_id ? ($notification->sender_id % count($avatarColors)) : 0;
                             @endphp
-                            <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0 {{ $colors[$colorIndex] }}">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0 {{ $avatarColors[$colorIndex] }}">
                                 {{ $initial }}
                             </div>
                             <div class="flex-1 min-w-0" x-data="{ showDetails: false }">
@@ -215,6 +215,62 @@
                                 @endif
                             @endif
                         </div>
+
+                        <!-- Javob berish formasi -->
+                        @if($notification->sender_id && $notification->sender_id != auth()->id())
+                        <div class="mx-5 sm:mx-6 mb-6 sm:ml-[4.5rem]" x-data="{ replyOpen: false }">
+                            <!-- Javob tugmasi -->
+                            <div x-show="!replyOpen">
+                                <button @click="replyOpen = true; $nextTick(() => $refs.replyBody.focus())"
+                                        class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all shadow-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                                    </svg>
+                                    {{ __('notifications.reply') }}
+                                </button>
+                            </div>
+
+                            <!-- Javob formasi -->
+                            <div x-show="replyOpen" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0">
+                                <form method="POST" action="{{ route('admin.notifications.reply', $notification) }}">
+                                    @csrf
+                                    <div class="border border-gray-300 rounded-lg overflow-hidden shadow-sm focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 transition-all">
+                                        <!-- Sarlavha -->
+                                        <div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                                            <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                                            </svg>
+                                            <span class="text-xs text-gray-500">
+                                                {{ __('notifications.reply_to') }}
+                                                <span class="font-semibold text-gray-700">{{ $senderName ?? __('notifications.system') }}</span>
+                                            </span>
+                                        </div>
+
+                                        <!-- Matn kiritish -->
+                                        <textarea x-ref="replyBody" name="body" rows="4"
+                                                  placeholder="{{ __('notifications.reply_placeholder') }}"
+                                                  class="w-full px-4 py-3 text-sm text-gray-800 border-0 focus:ring-0 resize-none placeholder-gray-400"
+                                                  required></textarea>
+
+                                        <!-- Amallar -->
+                                        <div class="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-t border-gray-200">
+                                            <button type="button" @click="replyOpen = false"
+                                                    class="text-xs text-gray-500 hover:text-gray-700 font-medium px-3 py-1.5 rounded hover:bg-gray-200 transition-colors">
+                                                {{ __('notifications.cancel') }}
+                                            </button>
+                                            <button type="submit"
+                                                    class="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                                </svg>
+                                                {{ __('notifications.send') }}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        @endif
                     </div>
                 </div>
             </div>

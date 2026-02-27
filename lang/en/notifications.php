@@ -56,4 +56,25 @@ return [
     'no_permission' => 'You do not have permission to perform this action',
     'all_marked_read' => 'All messages marked as read',
     'confirm_delete' => 'Are you sure you want to delete?',
+
+    // Filters
+    'filter_status' => 'Status',
+    'filter_unread' => 'Unread',
+    'filter_read' => 'Read',
+    'filter_type' => 'Type',
+    'clear_filters' => 'Clear',
+    'subjects' => 'Subjects',
+
+    // Multi-select
+    'select_all' => 'Select all',
+    'deselect_all' => 'Deselect all',
+    'selected_count' => 'selected',
+    'search_recipients' => 'Search employees...',
+
+    // Reply
+    'reply' => 'Reply',
+    'reply_to' => 'Reply to:',
+    'reply_placeholder' => 'Type your reply...',
+    'reply_sent' => 'Reply sent successfully',
+    'cancel' => 'Cancel',
 ];

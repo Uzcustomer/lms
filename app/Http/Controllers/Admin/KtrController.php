@@ -56,6 +56,10 @@ class KtrController extends Controller
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id');
         };
 
+        // Fan mas'uli uchun faqat mas'ul fanlarni ko'rsatish
+        $isFanMasuli = is_active_fan_masuli();
+        $fanMasuliSubjectIds = $isFanMasuli ? get_fan_masuli_subject_ids() : [];
+
         // Natija query
         $query = $baseQuery()
             ->select([
@@ -74,17 +78,9 @@ class KtrController extends Controller
                 's.level_code',
             ]);
 
-        // Fan masuli tekshiruvi
-        $user = auth()->user();
-        $isFanMasuli = !$user->hasRole(['superadmin', 'admin', 'kichik_admin']) && $user->hasRole('fan_masuli');
-
-        if ($isFanMasuli && $user instanceof Teacher) {
+        if ($isFanMasuli && !empty($fanMasuliSubjectIds)) {
             // Fan masuli - faqat biriktirilgan fanlar, filtrlar kerak emas
-            $responsibleCsIds = DB::table('teacher_responsible_subjects')
-                ->where('teacher_id', $user->id)
-                ->pluck('curriculum_subject_id')
-                ->toArray();
-            $query->whereIn('cs.id', $responsibleCsIds);
+            $query->whereIn('cs.id', $fanMasuliSubjectIds);
         } else {
             // Admin/kafedra_mudiri - barcha filtrlar qo'llaniladi
             if ($selectedEducationType) {

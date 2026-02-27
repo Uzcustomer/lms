@@ -56,4 +56,25 @@ return [
     'no_permission' => 'Sizda bu amalni bajarish huquqi yo\'q',
     'all_marked_read' => 'Barcha xabarlar o\'qilgan deb belgilandi',
     'confirm_delete' => 'Haqiqatan ham o\'chirmoqchimisiz?',
+
+    // Filters
+    'filter_status' => 'Holati',
+    'filter_unread' => "O'qilmagan",
+    'filter_read' => "O'qilgan",
+    'filter_type' => 'Turi',
+    'clear_filters' => 'Tozalash',
+    'subjects' => 'Mavzular',
+
+    // Multi-select
+    'select_all' => 'Barchasini tanlash',
+    'deselect_all' => 'Bekor qilish',
+    'selected_count' => 'ta tanlandi',
+    'search_recipients' => 'Xodimlarni qidirish...',
+
+    // Reply
+    'reply' => 'Javob berish',
+    'reply_to' => 'Javob:',
+    'reply_placeholder' => 'Javob matnini kiriting...',
+    'reply_sent' => 'Javob muvaffaqiyatli jo\'natildi',
+    'cancel' => 'Bekor qilish',
 ];

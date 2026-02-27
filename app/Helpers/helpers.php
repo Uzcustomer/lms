@@ -103,6 +103,39 @@ if (!function_exists('is_active_registrator')) {
     }
 }
 
+if (!function_exists('is_active_fan_masuli')) {
+    /**
+     * Joriy foydalanuvchining faol roli fan_masuli ekanligini tekshirish
+     */
+    function is_active_fan_masuli(): bool
+    {
+        $user = auth()->user();
+        if (!$user) return false;
+
+        $roles = $user->getRoleNames()->toArray();
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        return $activeRole === 'fan_masuli';
+    }
+}
+
+if (!function_exists('get_fan_masuli_subject_ids')) {
+    /**
+     * Fan mas'uli o'qituvchining mas'ul fanlari ID lari
+     */
+    function get_fan_masuli_subject_ids(): array
+    {
+        if (!is_active_fan_masuli()) return [];
+
+        $user = auth()->user();
+
+        return $user->responsibleSubjects()->pluck('curriculum_subjects.id')->toArray();
+    }
+}
+
 if (!function_exists('is_active_oqituvchi')) {
     /**
      * Joriy foydalanuvchi o'qituvchi sifatida ishlayotganini tekshirish.

@@ -289,6 +289,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/notifications/{notification}', [NotificationController::class, 'show'])->name('notifications.show');
         Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+        Route::post('/notifications/{notification}/reply', [NotificationController::class, 'reply'])->name('notifications.reply');
         Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
         Route::get('/notifications-unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
 

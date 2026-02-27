@@ -655,7 +655,6 @@ class KtrController extends Controller
         }
 
         $user = auth()->user();
-        $isAdmin = $user->hasRole(['superadmin', 'admin', 'kichik_admin']);
         $existingPlan = Schema::hasTable('ktr_plans')
             ? KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->first()
             : null;
@@ -712,8 +711,16 @@ class KtrController extends Controller
             });
         }
 
-        // Mavjud reja bo'lsa va admin bo'lmasa - DRAFT sifatida saqlash
-        if ($existingPlan && !$isAdmin && Schema::hasTable('ktr_change_requests')) {
+        // Mavjud reja bo'lsa - DRAFT sifatida saqlash (barcha foydalanuvchilar uchun)
+        if ($existingPlan && Schema::hasTable('ktr_change_requests')) {
+            // Draft ustunlari mavjudligini tekshirish va qo'shish
+            if (!Schema::hasColumn('ktr_change_requests', 'draft_plan_data')) {
+                Schema::table('ktr_change_requests', function (\Illuminate\Database\Schema\Blueprint $table) {
+                    $table->unsignedSmallInteger('draft_week_count')->nullable()->after('status');
+                    $table->json('draft_plan_data')->nullable()->after('draft_week_count');
+                });
+            }
+
             // Allaqachon pending so'rov bormi?
             $existingRequest = KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)
                 ->where('status', 'pending')

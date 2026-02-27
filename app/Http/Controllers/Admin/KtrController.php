@@ -56,6 +56,10 @@ class KtrController extends Controller
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id');
         };
 
+        // Fan mas'uli uchun faqat mas'ul fanlarni ko'rsatish
+        $isFanMasuli = is_active_fan_masuli();
+        $fanMasuliSubjectIds = $isFanMasuli ? get_fan_masuli_subject_ids() : [];
+
         // Natija query
         $query = $baseQuery()
             ->select([
@@ -73,6 +77,11 @@ class KtrController extends Controller
                 's.level_name',
                 's.level_code',
             ]);
+
+        // Fan mas'uli filtri
+        if ($isFanMasuli && !empty($fanMasuliSubjectIds)) {
+            $query->whereIn('cs.id', $fanMasuliSubjectIds);
+        }
 
         // Filtrlar
         if ($selectedEducationType) {

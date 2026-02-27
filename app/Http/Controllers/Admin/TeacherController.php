@@ -15,6 +15,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
@@ -298,11 +299,14 @@ class TeacherController extends Controller
                     $q->where('subject_name', 'like', "%{$search}%");
                 })
                 ->when($levelCode, function ($q, $levelCode) {
-                    $semesterCodes = Semester::where('level_code', $levelCode)
-                        ->pluck('code')
-                        ->unique()
-                        ->toArray();
-                    $q->whereIn('semester_code', $semesterCodes);
+                    // Curricula va semesters orqali to'g'ri join bilan filtr
+                    $q->whereExists(function ($sub) use ($levelCode) {
+                        $sub->select(DB::raw(1))
+                            ->from('semesters as s')
+                            ->whereColumn('s.curriculum_hemis_id', 'curriculum_subjects.curricula_hemis_id')
+                            ->whereColumn('s.code', 'curriculum_subjects.semester_code')
+                            ->where('s.level_code', $levelCode);
+                    });
                 })
                 ->selectRaw('MIN(id) as id, subject_name, MIN(subject_code) as subject_code, semester_code, semester_name, MIN(department_name) as department_name')
                 ->groupBy('subject_name', 'semester_code', 'semester_name')

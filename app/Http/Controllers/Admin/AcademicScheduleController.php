@@ -792,10 +792,12 @@ class AcademicScheduleController extends Controller
                 ->orderBy('lesson_pair_code')
                 ->get();
 
-            $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-                ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+            $jbColumns = $jbScheduleRows->map(fn($s) => [
+                    'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+                    'pair' => $s->lesson_pair_code,
+                ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
 
-            $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+            $jbLessonDates = $jbColumns->pluck('date')->unique()->sort()->values()->toArray();
 
             $jbPairsPerDay = [];
             foreach ($jbColumns as $col) {
@@ -827,10 +829,12 @@ class AcademicScheduleController extends Controller
                 ->orderBy('lesson_pair_code')
                 ->get();
 
-            $mtColumns = $mtScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-                ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+            $mtColumns = $mtScheduleRows->map(fn($s) => [
+                    'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+                    'pair' => $s->lesson_pair_code,
+                ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
 
-            $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+            $mtLessonDates = $mtColumns->pluck('date')->unique()->sort()->values()->toArray();
 
             $mtPairsPerDay = [];
             foreach ($mtColumns as $col) {
@@ -868,6 +872,9 @@ class AcademicScheduleController extends Controller
 
             // Baho filtrlash (jurnal logikasi bilan bir xil)
             $getEffectiveGrade = function ($row) {
+                if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {
+                    return $row->grade;
+                }
                 if ($row->status === 'pending') return null;
                 if ($row->reason === 'absent' && $row->grade === null) {
                     return $row->retake_grade !== null ? $row->retake_grade : null;

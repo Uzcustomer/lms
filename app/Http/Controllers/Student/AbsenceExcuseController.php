@@ -11,6 +11,7 @@ use App\Models\Notification;
 use App\Models\OraliqNazorat;
 use App\Models\Oski;
 use App\Models\Schedule;
+use App\Models\Student;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -370,6 +371,7 @@ class AbsenceExcuseController extends Controller
      */
     private function notifyAdmins(AbsenceExcuse $excuse): void
     {
+        $student = Auth::guard('student')->user();
         $adminUsers = User::role(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'])->get();
 
         $reasonLabel = $excuse->reason_label;
@@ -377,8 +379,8 @@ class AbsenceExcuseController extends Controller
 
         foreach ($adminUsers as $user) {
             Notification::create([
-                'sender_id' => null,
-                'sender_type' => null,
+                'sender_id' => $student->id,
+                'sender_type' => Student::class,
                 'recipient_id' => $user->id,
                 'recipient_type' => User::class,
                 'subject' => "Yangi sababli ariza: {$excuse->student_full_name}",

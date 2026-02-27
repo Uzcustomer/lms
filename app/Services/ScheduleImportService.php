@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Log;
 
 class ScheduleImportService
 {
+    private bool $silent = false;
+
     public function importBetween(Carbon $from, Carbon $to, ?\Closure $onProgress = null): void
     {
         $message = "🟢 Jadval importi boshlandi: {$from->toDateString()} — {$to->toDateString()}";
@@ -109,8 +111,10 @@ class ScheduleImportService
     /**
      * Joriy o'quv yili bo'yicha jadval import (cron uchun)
      */
-    public function importByEducationYear(?\Closure $log = null): void
+    public function importByEducationYear(?\Closure $log = null, bool $silent = false): void
     {
+        $this->silent = $silent;
+
         $educationYearCode = DB::table('semesters')
             ->where('current', true)
             ->value('education_year');
@@ -188,6 +192,12 @@ class ScheduleImportService
 
             if ($log) $log("  ✓ Sahifa {$page}/{$pages} — {$count} ta yozuv (jami: {$total})");
 
+            // Nightly wrapper ga progress yuborish
+            if (app()->bound('nightly.progress')) {
+                $nightlyCallback = app('nightly.progress');
+                $nightlyCallback("{$page}/{$pages} sahifa ({$total} ta yozuv)");
+            }
+
             if ($page % 50 === 0 || $page === $pages) {
                 $elapsed = microtime(true) - $startTime;
                 $remaining = max(0, $pages - $page);
@@ -219,6 +229,16 @@ class ScheduleImportService
         }
         $this->notifyTelegram($msg);
         if ($log) $log($msg);
+
+        // Nightly wrapper ga yakuniy natija
+        if (app()->bound('nightly.progress')) {
+            $detail = "{$pages} sahifa, {$totalImported} ta yozuv";
+            if ($failedCount > 0) {
+                $detail .= " ({$failedCount} xato)";
+            }
+            $nightlyCallback = app('nightly.progress');
+            $nightlyCallback($detail);
+        }
     }
 
     /**
@@ -375,6 +395,8 @@ class ScheduleImportService
 
     protected function notifyTelegram(string $message): void
     {
+        if ($this->silent) return;
+
         $botToken = config('services.telegram.bot_token');
         $chatId = config('services.telegram.chat_id');
 

@@ -274,8 +274,12 @@ class TeacherController extends Controller
         $teacher = $teacherId ? Teacher::find($teacherId) : null;
 
         // Query yaratish funksiyasi
-        $buildQuery = function ($filterByDept = true) use ($search, $levelCode, $teacher) {
-            $query = CurriculumSubject::active();
+        $buildQuery = function ($filterByDept = true, $onlyActive = true) use ($search, $levelCode, $teacher) {
+            $query = CurriculumSubject::query();
+
+            if ($onlyActive) {
+                $query->where('is_active', true);
+            }
 
             // Kafedra bo'yicha filtrlash
             if ($filterByDept && $teacher && $teacher->department_hemis_id) {
@@ -300,12 +304,22 @@ class TeacherController extends Controller
                 ->limit(50);
         };
 
-        // Avval kafedra bo'yicha qidirish
-        $subjects = $buildQuery(true)->get();
+        // 1. Kafedra + active
+        $subjects = $buildQuery(true, true)->get();
 
-        // Agar kafedrada fan topilmasa — barcha fanlardan ko'rsatish
+        // 2. Kafedra + barcha (active bo'lmasa ham)
         if ($subjects->isEmpty() && $teacher) {
-            $subjects = $buildQuery(false)->get();
+            $subjects = $buildQuery(true, false)->get();
+        }
+
+        // 3. Barcha fanlar + active (kafedrada umuman yo'q bo'lsa)
+        if ($subjects->isEmpty() && $teacher) {
+            $subjects = $buildQuery(false, true)->get();
+        }
+
+        // 4. Barcha fanlar + barcha
+        if ($subjects->isEmpty()) {
+            $subjects = $buildQuery(false, false)->get();
         }
 
         return response()->json($subjects);

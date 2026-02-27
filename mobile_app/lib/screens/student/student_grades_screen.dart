@@ -864,8 +864,18 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
     try {
       final service = StudentService(ApiService());
       final response = await service.getSubjectGrades(widget.subjectId);
-      final data = response['data'] as Map<String, dynamic>?;
-      final grades = (data?['grades'] as List<dynamic>?) ?? [];
+
+      // Handle various API response structures
+      List<dynamic> grades = [];
+      final data = response['data'];
+      if (data is Map<String, dynamic>) {
+        grades = (data['grades'] as List<dynamic>?) ?? [];
+      } else if (data is List) {
+        grades = data;
+      }
+      if (grades.isEmpty) {
+        grades = (response['grades'] as List<dynamic>?) ?? [];
+      }
 
       final amaliy = <Map<String, dynamic>>[];
       final maruza = <Map<String, dynamic>>[];

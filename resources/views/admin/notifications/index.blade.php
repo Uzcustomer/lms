@@ -61,14 +61,14 @@
                     <div class="border-t border-gray-200 px-2 pt-2 pb-3">
                         <div class="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('notifications.subjects') }}</div>
                         <div class="space-y-0.5 max-h-48 overflow-y-auto">
-                            <a href="{{ route('admin.notifications.index', ['tab' => 'inbox', 'search' => $search, 'sender_id' => $senderFilter, 'status' => $readStatus, 'type' => $typeFilter]) }}"
+                            <a href="{{ route('admin.notifications.index', ['tab' => 'inbox', 'search' => $search, 'sender_id' => $senderFilter, 'status' => $readStatus]) }}"
                                class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors {{ !$subjectFilter ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-500 hover:bg-gray-100' }}">
                                 <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
                                 <span class="truncate flex-1">{{ __('notifications.all') }}</span>
                                 <span class="text-[10px] text-gray-400">{{ $inboxCount }}</span>
                             </a>
                             @foreach($subjects as $subj)
-                            <a href="{{ route('admin.notifications.index', ['tab' => 'inbox', 'subject' => $subj->subject, 'search' => $search, 'sender_id' => $senderFilter, 'status' => $readStatus, 'type' => $typeFilter]) }}"
+                            <a href="{{ route('admin.notifications.index', ['tab' => 'inbox', 'subject' => $subj->subject, 'search' => $search, 'sender_id' => $senderFilter, 'status' => $readStatus]) }}"
                                class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors {{ $subjectFilter === $subj->subject ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-100' }}"
                                title="{{ $subj->subject }}">
                                 <svg class="w-3.5 h-3.5 flex-shrink-0 {{ $subjectFilter === $subj->subject ? 'text-blue-500' : 'text-gray-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
@@ -84,7 +84,7 @@
                     <div class="border-t border-gray-200 px-2 pt-2 pb-3">
                         <div class="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ __('notifications.senders') }}</div>
                         <div class="space-y-0.5 max-h-48 overflow-y-auto">
-                            <a href="{{ route('admin.notifications.index', ['tab' => 'inbox', 'search' => $search, 'subject' => $subjectFilter, 'status' => $readStatus, 'type' => $typeFilter]) }}"
+                            <a href="{{ route('admin.notifications.index', ['tab' => 'inbox', 'search' => $search, 'subject' => $subjectFilter, 'status' => $readStatus]) }}"
                                class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors {{ !$senderFilter ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-500 hover:bg-gray-100' }}">
                                 <span class="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 flex-shrink-0">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
@@ -98,7 +98,7 @@
                                 $colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-red-400'];
                                 $color = $colors[$sender->id % count($colors)];
                             @endphp
-                            <a href="{{ route('admin.notifications.index', ['tab' => 'inbox', 'sender_id' => $sender->id, 'search' => $search, 'subject' => $subjectFilter, 'status' => $readStatus, 'type' => $typeFilter]) }}"
+                            <a href="{{ route('admin.notifications.index', ['tab' => 'inbox', 'sender_id' => $sender->id, 'search' => $search, 'subject' => $subjectFilter, 'status' => $readStatus]) }}"
                                class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors {{ $senderFilter == $sender->id ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-100' }}">
                                 <span class="w-5 h-5 rounded-full {{ $color }} flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">{{ $initials }}</span>
                                 <span class="truncate">{{ $sName }}</span>
@@ -164,7 +164,7 @@
                     <div class="flex items-center gap-2 px-3 sm:px-4 py-1.5 border-b border-gray-100 bg-amber-50/50">
                         <svg class="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
                         <span class="text-xs text-amber-800 font-medium truncate">{{ __('notifications.subject') }}: <strong>{{ $subjectFilter }}</strong></span>
-                        <a href="{{ route('admin.notifications.index', ['tab' => $tab, 'search' => $search, 'sender_id' => $senderFilter, 'status' => $readStatus, 'type' => $typeFilter]) }}"
+                        <a href="{{ route('admin.notifications.index', ['tab' => $tab, 'search' => $search, 'sender_id' => $senderFilter, 'status' => $readStatus]) }}"
                            class="ml-auto text-amber-500 hover:text-amber-700 flex-shrink-0">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                         </a>
@@ -175,52 +175,35 @@
                     @if($tab === 'inbox')
                     <div class="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 border-b border-gray-100 bg-gray-50/50 overflow-x-auto">
                         @php
-                            $baseParams = ['tab' => $tab, 'search' => $search, 'sender_id' => $senderFilter];
+                            $baseParams = ['tab' => $tab, 'search' => $search, 'sender_id' => $senderFilter, 'subject' => $subjectFilter];
                         @endphp
                         {{-- O'qilganlik holati --}}
-                        <span class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mr-1 flex-shrink-0">{{ __('notifications.filter_status') }}:</span>
-                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['type' => $typeFilter])) }}"
+                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => null])) }}"
                            class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ !$readStatus ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
                             {{ __('notifications.all') }}
                         </a>
-                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => 'unread', 'type' => $typeFilter])) }}"
+                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => 'unread'])) }}"
                            class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $readStatus === 'unread' ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
                             <span class="inline-flex items-center gap-1">
                                 <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                                 {{ __('notifications.filter_unread') }}
                             </span>
                         </a>
-                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => 'read', 'type' => $typeFilter])) }}"
-                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $readStatus === 'read' ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
-                            {{ __('notifications.filter_read') }}
-                        </a>
 
+                        {{-- Mavzu filtri --}}
+                        @if($subjects->count() > 1)
                         <span class="w-px h-4 bg-gray-200 mx-1 flex-shrink-0"></span>
+                        <span class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mr-1 flex-shrink-0">{{ __('notifications.subject') }}:</span>
+                        <select onchange="if(this.value){window.location='{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus])) }}&subject='+encodeURIComponent(this.value)}else{window.location='{{ route('admin.notifications.index', ['tab' => $tab, 'search' => $search, 'sender_id' => $senderFilter, 'status' => $readStatus]) }}'}"
+                                class="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 max-w-[180px]">
+                            <option value="">{{ __('notifications.all') }}</option>
+                            @foreach($subjects as $subj)
+                            <option value="{{ $subj->subject }}" {{ $subjectFilter === $subj->subject ? 'selected' : '' }}>{{ Str::limit($subj->subject, 30) }} ({{ $subj->count }})</option>
+                            @endforeach
+                        </select>
+                        @endif
 
-                        {{-- Xabar turi --}}
-                        <span class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mr-1 flex-shrink-0">{{ __('notifications.filter_type') }}:</span>
-                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus])) }}"
-                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ !$typeFilter ? 'bg-blue-100 text-blue-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
-                            {{ __('notifications.all') }}
-                        </a>
-                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus, 'type' => 'message'])) }}"
-                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $typeFilter === 'message' ? 'bg-gray-200 text-gray-800 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
-                            {{ __('notifications.type_message') }}
-                        </a>
-                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus, 'type' => 'system'])) }}"
-                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $typeFilter === 'system' ? 'bg-purple-100 text-purple-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
-                            {{ __('notifications.type_system') }}
-                        </a>
-                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus, 'type' => 'alert'])) }}"
-                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $typeFilter === 'alert' ? 'bg-red-100 text-red-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
-                            {{ __('notifications.type_alert') }}
-                        </a>
-                        <a href="{{ route('admin.notifications.index', array_merge($baseParams, ['status' => $readStatus, 'type' => 'info'])) }}"
-                           class="px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors {{ $typeFilter === 'info' ? 'bg-cyan-100 text-cyan-700 font-semibold' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100' }}">
-                            {{ __('notifications.type_info') }}
-                        </a>
-
-                        @if($readStatus || $typeFilter)
+                        @if($readStatus || $subjectFilter)
                         <a href="{{ route('admin.notifications.index', ['tab' => $tab, 'search' => $search, 'sender_id' => $senderFilter]) }}"
                            class="ml-1 px-2 py-1 text-[10px] text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full font-medium transition-colors whitespace-nowrap flex-shrink-0">
                             <svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>

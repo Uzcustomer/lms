@@ -648,7 +648,7 @@
                 if (a.role === 'kafedra_mudiri') {
                     bolim = info.kafedra_name || '-';
                 } else if (a.role === 'dekan') {
-                    bolim = info.faculty_name || '-';
+                    bolim = info.faculty_name ? (info.faculty_name + ' fakulteti') : '-';
                 }
                 html += '<tr>';
                 html += '<td>' + getRoleName(a.role) + '</td>';

@@ -118,55 +118,37 @@
         elseif (request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
     @endphp
     <div x-data="{ boshqalarOpen: false }" class="sm:hidden" style="position:fixed !important;bottom:0 !important;left:0 !important;right:0 !important;z-index:9999 !important;">
-        <!-- Boshqalar overlay — hohlagan joyga bosganda yopiladi -->
-        <div x-show="boshqalarOpen" @click="boshqalarOpen = false" style="position:fixed;inset:0;z-index:9998;display:none;"></div>
+        <!-- Boshqalar popup overlay -->
+        <div x-show="boshqalarOpen" @click="boshqalarOpen = false" style="position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.3);display:none;"></div>
 
-        <!-- Boshqalar radial fan menu — Boshqalar tugmasidan pastroq ochiladi -->
-        <div style="position:absolute;bottom:100%;right:0.5rem;margin-bottom:0.15rem;z-index:9999;pointer-events:none;">
-            <!-- Animated circular bg -->
-            <div x-show="boshqalarOpen"
-                 style="position:absolute;bottom:-10px;right:0;width:0;height:0;border-radius:50%;background:rgba(35,65,123,0.12);display:none;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);"
-                 :style="boshqalarOpen ? 'width:260px;height:260px;bottom:-40px;right:-30px;opacity:1;' : 'width:0;height:0;bottom:-10px;right:0;opacity:0;'">
+        <!-- Boshqalar popup menu -->
+        <div x-show="boshqalarOpen" @click.away="boshqalarOpen = false" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:9999;display:none;" class="mx-auto max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="grid grid-cols-3 gap-3">
+                <a href="{{ route('student.absence-excuses.index') }}" class="flex flex-col items-center gap-2 px-2 py-3 rounded-xl transition {{ request()->routeIs('student.absence-excuses.*') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <div class="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
+                        <svg class="w-7 h-7 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">Sababli ariza</span>
+                </a>
+                <a href="{{ route('student.attendance') }}" class="flex flex-col items-center gap-2 px-2 py-3 rounded-xl transition {{ request()->routeIs('student.attendance') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <div class="w-14 h-14 rounded-2xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
+                        <svg class="w-7 h-7 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">Davomat</span>
+                </a>
+                <a href="{{ route('student.pending-lessons') }}" class="flex flex-col items-center gap-2 px-2 py-3 rounded-xl transition {{ request()->routeIs('student.pending-lessons') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <div class="w-14 h-14 rounded-2xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+                        <svg class="w-7 h-7 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">Qayta topshirish</span>
+                </a>
             </div>
-            <!-- 1. Sababli ariza -->
-            <a href="{{ route('student.absence-excuses.index') }}"
-               x-show="boshqalarOpen"
-               style="position:absolute;bottom:0;right:0;display:none;pointer-events:auto;transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1),opacity 0.25s ease;"
-               :style="boshqalarOpen ? 'transform:translate(-100px, -55px);opacity:1;' : 'transform:translate(0,0);opacity:0;'"
-               class="flex flex-col items-center gap-1">
-                <div class="flex items-center justify-center rounded-full shadow-lg" style="width:48px;height:48px;background-color:#23417b;">
-                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                    </svg>
-                </div>
-                <span class="text-[10px] font-semibold text-white" style="text-shadow:0 1px 3px rgba(0,0,0,0.6);">Ariza</span>
-            </a>
-            <!-- 2. Davomat -->
-            <a href="{{ route('student.attendance') }}"
-               x-show="boshqalarOpen"
-               style="position:absolute;bottom:0;right:0;display:none;pointer-events:auto;transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.06s,opacity 0.25s ease 0.06s;"
-               :style="boshqalarOpen ? 'transform:translate(-55px, -95px);opacity:1;' : 'transform:translate(0,0);opacity:0;'"
-               class="flex flex-col items-center gap-1">
-                <div class="flex items-center justify-center rounded-full shadow-lg" style="width:48px;height:48px;background-color:#23417b;">
-                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </div>
-                <span class="text-[10px] font-semibold text-white" style="text-shadow:0 1px 3px rgba(0,0,0,0.6);">Davomat</span>
-            </a>
-            <!-- 3. Qayta topshirish -->
-            <a href="{{ route('student.pending-lessons') }}"
-               x-show="boshqalarOpen"
-               style="position:absolute;bottom:0;right:0;display:none;pointer-events:auto;transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.12s,opacity 0.25s ease 0.12s;"
-               :style="boshqalarOpen ? 'transform:translate(5px, -105px);opacity:1;' : 'transform:translate(0,0);opacity:0;'"
-               class="flex flex-col items-center gap-1">
-                <div class="flex items-center justify-center rounded-full shadow-lg" style="width:48px;height:48px;background-color:#23417b;">
-                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
-                    </svg>
-                </div>
-                <span class="text-[10px] font-semibold text-white" style="text-shadow:0 1px 3px rgba(0,0,0,0.6);">Qayta</span>
-            </a>
         </div>
 
         <!-- Bottom Navigation Tabs -->

@@ -5268,9 +5268,9 @@ class JournalController extends Controller
             return back()->with('error', 'Fan topilmadi');
         }
 
-        $department = Department::where('department_hemis_id', $group->department_hemis_id)
-            ->where('structure_type_code', 11)
-            ->first();
+        // Fakultet - curriculum orqali
+        $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
+        $faculty = Department::where('department_hemis_id', $curriculum?->department_hemis_id)->first();
 
         $specialty = Specialty::where('specialty_hemis_id', $group->specialty_hemis_id)->first();
 
@@ -5278,18 +5278,153 @@ class JournalController extends Controller
         $students = Student::where('group_id', $groupHemisId)->orderBy('full_name')->get();
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
 
-        // YN submission dan JN/MT
-        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
+        // JB (amaliyot) jadval sanalarini olish
+        $jbScheduleRows = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
-            ->where('group_hemis_id', $groupHemisId)
-            ->first();
+            ->whereNull('deleted_at')
+            ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date', 'lesson_pair_code')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
 
-        $savedJnGrades = [];
-        $savedMtGrades = [];
-        if ($ynSubmission) {
-            $latestSnapshots = YnStudentGrade::latestPerStudent($ynSubmission->id)->get();
-            $savedJnGrades = $latestSnapshots->pluck('jn', 'student_hemis_id')->toArray();
-            $savedMtGrades = $latestSnapshots->pluck('mt', 'student_hemis_id')->toArray();
+        $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
+            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $jbPairsPerDay = [];
+        foreach ($jbColumns as $col) {
+            $jbPairsPerDay[$col['date']] = ($jbPairsPerDay[$col['date']] ?? 0) + 1;
+        }
+        $jbDatePairSet = [];
+        foreach ($jbColumns as $col) {
+            $jbDatePairSet[$col['date'] . '_' . $col['pair']] = true;
+        }
+
+        $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+        $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
+            return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
+        }));
+        $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
+        $totalJbDaysForAverage = count($jbLessonDatesForAverage);
+
+        // MT jadval sanalarini olish
+        $mtScheduleRows = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->where('training_type_code', 99)
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date', 'lesson_pair_code')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
+        $mtColumns = $mtScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
+            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtPairsPerDay = [];
+        foreach ($mtColumns as $col) {
+            $mtPairsPerDay[$col['date']] = ($mtPairsPerDay[$col['date']] ?? 0) + 1;
+        }
+        $mtDatePairSet = [];
+        foreach ($mtColumns as $col) {
+            $mtDatePairSet[$col['date'] . '_' . $col['pair']] = true;
+        }
+        $totalMtDays = count($mtLessonDates);
+
+        // Baholarni olish
+        $allGradesRaw = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotIn('training_type_code', [100, 101, 102, 103])
+            ->whereNotNull('lesson_date')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
+        $getEffectiveGrade = function ($row) {
+            if ($row->status === 'pending') return null;
+            if ($row->reason === 'absent' && $row->grade === null) {
+                return $row->retake_grade !== null ? $row->retake_grade : null;
+            }
+            if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+                return null;
+            }
+            if ($row->status === 'recorded') return $row->grade;
+            if ($row->status === 'closed') return $row->grade;
+            if ($row->retake_grade !== null) return $row->retake_grade;
+            return null;
+        };
+
+        $jbGrades = [];
+        $mtGradesMap = [];
+        foreach ($allGradesRaw as $g) {
+            $effectiveGrade = $getEffectiveGrade($g);
+            if ($effectiveGrade === null) continue;
+            $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+            $key = $normalizedDate . '_' . $g->lesson_pair_code;
+            if (isset($jbDatePairSet[$key])) {
+                $jbGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effectiveGrade;
+            }
+            if (isset($mtDatePairSet[$key])) {
+                $mtGradesMap[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effectiveGrade;
+            }
+        }
+
+        // Manual MT baholarini olish
+        $manualMtGrades = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNull('lesson_date')
+            ->whereNotNull('grade')
+            ->select('student_hemis_id', 'grade')
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        // Har bir talaba uchun JN va MT hisoblash (jurnal logikasi bilan bir xil)
+        $calculatedJnGrades = [];
+        $calculatedMtGrades = [];
+        foreach ($studentHemisIds as $hemisId) {
+            $dailySum = 0;
+            $studentDayGrades = $jbGrades[$hemisId] ?? [];
+            foreach ($jbLessonDates as $date) {
+                $dayGrades = $studentDayGrades[$date] ?? [];
+                $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                $gradeSum = array_sum($dayGrades);
+                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                    $dailySum += $dayAverage;
+                }
+            }
+            $calculatedJnGrades[$hemisId] = $totalJbDaysForAverage > 0
+                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                : 0;
+
+            $mtDailySum = 0;
+            $studentMtGrades = $mtGradesMap[$hemisId] ?? [];
+            foreach ($mtLessonDates as $date) {
+                $dayGrades = $studentMtGrades[$date] ?? [];
+                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                $gradeSum = array_sum($dayGrades);
+                $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+            }
+            $calculatedMtGrades[$hemisId] = $totalMtDays > 0
+                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                : 0;
+
+            if (isset($manualMtGrades[$hemisId])) {
+                $calculatedMtGrades[$hemisId] = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+            }
         }
 
         // ON (100), OSKI (101), Test (102) baholarni olish
@@ -5307,51 +5442,33 @@ class JournalController extends Controller
                 ->toArray();
         }
 
-        // O'qituvchilar
-        $maruzaTeacher = DB::table('student_grades as s')
-            ->leftJoin('teachers as t', 't.hemis_id', '=', 's.employee_id')
-            ->select(DB::raw('GROUP_CONCAT(DISTINCT t.full_name SEPARATOR ", ") AS full_names'))
-            ->where('s.subject_id', $subjectId)
-            ->where('s.training_type_code', 11)
-            ->whereIn('s.student_hemis_id', $studentHemisIds)
-            ->groupBy('s.employee_id')
-            ->first();
-
-        $otherTeachers = DB::table('student_grades as s')
-            ->leftJoin('teachers as t', 't.hemis_id', '=', 's.employee_id')
-            ->select(DB::raw('GROUP_CONCAT(DISTINCT t.full_name SEPARATOR ", ") AS full_names'))
-            ->where('s.subject_id', $subjectId)
-            ->where('s.training_type_code', '!=', 11)
-            ->whereNotIn('s.training_type_code', [99, 100, 101, 102, 103])
-            ->whereIn('s.student_hemis_id', $studentHemisIds)
-            ->groupBy('s.employee_id')
-            ->get();
+        // O'qituvchilar (jadvaldan tur bo'yicha ajratilgan)
+        $teacherData = $this->getTeachersByType($groupHemisId, $subjectId, $semesterCode);
+        $lectureTeacherName = $teacherData['lecture_teacher']['name'] ?? '';
+        $practiceTeacherNames = array_map(fn($t) => $t['name'], $teacherData['practice_teachers']);
 
         // FISH qisqartirish funksiyasi: "Rasulov Shomurod Maxmudovich" -> "Rasulov Sh.M."
+        // Sh, Ch digraflar to'liq saqlanadi
         $abbreviateName = function ($fullName) {
             $parts = preg_split('/\s+/', trim($fullName));
             if (count($parts) <= 1) return $fullName;
             $surname = $parts[0];
             $initials = '';
             for ($i = 1; $i < count($parts); $i++) {
-                $initials .= mb_strtoupper(mb_substr($parts[$i], 0, 1)) . '.';
+                $word = $parts[$i];
+                $upper2 = mb_strtoupper(mb_substr($word, 0, 2));
+                if ($upper2 === 'SH' || $upper2 === 'CH') {
+                    $initials .= mb_substr($word, 0, 1) . mb_strtolower(mb_substr($word, 1, 1)) . '.';
+                } else {
+                    $initials .= mb_strtoupper(mb_substr($word, 0, 1)) . '.';
+                }
             }
             return $surname . ' ' . $initials;
         };
 
-        $otherTeacherNames = [];
-        foreach ($otherTeachers as $t) {
-            foreach (explode(', ', $t->full_names) as $name) {
-                $name = trim($name);
-                if ($name && !in_array($name, $otherTeacherNames)) {
-                    $otherTeacherNames[] = $name;
-                }
-            }
-        }
-
         // O'qituvchi ismlarini qisqartirish
-        $abbreviatedOtherTeachers = array_map($abbreviateName, $otherTeacherNames);
-        $abbreviatedMaruza = $maruzaTeacher ? $abbreviateName($maruzaTeacher->full_names) : '';
+        $abbreviatedPracticeTeachers = array_map($abbreviateName, $practiceTeacherNames);
+        $abbreviatedMaruza = $lectureTeacherName ? $abbreviateName($lectureTeacherName) : '';
 
         // Shakl (urinish turi)
         $shaklId = (int) ($request->shakl ?? 1);
@@ -5376,16 +5493,19 @@ class JournalController extends Controller
         $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Sheet'), 0, 31);
         $sheet->setTitle($sheetName);
 
+        // Kurs va semestr raqamlarini hisoblash
+        $kurs = $semester->level_code ?? '';
+        $semesterInYear = ((int)($semester->code ?? 1) % 2 !== 0) ? 1 : 2;
+
         // Header
-        $sheet->setCellValue('A4', ($department->name ?? '') . ' FAKULTETI');
+        $sheet->setCellValue('A4', ($faculty->name ?? '') . ' FAKULTETI');
         $sheet->setCellValue('C8', '         ' . ($specialty->name ?? ''));
-        $sheet->setCellValue('N8', $semester->level_code ?? '');
-        $sheet->setCellValue('Q8', $semester->code ?? '');
+        $sheet->setCellValue('N8', $kurs);
+        $sheet->setCellValue('Q8', $semesterInYear);
         $sheet->setCellValue('W8', $group->name ?? '');
         $sheet->setCellValue('Y1', $shaklName);
         $sheet->setCellValue('C10', '  ' . ($subject->subject_name ?? ''));
-        $sheet->setCellValue('P10', implode(', ', $abbreviatedOtherTeachers));
-        $sheet->setCellValue('U10', implode(', ', $abbreviatedOtherTeachers));
+        $sheet->setCellValue('U10', implode(', ', $abbreviatedPracticeTeachers));
         $sheet->setCellValue('A11', "Ma'ruzachi:");
         $sheet->setCellValue('C11', '         ' . $abbreviatedMaruza);
         $sheet->setCellValue('D13', $subject->total_acload ?? 0);
@@ -5412,24 +5532,18 @@ class JournalController extends Controller
             $sheet->setCellValue('B' . $row, $student->full_name);
             $sheet->setCellValueExplicit('C' . $row, $student->student_id_number, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
-            $jnRaw = $savedJnGrades[$hemisId] ?? null;
-            $mtRaw = $savedMtGrades[$hemisId] ?? null;
+            $jnVal = (int) ($calculatedJnGrades[$hemisId] ?? 0);
+            $mtVal = (int) ($calculatedMtGrades[$hemisId] ?? 0);
             $onRaw = $gradesByType[100][$hemisId] ?? null;
             $oskiRaw = $gradesByType[101][$hemisId] ?? null;
             $testRaw = $gradesByType[102][$hemisId] ?? null;
 
-            $jnVal = $jnRaw !== null ? (int) $jnRaw : 0;
-            $mtVal = $mtRaw !== null ? (int) $mtRaw : 0;
             $onVal = $onRaw !== null ? round((float) $onRaw) : 0;
             $oskiVal = $oskiRaw !== null ? round((float) $oskiRaw) : 0;
             $testVal = $testRaw !== null ? round((float) $testRaw) : 0;
 
-            if ($jnRaw !== null) {
-                $sheet->setCellValue('D' . $row, $jnVal);
-            }
-            if ($mtRaw !== null) {
-                $sheet->setCellValue('G' . $row, $mtVal);
-            }
+            $sheet->setCellValue('D' . $row, $jnVal);
+            $sheet->setCellValue('G' . $row, $mtVal);
             if ($onRaw !== null) {
                 $sheet->setCellValue('J' . $row, $onVal);
             }

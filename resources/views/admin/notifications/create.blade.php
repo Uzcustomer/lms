@@ -93,10 +93,10 @@
 
                                 <!-- Role filter row (only for User type) -->
                                 <div class="flex items-center px-5 py-2.5" x-show="recipientType === 'user'">
-                                    <label class="w-20 text-sm text-gray-500 flex-shrink-0">Rol</label>
+                                    <label class="w-20 text-sm text-gray-500 flex-shrink-0">{{ __('notifications.role') }}</label>
                                     <select class="flex-1 border-0 focus:ring-0 text-sm text-gray-900 py-1 px-0"
                                             x-model="selectedRole" @change="filterByRole()">
-                                        <option value="">Barchasi</option>
+                                        <option value="">{{ __('notifications.all') }}</option>
                                         @foreach($roles as $role)
                                         <option value="{{ $role['value'] }}">{{ $role['label'] }}</option>
                                         @endforeach

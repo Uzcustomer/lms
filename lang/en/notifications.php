@@ -33,6 +33,8 @@ return [
     'body_placeholder' => 'Enter message text...',
     'search_placeholder' => 'Search messages...',
     'senders' => 'Senders',
+    'role' => 'Role',
+    'all' => 'All',
     'from' => 'From',
     'to' => 'To',
     'date' => 'Date',

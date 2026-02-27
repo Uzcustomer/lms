@@ -33,6 +33,8 @@ return [
     'body_placeholder' => 'Xabar matnini kiriting...',
     'search_placeholder' => 'Xabarlardan qidirish...',
     'senders' => "Jo'natuvchilar",
+    'role' => 'Rol',
+    'all' => 'Barchasi',
     'from' => 'Kimdan',
     'to' => 'Kimga',
     'date' => 'Sana',

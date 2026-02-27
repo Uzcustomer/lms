@@ -82,7 +82,7 @@
             <!-- Mobile Top Header: Student avatar (right side) -->
             <div class="flex items-center sm:hidden">
                 <a href="{{ route('student.profile') }}">
-                    <img src="{{ Auth::guard('student')->user()->image ?? asset('images/default-avatar.png') }}" alt="{{ Auth::guard('student')->user()->full_name }}" class="w-9 h-9 rounded-full object-cover border-2 border-indigo-200 dark:border-indigo-700">
+                    <img src="{{ Auth::guard('student')->user()->image ?? asset('images/default-avatar.png') }}" alt="{{ Auth::guard('student')->user()->full_name }}" class="w-9 h-9 rounded-lg object-cover border-2 border-indigo-200 dark:border-indigo-700">
                 </a>
             </div>
         </div>

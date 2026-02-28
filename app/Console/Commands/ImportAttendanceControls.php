@@ -133,8 +133,23 @@ class ImportAttendanceControls extends Command
     // =========================================================================
     private function handleFinalImport(string $token, TelegramService $telegram, bool $silent): int
     {
-        // Joriy semestr boshlanish sanasini aniqlash
-        $currentSemesterIds = Semester::where('current', true)->pluck('semester_hemis_id');
+        // Joriy o'quv yilining eng so'nggi education_year ni aniqlash
+        // (eski current=1 semestrlarni filtrlash uchun)
+        $educationYear = Semester::where('current', true)
+            ->orderBy('education_year', 'desc')
+            ->value('education_year');
+
+        if (!$educationYear) {
+            $msg = '❌ Joriy o\'quv yili topilmadi (semesters jadvalida current=true yo\'q)';
+            $this->error($msg);
+            if (!$silent) { $telegram->notify($msg); }
+            return self::FAILURE;
+        }
+
+        // Shu o'quv yilidagi semestrlarning eng erta boshlanish sanasi
+        $currentSemesterIds = Semester::where('current', true)
+            ->where('education_year', $educationYear)
+            ->pluck('semester_hemis_id');
 
         $semesterStart = CurriculumWeek::whereIn('semester_hemis_id', $currentSemesterIds)
             ->orderBy('start_date', 'asc')
@@ -149,6 +164,8 @@ class ImportAttendanceControls extends Command
 
         $from = Carbon::parse($semesterStart)->startOfDay();
         $to = Carbon::yesterday()->endOfDay();
+
+        $this->info("O'quv yili: {$educationYear}, semestrlar: {$currentSemesterIds->count()} ta");
 
         $dateRange = "{$from->toDateString()} — {$to->toDateString()}";
 

@@ -192,9 +192,9 @@
                     </div>
 
                     {{-- Modal body --}}
-                    <div class="flex-1 overflow-y-auto p-4">
+                    <div class="flex-1 overflow-y-auto p-2">
                         <template x-for="(item, idx) in modalItems" :key="idx">
-                            <div class="mb-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-100 dark:border-gray-600">
+                            <div class="mb-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-2 border border-gray-100 dark:border-gray-600">
                                 {{-- Status + Baho --}}
                                 <div class="flex items-center justify-between mb-3">
                                     <span class="px-2.5 py-1 text-[11px] font-bold rounded-full"

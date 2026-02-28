@@ -2435,7 +2435,9 @@
         // Kafedra erkin, fanga ta'sir qiladi.
         const currentGroupId = '{{ $groupId }}';
         const currentGroupHemisId = '{{ $group->group_hemis_id }}';
+        const currentGroupName = @json($group->name);
         const currentSubjectId = '{{ $subjectId }}';
+        const currentSubjectName = @json($subject->subject_name);
         const currentSemesterCode = '{{ $semesterCode }}';
         const currentFacultyId = '{{ $facultyId }}';
         const currentSpecialtyId = '{{ $specialtyId }}';
@@ -2615,6 +2617,13 @@
                     populateSelect('filter-specialty', data.specialties, values.specialty_id, true);
                     populateSelect('filter-level', data.levels, values.level_code, true);
                     populateSelect('filter-semester', data.semesters, values.semester_code, true);
+                    // Guruh va fan — AJAX natijasida joriy qiymat yo'q bo'lsa, qo'shib qo'yish
+                    if (currentGroupId && currentGroupName && !data.groups[currentGroupId]) {
+                        data.groups[currentGroupId] = currentGroupName;
+                    }
+                    if (currentSubjectId && currentSubjectName && !data.subjects[currentSubjectId]) {
+                        data.subjects[currentSubjectId] = currentSubjectName;
+                    }
                     populateSelect('filter-group', data.groups, values.group_id, false);
                     populateSelect('filter-subject', data.subjects, values.subject_id, false);
                     // O'qituvchi ma'lumotlarini yangilash (tur bo'yicha)

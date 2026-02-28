@@ -56,7 +56,7 @@ class ScheduleImportService
 
             if (!$response || !$response->successful()) {
                 $status = $response ? $response->status() : 'timeout';
-                Log::channel('import_schedule')->warning("HEMIS API sahifa {$page} o'tkazib yuborildi (status {$status})");
+                $this->safeLog('warning', "HEMIS API sahifa {$page} o'tkazib yuborildi (status {$status})");
                 $failedPages[] = $page;
 
                 if ($page === 1) {
@@ -151,7 +151,7 @@ class ScheduleImportService
 
         if (!$educationYearCode) {
             $this->notifyTelegram("❌ Joriy o'quv yili topilmadi (semesters jadvalida current=true yo'q)");
-            Log::channel('import_schedule')->error('Joriy o\'quv yili topilmadi');
+            $this->safeLog('error', 'Joriy o\'quv yili topilmadi');
             return;
         }
 
@@ -177,7 +177,7 @@ class ScheduleImportService
 
             if (!$response || !$response->successful()) {
                 $status = $response ? $response->status() : 'timeout';
-                Log::channel('import_schedule')->warning("HEMIS API sahifa {$page} o'tkazib yuborildi (status {$status})");
+                $this->safeLog('warning', "HEMIS API sahifa {$page} o'tkazib yuborildi (status {$status})");
                 $failedPages[] = $page;
                 if ($log) $log("  ❌ Sahifa {$page}/{$pages} — xato (status {$status}), o'tkazib yuborildi");
 
@@ -301,7 +301,7 @@ class ScheduleImportService
 
             if (!$response || !$response->successful()) {
                 $status = $response ? $response->status() : 'timeout';
-                Log::channel('import_schedule')->error('HEMIS API xatolik (guruh+fan sync)', [
+                $this->safeLog('error', 'HEMIS API xatolik (guruh+fan sync)', [
                     'group_id' => $groupId,
                     'subject_id' => $subjectId,
                     'page' => $page,
@@ -345,6 +345,19 @@ class ScheduleImportService
     }
 
     /**
+     * Xavfsiz log — log fayl permission xatosi importni buzmaydi
+     */
+    protected function safeLog(string $level, string $message, array $context = []): void
+    {
+        try {
+            Log::channel('import_schedule')->{$level}($message, $context);
+        } catch (\Throwable $e) {
+            // Log fayl yozib bo'lmasa, stderr ga yozish (CLI da ko'rinadi)
+            error_log("[import_schedule] {$level}: {$message}");
+        }
+    }
+
+    /**
      * HEMIS API sahifasini olish — 502/503/timeout bo'lsa 3 marta qayta urinadi
      */
     protected function fetchPage(string $token, array $params, int $timeout = 60): ?\Illuminate\Http\Client\Response
@@ -366,7 +379,7 @@ class ScheduleImportService
                 // 5xx xato — retry
                 if ($attempt < $maxRetries) {
                     $delay = $delays[$attempt - 1] ?? 20;
-                    Log::channel('import_schedule')->warning("HEMIS API {$response->status()} — sahifa {$params['page']}, {$attempt}/{$maxRetries} urinish, {$delay}s kutish");
+                    $this->safeLog('warning', "HEMIS API {$response->status()} — sahifa {$params['page']}, {$attempt}/{$maxRetries} urinish, {$delay}s kutish");
                     sleep($delay);
                 } else {
                     return $response;
@@ -374,10 +387,10 @@ class ScheduleImportService
             } catch (\Throwable $e) {
                 if ($attempt < $maxRetries) {
                     $delay = $delays[$attempt - 1] ?? 20;
-                    Log::channel('import_schedule')->warning("HEMIS API timeout — sahifa {$params['page']}, {$attempt}/{$maxRetries} urinish, {$delay}s kutish");
+                    $this->safeLog('warning', "HEMIS API timeout — sahifa {$params['page']}, {$attempt}/{$maxRetries} urinish, {$delay}s kutish");
                     sleep($delay);
                 } else {
-                    Log::channel('import_schedule')->error("HEMIS API {$maxRetries} marta xatolik: " . $e->getMessage());
+                    $this->safeLog('error', "HEMIS API {$maxRetries} marta xatolik: " . $e->getMessage());
                     return null;
                 }
             }
@@ -447,7 +460,7 @@ class ScheduleImportService
                 ])
                 ->throw();
         } catch (\Throwable $e) {
-            Log::channel('import_schedule')->error('Telegramga yuborishda xato: ' . $e->getMessage());
+            $this->safeLog('error', 'Telegramga yuborishda xato: ' . $e->getMessage());
         }
     }
 }

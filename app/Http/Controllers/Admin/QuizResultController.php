@@ -604,7 +604,6 @@ class QuizResultController extends Controller
             $curriculumHemisIds = $groups->pluck('curriculum_hemis_id')->unique()->toArray();
 
             $curriculumSubjects = [];
-            $curriculumSubjectsAll = []; // curriculum_hemis_id|subject_id => [semester_code, ...]
             if (!empty($curriculumHemisIds) && !empty($fanIds)) {
                 $csRows = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumHemisIds)
                     ->whereIn('subject_id', $fanIds)
@@ -613,36 +612,6 @@ class QuizResultController extends Controller
                 foreach ($csRows as $cs) {
                     $csKey = $cs->curricula_hemis_id . '|' . $cs->subject_id;
                     $curriculumSubjects[$csKey] = $cs->semester_code;
-                    $curriculumSubjectsAll[$csKey][] = $cs->semester_code;
-                }
-            }
-
-            // Joriy semestrlarni aniqlash (schedule data mavjud bo'lgan semestrlarni topish)
-            $currentSemesters = [];
-            if (!empty($curriculumHemisIds)) {
-                $currentSemRows = Semester::whereIn('curriculum_hemis_id', $curriculumHemisIds)
-                    ->where('current', true)
-                    ->get(['curriculum_hemis_id', 'code']);
-                foreach ($currentSemRows as $sem) {
-                    $currentSemesters[$sem->curriculum_hemis_id] = $sem->code;
-                }
-            }
-
-            // Schedules dan haqiqiy semester_code larni olish (group_hemis_id + subject_id)
-            // curriculum_subjects va schedules orasida semester_code farq bo'lishi mumkin
-            $scheduleSemesterCodes = [];
-            $groupHemisIds = $groups->pluck('group_hemis_id')->toArray();
-            if (!empty($groupHemisIds) && !empty($fanIds)) {
-                $schedSemRows = DB::table('schedules')
-                    ->whereIn('group_id', $groupHemisIds)
-                    ->whereIn('subject_id', $fanIds)
-                    ->whereNull('deleted_at')
-                    ->whereNotNull('lesson_date')
-                    ->select('group_id', 'subject_id', 'semester_code')
-                    ->distinct()
-                    ->get();
-                foreach ($schedSemRows as $sr) {
-                    $scheduleSemesterCodes[$sr->group_id . '|' . $sr->subject_id] = $sr->semester_code;
                 }
             }
 
@@ -920,54 +889,6 @@ class QuizResultController extends Controller
                     $studentScoreLookup, $defaultScore
                 );
 
-                // Journal uchun group_db_id va semester_code aniqlash
-                $groupDbId = null;
-                $semesterCode = null;
-                if ($student) {
-                    $groupModel = $groups[$student->group_id] ?? null;
-                    if ($groupModel) {
-                        $groupDbId = $groupModel->id;
-
-                        // 1) Avval schedules dan haqiqiy semester_code ni tekshirish
-                        //    (curriculum_subjects va schedules orasida semester_code farq bo'lishi mumkin)
-                        $schedKey = $groupModel->group_hemis_id . '|' . $result->fan_id;
-                        $scheduleSemCode = $scheduleSemesterCodes[$schedKey] ?? null;
-
-                        if ($scheduleSemCode) {
-                            // Schedules da aniq semester_code topildi — uni ishlatamiz
-                            $semesterCode = $scheduleSemCode;
-                        } else {
-                            // 2) Schedules da topilmasa — curriculum_subjects dan tanlash (fallback)
-                            $csKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
-                            $allSemCodes = $curriculumSubjectsAll[$csKey] ?? [];
-
-                            if (count($allSemCodes) === 1) {
-                                $semesterCode = $allSemCodes[0];
-                            } elseif (count($allSemCodes) > 1) {
-                                $studentSemCode = $student->semester_code;
-                                if ($studentSemCode && in_array($studentSemCode, $allSemCodes)) {
-                                    $semesterCode = $studentSemCode;
-                                } else {
-                                    $curSem = $currentSemesters[$groupModel->curriculum_hemis_id] ?? null;
-                                    if ($curSem && in_array($curSem, $allSemCodes)) {
-                                        $semesterCode = $curSem;
-                                    } else {
-                                        $semesterCode = end($allSemCodes);
-                                    }
-                                }
-                            } elseif ($student->semester_code) {
-                                $directCs = CurriculumSubject::where('curricula_hemis_id', $groupModel->curriculum_hemis_id)
-                                    ->where('subject_id', $result->fan_id)
-                                    ->where('semester_code', $student->semester_code)
-                                    ->first();
-                                if ($directCs) {
-                                    $semesterCode = $directCs->semester_code;
-                                }
-                            }
-                        }
-                    }
-                }
-
                 $rowNum++;
                 $data[] = [
                     'id' => $result->id,
@@ -989,9 +910,6 @@ class QuizResultController extends Controller
                     'jn_avg' => $xulosa['jn_avg'],
                     'mt_avg' => $xulosa['mt_avg'],
                     'oski_avg' => $xulosa['oski_avg'],
-                    'group_db_id' => $groupDbId,
-                    'fan_id' => $result->fan_id,
-                    'semester_code' => $semesterCode,
                 ];
             }
 

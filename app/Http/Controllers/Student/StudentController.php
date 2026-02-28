@@ -162,7 +162,10 @@ class StudentController extends Controller
                             'lessonPair' => [
                                 'start_time' => $lesson->lesson_pair_start_time,
                                 'end_time' => $lesson->lesson_pair_end_time,
+                                'code' => $lesson->lesson_pair_code,
+                                'name' => $lesson->lesson_pair_name ?? '',
                             ],
+                            'training_type' => $lesson->training_type_name ?? '',
                             'lesson_date' => Carbon::parse($lesson->lesson_date)->timestamp,
                         ];
                     })
@@ -171,7 +174,36 @@ class StudentController extends Controller
             })
             ->sortKeys();
 
-        return view('student.student_schedule', compact('groupedSchedule', 'selectedSemester', 'semesters', 'weeks', 'selectedWeekId'));
+        // Hafta navigatsiya uchun oldingi/keyingi hafta
+        $weekIds = $weeks->pluck('id')->toArray();
+        $currentWeekIndex = array_search($selectedWeekId, $weekIds);
+        $prevWeekId = $currentWeekIndex > 0 ? $weekIds[$currentWeekIndex - 1] : null;
+        $nextWeekId = $currentWeekIndex !== false && $currentWeekIndex < count($weekIds) - 1 ? $weekIds[$currentWeekIndex + 1] : null;
+
+        // Haftaning sanalari (Dush - Shanba)
+        $weekDates = [];
+        if ($weekStart) {
+            $dayNames = ['Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan'];
+            for ($i = 0; $i < 6; $i++) {
+                $date = $weekStart->copy()->addDays($i);
+                $weekDates[] = [
+                    'day_short' => $dayNames[$i],
+                    'day_num' => $date->format('d'),
+                    'month' => $date->format('M'),
+                    'full_date' => $date->format('Y-m-d'),
+                    'is_today' => $date->isToday(),
+                    'day_en' => $date->format('l'),
+                ];
+            }
+        }
+
+        // Bugungi kun
+        $todayDayEn = Carbon::now()->format('l');
+
+        return view('student.student_schedule', compact(
+            'groupedSchedule', 'selectedSemester', 'semesters', 'weeks', 'selectedWeekId',
+            'prevWeekId', 'nextWeekId', 'weekDates', 'weekStart', 'weekEnd', 'todayDayEn'
+        ));
     }
 
 

@@ -295,6 +295,20 @@ class JournalController extends Controller
             ->value('education_year_code');
         if ($scheduleEducationYear) {
             $educationYearCode = $scheduleEducationYear;
+        } elseif ($educationYearCode !== null) {
+            // Jadval yozuvlarida education_year_code NULL bo'lsa, lekin yozuvlar mavjud bo'lsa,
+            // curriculum ning education_year_code ni ishlatmaslik kerak — aks holda barcha
+            // jadval ma'lumotlari filtrlanib ketadi
+            $hasScheduleRows = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->whereNotNull('lesson_date')
+                ->exists();
+            if ($hasScheduleRows) {
+                $educationYearCode = null;
+            }
         }
 
         // Get student hemis IDs for this group

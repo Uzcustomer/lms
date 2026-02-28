@@ -1,6 +1,6 @@
 <x-student-app-layout>
     <x-slot name="header">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
+        <h2 class="text-sm font-semibold leading-tight text-gray-800 dark:text-gray-200">
             Joriy fanlar <span class="text-base font-normal text-gray-500">({{ $semester }})</span>
         </h2>
     </x-slot>

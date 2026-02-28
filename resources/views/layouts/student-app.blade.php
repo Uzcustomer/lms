@@ -32,7 +32,7 @@
     <!-- Page Heading -->
     @if (isset($header))
         <header class="bg-white dark:bg-gray-800 shadow">
-            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <div class="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
                 {{ $header }}
             </div>
         </header>
@@ -152,7 +152,7 @@
         </div>
 
         <!-- Bottom Navigation Tabs -->
-        <div class="flex items-end justify-between px-4 pt-2" style="background-color:#23417b;padding-bottom:max(0.5rem, env(safe-area-inset-bottom));">
+        <div class="flex items-end justify-between px-4 pt-2" style="background-color:#23417b;height:80px;padding-bottom:max(7px, env(safe-area-inset-bottom));">
             <!-- 1. Fanlar -->
             <a href="{{ route('student.subjects') }}" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;">
                 @if($activeTab === 'fanlar')

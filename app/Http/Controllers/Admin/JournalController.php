@@ -4072,7 +4072,7 @@ class JournalController extends Controller
             $jbDatePairSet[$col['date'] . '_' . $col['pair']] = true;
         }
 
-        $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+        $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
         $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
             return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
         }));
@@ -4435,7 +4435,7 @@ class JournalController extends Controller
             $jbDatePairSet[$col['date'] . '_' . $col['pair']] = true;
         }
 
-        $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+        $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
         $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
             return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
         }));
@@ -5375,7 +5375,7 @@ class JournalController extends Controller
             $jbDatePairSet[$col['date'] . '_' . $col['pair']] = true;
         }
 
-        $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+        $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
         $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
             return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
         }));

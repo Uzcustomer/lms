@@ -13,7 +13,7 @@ Artisan::command('inspire', function () {
 // 1. Jadval import (import:schedules)
 // 2. Final import — baholar (student:import-data --mode=final)
 // 3. Davomat nazorati FINAL (import:attendance-controls --mode=final)
-Schedule::command('nightly:run')->dailyAt('00:00')->withoutOverlapping(180);
+Schedule::command('nightly:run')->dailyAt('00:30')->withoutOverlapping(180);
 
 // 04:00 da retry: FAQAT oldingi run xato bergan bo'lsa qayta ishlaydi
 Schedule::command('student:import-data --mode=final')->dailyAt('04:00')->when(function () {

@@ -30,17 +30,25 @@ class RunNightlyImports extends Command
         $dateStr = Carbon::now()->format('d.m.Y');
         $this->sendMessage("🌙 Kechki import — {$dateStr}\n\n⏳ Boshlanmoqda...");
 
+        $stepPause = 180; // Bosqichlar orasida 3 daqiqa pauza (server yukini kamaytirish)
+
         // 1-qadam: Jadval import
         $this->runStep(
             'Jadval import',
             fn () => Artisan::call('import:schedules', ['--silent' => true]),
         );
 
+        $this->info("Keyingi bosqichgacha {$stepPause}s pauza...");
+        sleep($stepPause);
+
         // 2-qadam: Final import (baholar)
         $this->runStep(
             'Final import (baholar)',
             fn () => Artisan::call('student:import-data', ['--mode' => 'final', '--silent' => true]),
         );
+
+        $this->info("Keyingi bosqichgacha {$stepPause}s pauza...");
+        sleep($stepPause);
 
         // 3-qadam: Davomat nazorati FINAL
         $this->runStep(
@@ -90,9 +98,19 @@ class RunNightlyImports extends Command
 
         try {
             $exitCode = $callback();
+
+            // Artisan sub-command outputidan xato tafsilotini olish
+            $artisanOutput = trim(Artisan::output());
+
             if ($exitCode !== 0 && $exitCode !== null) {
                 $this->steps[$stepIdx]['status'] = 'failed';
-                $this->steps[$stepIdx]['error'] = "Exit code: {$exitCode}";
+                // Artisan outputdan oxirgi 3 qatorni xato tafsiloti sifatida ko'rsatish
+                $errorDetail = "Exit code: {$exitCode}";
+                if ($artisanOutput) {
+                    $lastLines = array_slice(explode("\n", $artisanOutput), -3);
+                    $errorDetail .= "\n" . implode("\n", $lastLines);
+                }
+                $this->steps[$stepIdx]['error'] = substr($errorDetail, 0, 300);
             } else {
                 $this->steps[$stepIdx]['status'] = 'done';
             }
@@ -101,7 +119,7 @@ class RunNightlyImports extends Command
         } catch (\Throwable $e) {
             $this->steps[$stepIdx]['status'] = 'failed';
             $this->steps[$stepIdx]['end'] = Carbon::now()->format('H:i');
-            $this->steps[$stepIdx]['error'] = substr($e->getMessage(), 0, 150);
+            $this->steps[$stepIdx]['error'] = substr($e->getMessage(), 0, 300);
             $this->error("{$name} xato: " . $e->getMessage());
             Log::error("[NightlyImports] {$name} failed: " . $e->getMessage());
         }

@@ -126,17 +126,23 @@ class ImportAttendanceControls extends Command
     }
 
     // =========================================================================
-    // FINAL IMPORT — har kuni 02:00 da, yakunlanmagan kunlarni is_final=true qiladi
+    // FINAL IMPORT — har kuni tunda, oxirgi 7 kunni is_final=true qiladi
     // =========================================================================
     private function handleFinalImport(string $token, TelegramService $telegram, bool $silent): int
     {
+        // Oxirgi 7 kun — eski kunlar allaqachon yakunlangan, qayta import qilish shart emas
+        $from = Carbon::today()->subDays(7)->startOfDay();
+        $to = Carbon::yesterday()->endOfDay();
+
+        $dateRange = "{$from->toDateString()} — {$to->toDateString()}";
+
         if (!$silent) {
-            $telegram->notify("🟢 Davomat nazorati FINAL import boshlandi (butun semestr)");
+            $telegram->notify("🟢 Davomat nazorati FINAL import boshlandi ({$dateRange})");
         }
-        $this->info('Starting FINAL attendance controls import (butun semestr)...');
+        $this->info("Starting FINAL attendance controls import ({$dateRange})...");
 
         // Sahifama-sahifa process — xotiraga yig'masdan
-        $result = $this->streamPagesAndProcess($token, null, null, true);
+        $result = $this->streamPagesAndProcess($token, $from->timestamp, $to->timestamp, true);
 
         if ($result === false) {
             $this->error('Final import: API xato — import bekor qilindi.');
@@ -149,7 +155,7 @@ class ImportAttendanceControls extends Command
         $totalDays = $result['totalDays'];
         $totalRecords = $result['totalRecords'];
 
-        $msg = "✅ Davomat nazorati FINAL import: {$totalDays} kun, {$totalRecords} yozuv (butun semestr)";
+        $msg = "✅ Davomat nazorati FINAL import: {$totalDays} kun, {$totalRecords} yozuv ({$dateRange})";
         if (!$silent) {
             $telegram->notify($msg);
         }

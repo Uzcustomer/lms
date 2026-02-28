@@ -1596,58 +1596,119 @@ class KtrController extends Controller
         $titleSection = $phpWord->addSection([
             'orientation' => 'portrait',
             'paperSize' => 'A4',
-            'marginTop' => 1440,
-            'marginBottom' => 1440,
-            'marginLeft' => 1440,
-            'marginRight' => 1440,
+            'marginTop' => 1134,
+            'marginBottom' => 1134,
+            'marginLeft' => 1418,
+            'marginRight' => 1134,
         ]);
 
         $center = ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0];
         $left = ['spaceAfter' => 0, 'spaceBefore' => 0];
         $right = ['alignment' => 'right', 'spaceAfter' => 0, 'spaceBefore' => 0];
+        $centerS = ['alignment' => 'center', 'spaceAfter' => 40, 'spaceBefore' => 0];
 
-        // Tasdiqlangan matn (o'ng tomonda)
-        $titleSection->addText('"Tasdiqlagan"', ['bold' => true, 'size' => 12], $right);
-        $titleSection->addText("O'quv ishlari bo'yicha prorektor", ['size' => 12], $right);
-        $titleSection->addText('_____________  /', ['size' => 12], $right);
-        $titleSection->addText('"____" ______________ ' . date('Y') . ' y.', ['size' => 12], $right);
+        // ---- YUQORI QISM: Vazirlik va universitet nomi (markazda) ----
+        $titleSection->addText(
+            "O'ZBEKISTON RESPUBLIKASI",
+            ['bold' => true, 'size' => 11],
+            $center
+        );
+        $titleSection->addText(
+            "OLIY TA'LIM, FAN VA INNOVATSIYALAR VAZIRLIGI",
+            ['bold' => true, 'size' => 11],
+            $center
+        );
+        $titleSection->addText(
+            "O'ZBEKISTON RESPUBLIKASI SOG'LIQNI SAQLASH VAZIRLIGI",
+            ['bold' => true, 'size' => 11],
+            $center
+        );
+        $titleSection->addText(
+            'TOSHKENT DAVLAT TIBBIYOT UNIVERSITETI',
+            ['bold' => true, 'size' => 12],
+            $center
+        );
+        $titleSection->addText(
+            'TERMIZ FILIALI',
+            ['bold' => true, 'size' => 12],
+            $center
+        );
 
-        $titleSection->addTextBreak(3);
+        $titleSection->addTextBreak(1);
 
-        // Markazda: KALENDAR-TEMATIK REJA
-        $titleSection->addText('KALENDAR-TEMATIK REJA', ['bold' => true, 'size' => 16], $center);
+        // ---- Kafedra nomi (markazda) ----
+        $kafedraName = mb_strtoupper($approverInfo['kafedra_name'] ?: '_______________');
+        $titleSection->addText(
+            $kafedraName . ' KAFEDRASI',
+            ['bold' => true, 'size' => 12],
+            $center
+        );
+
+        $titleSection->addTextBreak(1);
+
+        // ---- "Tasdiqlayman" bloki (o'ng tomonda) ----
+        $dekanName = $approverInfo['dekan']['name'] ?? '_______________';
+        $facultyName = $approverInfo['faculty_name'] ?: '_______________';
+        $titleSection->addText("\u{00AB}Tasdiqlayman\u{00BB}", ['bold' => true, 'size' => 12, 'italic' => true], $right);
+        $titleSection->addText($facultyName . ' fakulteti dekani:', ['size' => 11], $right);
+        $titleSection->addText('___________ ' . $dekanName, ['size' => 11], $right);
+        $titleSection->addText("\u{00AB}____\u{00BB} _____________ " . date('Y') . ' yil', ['size' => 11], $right);
+
         $titleSection->addTextBreak(2);
 
-        // Fan ma'lumotlari - chapda
-        $titleSection->addText('Fan: ' . $cs->subject_name, ['bold' => true, 'size' => 13], $left);
+        // ---- Fan nomi va KTR sarlavhasi (markazda, katta) ----
+        $titleSection->addText(
+            mb_strtoupper($cs->subject_name),
+            ['bold' => true, 'size' => 16],
+            $center
+        );
         $titleSection->addTextBreak(0);
-        $titleSection->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: '_______________'), ['size' => 12], $left);
-        $titleSection->addText("Kafedra: " . ($approverInfo['kafedra_name'] ?: '_______________'), ['size' => 12], $left);
-        $titleSection->addText("Yo'nalish: " . ($specialtyName ?: '_______________'), ['size' => 12], $left);
-        $titleSection->addText("Ta'lim turi: " . ($educationTypeName ?: '_______________'), ['size' => 12], $left);
-        $titleSection->addText("Ta'lim shakli: " . ($educationFormName ?: '_______________'), ['size' => 12], $left);
-        $titleSection->addText('Kurs: ' . ($levelName ?: '___'), ['size' => 12], $left);
-        $titleSection->addText('Semestr: ' . $semesterName, ['size' => 12], $left);
-        $titleSection->addText("O'quv yili: " . $educationYear, ['size' => 12], $left);
-        $titleSection->addTextBreak(0);
+        $titleSection->addText(
+            'KALENDAR-TEMATIK REJA',
+            ['bold' => true, 'size' => 14],
+            $center
+        );
+        $titleSection->addText(
+            $educationYear . " o'quv yili",
+            ['size' => 13],
+            $centerS
+        );
 
-        // Soatlar
-        $titleSection->addText('Jami soat: ' . $totalHours, ['size' => 12], $left);
+        // Ta'lim turi va kurs-semestr
+        if ($educationTypeName) {
+            $titleSection->addText('(' . $educationTypeName . ')', ['size' => 12], $center);
+        }
+        $kursInfo = '';
+        if ($levelName) $kursInfo .= $levelName . '-kurs';
+        if ($semesterName) $kursInfo .= ($kursInfo ? '  ' : '') . $semesterName;
+        if ($kursInfo) {
+            $titleSection->addText('(' . $kursInfo . ')', ['size' => 12], $center);
+        }
+
+        $titleSection->addTextBreak(1);
+
+        // Soatlar jadvali
+        $titleSection->addText('Jami soat: ' . $totalHours, ['bold' => true, 'size' => 12], $center);
+        $soatParts = [];
         foreach ($filteredTypes as $code => $type) {
-            $titleSection->addText('  ' . $type['name'] . ': ' . $type['hours'] . ' soat', ['size' => 12], $left);
+            $soatParts[] = $type['name'] . ' - ' . $type['hours'] . ' soat';
         }
         foreach ($mustaqilTypes as $code => $type) {
-            $titleSection->addText('  ' . $type['name'] . ': ' . $type['hours'] . ' soat', ['size' => 12], $left);
+            $soatParts[] = $type['name'] . ' - ' . $type['hours'] . ' soat';
+        }
+        if ($soatParts) {
+            $titleSection->addText(implode(',  ', $soatParts), ['size' => 11], $center);
         }
 
-        $titleSection->addTextBreak(3);
+        // Pastga joy qoldirish
+        $titleSection->addTextBreak(6);
 
-        // Imzolar
-        $titleSection->addText("Tuzuvchi o'qituvchi:  ______________  " . $teacherName, ['size' => 12], $left);
-        $titleSection->addTextBreak(1);
-        $titleSection->addText("Kafedra mudiri:  ______________  " . ($approverInfo['kafedra_mudiri']['name'] ?? ''), ['size' => 12], $left);
-        $titleSection->addTextBreak(1);
-        $titleSection->addText("Fakultet dekani:  ______________  " . ($approverInfo['dekan']['name'] ?? ''), ['size' => 12], $left);
+        // ---- Pastda: Shahar-Yil (markazda) ----
+        $titleSection->addText(
+            'TERMIZ - ' . date('Y'),
+            ['bold' => true, 'size' => 12],
+            $center
+        );
 
         // =============== 2-BET: JADVAL (A4 Landscape) ===============
         $section = $phpWord->addSection([

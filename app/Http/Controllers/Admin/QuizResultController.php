@@ -461,6 +461,51 @@ class QuizResultController extends Controller
                 }
             }
 
+            // Joriy semestrning fan entry'sini topish (eski fan_id → yangi fan_id mapping)
+            // HEMIS ba'zan bir xil fan uchun har semestrda yangi subject_id beradi
+            // Masalan: Pediatriya → subject_id=25 (7-semestr), subject_id=435 (10-semestr)
+            $currentSubjectMapping = []; // curriculum_hemis_id|old_fan_id => ['fan_id' => ..., 'semester_code' => ...]
+            if (!empty($curriculumHemisIds) && !empty($fanIds)) {
+                // 1) Eski fan_id larning subject_name larini olish
+                $fanNameRows = CurriculumSubject::whereIn('subject_id', $fanIds)
+                    ->whereIn('curricula_hemis_id', $curriculumHemisIds)
+                    ->select('subject_id', 'subject_name', 'curricula_hemis_id')
+                    ->get();
+
+                $fanNames = []; // old_fan_id => subject_name
+                foreach ($fanNameRows as $fnr) {
+                    $fanNames[$fnr->subject_id] = $fnr->subject_name;
+                }
+
+                if (!empty($fanNames)) {
+                    // 2) Joriy semestrda shu nomdagi fanlarni topish
+                    $uniqueNames = array_unique(array_values($fanNames));
+                    $currentEntries = DB::table('curriculum_subjects as cs')
+                        ->join('semesters as s', function ($join) {
+                            $join->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+                                ->on('s.code', '=', 'cs.semester_code');
+                        })
+                        ->where('s.current', true)
+                        ->whereIn('cs.curricula_hemis_id', $curriculumHemisIds)
+                        ->whereIn('cs.subject_name', $uniqueNames)
+                        ->select('cs.curricula_hemis_id', 'cs.subject_id', 'cs.subject_name', 'cs.semester_code')
+                        ->get();
+
+                    // 3) Mapping: eski fan_id → joriy fan_id (faqat farq qilganda)
+                    foreach ($currentEntries as $ce) {
+                        foreach ($fanNames as $oldFanId => $name) {
+                            if ($ce->subject_name === $name && $ce->subject_id != $oldFanId) {
+                                $mapKey = $ce->curricula_hemis_id . '|' . $oldFanId;
+                                $currentSubjectMapping[$mapKey] = [
+                                    'fan_id' => $ce->subject_id,
+                                    'semester_code' => $ce->semester_code,
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+
             // Schedules dan haqiqiy semester_code larni olish (group_hemis_id + subject_id)
             // curriculum_subjects va schedules orasida semester_code farq bo'lishi mumkin
             $scheduleSemesterCodes = [];
@@ -745,48 +790,57 @@ class QuizResultController extends Controller
                     $studentScoreLookup, $defaultScore
                 );
 
-                // Journal uchun group_db_id va semester_code aniqlash
+                // Journal uchun group_db_id, fan_id va semester_code aniqlash
                 $groupDbId = null;
                 $semesterCode = null;
+                $fanIdForLink = $result->fan_id;
                 if ($student) {
                     $groupModel = $groups[$student->group_id] ?? null;
                     if ($groupModel) {
                         $groupDbId = $groupModel->id;
 
-                        // 1) Avval schedules dan haqiqiy semester_code ni tekshirish
-                        //    (curriculum_subjects va schedules orasida semester_code farq bo'lishi mumkin)
-                        $schedKey = $groupModel->group_hemis_id . '|' . $result->fan_id;
-                        $scheduleSemCode = $scheduleSemesterCodes[$schedKey] ?? null;
-
-                        if ($scheduleSemCode) {
-                            // Schedules da aniq semester_code topildi — uni ishlatamiz
-                            $semesterCode = $scheduleSemCode;
+                        // 0) Joriy semestrda shu fan uchun yangi subject_id bormi tekshirish
+                        //    HEMIS har semestrda bir xil fan uchun yangi subject_id berishi mumkin
+                        //    Masalan: Pediatriya → fan_id=25 (7-sem), fan_id=435 (10-sem)
+                        $mapKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
+                        if (isset($currentSubjectMapping[$mapKey])) {
+                            $fanIdForLink = $currentSubjectMapping[$mapKey]['fan_id'];
+                            $semesterCode = $currentSubjectMapping[$mapKey]['semester_code'];
                         } else {
-                            // 2) Schedules da topilmasa — curriculum_subjects dan tanlash (fallback)
-                            $csKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
-                            $allSemCodes = $curriculumSubjectsAll[$csKey] ?? [];
+                            // 1) Avval schedules dan haqiqiy semester_code ni tekshirish
+                            $schedKey = $groupModel->group_hemis_id . '|' . $result->fan_id;
+                            $scheduleSemCode = $scheduleSemesterCodes[$schedKey] ?? null;
 
-                            if (count($allSemCodes) === 1) {
-                                $semesterCode = $allSemCodes[0];
-                            } elseif (count($allSemCodes) > 1) {
-                                $studentSemCode = $student->semester_code;
-                                if ($studentSemCode && in_array($studentSemCode, $allSemCodes)) {
-                                    $semesterCode = $studentSemCode;
-                                } else {
-                                    $curSem = $currentSemesters[$groupModel->curriculum_hemis_id] ?? null;
-                                    if ($curSem && in_array($curSem, $allSemCodes)) {
-                                        $semesterCode = $curSem;
+                            if ($scheduleSemCode) {
+                                $semesterCode = $scheduleSemCode;
+                            } else {
+                                // 2) curriculum_subjects dan tanlash (fallback)
+                                $csKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
+                                $allSemCodes = $curriculumSubjectsAll[$csKey] ?? [];
+
+                                if (count($allSemCodes) === 1) {
+                                    $semesterCode = $allSemCodes[0];
+                                } elseif (count($allSemCodes) > 1) {
+                                    $studentSemCode = $student->semester_code;
+                                    if ($studentSemCode && in_array($studentSemCode, $allSemCodes)) {
+                                        $semesterCode = $studentSemCode;
                                     } else {
-                                        $semesterCode = end($allSemCodes);
+                                        $curSem = $currentSemesters[$groupModel->curriculum_hemis_id] ?? null;
+                                        if ($curSem && in_array($curSem, $allSemCodes)) {
+                                            $semesterCode = $curSem;
+                                        } else {
+                                            // Eng katta semester_code ni tanlash (eng yangi)
+                                            $semesterCode = max($allSemCodes);
+                                        }
                                     }
-                                }
-                            } elseif ($student->semester_code) {
-                                $directCs = CurriculumSubject::where('curricula_hemis_id', $groupModel->curriculum_hemis_id)
-                                    ->where('subject_id', $result->fan_id)
-                                    ->where('semester_code', $student->semester_code)
-                                    ->first();
-                                if ($directCs) {
-                                    $semesterCode = $directCs->semester_code;
+                                } elseif ($student->semester_code) {
+                                    $directCs = CurriculumSubject::where('curricula_hemis_id', $groupModel->curriculum_hemis_id)
+                                        ->where('subject_id', $result->fan_id)
+                                        ->where('semester_code', $student->semester_code)
+                                        ->first();
+                                    if ($directCs) {
+                                        $semesterCode = $directCs->semester_code;
+                                    }
                                 }
                             }
                         }
@@ -815,7 +869,7 @@ class QuizResultController extends Controller
                     'mt_avg' => $xulosa['mt_avg'],
                     'oski_avg' => $xulosa['oski_avg'],
                     'group_db_id' => $groupDbId,
-                    'fan_id' => $result->fan_id,
+                    'fan_id' => $fanIdForLink,
                     'semester_code' => $semesterCode,
                 ];
             }

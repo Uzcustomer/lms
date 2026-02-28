@@ -984,7 +984,7 @@
                         @php
                             $totalJbDays = count($jbLessonDates);
                             $totalMtDays = count($mtLessonDates);
-                            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+                            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
                             $openLessonRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
                             $canOpenLesson = (auth()->guard('web')->user()?->hasAnyRole($openLessonRoles) ?? false)
                                 || (auth()->guard('teacher')->user()?->hasAnyRole($openLessonRoles) ?? false);

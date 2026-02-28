@@ -608,7 +608,7 @@ class ReportController extends Controller
      */
     public function lessonAssignmentDiagnostic(Request $request)
     {
-        $date = $request->get('date', now()->subDay()->format('Y-m-d'));
+        $date = $request->get('date', now()->format('Y-m-d'));
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 

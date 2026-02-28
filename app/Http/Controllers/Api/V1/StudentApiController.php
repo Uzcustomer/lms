@@ -256,7 +256,7 @@ class StudentApiController extends Controller
 
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
-        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->endOfDay();
 
         $getEffectiveGrade = function ($row) {
             if ($row->status === 'pending') return null;

@@ -281,7 +281,7 @@ class StudentController extends Controller
         $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
-        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->endOfDay();
 
         // MT settings
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');

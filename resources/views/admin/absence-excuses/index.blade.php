@@ -13,11 +13,64 @@
                 </div>
             @endif
 
+            @if(session('warning'))
+                <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+                    {{ session('warning') }}
+                </div>
+            @endif
+
             @if(session('error'))
                 <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                     {{ session('error') }}
                 </div>
             @endif
+
+            @if(session('import_errors'))
+                <div class="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded mb-4 max-h-60 overflow-y-auto">
+                    <p class="font-semibold mb-2">Import xatoliklari:</p>
+                    <ul class="list-disc list-inside text-sm space-y-1">
+                        @foreach(session('import_errors') as $err)
+                            <li>{{ $err }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            {{-- Import section --}}
+            <div x-data="{ showImport: false }" class="mb-4">
+                <div class="flex gap-2">
+                    <button @click="showImport = !showImport"
+                            class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                        Exceldan import
+                    </button>
+                    <a href="{{ route('admin.absence-excuses.import-template') }}"
+                       class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        Shablon yuklab olish
+                    </a>
+                </div>
+
+                <div x-show="showImport" x-cloak x-transition class="mt-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <form action="{{ route('admin.absence-excuses.import') }}" method="POST" enctype="multipart/form-data" class="flex items-end gap-3">
+                        @csrf
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Excel faylni tanlang (.xlsx, .xls, .csv)</label>
+                            <input type="file" name="file" accept=".xlsx,.xls,.csv" required
+                                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                        </div>
+                        <button type="submit"
+                                class="inline-flex items-center px-5 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            Import qilish
+                        </button>
+                    </form>
+                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        Avval "Shablon yuklab olish" tugmasini bosib, namuna faylni ko'ring. Shablondagi ustunlarga ma'lumotlarni to'ldirib, yuklang.
+                        Dublikat yozuvlar avtomatik o'tkazib yuboriladi.
+                    </p>
+                </div>
+            </div>
 
             {{-- Statistika card --}}
             <div class="mb-4">

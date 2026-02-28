@@ -242,7 +242,7 @@
             </svg>
             YN kunini belgilash
         </a>
-        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi']))
+        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi', 'fan_masuli']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         <div class="sidebar-section">Qo'shimcha</div>
 

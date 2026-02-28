@@ -95,6 +95,17 @@
                                        onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
                             </div>
 
+                            <div class="filter-item" style="min-width: 140px;">
+                                <label class="filter-label" style="color: #059669;">
+                                    <span class="fl-dot" style="background:#059669;"></span> KTR holati
+                                </label>
+                                <select name="ktr_status" id="ktr_status" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                    <option value="created" {{ request('ktr_status') == 'created' ? 'selected' : '' }}>Yaratildi</option>
+                                    <option value="not_created" {{ request('ktr_status') == 'not_created' ? 'selected' : '' }}>Yaratilmadi</option>
+                                </select>
+                            </div>
+
                             <div class="filter-item" style="min-width: 130px;">
                                 <label class="filter-label fl-slate">
                                     <span class="fl-dot" style="background:#94a3b8;"></span> Holati
@@ -195,6 +206,7 @@
                                     @foreach($trainingTypes as $code => $name)
                                         <th class="ktr-type-th">{{ $name }}</th>
                                     @endforeach
+                                    <th style="min-width: 90px; text-align: center;">Holat</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -233,6 +245,13 @@
                                                 @endif
                                             </td>
                                         @endforeach
+                                        <td style="text-align: center;">
+                                            @if($item->has_ktr ?? false)
+                                                <span class="badge" style="background:#dcfce7;color:#16a34a;font-size:11px;padding:2px 8px;border-radius:6px;">Yaratildi</span>
+                                            @else
+                                                <span class="badge" style="background:#fef2f2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:6px;">Yaratilmadi</span>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>

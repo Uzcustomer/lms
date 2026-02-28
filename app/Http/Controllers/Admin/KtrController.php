@@ -1637,9 +1637,11 @@ class KtrController extends Controller
         $titleSection->addTextBreak(1);
 
         // ---- Kafedra nomi (markazda) ----
-        $kafedraName = mb_strtoupper($approverInfo['kafedra_name'] ?: '_______________');
+        // Kafedra nomidan "kafedrasi" so'zini olib tashlash (takrorlanmasligi uchun)
+        $kafedraRaw = $approverInfo['kafedra_name'] ?: '_______________';
+        $kafedraClean = preg_replace('/\s*kafedrasi?\s*$/iu', '', $kafedraRaw);
         $titleSection->addText(
-            $kafedraName . ' KAFEDRASI',
+            mb_strtoupper($kafedraClean) . ' KAFEDRASI',
             ['bold' => true, 'size' => 12],
             $center
         );
@@ -1647,11 +1649,22 @@ class KtrController extends Controller
         $titleSection->addTextBreak(1);
 
         // ---- "Tasdiqlayman" bloki (o'ng tomonda) ----
-        $dekanName = $approverInfo['dekan']['name'] ?? '_______________';
+        // Dekan ismini qisqartirish: Familya I.O. formatida
+        $dekanFullName = $approverInfo['dekan']['name'] ?? '';
+        $dekanShort = $dekanFullName;
+        if ($dekanFullName) {
+            $nameParts = preg_split('/\s+/', trim($dekanFullName));
+            if (count($nameParts) >= 2) {
+                $dekanShort = $nameParts[0]; // Familya
+                for ($i = 1; $i < count($nameParts); $i++) {
+                    $dekanShort .= ' ' . mb_strtoupper(mb_substr($nameParts[$i], 0, 1)) . '.';
+                }
+            }
+        }
         $facultyName = $approverInfo['faculty_name'] ?: '_______________';
         $titleSection->addText("\u{00AB}Tasdiqlayman\u{00BB}", ['bold' => true, 'size' => 12, 'italic' => true], $right);
         $titleSection->addText($facultyName . ' fakulteti dekani:', ['size' => 11], $right);
-        $titleSection->addText('___________ ' . $dekanName, ['size' => 11], $right);
+        $titleSection->addText('___________ ' . ($dekanShort ?: '_______________'), ['size' => 11], $right);
         $titleSection->addText("\u{00AB}____\u{00BB} _____________ " . date('Y') . ' yil', ['size' => 11], $right);
 
         $titleSection->addTextBreak(2);
@@ -1670,38 +1683,20 @@ class KtrController extends Controller
         );
         $titleSection->addText(
             $educationYear . " o'quv yili",
-            ['size' => 13],
+            ['bold' => true, 'size' => 14],
             $centerS
         );
 
-        // Ta'lim turi va kurs-semestr
-        if ($educationTypeName) {
-            $titleSection->addText('(' . $educationTypeName . ')', ['size' => 12], $center);
-        }
+        // Kurs va semestr (bold, kattaroq)
         $kursInfo = '';
         if ($levelName) $kursInfo .= $levelName . '-kurs';
         if ($semesterName) $kursInfo .= ($kursInfo ? '  ' : '') . $semesterName;
         if ($kursInfo) {
-            $titleSection->addText('(' . $kursInfo . ')', ['size' => 12], $center);
-        }
-
-        $titleSection->addTextBreak(1);
-
-        // Soatlar jadvali
-        $titleSection->addText('Jami soat: ' . $totalHours, ['bold' => true, 'size' => 12], $center);
-        $soatParts = [];
-        foreach ($filteredTypes as $code => $type) {
-            $soatParts[] = $type['name'] . ' - ' . $type['hours'] . ' soat';
-        }
-        foreach ($mustaqilTypes as $code => $type) {
-            $soatParts[] = $type['name'] . ' - ' . $type['hours'] . ' soat';
-        }
-        if ($soatParts) {
-            $titleSection->addText(implode(',  ', $soatParts), ['size' => 11], $center);
+            $titleSection->addText('(' . $kursInfo . ')', ['bold' => true, 'size' => 13], $center);
         }
 
         // Pastga joy qoldirish
-        $titleSection->addTextBreak(6);
+        $titleSection->addTextBreak(8);
 
         // ---- Pastda: Shahar-Yil (markazda) ----
         $titleSection->addText(
@@ -1720,6 +1715,17 @@ class KtrController extends Controller
             'marginRight' => 600,
         ]);
 
+        // ---- Sarlavha va yuklama soatlari ----
+        $section->addText('Fan: ' . $cs->subject_name, ['bold' => true, 'size' => 12], $left);
+        $section->addText($semesterName . ' uchun ajratilgan soat:', ['bold' => true, 'size' => 11], $left);
+        foreach ($filteredTypes as $code => $type) {
+            $section->addText('  ' . $type['name'] . ' - ' . $type['hours'] . ' soat', ['size' => 11], $left);
+        }
+        foreach ($mustaqilTypes as $code => $type) {
+            $section->addText('  ' . $type['name'] . ' - ' . $type['hours'] . ' soat', ['size' => 11], $left);
+        }
+        $section->addTextBreak(0);
+
         // ---- JADVAL SARLAVHASI ----
         $typeNames = [];
         foreach ($filteredTypes as $code => $type) {
@@ -1730,7 +1736,6 @@ class KtrController extends Controller
             ['bold' => true, 'size' => 12],
             $center
         );
-        $section->addText($cs->subject_name . '  ' . $semesterName . '  ' . $educationYear, ['size' => 11], $center);
         $section->addTextBreak(0);
 
         // ---- JADVAL ----

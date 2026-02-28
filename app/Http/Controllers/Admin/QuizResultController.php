@@ -467,14 +467,11 @@ class QuizResultController extends Controller
                 }
             }
 
-            // MT baholar — jurnal logikasi bilan bir xil hisoblash (schedule-based daily average)
-            $mtGrades = []; // student_hemis_id|subject_id => computed MT average (pre-computed)
+            // Student->group mapping va semester aniqlash (MT va OSKI uchun umumiy)
+            $studentGroupMap = [];
+            $studentSubjectSemester = [];
 
-            if (!empty($studentHemisIds) && !empty($fanIds) && $groups->isNotEmpty()) {
-                // 1) Student->group mapping va schedule key'larni yig'ish
-                $studentGroupMap = [];
-                $studentSubjectSemester = [];
-
+            if ($groups->isNotEmpty()) {
                 foreach ($students as $s) {
                     $grp = $groups[$s->group_id] ?? null;
                     if (!$grp) continue;
@@ -486,7 +483,12 @@ class QuizResultController extends Controller
                         $studentSubjectSemester[$s->hemis_id . '|' . $fId] = $semC;
                     }
                 }
+            }
 
+            // MT baholar — jurnal logikasi bilan bir xil hisoblash (schedule-based daily average)
+            $mtGrades = []; // student_hemis_id|subject_id => computed MT average (pre-computed)
+
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($studentGroupMap)) {
                 // 2) MT jadval sanalarini batch olish (schedules jadvalidan)
                 $mtScheduleData = [];
                 $uniqueGroupIds = array_unique(array_values($studentGroupMap));
@@ -633,20 +635,26 @@ class QuizResultController extends Controller
                 }
             }
 
-            // OSKI baholar (training_type_code = 101) — YN test uchun kerak
-            $oskiGrades = [];
-            if (!empty($studentHemisIds) && !empty($fanIds)) {
+            // OSKI baholar (training_type_code = 101) — jurnal logikasi: MAX(grade) + semester filtri
+            $oskiGrades = []; // student_hemis_id|subject_id => max grade (pre-computed)
+            $allSemCodesForOski = !empty($studentSubjectSemester) ? array_unique(array_values($studentSubjectSemester)) : [];
+
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($allSemCodesForOski)) {
                 foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                    $oskiRows = StudentGrade::whereIn('student_hemis_id', $chunk)
+                    $oskiRows = DB::table('student_grades')
+                        ->whereNull('deleted_at')
+                        ->whereIn('student_hemis_id', $chunk)
                         ->whereIn('subject_id', $fanIds)
+                        ->whereIn('semester_code', $allSemCodesForOski)
                         ->where('training_type_code', 101)
                         ->whereNotNull('grade')
-                        ->select('student_hemis_id', 'subject_id', 'grade')
+                        ->select('student_hemis_id', 'subject_id', DB::raw('MAX(grade) as grade'))
+                        ->groupBy('student_hemis_id', 'subject_id')
                         ->get();
 
                     foreach ($oskiRows as $row) {
                         $k = $row->student_hemis_id . '|' . $row->subject_id;
-                        $oskiGrades[$k][] = $row->grade;
+                        $oskiGrades[$k] = (float) $row->grade;
                     }
                     unset($oskiRows);
                 }
@@ -852,9 +860,9 @@ class QuizResultController extends Controller
             $mtAvg = $mtGrades[$gradeKey];
         }
 
-        // OSKI o'rtachasi
+        // OSKI bahosi (jurnal logikasi bilan oldindan hisoblangan — MAX)
         if (isset($oskiGrades[$gradeKey])) {
-            $oskiAvg = round(array_sum($oskiGrades[$gradeKey]) / count($oskiGrades[$gradeKey]), 1);
+            $oskiAvg = $oskiGrades[$gradeKey];
         }
 
         // 9) YNga ruxsat tekshiruvi (MarkingSystemScore orqali)

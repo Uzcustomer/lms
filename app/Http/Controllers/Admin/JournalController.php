@@ -3554,13 +3554,23 @@ class JournalController extends Controller
             ->where('g.department_active', true)
             ->where('g.active', true);
         if ($request->filled('semester_code')) {
-            // Tanlangan semestr guruhning curriculumida current bo'lishi shart
-            $groupsQuery->whereExists(function ($sub) use ($request) {
-                $sub->select(DB::raw(1))
-                    ->from('semesters as s2')
-                    ->whereColumn('s2.curriculum_hemis_id', 'g.curriculum_hemis_id')
-                    ->where('s2.code', $request->semester_code)
-                    ->where('s2.current', true);
+            // Tanlangan semestr guruhning curriculumida bo'lishi shart
+            // current=true YOKI schedules da shu semester_code mavjud bo'lsa
+            $groupsQuery->where(function ($q) use ($request) {
+                $q->whereExists(function ($sub) use ($request) {
+                    $sub->select(DB::raw(1))
+                        ->from('semesters as s2')
+                        ->whereColumn('s2.curriculum_hemis_id', 'g.curriculum_hemis_id')
+                        ->where('s2.code', $request->semester_code)
+                        ->where('s2.current', true);
+                })->orWhereExists(function ($sub) use ($request) {
+                    // Schedules da shu semester bilan dars mavjud bo'lsa ham ko'rsatish
+                    $sub->select(DB::raw(1))
+                        ->from('schedules as sch')
+                        ->whereColumn('sch.group_id', 'g.group_hemis_id')
+                        ->where('sch.semester_code', $request->semester_code)
+                        ->whereNull('sch.deleted_at');
+                });
             });
         } else {
             // Semestr tanlanmagan - ixtiyoriy joriy semestri bor guruhlar
@@ -3579,14 +3589,21 @@ class JournalController extends Controller
         }
         // Ikki tomonlama: fan tanlansa, faqat o'sha fan bor guruhlar
         if ($request->filled('subject_id')) {
-            $groupsQuery->whereExists(function ($sub) use ($request) {
-                $sub->select(DB::raw(1))
-                    ->from('curriculum_subjects as cs2')
-                    ->whereColumn('cs2.curricula_hemis_id', 'g.curriculum_hemis_id')
-                    ->where('cs2.subject_id', $request->subject_id);
-                if ($request->filled('semester_code')) {
-                    $sub->where('cs2.semester_code', $request->semester_code);
-                }
+            $groupsQuery->where(function ($q) use ($request) {
+                // curriculum_subjects da fan mavjud (ixtiyoriy semester_code)
+                $q->whereExists(function ($sub) use ($request) {
+                    $sub->select(DB::raw(1))
+                        ->from('curriculum_subjects as cs2')
+                        ->whereColumn('cs2.curricula_hemis_id', 'g.curriculum_hemis_id')
+                        ->where('cs2.subject_id', $request->subject_id);
+                })->orWhereExists(function ($sub) use ($request) {
+                    // schedules da shu fan mavjud bo'lsa ham
+                    $sub->select(DB::raw(1))
+                        ->from('schedules as sch2')
+                        ->whereColumn('sch2.group_id', 'g.group_hemis_id')
+                        ->where('sch2.subject_id', $request->subject_id)
+                        ->whereNull('sch2.deleted_at');
+                });
             });
         }
         // O'qituvchi uchun faqat o'zi o'tadigan guruhlar
@@ -3604,14 +3621,37 @@ class JournalController extends Controller
             ->where('g.department_active', true)
             ->where('g.active', true);
         if ($request->filled('semester_code')) {
-            $subjectsQuery->where('cs.semester_code', $request->semester_code);
+            // curriculum_subjects.semester_code yoki schedules.semester_code mos kelishi kerak
+            // (bu ikki jadval orasida semester_code farq qilishi mumkin)
+            $semCode = $request->semester_code;
+            $subjectsQuery->where(function ($q) use ($semCode) {
+                $q->where('cs.semester_code', $semCode)
+                  ->orWhereExists(function ($sub) use ($semCode) {
+                      $sub->select(DB::raw(1))
+                          ->from('schedules as sch3')
+                          ->whereColumn('sch3.group_id', 'g.group_hemis_id')
+                          ->whereColumn('sch3.subject_id', 'cs.subject_id')
+                          ->where('sch3.semester_code', $semCode)
+                          ->whereNull('sch3.deleted_at');
+                  });
+            });
             // Faqat joriy semestr fanlari (eski curriculumlarni chiqarmaslik uchun)
-            $subjectsQuery->whereExists(function ($sub) use ($request) {
-                $sub->select(DB::raw(1))
-                    ->from('semesters as s3')
-                    ->whereColumn('s3.curriculum_hemis_id', 'cs.curricula_hemis_id')
-                    ->where('s3.code', $request->semester_code)
-                    ->where('s3.current', true);
+            // YOKI schedules da shu semester bilan dars mavjud
+            $subjectsQuery->where(function ($q) use ($request) {
+                $q->whereExists(function ($sub) use ($request) {
+                    $sub->select(DB::raw(1))
+                        ->from('semesters as s3')
+                        ->whereColumn('s3.curriculum_hemis_id', 'cs.curricula_hemis_id')
+                        ->where('s3.code', $request->semester_code)
+                        ->where('s3.current', true);
+                })->orWhereExists(function ($sub) use ($request) {
+                    $sub->select(DB::raw(1))
+                        ->from('schedules as sch4')
+                        ->whereColumn('sch4.group_id', 'g.group_hemis_id')
+                        ->whereColumn('sch4.subject_id', 'cs.subject_id')
+                        ->where('sch4.semester_code', $request->semester_code)
+                        ->whereNull('sch4.deleted_at');
+                });
             });
         }
         // Ikki tomonlama: guruh tanlansa, faqat o'sha guruh fanlari

@@ -124,6 +124,9 @@ class ImportGrades extends Command
         if ($hasAnyGrades && !$hasUnfinalized) {
             $this->info("Live import: bugungi BARCHA baholar yakunlangan (is_final=true), o'tkazib yuborildi.");
             Log::info("[LiveImport] Today's ALL grades finalized, skipping.");
+            // Cache ni yangilash — hisobot komandlari "yaqinda import bo'lgan" deb bilishi uchun
+            // (oldin cache yangilanmasdi → 18:00 hisobot "import yo'q" deb qayta import boshlardi)
+            \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), Carbon::today()->endOfDay());
             return;
         }
 

@@ -3416,16 +3416,13 @@ class ReportController extends Controller
 
         // Joriy semestr
         if ($request->get('current_semester', '1') == '1') {
-            $currentSemesters = DB::table('semesters')
-                ->where('current', true)
-                ->select('code', 'education_year')
-                ->get();
-            if ($currentSemesters->isNotEmpty()) {
-                $currentSemesterCodes = $currentSemesters->pluck('code')->unique()->toArray();
-                $currentEducationYears = $currentSemesters->pluck('education_year')->unique()->toArray();
-                $gradesQuery->whereIn('sg.semester_code', $currentSemesterCodes);
-                $gradesQuery->whereIn('sg.education_year_code', $currentEducationYears);
-            }
+            $gradesQuery->whereExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('semesters as sem')
+                    ->whereColumn('sem.curriculum_hemis_id', 'g.curriculum_hemis_id')
+                    ->whereColumn('sem.code', 'sg.semester_code')
+                    ->where('sem.current', true);
+            });
         }
 
         $gradesRows = $gradesQuery->select(

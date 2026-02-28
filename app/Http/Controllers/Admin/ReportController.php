@@ -3439,7 +3439,8 @@ class ReportController extends Controller
             'sg.subject_name',
             'sg.lesson_date',
             'sg.lesson_pair_code',
-            'sg.lesson_pair_name',
+            'sg.lesson_pair_start_time',
+            'sg.lesson_pair_end_time',
             'sg.semester_code'
         )->get();
 
@@ -3497,7 +3498,8 @@ class ReportController extends Controller
                 'group_name' => $gr->group_name ?? '-',
                 'subject_name' => $gr->subject_name ?? '-',
                 'lesson_date' => $dateStr ? date('d.m.Y', strtotime($dateStr)) : '-',
-                'lesson_pair' => $gr->lesson_pair_name ?? '-',
+                'lesson_pair' => ($gr->lesson_pair_start_time && $gr->lesson_pair_end_time)
+                    ? $gr->lesson_pair_start_time . '-' . $gr->lesson_pair_end_time : '-',
                 'mark_status' => 'Sababli',
                 'hemis_status' => $hemisStatus,
                 'match' => $match,
@@ -3553,7 +3555,8 @@ class ReportController extends Controller
             'a.subject_name',
             'a.lesson_date',
             'a.lesson_pair_code',
-            'a.lesson_pair_name'
+            'a.lesson_pair_start_time',
+            'a.lesson_pair_end_time'
         )->get();
 
         foreach ($reverseRows as $ar) {
@@ -3574,7 +3577,8 @@ class ReportController extends Controller
                 'group_name' => $ar->group_name ?? '-',
                 'subject_name' => $ar->subject_name ?? '-',
                 'lesson_date' => $dateStr ? date('d.m.Y', strtotime($dateStr)) : '-',
-                'lesson_pair' => $ar->lesson_pair_name ?? '-',
+                'lesson_pair' => ($ar->lesson_pair_start_time && $ar->lesson_pair_end_time)
+                    ? $ar->lesson_pair_start_time . '-' . $ar->lesson_pair_end_time : '-',
                 'mark_status' => 'Sababli emas',
                 'hemis_status' => 'Sababli',
                 'match' => 'mismatch',

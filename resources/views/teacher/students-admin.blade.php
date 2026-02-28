@@ -192,7 +192,7 @@
                                             </div>
                                         </td>
                                         <td class="px-2 py-2 whitespace-nowrap">
-                                            <span class="text-gray-900">{{ $student->full_name }}</span>
+                                            <a href="{{ route('admin.students.show', $student->id) }}" class="text-blue-600 hover:text-blue-800 hover:underline font-medium">{{ $student->full_name }}</a>
                                             <div class="text-xs text-gray-500">{{ $student->student_id_number }}</div>
                                         </td>
                                         <td class="px-2 py-2 whitespace-nowrap">

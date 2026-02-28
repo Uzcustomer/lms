@@ -430,7 +430,7 @@ class QuizResultController extends Controller
             $fanIds = $results->pluck('fan_id')->unique()->values()->toArray();
 
             // JN baholar (training_type_code NOT IN config list)
-            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
             $jnGrades = [];
             if (!empty($studentHemisIds) && !empty($fanIds)) {
                 foreach (array_chunk($studentHemisIds, 500) as $chunk) {

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ActivityLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class ActivityLogService
 {
@@ -18,32 +19,37 @@ class ActivityLogService
         ?Model $subject = null,
         ?array $oldValues = null,
         ?array $newValues = null
-    ): ActivityLog {
+    ): ?ActivityLog {
         $guard = self::detectGuard();
         $user = Auth::guard($guard)->user();
 
-        return ActivityLog::create([
-            'guard' => $guard,
-            'user_id' => $user?->id,
-            'user_name' => self::getUserName($user),
-            'role' => self::getActiveRole($user),
-            'action' => $action,
-            'module' => $module,
-            'description' => $description,
-            'subject_type' => $subject ? get_class($subject) : null,
-            'subject_id' => $subject?->id ?? $subject?->getKey(),
-            'old_values' => $oldValues,
-            'new_values' => $newValues,
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'created_at' => now(),
-        ]);
+        try {
+            return ActivityLog::create([
+                'guard' => $guard,
+                'user_id' => $user?->id,
+                'user_name' => self::getUserName($user),
+                'role' => self::getActiveRole($user),
+                'action' => $action,
+                'module' => $module,
+                'description' => $description,
+                'subject_type' => $subject ? get_class($subject) : null,
+                'subject_id' => $subject?->id ?? $subject?->getKey(),
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('ActivityLog write failed: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
      * Model yaratilganda log
      */
-    public static function logCreated(Model $model, string $module, ?string $description = null): ActivityLog
+    public static function logCreated(Model $model, string $module, ?string $description = null): ?ActivityLog
     {
         return self::log('create', $module, $description, $model, null, self::getLoggableValues($model));
     }
@@ -51,7 +57,7 @@ class ActivityLogService
     /**
      * Model yangilanganda log (faqat o'zgargan maydonlar)
      */
-    public static function logUpdated(Model $model, string $module, ?string $description = null): ActivityLog
+    public static function logUpdated(Model $model, string $module, ?string $description = null): ?ActivityLog
     {
         $dirty = $model->getDirty();
         $original = collect($model->getOriginal())->only(array_keys($dirty))->toArray();
@@ -63,7 +69,7 @@ class ActivityLogService
     /**
      * Model o'chirilganda log
      */
-    public static function logDeleted(Model $model, string $module, ?string $description = null): ActivityLog
+    public static function logDeleted(Model $model, string $module, ?string $description = null): ?ActivityLog
     {
         return self::log('delete', $module, $description, $model, self::getLoggableValues($model));
     }
@@ -71,45 +77,55 @@ class ActivityLogService
     /**
      * Login log
      */
-    public static function logLogin(?string $guard = null): ActivityLog
+    public static function logLogin(?string $guard = null): ?ActivityLog
     {
         $guard = $guard ?? self::detectGuard();
         $user = Auth::guard($guard)->user();
 
-        return ActivityLog::create([
-            'guard' => $guard,
-            'user_id' => $user?->id,
-            'user_name' => self::getUserName($user),
-            'role' => self::getActiveRole($user),
-            'action' => 'login',
-            'module' => 'auth',
-            'description' => 'Tizimga kirdi',
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'created_at' => now(),
-        ]);
+        try {
+            return ActivityLog::create([
+                'guard' => $guard,
+                'user_id' => $user?->id,
+                'user_name' => self::getUserName($user),
+                'role' => self::getActiveRole($user),
+                'action' => 'login',
+                'module' => 'auth',
+                'description' => 'Tizimga kirdi',
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('ActivityLog write failed: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
      * Logout log
      */
-    public static function logLogout(?string $guard = null): ActivityLog
+    public static function logLogout(?string $guard = null): ?ActivityLog
     {
         $guard = $guard ?? self::detectGuard();
         $user = Auth::guard($guard)->user();
 
-        return ActivityLog::create([
-            'guard' => $guard,
-            'user_id' => $user?->id,
-            'user_name' => self::getUserName($user),
-            'role' => self::getActiveRole($user),
-            'action' => 'logout',
-            'module' => 'auth',
-            'description' => 'Tizimdan chiqdi',
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'created_at' => now(),
-        ]);
+        try {
+            return ActivityLog::create([
+                'guard' => $guard,
+                'user_id' => $user?->id,
+                'user_name' => self::getUserName($user),
+                'role' => self::getActiveRole($user),
+                'action' => 'logout',
+                'module' => 'auth',
+                'description' => 'Tizimdan chiqdi',
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('ActivityLog write failed: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**

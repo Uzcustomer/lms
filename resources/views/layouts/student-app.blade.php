@@ -17,7 +17,8 @@
     <!-- Scripts -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
-    <!-- Alpine.js (student layoutda Livewire yuklanmaydi, shuning uchun alohida kerak) -->
+    <!-- Alpine.js + Collapse plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 
     <!-- JSZip for client-side file compression -->
@@ -31,8 +32,8 @@
 
     <!-- Page Heading -->
     @if (isset($header))
-        <header class="bg-white dark:bg-gray-800 shadow">
-            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <header class="bg-white dark:bg-gray-800 shadow" style="margin-bottom:15px;">
+            <div class="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
                 {{ $header }}
             </div>
         </header>
@@ -103,31 +104,153 @@
     @endif
 
     <!-- Page Content -->
-    <main>
+    <main class="pb-20 sm:pb-0">
         {{ $slot }}
     </main>
 </div>
 
+    <!-- Mobile Bottom Navigation Bar -->
+    @php
+        $activeTab = 'none';
+        if (request()->routeIs('student.subjects') || request()->routeIs('student.subject.*')) $activeTab = 'fanlar';
+        elseif (request()->routeIs('student.schedule')) $activeTab = 'jadval';
+        elseif (request()->routeIs('student.dashboard')) $activeTab = 'asosiy';
+        elseif (request()->routeIs('student.independents')) $activeTab = 'mt';
+        elseif (request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
+    @endphp
+    <div x-data="{ boshqalarOpen: false }" class="sm:hidden" style="position:fixed !important;bottom:0 !important;left:0 !important;right:0 !important;z-index:9999 !important;">
+        <!-- Boshqalar popup overlay -->
+        <div x-show="boshqalarOpen" @click="boshqalarOpen = false" style="position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.3);display:none;"></div>
+
+        <!-- Boshqalar popup menu -->
+        <div x-show="boshqalarOpen" @click.away="boshqalarOpen = false" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:9999;display:none;" class="mx-auto max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="grid grid-cols-3 gap-3">
+                <a href="{{ route('student.absence-excuses.index') }}" class="flex flex-col items-center gap-2 px-2 py-3 rounded-xl transition {{ request()->routeIs('student.absence-excuses.*') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <div class="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
+                        <svg class="w-7 h-7 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">Sababli ariza</span>
+                </a>
+                <a href="{{ route('student.attendance') }}" class="flex flex-col items-center gap-2 px-2 py-3 rounded-xl transition {{ request()->routeIs('student.attendance') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <div class="w-14 h-14 rounded-2xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
+                        <svg class="w-7 h-7 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">Davomat</span>
+                </a>
+                <a href="{{ route('student.pending-lessons') }}" class="flex flex-col items-center gap-2 px-2 py-3 rounded-xl transition {{ request()->routeIs('student.pending-lessons') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <div class="w-14 h-14 rounded-2xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+                        <svg class="w-7 h-7 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">Qayta topshirish</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation Tabs -->
+        <div class="flex items-end justify-between px-4 pt-2" style="background-color:#23417b;height:80px;padding-bottom:max(7px, env(safe-area-inset-bottom));">
+            <!-- 1. Fanlar -->
+            <a href="{{ route('student.subjects') }}" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;">
+                @if($activeTab === 'fanlar')
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:45px;height:45px;">
+                        <svg class="w-5 h-5" fill="none" stroke="#23417b" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                        </svg>
+                    </div>
+                    <span class="text-[11px] font-semibold leading-tight text-white">Fanlar</span>
+                @else
+                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                    </svg>
+                    <span class="text-[11px] font-medium leading-tight" style="color:rgba(255,255,255,0.7);">Fanlar</span>
+                @endif
+            </a>
+
+            <!-- 2. Dars jadvali -->
+            <a href="{{ route('student.schedule') }}" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;">
+                @if($activeTab === 'jadval')
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:45px;height:45px;">
+                        <svg class="w-5 h-5" fill="none" stroke="#23417b" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                        </svg>
+                    </div>
+                    <span class="text-[11px] font-semibold leading-tight text-white">Jadval</span>
+                @else
+                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                    </svg>
+                    <span class="text-[11px] font-medium leading-tight" style="color:rgba(255,255,255,0.7);">Jadval</span>
+                @endif
+            </a>
+
+            <!-- 3. Asosiy -->
+            <a href="{{ route('student.dashboard') }}" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;">
+                @if($activeTab === 'asosiy')
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:45px;height:45px;">
+                        <svg class="w-5 h-5" fill="none" stroke="#23417b" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                        </svg>
+                    </div>
+                    <span class="text-[11px] font-semibold leading-tight text-white">Asosiy</span>
+                @else
+                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                    </svg>
+                    <span class="text-[11px] font-medium leading-tight" style="color:rgba(255,255,255,0.7);">Asosiy</span>
+                @endif
+            </a>
+
+            <!-- 4. MT (Mustaqil ta'lim) -->
+            <a href="{{ route('student.independents') }}" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;">
+                @if($activeTab === 'mt')
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:45px;height:45px;">
+                        <svg class="w-5 h-5" fill="none" stroke="#23417b" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.636 50.636 0 00-2.658-.813A59.906 59.906 0 0112 3.493a59.903 59.903 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                        </svg>
+                    </div>
+                    <span class="text-[11px] font-semibold leading-tight text-white">MT</span>
+                @else
+                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.636 50.636 0 00-2.658-.813A59.906 59.906 0 0112 3.493a59.903 59.903 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                    </svg>
+                    <span class="text-[11px] font-medium leading-tight" style="color:rgba(255,255,255,0.7);">MT</span>
+                @endif
+            </a>
+
+            <!-- 5. Boshqalar (radial fan trigger) -->
+            <button @click="boshqalarOpen = !boshqalarOpen" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;">
+                @if($activeTab === 'foydali')
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:45px;height:45px;">
+                        <svg class="w-5 h-5" fill="none" stroke="#23417b" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+                        </svg>
+                    </div>
+                    <span class="text-[11px] font-semibold leading-tight text-white">Boshqa</span>
+                @else
+                    <svg class="w-6 h-6 transition-transform duration-300" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24"
+                         :style="boshqalarOpen ? 'transform:rotate(45deg)' : ''">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+                    </svg>
+                    <span class="text-[11px] font-medium leading-tight" style="color:rgba(255,255,255,0.7);">Boshqa</span>
+                @endif
+            </button>
+        </div>
+    </div>
+
     @stack('scripts')
 
-    {{-- DEBUG: Console log - account switching debug --}}
+    @if(config('app.debug'))
+    {{-- DEBUG: Console log - faqat debug rejimda --}}
     <script>
-        console.group('%c🔍 LMS DEBUG: Student Layout', 'color: #3498db; font-weight: bold; font-size: 14px;');
-        console.log('%cLayout:', 'font-weight:bold', 'student-app.blade.php (Student)');
-        console.log('%cURL:', 'font-weight:bold', window.location.href);
-        console.log('%cGuard (server):', 'font-weight:bold', '{{ auth()->guard("web")->check() ? "web ✅ (id=" . auth()->guard("web")->id() . ")" : "web ❌" }}');
-        console.log('%cTeacher guard:', 'font-weight:bold', '{{ auth()->guard("teacher")->check() ? "teacher ✅ (id=" . auth()->guard("teacher")->id() . ")" : "teacher ❌" }}');
-        console.log('%cStudent guard:', 'font-weight:bold', '{{ auth()->guard("student")->check() ? "student ✅ (id=" . auth()->guard("student")->id() . " " . (auth()->guard("student")->user()->full_name ?? "?") . ")" : "student ❌" }}');
-        console.log('%cauth()->user():', 'font-weight:bold', '{{ auth()->user() ? "id=" . auth()->user()->id : "NULL" }}');
-        console.log('%csession.impersonating:', 'font-weight:bold', {{ session('impersonating') ? 'true' : 'false' }});
-        console.log('%csession.impersonated_name:', 'font-weight:bold', '{{ session("impersonated_name", "NULL") }}');
-        console.log('%csession.impersonator_id:', 'font-weight:bold', '{{ session("impersonator_id", "NULL") }}');
-        console.log('%csession.active_role:', 'font-weight:bold', '{{ session("active_role", "NULL") }}');
-        console.log('%csession_id:', 'font-weight:bold', '{{ session()->getId() }}');
-        @if(session('impersonating'))
-            console.log('%c📍 Impersonation mode AKTIV — banner ko\'rinmoqda', 'color: orange; font-weight: bold;');
-        @endif
+        console.group('%c LMS DEBUG: Student Layout', 'color: #3498db; font-weight: bold;');
+        console.log('URL:', window.location.href);
         console.groupEnd();
     </script>
+    @endif
 </body>
 </html>

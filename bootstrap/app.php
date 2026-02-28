@@ -24,6 +24,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'force.student.contact' => \App\Http\Middleware\ForceStudentContact::class,
         ]);
 
+        // Til sozlamasi middleware
+        $middleware->append(\App\Http\Middleware\SetLocale::class);
+
         // Server ulanish debug middleware — har bir requestda DB va server holatini tekshiradi
         $middleware->append(\App\Http\Middleware\ConnectionDebugMiddleware::class);
 
@@ -47,14 +50,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:specialties-departments')->weekly();
         $schedule->command('students:import')->weekly();
         $schedule->command('import:contracts')->weeklyOn(0, '22:00');
-        $schedule->command('import:schedules')->daily()->withoutOverlapping(120);
+        // import:schedules — nightly:run ichiga ko'chirildi (routes/console.php)
         $schedule->command('import:curriculum-subject-teachers')->dailyAt('22:00');
 
         // Live import — har 30 daqiqada bugungi baholarni yangilaydi (faqat 8:30 — 00:00)
-        // VAQTINCHA O'CHIRILGAN: import muammosi hal bo'lguncha to'xtatildi (2026-02-23)
-        // $schedule->command('student:import-data --mode=live')->everyThirtyMinutes()->between('8:30', '23:59')->withoutOverlapping(60);
-        // Final import — har kuni 00:30 da kechagi kunni yakunlaydi
-        $schedule->command('student:import-data --mode=final')->dailyAt('00:30')->withoutOverlapping(60);
+        // withoutOverlapping(25): lock 25 daqiqada expire bo'ladi — 30 daqiqalik intervalni bloklamaydi
+        // (oldin 60 edi — crash bo'lganda keyingi 1-2 ta run ham bloklanardi)
+        $schedule->command('student:import-data --mode=live')->everyThirtyMinutes()->between('8:30', '23:59')->withoutOverlapping(25);
+        // Final import routes/console.php da boshqariladi (00:30 + 04:00 retry)
+        // Bu yerdagi dublikat olib tashlandi — ikki joyda schedule bo'lsa race condition bo'ladi
         $schedule->command('import:teachers')->cron('0 0 */2 * *'); // Every 2 days at midnight
 //        $schedule->command('grades:close-expired')->everyMinute();
         $schedule->command('grades:close-expired')->everyThirtyMinutes()->withoutOverlapping(30);

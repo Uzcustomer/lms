@@ -9,6 +9,7 @@ use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -30,8 +31,8 @@ class SendAttendanceGroupSummary extends Command
 
         $this->info("Bugungi sana: {$todayStr}");
 
-        // Progress reporter: bitta Telegram xabar yuborib, har bosqichda yangilab turadi
-        $progressChatId = $this->option('chat-id') ?: config('services.telegram.attendance_group_id');
+        // Progress reporter: admin chatga yuboriladi (guruhga emas)
+        $progressChatId = $this->option('chat-id') ?: config('services.telegram.chat_id');
         $reporter = new ImportProgressReporter($telegram, $progressChatId, $todayStr);
 
         if ($progressChatId) {
@@ -72,19 +73,57 @@ class SendAttendanceGroupSummary extends Command
             $this->warn("Davomat nazorati yangilashda xato: " . $e->getMessage());
         }
 
-        // 1.6-QADAM: Bugungi baholarni HEMIS dan yangilash (student_grades)
-        $reporter->startStep('HEMIS dan bugungi baholar yangilanmoqda', 'Baholar muvaffaqiyatli yangilandi');
-        $this->info("HEMIS dan bugungi baholar yangilanmoqda...");
-        try {
-            \Illuminate\Support\Facades\Artisan::call('student:import-data', [
-                '--mode' => 'live',
-            ]);
+        // 1.6-QADAM: Bugungi baholar — avval crondagi live import muvaffaqiyatini tekshirish
+        // Live import har 30 daqiqada ishlaydi (bootstrap/app.php), shuning uchun odatda tayyor bo'ladi
+        $liveImportSuccess = Cache::get('live_import_last_success');
+        $liveImportRecent = $liveImportSuccess && Carbon::parse($liveImportSuccess)->diffInMinutes(Carbon::now()) <= 180;
+
+        // DB fallback: cache expire bo'lgan bo'lsa ham, bazada bugungi baholar bormi tekshirish
+        if (!$liveImportRecent) {
+            $hasGradesToday = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereRaw('DATE(lesson_date) = ?', [$todayStr])
+                ->exists();
+            if ($hasGradesToday) {
+                $liveImportRecent = true;
+                $liveImportSuccess = $liveImportSuccess ?: 'DB da mavjud';
+                $this->info("Cache topilmadi, lekin DB da bugungi baholar bor — import o'tkaziladi.");
+            }
+        }
+
+        if ($liveImportRecent) {
+            $reporter->startStep('Baholar: crondagi live import tayyor', 'Baholar mavjud (oxirgi: ' . $liveImportSuccess . ')');
             $reporter->completeStep();
-            $this->info("Baholar yangilandi.");
-        } catch (\Throwable $e) {
-            $reporter->failStep($e->getMessage());
-            Log::warning('Baholar yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
-            $this->warn("Baholar yangilashda xato: " . $e->getMessage());
+            $this->info("Baholar: crondagi live import tayyor (oxirgi: {$liveImportSuccess})");
+        } else {
+            // Live import yaqinda muvaffaqiyatli bo'lmagan va DB da ham baho yo'q — o'zimiz ishlatib ko'ramiz
+            $reporter->startStep('Baholar: live import yaqinda bo\'lmagan, qayta import qilinmoqda', 'Baholar muvaffaqiyatli yangilandi');
+            $this->warn("Live import yaqinda muvaffaqiyatli bo'lmagan (oxirgi: " . ($liveImportSuccess ?: 'topilmadi') . "). Import boshlanmoqda...");
+            try {
+                \Illuminate\Support\Facades\Artisan::call('student:import-data', [
+                    '--mode' => 'live',
+                    '--silent' => true,
+                ]);
+                $reporter->completeStep();
+                $this->info("Baholar yangilandi.");
+            } catch (\Throwable $e) {
+                $reporter->failStep($e->getMessage());
+                Log::error('Baholar import crash: ' . $e->getMessage());
+                $this->error("Baholar import crash: " . $e->getMessage());
+
+                // Admin chatga xato haqida xabar yuborish — lekin hisobotni TO'XTATMASLIK
+                // DB dagi mavjud baholar bilan hisobot davom etadi
+                $adminChatId = config('services.telegram.chat_id');
+                if ($adminChatId) {
+                    $telegram->sendToUser($adminChatId,
+                        "⚠️ Baholar import xato (hisobot mavjud ma'lumotlar bilan davom etmoqda)\n\n"
+                        . "Sana: {$todayStr}\n"
+                        . "Oxirgi muvaffaqiyatli live import: " . ($liveImportSuccess ?: 'topilmadi') . "\n\n"
+                        . "Xato: " . substr($e->getMessage(), 0, 300)
+                    );
+                }
+                // return 1 olib tashlandi — hisobot mavjud ma'lumotlar bilan davom etadi
+            }
         }
 
         // Progress reporter ni tozalash

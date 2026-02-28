@@ -119,6 +119,12 @@
                             </svg>
                             Ruxsatnoma chiqarish
                         </button>
+                        <button type="button" id="btn-yn-qaydnoma" class="btn-yn-qaydnoma" onclick="generateYnQaydnoma()" disabled>
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            YN qaydnoma (Excel)
+                        </button>
                     </div>
                 </div>
 
@@ -374,6 +380,7 @@
             $('#selected-count').text(count);
             $('#btn-ruxsatnoma').prop('disabled', count === 0);
             $('#btn-yn-oldi-word').prop('disabled', count === 0);
+            $('#btn-yn-qaydnoma').prop('disabled', count === 0);
             $('#select-all').prop('checked', count === total && total > 0);
             $('#select-all-header').prop('checked', count === total && total > 0);
         }
@@ -480,6 +487,75 @@
 
                 var contentDisposition = response.headers.get('Content-Disposition');
                 var fileName = 'yn_oldi_qaydnoma.docx';
+                if (contentDisposition) {
+                    var match = contentDisposition.match(/filename="?([^";\n]+)"?/);
+                    if (match && match[1]) fileName = match[1];
+                }
+
+                return response.blob().then(function (blob) {
+                    return { blob: blob, fileName: fileName };
+                });
+            })
+            .then(function (result) {
+                var url = window.URL.createObjectURL(result.blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = result.fileName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(function (err) {
+                alert('Xatolik yuz berdi: ' + err.message);
+            })
+            .finally(function () {
+                btn.prop('disabled', false).html(originalText);
+                updateSelection();
+            });
+        }
+
+        function generateYnQaydnoma() {
+            var selected = [];
+            $('.group-checkbox:checked').each(function () {
+                selected.push({
+                    group_hemis_id: $(this).data('group-hemis-id'),
+                    semester_code: String($(this).data('semester-code')),
+                });
+            });
+
+            if (selected.length === 0) {
+                alert('Kamida bitta guruhni tanlang');
+                return;
+            }
+
+            var btn = $('#btn-yn-qaydnoma');
+            var originalText = btn.html();
+            btn.prop('disabled', true).html(
+                '<svg class="animate-spin" style="height:14px;width:14px;display:inline-block;margin-right:4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">' +
+                '<circle style="opacity:0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+                '<path style="opacity:0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>' +
+                '</svg> Yuklanmoqda...'
+            );
+
+            fetch('{{ route($routePrefix . ".yn-qaytnoma.generate-yn-qaydnoma") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/octet-stream',
+                },
+                body: JSON.stringify({ groups: selected })
+            })
+            .then(function (response) {
+                if (!response.ok) {
+                    return response.json().then(function (data) {
+                        throw new Error(data.error || 'Server xatosi');
+                    });
+                }
+
+                var contentDisposition = response.headers.get('Content-Disposition');
+                var fileName = 'yn_qaydnoma.xlsx';
                 if (contentDisposition) {
                     var match = contentDisposition.match(/filename="?([^";\n]+)"?/);
                     if (match && match[1]) fileName = match[1];
@@ -720,6 +796,32 @@
             transform: translateY(-1px);
         }
         .btn-ruxsatnoma:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ===== YN Qaydnoma Excel Button ===== */
+        .btn-yn-qaydnoma {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 18px;
+            background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-yn-qaydnoma:hover:not(:disabled) {
+            background: linear-gradient(135deg, #6d28d9, #7c3aed);
+            box-shadow: 0 4px 12px rgba(124,58,237,0.4);
+            transform: translateY(-1px);
+        }
+        .btn-yn-qaydnoma:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;

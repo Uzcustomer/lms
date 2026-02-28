@@ -15,6 +15,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class IndependentAutoCreate extends Command
 {
@@ -116,6 +117,7 @@ class IndependentAutoCreate extends Command
                 ]);
             } catch (\Exception $e) {
                 $this->error("Error processing schedule {$sche->id}: {$e->getMessage()}");
+                Log::error("[IndependentAutoCreate] Schedule {$sche->id} xato: {$e->getMessage()}");
                 continue;
             }
         }
@@ -164,6 +166,7 @@ class IndependentAutoCreate extends Command
                 $updated += $count;
             } catch (\Exception $e) {
                 $this->error("Error recalculating for group={$combo->group_id}, subject={$combo->subject_id}: {$e->getMessage()}");
+                Log::error("[IndependentAutoCreate] Deadline recalc xato: group={$combo->group_id}, subject={$combo->subject_id}: {$e->getMessage()}");
                 continue;
             }
         }

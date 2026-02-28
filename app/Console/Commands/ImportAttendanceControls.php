@@ -16,14 +16,18 @@ class ImportAttendanceControls extends Command
     protected $signature = 'import:attendance-controls
         {--mode=live : Import rejimi: live yoki final}
         {--date= : Faqat shu kun uchun import (Y-m-d)}
+        {--date-from= : Sana oralig\'i boshlanishi (Y-m-d)}
+        {--date-to= : Sana oralig\'i tugashi (Y-m-d)}
         {--silent : Telegram xabar yubormaslik}';
 
     protected $description = 'Import attendance controls from HEMIS API (live/final rejimlar)';
 
-    public function handle(TelegramService $telegram)
+    public function handle(TelegramService $telegram): int
     {
         $mode = $this->option('mode');
         $dateOption = $this->option('date');
+        $dateFrom = $this->option('date-from');
+        $dateTo = $this->option('date-to');
         $silent = $this->option('silent');
 
         $token = config('services.hemis.token');
@@ -32,13 +36,18 @@ class ImportAttendanceControls extends Command
             return $this->handleFinalImport($token, $telegram, $silent);
         }
 
+        // Sana oralig'i berilgan bo'lsa — range import
+        if ($dateFrom && $dateTo) {
+            return $this->handleRangeImport($token, $dateFrom, $dateTo, $telegram, $silent);
+        }
+
         return $this->handleLiveImport($token, $dateOption, $telegram, $silent);
     }
 
     // =========================================================================
     // LIVE IMPORT — kun davomida, bugungi davomat nazoratini yangilaydi
     // =========================================================================
-    private function handleLiveImport(string $token, ?string $dateOption, TelegramService $telegram, bool $silent)
+    private function handleLiveImport(string $token, ?string $dateOption, TelegramService $telegram, bool $silent): int
     {
         $date = $dateOption ? Carbon::parse($dateOption) : Carbon::today();
         $todayStr = $date->toDateString();
@@ -51,7 +60,7 @@ class ImportAttendanceControls extends Command
 
         if ($alreadyFinalized) {
             $this->info("Live import: {$todayStr} davomat nazorati allaqachon yakunlangan (is_final=true), o'tkazib yuborildi.");
-            return;
+            return self::SUCCESS;
         }
 
         $this->info("Live import: {$todayStr} uchun davomat nazorati yangilanmoqda...");
@@ -68,19 +77,73 @@ class ImportAttendanceControls extends Command
             if (!$silent) {
                 $telegram->notify("❌ Davomat nazorati live import xato: {$todayStr}");
             }
-            return;
+            return self::FAILURE;
         }
 
         // 2-qadam: API muvaffaqiyatli — faqat upsert (soft delete yo'q)
         $this->applyAttendanceControls($items, $date, false);
 
         $this->info("Live import tugadi: {$todayStr}, API dan: " . count($items) . " ta yozuv");
+        return self::SUCCESS;
+    }
+
+    // =========================================================================
+    // RANGE IMPORT — sana oralig'i uchun bitta API chaqiruv bilan import
+    // SyncReportDataJob dan foydalaniladi
+    // =========================================================================
+    private function handleRangeImport(string $token, string $dateFrom, string $dateTo, TelegramService $telegram, bool $silent)
+    {
+        $from = Carbon::parse($dateFrom)->startOfDay();
+        $to = Carbon::parse($dateTo)->endOfDay();
+
+        $this->info("Range import: {$from->toDateString()} — {$to->toDateString()} uchun davomat yangilanmoqda...");
+
+        $items = $this->fetchAllPages($token, $from->timestamp, $to->timestamp);
+
+        if ($items === false) {
+            $this->error("Range import: API xato.");
+            Log::error("[AttCtrl RangeImport] API failed for {$dateFrom} — {$dateTo}");
+            return 1;
+        }
+
+        if (empty($items)) {
+            $this->info("Range import: API dan yozuv kelmadi.");
+            return 0;
+        }
+
+        // Sanalar bo'yicha guruhlash va har kun uchun upsert
+        $groupedByDate = collect($items)->groupBy(function ($item) {
+            return isset($item['lesson_date']) ? date('Y-m-d', $item['lesson_date']) : null;
+        })->filter(fn ($dateItems, $date) => $date !== null)->sortKeys();
+
+        $totalDays = $groupedByDate->count();
+        $successDays = 0;
+        $totalRecords = 0;
+
+        $this->info("Jami: " . count($items) . " yozuv, {$totalDays} kun");
+
+        foreach ($groupedByDate as $dateStr => $dateItems) {
+            $date = Carbon::parse($dateStr);
+            $this->applyAttendanceControls($dateItems->toArray(), $date, false);
+            $successDays++;
+            $totalRecords += $dateItems->count();
+            $this->info("  {$dateStr} — {$dateItems->count()} yozuv ({$successDays}/{$totalDays})");
+
+            // Nightly/report progress callback
+            if (app()->bound('nightly.progress')) {
+                $callback = app('nightly.progress');
+                $callback("{$successDays}/{$totalDays} kun ({$totalRecords} yozuv)");
+            }
+        }
+
+        $this->info("Range import tugadi: {$successDays} kun, {$totalRecords} yozuv");
+        return 0;
     }
 
     // =========================================================================
     // FINAL IMPORT — har kuni 02:00 da, yakunlanmagan kunlarni is_final=true qiladi
     // =========================================================================
-    private function handleFinalImport(string $token, TelegramService $telegram, bool $silent)
+    private function handleFinalImport(string $token, TelegramService $telegram, bool $silent): int
     {
         if (!$silent) {
             $telegram->notify("🟢 Davomat nazorati FINAL import boshlandi (butun semestr)");
@@ -95,7 +158,7 @@ class ImportAttendanceControls extends Command
             if (!$silent) {
                 $telegram->notify("❌ Davomat nazorati FINAL import xato: API javob bermadi");
             }
-            return;
+            return self::FAILURE;
         }
 
         if (empty($items)) {
@@ -103,7 +166,7 @@ class ImportAttendanceControls extends Command
             if (!$silent) {
                 $telegram->notify("✅ Davomat nazorati: API da yozuv yo'q.");
             }
-            return;
+            return self::SUCCESS;
         }
 
         // Sanalar bo'yicha guruhlash
@@ -127,6 +190,12 @@ class ImportAttendanceControls extends Command
             $successDays++;
             $totalRecords += $dateItems->count();
             $this->info("  {$dateStr} — {$dateItems->count()} yozuv yakunlandi ({$successDays}/{$totalDays})");
+
+            // Nightly wrapper ga progress yuborish
+            if (app()->bound('nightly.progress')) {
+                $nightlyCallback = app('nightly.progress');
+                $nightlyCallback("{$successDays}/{$totalDays} kun ({$totalRecords} yozuv)");
+            }
         }
 
         $msg = "✅ Davomat nazorati FINAL import: {$successDays} kun, {$totalRecords} yozuv (butun semestr)";
@@ -134,6 +203,14 @@ class ImportAttendanceControls extends Command
             $telegram->notify($msg);
         }
         $this->info($msg);
+
+        // Nightly wrapper ga yakuniy natija
+        if (app()->bound('nightly.progress')) {
+            $nightlyCallback = app('nightly.progress');
+            $nightlyCallback("{$successDays} kun, {$totalRecords} yozuv");
+        }
+
+        return self::SUCCESS;
     }
 
     // =========================================================================
@@ -178,6 +255,11 @@ class ImportAttendanceControls extends Command
                         $this->info("Fetched page {$page}/{$totalPages} (" . count($items) . " items)");
                         if ($reporter) {
                             $reporter->updateProgress($page, $totalPages);
+                        }
+                        // Nightly wrapper ga API progress
+                        if (app()->bound('nightly.progress')) {
+                            $nightlyCallback = app('nightly.progress');
+                            $nightlyCallback("API: {$page}/{$totalPages} sahifa (" . count($allItems) . " yozuv)");
                         }
                         $pageSuccess = true;
                         sleep(1);

@@ -67,10 +67,9 @@ class StudentController extends Controller
             ->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
-            ->where('status', 'recorded')
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('created_at', 'desc')
-            ->take(4)
+            ->take(10)
             ->get();
 
         return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'recentGrades'));
@@ -163,7 +162,10 @@ class StudentController extends Controller
                             'lessonPair' => [
                                 'start_time' => $lesson->lesson_pair_start_time,
                                 'end_time' => $lesson->lesson_pair_end_time,
+                                'code' => $lesson->lesson_pair_code,
+                                'name' => $lesson->lesson_pair_name ?? '',
                             ],
+                            'training_type' => $lesson->training_type_name ?? '',
                             'lesson_date' => Carbon::parse($lesson->lesson_date)->timestamp,
                         ];
                     })
@@ -172,7 +174,36 @@ class StudentController extends Controller
             })
             ->sortKeys();
 
-        return view('student.student_schedule', compact('groupedSchedule', 'selectedSemester', 'semesters', 'weeks', 'selectedWeekId'));
+        // Hafta navigatsiya uchun oldingi/keyingi hafta
+        $weekIds = $weeks->pluck('id')->toArray();
+        $currentWeekIndex = array_search($selectedWeekId, $weekIds);
+        $prevWeekId = $currentWeekIndex > 0 ? $weekIds[$currentWeekIndex - 1] : null;
+        $nextWeekId = $currentWeekIndex !== false && $currentWeekIndex < count($weekIds) - 1 ? $weekIds[$currentWeekIndex + 1] : null;
+
+        // Haftaning sanalari (Dush - Shanba)
+        $weekDates = [];
+        if ($weekStart) {
+            $dayNames = ['Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan'];
+            for ($i = 0; $i < 6; $i++) {
+                $date = $weekStart->copy()->addDays($i);
+                $weekDates[] = [
+                    'day_short' => $dayNames[$i],
+                    'day_num' => $date->format('d'),
+                    'month' => $date->format('M'),
+                    'full_date' => $date->format('Y-m-d'),
+                    'is_today' => $date->isToday(),
+                    'day_en' => $date->format('l'),
+                ];
+            }
+        }
+
+        // Bugungi kun
+        $todayDayEn = Carbon::now()->format('l');
+
+        return view('student.student_schedule', compact(
+            'groupedSchedule', 'selectedSemester', 'semesters', 'weeks', 'selectedWeekId',
+            'prevWeekId', 'nextWeekId', 'weekDates', 'weekStart', 'weekEnd', 'todayDayEn'
+        ));
     }
 
 
@@ -247,8 +278,8 @@ class StudentController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test"];
-        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
         $gradingCutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
 
@@ -303,6 +334,102 @@ class StudentController extends Controller
             ->where('is_active', true)
             ->get();
 
+        // ========== BATCH PRE-LOADING (N+1 muammosini hal qilish) ==========
+        $subjectIds = $curriculumSubjects->pluck('subject_id')->unique()->toArray();
+
+        // 1) Barcha schedulelar — bir so'rov bilan
+        $allSchedules = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->whereIn('subject_id', $subjectIds)
+            ->select('subject_id', 'lesson_date', 'lesson_pair_code', 'training_type_name', 'training_type_code', 'education_year_code')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get()
+            ->groupBy('subject_id');
+
+        // 2) Barcha student_grades — bir so'rov bilan
+        $allStudentGrades = DB::table('student_grades')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('semester_code', $semesterCode)
+            ->whereIn('subject_id', $subjectIds)
+            ->whereNotNull('lesson_date')
+            ->select('subject_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'training_type_name', 'training_type_code', 'education_year_code')
+            ->get()
+            ->groupBy('subject_id');
+
+        // 3) ON/OSKI/Test baholar — bir so'rov (training_type_code: 100, 101, 102, 103)
+        $allOtherGrades = DB::table('student_grades')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('semester_code', $semesterCode)
+            ->whereIn('subject_id', $subjectIds)
+            ->whereIn('training_type_code', [100, 101, 102, 103])
+            ->select('subject_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'education_year_code', 'lesson_date')
+            ->get()
+            ->groupBy('subject_id');
+
+        // 4) Davomat — bir so'rov
+        $allAttendance = DB::table('attendances')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('semester_code', $semesterCode)
+            ->whereIn('subject_id', $subjectIds)
+            ->select('subject_id', 'absent_off', 'training_type_code', 'education_year_code', 'lesson_date', 'lesson_pair_name', 'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_name', 'absent_on')
+            ->get()
+            ->groupBy('subject_id');
+
+        // 5) Batafsil baholar (Ma'ruza, Amaliy, MT) — bir so'rov
+        $allDetailGrades = DB::table('student_grades')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('semester_code', $semesterCode)
+            ->whereIn('subject_id', $subjectIds)
+            ->whereNotIn('training_type_code', [100, 101, 102, 103])
+            ->whereNotNull('lesson_date')
+            ->select('subject_id', 'lesson_date', 'training_type_code', 'training_type_name', 'lesson_pair_name',
+                'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_name',
+                'grade', 'retake_grade', 'status', 'reason', 'education_year_code')
+            ->orderBy('lesson_date', 'desc')
+            ->get()
+            ->groupBy('subject_id');
+
+        // 6) Manual MT baholar — bir so'rov
+        $allManualMt = DB::table('student_grades')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('semester_code', $semesterCode)
+            ->whereIn('subject_id', $subjectIds)
+            ->where('training_type_code', 99)
+            ->whereNull('lesson_date')
+            ->select('subject_id', 'grade', 'education_year_code')
+            ->get()
+            ->groupBy('subject_id');
+
+        // 7) Quiz results (legacy code 103) — bir so'rov
+        $allQuizResultIds = $allOtherGrades->flatten()->where('training_type_code', 103)->pluck('quiz_result_id')->filter()->unique()->toArray();
+        $quizTypes = [];
+        if (!empty($allQuizResultIds)) {
+            $quizTypes = DB::table('hemis_quiz_results')
+                ->whereIn('id', $allQuizResultIds)
+                ->pluck('quiz_type', 'id')
+                ->toArray();
+        }
+
+        // 8) MT grade history counts — bir so'rov
+        $independentSubjectHemisIds = $allIndependents->pluck('subject_hemis_id')->unique()->filter()->toArray();
+        $mtHistoryCounts = [];
+        if (!empty($independentSubjectHemisIds)) {
+            $mtHistoryCounts = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $student->hemis_id)
+                ->where('semester_code', $semesterCode)
+                ->whereIn('subject_id', $independentSubjectHemisIds)
+                ->select('subject_id', DB::raw('COUNT(*) as cnt'))
+                ->groupBy('subject_id')
+                ->pluck('cnt', 'subject_id')
+                ->toArray();
+        }
+
+        // ========== END BATCH PRE-LOADING ==========
+
         // Helper: effective grade (aynan jurnal mantiqidan)
         $getEffectiveGrade = function ($row) {
             if ($row->status === 'pending') return null;
@@ -323,60 +450,47 @@ class StudentController extends Controller
             $excludedTrainingTypes, $excludedTrainingCodes, $gradingCutoffDate, $getEffectiveGrade,
             $student, $independentsByHemisId, $independentsBySubjectId, $independentsByName,
             $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime, $mtDeadlineType,
-            $allScheduleDatesBySubject
+            $allScheduleDatesBySubject,
+            $allSchedules, $allStudentGrades, $allOtherGrades, $allAttendance, $allDetailGrades,
+            $allManualMt, $quizTypes, $mtHistoryCounts
         ) {
             $subjectId = $cs->subject_id;
 
-            // Education year code: schedule dan aniqlash (admin jurnaldek)
+            // Education year code: schedule dan aniqlash (in-memory filter)
+            $subjectSchedules_all = $allSchedules->get($subjectId) ?? collect();
             $subjectEducationYearCode = $educationYearCode;
-            $scheduleEducationYear = DB::table('schedules')
-                ->where('group_id', $groupHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->whereNull('deleted_at')
-                ->whereNotNull('lesson_date')
+            $scheduleEducationYear = $subjectSchedules_all
                 ->whereNotNull('education_year_code')
-                ->orderBy('lesson_date', 'desc')
-                ->value('education_year_code');
+                ->sortByDesc('lesson_date')
+                ->first()?->education_year_code;
             if ($scheduleEducationYear) {
                 $subjectEducationYearCode = $scheduleEducationYear;
             }
 
-            // ---- JB (Amaliyot) schedule va baholar ----
-            $jbScheduleRows = DB::table('schedules')
-                ->where('group_id', $groupHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->whereNull('deleted_at')
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
-                ->whereNotIn('training_type_name', $excludedTrainingTypes)
-                ->whereNotIn('training_type_code', $excludedTrainingCodes)
-                ->whereNotNull('lesson_date')
-                ->select('lesson_date', 'lesson_pair_code')
-                ->orderBy('lesson_date')
-                ->orderBy('lesson_pair_code')
-                ->get();
+            // ---- JB (Amaliyot) schedule va baholar (in-memory filter) ----
+            $jbScheduleRows = $subjectSchedules_all
+                ->when($subjectEducationYearCode !== null, fn($c) => $c->where('education_year_code', $subjectEducationYearCode))
+                ->filter(fn($s) => !in_array($s->training_type_name, $excludedTrainingTypes) && !in_array($s->training_type_code, $excludedTrainingCodes))
+                ->values();
 
-            $minScheduleDate = $jbScheduleRows->pluck('lesson_date')->min();
+            // Min schedule date (all training types for this subject + education_year)
+            $allScheduleDatesForMin = $subjectSchedules_all
+                ->when($subjectEducationYearCode !== null, fn($c) => $c->where('education_year_code', $subjectEducationYearCode))
+                ->pluck('lesson_date');
+            $minScheduleDate = $allScheduleDatesForMin->min();
 
-            $jbGradesRaw = DB::table('student_grades')
-                ->where('student_hemis_id', $studentHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->whereNotIn('training_type_name', $excludedTrainingTypes)
-                ->whereNotIn('training_type_code', $excludedTrainingCodes)
-                ->whereNotNull('lesson_date')
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $subjectEducationYearCode);
-                    if ($minScheduleDate !== null) {
-                        $q2->orWhere(function ($q3) use ($minScheduleDate) {
-                            $q3->whereNull('education_year_code')
-                                ->where('lesson_date', '>=', $minScheduleDate);
-                        });
-                    }
-                }))
-                ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
-                ->get();
+            // JB grades (in-memory filter)
+            $subjectGrades_all = $allStudentGrades->get($subjectId) ?? collect();
+            $jbGradesRaw = $subjectGrades_all
+                ->filter(fn($g) => !in_array($g->training_type_name, $excludedTrainingTypes) && !in_array($g->training_type_code, $excludedTrainingCodes))
+                ->when($subjectEducationYearCode !== null, function ($c) use ($subjectEducationYearCode, $minScheduleDate) {
+                    return $c->filter(function ($g) use ($subjectEducationYearCode, $minScheduleDate) {
+                        if ($g->education_year_code == $subjectEducationYearCode) return true;
+                        if ($g->education_year_code === null && $minScheduleDate !== null && $g->lesson_date >= $minScheduleDate) return true;
+                        return false;
+                    });
+                })
+                ->values();
 
             // JB kunlik o'rtachalar (jurnal mantiqidek)
             $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
@@ -441,27 +555,16 @@ class StudentController extends Controller
                 ];
             }
 
-            // ---- MT (Mustaqil ta'lim) ----
-            $mtScheduleRows = DB::table('schedules')
-                ->where('group_id', $groupHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->whereNull('deleted_at')
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+            // ---- MT (Mustaqil ta'lim) (in-memory filter) ----
+            $mtScheduleRows = $subjectSchedules_all
+                ->when($subjectEducationYearCode !== null, fn($c) => $c->where('education_year_code', $subjectEducationYearCode))
                 ->where('training_type_code', 99)
-                ->whereNotNull('lesson_date')
-                ->select('lesson_date', 'lesson_pair_code')
-                ->get();
+                ->values();
 
-            $mtGradesRaw = DB::table('student_grades')
-                ->where('student_hemis_id', $studentHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
+            $mtGradesRaw = $subjectGrades_all
                 ->where('training_type_code', 99)
-                ->whereNotNull('lesson_date')
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
-                ->select('lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
-                ->get();
+                ->when($subjectEducationYearCode !== null, fn($c) => $c->where('education_year_code', $subjectEducationYearCode))
+                ->values();
 
             $mtColumns = $mtScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
                 ->merge($mtGradesRaw->map(fn($g) => ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code]))
@@ -517,49 +620,64 @@ class StudentController extends Controller
                 ];
             }
 
-            // Manual MT baho bo'lsa override
-            $manualMt = DB::table('student_grades')
-                ->where('student_hemis_id', $studentHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->where('training_type_code', 99)
-                ->whereNull('lesson_date')
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
-                ->value('grade');
+            // Manual MT baho bo'lsa override (in-memory filter)
+            $manualMtRow = ($allManualMt->get($subjectId) ?? collect())
+                ->when($subjectEducationYearCode !== null, fn($c) => $c->where('education_year_code', $subjectEducationYearCode))
+                ->first();
+            $manualMt = $manualMtRow?->grade;
             if ($manualMt !== null) {
                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
             }
 
-            // ---- ON, OSKI, Test (training_type_code: 100, 101, 102) ----
-            $otherGradesRaw = DB::table('student_grades')
-                ->where('student_hemis_id', $studentHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->whereIn('training_type_code', [100, 101, 102])
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
-                ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason')
-                ->get();
+            // ---- ON, OSKI, Test, Quiz (in-memory filter) ----
+            $otherGradesRaw = ($allOtherGrades->get($subjectId) ?? collect())
+                ->when($subjectEducationYearCode !== null, function ($c) use ($subjectEducationYearCode, $minScheduleDate) {
+                    return $c->filter(function ($g) use ($subjectEducationYearCode, $minScheduleDate) {
+                        if ($g->education_year_code == $subjectEducationYearCode) return true;
+                        if ($g->education_year_code === null) {
+                            if ($minScheduleDate !== null) {
+                                return ($g->lesson_date !== null && $g->lesson_date >= $minScheduleDate) || $g->lesson_date === null;
+                            }
+                            return true;
+                        }
+                        return false;
+                    });
+                })
+                ->when($subjectEducationYearCode === null && $minScheduleDate !== null, function ($c) use ($minScheduleDate) {
+                    return $c->filter(fn($g) => ($g->lesson_date !== null && $g->lesson_date >= $minScheduleDate) || $g->lesson_date === null);
+                })
+                ->values();
 
             $otherGrades = ['on' => null, 'oski' => null, 'test' => null];
             $otherByType = [];
             foreach ($otherGradesRaw as $g) {
                 $effectiveGrade = $getEffectiveGrade($g);
                 if ($effectiveGrade !== null) {
-                    $otherByType[$g->training_type_code][] = $effectiveGrade;
+                    $typeCode = $g->training_type_code;
+                    // Legacy code 103 quiz grades: resolve to OSKI(101) or Test(102) via quiz_result
+                    if ($typeCode == 103 && $g->quiz_result_id) {
+                        $quizType = $quizTypes[$g->quiz_result_id] ?? null;
+                        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+                        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+                        if (in_array($quizType, $oskiTypes)) {
+                            $typeCode = 101;
+                        } elseif (in_array($quizType, $testTypes)) {
+                            $typeCode = 102;
+                        }
+                    }
+                    $otherByType[$typeCode][] = $effectiveGrade;
                 }
             }
             if (!empty($otherByType[100])) $otherGrades['on'] = round(array_sum($otherByType[100]) / count($otherByType[100]), 0, PHP_ROUND_HALF_UP);
             if (!empty($otherByType[101])) $otherGrades['oski'] = round(array_sum($otherByType[101]) / count($otherByType[101]), 0, PHP_ROUND_HALF_UP);
             if (!empty($otherByType[102])) $otherGrades['test'] = round(array_sum($otherByType[102]) / count($otherByType[102]), 0, PHP_ROUND_HALF_UP);
 
-            // ---- Davomat (Attendance) ----
+            // ---- Davomat (in-memory filter) ----
             $excludedAttendanceCodes = [99, 100, 101, 102];
-            $absentOff = DB::table('attendances')
-                ->where('student_hemis_id', $studentHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
-                ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+            $subjectAttendance = $allAttendance->get($subjectId) ?? collect();
+            $absentOff = $subjectAttendance
+                ->when($subjectEducationYearCode !== null, fn($c) => $c->where('education_year_code', $subjectEducationYearCode))
+                ->filter(fn($a) => !in_array($a->training_type_code, $excludedAttendanceCodes))
                 ->sum('absent_off');
 
             // Auditoriya soatlari
@@ -578,52 +696,35 @@ class StudentController extends Controller
             }
             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
 
-            // ---- Batafsil uchun baholar (Ma'ruza, Amaliy, MT) ----
-            $detailGrades = DB::table('student_grades')
-                ->where('student_hemis_id', $studentHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->whereNotIn('training_type_code', [100, 101, 102])
-                ->whereNotNull('lesson_date')
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where(function ($q2) use ($subjectEducationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $subjectEducationYearCode);
-                    if ($minScheduleDate !== null) {
-                        $q2->orWhere(function ($q3) use ($minScheduleDate) {
-                            $q3->whereNull('education_year_code')
-                                ->where('lesson_date', '>=', $minScheduleDate);
-                        });
-                    }
-                }))
-                ->select('lesson_date', 'training_type_code', 'training_type_name', 'lesson_pair_name',
-                    'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_name',
-                    'grade', 'retake_grade', 'status', 'reason')
-                ->orderBy('lesson_date', 'desc')
-                ->get();
+            // ---- Batafsil uchun baholar (in-memory filter) ----
+            $detailGrades = ($allDetailGrades->get($subjectId) ?? collect())
+                ->when($subjectEducationYearCode !== null, function ($c) use ($subjectEducationYearCode, $minScheduleDate) {
+                    return $c->filter(function ($g) use ($subjectEducationYearCode, $minScheduleDate) {
+                        if ($g->education_year_code == $subjectEducationYearCode) return true;
+                        if ($g->education_year_code === null && $minScheduleDate !== null && $g->lesson_date >= $minScheduleDate) return true;
+                        return false;
+                    });
+                })
+                ->values();
 
-            // Ma'ruza uchun davomat
-            $lectureAttendance = DB::table('attendances')
-                ->where('student_hemis_id', $studentHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+            // Ma'ruza uchun davomat (in-memory filter)
+            $lectureAttendance = $subjectAttendance
+                ->when($subjectEducationYearCode !== null, fn($c) => $c->where('education_year_code', $subjectEducationYearCode))
                 ->where('training_type_code', 11)
-                ->whereNotNull('lesson_date')
-                ->select(DB::raw('DATE(lesson_date) as lesson_date'), 'lesson_pair_name',
-                    'lesson_pair_start_time', 'lesson_pair_end_time', 'employee_name',
-                    'absent_on', 'absent_off')
-                ->orderBy('lesson_date', 'desc')
-                ->get()
+                ->filter(fn($a) => $a->lesson_date !== null)
+                ->sortByDesc('lesson_date')
                 ->map(function ($row) {
                     $isAbsent = ((int) $row->absent_on) > 0 || ((int) $row->absent_off) > 0;
                     return [
-                        'lesson_date' => $row->lesson_date,
+                        'lesson_date' => \Carbon\Carbon::parse($row->lesson_date)->format('Y-m-d'),
                         'lesson_pair_name' => $row->lesson_pair_name,
                         'lesson_pair_start_time' => $row->lesson_pair_start_time,
                         'lesson_pair_end_time' => $row->lesson_pair_end_time,
                         'employee_name' => $row->employee_name,
                         'status' => $isAbsent ? 'NB' : 'Qatnashdi',
                     ];
-                });
+                })
+                ->values();
 
             // Ma'ruza attendance grouped by date for horizontal view
             $lectureByDate = $lectureAttendance->groupBy('lesson_date')->map(function($items, $date) {
@@ -757,13 +858,8 @@ class StudentController extends Controller
                 $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($mtHour, $mtMinute, 0);
                 $submissionCount = $submission?->submission_count ?? 0;
 
-                // Use mt_grade_history count for accurate resubmission tracking
-                // (submission_count increments for every upload, including re-uploads before grading)
-                $mtHistoryCount = DB::table('mt_grade_history')
-                    ->where('student_hemis_id', $student->hemis_id)
-                    ->where('subject_id', $independent->subject_hemis_id)
-                    ->where('semester_code', $independent->semester_code)
-                    ->count();
+                // Use pre-loaded mt_grade_history count for accurate resubmission tracking
+                $mtHistoryCount = $mtHistoryCounts[$independent->subject_hemis_id] ?? 0;
                 $remainingAttempts = max(0, $mtMaxResubmissions - $mtHistoryCount);
                 $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
                 $gradeLocked = $grade && $grade->grade >= $studentMinLimit;

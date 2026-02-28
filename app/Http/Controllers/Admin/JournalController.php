@@ -5204,7 +5204,7 @@ class JournalController extends Controller
         $headerRow->addCell(3500, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
         $headerRow->addCell(1500, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
         $headerRow->addCell(900, $headerBg)->addText('JN', $headerFont, $cellCenter);
-        $headerRow->addCell(900, $headerBg)->addText("O'N", $headerFont, $cellCenter);
+        $headerRow->addCell(900, $headerBg)->addText('MT', $headerFont, $cellCenter);
         $headerRow->addCell(900, $headerBg)->addText('OSKI', $headerFont, $cellCenter);
         $headerRow->addCell(900, $headerBg)->addText('Test', $headerFont, $cellCenter);
         $headerRow->addCell(1200, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);

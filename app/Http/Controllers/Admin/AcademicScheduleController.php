@@ -1138,7 +1138,7 @@ class AcademicScheduleController extends Controller
             $headerRow->addCell(4500, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
             $headerRow->addCell(1800, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
             $headerRow->addCell(1200, $headerBg)->addText('JN', $headerFont, $cellCenter);
-            $headerRow->addCell(1200, $headerBg)->addText("O'N", $headerFont, $cellCenter);
+            $headerRow->addCell(1200, $headerBg)->addText('MT', $headerFont, $cellCenter);
             $headerRow->addCell(1500, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
             $headerRow->addCell(2000, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
 

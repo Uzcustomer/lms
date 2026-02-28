@@ -153,7 +153,7 @@
         </div>
 
         <!-- Bottom Navigation Tabs -->
-        <div class="flex items-center justify-around" style="background-color:#23417b;height:60px;padding-bottom:max(5px, env(safe-area-inset-bottom));">
+        <div class="flex items-center justify-between" style="background-color:#23417b;height:60px;padding:0 15px;padding-bottom:max(5px, env(safe-area-inset-bottom));">
             <!-- 1. Fanlar -->
             <a href="{{ route('student.subjects') }}" class="flex flex-col items-center justify-center" style="width:50px;gap:3px;">
                 @if($activeTab === 'fanlar')

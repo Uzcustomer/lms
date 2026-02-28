@@ -628,6 +628,24 @@ class QuizResultController extends Controller
                 }
             }
 
+            // Schedules dan haqiqiy semester_code larni olish (group_hemis_id + subject_id)
+            // curriculum_subjects va schedules orasida semester_code farq bo'lishi mumkin
+            $scheduleSemesterCodes = [];
+            $groupHemisIds = $groups->pluck('group_hemis_id')->toArray();
+            if (!empty($groupHemisIds) && !empty($fanIds)) {
+                $schedSemRows = DB::table('schedules')
+                    ->whereIn('group_id', $groupHemisIds)
+                    ->whereIn('subject_id', $fanIds)
+                    ->whereNull('deleted_at')
+                    ->whereNotNull('lesson_date')
+                    ->select('group_id', 'subject_id', 'semester_code')
+                    ->distinct()
+                    ->get();
+                foreach ($schedSemRows as $sr) {
+                    $scheduleSemesterCodes[$sr->group_id . '|' . $sr->subject_id] = $sr->semester_code;
+                }
+            }
+
             // JN baholar (training_type_code NOT IN config list)
             $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
             $jnGrades = [];
@@ -909,35 +927,42 @@ class QuizResultController extends Controller
                     $groupModel = $groups[$student->group_id] ?? null;
                     if ($groupModel) {
                         $groupDbId = $groupModel->id;
-                        $csKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
-                        $allSemCodes = $curriculumSubjectsAll[$csKey] ?? [];
 
-                        if (count($allSemCodes) === 1) {
-                            // Faqat bitta semestr bor — to'g'ridan-to'g'ri ishlatamiz
-                            $semesterCode = $allSemCodes[0];
-                        } elseif (count($allSemCodes) > 1) {
-                            // Bir nechta semestrda bo'lsa — talabaning joriy semestriga mos kelganini tanlash
-                            $studentSemCode = $student->semester_code;
-                            if ($studentSemCode && in_array($studentSemCode, $allSemCodes)) {
-                                $semesterCode = $studentSemCode;
-                            } else {
-                                // Joriy semestrga mos kelganini tanlash
-                                $curSem = $currentSemesters[$groupModel->curriculum_hemis_id] ?? null;
-                                if ($curSem && in_array($curSem, $allSemCodes)) {
-                                    $semesterCode = $curSem;
+                        // 1) Avval schedules dan haqiqiy semester_code ni tekshirish
+                        //    (curriculum_subjects va schedules orasida semester_code farq bo'lishi mumkin)
+                        $schedKey = $groupModel->group_hemis_id . '|' . $result->fan_id;
+                        $scheduleSemCode = $scheduleSemesterCodes[$schedKey] ?? null;
+
+                        if ($scheduleSemCode) {
+                            // Schedules da aniq semester_code topildi — uni ishlatamiz
+                            $semesterCode = $scheduleSemCode;
+                        } else {
+                            // 2) Schedules da topilmasa — curriculum_subjects dan tanlash (fallback)
+                            $csKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
+                            $allSemCodes = $curriculumSubjectsAll[$csKey] ?? [];
+
+                            if (count($allSemCodes) === 1) {
+                                $semesterCode = $allSemCodes[0];
+                            } elseif (count($allSemCodes) > 1) {
+                                $studentSemCode = $student->semester_code;
+                                if ($studentSemCode && in_array($studentSemCode, $allSemCodes)) {
+                                    $semesterCode = $studentSemCode;
                                 } else {
-                                    // Oxirgi semestrni tanlash (fallback)
-                                    $semesterCode = end($allSemCodes);
+                                    $curSem = $currentSemesters[$groupModel->curriculum_hemis_id] ?? null;
+                                    if ($curSem && in_array($curSem, $allSemCodes)) {
+                                        $semesterCode = $curSem;
+                                    } else {
+                                        $semesterCode = end($allSemCodes);
+                                    }
                                 }
-                            }
-                        } elseif ($student->semester_code) {
-                            // curriculumSubjects topilmadi — talabaning semester_code bilan to'g'ridan-to'g'ri tekshirish
-                            $directCs = CurriculumSubject::where('curricula_hemis_id', $groupModel->curriculum_hemis_id)
-                                ->where('subject_id', $result->fan_id)
-                                ->where('semester_code', $student->semester_code)
-                                ->first();
-                            if ($directCs) {
-                                $semesterCode = $directCs->semester_code;
+                            } elseif ($student->semester_code) {
+                                $directCs = CurriculumSubject::where('curricula_hemis_id', $groupModel->curriculum_hemis_id)
+                                    ->where('subject_id', $result->fan_id)
+                                    ->where('semester_code', $student->semester_code)
+                                    ->first();
+                                if ($directCs) {
+                                    $semesterCode = $directCs->semester_code;
+                                }
                             }
                         }
                     }

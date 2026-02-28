@@ -268,10 +268,49 @@ class JournalController extends Controller
             abort(404, "Guruh topilmadi (ID: {$groupId})");
         }
 
+        // semester_code ni schedules jadvalidan tekshirish:
+        // curriculum_subjects da semester_code=12 bo'lishi mumkin, lekin haqiqiy
+        // dars jadvali schedules da boshqa semester_code (masalan 17) ishlatilgan bo'lishi mumkin.
+        $originalSemesterCode = $semesterCode;
+        $hasSchedulesWithGivenSemester = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if (!$hasSchedulesWithGivenSemester) {
+            // Shu guruh + fan uchun haqiqiy semester_code ni schedules dan topish
+            $actualSemesterCode = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subjectId)
+                ->whereNull('deleted_at')
+                ->whereNotNull('lesson_date')
+                ->orderBy('lesson_date', 'desc')
+                ->value('semester_code');
+
+            if ($actualSemesterCode) {
+                $semesterCode = $actualSemesterCode;
+            }
+        }
+
         $subject = CurriculumSubject::where('subject_id', $subjectId)
             ->where('curricula_hemis_id', $group->curriculum_hemis_id)
             ->where('semester_code', $semesterCode)
             ->first();
+        // Agar yangi semester_code bilan ham topilmasa, original bilan sinab ko'rish
+        if (!$subject && $semesterCode !== $originalSemesterCode) {
+            $subject = CurriculumSubject::where('subject_id', $subjectId)
+                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->where('semester_code', $originalSemesterCode)
+                ->first();
+        }
+        // Hech biri topilmasa — semester filtrSIZ birinchi natijani olish
+        if (!$subject) {
+            $subject = CurriculumSubject::where('subject_id', $subjectId)
+                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->first();
+        }
         if (!$subject) {
             abort(404, "Fan topilmadi (subject_id: {$subjectId}, semester: {$semesterCode})");
         }
@@ -280,6 +319,12 @@ class JournalController extends Controller
         $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
             ->where('code', $semesterCode)
             ->first();
+        // semester topilmasa, original semester_code bilan sinash
+        if (!$semester && $semesterCode !== $originalSemesterCode) {
+            $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('code', $originalSemesterCode)
+                ->first();
+        }
 
         // Current education year: determine from schedules (most reliable source)
         // Pick the education_year_code that has the latest lesson_date for this group/subject/semester
@@ -313,7 +358,10 @@ class JournalController extends Controller
 
         // ===== DEBUG: Jornal ma'lumotlari diagnostikasi =====
         $debugInfo = [];
-        $debugInfo['url_params'] = ['groupId' => $groupId, 'subjectId' => $subjectId, 'semesterCode' => $semesterCode];
+        $debugInfo['url_params'] = ['groupId' => $groupId, 'subjectId' => $subjectId, 'semesterCode' => $originalSemesterCode];
+        $debugInfo['semester_code_redirect'] = $semesterCode !== $originalSemesterCode
+            ? "TUZATILDI: {$originalSemesterCode} → {$semesterCode} (schedules dan topildi)"
+            : "O'zgarishsiz: {$semesterCode}";
         $debugInfo['group'] = [
             'id' => $group->id,
             'name' => $group->name,

@@ -3430,6 +3430,7 @@ class ReportController extends Controller
         $gradesRows = $gradesQuery->select(
             'sg.student_hemis_id',
             's.full_name',
+            's.group_id',
             's.department_name',
             's.specialty_name',
             's.level_name',
@@ -3503,6 +3504,11 @@ class ReportController extends Controller
                 'mark_status' => 'Sababli',
                 'hemis_status' => $hemisStatus,
                 'match' => $match,
+                'journal_url' => route('admin.journal.show', [
+                    'groupId' => $gr->group_id,
+                    'subjectId' => $gr->subject_id,
+                    'semesterCode' => $gr->semester_code,
+                ]),
             ];
         }
 
@@ -3547,6 +3553,7 @@ class ReportController extends Controller
         $reverseRows = $reverseQuery->select(
             'a.student_hemis_id',
             's2.full_name',
+            's2.group_id',
             's2.department_name',
             's2.specialty_name',
             's2.level_name',
@@ -3556,7 +3563,8 @@ class ReportController extends Controller
             'a.lesson_date',
             'a.lesson_pair_code',
             'a.lesson_pair_start_time',
-            'a.lesson_pair_end_time'
+            'a.lesson_pair_end_time',
+            'a.semester_code'
         )->get();
 
         foreach ($reverseRows as $ar) {
@@ -3582,6 +3590,11 @@ class ReportController extends Controller
                 'mark_status' => 'Sababli emas',
                 'hemis_status' => 'Sababli',
                 'match' => 'mismatch',
+                'journal_url' => route('admin.journal.show', [
+                    'groupId' => $ar->group_id,
+                    'subjectId' => $ar->subject_id,
+                    'semesterCode' => $ar->semester_code,
+                ]),
             ];
         }
 

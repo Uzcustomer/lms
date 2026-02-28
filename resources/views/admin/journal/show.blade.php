@@ -26,8 +26,15 @@
             <div>
                 <div style="color:#60a5fa;font-weight:bold;margin-bottom:4px;">Fan (curriculum_subjects):</div>
                 <div>subject_id: <span style="color:#fbbf24;">{{ $debugInfo['subject']['subject_id'] }}</span></div>
+                <div>curriculum_subject_hemis_id: <span style="color:#f87171;font-weight:bold;">{{ $debugInfo['subject']['curriculum_subject_hemis_id'] ?? 'N/A' }}</span></div>
                 <div>subject_name: <span style="color:#34d399;">{{ $debugInfo['subject']['subject_name'] }}</span></div>
                 <div>semester_code: <span style="color:#34d399;">{{ $debugInfo['subject']['semester_code'] }}</span></div>
+                @if(($debugInfo['subject']['curriculum_subject_hemis_id'] ?? null) != $debugInfo['subject']['subject_id'])
+                    <div style="background:#7f1d1d;color:#fca5a5;padding:4px 8px;border-radius:4px;margin-top:4px;">
+                        ⚠️ subject_id ≠ curriculum_subject_hemis_id!<br>
+                        Schedules da subject_id={{ $debugInfo['subject']['curriculum_subject_hemis_id'] }} bo'lishi kerak!
+                    </div>
+                @endif
             </div>
             <div>
                 <div style="color:#60a5fa;font-weight:bold;margin-bottom:4px;">Education Year:</div>
@@ -48,10 +55,16 @@
                 <div style="color:#60a5fa;font-weight:bold;margin-bottom:4px;">Shu guruh uchun BARCHA jadvallar (subject/semester filtrSIZ):</div>
                 <div>Jami schedules: <span style="color:#fbbf24;">{{ $debugInfo['schedules_all_for_group'] }}</span></div>
                 <div style="margin-top:4px;">Mavjud subject_id + semester_code kombinatsiyalari:</div>
+                @php $csHemisId = $debugInfo['subject']['curriculum_subject_hemis_id'] ?? null; @endphp
                 @foreach($debugInfo['schedule_subjects_for_group'] as $ss)
-                    <div style="{{ $ss->subject_id == $debugInfo['url_params']['subjectId'] && $ss->semester_code == $debugInfo['url_params']['semesterCode'] ? 'color:#34d399;font-weight:bold;' : '' }}">
+                    @php
+                        $matchesBySubjectId = $ss->subject_id == $debugInfo['url_params']['subjectId'] && $ss->semester_code == $debugInfo['url_params']['semesterCode'];
+                        $matchesByHemisId = $csHemisId && $ss->subject_id == $csHemisId;
+                    @endphp
+                    <div style="{{ $matchesBySubjectId ? 'color:#34d399;font-weight:bold;' : ($matchesByHemisId ? 'color:#fbbf24;font-weight:bold;background:#422006;padding:2px 6px;border-radius:3px;' : '') }}">
                         subject_id={{ $ss->subject_id }}, semester_code={{ $ss->semester_code }}
-                        @if($ss->subject_id == $debugInfo['url_params']['subjectId'] && $ss->semester_code == $debugInfo['url_params']['semesterCode']) ✓ @endif
+                        @if($matchesBySubjectId) ✓ @endif
+                        @if($matchesByHemisId && !$matchesBySubjectId) ← curriculum_subject_hemis_id UYQUSHDI! @endif
                     </div>
                 @endforeach
             </div>

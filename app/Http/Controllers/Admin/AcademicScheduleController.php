@@ -16,6 +16,7 @@ use App\Models\Specialty;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\ContractList;
+use App\Models\Setting;
 use App\Models\DocumentVerification;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnStudentGrade;
@@ -1149,18 +1150,19 @@ class AcademicScheduleController extends Controller
             $rowNum = 1;
             $multipleGroups = count($subjectData['entries']) > 1;
 
-            // Kontrakt to'lov muddatlari va minimal foiz chegaralari
-            $contractCutoffs = [
-                '2025-10-01 23:59:59' => 25,
-                '2026-01-01 23:59:59' => 50,
-                '2026-03-01 23:59:59' => 75,
-                '2026-05-01 23:59:59' => 100,
-            ];
+            // Kontrakt to'lov muddatlari — sozlamalardan o'qish
+            $defaultCutoffs = json_encode([
+                ['deadline' => '2025-10-01', 'percent' => 25],
+                ['deadline' => '2026-01-01', 'percent' => 50],
+                ['deadline' => '2026-03-01', 'percent' => 75],
+                ['deadline' => '2026-05-01', 'percent' => 100],
+            ]);
+            $cutoffsRaw = json_decode(Setting::get('contract_cutoffs', $defaultCutoffs), true) ?: [];
             $now = time();
             $contractThreshold = 100; // default: barcha muddatlar o'tgan
-            foreach ($contractCutoffs as $deadline => $requiredPercent) {
-                if ($now <= strtotime($deadline)) {
-                    $contractThreshold = $requiredPercent;
+            foreach ($cutoffsRaw as $cutoff) {
+                if ($now <= strtotime($cutoff['deadline'] . ' 23:59:59')) {
+                    $contractThreshold = (int) $cutoff['percent'];
                     break;
                 }
             }

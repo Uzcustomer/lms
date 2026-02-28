@@ -174,7 +174,7 @@
 
                 {{-- Slide panel from RIGHT --}}
                 <div :class="modalOpen ? 'mt-modal-panel-enter' : 'mt-modal-panel-leave'"
-                     style="position:absolute;top:0;bottom:0;right:0;width:100%;max-width:28rem;background:white;box-shadow:-4px 0 25px rgba(0,0,0,0.15);display:flex;flex-direction:column;">
+                     style="position:absolute;top:0;bottom:0;right:0;width:70%;background:white;box-shadow:-4px 0 25px rgba(0,0,0,0.15);display:flex;flex-direction:column;">
 
                     {{-- Modal header --}}
                     <div class="flex-shrink-0 flex items-center justify-between px-4 py-3" :style="'background:' + modalColor.accent">

@@ -202,8 +202,10 @@ class ImportGrades extends Command
         $elapsed = round((microtime(true) - $liveStartTime) / 60, 1);
 
         // Cache ni AVVAL yozish — sendDailyLiveReport crash qilsa ham data muvaffaqiyati saqlansin
+        // TTL: kun oxirigacha (oldin 2 soat edi — 15:30 da yozilgan cache 17:30 da expire bo'lib,
+        // 18:00 hisobot import qayta boshlardi va oxiriga yetolmasdan to'xtardi)
         if (!$gradeError && !$attendanceError) {
-            \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), now()->addHours(2));
+            \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), Carbon::today()->endOfDay());
         }
 
         if (!$this->option('silent')) {

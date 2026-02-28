@@ -282,7 +282,7 @@
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
                 var rowClass = r.match === 'mismatch' ? 'row-mismatch' : '';
-                html += '<tr class="journal-row ' + rowClass + '">';
+                html += '<tr class="journal-row ' + rowClass + '" style="cursor:pointer;" onclick="window.open(\'' + r.journal_url + '\', \'_blank\')">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';

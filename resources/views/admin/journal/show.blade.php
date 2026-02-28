@@ -12,6 +12,9 @@
                 <div>groupId: <span style="color:#34d399;">{{ $debugInfo['url_params']['groupId'] }}</span></div>
                 <div>subjectId: <span style="color:#34d399;">{{ $debugInfo['url_params']['subjectId'] }}</span></div>
                 <div>semesterCode: <span style="color:#34d399;">{{ $debugInfo['url_params']['semesterCode'] }}</span></div>
+                <div style="margin-top:4px;padding:4px 8px;border-radius:4px;{{ str_contains($debugInfo['semester_code_redirect'] ?? '', 'TUZATILDI') ? 'background:#065f46;color:#34d399;' : 'color:#94a3b8;' }}">
+                    {{ $debugInfo['semester_code_redirect'] ?? '' }}
+                </div>
             </div>
             <div>
                 <div style="color:#60a5fa;font-weight:bold;margin-bottom:4px;">Guruh (groups jadval):</div>

@@ -114,6 +114,7 @@
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="lesson_date">Sana <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="lesson_pair">Juftlik <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th>LMS holati</th>
                                         <th><a href="#" class="sort-link" data-sort="hemis_status">HEMIS holati <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="match">Natija <span class="sort-icon">&#9650;&#9660;</span></a></th>
@@ -239,6 +240,7 @@
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.lesson_date) + '</td>';
+                html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.lesson_pair) + '</td>';
                 html += '<td style="text-align:center;"><span class="badge badge-lms">Sababli</span></td>';
                 html += '<td style="text-align:center;">' + hemisBadge(r.hemis_status) + '</td>';
                 html += '<td style="text-align:center;">' + matchBadge(r.match) + '</td>';

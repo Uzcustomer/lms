@@ -1686,11 +1686,11 @@ class KtrController extends Controller
 
         $titleSection->addTextBreak(0);
 
-        // Yo'nalish nomi (underline bilan)
+        // Yo'nalish nomi
         if ($specialtyName) {
             $titleSection->addText(
                 $specialtyName,
-                ['underline' => 'single', 'size' => 13],
+                ['size' => 13],
                 $center
             );
         }
@@ -1732,20 +1732,20 @@ class KtrController extends Controller
         $section->addText('Fan: ' . $cs->subject_name . '.', ['bold' => true, 'size' => 11], $left);
         $section->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['size' => 11], $left);
 
-        // Yo'nalish: ... kurs semestr (underline)
+        // Yo'nalish: ... kurs semestr
         $yonalishLine = "Yo'nalish: " . $specialtyName;
         if ($levelName) $yonalishLine .= '  ' . $levelName . '-kurs';
         if ($semesterName) $yonalishLine .= '  ' . $semesterName;
-        $section->addText($yonalishLine, ['size' => 11, 'underline' => 'single'], $left);
+        $section->addText($yonalishLine, ['size' => 11], $left);
         $section->addTextBreak(0);
 
-        // Semestr uchun ajratilgan soat
-        $section->addText($semesterName . ' uchun ajratilgan soat:', ['bold' => true, 'size' => 11], $left);
+        // Semestr uchun ajratilgan yuklama
+        $section->addText($semesterName . ' uchun ajratilgan yuklama:', ['bold' => true, 'size' => 13], $left);
         foreach ($filteredTypes as $code => $type) {
-            $section->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['size' => 11, 'underline' => 'single'], $left);
+            $section->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['bold' => true, 'size' => 13], $left);
         }
         foreach ($mustaqilTypes as $code => $type) {
-            $section->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['size' => 11], $left);
+            $section->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['bold' => true, 'size' => 13], $left);
         }
         $section->addTextBreak(0);
 
@@ -1837,7 +1837,7 @@ class KtrController extends Controller
                 if ($hrs > 0 && $topic !== '') {
                     $textRun = $topicCell->addTextRun($lp);
                     $textRun->addText($filteredTypes[$code]['name'] . ': ', ['bold' => true, 'size' => 10]);
-                    $textRun->addText($topic, ['size' => 10, 'underline' => 'single']);
+                    $textRun->addText($topic, ['size' => 10]);
                     $hasContent = true;
                 } elseif ($hrs > 0) {
                     $textRun = $topicCell->addTextRun($lp);

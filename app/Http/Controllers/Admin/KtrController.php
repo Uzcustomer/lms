@@ -1872,12 +1872,6 @@ class KtrController extends Controller
                 ->addText($colTotal, ['bold' => true, 'size' => 10], $cp);
         }
 
-        // ---- IMZOLAR ----
-        $section->addTextBreak(2);
-        $section->addText("Tuzuvchi o'qituvchi:  ______________  " . $teacherName, ['size' => 12], $left);
-        $section->addTextBreak(1);
-        $section->addText("Kafedra mudiri:  ______________  " . ($approverInfo['kafedra_mudiri']['name'] ?? ''), ['size' => 12], $left);
-
         // =============== 3-BET: MUSTAQIL TA'LIM MAVZULARI (A4 Landscape) ===============
         if (!empty($mustaqilTypes)) {
             // HEMIS dan mustaqil ta'lim mavzularini olish
@@ -1964,12 +1958,14 @@ class KtrController extends Controller
                 $table3->addCell($adabiyotW, $cellBorder)->addText('', $dStyle, $lp);
             }
 
-            // Imzolar
-            $section3->addTextBreak(2);
-            $section3->addText("Tuzuvchi o'qituvchi:  ______________  " . $teacherName, ['size' => 12], $left);
-            $section3->addTextBreak(1);
-            $section3->addText("Kafedra mudiri:  ______________  " . ($approverInfo['kafedra_mudiri']['name'] ?? ''), ['size' => 12], $left);
         }
+
+        // ---- IMZOLAR (oxirgi sahifada) ----
+        $lastSection = !empty($mustaqilTypes) ? $section3 : $section;
+        $lastSection->addTextBreak(2);
+        $lastSection->addText("Tuzuvchi o'qituvchi:  ______________  " . $teacherName, ['size' => 12], $left);
+        $lastSection->addTextBreak(1);
+        $lastSection->addText("Kafedra mudiri:  ______________  " . ($approverInfo['kafedra_mudiri']['name'] ?? ''), ['size' => 12], $left);
 
         // ---- FAYLNI YUKLASH ----
         $filename = 'KTR_' . preg_replace('/[^a-zA-Z0-9\x{0400}-\x{04FF}]/u', '_', $cs->subject_name) . '_' . date('Y-m-d') . '.docx';

@@ -3780,37 +3780,45 @@ class JournalController extends Controller
 
     /**
      * Joriy semestrning boshlanish sanasini aniqlash.
-     * curriculum_weeks dan bugungi sana qaysi haftaga tushishini topib,
-     * o'sha semestrning birinchi haftasi boshlanish sanasini qaytaradi.
+     * Har bir yo'nalishning o'quv rejasi boshqa sanada boshlanadi,
+     * bahorgi semestrlar ichidan eng ertasini qaytaradi.
      */
     private function getCurrentSemesterStartDate(): ?string
     {
-        $now = now();
+        // Joriy o'quv yilini aniqlash
+        $educationYear = DB::table('semesters')
+            ->where('current', true)
+            ->orderByDesc('education_year')
+            ->value('education_year');
 
-        // Bugungi sana qaysi curriculum_weeks ga tushadi?
-        $currentWeekSemesterIds = DB::table('curriculum_weeks')
-            ->where('start_date', '<=', $now)
-            ->where('end_date', '>=', $now)
-            ->pluck('semester_hemis_id')
-            ->unique()
-            ->toArray();
-
-        // Agar topilmasa, curriculum_weeks.current=true dan olish
-        if (empty($currentWeekSemesterIds)) {
-            $currentWeekSemesterIds = DB::table('curriculum_weeks')
-                ->where('current', true)
-                ->pluck('semester_hemis_id')
-                ->unique()
-                ->toArray();
-        }
-
-        if (empty($currentWeekSemesterIds)) {
+        if (!$educationYear) {
             return null;
         }
 
-        // Shu semestrlarning eng erta boshlanish sanasi
+        $currentSemesterIds = DB::table('semesters')
+            ->where('current', true)
+            ->where('education_year', $educationYear)
+            ->pluck('semester_hemis_id');
+
+        if ($currentSemesterIds->isEmpty()) {
+            return null;
+        }
+
+        // Bahorgi semestrlarni ajratish — kuzgi (yanvardan OLDIN boshlangan) larni chiqarib tashlash
+        $springCutoff = ($educationYear + 1) . '-01-01';
+
+        $springSemesterIds = DB::table('curriculum_weeks')
+            ->whereIn('semester_hemis_id', $currentSemesterIds)
+            ->groupBy('semester_hemis_id')
+            ->havingRaw('MIN(start_date) >= ?', [$springCutoff])
+            ->pluck('semester_hemis_id');
+
+        $targetSemesterIds = $springSemesterIds->isNotEmpty()
+            ? $springSemesterIds
+            : $currentSemesterIds;
+
         return DB::table('curriculum_weeks')
-            ->whereIn('semester_hemis_id', $currentWeekSemesterIds)
+            ->whereIn('semester_hemis_id', $targetSemesterIds)
             ->min('start_date');
     }
 

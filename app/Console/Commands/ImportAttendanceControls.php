@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\AttendanceControl;
+use App\Models\CurriculumWeek;
+use App\Models\Semester;
 use App\Services\ImportProgressReporter;
 use App\Services\TelegramService;
 use Carbon\Carbon;
@@ -126,17 +128,68 @@ class ImportAttendanceControls extends Command
     }
 
     // =========================================================================
-    // FINAL IMPORT — har kuni 02:00 da, yakunlanmagan kunlarni is_final=true qiladi
+    // FINAL IMPORT — har kuni tunda, joriy semestr boshidan kechagacha
+    // Davomat o'zgarishi semestr davomida mumkin (sababli/sababsiz)
     // =========================================================================
     private function handleFinalImport(string $token, TelegramService $telegram, bool $silent): int
     {
-        if (!$silent) {
-            $telegram->notify("🟢 Davomat nazorati FINAL import boshlandi (butun semestr)");
+        // Joriy o'quv yilining eng so'nggi education_year ni aniqlash
+        // (eski current=1 semestrlarni filtrlash uchun)
+        $educationYear = Semester::where('current', true)
+            ->orderBy('education_year', 'desc')
+            ->value('education_year');
+
+        if (!$educationYear) {
+            $msg = '❌ Joriy o\'quv yili topilmadi (semesters jadvalida current=true yo\'q)';
+            $this->error($msg);
+            if (!$silent) { $telegram->notify($msg); }
+            return self::FAILURE;
         }
-        $this->info('Starting FINAL attendance controls import (butun semestr)...');
+
+        // Shu o'quv yilidagi semestrlarning eng erta boshlanish sanasi
+        $currentSemesterIds = Semester::where('current', true)
+            ->where('education_year', $educationYear)
+            ->pluck('semester_hemis_id');
+
+        // Bahorgi semestrlarni ajratish — kuzgi (yanvardan OLDIN boshlangan) larni chiqarib tashlash
+        // Har bir yo'nalishning o'quv rejasi boshqa sanada boshlanadi, eng ertasini olish kerak
+        $springCutoff = ($educationYear + 1) . '-01-01';
+
+        $springSemesterIds = DB::table('curriculum_weeks')
+            ->whereIn('semester_hemis_id', $currentSemesterIds)
+            ->groupBy('semester_hemis_id')
+            ->havingRaw('MIN(start_date) >= ?', [$springCutoff])
+            ->pluck('semester_hemis_id');
+
+        $targetSemesterIds = $springSemesterIds->isNotEmpty()
+            ? $springSemesterIds
+            : $currentSemesterIds;
+
+        $semesterStart = CurriculumWeek::whereIn('semester_hemis_id', $targetSemesterIds)
+            ->orderBy('start_date', 'asc')
+            ->value('start_date');
+
+        if (!$semesterStart) {
+            $msg = '❌ Joriy semestr sanasi topilmadi (CurriculumWeek da ma\'lumot yo\'q)';
+            $this->error($msg);
+            if (!$silent) { $telegram->notify($msg); }
+            return self::FAILURE;
+        }
+
+        $from = Carbon::parse($semesterStart)->startOfDay();
+        $to = Carbon::yesterday()->endOfDay();
+
+        $this->info("O'quv yili: {$educationYear}, semestrlar: {$currentSemesterIds->count()} ta");
+
+        $dateRange = "{$from->toDateString()} — {$to->toDateString()}";
+
+        if (!$silent) {
+            $telegram->notify("🟢 Davomat nazorati FINAL import boshlandi ({$dateRange})");
+        }
+        $this->info("Starting FINAL attendance controls import ({$dateRange})...");
 
         // Sahifama-sahifa process — xotiraga yig'masdan
-        $result = $this->streamPagesAndProcess($token, null, null, true);
+        $result = $this->streamPagesAndProcess($token, $from->timestamp, $to->timestamp, true);
 
         if ($result === false) {
             $this->error('Final import: API xato — import bekor qilindi.');
@@ -149,7 +202,7 @@ class ImportAttendanceControls extends Command
         $totalDays = $result['totalDays'];
         $totalRecords = $result['totalRecords'];
 
-        $msg = "✅ Davomat nazorati FINAL import: {$totalDays} kun, {$totalRecords} yozuv (butun semestr)";
+        $msg = "✅ Davomat nazorati FINAL: {$totalDays} kun, {$totalRecords} yozuv ({$dateRange})";
         if (!$silent) {
             $telegram->notify($msg);
         }

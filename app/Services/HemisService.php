@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\ContractList;
 use App\Models\Curriculum;
 use App\Models\Department;
 use App\Models\Group;
@@ -601,83 +600,6 @@ class HemisService
                 'gpa_limit' => $data['gpa_limit'] ?? 2.0,
             ]
         );
-    }
-
-    /**
-     * HEMIS dan kontraktlarni import qilish (lokal bazaga saqlash)
-     */
-    public function importContracts(callable $onProgress = null): int
-    {
-        $page = 1;
-        $totalImported = 0;
-
-        do {
-            $result = $this->fetchContracts(['page' => $page, 'limit' => 200]);
-
-            if (!($result['success'] ?? false) || empty($result['data']['items'])) {
-                break;
-            }
-
-            $items = $result['data']['items'];
-            $pagination = $result['data']['pagination'] ?? [];
-
-            foreach ($items as $item) {
-                $data = $item['_data'] ?? [];
-
-                ContractList::updateOrCreate(
-                    ['hemis_id' => $item['id']],
-                    [
-                        'key' => $item['key'] ?? null,
-                        'education_year' => $item['_education_year'] ?? null,
-                        'student_hemis_id' => $item['_student'] ?? null,
-                        'year' => $data['year'] ?? null,
-                        'status' => $data['status'] ?? null,
-                        'status_id' => $data['statusId'] ?? null,
-                        'edu_form' => $data['eduForm'] ?? null,
-                        'edu_form_id' => $data['eduFormId'] ?? null,
-                        'edu_year' => $data['eduYear'] ?? null,
-                        'full_name' => $data['fullName'] ?? null,
-                        'edu_course' => $data['eduCourse'] ?? null,
-                        'edu_cours_id' => $data['eduCoursId'] ?? null,
-                        'edu_type_code' => $data['eduTypeCode'] ?? null,
-                        'edu_type_name' => $data['eduTypeName'] ?? null,
-                        'faculty_code' => $data['facultyCode'] ?? null,
-                        'faculty_name' => $data['facultyName'] ?? null,
-                        'contract_number' => $data['contractNumber'] ?? null,
-                        'edu_contract_sum' => $data['eduContractSum'] ?? null,
-                        'edu_organization' => $data['eduOrganization'] ?? null,
-                        'edu_organization_code' => $data['eduOrganizationCode'] ?? null,
-                        'paid_credit_amount' => $data['paidCreditAmount'] ?? null,
-                        'edu_speciality_code' => $data['eduSpecialityCode'] ?? null,
-                        'edu_speciality_name' => $data['eduSpecialityName'] ?? null,
-                        'end_rest_debet_amount' => $data['endRestDebetAmount'] ?? null,
-                        'unpaid_credit_amount' => $data['unPaidCreditAmount'] ?? null,
-                        'vozvrat_debet_amount' => $data['vozvratDebetAmount'] ?? null,
-                        'contract_debet_amount' => $data['contractDebetAmount'] ?? null,
-                        'edu_contract_type_code' => $data['eduContractTypeCode'] ?? null,
-                        'edu_contract_type_name' => $data['eduContractTypeName'] ?? null,
-                        'end_rest_credit_amount' => $data['endRestCreditAmount'] ?? null,
-                        'begin_rest_debet_amount' => $data['beginRestDebetAmount'] ?? null,
-                        'begin_rest_credit_amount' => $data['beginRestCreditAmount'] ?? null,
-                        'edu_contract_sum_type_code' => $data['eduContractSumTypeCode'] ?? null,
-                        'edu_contract_sum_type_name' => $data['eduContractSumTypeName'] ?? null,
-                        'hemis_created_at' => $item['created_at'] ?? null,
-                        'hemis_updated_at' => $item['updated_at'] ?? null,
-                    ]
-                );
-
-                $totalImported++;
-            }
-
-            if ($onProgress) {
-                $onProgress($page, $totalImported, $pagination['totalCount'] ?? 0);
-            }
-
-            $pageCount = $pagination['pageCount'] ?? 1;
-            $page++;
-        } while ($page <= $pageCount);
-
-        return $totalImported;
     }
 
     /**

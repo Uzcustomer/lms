@@ -22,7 +22,12 @@ class ImportSchedules extends Command
             $error = error_get_last();
             if ($error && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR])) {
                 $msg = "💀 import:schedules CRASH: {$error['message']} ({$error['file']}:{$error['line']})";
-                Log::channel('import_schedule')->critical($msg);
+
+                try {
+                    Log::channel('import_schedule')->critical($msg);
+                } catch (\Throwable $e) {
+                    error_log("[import_schedule] CRITICAL: {$msg}");
+                }
 
                 if (!$this->option('silent')) {
                     try {
@@ -46,10 +51,16 @@ class ImportSchedules extends Command
         } catch (\Throwable $e) {
             $errorMsg = $e->getMessage();
             $this->error('Xatolik: ' . $errorMsg);
-            Log::channel('import_schedule')->error("Jadval import exception: {$errorMsg}", [
-                'file' => $e->getFile() . ':' . $e->getLine(),
-                'trace' => substr($e->getTraceAsString(), 0, 1000),
-            ]);
+
+            try {
+                Log::channel('import_schedule')->error("Jadval import exception: {$errorMsg}", [
+                    'file' => $e->getFile() . ':' . $e->getLine(),
+                    'trace' => substr($e->getTraceAsString(), 0, 1000),
+                ]);
+            } catch (\Throwable $logEx) {
+                error_log("[import_schedule] ERROR: Jadval import exception: {$errorMsg}");
+            }
+
             return self::FAILURE;
         }
     }

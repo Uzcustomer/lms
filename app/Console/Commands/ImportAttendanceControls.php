@@ -24,6 +24,21 @@ class ImportAttendanceControls extends Command
 
     public function handle(TelegramService $telegram): int
     {
+        ini_set('memory_limit', '512M');
+
+        // OOM crash himoyasi
+        register_shutdown_function(function () use ($telegram) {
+            $error = error_get_last();
+            if ($error && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR])) {
+                $msg = "💀 import:attendance-controls CRASH: {$error['message']} ({$error['file']}:{$error['line']})";
+                try { Log::critical($msg); } catch (\Throwable $e) { error_log($msg); }
+
+                if (!$this->option('silent')) {
+                    try { $telegram->notify($msg); } catch (\Throwable $e) {}
+                }
+            }
+        });
+
         $mode = $this->option('mode');
         $dateOption = $this->option('date');
         $dateFrom = $this->option('date-from');
@@ -68,7 +83,7 @@ class ImportAttendanceControls extends Command
         $from = $date->copy()->startOfDay()->timestamp;
         $to = $date->copy()->endOfDay()->timestamp;
 
-        // 1-qadam: API dan barcha sahifalarni xotiraga yig'ish
+        // Live import — bitta kun, kichik data, fetchAllPages xavfsiz
         $items = $this->fetchAllPages($token, $from, $to);
 
         if ($items === false) {
@@ -80,7 +95,7 @@ class ImportAttendanceControls extends Command
             return self::FAILURE;
         }
 
-        // 2-qadam: API muvaffaqiyatli — faqat upsert (soft delete yo'q)
+        // API muvaffaqiyatli — faqat upsert (soft delete yo'q)
         $this->applyAttendanceControls($items, $date, false);
 
         $this->info("Live import tugadi: {$todayStr}, API dan: " . count($items) . " ta yozuv");
@@ -88,7 +103,7 @@ class ImportAttendanceControls extends Command
     }
 
     // =========================================================================
-    // RANGE IMPORT — sana oralig'i uchun bitta API chaqiruv bilan import
+    // RANGE IMPORT — sana oralig'i uchun, sahifama-sahifa process qiladi
     // SyncReportDataJob dan foydalaniladi
     // =========================================================================
     private function handleRangeImport(string $token, string $dateFrom, string $dateTo, TelegramService $telegram, bool $silent)
@@ -98,45 +113,15 @@ class ImportAttendanceControls extends Command
 
         $this->info("Range import: {$from->toDateString()} — {$to->toDateString()} uchun davomat yangilanmoqda...");
 
-        $items = $this->fetchAllPages($token, $from->timestamp, $to->timestamp);
+        $result = $this->streamPagesAndProcess($token, $from->timestamp, $to->timestamp, false);
 
-        if ($items === false) {
+        if ($result === false) {
             $this->error("Range import: API xato.");
             Log::error("[AttCtrl RangeImport] API failed for {$dateFrom} — {$dateTo}");
             return 1;
         }
 
-        if (empty($items)) {
-            $this->info("Range import: API dan yozuv kelmadi.");
-            return 0;
-        }
-
-        // Sanalar bo'yicha guruhlash va har kun uchun upsert
-        $groupedByDate = collect($items)->groupBy(function ($item) {
-            return isset($item['lesson_date']) ? date('Y-m-d', $item['lesson_date']) : null;
-        })->filter(fn ($dateItems, $date) => $date !== null)->sortKeys();
-
-        $totalDays = $groupedByDate->count();
-        $successDays = 0;
-        $totalRecords = 0;
-
-        $this->info("Jami: " . count($items) . " yozuv, {$totalDays} kun");
-
-        foreach ($groupedByDate as $dateStr => $dateItems) {
-            $date = Carbon::parse($dateStr);
-            $this->applyAttendanceControls($dateItems->toArray(), $date, false);
-            $successDays++;
-            $totalRecords += $dateItems->count();
-            $this->info("  {$dateStr} — {$dateItems->count()} yozuv ({$successDays}/{$totalDays})");
-
-            // Nightly/report progress callback
-            if (app()->bound('nightly.progress')) {
-                $callback = app('nightly.progress');
-                $callback("{$successDays}/{$totalDays} kun ({$totalRecords} yozuv)");
-            }
-        }
-
-        $this->info("Range import tugadi: {$successDays} kun, {$totalRecords} yozuv");
+        $this->info("Range import tugadi: {$result['totalDays']} kun, {$result['totalRecords']} yozuv");
         return 0;
     }
 
@@ -150,10 +135,10 @@ class ImportAttendanceControls extends Command
         }
         $this->info('Starting FINAL attendance controls import (butun semestr)...');
 
-        // HEMIS dan BARCHA yozuvlarni olish (sana filtrsiz — butun semestr)
-        $items = $this->fetchAllPages($token);
+        // Sahifama-sahifa process — xotiraga yig'masdan
+        $result = $this->streamPagesAndProcess($token, null, null, true);
 
-        if ($items === false) {
+        if ($result === false) {
             $this->error('Final import: API xato — import bekor qilindi.');
             if (!$silent) {
                 $telegram->notify("❌ Davomat nazorati FINAL import xato: API javob bermadi");
@@ -161,44 +146,10 @@ class ImportAttendanceControls extends Command
             return self::FAILURE;
         }
 
-        if (empty($items)) {
-            $this->info('Final import: API dan hech qanday yozuv kelmadi.');
-            if (!$silent) {
-                $telegram->notify("✅ Davomat nazorati: API da yozuv yo'q.");
-            }
-            return self::SUCCESS;
-        }
+        $totalDays = $result['totalDays'];
+        $totalRecords = $result['totalRecords'];
 
-        // Sanalar bo'yicha guruhlash
-        $todayStr = Carbon::today()->toDateString();
-        $groupedByDate = collect($items)->groupBy(function ($item) {
-            return isset($item['lesson_date']) ? date('Y-m-d', $item['lesson_date']) : null;
-        })->filter(function ($dateItems, $date) use ($todayStr) {
-            // null sanalarni va bugungi sanani o'tkazib yuborish (bugunni live import boshqaradi)
-            return $date !== null && $date < $todayStr;
-        })->sortKeys();
-
-        $totalDays = $groupedByDate->count();
-        $successDays = 0;
-        $totalRecords = 0;
-
-        $this->info("Jami: " . count($items) . " yozuv, {$totalDays} kun (bugundan oldingi)");
-
-        foreach ($groupedByDate as $dateStr => $dateItems) {
-            $date = Carbon::parse($dateStr);
-            $this->applyAttendanceControls($dateItems->toArray(), $date, true);
-            $successDays++;
-            $totalRecords += $dateItems->count();
-            $this->info("  {$dateStr} — {$dateItems->count()} yozuv yakunlandi ({$successDays}/{$totalDays})");
-
-            // Nightly wrapper ga progress yuborish
-            if (app()->bound('nightly.progress')) {
-                $nightlyCallback = app('nightly.progress');
-                $nightlyCallback("{$successDays}/{$totalDays} kun ({$totalRecords} yozuv)");
-            }
-        }
-
-        $msg = "✅ Davomat nazorati FINAL import: {$successDays} kun, {$totalRecords} yozuv (butun semestr)";
+        $msg = "✅ Davomat nazorati FINAL import: {$totalDays} kun, {$totalRecords} yozuv (butun semestr)";
         if (!$silent) {
             $telegram->notify($msg);
         }
@@ -207,15 +158,145 @@ class ImportAttendanceControls extends Command
         // Nightly wrapper ga yakuniy natija
         if (app()->bound('nightly.progress')) {
             $nightlyCallback = app('nightly.progress');
-            $nightlyCallback("{$successDays} kun, {$totalRecords} yozuv");
+            $nightlyCallback("{$totalDays} kun, {$totalRecords} yozuv");
         }
 
         return self::SUCCESS;
     }
 
     // =========================================================================
-    // API dan barcha sahifalarni xotiraga yig'ish (sana filtr bilan)
-    // Muvaffaqiyatli bo'lsa array, xato bo'lsa false qaytaradi
+    // Sahifama-sahifa fetch + process — xotira tejaladi
+    // Har sahifani olganidan keyin darhol bazaga yozadi
+    // =========================================================================
+    private function streamPagesAndProcess(string $token, ?int $from, ?int $to, bool $isFinal): array|false
+    {
+        $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
+        $page = 1;
+        $pageSize = 200;
+        $totalPages = 1;
+        $maxRetries = 3;
+        $totalFetched = 0;
+
+        $todayStr = Carbon::today()->toDateString();
+        $softDeletedDates = []; // Qaysi sanalar uchun soft-delete qilingan
+        $dateCounts = [];       // Har sana uchun yozuvlar soni
+
+        do {
+            $url = "https://student.ttatf.uz/rest/v1/data/attendance-control-list?limit={$pageSize}&page={$page}";
+            if ($from !== null && $to !== null) {
+                $url .= "&lesson_date_from={$from}&lesson_date_to={$to}";
+            }
+
+            $retryCount = 0;
+            $pageSuccess = false;
+
+            while ($retryCount < $maxRetries && !$pageSuccess) {
+                try {
+                    $response = Http::withoutVerifying()
+                        ->withToken($token)
+                        ->timeout(60)
+                        ->get($url);
+
+                    if ($response->successful()) {
+                        $json = $response->json();
+                        if (!($json['success'] ?? false)) {
+                            $this->error("API returned success=false on page {$page}");
+                            return false;
+                        }
+
+                        $items = $json['data']['items'] ?? [];
+                        $totalPages = $json['data']['pagination']['pageCount'] ?? 1;
+                        $totalFetched += count($items);
+
+                        $this->info("Fetched page {$page}/{$totalPages} (" . count($items) . " items)");
+                        if ($reporter) {
+                            $reporter->updateProgress($page, $totalPages);
+                        }
+                        // Nightly wrapper ga API progress
+                        if (app()->bound('nightly.progress')) {
+                            $nightlyCallback = app('nightly.progress');
+                            $nightlyCallback("API: {$page}/{$totalPages} sahifa ({$totalFetched} yozuv)");
+                        }
+
+                        // Sahifadagi itemlarni sanalar bo'yicha guruhlash va darhol process qilish
+                        $this->processPageItems($items, $isFinal, $todayStr, $softDeletedDates, $dateCounts);
+
+                        $pageSuccess = true;
+                        sleep(1);
+                    } else {
+                        $retryCount++;
+                        Log::error("[AttCtrl Fetch] Page {$page} failed. Status: {$response->status()}");
+                        if ($retryCount < $maxRetries) {
+                            sleep(3);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    $retryCount++;
+                    Log::error("[AttCtrl Fetch] Page {$page} exception: " . $e->getMessage());
+                    if ($retryCount < $maxRetries) {
+                        sleep(3);
+                    }
+                }
+            }
+
+            if (!$pageSuccess) {
+                $this->error("Failed page {$page} after {$maxRetries} retries — ABORTING.");
+                return false;
+            }
+
+            // Har 10 sahifada memory tozalash
+            if ($page % 10 === 0) {
+                gc_collect_cycles();
+            }
+
+            $page++;
+        } while ($page <= $totalPages);
+
+        $this->info("Total items fetched: {$totalFetched}");
+
+        return [
+            'totalFetched' => $totalFetched,
+            'totalDays' => count($dateCounts),
+            'totalRecords' => array_sum($dateCounts),
+            'dateCounts' => $dateCounts,
+        ];
+    }
+
+    // =========================================================================
+    // Sahifa itemlarini sanalar bo'yicha guruhlash va darhol bazaga yozish
+    // =========================================================================
+    private function processPageItems(array $items, bool $isFinal, string $todayStr, array &$softDeletedDates, array &$dateCounts): void
+    {
+        if (empty($items)) return;
+
+        // Sanalar bo'yicha guruhlash
+        $groupedByDate = [];
+        foreach ($items as $item) {
+            $dateStr = isset($item['lesson_date']) ? date('Y-m-d', $item['lesson_date']) : null;
+            if ($dateStr === null) continue;
+
+            // Final import: bugunni o'tkazib yuborish (bugunni live import boshqaradi)
+            if ($isFinal && $dateStr >= $todayStr) continue;
+
+            $groupedByDate[$dateStr][] = $item;
+        }
+
+        foreach ($groupedByDate as $dateStr => $dateItems) {
+            $date = Carbon::parse($dateStr);
+
+            // Soft-delete faqat FINAL da va faqat BIR MARTA har sana uchun
+            $doSoftDelete = $isFinal && !isset($softDeletedDates[$dateStr]);
+            if ($doSoftDelete) {
+                $softDeletedDates[$dateStr] = true;
+            }
+
+            $this->applyAttendanceControls($dateItems, $date, $isFinal, $doSoftDelete);
+            $dateCounts[$dateStr] = ($dateCounts[$dateStr] ?? 0) + count($dateItems);
+        }
+    }
+
+    // =========================================================================
+    // API dan barcha sahifalarni xotiraga yig'ish (faqat live import uchun — kichik data)
     // =========================================================================
     private function fetchAllPages(string $token, ?int $from = null, ?int $to = null): array|false
     {
@@ -325,7 +406,7 @@ class ImportAttendanceControls extends Command
     // Live: faqat upsert (soft-delete QILMAYDI — API har doim to'liq ma'lumot qaytarmaydi)
     // Final: soft delete + upsert (tunda, barcha ma'lumot to'liq bo'lganda)
     // =========================================================================
-    private function applyAttendanceControls(array $items, Carbon $date, bool $isFinal): void
+    private function applyAttendanceControls(array $items, Carbon $date, bool $isFinal, bool $doSoftDelete = true): void
     {
         $dateStart = $date->copy()->startOfDay();
         $dateEnd = $date->copy()->endOfDay();
@@ -334,11 +415,8 @@ class ImportAttendanceControls extends Command
 
         $softDeletedCount = 0;
 
-        // Soft delete faqat FINAL import da — live import da qilmaslik!
-        // Sabab: HEMIS API kun davomida to'liq ma'lumot qaytarmasligi mumkin,
-        // oldingi importda kiritilgan yozuvlarni yo'qotib qo'yadi.
-        // Tranzaksiyadan TASHQARIDA — tez bajariladi va lockni ushlab turmasligi kerak
-        if ($isFinal) {
+        // Soft delete faqat FINAL import da VA doSoftDelete=true bo'lganda
+        if ($isFinal && $doSoftDelete) {
             $softDeletedCount = $this->retryOnLockTimeout(fn () =>
                 AttendanceControl::where('lesson_date', '>=', $dateStart)
                     ->where('lesson_date', '<=', $dateEnd)
@@ -384,7 +462,6 @@ class ImportAttendanceControls extends Command
         }
 
         // Bulk upsert — 200 tadan chunk qilib, har biri alohida tranzaksiya
-        // updateOrCreate loop o'rniga ~50x tez, lock vaqti minimal
         $updateColumns = [
             'subject_schedule_id', 'subject_id', 'subject_code', 'subject_name',
             'employee_id', 'employee_name', 'education_year_code', 'education_year_name',

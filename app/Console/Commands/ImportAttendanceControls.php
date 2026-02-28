@@ -22,7 +22,7 @@ class ImportAttendanceControls extends Command
 
     protected $description = 'Import attendance controls from HEMIS API (live/final rejimlar)';
 
-    public function handle(TelegramService $telegram)
+    public function handle(TelegramService $telegram): int
     {
         $mode = $this->option('mode');
         $dateOption = $this->option('date');
@@ -47,7 +47,7 @@ class ImportAttendanceControls extends Command
     // =========================================================================
     // LIVE IMPORT — kun davomida, bugungi davomat nazoratini yangilaydi
     // =========================================================================
-    private function handleLiveImport(string $token, ?string $dateOption, TelegramService $telegram, bool $silent)
+    private function handleLiveImport(string $token, ?string $dateOption, TelegramService $telegram, bool $silent): int
     {
         $date = $dateOption ? Carbon::parse($dateOption) : Carbon::today();
         $todayStr = $date->toDateString();
@@ -60,7 +60,7 @@ class ImportAttendanceControls extends Command
 
         if ($alreadyFinalized) {
             $this->info("Live import: {$todayStr} davomat nazorati allaqachon yakunlangan (is_final=true), o'tkazib yuborildi.");
-            return;
+            return self::SUCCESS;
         }
 
         $this->info("Live import: {$todayStr} uchun davomat nazorati yangilanmoqda...");
@@ -77,13 +77,14 @@ class ImportAttendanceControls extends Command
             if (!$silent) {
                 $telegram->notify("❌ Davomat nazorati live import xato: {$todayStr}");
             }
-            return;
+            return self::FAILURE;
         }
 
         // 2-qadam: API muvaffaqiyatli — faqat upsert (soft delete yo'q)
         $this->applyAttendanceControls($items, $date, false);
 
         $this->info("Live import tugadi: {$todayStr}, API dan: " . count($items) . " ta yozuv");
+        return self::SUCCESS;
     }
 
     // =========================================================================
@@ -142,7 +143,7 @@ class ImportAttendanceControls extends Command
     // =========================================================================
     // FINAL IMPORT — har kuni 02:00 da, yakunlanmagan kunlarni is_final=true qiladi
     // =========================================================================
-    private function handleFinalImport(string $token, TelegramService $telegram, bool $silent)
+    private function handleFinalImport(string $token, TelegramService $telegram, bool $silent): int
     {
         if (!$silent) {
             $telegram->notify("🟢 Davomat nazorati FINAL import boshlandi (butun semestr)");
@@ -157,7 +158,7 @@ class ImportAttendanceControls extends Command
             if (!$silent) {
                 $telegram->notify("❌ Davomat nazorati FINAL import xato: API javob bermadi");
             }
-            return;
+            return self::FAILURE;
         }
 
         if (empty($items)) {
@@ -165,7 +166,7 @@ class ImportAttendanceControls extends Command
             if (!$silent) {
                 $telegram->notify("✅ Davomat nazorati: API da yozuv yo'q.");
             }
-            return;
+            return self::SUCCESS;
         }
 
         // Sanalar bo'yicha guruhlash
@@ -208,6 +209,8 @@ class ImportAttendanceControls extends Command
             $nightlyCallback = app('nightly.progress');
             $nightlyCallback("{$successDays} kun, {$totalRecords} yozuv");
         }
+
+        return self::SUCCESS;
     }
 
     // =========================================================================

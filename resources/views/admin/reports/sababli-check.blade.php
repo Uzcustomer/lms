@@ -223,7 +223,16 @@
             var sorted = allData.slice().sort(function(a, b) {
                 var valA = a[currentSort] || '';
                 var valB = b[currentSort] || '';
-                var cmp = valA.toString().localeCompare(valB.toString(), 'uz', {numeric: true});
+                var cmp;
+                if (currentSort === 'lesson_date') {
+                    // dd.mm.yyyy → Date ga parse qilish
+                    var pA = valA.split('.'), pB = valB.split('.');
+                    var dA = new Date(pA[2], pA[1] - 1, pA[0]);
+                    var dB = new Date(pB[2], pB[1] - 1, pB[0]);
+                    cmp = dA - dB;
+                } else {
+                    cmp = valA.toString().localeCompare(valB.toString(), 'uz', {numeric: true});
+                }
                 return currentDirection === 'desc' ? -cmp : cmp;
             });
 

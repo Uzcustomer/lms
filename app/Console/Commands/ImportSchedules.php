@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\ScheduleImportService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class ImportSchedules extends Command
 {
@@ -20,7 +21,12 @@ class ImportSchedules extends Command
             $this->info('Jadval importi muvaffaqiyatli yakunlandi.');
             return self::SUCCESS;
         } catch (\Throwable $e) {
-            $this->error('Xatolik: ' . $e->getMessage());
+            $errorMsg = $e->getMessage();
+            $this->error('Xatolik: ' . $errorMsg);
+            Log::channel('import_schedule')->error("Jadval import exception: {$errorMsg}", [
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => substr($e->getTraceAsString(), 0, 1000),
+            ]);
             return self::FAILURE;
         }
     }

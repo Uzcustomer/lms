@@ -112,10 +112,6 @@
         .text-emerald { color: #047857; }
         .text-cyan { color: #0e7490; max-width: 200px; white-space: normal; word-break: break-word; }
 
-        /* === JOURNAL LINK === */
-        .journal-link { font-size: 12px; font-weight: 700; color: #1d4ed8; text-decoration: none; display: block; line-height: 1.35; cursor: pointer; }
-        .journal-link:hover { color: #1e40af; text-decoration: underline; }
-
         /* === CHECKBOX === */
         .cb-styled { width: 16px; height: 16px; accent-color: #2b5ea7; cursor: pointer; }
 
@@ -328,7 +324,6 @@
         var importUrl = '{{ route($routePrefix . ".quiz-results.import") }}';
         var triggerCronUrl = '{{ route($routePrefix . ".quiz-results.trigger-cron") }}';
         var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
-        var journalBaseUrl = '{{ url("/admin/journal/show") }}';
 
         var allData = [];
         var filteredData = [];
@@ -569,15 +564,6 @@
         });
 
         // ========== JADVAL RENDERI ==========
-        function getJournalUrl(r) {
-            if (r.group_db_id != null && r.group_db_id !== '' &&
-                r.fan_id != null && r.fan_id !== '' &&
-                r.semester_code != null && r.semester_code !== '') {
-                return journalBaseUrl + '/' + r.group_db_id + '/' + r.fan_id + '/' + r.semester_code;
-            }
-            return null;
-        }
-
         function renderTable(data) {
             var html = '';
             for (var i = 0; i < data.length; i++) {
@@ -590,20 +576,11 @@
 
                 var isOk = r.xulosa_code === 'ok';
                 var rowClass = r.xulosa_code === 'uploaded' ? 'journal-row row-uploaded' : 'journal-row';
-                var jUrl = getJournalUrl(r);
 
-                var nameCell = jUrl
-                    ? '<a href="' + jUrl + '" target="_blank" class="journal-link">' + esc(r.full_name) + '</a>'
-                    : '<span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
+                var nameCell = '<span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
+                var fanCell = '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';
 
-                var fanCell = jUrl
-                    ? '<a href="' + jUrl + '" target="_blank" class="journal-link">' + esc(r.fan_name) + '</a>'
-                    : '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';
-
-                var rowDataAttr = jUrl ? ' data-journal-url="' + jUrl + '"' : '';
-                var rowCursor = jUrl ? ' style="cursor:pointer;"' : '';
-
-                html += '<tr class="' + rowClass + '" id="row-' + r.id + '"' + rowDataAttr + rowCursor + '>';
+                html += '<tr class="' + rowClass + '" id="row-' + r.id + '">';
                 html += '<td style="padding-left:14px;"><input type="checkbox" class="row-checkbox cb-styled" value="' + r.id + '"' + (r.xulosa_code === 'uploaded' ? ' disabled' : '') + '></td>';
                 html += '<td class="td-num">' + (i + 1) + '</td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.student_id) + '</span></td>';
@@ -624,12 +601,6 @@
             $('#table-body').html(html);
             $('#select-all').prop('checked', false);
 
-            // Qator bosilganda jurnalga o'tish (checkbox va link bosilganda emas)
-            $('#table-body').off('click', 'tr[data-journal-url]').on('click', 'tr[data-journal-url]', function(e) {
-                if ($(e.target).is('input, a') || $(e.target).closest('a').length) return;
-                var url = $(this).data('journal-url');
-                if (url) window.open(url, '_blank');
-            });
         }
 
         // ========== TANLASH BOSHQARUVI ==========

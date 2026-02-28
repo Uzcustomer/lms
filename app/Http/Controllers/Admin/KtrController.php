@@ -1730,13 +1730,13 @@ class KtrController extends Controller
 
         // Fan ma'lumotlari
         $section->addText('Fan: ' . $cs->subject_name . '.', ['bold' => true, 'size' => 11], $left);
-        $section->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['size' => 11], $left);
+        $section->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['bold' => true, 'size' => 11], $left);
 
         // Yo'nalish: ... kurs semestr
         $yonalishLine = "Yo'nalish: " . $specialtyName;
         if ($levelName) $yonalishLine .= '  ' . $levelName . '-kurs';
         if ($semesterName) $yonalishLine .= '  ' . $semesterName;
-        $section->addText($yonalishLine, ['size' => 11], $left);
+        $section->addText($yonalishLine, ['bold' => true, 'size' => 11], $left);
         $section->addTextBreak(0);
 
         // Semestr uchun ajratilgan yuklama

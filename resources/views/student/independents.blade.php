@@ -234,14 +234,16 @@
 
                                 {{-- Topshiriq fayli (o'qituvchi yuklagan) --}}
                                 <template x-if="item.task_file_url">
-                                    <div class="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-2.5 mb-2 border border-blue-100 dark:border-blue-800">
-                                        <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
-                                        <div class="flex-1 min-w-0">
-                                            <p class="text-[11px] text-gray-400">Topshiriq fayli</p>
-                                            <p class="text-xs font-medium text-gray-700 dark:text-gray-200 truncate" x-text="item.task_file_name"></p>
+                                    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-3 mb-2 border border-blue-100 dark:border-blue-800">
+                                        <div class="flex items-center gap-2 mb-2.5">
+                                            <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="text-[11px] text-gray-400">Topshiriq fayli</p>
+                                                <p class="text-xs font-medium text-gray-700 dark:text-gray-200 truncate" x-text="item.task_file_name"></p>
+                                            </div>
                                         </div>
-                                        <a :href="item.task_file_url" download class="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-[11px] font-medium rounded-lg transition">
-                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                                        <a :href="item.task_file_url" download class="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
                                             Yuklab olish
                                         </a>
                                     </div>
@@ -249,15 +251,17 @@
 
                                 {{-- Yuklangan fayl (talaba topshirgani) --}}
                                 <template x-if="item.submission_file_url">
-                                    <div class="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-2.5 mb-2 border border-green-100 dark:border-green-800">
-                                        <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        <div class="flex-1 min-w-0">
-                                            <p class="text-[11px] text-gray-400">Topshirilgan fayl</p>
-                                            <p class="text-xs font-medium text-gray-700 dark:text-gray-200 truncate" x-text="item.submission_name"></p>
-                                            <p class="text-[10px] text-gray-400" x-text="item.submission_date"></p>
+                                    <div class="bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-3 mb-2 border border-green-100 dark:border-green-800">
+                                        <div class="flex items-center gap-2 mb-2.5">
+                                            <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="text-[11px] text-gray-400">Topshirilgan fayl</p>
+                                                <p class="text-xs font-medium text-gray-700 dark:text-gray-200 truncate" x-text="item.submission_name"></p>
+                                                <p class="text-[10px] text-gray-400" x-text="item.submission_date"></p>
+                                            </div>
                                         </div>
-                                        <a :href="item.submission_file_url" download class="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 bg-green-500 hover:bg-green-600 text-white text-[11px] font-medium rounded-lg transition">
-                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                                        <a :href="item.submission_file_url" download class="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
                                             Yuklab olish
                                         </a>
                                     </div>

@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\AttendanceControl;
+use App\Models\CurriculumWeek;
+use App\Models\Semester;
 use App\Services\ImportProgressReporter;
 use App\Services\TelegramService;
 use Carbon\Carbon;
@@ -126,12 +128,26 @@ class ImportAttendanceControls extends Command
     }
 
     // =========================================================================
-    // FINAL IMPORT — har kuni tunda, oxirgi 7 kunni is_final=true qiladi
+    // FINAL IMPORT — har kuni tunda, joriy semestr boshidan kechagacha
+    // Davomat o'zgarishi semestr davomida mumkin (sababli/sababsiz)
     // =========================================================================
     private function handleFinalImport(string $token, TelegramService $telegram, bool $silent): int
     {
-        // Oxirgi 7 kun — eski kunlar allaqachon yakunlangan, qayta import qilish shart emas
-        $from = Carbon::today()->subDays(7)->startOfDay();
+        // Joriy semestr boshlanish sanasini aniqlash
+        $currentSemesterIds = Semester::where('current', true)->pluck('semester_hemis_id');
+
+        $semesterStart = CurriculumWeek::whereIn('semester_hemis_id', $currentSemesterIds)
+            ->orderBy('start_date', 'asc')
+            ->value('start_date');
+
+        if (!$semesterStart) {
+            $msg = '❌ Joriy semestr sanasi topilmadi (CurriculumWeek da ma\'lumot yo\'q)';
+            $this->error($msg);
+            if (!$silent) { $telegram->notify($msg); }
+            return self::FAILURE;
+        }
+
+        $from = Carbon::parse($semesterStart)->startOfDay();
         $to = Carbon::yesterday()->endOfDay();
 
         $dateRange = "{$from->toDateString()} — {$to->toDateString()}";
@@ -155,7 +171,7 @@ class ImportAttendanceControls extends Command
         $totalDays = $result['totalDays'];
         $totalRecords = $result['totalRecords'];
 
-        $msg = "✅ Davomat nazorati FINAL import: {$totalDays} kun, {$totalRecords} yozuv ({$dateRange})";
+        $msg = "✅ Davomat nazorati FINAL: {$totalDays} kun, {$totalRecords} yozuv ({$dateRange})";
         if (!$silent) {
             $telegram->notify($msg);
         }

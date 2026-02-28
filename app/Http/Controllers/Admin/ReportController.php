@@ -4369,6 +4369,12 @@ class ReportController extends Controller
             ->whereNull('sch.deleted_at')
             ->whereRaw('DATE(sch.lesson_date) < CURDATE()');
 
+        // Baho qo'yilmaydigan fanlarni chiqarish (masalan, O'quv amaliyoti)
+        $excludedSubjectNames = config('app.excluded_rating_subject_names', []);
+        if (!empty($excludedSubjectNames)) {
+            $scheduleQuery->whereNotIn('sch.subject_name', $excludedSubjectNames);
+        }
+
         if ($request->get('current_semester', '1') == '1') {
             $scheduleQuery->where(function ($q) {
                 $q->where('sem.current', true)

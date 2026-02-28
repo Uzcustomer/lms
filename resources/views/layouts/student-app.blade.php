@@ -243,24 +243,13 @@
 
     @stack('scripts')
 
-    {{-- DEBUG: Console log - account switching debug --}}
+    @if(config('app.debug'))
+    {{-- DEBUG: Console log - faqat debug rejimda --}}
     <script>
-        console.group('%c🔍 LMS DEBUG: Student Layout', 'color: #3498db; font-weight: bold; font-size: 14px;');
-        console.log('%cLayout:', 'font-weight:bold', 'student-app.blade.php (Student)');
-        console.log('%cURL:', 'font-weight:bold', window.location.href);
-        console.log('%cGuard (server):', 'font-weight:bold', '{{ auth()->guard("web")->check() ? "web ✅ (id=" . auth()->guard("web")->id() . ")" : "web ❌" }}');
-        console.log('%cTeacher guard:', 'font-weight:bold', '{{ auth()->guard("teacher")->check() ? "teacher ✅ (id=" . auth()->guard("teacher")->id() . ")" : "teacher ❌" }}');
-        console.log('%cStudent guard:', 'font-weight:bold', '{{ auth()->guard("student")->check() ? "student ✅ (id=" . auth()->guard("student")->id() . " " . (auth()->guard("student")->user()->full_name ?? "?") . ")" : "student ❌" }}');
-        console.log('%cauth()->user():', 'font-weight:bold', '{{ auth()->user() ? "id=" . auth()->user()->id : "NULL" }}');
-        console.log('%csession.impersonating:', 'font-weight:bold', {{ session('impersonating') ? 'true' : 'false' }});
-        console.log('%csession.impersonated_name:', 'font-weight:bold', '{{ session("impersonated_name", "NULL") }}');
-        console.log('%csession.impersonator_id:', 'font-weight:bold', '{{ session("impersonator_id", "NULL") }}');
-        console.log('%csession.active_role:', 'font-weight:bold', '{{ session("active_role", "NULL") }}');
-        console.log('%csession_id:', 'font-weight:bold', '{{ session()->getId() }}');
-        @if(session('impersonating'))
-            console.log('%c📍 Impersonation mode AKTIV — banner ko\'rinmoqda', 'color: orange; font-weight: bold;');
-        @endif
+        console.group('%c LMS DEBUG: Student Layout', 'color: #3498db; font-weight: bold;');
+        console.log('URL:', window.location.href);
         console.groupEnd();
     </script>
+    @endif
 </body>
 </html>

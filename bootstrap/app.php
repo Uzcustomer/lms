@@ -53,7 +53,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:curriculum-subject-teachers')->dailyAt('22:00');
 
         // Live import — har 30 daqiqada bugungi baholarni yangilaydi (faqat 8:30 — 00:00)
-        $schedule->command('student:import-data --mode=live')->everyThirtyMinutes()->between('8:30', '23:59')->withoutOverlapping(60);
+        // withoutOverlapping(25): lock 25 daqiqada expire bo'ladi — 30 daqiqalik intervalni bloklamaydi
+        // (oldin 60 edi — crash bo'lganda keyingi 1-2 ta run ham bloklanardi)
+        $schedule->command('student:import-data --mode=live')->everyThirtyMinutes()->between('8:30', '23:59')->withoutOverlapping(25);
         // Final import routes/console.php da boshqariladi (00:30 + 04:00 retry)
         // Bu yerdagi dublikat olib tashlandi — ikki joyda schedule bo'lsa race condition bo'ladi
         $schedule->command('import:teachers')->cron('0 0 */2 * *'); // Every 2 days at midnight

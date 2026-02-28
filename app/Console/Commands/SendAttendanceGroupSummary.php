@@ -76,14 +76,27 @@ class SendAttendanceGroupSummary extends Command
         // 1.6-QADAM: Bugungi baholar — avval crondagi live import muvaffaqiyatini tekshirish
         // Live import har 30 daqiqada ishlaydi (bootstrap/app.php), shuning uchun odatda tayyor bo'ladi
         $liveImportSuccess = Cache::get('live_import_last_success');
-        $liveImportRecent = $liveImportSuccess && Carbon::parse($liveImportSuccess)->diffInMinutes(Carbon::now()) <= 60;
+        $liveImportRecent = $liveImportSuccess && Carbon::parse($liveImportSuccess)->diffInMinutes(Carbon::now()) <= 180;
+
+        // DB fallback: cache expire bo'lgan bo'lsa ham, bazada bugungi baholar bormi tekshirish
+        if (!$liveImportRecent) {
+            $hasGradesToday = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereRaw('DATE(lesson_date) = ?', [$todayStr])
+                ->exists();
+            if ($hasGradesToday) {
+                $liveImportRecent = true;
+                $liveImportSuccess = $liveImportSuccess ?: 'DB da mavjud';
+                $this->info("Cache topilmadi, lekin DB da bugungi baholar bor — import o'tkaziladi.");
+            }
+        }
 
         if ($liveImportRecent) {
             $reporter->startStep('Baholar: crondagi live import tayyor', 'Baholar mavjud (oxirgi: ' . $liveImportSuccess . ')');
             $reporter->completeStep();
             $this->info("Baholar: crondagi live import tayyor (oxirgi: {$liveImportSuccess})");
         } else {
-            // Live import yaqinda muvaffaqiyatli bo'lmagan — o'zimiz ishlatib ko'ramiz
+            // Live import yaqinda muvaffaqiyatli bo'lmagan va DB da ham baho yo'q — o'zimiz ishlatib ko'ramiz
             $reporter->startStep('Baholar: live import yaqinda bo\'lmagan, qayta import qilinmoqda', 'Baholar muvaffaqiyatli yangilandi');
             $this->warn("Live import yaqinda muvaffaqiyatli bo'lmagan (oxirgi: " . ($liveImportSuccess ?: 'topilmadi') . "). Import boshlanmoqda...");
             try {
@@ -98,19 +111,18 @@ class SendAttendanceGroupSummary extends Command
                 Log::error('Baholar import crash: ' . $e->getMessage());
                 $this->error("Baholar import crash: " . $e->getMessage());
 
-                // Admin chatga xato haqida xabar yuborish va hisobotni to'xtatish
+                // Admin chatga xato haqida xabar yuborish — lekin hisobotni TO'XTATMASLIK
+                // DB dagi mavjud baholar bilan hisobot davom etadi
                 $adminChatId = config('services.telegram.chat_id');
                 if ($adminChatId) {
                     $telegram->sendToUser($adminChatId,
-                        "❌ GURUH HISOBOTI TO'XTATILDI\n\n"
+                        "⚠️ Baholar import xato (hisobot mavjud ma'lumotlar bilan davom etmoqda)\n\n"
                         . "Sana: {$todayStr}\n"
-                        . "Sabab: Baholar live import crash bo'ldi\n"
                         . "Oxirgi muvaffaqiyatli live import: " . ($liveImportSuccess ?: 'topilmadi') . "\n\n"
                         . "Xato: " . substr($e->getMessage(), 0, 300)
                     );
                 }
-
-                return 1;
+                // return 1 olib tashlandi — hisobot mavjud ma'lumotlar bilan davom etadi
             }
         }
 

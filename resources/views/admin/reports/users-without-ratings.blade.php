@@ -104,10 +104,14 @@
                         </div>
                         <div class="filter-item" style="min-width: 290px;">
                             <label class="filter-label">&nbsp;</label>
-                            <div style="display:flex;gap:8px;">
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
                                 <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                     Excel
+                                </button>
+                                <button type="button" id="btn-telegram-all" class="btn-telegram" onclick="sendTelegramAll()" disabled>
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                                    Hammaga Telegram
                                 </button>
                                 <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
@@ -180,6 +184,7 @@
         let currentSort = 'lesson_date';
         let currentDirection = 'desc';
         let currentPage = 1;
+        let lastTotal = 0;
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
@@ -243,15 +248,18 @@
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
                         $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
+                        $('#btn-telegram-all').prop('disabled', true).css('opacity', '0.5');
                         return;
                     }
 
+                    lastTotal = res.total;
                     $('#total-badge').text('Jami: ' + res.total);
                     $('#time-badge').text(elapsed + ' soniyada hisoblandi');
                     renderTable(res.data);
                     renderPagination(res);
                     $('#table-area').show();
                     $('#btn-excel').prop('disabled', false).css('opacity', '1');
+                    $('#btn-telegram-all').prop('disabled', false).css('opacity', '1');
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
@@ -396,6 +404,50 @@
                 '<svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg> Telegram yuborish'
             );
             updateSelectedCount();
+        }
+
+        function sendTelegramAll() {
+            if (lastTotal === 0) return;
+
+            if (!confirm('Jami ' + lastTotal + ' ta natijadagi BARCHA o\'qituvchilarga Telegram xabar yuborilsinmi?')) return;
+
+            var params = getFilters();
+
+            $('#btn-telegram-all').prop('disabled', true).css('opacity', '0.6').html(
+                '<div class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:6px;"></div> Yuborilmoqda...'
+            );
+
+            $.ajax({
+                url: '{{ route("admin.reports.users-without-ratings.send-telegram-all") }}',
+                type: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                data: JSON.stringify(params),
+                timeout: 300000,
+                success: function(res) {
+                    var msg = 'Jami o\'qituvchilar: ' + res.total_teachers + ' ta';
+                    msg += '\nYuborildi: ' + res.sent + ' ta';
+                    if (res.no_telegram > 0) msg += '\nTelegram bog\'lanmagan: ' + res.no_telegram + ' ta';
+                    if (res.failed > 0) msg += '\nXatolik: ' + res.failed + ' ta';
+                    alert(msg);
+                    resetTelegramAllBtn();
+                },
+                error: function(xhr) {
+                    var msg = 'Xatolik yuz berdi.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
+                    resetTelegramAllBtn();
+                }
+            });
+        }
+
+        function resetTelegramAllBtn() {
+            $('#btn-telegram-all').prop('disabled', false).css('opacity', '1').html(
+                '<svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg> Hammaga Telegram'
+            );
         }
 
         $(document).ready(function() {

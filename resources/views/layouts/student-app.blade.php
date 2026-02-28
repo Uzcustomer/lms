@@ -153,57 +153,11 @@
         </div>
 
         <!-- Bottom Navigation Tabs -->
-        <style>
-            .bottom-nav-bar {
-                background-color: #23417b;
-                height: 80px;
-                padding-bottom: max(7px, env(safe-area-inset-bottom));
-                position: relative;
-            }
-            .bottom-nav-bar::before {
-                content: '';
-                position: absolute;
-                top: -20px;
-                left: 0;
-                right: 0;
-                height: 20px;
-                background: transparent;
-                pointer-events: none;
-            }
-            .nav-notch-svg {
-                position: absolute;
-                top: -19px;
-                width: 70px;
-                height: 20px;
-                pointer-events: none;
-                transition: left 0.3s ease;
-            }
-            .nav-tab { width: 20%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; position: relative; z-index: 2; text-decoration: none; }
-            .nav-tab-icon-active {
-                width: 45px; height: 45px; border-radius: 50%;
-                display: flex; align-items: center; justify-content: center;
-                background: white;
-                margin-top: -28px;
-                box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
-            }
-        </style>
-        @php
-            $tabOrder = ['fanlar', 'jadval', 'asosiy', 'mt', 'foydali'];
-            $activeIndex = array_search($activeTab, $tabOrder);
-            if ($activeIndex === false) $activeIndex = -1;
-        @endphp
-        <div class="bottom-nav-bar flex items-end justify-between px-0">
-            {{-- SVG curved notch that follows active tab --}}
-            @if($activeIndex >= 0)
-                <svg class="nav-notch-svg" style="left:calc({{ $activeIndex }} * 20% + 10% - 35px);" viewBox="0 0 70 20" fill="#23417b" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M0,20 L0,0 L15,0 Q25,0 28,10 Q30,20 35,20 Q40,20 42,10 Q45,0 55,0 L70,0 L70,20 Z" />
-                </svg>
-            @endif
-
+        <div class="flex items-end justify-between px-4 pt-2" style="background-color:#23417b;height:80px;padding-bottom:max(7px, env(safe-area-inset-bottom));">
             <!-- 1. Fanlar -->
-            <a href="{{ route('student.subjects') }}" class="nav-tab">
+            <a href="{{ route('student.subjects') }}" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;">
                 @if($activeTab === 'fanlar')
-                    <div class="nav-tab-icon-active">
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:45px;height:45px;">
                         <svg class="w-5 h-5" fill="none" stroke="#23417b" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                         </svg>
@@ -218,9 +172,9 @@
             </a>
 
             <!-- 2. Dars jadvali -->
-            <a href="{{ route('student.schedule') }}" class="nav-tab">
+            <a href="{{ route('student.schedule') }}" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;">
                 @if($activeTab === 'jadval')
-                    <div class="nav-tab-icon-active">
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:45px;height:45px;">
                         <svg class="w-5 h-5" fill="none" stroke="#23417b" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                         </svg>
@@ -235,9 +189,9 @@
             </a>
 
             <!-- 3. Asosiy -->
-            <a href="{{ route('student.dashboard') }}" class="nav-tab">
+            <a href="{{ route('student.dashboard') }}" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;">
                 @if($activeTab === 'asosiy')
-                    <div class="nav-tab-icon-active">
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:45px;height:45px;">
                         <svg class="w-5 h-5" fill="none" stroke="#23417b" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
                         </svg>
@@ -252,9 +206,9 @@
             </a>
 
             <!-- 4. MT (Mustaqil ta'lim) -->
-            <a href="{{ route('student.independents') }}" class="nav-tab">
+            <a href="{{ route('student.independents') }}" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;">
                 @if($activeTab === 'mt')
-                    <div class="nav-tab-icon-active">
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:45px;height:45px;">
                         <svg class="w-5 h-5" fill="none" stroke="#23417b" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.636 50.636 0 00-2.658-.813A59.906 59.906 0 0112 3.493a59.903 59.903 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
                         </svg>
@@ -269,9 +223,9 @@
             </a>
 
             <!-- 5. Boshqalar (radial fan trigger) -->
-            <button @click="boshqalarOpen = !boshqalarOpen" class="nav-tab" style="background:none;border:none;">
+            <button @click="boshqalarOpen = !boshqalarOpen" class="flex flex-col items-center justify-center" style="width:50px;gap:5px;background:none;border:none;">
                 @if($activeTab === 'foydali')
-                    <div class="nav-tab-icon-active">
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:45px;height:45px;">
                         <svg class="w-5 h-5" fill="none" stroke="#23417b" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
                         </svg>

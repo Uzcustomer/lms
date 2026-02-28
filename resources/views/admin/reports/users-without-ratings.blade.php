@@ -131,14 +131,22 @@
                         <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
                     </div>
                     <div id="table-area" style="display:none;">
-                        <div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:12px;">
+                        <div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                             <span id="total-badge" class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                            <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+                                <span id="selected-count" style="font-size:12px;color:#64748b;display:none;">0 ta tanlandi</span>
+                                <button type="button" id="btn-send-telegram" class="btn-telegram" onclick="sendTelegram()" disabled>
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                                    Telegram yuborish
+                                </button>
+                            </div>
                         </div>
                         <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
                             <table class="journal-table">
                                 <thead>
                                     <tr>
+                                        <th style="width:36px;text-align:center;"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this)" title="Hammasini tanlash" style="width:16px;height:16px;cursor:pointer;"></th>
                                         <th class="th-num">#</th>
                                         <th><a href="#" class="sort-link" data-sort="employee_name">O'qituvchi FISH <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="faculty_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
@@ -255,13 +263,17 @@
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
+        var reportData = [];
+
         function renderTable(data) {
+            reportData = data;
             var html = '';
             var journalBase = '{{ url("/admin/journal/show") }}';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
                 var journalUrl = journalBase + '/' + encodeURIComponent(r.group_db_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code) + '?ref=' + encodeURIComponent(window.location.href);
                 html += '<tr class="journal-row">';
+                html += '<td style="text-align:center;"><input type="checkbox" class="row-check" data-index="' + i + '" onchange="updateSelectedCount()" style="width:16px;height:16px;cursor:pointer;"></td>';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.employee_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.faculty_name) + '</span></td>';
@@ -280,6 +292,8 @@
                 html += '</tr>';
             }
             $('#table-body').html(html);
+            $('#select-all').prop('checked', false);
+            updateSelectedCount();
         }
 
         function downloadExcel() {
@@ -304,6 +318,79 @@
             if (res.current_page < res.last_page)
                 html += '<button class="pg-btn" onclick="loadReport(' + (res.current_page + 1) + ')">Keyingi &raquo;</button>';
             $('#pagination-area').html(html);
+        }
+
+        function toggleSelectAll(el) {
+            $('.row-check').prop('checked', el.checked);
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            var count = $('.row-check:checked').length;
+            if (count > 0) {
+                $('#selected-count').show().text(count + ' ta tanlandi');
+                $('#btn-send-telegram').prop('disabled', false).css('opacity', '1');
+            } else {
+                $('#selected-count').hide();
+                $('#btn-send-telegram').prop('disabled', true).css('opacity', '0.5');
+            }
+        }
+
+        function sendTelegram() {
+            var checked = $('.row-check:checked');
+            if (checked.length === 0) return;
+
+            if (!confirm(checked.length + ' ta o\'qituvchiga Telegram xabar yuborilsinmi?')) return;
+
+            // O'qituvchilar bo'yicha guruhlash
+            var byEmployee = {};
+            checked.each(function() {
+                var idx = $(this).data('index');
+                var r = reportData[idx];
+                if (!r) return;
+                if (!byEmployee[r.employee_id]) {
+                    byEmployee[r.employee_id] = { employee_id: r.employee_id, lessons: [] };
+                }
+                byEmployee[r.employee_id].lessons.push({
+                    subject_name: r.subject_name,
+                    group_name: r.group_name,
+                    training_type: r.training_type,
+                    lesson_date: r.lesson_date
+                });
+            });
+
+            var employees = Object.values(byEmployee);
+
+            $('#btn-send-telegram').prop('disabled', true).css('opacity', '0.6').html(
+                '<div class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:6px;"></div> Yuborilmoqda...'
+            );
+
+            $.ajax({
+                url: '{{ route("admin.reports.users-without-ratings.send-telegram") }}',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                data: JSON.stringify({ employees: employees }),
+                timeout: 120000,
+                success: function(res) {
+                    var msg = 'Yuborildi: ' + res.sent + ' ta';
+                    if (res.no_telegram > 0) msg += '\nTelegram bog\'lanmagan: ' + res.no_telegram + ' ta';
+                    if (res.failed > 0) msg += '\nXatolik: ' + res.failed + ' ta';
+                    alert(msg);
+                    resetTelegramBtn();
+                },
+                error: function() {
+                    alert('Xatolik yuz berdi. Qayta urinib ko\'ring.');
+                    resetTelegramBtn();
+                }
+            });
+        }
+
+        function resetTelegramBtn() {
+            $('#btn-send-telegram').html(
+                '<svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg> Telegram yuborish'
+            );
+            updateSelectedCount();
         }
 
         $(document).ready(function() {
@@ -379,6 +466,10 @@
         .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
         .btn-excel:disabled { cursor: not-allowed; opacity: 0.5; }
+
+        .btn-telegram { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #0088cc, #00aaee); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(0,136,204,0.3); height: 36px; }
+        .btn-telegram:hover:not(:disabled) { background: linear-gradient(135deg, #006699, #0088cc); box-shadow: 0 4px 12px rgba(0,136,204,0.4); transform: translateY(-1px); }
+        .btn-telegram:disabled { cursor: not-allowed; opacity: 0.5; }
 
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }

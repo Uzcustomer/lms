@@ -4278,6 +4278,31 @@ class ReportController extends Controller
         ));
     }
 
+    public function getUsersWithoutRatingsEmployees(Request $request)
+    {
+        $query = DB::table('schedules as sch')
+            ->where('sch.education_year_current', true)
+            ->whereNull('sch.deleted_at')
+            ->whereNotNull('sch.employee_id');
+
+        if ($request->filled('faculty_id')) {
+            $faculty = Department::find($request->faculty_id);
+            if ($faculty) {
+                $query->where('sch.faculty_id', $faculty->department_hemis_id);
+            }
+        }
+
+        if ($request->filled('department_id')) {
+            $query->where('sch.department_id', $request->department_id);
+        }
+
+        return $query->select('sch.employee_id', 'sch.employee_name')
+            ->groupBy('sch.employee_id', 'sch.employee_name')
+            ->orderBy('sch.employee_name')
+            ->get()
+            ->pluck('employee_name', 'employee_id');
+    }
+
     public function usersWithoutRatingsData(Request $request)
     {
         $dekanFacultyIds = get_dekan_faculty_ids();
@@ -4348,6 +4373,10 @@ class ReportController extends Controller
 
         if ($request->filled('group')) {
             $scheduleQuery->where('sch.group_id', $request->group);
+        }
+
+        if ($request->filled('employee')) {
+            $scheduleQuery->where('sch.employee_id', $request->employee);
         }
 
         if ($request->filled('date_from')) {

@@ -17,6 +17,7 @@ use App\Jobs\ImportSchedulesPartiallyJob;
 use App\Services\ActivityLogService;
 use App\Services\HemisService;
 use App\Services\ScheduleImportService;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -3704,6 +3705,49 @@ class JournalController extends Controller
             'deadline' => $deadline,
             'status' => 'active',
         ]);
+
+        // O'qituvchilarga Telegram orqali xabar yuborish
+        try {
+            $teacherEmployeeIds = DB::table('schedules')
+                ->where('group_id', $request->group_hemis_id)
+                ->where('subject_id', $request->subject_id)
+                ->where('semester_code', $request->semester_code)
+                ->whereRaw('DATE(lesson_date) = ?', [$request->lesson_date])
+                ->whereNull('deleted_at')
+                ->distinct()
+                ->pluck('employee_id');
+
+            if ($teacherEmployeeIds->isNotEmpty()) {
+                $telegram = app(TelegramService::class);
+                $deadlineFormatted = $opening->deadline->format('d.m.Y H:i');
+                $lessonDateFormatted = \Carbon\Carbon::parse($request->lesson_date)->format('d.m.Y');
+
+                $subjectName = DB::table('schedules')
+                    ->where('group_id', $request->group_hemis_id)
+                    ->where('subject_id', $request->subject_id)
+                    ->whereNull('deleted_at')
+                    ->value('subject_name') ?? 'Noma\'lum fan';
+
+                $groupName = DB::table('groups')
+                    ->where('group_hemis_id', $request->group_hemis_id)
+                    ->value('name') ?? 'Noma\'lum guruh';
+
+                $teachers = Teacher::whereIn('hemis_id', $teacherEmployeeIds)
+                    ->whereNotNull('telegram_chat_id')
+                    ->get();
+
+                foreach ($teachers as $teacher) {
+                    $message = "Hurmatli {$teacher->full_name}!\n\n"
+                        . "{$subjectName} fani bo'yicha {$groupName} guruhiga {$lessonDateFormatted} sanasidagi dars ochildi.\n\n"
+                        . "Baho qo'yish uchun muhlat: {$deadlineFormatted}\n\n"
+                        . "Iltimos, muddatgacha baholarni kiritib qo'ying.";
+
+                    $telegram->sendToUser($teacher->telegram_chat_id, $message);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Dars ochilganda Telegram xabar yuborishda xato: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,

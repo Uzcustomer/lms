@@ -570,7 +570,9 @@
 
         // ========== JADVAL RENDERI ==========
         function getJournalUrl(r) {
-            if (r.group_db_id && r.fan_id && r.semester_code) {
+            if (r.group_db_id != null && r.group_db_id !== '' &&
+                r.fan_id != null && r.fan_id !== '' &&
+                r.semester_code != null && r.semester_code !== '') {
                 return journalBaseUrl + '/' + r.group_db_id + '/' + r.fan_id + '/' + r.semester_code;
             }
             return null;
@@ -598,7 +600,10 @@
                     ? '<a href="' + jUrl + '" target="_blank" class="journal-link">' + esc(r.fan_name) + '</a>'
                     : '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';
 
-                html += '<tr class="' + rowClass + '" id="row-' + r.id + '">';
+                var rowDataAttr = jUrl ? ' data-journal-url="' + jUrl + '"' : '';
+                var rowCursor = jUrl ? ' style="cursor:pointer;"' : '';
+
+                html += '<tr class="' + rowClass + '" id="row-' + r.id + '"' + rowDataAttr + rowCursor + '>';
                 html += '<td style="padding-left:14px;"><input type="checkbox" class="row-checkbox cb-styled" value="' + r.id + '"' + (r.xulosa_code === 'uploaded' ? ' disabled' : '') + '></td>';
                 html += '<td class="td-num">' + (i + 1) + '</td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.student_id) + '</span></td>';
@@ -618,6 +623,13 @@
             }
             $('#table-body').html(html);
             $('#select-all').prop('checked', false);
+
+            // Qator bosilganda jurnalga o'tish (checkbox va link bosilganda emas)
+            $('#table-body').off('click', 'tr[data-journal-url]').on('click', 'tr[data-journal-url]', function(e) {
+                if ($(e.target).is('input, a') || $(e.target).closest('a').length) return;
+                var url = $(this).data('journal-url');
+                if (url) window.open(url, '_blank');
+            });
         }
 
         // ========== TANLASH BOSHQARUVI ==========

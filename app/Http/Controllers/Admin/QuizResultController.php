@@ -437,13 +437,27 @@ class QuizResultController extends Controller
             $curriculumHemisIds = $groups->pluck('curriculum_hemis_id')->unique()->toArray();
 
             $curriculumSubjects = [];
+            $curriculumSubjectsAll = []; // curriculum_hemis_id|subject_id => [semester_code, ...]
             if (!empty($curriculumHemisIds) && !empty($fanIds)) {
                 $csRows = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumHemisIds)
                     ->whereIn('subject_id', $fanIds)
                     ->get(['curricula_hemis_id', 'subject_id', 'semester_code']);
 
                 foreach ($csRows as $cs) {
-                    $curriculumSubjects[$cs->curricula_hemis_id . '|' . $cs->subject_id] = $cs->semester_code;
+                    $csKey = $cs->curricula_hemis_id . '|' . $cs->subject_id;
+                    $curriculumSubjects[$csKey] = $cs->semester_code;
+                    $curriculumSubjectsAll[$csKey][] = $cs->semester_code;
+                }
+            }
+
+            // Joriy semestrlarni aniqlash (schedule data mavjud bo'lgan semestrlarni topish)
+            $currentSemesters = [];
+            if (!empty($curriculumHemisIds)) {
+                $currentSemRows = Semester::whereIn('curriculum_hemis_id', $curriculumHemisIds)
+                    ->where('current', true)
+                    ->get(['curriculum_hemis_id', 'code']);
+                foreach ($currentSemRows as $sem) {
+                    $currentSemesters[$sem->curriculum_hemis_id] = $sem->code;
                 }
             }
 
@@ -721,7 +735,36 @@ class QuizResultController extends Controller
                     if ($groupModel) {
                         $groupDbId = $groupModel->id;
                         $csKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
-                        $semesterCode = $curriculumSubjects[$csKey] ?? null;
+                        $allSemCodes = $curriculumSubjectsAll[$csKey] ?? [];
+
+                        if (count($allSemCodes) === 1) {
+                            // Faqat bitta semestr bor — to'g'ridan-to'g'ri ishlatamiz
+                            $semesterCode = $allSemCodes[0];
+                        } elseif (count($allSemCodes) > 1) {
+                            // Bir nechta semestrda bo'lsa — talabaning joriy semestriga mos kelganini tanlash
+                            $studentSemCode = $student->semester_code;
+                            if ($studentSemCode && in_array($studentSemCode, $allSemCodes)) {
+                                $semesterCode = $studentSemCode;
+                            } else {
+                                // Joriy semestrga mos kelganini tanlash
+                                $curSem = $currentSemesters[$groupModel->curriculum_hemis_id] ?? null;
+                                if ($curSem && in_array($curSem, $allSemCodes)) {
+                                    $semesterCode = $curSem;
+                                } else {
+                                    // Oxirgi semestrni tanlash (fallback)
+                                    $semesterCode = end($allSemCodes);
+                                }
+                            }
+                        } elseif ($student->semester_code) {
+                            // curriculumSubjects topilmadi — talabaning semester_code bilan to'g'ridan-to'g'ri tekshirish
+                            $directCs = CurriculumSubject::where('curricula_hemis_id', $groupModel->curriculum_hemis_id)
+                                ->where('subject_id', $result->fan_id)
+                                ->where('semester_code', $student->semester_code)
+                                ->first();
+                            if ($directCs) {
+                                $semesterCode = $directCs->semester_code;
+                            }
+                        }
                     }
                 }
 

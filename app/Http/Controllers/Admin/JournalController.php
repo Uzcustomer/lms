@@ -1292,10 +1292,12 @@ class JournalController extends Controller
                     $newAbsentOn = (int) ($item['absent_on'] ?? 0);
                     $newAbsentOff = (int) ($item['absent_off'] ?? 0);
 
+                    $studentForAtt = $studentsMap->get($item['student']['id']);
                     DB::table('attendances')->updateOrInsert(
                         ['hemis_id' => $item['id']],
                         [
                             'subject_schedule_id' => $item['_subject_schedule'] ?? null,
+                            'student_id' => $studentForAtt->id ?? null,
                             'student_hemis_id' => $item['student']['id'],
                             'student_name' => $item['student']['name'],
                             'employee_id' => $item['employee']['id'],

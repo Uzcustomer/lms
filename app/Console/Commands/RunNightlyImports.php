@@ -102,8 +102,11 @@ class RunNightlyImports extends Command
         ];
 
         // Sub-commandlar o'z progressini shu callback orqali yuboradi
-        app()->instance('nightly.progress', function (string $detail) use ($stepIdx) {
+        app()->instance('nightly.progress', function (string $detail) use ($stepIdx, $name) {
             $this->steps[$stepIdx]['detail'] = $detail;
+
+            // Terminal ga ham progress chiqarish
+            $this->line("  [{$name}] {$detail}");
 
             // Telegram rate limit: 5 sekund
             $now = microtime(true);

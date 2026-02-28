@@ -15,7 +15,7 @@ class AbsenceExcuseController extends Controller
 {
     public function index(Request $request)
     {
-        $query = AbsenceExcuse::query()->orderByDesc('created_at');
+        $query = AbsenceExcuse::with('student')->orderByDesc('created_at');
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);

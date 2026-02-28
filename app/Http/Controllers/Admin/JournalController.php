@@ -311,6 +311,95 @@ class JournalController extends Controller
             }
         }
 
+        // ===== DEBUG: Jornal ma'lumotlari diagnostikasi =====
+        $debugInfo = [];
+        $debugInfo['url_params'] = ['groupId' => $groupId, 'subjectId' => $subjectId, 'semesterCode' => $semesterCode];
+        $debugInfo['group'] = [
+            'id' => $group->id,
+            'name' => $group->name,
+            'group_hemis_id' => $group->group_hemis_id,
+            'curriculum_hemis_id' => $group->curriculum_hemis_id,
+        ];
+        $debugInfo['subject'] = [
+            'id' => $subject->id ?? null,
+            'subject_id' => $subject->subject_id,
+            'subject_name' => $subject->subject_name,
+            'semester_code' => $subject->semester_code,
+        ];
+        $debugInfo['curriculum'] = [
+            'id' => $curriculum?->id,
+            'education_year_code' => $curriculum?->education_year_code,
+        ];
+        $debugInfo['semester'] = $semester ? ['id' => $semester->id, 'code' => $semester->code, 'name' => $semester->name] : null;
+        $debugInfo['education_year_code_final'] = $educationYearCode;
+        $debugInfo['schedule_education_year_from_db'] = $scheduleEducationYear;
+
+        // Barcha schedules ni tekshirish (filtr SHAM)
+        $allScheduleCount = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->count();
+        $allScheduleWithDate = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->count();
+        $schedulesSample = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->limit(5)
+            ->get(['id', 'group_id', 'subject_id', 'semester_code', 'education_year_code', 'lesson_date', 'training_type_code', 'training_type_name']);
+
+        // group_hemis_id bo'yicha barcha schedule larni tekshirish (subject/semester filtrSIZ)
+        $allScheduleForGroup = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->whereNull('deleted_at')
+            ->count();
+        $scheduleSubjectsForGroup = DB::table('schedules')
+            ->where('group_id', $group->group_hemis_id)
+            ->whereNull('deleted_at')
+            ->select('subject_id', 'semester_code')
+            ->distinct()
+            ->limit(20)
+            ->get();
+
+        $debugInfo['schedules_total'] = $allScheduleCount;
+        $debugInfo['schedules_with_date'] = $allScheduleWithDate;
+        $debugInfo['schedules_sample'] = $schedulesSample->toArray();
+        $debugInfo['schedules_all_for_group'] = $allScheduleForGroup;
+        $debugInfo['schedule_subjects_for_group'] = $scheduleSubjectsForGroup->toArray();
+
+        // student_grades tekshirish
+        $studentHemisIdsDebug = DB::table('students')
+            ->where('group_id', $group->group_hemis_id)
+            ->pluck('hemis_id');
+        $gradesCount = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIdsDebug)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->count();
+        $gradesSample = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIdsDebug)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->limit(5)
+            ->get(['id', 'student_hemis_id', 'subject_id', 'semester_code', 'education_year_code', 'lesson_date', 'training_type_code', 'grade', 'status']);
+
+        $debugInfo['student_hemis_ids'] = $studentHemisIdsDebug->toArray();
+        $debugInfo['student_grades_count'] = $gradesCount;
+        $debugInfo['student_grades_sample'] = $gradesSample->toArray();
+
+        \Log::info('JOURNAL_DEBUG', $debugInfo);
+        // ===== END DEBUG =====
+
         // Get student hemis IDs for this group
         $studentHemisIds = DB::table('students')
             ->where('group_id', $group->group_hemis_id)
@@ -361,6 +450,17 @@ class JournalController extends Controller
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
+
+        // DEBUG: schedule query natijalari
+        $debugInfo['jb_schedule_count'] = $jbScheduleRows->count();
+        $debugInfo['mt_schedule_count'] = $mtScheduleRows->count();
+        $debugInfo['lecture_schedule_count'] = $lectureScheduleRows->count();
+        \Log::info('JOURNAL_DEBUG_SCHEDULES', [
+            'education_year_code_used' => $educationYearCode,
+            'jb_count' => $jbScheduleRows->count(),
+            'mt_count' => $mtScheduleRows->count(),
+            'lecture_count' => $lectureScheduleRows->count(),
+        ]);
 
         // Get sessions from attendance_controls (authoritative source for classes that actually happened)
         $lectureControlRows = DB::table('attendance_controls')
@@ -1160,7 +1260,8 @@ class JournalController extends Controller
             'canSubmitYn',
             'levelDeadline',
             'approvedExcuses',
-            'excuseGradeSnapshots'
+            'excuseGradeSnapshots',
+            'debugInfo'
         ));
     }
 

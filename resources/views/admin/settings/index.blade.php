@@ -385,6 +385,77 @@
                 </div>
             </div>
 
+            {{-- SECTION: KONTRAKT TO'LOV MUDDATLARI --}}
+            <div x-data="{
+                open: true,
+                cutoffs: @json($contractCutoffs ?? []),
+                addRow() {
+                    this.cutoffs.push({ deadline: '', percent: '' });
+                },
+                removeRow(index) {
+                    if (this.cutoffs.length > 1) this.cutoffs.splice(index, 1);
+                }
+            }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #fff7ed, #ffedd5); border: none; cursor: pointer; border-bottom: 1px solid #fdba74;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 44px; height: 44px; min-width: 44px; background: linear-gradient(135deg, #f97316, #ea580c); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(249,115,22,0.3);">
+                            <svg width="22" height="22" style="width: 22px; height: 22px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        </div>
+                        <div style="text-align: left;">
+                            <div style="font-size: 17px; font-weight: 700; color: #9a3412;">Kontrakt to'lov muddatlari</div>
+                            <div style="font-size: 13px; color: #c2410c; margin-top: 2px;">YN oldi qaydnomada kontrakt qarzdorligi tekshiruvi muddatlari</div>
+                        </div>
+                    </div>
+                    <svg width="20" height="20" :style="open ? 'transform: rotate(180deg)' : ''" style="width: 20px; height: 20px; min-width: 20px; color: #c2410c; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+
+                <div x-show="open" x-transition style="padding: 24px;">
+                    <div style="background: linear-gradient(135deg, #fff7ed, #ffedd5); border-radius: 10px; padding: 14px; margin-bottom: 20px; border: 1px solid #fed7aa; font-size: 12px; color: #9a3412; line-height: 1.7;">
+                        <b>Qanday ishlaydi:</b> Har bir muddat uchun talabaning kontrakt to'lovi belgilangan foizdan kam bo'lsa, YN oldi qaydnomada "Shartli" holat beriladi. Masalan: 1-yanvargacha kamida 50% to'langan bo'lishi kerak.
+                    </div>
+
+                    <form method="POST" action="{{ route('admin.settings.update.contract-cutoffs') }}">
+                        @csrf
+
+                        <div style="margin-bottom: 16px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 40px; gap: 10px; margin-bottom: 8px; padding: 0 4px;">
+                                <div style="font-size: 12px; font-weight: 700; color: #78350f; text-transform: uppercase; letter-spacing: 0.5px;">Muddat (gacha)</div>
+                                <div style="font-size: 12px; font-weight: 700; color: #78350f; text-transform: uppercase; letter-spacing: 0.5px;">Minimal to'lov (%)</div>
+                                <div></div>
+                            </div>
+
+                            <template x-for="(cutoff, index) in cutoffs" :key="index">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr 40px; gap: 10px; margin-bottom: 8px;">
+                                    <input type="date" :name="'cutoffs[' + index + '][deadline]'" x-model="cutoff.deadline"
+                                        style="padding: 10px 14px; border: 2px solid #fdba74; border-radius: 10px; font-size: 14px; font-weight: 600; color: #9a3412; background: #fffbf5; outline: none;" required>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="number" :name="'cutoffs[' + index + '][percent]'" x-model="cutoff.percent" min="1" max="100"
+                                            style="width: 80px; padding: 10px 14px; border: 2px solid #fdba74; border-radius: 10px; font-size: 18px; font-weight: 800; color: #9a3412; text-align: center; background: #fffbf5; outline: none;" required>
+                                        <span style="font-size: 16px; font-weight: 700; color: #9a3412;">%</span>
+                                    </div>
+                                    <button type="button" @click="removeRow(index)" x-show="cutoffs.length > 1"
+                                        style="width: 36px; height: 36px; border: none; background: #fef2f2; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; align-self: center;"
+                                        title="O'chirish">
+                                        <svg width="16" height="16" style="width: 16px; height: 16px; color: #dc2626;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <button type="button" @click="addRow()" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #fff7ed; color: #c2410c; font-size: 13px; font-weight: 600; border-radius: 8px; border: 2px dashed #fdba74; cursor: pointer;">
+                                <svg width="16" height="16" style="width: 16px; height: 16px; min-width: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                                Muddat qo'shish
+                            </button>
+                            <button type="submit" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(249,115,22,0.3);">
+                                <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Saqlash
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             {{-- SECTION 3: SINXRONIZATSIYA --}}
             <div x-data="{ open: true }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
                 <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #ecfdf5, #d1fae5); border: none; cursor: pointer; border-bottom: 1px solid #6ee7b7;">

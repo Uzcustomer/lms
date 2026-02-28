@@ -302,6 +302,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/settings/marking-system-scores', [SettingsController::class, 'updateMarkingSystemScores'])->name('settings.update.marking-system-scores');
         Route::post('/settings/password', [SettingsController::class, 'updatePassword'])->name('settings.update.password');
         Route::post('/settings/telegram', [SettingsController::class, 'updateTelegram'])->name('settings.update.telegram');
+        Route::post('/settings/contract-cutoffs', [SettingsController::class, 'updateContractCutoffs'])->name('settings.update.contract-cutoffs');
 
         // Old routes — redirect to unified settings
         Route::get('/deadlines', fn () => redirect()->route('admin.settings', ['tab' => 'deadlines']))->name('deadlines');

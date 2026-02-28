@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\AbsenceExcuseTemplate;
 use App\Http\Controllers\Controller;
+use App\Imports\AbsenceExcuseImport;
 use App\Models\AbsenceExcuse;
 use App\Models\DocumentTemplate;
 use App\Services\DocumentTemplateService;
@@ -10,6 +12,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AbsenceExcuseController extends Controller
 {
@@ -239,6 +242,53 @@ class AbsenceExcuseController extends Controller
         return response()->file($filePath, [
             'Content-Disposition' => 'inline; filename="' . $excuse->file_original_name . '"',
         ]);
+    }
+
+    public function importTemplate()
+    {
+        return Excel::download(new AbsenceExcuseTemplate(), 'sababli_ariza_shablon.xlsx');
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
+        ], [
+            'file.required' => 'Excel faylni tanlang.',
+            'file.mimes' => 'Faqat xlsx, xls yoki csv formatdagi fayllar qabul qilinadi.',
+            'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak.',
+        ]);
+
+        $user = Auth::user();
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name;
+
+        $import = new AbsenceExcuseImport($user->id, $reviewerName);
+
+        try {
+            Excel::import($import, $request->file('file'));
+        } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
+            $failures = $e->failures();
+            $errorMessages = [];
+            foreach ($failures as $failure) {
+                $errorMessages[] = "Qator {$failure->row()}: {$failure->errors()[0]}";
+            }
+            return back()->with('import_errors', $errorMessages)->with('error', 'Excelda validatsiya xatoliklari topildi.');
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Import xatolik: ' . $e->getMessage());
+        }
+
+        $message = "{$import->importedCount} ta ariza muvaffaqiyatli import qilindi.";
+        if ($import->skippedCount > 0) {
+            $message .= " {$import->skippedCount} ta dublikat o'tkazib yuborildi.";
+        }
+
+        if (count($import->errors) > 0) {
+            return back()
+                ->with('warning', $message)
+                ->with('import_errors', collect($import->errors)->map(fn($e) => "Qator {$e['row']}: {$e['error']}")->toArray());
+        }
+
+        return back()->with('success', $message);
     }
 
     public function downloadPdf($id)

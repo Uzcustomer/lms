@@ -18,6 +18,11 @@
         return in_array($activeRole, (array) $roles);
     };
 
+    // Foydalanuvchida rol mavjudligini tekshirish (faol bo'lmasa ham)
+    $hasAnyRole = function($roles) use ($userRoles) {
+        return count(array_intersect((array) $roles, $userRoles)) > 0;
+    };
+
     // Route resolver - teacher yoki admin guardga qarab route aniqlash
     $r = function($adminRoute, $teacherRoute = null) use ($isTeacher, $activeRole, $adminRoles) {
         if ($isTeacher && $teacherRoute && !in_array($activeRole, $adminRoles)) {
@@ -88,6 +93,26 @@
     <!-- Navigation Menu -->
     <nav class="flex-1 py-3 px-3 overflow-y-auto sidebar-nav"
          x-data @click="if($event.target.closest('a')) { if(window.innerWidth < 768) $store.sidebar.close() }">
+        <!-- Xabarnomalar (Notifications) -->
+        @php
+            $sidebarUserType = get_class($user);
+            $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
+                ->where('recipient_type', $sidebarUserType)
+                ->where('is_draft', false)
+                ->where('is_read', false)
+                ->count();
+        @endphp
+        <a href="{{ route('admin.notifications.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.notifications.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+            </svg>
+            {{ __('notifications.notifications') }}
+            @if($sidebarUnreadCount > 0)
+            <span class="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">{{ $sidebarUnreadCount }}</span>
+            @endif
+        </a>
+
         <a href="{{ $r('admin.dashboard', 'teacher.dashboard') }}"
            class="sidebar-link {{ $isActive('admin.dashboard', 'teacher.dashboard') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,6 +176,9 @@
             Baholar
         </a>
 
+        @endif
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'fan_masuli', 'kafedra_mudiri', 'dekan']))
         <a href="{{ route('admin.ktr.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.ktr.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,7 +186,6 @@
             </svg>
             KTR
         </a>
-
         @endif
 
         @if($hasActiveRole('test_markazi'))
@@ -215,7 +242,7 @@
             </svg>
             YN kunini belgilash
         </a>
-        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi']))
+        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi', 'fan_masuli']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         <div class="sidebar-section">Qo'shimcha</div>
 
@@ -440,13 +467,24 @@
         </a>
         @endif
 
+        <a href="{{ route('admin.reports.users-without-ratings') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.users-without-ratings') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+            </svg>
+            Baho qo'ymaganlar
+        </a>
+
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
         <a href="{{ route('admin.absence-excuses.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}">
+           class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}" style="position: relative;">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
             Sababli arizalar
+            @if(($pendingExcusesCount ?? 0) > 0)
+                <span class="sidebar-badge">{{ $pendingExcusesCount }}</span>
+            @endif
         </a>
         @endif
 
@@ -472,25 +510,6 @@
         @endif
         @endif
 
-        <!-- Xabarnomalar (Notifications) -->
-        <div class="sidebar-section">{{ __('notifications.notifications') }}</div>
-        @php
-            $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
-                ->where('recipient_type', get_class($user))
-                ->where('is_draft', false)
-                ->where('is_read', false)
-                ->count();
-        @endphp
-        <a href="{{ route('admin.notifications.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.notifications.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-            </svg>
-            {{ __('notifications.notifications') }}
-            @if($sidebarUnreadCount > 0)
-            <span class="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">{{ $sidebarUnreadCount }}</span>
-            @endif
-        </a>
     </nav>
 
     <!-- User Section with Profile Dropdown -->
@@ -909,6 +928,28 @@
         }
         .sidebar-themed[data-theme="yorug"] .sidebar-check-icon {
             color: #3b82f6;
+        }
+
+        /* ===== BADGE (notification count) ===== */
+        .sidebar-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            margin-left: auto;
+            font-size: 0.7rem;
+            font-weight: 700;
+            line-height: 1;
+            color: #ffffff;
+            background-color: #ef4444;
+            border-radius: 10px;
+            animation: badge-pulse 2s ease-in-out infinite;
+        }
+        @keyframes badge-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
 
         /* ===== BASE STYLES (shared) ===== */

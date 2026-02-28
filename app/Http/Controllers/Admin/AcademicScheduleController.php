@@ -15,6 +15,8 @@ use App\Models\Semester;
 use App\Models\Specialty;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\ContractList;
+use App\Models\Setting;
 use App\Models\DocumentVerification;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnStudentGrade;
@@ -776,53 +778,187 @@ class AcademicScheduleController extends Controller
 
             if (!$subject) continue;
 
-            $currentDate = now();
-            $lessonCount = Schedule::where('subject_id', $subject->subject_id)
+            // --- JN/MT hisoblash (jurnal logikasi bilan bir xil) ---
+            $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
+            // JB jadval sanalarini olish
+            $jbScheduleRows = DB::table('schedules')
                 ->where('group_id', $group->group_hemis_id)
-                ->whereNotIn('training_type_code', config('app.training_type_code'))
-                ->where('lesson_date', '<=', $currentDate)
-                ->distinct('lesson_date')
-                ->count();
-
-            if ($lessonCount == 0) $lessonCount = 1;
-
-            $students = Student::selectRaw('
-                students.full_name as student_name,
-                students.student_id_number as student_id,
-                students.hemis_id as hemis_id,
-                ROUND(
-                    (SELECT sum(inner_table.average_grade) / ' . $lessonCount . '
-                    FROM (
-                        SELECT lesson_date, AVG(COALESCE(
-                            CASE
-                                WHEN status = "retake" AND (reason = "absent" OR reason = "teacher_victim")
-                                THEN retake_grade
-                                WHEN status = "retake" AND reason = "low_grade"
-                                THEN retake_grade
-                                WHEN status = "pending" AND reason = "absent"
-                                THEN grade
-                                ELSE grade
-                            END, 0)) AS average_grade
-                        FROM student_grades
-                        WHERE student_grades.student_hemis_id = students.hemis_id
-                        AND student_grades.subject_id = ' . $subject->subject_id . '
-                        AND student_grades.training_type_code NOT IN (' . implode(',', config('app.training_type_code')) . ')
-                        GROUP BY student_grades.lesson_date
-                    ) AS inner_table)
-                ) as jn,
-                ROUND(
-                    (SELECT avg(student_grades.grade) as average_grade
-                    FROM student_grades
-                    WHERE student_grades.student_hemis_id = students.hemis_id
-                    AND student_grades.subject_id = ' . $subject->subject_id . '
-                    AND student_grades.training_type_code = 99
-                    GROUP BY student_grades.student_hemis_id)
-                ) as mt
-            ')
-                ->where('students.group_id', $group->group_hemis_id)
-                ->groupBy('students.id')
-                ->orderBy('students.full_name')
+                ->where('subject_id', $subject->subject_id)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->whereNotIn('training_type_code', $excludedTrainingCodes)
+                ->whereNotNull('lesson_date')
+                ->select('lesson_date', 'lesson_pair_code')
+                ->orderBy('lesson_date')
+                ->orderBy('lesson_pair_code')
                 ->get();
+
+            $jbColumns = $jbScheduleRows->map(fn($s) => [
+                    'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+                    'pair' => $s->lesson_pair_code,
+                ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+
+            $jbLessonDates = $jbColumns->pluck('date')->unique()->sort()->values()->toArray();
+
+            $jbPairsPerDay = [];
+            foreach ($jbColumns as $col) {
+                $jbPairsPerDay[$col['date']] = ($jbPairsPerDay[$col['date']] ?? 0) + 1;
+            }
+
+            $jbDatePairSet = [];
+            foreach ($jbColumns as $col) {
+                $jbDatePairSet[$col['date'] . '_' . $col['pair']] = true;
+            }
+
+            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
+            $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
+                return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
+            }));
+            $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
+            $totalJbDaysForAverage = count($jbLessonDatesForAverage);
+
+            // MT jadval sanalarini olish
+            $mtScheduleRows = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subject->subject_id)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->where('training_type_code', 99)
+                ->whereNotNull('lesson_date')
+                ->select('lesson_date', 'lesson_pair_code')
+                ->orderBy('lesson_date')
+                ->orderBy('lesson_pair_code')
+                ->get();
+
+            $mtColumns = $mtScheduleRows->map(fn($s) => [
+                    'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+                    'pair' => $s->lesson_pair_code,
+                ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+
+            $mtLessonDates = $mtColumns->pluck('date')->unique()->sort()->values()->toArray();
+
+            $mtPairsPerDay = [];
+            foreach ($mtColumns as $col) {
+                $mtPairsPerDay[$col['date']] = ($mtPairsPerDay[$col['date']] ?? 0) + 1;
+            }
+
+            $mtDatePairSet = [];
+            foreach ($mtColumns as $col) {
+                $mtDatePairSet[$col['date'] . '_' . $col['pair']] = true;
+            }
+
+            $totalMtDays = count($mtLessonDates);
+
+            // Talabalarni olish
+            $students = Student::select('id', 'full_name as student_name', 'student_id_number as student_id', 'hemis_id')
+                ->where('group_id', $group->group_hemis_id)
+                ->groupBy('id')
+                ->orderBy('full_name')
+                ->get();
+
+            $studentHemisIds = $students->pluck('hemis_id')->toArray();
+
+            // Baholarni olish
+            $allGradesRaw = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subject->subject_id)
+                ->where('semester_code', $semesterCode)
+                ->whereNotIn('training_type_code', [100, 101, 102, 103])
+                ->whereNotNull('lesson_date')
+                ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                ->orderBy('lesson_date')
+                ->orderBy('lesson_pair_code')
+                ->get();
+
+            // Baho filtrlash (jurnal logikasi bilan bir xil)
+            $getEffectiveGrade = function ($row) {
+                if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {
+                    return $row->grade;
+                }
+                if ($row->status === 'pending') return null;
+                if ($row->reason === 'absent' && $row->grade === null) {
+                    return $row->retake_grade !== null ? $row->retake_grade : null;
+                }
+                if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+                    return null;
+                }
+                if ($row->status === 'recorded') return $row->grade;
+                if ($row->status === 'closed') return $row->grade;
+                if ($row->retake_grade !== null) return $row->retake_grade;
+                return null;
+            };
+
+            // JB va MT baholarni tuzish
+            $jbGrades = [];
+            $mtGradesArr = [];
+            foreach ($allGradesRaw as $g) {
+                $effectiveGrade = $getEffectiveGrade($g);
+                if ($effectiveGrade === null) continue;
+                $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+                $key = $normalizedDate . '_' . $g->lesson_pair_code;
+                if (isset($jbDatePairSet[$key])) {
+                    $jbGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effectiveGrade;
+                }
+                if (isset($mtDatePairSet[$key])) {
+                    $mtGradesArr[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effectiveGrade;
+                }
+            }
+
+            // Manual MT baholarini olish
+            $manualMtGrades = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subject->subject_id)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', 99)
+                ->whereNull('lesson_date')
+                ->whereNotNull('grade')
+                ->select('student_hemis_id', 'grade')
+                ->get()
+                ->keyBy('student_hemis_id');
+
+            // Har bir talaba uchun JN va MT hisoblash
+            foreach ($students as $student) {
+                $hemisId = $student->hemis_id;
+
+                // JN hisoblash
+                $dailySum = 0;
+                $studentDayGrades = $jbGrades[$hemisId] ?? [];
+                foreach ($jbLessonDates as $date) {
+                    $dayGrades = $studentDayGrades[$date] ?? [];
+                    $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                    $gradeSum = array_sum($dayGrades);
+                    $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                    if (isset($jbLessonDatesForAverageLookup[$date])) {
+                        $dailySum += $dayAverage;
+                    }
+                }
+                $student->jn = $totalJbDaysForAverage > 0
+                    ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                    : 0;
+
+                // MT hisoblash
+                $mtDailySum = 0;
+                $studentMtGrades = $mtGradesArr[$hemisId] ?? [];
+                foreach ($mtLessonDates as $date) {
+                    $dayGrades = $studentMtGrades[$date] ?? [];
+                    $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                    $gradeSum = array_sum($dayGrades);
+                    $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                }
+                $mt = $totalMtDays > 0
+                    ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                    : 0;
+
+                // Manual MT override
+                if (isset($manualMtGrades[$hemisId])) {
+                    $mt = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+                }
+
+                $student->mt = $mt;
+            }
 
             // O'qituvchilarni olish
             $studentIds = Student::where('group_id', $group->group_hemis_id)
@@ -995,22 +1131,41 @@ class AcademicScheduleController extends Controller
             $cellFont = ['size' => 10];
             $cellFontRed = ['size' => 10, 'color' => 'FF0000'];
             $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
-            $groupSeparatorBg = ['bgColor' => 'E2EFDA', 'valign' => 'center', 'gridSpan' => 7];
+            $groupSeparatorBg = ['bgColor' => 'E2EFDA', 'valign' => 'center', 'gridSpan' => 8];
             $cellCenter = ['alignment' => Jc::CENTER];
             $cellLeft = ['alignment' => Jc::START];
+            $cellFontOrange = ['size' => 10, 'color' => 'FF8C00'];
 
             $headerRow = $table->addRow(400);
             $headerRow->addCell(600, $headerBg)->addText('№', $headerFont, $cellCenter);
-            $headerRow->addCell(4500, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
+            $headerRow->addCell(4000, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
             $headerRow->addCell(1800, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
-            $headerRow->addCell(1200, $headerBg)->addText('JN', $headerFont, $cellCenter);
-            $headerRow->addCell(1200, $headerBg)->addText("O'N", $headerFont, $cellCenter);
-            $headerRow->addCell(1500, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
-            $headerRow->addCell(2000, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
+            $headerRow->addCell(1000, $headerBg)->addText('JN', $headerFont, $cellCenter);
+            $headerRow->addCell(1000, $headerBg)->addText('MT', $headerFont, $cellCenter);
+            $headerRow->addCell(1300, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
+            $headerRow->addCell(1300, $headerBg)->addText('Kontrakt', $headerFont, $cellCenter);
+            $headerRow->addCell(1800, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
 
             // Talabalar ro'yxati - barcha guruhlar uchun davom etadi
             $rowNum = 1;
             $multipleGroups = count($subjectData['entries']) > 1;
+
+            // Kontrakt to'lov muddatlari — sozlamalardan o'qish
+            $defaultCutoffs = json_encode([
+                ['deadline' => '2025-10-01', 'percent' => 25],
+                ['deadline' => '2026-01-01', 'percent' => 50],
+                ['deadline' => '2026-03-01', 'percent' => 75],
+                ['deadline' => '2026-05-01', 'percent' => 100],
+            ]);
+            $cutoffsRaw = json_decode(Setting::get('contract_cutoffs', $defaultCutoffs), true) ?: [];
+            $now = time();
+            $contractThreshold = 100; // default: barcha muddatlar o'tgan
+            foreach ($cutoffsRaw as $cutoff) {
+                if ($now <= strtotime($cutoff['deadline'] . ' 23:59:59')) {
+                    $contractThreshold = (int) $cutoff['percent'];
+                    break;
+                }
+            }
 
             foreach ($subjectData['entries'] as $entry) {
                 $entryGroup = $entry['group'];
@@ -1038,6 +1193,23 @@ class AcademicScheduleController extends Controller
                     $totalAcload = $entrySubject->total_acload ?: 1;
                     $qoldiq = round($qoldirgan * 100 / $totalAcload, 2);
 
+                    // Kontrakt qarzdorligi tekshiruvi
+                    $contract = ContractList::where('student_hemis_id', $student->hemis_id)
+                        ->where('year', '2025')
+                        ->where('edu_year', 'like', '2025-2026%')
+                        ->first();
+
+                    $contractPercent = 100; // default: kontrakt topilmasa ruxsat
+                    $contractText = '-';
+                    $contractFailed = false;
+                    if ($contract && $contract->edu_contract_sum > 0) {
+                        $contractPercent = round(($contract->paid_credit_amount / $contract->edu_contract_sum) * 100);
+                        $contractText = $contractPercent . '%';
+                        if ($contractPercent < $contractThreshold) {
+                            $contractFailed = true;
+                        }
+                    }
+
                     $holat = 'Ruxsat';
                     $jnFailed = false;
                     $mtFailed = false;
@@ -1055,27 +1227,42 @@ class AcademicScheduleController extends Controller
                         $davomatFailed = true;
                         $holat = 'X';
                     }
+                    // Kontrakt: "X" emas, "Shartli" holat beradi
+                    if ($contractFailed && $holat === 'Ruxsat') {
+                        $holat = 'Shartli';
+                    }
 
                     $dataRow = $table->addRow();
                     $dataRow->addCell(600)->addText($rowNum, $cellFont, $cellCenter);
-                    $dataRow->addCell(4500)->addText($student->student_name, $cellFont, $cellLeft);
+                    $dataRow->addCell(4000)->addText($student->student_name, $cellFont, $cellLeft);
                     $dataRow->addCell(1800)->addText($student->student_id, $cellFont, $cellCenter);
 
-                    $jnCell = $dataRow->addCell(1200);
+                    $jnCell = $dataRow->addCell(1000);
                     $jnCell->addText($student->jn ?? '0', $jnFailed ? $cellFontRed : $cellFont, $cellCenter);
 
-                    $mtCell = $dataRow->addCell(1200);
+                    $mtCell = $dataRow->addCell(1000);
                     $mtCell->addText($student->mt ?? '0', $mtFailed ? $cellFontRed : $cellFont, $cellCenter);
 
-                    $davomatCell = $dataRow->addCell(1500);
+                    $davomatCell = $dataRow->addCell(1300);
                     $davomatCell->addText(
                         ($qoldiq != 0 ? $qoldiq . '%' : '0%'),
                         $davomatFailed ? $cellFontRed : $cellFont,
                         $cellCenter
                     );
 
-                    $holatCell = $dataRow->addCell(2000);
-                    $holatCell->addText($holat, $holat === 'X' ? $cellFontRed : $cellFont, $cellCenter);
+                    $kontraktCell = $dataRow->addCell(1300);
+                    $kontraktCell->addText(
+                        $contractText,
+                        $contractFailed ? $cellFontOrange : $cellFont,
+                        $cellCenter
+                    );
+
+                    $holatCell = $dataRow->addCell(1800);
+                    if ($holat === 'Shartli') {
+                        $holatCell->addText($holat, $cellFontOrange, $cellCenter);
+                    } else {
+                        $holatCell->addText($holat, $holat === 'X' ? $cellFontRed : $cellFont, $cellCenter);
+                    }
 
                     $rowNum++;
                 }

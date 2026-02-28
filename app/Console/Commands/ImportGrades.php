@@ -132,6 +132,8 @@ class ImportGrades extends Command
             $this->info("Live import: bugungi BARCHA baholar yakunlangan (is_final=true), o'tkazib yuborildi.");
             Log::info("[LiveImport] Today's ALL grades finalized, skipping.");
             \Illuminate\Support\Facades\Cache::forget('live_import_running');
+            // Cache ni yangilash — hisobot komandlari "yaqinda import bo'lgan" deb bilishi uchun
+            \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), Carbon::today()->endOfDay());
             return;
         }
 
@@ -210,9 +212,9 @@ class ImportGrades extends Command
         $elapsed = round((microtime(true) - $liveStartTime) / 60, 1);
 
         // Cache ni yozish — sendDailyLiveReport crash qilsa ham data muvaffaqiyati saqlansin
-        // TTL 24 soat — 2 soat emas (22:00 dagi tekshiruvda ham ko'rinishi uchun)
+        // TTL: kun oxirigacha
         if (!$gradeError && !$attendanceError) {
-            \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), now()->addHours(24));
+            \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), Carbon::today()->endOfDay());
         }
 
         if (!$this->option('silent')) {

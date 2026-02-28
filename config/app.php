@@ -134,6 +134,8 @@ return [
     "training_type_code" => [11, 99, 100, 101, 102, 103],
     // Davomat nazorati uchun chiqarib tashlanadigan mashg'ulot turlari (Ma'ruza=11 kiritilmagan)
     "attendance_excluded_training_types" => [99, 100, 101, 102],
+    // Reyting hisobotidan chiqariladigan fanlar (baho qo'yilmaydigan fanlar)
+    "excluded_rating_subject_names" => ["O'quv amaliyoti"],
     "shakllar" =>
         [
             [

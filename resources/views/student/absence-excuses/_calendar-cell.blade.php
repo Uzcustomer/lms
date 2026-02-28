@@ -80,7 +80,7 @@
                                 'rc-end': item.assessment_type === 'jn' && cell.dateStr === item.makeup_end,
                                 'rc-in-range': item.assessment_type === 'jn' && miniInRange(item._idx, cell.dateStr),
                                 'rc-picked-single': item.assessment_type !== 'jn' && cell.dateStr === item.makeup_date,
-                                'rc-taken': cell.takenByJn
+                                'rc-taken': cell.takenByJn || cell.takenByOski
                             }"
                             class="rc-day"
                             x-text="cell.day"></button>

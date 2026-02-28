@@ -256,7 +256,7 @@ class StudentApiController extends Controller
 
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
-        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->endOfDay();
 
         $getEffectiveGrade = function ($row) {
             if ($row->status === 'pending') return null;
@@ -623,14 +623,50 @@ class StudentApiController extends Controller
     {
         $student = $request->user();
         $semester = $student->semester_code;
+        $groupHemisId = $student->group_id;
 
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $grades = StudentGrade::where('student_id', $student->id)
+        // Get education_year_code from schedule (like subjects endpoint)
+        $scheduleEducationYear = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('education_year_code')
+            ->orderBy('lesson_date', 'desc')
+            ->value('education_year_code');
+        if ($scheduleEducationYear) {
+            $educationYearCode = $scheduleEducationYear;
+        }
+
+        // Get minScheduleDate for education_year_code fallback (matches web journal)
+        $minScheduleDate = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semester)
+            ->whereNull('deleted_at')
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->whereNotNull('lesson_date')
+            ->min('lesson_date');
+
+        $grades = DB::table('student_grades')
+            ->where('student_hemis_id', $student->hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semester)
+            ->whereNotNull('lesson_date')
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                $q2->where('education_year_code', $educationYearCode);
+                if ($minScheduleDate !== null) {
+                    $q2->orWhere(function ($q3) use ($minScheduleDate) {
+                        $q3->whereNull('education_year_code')
+                            ->where('lesson_date', '>=', $minScheduleDate);
+                    });
+                }
+            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->orderBy('lesson_date', 'desc')
             ->get()
             ->map(fn($g) => [
@@ -667,7 +703,8 @@ class StudentApiController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $pendingLessons = StudentGrade::where('student_id', $student->id)
+        $pendingLessons = DB::table('student_grades')
+            ->where('student_hemis_id', $student->hemis_id)
             ->whereIn('status', ['pending', 'retake'])
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('lesson_date')

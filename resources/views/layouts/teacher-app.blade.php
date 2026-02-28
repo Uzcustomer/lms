@@ -63,7 +63,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                         </svg>
                         @if($notifUnreadCount > 0)
-                        <span style="position:absolute;top:2px;right:2px;width:9px;height:9px;background:#ef4444;border-radius:50%;border:2px solid #fff;"></span>
+                        <span style="position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;background:#ef4444;border-radius:9px;border:2px solid #fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;line-height:1;">{{ $notifUnreadCount > 99 ? '99+' : $notifUnreadCount }}</span>
                         @endif
                     </button>
 
@@ -87,7 +87,8 @@
                         </div>
                         <div style="max-height:280px;overflow-y:auto;">
                             @php
-                                $recentNotifs = \App\Models\Notification::where('recipient_id', $notifUserId)
+                                $recentNotifs = \App\Models\Notification::with('sender')
+                                    ->where('recipient_id', $notifUserId)
                                     ->where('recipient_type', $notifUserType)
                                     ->where('is_draft', false)
                                     ->orderByDesc('sent_at')
@@ -105,6 +106,7 @@
                                     <span style="width:6px;height:6px;flex-shrink:0;margin-top:5px;"></span>
                                     @endif
                                     <div style="flex:1;min-width:0;">
+                                        <p style="font-size:0.7rem;color:#6b7280;margin:0 0 1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ $notif->sender?->name ?? $notif->sender?->short_name ?? $notif->sender?->full_name ?? __('notifications.system') }}</p>
                                         <p style="font-size:0.8rem;font-weight:{{ !$notif->is_read ? '600' : '400' }};color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;">{{ $notif->subject }}</p>
                                         <p style="font-size:0.65rem;color:#6b7280;margin:2px 0 0;">{{ $notif->sent_at ? $notif->sent_at->diffForHumans() : '' }}</p>
                                     </div>
@@ -210,23 +212,11 @@
 </body>
 <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
 
-    {{-- DEBUG: Console log - account switching debug --}}
+    @if(config('app.debug'))
     <script>
-        console.group('%c🔍 LMS DEBUG: Teacher Layout', 'color: #2ecc71; font-weight: bold; font-size: 14px;');
-        console.log('%cLayout:', 'font-weight:bold', 'teacher-app.blade.php (Teacher)');
-        console.log('%cURL:', 'font-weight:bold', window.location.href);
-        console.log('%cGuard (server):', 'font-weight:bold', '{{ auth()->guard("web")->check() ? "web ✅ (id=" . auth()->guard("web")->id() . ")" : "web ❌" }}');
-        console.log('%cTeacher guard:', 'font-weight:bold', '{{ auth()->guard("teacher")->check() ? "teacher ✅ (id=" . auth()->guard("teacher")->id() . " " . (auth()->guard("teacher")->user()->full_name ?? "?") . ")" : "teacher ❌" }}');
-        console.log('%cStudent guard:', 'font-weight:bold', '{{ auth()->guard("student")->check() ? "student ✅ (id=" . auth()->guard("student")->id() . ")" : "student ❌" }}');
-        console.log('%cauth()->user():', 'font-weight:bold', '{{ auth()->user() ? "id=" . auth()->user()->id : "NULL" }}');
-        console.log('%csession.impersonating:', 'font-weight:bold', {{ session('impersonating') ? 'true' : 'false' }});
-        console.log('%csession.impersonated_name:', 'font-weight:bold', '{{ session("impersonated_name", "NULL") }}');
-        console.log('%csession.impersonator_id:', 'font-weight:bold', '{{ session("impersonator_id", "NULL") }}');
-        console.log('%csession.active_role:', 'font-weight:bold', '{{ session("active_role", "NULL") }}');
-        console.log('%csession_id:', 'font-weight:bold', '{{ session()->getId() }}');
-        @if(session('impersonating'))
-            console.log('%c📍 Impersonation mode AKTIV — banner ko\'rinmoqda', 'color: orange; font-weight: bold;');
-        @endif
+        console.group('LMS DEBUG: Teacher Layout');
+        console.log('URL:', window.location.href);
         console.groupEnd();
     </script>
+    @endif
 </html>

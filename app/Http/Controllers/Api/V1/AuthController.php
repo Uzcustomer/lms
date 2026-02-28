@@ -72,28 +72,28 @@ class AuthController extends Controller
             }
         }
 
-        // Check if Telegram 2FA is needed
-        if ($student->telegram_chat_id) {
-            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-            $student->login_code = $code;
-            $student->login_code_expires_at = now()->addMinutes(5);
-            $student->save();
-
-            $telegramService = new TelegramService();
-            $sent = $telegramService->sendToUser(
-                $student->telegram_chat_id,
-                "Tizimga kirish uchun tasdiqlash kodi: {$code}\n\nKod 5 daqiqa amal qiladi."
-            );
-
-            if ($sent) {
-                return response()->json([
-                    'requires_2fa' => true,
-                    'student_id' => $student->id,
-                    'masked_telegram' => substr($student->telegram_username ?? 'Telegram', 0, 3) . '***',
-                    'message' => 'Tasdiqlash kodi Telegramga yuborildi.',
-                ]);
-            }
-        }
+        // Check if Telegram 2FA is needed (temporarily disabled for testing)
+        // if ($student->telegram_chat_id) {
+        //     $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        //     $student->login_code = $code;
+        //     $student->login_code_expires_at = now()->addMinutes(5);
+        //     $student->save();
+        //
+        //     $telegramService = new TelegramService();
+        //     $sent = $telegramService->sendToUser(
+        //         $student->telegram_chat_id,
+        //         "Tizimga kirish uchun tasdiqlash kodi: {$code}\n\nKod 5 daqiqa amal qiladi."
+        //     );
+        //
+        //     if ($sent) {
+        //         return response()->json([
+        //             'requires_2fa' => true,
+        //             'student_id' => $student->id,
+        //             'masked_telegram' => substr($student->telegram_username ?? 'Telegram', 0, 3) . '***',
+        //             'message' => 'Tasdiqlash kodi Telegramga yuborildi.',
+        //         ]);
+        //     }
+        // }
 
         // No 2FA needed — issue token
         return $this->issueStudentToken($student);
@@ -180,28 +180,28 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // Check if Telegram 2FA is needed
-        if ($teacher->telegram_chat_id) {
-            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-            $teacher->login_code = $code;
-            $teacher->login_code_expires_at = now()->addMinutes(5);
-            $teacher->save();
-
-            $telegramService = new TelegramService();
-            $sent = $telegramService->sendToUser(
-                $teacher->telegram_chat_id,
-                "Tizimga kirish uchun tasdiqlash kodi: {$code}\n\nKod 5 daqiqa amal qiladi."
-            );
-
-            if ($sent) {
-                return response()->json([
-                    'requires_2fa' => true,
-                    'teacher_id' => $teacher->id,
-                    'masked_telegram' => substr($teacher->telegram_username ?? 'Telegram', 0, 3) . '***',
-                    'message' => 'Tasdiqlash kodi Telegramga yuborildi.',
-                ]);
-            }
-        }
+        // Check if Telegram 2FA is needed (temporarily disabled for testing)
+        // if ($teacher->telegram_chat_id) {
+        //     $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        //     $teacher->login_code = $code;
+        //     $teacher->login_code_expires_at = now()->addMinutes(5);
+        //     $teacher->save();
+        //
+        //     $telegramService = new TelegramService();
+        //     $sent = $telegramService->sendToUser(
+        //         $teacher->telegram_chat_id,
+        //         "Tizimga kirish uchun tasdiqlash kodi: {$code}\n\nKod 5 daqiqa amal qiladi."
+        //     );
+        //
+        //     if ($sent) {
+        //         return response()->json([
+        //             'requires_2fa' => true,
+        //             'teacher_id' => $teacher->id,
+        //             'masked_telegram' => substr($teacher->telegram_username ?? 'Telegram', 0, 3) . '***',
+        //             'message' => 'Tasdiqlash kodi Telegramga yuborildi.',
+        //         ]);
+        //     }
+        // }
 
         return $this->issueTeacherToken($teacher);
     }

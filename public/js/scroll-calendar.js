@@ -155,6 +155,7 @@
                 cell.textContent = date.getDate();
                 cell._date = date;
                 if (d === 6) cell.classList.add('sc-sun');
+                if (date.getMonth() % 2 === 1) cell.classList.add('sc-alt-month');
                 if (sameDay(date, this.today)) cell.classList.add('sc-today');
                 if (sameDay(date, this.selected)) cell.classList.add('sc-selected');
                 if (date.getDate() === 1) {

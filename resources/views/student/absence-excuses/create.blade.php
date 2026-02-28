@@ -1,6 +1,6 @@
 <x-student-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+        <h2 class="font-semibold text-sm text-gray-800 leading-tight">
             Sababli dars qoldirish arizasi
         </h2>
     </x-slot>
@@ -613,6 +613,7 @@
                 return this._countNonSundays(this.startDate, this.endDate);
             },
             get groupedAssessments() {
+                const typeOrder = { jn: 0, mt: 1, oski: 2, test: 3 };
                 const groups = [];
                 const map = {};
                 this.assessments.forEach((item, idx) => {
@@ -623,6 +624,18 @@
                         groups.push(map[key]);
                     }
                     map[key].items.push(item);
+                });
+                // Har bir fan ichida: JN birinchi, keyin MT, OSKI, Test
+                groups.forEach(g => {
+                    g.items.sort((a, b) => (typeOrder[a.assessment_type] ?? 9) - (typeOrder[b.assessment_type] ?? 9));
+                });
+                // Non-JN testlari bor fanlar birinchi, faqat JN bor fanlar oxirida
+                groups.sort((a, b) => {
+                    const aHasNonJn = a.items.some(i => i.assessment_type !== 'jn');
+                    const bHasNonJn = b.items.some(i => i.assessment_type !== 'jn');
+                    if (aHasNonJn && !bHasNonJn) return -1;
+                    if (!aHasNonJn && bHasNonJn) return 1;
+                    return 0;
                 });
                 return groups;
             },
@@ -844,8 +857,6 @@
                         });
                     }
                 } catch (e) { console.error('Xatolik:', e); }
-                // JN har doim birinchi
-                this.assessments.sort((a, b) => a.assessment_type === 'jn' ? -1 : b.assessment_type === 'jn' ? 1 : 0);
                 this.loading = false; this.searched = true;
             },
 
@@ -892,10 +903,23 @@
                 const today = new Date(); today.setHours(0,0,0,0);
                 const todayStr = this._toStr(today);
                 const maxDate = this.miniMaxDateStr;
-                // JN range for restricting others
-                const jnItem = this.assessments.find(a => a.assessment_type === 'jn');
-                const jnStart = jnItem?.makeup_start || '';
-                const jnEnd = jnItem?.makeup_end || '';
+                // Shu fan ichidagi JN range ni topish (faqat non-JN lar uchun)
+                let jnStart = '', jnEnd = '';
+                if (item.assessment_type !== 'jn') {
+                    const sameSubjectJn = this.assessments.find(
+                        a => a.assessment_type === 'jn' && a.subject_name === item.subject_name
+                    );
+                    jnStart = sameSubjectJn?.makeup_start || '';
+                    jnEnd = sameSubjectJn?.makeup_end || '';
+                }
+                // Yakuniy test uchun: OSKI tanlangan kunni bloklash
+                let oskiDate = '';
+                if (item.assessment_type === 'test') {
+                    const sameSubjectOski = this.assessments.find(
+                        a => a.assessment_type === 'oski' && a.subject_name === item.subject_name
+                    );
+                    oskiDate = sameSubjectOski?.makeup_date || '';
+                }
                 for (let i = 0; i < startWd; i++) {
                     cells.push({ key: 'e' + i, date: null, day: '', disabled: true });
                 }
@@ -904,18 +928,23 @@
                     const ds = this._toStr(dt);
                     const isSun = dt.getDay() === 0;
                     const isPast = dt < today;
-                    // Period-length cheklovi: bugundan boshlab totalDays ta yakshanbasiz kundan keyingilar disabled
                     const beyondLimit = maxDate ? ds > maxDate : false;
-                    // Non-JN: JN range dates are taken
+                    // Non-JN: shu fan JN range ichidagi sanalar band
                     let takenByJn = false;
-                    if (item.assessment_type !== 'jn' && jnStart && jnEnd) {
+                    if (jnStart && jnEnd) {
                         takenByJn = ds >= jnStart && ds <= jnEnd && !isSun;
+                    }
+                    // Yakuniy test: OSKI tanlangan kun band
+                    let takenByOski = false;
+                    if (oskiDate && ds === oskiDate) {
+                        takenByOski = true;
                     }
                     cells.push({
                         key: ds, date: dt, dateStr: ds, day: d,
                         isSunday: isSun, isToday: ds === todayStr,
-                        disabled: isPast || isSun || takenByJn || beyondLimit,
-                        takenByJn: takenByJn
+                        disabled: isPast || isSun || beyondLimit || takenByJn || takenByOski,
+                        takenByJn: takenByJn,
+                        takenByOski: takenByOski
                     });
                 }
                 return cells;
@@ -937,9 +966,9 @@
                         item.makeup_end = dateStr;
                         item.jn_selecting = 'start';
                         item.show_cal = false;
-                        // JN range o'zgarganda, ichiga tushgan boshqa testlar tozalanadi
+                        // Shu fan ichidagi boshqa testlarning JN range ga tushgan sanalarini tozalash
                         this.assessments.forEach(a => {
-                            if (a.assessment_type !== 'jn' && a.makeup_date) {
+                            if (a.assessment_type !== 'jn' && a.subject_name === item.subject_name && a.makeup_date) {
                                 if (a.makeup_date >= item.makeup_start && a.makeup_date <= item.makeup_end) {
                                     a.makeup_date = '';
                                 }
@@ -949,6 +978,14 @@
                 } else {
                     item.makeup_date = item.makeup_date === dateStr ? '' : dateStr;
                     if (item.makeup_date) item.show_cal = false;
+                    // OSKI tanlanganda, shu fan yakuniy test ning o'sha kunini tozalash
+                    if (item.assessment_type === 'oski' && item.makeup_date) {
+                        this.assessments.forEach(a => {
+                            if (a.assessment_type === 'test' && a.subject_name === item.subject_name && a.makeup_date === item.makeup_date) {
+                                a.makeup_date = '';
+                            }
+                        });
+                    }
                 }
             },
             miniInRange(index, dateStr) {

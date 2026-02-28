@@ -7,9 +7,13 @@ use App\Models\AbsenceExcuse;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\ExamSchedule;
 use App\Models\ExamTest;
+use App\Models\Notification;
 use App\Models\OraliqNazorat;
 use App\Models\Oski;
 use App\Models\Schedule;
+use App\Models\Student;
+use App\Models\Teacher;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -203,6 +207,11 @@ class AbsenceExcuseController extends Controller
                     throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
                 }
 
+                $makeupEndDate = null;
+                if (($makeup['assessment_type'] ?? '') === 'jn' && !empty($makeup['makeup_end'])) {
+                    $makeupEndDate = $makeup['makeup_end'];
+                }
+
                 AbsenceExcuseMakeup::create([
                     'absence_excuse_id' => $excuse->id,
                     'student_id' => $student->id,
@@ -212,11 +221,15 @@ class AbsenceExcuseController extends Controller
                     'assessment_type_code' => $makeup['assessment_type_code'],
                     'original_date' => $makeup['original_date'],
                     'makeup_date' => $dateToSave,
+                    'makeup_end_date' => $makeupEndDate,
                     'status' => 'scheduled',
                 ]);
             }
 
             DB::commit();
+
+            // Barcha admin va registrator_ofisi rollariga xabarnoma jo'natish
+            $this->notifyAdmins($excuse);
         } catch (\Throwable $e) {
             DB::rollBack();
             return back()->withErrors(['error' => $e->getMessage()])->withInput();
@@ -352,6 +365,54 @@ class AbsenceExcuseController extends Controller
         }
 
         return response()->download($filePath, 'sababli_ariza_' . $excuse->id . '.pdf');
+    }
+
+    /**
+     * Admin va registrator_ofisi rollariga yangi ariza haqida xabarnoma jo'natish
+     */
+    private function notifyAdmins(AbsenceExcuse $excuse): void
+    {
+        $student = Auth::guard('student')->user();
+        $roles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
+
+        $reasonLabel = $excuse->reason_label;
+        $url = route('admin.absence-excuses.show', $excuse->id);
+        $subject = "Yangi sababli ariza: {$excuse->student_full_name}";
+        $body = "Talaba: {$excuse->student_full_name}\nGuruh: {$excuse->group_name}\nSabab: {$reasonLabel}\nSana: {$excuse->start_date->format('d.m.Y')} — {$excuse->end_date->format('d.m.Y')}";
+
+        // User modelidagi adminlar
+        $adminUsers = User::role($roles)->get();
+        foreach ($adminUsers as $user) {
+            Notification::create([
+                'sender_id' => $student->id,
+                'sender_type' => Student::class,
+                'recipient_id' => $user->id,
+                'recipient_type' => User::class,
+                'subject' => $subject,
+                'body' => $body,
+                'type' => Notification::TYPE_SYSTEM,
+                'url' => $url,
+                'is_draft' => false,
+                'sent_at' => now(),
+            ]);
+        }
+
+        // Teacher modelidagi adminlar (registrator_ofisi va boshqalar)
+        $adminTeachers = Teacher::role($roles)->get();
+        foreach ($adminTeachers as $teacher) {
+            Notification::create([
+                'sender_id' => $student->id,
+                'sender_type' => Student::class,
+                'recipient_id' => $teacher->id,
+                'recipient_type' => Teacher::class,
+                'subject' => $subject,
+                'body' => $body,
+                'type' => Notification::TYPE_SYSTEM,
+                'url' => $url,
+                'is_draft' => false,
+                'sent_at' => now(),
+            ]);
+        }
     }
 
     /**

@@ -59,7 +59,27 @@
                             ->count();
                     } catch (\Exception $e) {}
                 @endphp
-                <div x-data="{ notifOpen: false }" style="position:fixed;top:10px;right:16px;z-index:9999;">
+                <div style="position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:6px;">
+                    <!-- Til almashtirgich -->
+                    <div x-data="{ langOpen: false }" style="position:relative;">
+                        @php $currentLocale = app()->getLocale(); @endphp
+                        <button @click.stop="langOpen = !langOpen"
+                                style="width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(0,0,0,0.08);cursor:pointer;transition:all 0.15s;font-size:11px;font-weight:700;color:#4b5563;text-transform:uppercase;"
+                                onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fff'">
+                            {{ $currentLocale }}
+                        </button>
+                        <div x-show="langOpen" x-cloak @click.outside="langOpen = false"
+                             x-transition:enter="transition ease-out duration-100"
+                             x-transition:enter-start="opacity-0 transform scale-95"
+                             x-transition:enter-end="opacity-100 transform scale-100"
+                             style="position:absolute;top:42px;right:0;width:130px;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);overflow:hidden;">
+                            <a href="{{ route('language.switch', 'uz') }}" style="display:block;padding:8px 12px;font-size:13px;color:#374151;text-decoration:none;{{ $currentLocale === 'uz' ? 'background:#eff6ff;font-weight:600;color:#2563eb;' : '' }}" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='{{ $currentLocale === 'uz' ? '#eff6ff' : '#fff' }}'">O'zbekcha</a>
+                            <a href="{{ route('language.switch', 'ru') }}" style="display:block;padding:8px 12px;font-size:13px;color:#374151;text-decoration:none;{{ $currentLocale === 'ru' ? 'background:#eff6ff;font-weight:600;color:#2563eb;' : '' }}" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='{{ $currentLocale === 'ru' ? '#eff6ff' : '#fff' }}'">Русский</a>
+                            <a href="{{ route('language.switch', 'en') }}" style="display:block;padding:8px 12px;font-size:13px;color:#374151;text-decoration:none;{{ $currentLocale === 'en' ? 'background:#eff6ff;font-weight:600;color:#2563eb;' : '' }}" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='{{ $currentLocale === 'en' ? '#eff6ff' : '#fff' }}'">English</a>
+                        </div>
+                    </div>
+                    <!-- Xabarnomalar -->
+                <div x-data="{ notifOpen: false }" style="position:relative;">
                     <button @click.stop="notifOpen = !notifOpen"
                             style="position:relative;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(0,0,0,0.08);cursor:pointer;transition:all 0.15s;"
                             onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fff'">
@@ -93,7 +113,8 @@
                             @php
                                 $recentNotifs = collect();
                                 try {
-                                    $recentNotifs = \App\Models\Notification::where('recipient_id', $notifUserId)
+                                    $recentNotifs = \App\Models\Notification::with('sender')
+                                        ->where('recipient_id', $notifUserId)
                                         ->where('recipient_type', $notifUserType)
                                         ->where('is_draft', false)
                                         ->orderByDesc('sent_at')
@@ -112,6 +133,7 @@
                                     <span style="width:6px;height:6px;flex-shrink:0;margin-top:5px;"></span>
                                     @endif
                                     <div style="flex:1;min-width:0;">
+                                        <p style="font-size:0.7rem;color:#6b7280;margin:0 0 1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ $notif->sender?->name ?? $notif->sender?->short_name ?? $notif->sender?->full_name ?? __('notifications.system') }}</p>
                                         <p style="font-size:0.8rem;font-weight:{{ !$notif->is_read ? '600' : '400' }};color:#111827;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;">{{ $notif->subject }}</p>
                                         <p style="font-size:0.65rem;color:#6b7280;margin:2px 0 0;">{{ $notif->sent_at ? $notif->sent_at->diffForHumans() : '' }}</p>
                                     </div>
@@ -129,6 +151,7 @@
                             {{ __('notifications.view_all') }}
                         </a>
                     </div>
+                </div>
                 </div>
 
                 <!-- Page Heading -->
@@ -170,25 +193,11 @@
     </body>
     <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
 
-    {{-- DEBUG: Console log - account switching debug --}}
+    @if(config('app.debug'))
     <script>
-        console.group('%c🔍 LMS DEBUG: Admin Layout', 'color: #e74c3c; font-weight: bold; font-size: 14px;');
-        console.log('%cLayout:', 'font-weight:bold', 'app.blade.php (Admin)');
-        console.log('%cURL:', 'font-weight:bold', window.location.href);
-        console.log('%cGuard (server):', 'font-weight:bold', '{{ auth()->guard("web")->check() ? "web ✅ (id=" . auth()->guard("web")->id() . " " . (auth()->guard("web")->user()->name ?? "?") . ")" : "web ❌" }}');
-        console.log('%cTeacher guard:', 'font-weight:bold', '{{ auth()->guard("teacher")->check() ? "teacher ✅ (id=" . auth()->guard("teacher")->id() . ")" : "teacher ❌" }}');
-        console.log('%cStudent guard:', 'font-weight:bold', '{{ auth()->guard("student")->check() ? "student ✅ (id=" . auth()->guard("student")->id() . ")" : "student ❌" }}');
-        console.log('%cauth()->user():', 'font-weight:bold', '{{ auth()->user() ? "id=" . auth()->user()->id . " name=" . auth()->user()->name : "NULL" }}');
-        console.log('%csession.impersonating:', 'font-weight:bold', {{ session('impersonating') ? 'true' : 'false' }});
-        console.log('%csession.impersonated_name:', 'font-weight:bold', '{{ session("impersonated_name", "NULL") }}');
-        console.log('%csession.impersonator_id:', 'font-weight:bold', '{{ session("impersonator_id", "NULL") }}');
-        console.log('%csession.active_role:', 'font-weight:bold', '{{ session("active_role", "NULL") }}');
-        console.log('%csession_id:', 'font-weight:bold', '{{ session()->getId() }}');
-        @if(session('impersonating'))
-            console.warn('%c⚠️ IMPERSONATION BANNER KO\'RINMOQDA!', 'color: red; font-size: 16px; font-weight: bold;');
-        @else
-            console.log('%c✅ Impersonation banner yo\'q (to\'g\'ri)', 'color: green;');
-        @endif
+        console.group('LMS DEBUG: Admin Layout');
+        console.log('URL:', window.location.href);
         console.groupEnd();
     </script>
+    @endif
 </html>

@@ -3415,12 +3415,14 @@ class ReportController extends Controller
         }
 
         // Joriy semestr
-        if ($request->get('current_semester', '1') == '1') {
+        $currentSemesterFilter = $request->get('current_semester', '1') == '1';
+        if ($currentSemesterFilter) {
             $gradesQuery->whereExists(function ($q) {
                 $q->select(DB::raw(1))
                     ->from('semesters as sem')
                     ->whereColumn('sem.curriculum_hemis_id', 'g.curriculum_hemis_id')
                     ->whereColumn('sem.code', 'sg.semester_code')
+                    ->whereColumn('sem.education_year', 'sg.education_year_code')
                     ->where('sem.current', true);
             });
         }
@@ -3441,10 +3443,6 @@ class ReportController extends Controller
             'sg.semester_code'
         )->get();
 
-        if ($gradesRows->isEmpty()) {
-            return response()->json(['data' => [], 'total' => 0]);
-        }
-
         // 2-QADAM: attendances dan tegishli yozuvlarni olish
         $studentHemisIds = $gradesRows->pluck('student_hemis_id')->unique()->toArray();
 
@@ -3461,11 +3459,13 @@ class ReportController extends Controller
             $attendanceMap[$key] = $att;
         }
 
-        // 3-QADAM: Solishtirish
+        // 3-QADAM: LMS sababli → HEMIS tekshiruvi
         $results = [];
+        $gradeKeys = [];
         foreach ($gradesRows as $gr) {
             $dateStr = substr($gr->lesson_date, 0, 10);
             $key = $gr->student_hemis_id . '|' . $gr->subject_id . '|' . $dateStr . '|' . $gr->lesson_pair_code;
+            $gradeKeys[$key] = true;
 
             $att = $attendanceMap[$key] ?? null;
 
@@ -3498,9 +3498,86 @@ class ReportController extends Controller
                 'subject_name' => $gr->subject_name ?? '-',
                 'lesson_date' => $dateStr ? date('d.m.Y', strtotime($dateStr)) : '-',
                 'lesson_pair' => $gr->lesson_pair_name ?? '-',
-                'lms_status' => 'Sababli (retake)',
+                'mark_status' => 'Sababli',
                 'hemis_status' => $hemisStatus,
                 'match' => $match,
+            ];
+        }
+
+        // 4-QADAM: HEMIS sababli → Mark (LMS) da retake bo'lmaganlar
+        $reverseQuery = DB::table('attendances as a')
+            ->join('students as s2', 's2.hemis_id', '=', 'a.student_hemis_id')
+            ->join('groups as g2', 'g2.group_hemis_id', '=', 's2.group_id')
+            ->where('g2.department_active', true)
+            ->where('g2.active', true)
+            ->where('a.absent_on', '>', 0);
+
+        // Xuddi shu filtrlar
+        if ($request->filled('education_type')) {
+            $reverseQuery->whereIn('s2.group_id', $groupIds);
+        }
+        if ($request->filled('faculty')) {
+            $faculty2 = Department::find($request->faculty);
+            if ($faculty2) {
+                $reverseQuery->where('s2.department_id', $faculty2->department_hemis_id);
+            }
+        }
+        if ($request->filled('specialty')) {
+            $reverseQuery->where('s2.specialty_id', $request->specialty);
+        }
+        if ($request->filled('level_code')) {
+            $reverseQuery->where('s2.level_code', $request->level_code);
+        }
+        if ($request->filled('group')) {
+            $reverseQuery->where('s2.group_id', $request->group);
+        }
+        if ($currentSemesterFilter) {
+            $reverseQuery->whereExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('semesters as sem2')
+                    ->whereColumn('sem2.curriculum_hemis_id', 'g2.curriculum_hemis_id')
+                    ->whereColumn('sem2.code', 'a.semester_code')
+                    ->whereColumn('sem2.education_year', 'a.education_year_code')
+                    ->where('sem2.current', true);
+            });
+        }
+
+        $reverseRows = $reverseQuery->select(
+            'a.student_hemis_id',
+            's2.full_name',
+            's2.department_name',
+            's2.specialty_name',
+            's2.level_name',
+            's2.group_name',
+            'a.subject_id',
+            'a.subject_name',
+            'a.lesson_date',
+            'a.lesson_pair_code',
+            'a.lesson_pair_name'
+        )->get();
+
+        foreach ($reverseRows as $ar) {
+            $dateStr = substr($ar->lesson_date, 0, 10);
+            $key = $ar->student_hemis_id . '|' . $ar->subject_id . '|' . $dateStr . '|' . $ar->lesson_pair_code;
+
+            // Allaqachon LMS retake sifatida qayd etilganlarni o'tkazib yuborish
+            if (isset($gradeKeys[$key])) {
+                continue;
+            }
+
+            $results[] = [
+                'student_hemis_id' => $ar->student_hemis_id,
+                'full_name' => $ar->full_name,
+                'department_name' => $ar->department_name ?? '-',
+                'specialty_name' => $ar->specialty_name ?? '-',
+                'level_name' => $ar->level_name ?? '-',
+                'group_name' => $ar->group_name ?? '-',
+                'subject_name' => $ar->subject_name ?? '-',
+                'lesson_date' => $dateStr ? date('d.m.Y', strtotime($dateStr)) : '-',
+                'lesson_pair' => $ar->lesson_pair_name ?? '-',
+                'mark_status' => 'Sababli emas',
+                'hemis_status' => 'Sababli',
+                'match' => 'mismatch',
             ];
         }
 
@@ -3564,7 +3641,7 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sababli check');
 
-        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Fan', 'Sana', 'Juftlik', 'LMS holati', 'HEMIS holati', 'Natija'];
+        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Fan', 'Sana', 'Juftlik', 'Mark', 'HEMIS holati', 'Natija'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -3588,7 +3665,7 @@ class ReportController extends Controller
             $sheet->setCellValue([7, $row], $r['subject_name']);
             $sheet->setCellValue([8, $row], $r['lesson_date']);
             $sheet->setCellValue([9, $row], $r['lesson_pair'] ?? '-');
-            $sheet->setCellValue([10, $row], $r['lms_status']);
+            $sheet->setCellValue([10, $row], $r['mark_status']);
             $sheet->setCellValue([11, $row], $r['hemis_status']);
             $sheet->setCellValue([12, $row], $r['match'] === 'match' ? 'Mos' : 'Mos emas');
 

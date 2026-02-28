@@ -14,6 +14,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use App\Services\ScheduleImportService;
+use App\Services\TelegramService;
+use App\Models\Teacher;
 
 class ReportController extends Controller
 {
@@ -4617,5 +4619,58 @@ class ReportController extends Controller
         return response()->download($temp, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
+    }
+
+    public function sendUsersWithoutRatingsTelegram(Request $request, TelegramService $telegram)
+    {
+        $request->validate([
+            'employees' => 'required|array|min:1',
+            'employees.*.employee_id' => 'required|string',
+            'employees.*.lessons' => 'required|array|min:1',
+        ]);
+
+        $sentCount = 0;
+        $failedCount = 0;
+        $noTelegramCount = 0;
+
+        foreach ($request->employees as $emp) {
+            $teacher = Teacher::where('hemis_id', $emp['employee_id'])->first();
+
+            if (!$teacher || !$teacher->telegram_chat_id) {
+                $noTelegramCount++;
+                continue;
+            }
+
+            $lines = [];
+            $lines[] = "Hurmatli {$teacher->full_name}!\n";
+            $lines[] = "Sizda quyidagi darslarda baho qo'yilmagan:\n";
+
+            foreach ($emp['lessons'] as $lesson) {
+                $date = $lesson['lesson_date'] ?? '';
+                $subject = $lesson['subject_name'] ?? '';
+                $group = $lesson['group_name'] ?? '';
+                $type = $lesson['training_type'] ?? '';
+                $lines[] = "  - {$date} | {$subject} | {$group} | {$type}";
+            }
+
+            $lines[] = "\nIltimos, tezroq baholarni kiriting.";
+            $lines[] = "\nHurmat bilan,\nRegistrator ofisi";
+
+            $message = implode("\n", $lines);
+
+            try {
+                $telegram->sendToUser($teacher->telegram_chat_id, $message);
+                $sentCount++;
+            } catch (\Throwable $e) {
+                $failedCount++;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'sent' => $sentCount,
+            'failed' => $failedCount,
+            'no_telegram' => $noTelegramCount,
+        ]);
     }
 }

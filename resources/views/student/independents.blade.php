@@ -110,7 +110,7 @@
             </div>
 
             @if($grouped->count() > 0)
-                <div class="flex flex-col gap-3 px-3 mt-1">
+                <div class="flex flex-col px-3 mt-1" style="gap:5px;">
                     @php $colorIndex = 0; @endphp
                     @foreach($grouped as $subjectName => $items)
                         @php
@@ -120,10 +120,10 @@
                             $colorIndex++;
                         @endphp
                         <button @click="openModal('{{ addslashes($subjectName) }}', {{ json_encode($groupedJson[$subjectName]) }})"
-                            class="w-full flex items-center rounded-xl shadow-sm border overflow-hidden active:scale-[0.98] transition-all duration-150 {{ $color['borderClass'] }}"
-                            style="background:{{ $color['bg'] }};">
+                            class="w-full flex items-center shadow-sm border overflow-hidden active:scale-[0.98] transition-all duration-150 {{ $color['borderClass'] }}"
+                            style="background:{{ $color['bg'] }};border-radius:0;">
                             {{-- Left accent bar --}}
-                            <div class="w-1.5 self-stretch rounded-l-xl" style="background:{{ $color['accent'] }};"></div>
+                            <div class="w-1.5 self-stretch" style="background:{{ $color['accent'] }};"></div>
                             {{-- Icon --}}
                             <div class="w-10 h-10 rounded-lg flex items-center justify-center ml-3 flex-shrink-0" style="background:{{ $color['accent'] }};">
                                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
@@ -155,18 +155,26 @@
             @endif
 
             {{-- RIGHT SLIDE MODAL --}}
-            <div x-show="modalOpen" x-cloak class="fixed inset-0 z-[9998]">
+            <style>
+                @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+                @keyframes slideOutRight { from { transform: translateX(0); } to { transform: translateX(100%); } }
+                @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+                @keyframes fadeOut { from { opacity:1; } to { opacity:0; } }
+                .mt-modal-backdrop-enter { animation: fadeIn 0.3s ease forwards; }
+                .mt-modal-backdrop-leave { animation: fadeOut 0.2s ease forwards; }
+                .mt-modal-panel-enter { animation: slideInRight 0.3s ease forwards; }
+                .mt-modal-panel-leave { animation: slideOutRight 0.2s ease forwards; }
+            </style>
+            <div x-show="modalOpen" x-cloak class="fixed inset-0 z-[9998]"
+                 style="position:fixed;top:0;left:0;right:0;bottom:0;">
                 {{-- Backdrop --}}
-                <div x-show="modalOpen"
-                     x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
-                     x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
-                     @click="closeModal()" class="absolute inset-0 bg-black/40"></div>
+                <div @click="closeModal()"
+                     :class="modalOpen ? 'mt-modal-backdrop-enter' : 'mt-modal-backdrop-leave'"
+                     style="position:absolute;inset:0;background:rgba(0,0,0,0.4);"></div>
 
                 {{-- Slide panel from RIGHT --}}
-                <div x-show="modalOpen"
-                     x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0"
-                     x-transition:leave="transition ease-in duration-200 transform" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full"
-                     class="absolute inset-y-0 right-0 w-full sm:max-w-md bg-white dark:bg-gray-800 shadow-2xl flex flex-col">
+                <div :class="modalOpen ? 'mt-modal-panel-enter' : 'mt-modal-panel-leave'"
+                     style="position:absolute;top:0;bottom:0;right:0;width:100%;max-width:28rem;background:white;box-shadow:-4px 0 25px rgba(0,0,0,0.15);display:flex;flex-direction:column;">
 
                     {{-- Modal header --}}
                     <div class="flex-shrink-0 flex items-center justify-between px-4 py-3" :style="'background:' + modalColor.accent">

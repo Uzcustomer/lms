@@ -1730,13 +1730,13 @@ class KtrController extends Controller
 
         // Fan ma'lumotlari
         $section->addText('Fan: ' . $cs->subject_name . '.', ['bold' => true, 'size' => 11], $left);
-        $section->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['size' => 11], $left);
+        $section->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['bold' => true, 'size' => 11], $left);
 
         // Yo'nalish: ... kurs semestr
         $yonalishLine = "Yo'nalish: " . $specialtyName;
         if ($levelName) $yonalishLine .= '  ' . $levelName . '-kurs';
         if ($semesterName) $yonalishLine .= '  ' . $semesterName;
-        $section->addText($yonalishLine, ['size' => 11], $left);
+        $section->addText($yonalishLine, ['bold' => true, 'size' => 11], $left);
         $section->addTextBreak(0);
 
         // Semestr uchun ajratilgan yuklama
@@ -1872,11 +1872,100 @@ class KtrController extends Controller
                 ->addText($colTotal, ['bold' => true, 'size' => 10], $cp);
         }
 
-        // ---- IMZOLAR ----
-        $section->addTextBreak(2);
-        $section->addText("Tuzuvchi o'qituvchi:  ______________  " . $teacherName, ['size' => 12], $left);
-        $section->addTextBreak(1);
-        $section->addText("Kafedra mudiri:  ______________  " . ($approverInfo['kafedra_mudiri']['name'] ?? ''), ['size' => 12], $left);
+        // =============== 3-BET: MUSTAQIL TA'LIM MAVZULARI (A4 Landscape) ===============
+        if (!empty($mustaqilTypes)) {
+            // HEMIS dan mustaqil ta'lim mavzularini olish
+            $hemisTopics = $this->fetchHemisTopics($cs);
+            $mustaqilCodes = array_keys($mustaqilTypes);
+
+            $section3 = $phpWord->addSection([
+                'orientation' => 'landscape',
+                'paperSize' => 'A4',
+                'marginTop' => 800,
+                'marginBottom' => 600,
+                'marginLeft' => 800,
+                'marginRight' => 600,
+            ]);
+
+            // Sarlavha
+            $section3->addText("MUSTAQIL TA'LIM MAVZULARI", ['bold' => true, 'size' => 14], $center);
+            $section3->addText($educationYear . " o'quv yili", ['bold' => true, 'size' => 12], $center);
+            $section3->addTextBreak(0);
+
+            // Fan ma'lumotlari
+            $section3->addText('Fan: ' . $cs->subject_name, ['bold' => true, 'size' => 11], $left);
+            $section3->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['bold' => true, 'size' => 11], $left);
+            $yonalishLine3 = "Yo'nalish: " . $specialtyName;
+            if ($levelName) $yonalishLine3 .= '  ' . $levelName . '-kurs';
+            if ($semesterName) $yonalishLine3 .= '  ' . $semesterName;
+            $section3->addText($yonalishLine3, ['bold' => true, 'size' => 11], $left);
+            $section3->addTextBreak(0);
+
+            // Mustaqil ta'lim soatlari
+            foreach ($mustaqilTypes as $code => $type) {
+                $section3->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['bold' => true, 'size' => 13], $left);
+            }
+            $section3->addTextBreak(0);
+
+            // Jadval
+            $nomerW = 700;
+            $mavzuW3 = 10000;
+            $soatW3 = 1200;
+            $adabiyotW = 2100;
+
+            $table3 = $section3->addTable([
+                'borderSize' => 6,
+                'borderColor' => '000000',
+                'cellMarginTop' => 20,
+                'cellMarginBottom' => 20,
+                'cellMarginLeft' => 40,
+                'cellMarginRight' => 40,
+            ]);
+
+            // Sarlavha qatori
+            $table3->addRow(null, ['tblHeader' => true]);
+            $table3->addCell($nomerW, $cellBorder)->addText('№', $hBold, $cp);
+            $table3->addCell($mavzuW3, $cellBorder)->addText('Mavzular nomi', $hBold, $cp);
+            $table3->addCell($soatW3, $cellBorder)->addText('Soat', $hBold, $cp);
+            $table3->addCell($adabiyotW, $cellBorder)->addText('Adabiyotlar', $hBold, $cp);
+
+            // Ma'lumotlar
+            $rowNum = 0;
+            foreach ($mustaqilCodes as $mCode) {
+                $topics = $hemisTopics[$mCode] ?? [];
+                if (!empty($topics)) {
+                    foreach ($topics as $topic) {
+                        $rowNum++;
+                        $table3->addRow();
+                        $table3->addCell($nomerW, $cellBorder)->addText($rowNum, $dStyle, $cp);
+                        $table3->addCell($mavzuW3, $cellBorder)->addText($topic['name'] ?? '', $dStyle, $lp);
+                        $table3->addCell($soatW3, $cellBorder)->addText('', $dStyle, $cp);
+                        $table3->addCell($adabiyotW, $cellBorder)->addText('', $dStyle, $lp);
+                    }
+                }
+            }
+
+            // Agar mavzular bo'sh bo'lsa
+            if ($rowNum === 0) {
+                $totalMustaqilHours = 0;
+                foreach ($mustaqilTypes as $type) {
+                    $totalMustaqilHours += $type['hours'];
+                }
+                $table3->addRow();
+                $table3->addCell($nomerW, $cellBorder)->addText('1', $dStyle, $cp);
+                $table3->addCell($mavzuW3, $cellBorder)->addText('Mavzular HEMIS tizimida topilmadi', ['size' => 10, 'italic' => true], $lp);
+                $table3->addCell($soatW3, $cellBorder)->addText($totalMustaqilHours, $dStyle, $cp);
+                $table3->addCell($adabiyotW, $cellBorder)->addText('', $dStyle, $lp);
+            }
+
+        }
+
+        // ---- IMZOLAR (oxirgi sahifada) ----
+        $lastSection = !empty($mustaqilTypes) ? $section3 : $section;
+        $lastSection->addTextBreak(2);
+        $lastSection->addText("Tuzuvchi o'qituvchi:  ______________  " . $teacherName, ['size' => 12], $left);
+        $lastSection->addTextBreak(1);
+        $lastSection->addText("Kafedra mudiri:  ______________  " . ($approverInfo['kafedra_mudiri']['name'] ?? ''), ['size' => 12], $left);
 
         // ---- FAYLNI YUKLASH ----
         $filename = 'KTR_' . preg_replace('/[^a-zA-Z0-9\x{0400}-\x{04FF}]/u', '_', $cs->subject_name) . '_' . date('Y-m-d') . '.docx';

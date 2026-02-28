@@ -4307,6 +4307,47 @@ class ReportController extends Controller
 
     public function usersWithoutRatingsData(Request $request)
     {
+        $results = $this->getUsersWithoutRatingsResults($request);
+
+        // Excel export
+        if ($request->get('export') === 'excel') {
+            return $this->exportUsersWithoutRatingsExcel($results);
+        }
+
+        // Saralash
+        $sortColumn = $request->get('sort', 'lesson_date');
+        $sortDirection = $request->get('direction', 'desc');
+
+        usort($results, function ($a, $b) use ($sortColumn, $sortDirection) {
+            $valA = $a[$sortColumn] ?? '';
+            $valB = $b[$sortColumn] ?? '';
+            $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
+            return $sortDirection === 'desc' ? -$cmp : $cmp;
+        });
+
+        // Pagination
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 50);
+        $total = count($results);
+        $offset = ($page - 1) * $perPage;
+        $pageData = array_slice($results, $offset, $perPage);
+
+        foreach ($pageData as $i => &$item) {
+            $item['row_num'] = $offset + $i + 1;
+        }
+        unset($item);
+
+        return response()->json([
+            'data' => $pageData,
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => (int) $page,
+            'last_page' => ceil($total / $perPage),
+        ]);
+    }
+
+    private function getUsersWithoutRatingsResults(Request $request): array
+    {
         $dekanFacultyIds = get_dekan_faculty_ids();
         if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
             $request->merge(['faculty' => $dekanFacultyIds[0]]);
@@ -4527,41 +4568,7 @@ class ReportController extends Controller
             }));
         }
 
-        // Saralash
-        $sortColumn = $request->get('sort', 'lesson_date');
-        $sortDirection = $request->get('direction', 'desc');
-
-        usort($results, function ($a, $b) use ($sortColumn, $sortDirection) {
-            $valA = $a[$sortColumn] ?? '';
-            $valB = $b[$sortColumn] ?? '';
-            $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
-            return $sortDirection === 'desc' ? -$cmp : $cmp;
-        });
-
-        // Excel export
-        if ($request->get('export') === 'excel') {
-            return $this->exportUsersWithoutRatingsExcel($results);
-        }
-
-        // Pagination
-        $page = $request->get('page', 1);
-        $perPage = $request->get('per_page', 50);
-        $total = count($results);
-        $offset = ($page - 1) * $perPage;
-        $pageData = array_slice($results, $offset, $perPage);
-
-        foreach ($pageData as $i => &$item) {
-            $item['row_num'] = $offset + $i + 1;
-        }
-        unset($item);
-
-        return response()->json([
-            'data' => $pageData,
-            'total' => $total,
-            'per_page' => $perPage,
-            'current_page' => (int) $page,
-            'last_page' => ceil($total / $perPage),
-        ]);
+        return $results;
     }
 
     private function exportUsersWithoutRatingsExcel(array $data)
@@ -4677,6 +4684,67 @@ class ReportController extends Controller
             'sent' => $sentCount,
             'failed' => $failedCount,
             'no_telegram' => $noTelegramCount,
+        ]);
+    }
+
+    public function sendAllUsersWithoutRatingsTelegram(Request $request)
+    {
+        $results = $this->getUsersWithoutRatingsResults($request);
+
+        if (empty($results)) {
+            return response()->json(['success' => false, 'message' => 'Ma\'lumot topilmadi'], 422);
+        }
+
+        // O'qituvchilar bo'yicha guruhlash
+        $byEmployee = [];
+        foreach ($results as $r) {
+            $empId = $r['employee_id'];
+            if (!isset($byEmployee[$empId])) {
+                $byEmployee[$empId] = [];
+            }
+            $byEmployee[$empId][] = $r;
+        }
+
+        $telegram = new TelegramService();
+        $sentCount = 0;
+        $failedCount = 0;
+        $noTelegramCount = 0;
+
+        foreach ($byEmployee as $employeeId => $lessons) {
+            $teacher = Teacher::where('hemis_id', $employeeId)->first();
+
+            if (!$teacher || !$teacher->telegram_chat_id) {
+                $noTelegramCount++;
+                continue;
+            }
+
+            $lines = [];
+            $lines[] = "Hurmatli {$teacher->full_name}!\n";
+            $lines[] = "Sizda quyidagi darslarda baho qo'yilmagan:\n";
+
+            foreach ($lessons as $lesson) {
+                $lines[] = "  - {$lesson['lesson_date']} | {$lesson['subject_name']} | {$lesson['group_name']} | {$lesson['training_type']}";
+            }
+
+            $lines[] = "\nIltimos, tezroq baholarni kiriting.";
+            $lines[] = "\nHurmat bilan,\nRegistrator ofisi";
+
+            $message = implode("\n", $lines);
+
+            try {
+                $telegram->sendToUser($teacher->telegram_chat_id, $message);
+                $sentCount++;
+            } catch (\Throwable $e) {
+                $failedCount++;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'sent' => $sentCount,
+            'failed' => $failedCount,
+            'no_telegram' => $noTelegramCount,
+            'total_teachers' => count($byEmployee),
         ]);
     }
 }

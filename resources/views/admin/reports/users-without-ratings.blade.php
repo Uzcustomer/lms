@@ -368,8 +368,11 @@
             $.ajax({
                 url: '{{ route("admin.reports.users-without-ratings.send-telegram") }}',
                 type: 'POST',
-                contentType: 'application/json',
-                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 data: JSON.stringify({ employees: employees }),
                 timeout: 120000,
                 success: function(res) {
@@ -379,8 +382,10 @@
                     alert(msg);
                     resetTelegramBtn();
                 },
-                error: function() {
-                    alert('Xatolik yuz berdi. Qayta urinib ko\'ring.');
+                error: function(xhr) {
+                    var msg = 'Xatolik yuz berdi.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
                     resetTelegramBtn();
                 }
             });

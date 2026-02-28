@@ -4621,20 +4621,26 @@ class ReportController extends Controller
         ])->deleteFileAfterSend(true);
     }
 
-    public function sendUsersWithoutRatingsTelegram(Request $request, TelegramService $telegram)
+    public function sendUsersWithoutRatingsTelegram(Request $request)
     {
-        $request->validate([
-            'employees' => 'required|array|min:1',
-            'employees.*.employee_id' => 'required|string',
-            'employees.*.lessons' => 'required|array|min:1',
-        ]);
+        $employees = $request->input('employees', []);
+        if (empty($employees) || !is_array($employees)) {
+            return response()->json(['success' => false, 'message' => 'O\'qituvchilar tanlanmagan'], 422);
+        }
 
+        $telegram = new TelegramService();
         $sentCount = 0;
         $failedCount = 0;
         $noTelegramCount = 0;
 
-        foreach ($request->employees as $emp) {
-            $teacher = Teacher::where('hemis_id', $emp['employee_id'])->first();
+        foreach ($employees as $emp) {
+            $employeeId = $emp['employee_id'] ?? null;
+            if (!$employeeId) {
+                $failedCount++;
+                continue;
+            }
+
+            $teacher = Teacher::where('hemis_id', $employeeId)->first();
 
             if (!$teacher || !$teacher->telegram_chat_id) {
                 $noTelegramCount++;

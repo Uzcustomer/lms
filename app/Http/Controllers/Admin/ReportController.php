@@ -3437,6 +3437,7 @@ class ReportController extends Controller
             'sg.subject_name',
             'sg.lesson_date',
             'sg.lesson_pair_code',
+            'sg.lesson_pair_name',
             'sg.semester_code'
         )->get();
 
@@ -3496,6 +3497,7 @@ class ReportController extends Controller
                 'group_name' => $gr->group_name ?? '-',
                 'subject_name' => $gr->subject_name ?? '-',
                 'lesson_date' => $dateStr ? date('d.m.Y', strtotime($dateStr)) : '-',
+                'lesson_pair' => $gr->lesson_pair_name ?? '-',
                 'lms_status' => 'Sababli (retake)',
                 'hemis_status' => $hemisStatus,
                 'match' => $match,
@@ -3562,7 +3564,7 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sababli check');
 
-        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Fan', 'Sana', 'LMS holati', 'HEMIS holati', 'Natija'];
+        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Fan', 'Sana', 'Juftlik', 'LMS holati', 'HEMIS holati', 'Natija'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -3573,7 +3575,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:L1')->applyFromArray($headerStyle);
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -3585,32 +3587,33 @@ class ReportController extends Controller
             $sheet->setCellValue([6, $row], $r['group_name']);
             $sheet->setCellValue([7, $row], $r['subject_name']);
             $sheet->setCellValue([8, $row], $r['lesson_date']);
-            $sheet->setCellValue([9, $row], $r['lms_status']);
-            $sheet->setCellValue([10, $row], $r['hemis_status']);
-            $sheet->setCellValue([11, $row], $r['match'] === 'match' ? 'Mos' : 'Mos emas');
+            $sheet->setCellValue([9, $row], $r['lesson_pair'] ?? '-');
+            $sheet->setCellValue([10, $row], $r['lms_status']);
+            $sheet->setCellValue([11, $row], $r['hemis_status']);
+            $sheet->setCellValue([12, $row], $r['match'] === 'match' ? 'Mos' : 'Mos emas');
 
             // Natija rangini qo'yish
             if ($r['match'] === 'match') {
-                $sheet->getStyle("K{$row}")->applyFromArray([
+                $sheet->getStyle("L{$row}")->applyFromArray([
                     'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D1FAE5']],
                     'font' => ['bold' => true, 'color' => ['rgb' => '065F46']],
                 ]);
             } else {
-                $sheet->getStyle("K{$row}")->applyFromArray([
+                $sheet->getStyle("L{$row}")->applyFromArray([
                     'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEE2E2']],
                     'font' => ['bold' => true, 'color' => ['rgb' => 'DC2626']],
                 ]);
             }
         }
 
-        $widths = [5, 30, 25, 30, 8, 15, 35, 12, 18, 18, 12];
+        $widths = [5, 30, 25, 30, 8, 15, 35, 12, 20, 18, 18, 12];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:L{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

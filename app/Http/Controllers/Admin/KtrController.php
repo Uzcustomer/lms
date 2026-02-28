@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumSubjectTeacher;
+use App\Models\CurriculumWeek;
 use App\Models\Department;
 use App\Models\KtrChangeApproval;
 use App\Models\KtrChangeRequest;
@@ -83,22 +84,33 @@ class KtrController extends Controller
         };
 
         // Natija query
-        $query = $baseQuery()
-            ->select([
-                'cs.id',
-                'cs.subject_id',
-                'cs.subject_name',
-                'cs.semester_code',
-                'cs.semester_name',
-                'cs.total_acload',
-                'cs.credit',
-                'cs.subject_details',
-                'c.education_type_name',
-                'f.name as faculty_name',
-                'sp.name as specialty_name',
-                's.level_name',
-                's.level_code',
-            ]);
+        $hasKtrTable = Schema::hasTable('ktr_plans');
+        $selectColumns = [
+            'cs.id',
+            'cs.subject_id',
+            'cs.subject_name',
+            'cs.semester_code',
+            'cs.semester_name',
+            'cs.total_acload',
+            'cs.credit',
+            'cs.subject_details',
+            'c.education_type_name',
+            'f.name as faculty_name',
+            'sp.name as specialty_name',
+            's.level_name',
+            's.level_code',
+        ];
+        if ($hasKtrTable) {
+            $selectColumns[] = DB::raw('(CASE WHEN kp.id IS NOT NULL THEN 1 ELSE 0 END) as has_ktr');
+        } else {
+            $selectColumns[] = DB::raw('0 as has_ktr');
+        }
+        $query = $baseQuery()->select($selectColumns);
+
+        // KTR plan mavjudligini tekshirish uchun left join
+        if ($hasKtrTable) {
+            $query->leftJoin('ktr_plans as kp', 'kp.curriculum_subject_id', '=', 'cs.id');
+        }
 
         if ($isFanMasuli) {
             // Fan masuli - faqat biriktirilgan fanlar
@@ -143,6 +155,14 @@ class KtrController extends Controller
         $currentSemesterDefault = $isFanMasuli ? '0' : '1';
         if ($request->get('current_semester', $currentSemesterDefault) == '1') {
             $query->where('s.current', true);
+        }
+
+        // KTR holati filtri (yaratildi/yaratilmadi)
+        $ktrStatus = $request->get('ktr_status', '');
+        if ($ktrStatus === 'created' && Schema::hasTable('ktr_plans')) {
+            $query->whereNotNull('kp.id');
+        } elseif ($ktrStatus === 'not_created' && Schema::hasTable('ktr_plans')) {
+            $query->whereNull('kp.id');
         }
 
         // Sorting
@@ -1521,15 +1541,30 @@ class KtrController extends Controller
         $levelName = '';
         $educationYear = '';
         $specialtyName = '';
+        $educationTypeName = '';
+        $educationFormName = '';
+        $weekDates = []; // hafta sanalarini saqlash
 
         if ($curriculum) {
             $educationYear = $curriculum->education_year_name ?? '';
+            $educationTypeName = $curriculum->education_type_name ?? '';
+            $educationFormName = $curriculum->education_form_name ?? '';
             $semester = DB::table('semesters')
                 ->where('curriculum_hemis_id', $curriculum->curricula_hemis_id)
                 ->where('code', $cs->semester_code)
                 ->first();
             if ($semester) {
                 $levelName = $semester->level_name ?? '';
+                // Hafta sanalarini curriculum_weeks jadvalidan olish
+                $weeks = CurriculumWeek::where('semester_hemis_id', $semester->semester_hemis_id)
+                    ->orderBy('start_date')
+                    ->get();
+                foreach ($weeks as $i => $week) {
+                    $weekNum = $i + 1;
+                    $start = $week->start_date ? $week->start_date->format('d.m') : '';
+                    $end = $week->end_date ? $week->end_date->format('d.m') : '';
+                    $weekDates[$weekNum] = $start && $end ? $start . '-' . $end : '';
+                }
             }
             $specialty = DB::table('specialties')
                 ->where('specialty_hemis_id', $curriculum->specialty_hemis_id)
@@ -1543,42 +1578,86 @@ class KtrController extends Controller
         $hoursData = $planData['hours'] ?? $planData;
         $topicsData = $planData['topics'] ?? [];
 
+        // Jami soat
+        $totalHours = 0;
+        foreach ($trainingTypes as $type) {
+            $totalHours += $type['hours'];
+        }
+
         // ---- PhpWord hujjat yaratish ----
         $phpWord = new \PhpOffice\PhpWord\PhpWord();
         $phpWord->setDefaultFontName('Times New Roman');
         $phpWord->setDefaultFontSize(12);
 
+        $user = auth()->user();
+        $teacherName = ($user instanceof Teacher) ? ($user->full_name ?? $user->name) : '';
+
+        // =============== 1-BET: TITUL SAHIFA (A4 Portrait) ===============
+        $titleSection = $phpWord->addSection([
+            'orientation' => 'portrait',
+            'paperSize' => 'A4',
+            'marginTop' => 1440,
+            'marginBottom' => 1440,
+            'marginLeft' => 1440,
+            'marginRight' => 1440,
+        ]);
+
+        $center = ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0];
+        $left = ['spaceAfter' => 0, 'spaceBefore' => 0];
+        $right = ['alignment' => 'right', 'spaceAfter' => 0, 'spaceBefore' => 0];
+
+        // Tasdiqlangan matn (o'ng tomonda)
+        $titleSection->addText('"Tasdiqlagan"', ['bold' => true, 'size' => 12], $right);
+        $titleSection->addText("O'quv ishlari bo'yicha prorektor", ['size' => 12], $right);
+        $titleSection->addText('_____________  /', ['size' => 12], $right);
+        $titleSection->addText('"____" ______________ ' . date('Y') . ' y.', ['size' => 12], $right);
+
+        $titleSection->addTextBreak(3);
+
+        // Markazda: KALENDAR-TEMATIK REJA
+        $titleSection->addText('KALENDAR-TEMATIK REJA', ['bold' => true, 'size' => 16], $center);
+        $titleSection->addTextBreak(2);
+
+        // Fan ma'lumotlari - chapda
+        $titleSection->addText('Fan: ' . $cs->subject_name, ['bold' => true, 'size' => 13], $left);
+        $titleSection->addTextBreak(0);
+        $titleSection->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: '_______________'), ['size' => 12], $left);
+        $titleSection->addText("Kafedra: " . ($approverInfo['kafedra_name'] ?: '_______________'), ['size' => 12], $left);
+        $titleSection->addText("Yo'nalish: " . ($specialtyName ?: '_______________'), ['size' => 12], $left);
+        $titleSection->addText("Ta'lim turi: " . ($educationTypeName ?: '_______________'), ['size' => 12], $left);
+        $titleSection->addText("Ta'lim shakli: " . ($educationFormName ?: '_______________'), ['size' => 12], $left);
+        $titleSection->addText('Kurs: ' . ($levelName ?: '___'), ['size' => 12], $left);
+        $titleSection->addText('Semestr: ' . $semesterName, ['size' => 12], $left);
+        $titleSection->addText("O'quv yili: " . $educationYear, ['size' => 12], $left);
+        $titleSection->addTextBreak(0);
+
+        // Soatlar
+        $titleSection->addText('Jami soat: ' . $totalHours, ['size' => 12], $left);
+        foreach ($filteredTypes as $code => $type) {
+            $titleSection->addText('  ' . $type['name'] . ': ' . $type['hours'] . ' soat', ['size' => 12], $left);
+        }
+        foreach ($mustaqilTypes as $code => $type) {
+            $titleSection->addText('  ' . $type['name'] . ': ' . $type['hours'] . ' soat', ['size' => 12], $left);
+        }
+
+        $titleSection->addTextBreak(3);
+
+        // Imzolar
+        $titleSection->addText("Tuzuvchi o'qituvchi:  ______________  " . $teacherName, ['size' => 12], $left);
+        $titleSection->addTextBreak(1);
+        $titleSection->addText("Kafedra mudiri:  ______________  " . ($approverInfo['kafedra_mudiri']['name'] ?? ''), ['size' => 12], $left);
+        $titleSection->addTextBreak(1);
+        $titleSection->addText("Fakultet dekani:  ______________  " . ($approverInfo['dekan']['name'] ?? ''), ['size' => 12], $left);
+
+        // =============== 2-BET: JADVAL (A4 Landscape) ===============
         $section = $phpWord->addSection([
             'orientation' => 'landscape',
+            'paperSize' => 'A4',
             'marginTop' => 800,
             'marginBottom' => 600,
             'marginLeft' => 800,
             'marginRight' => 600,
         ]);
-
-        $center = ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0];
-        $left = ['spaceAfter' => 0, 'spaceBefore' => 0];
-
-        // ---- SARLAVHA ----
-        $section->addText('KALENDAR-TEMATIK REJA', ['bold' => true, 'size' => 14], $center);
-        $section->addText($educationYear . " o'quv yili", ['size' => 12], $center);
-        $section->addTextBreak(1);
-
-        // Fan ma'lumotlari
-        $section->addText('Fan: ' . $cs->subject_name, ['bold' => true, 'size' => 12], $left);
-        $section->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['size' => 12], $left);
-        $section->addText("Yo'nalish: " . $specialtyName . '  ' . $levelName . '-kurs  ' . $semesterName, ['size' => 12], $left);
-        $section->addTextBreak(0);
-
-        // Semestr uchun ajratilgan soatlar
-        $section->addText($semesterName . ' uchun ajratilgan soat:', ['bold' => true, 'size' => 12], $left);
-        foreach ($filteredTypes as $code => $type) {
-            $section->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['size' => 12], $left);
-        }
-        foreach ($mustaqilTypes as $code => $type) {
-            $section->addText($type['name'] . ' - ' . $type['hours'] . ' soat.', ['size' => 12], $left);
-        }
-        $section->addTextBreak(1);
 
         // ---- JADVAL SARLAVHASI ----
         $typeNames = [];
@@ -1590,13 +1669,13 @@ class KtrController extends Controller
             ['bold' => true, 'size' => 12],
             $center
         );
+        $section->addText($cs->subject_name . '  ' . $semesterName . '  ' . $educationYear, ['size' => 11], $center);
         $section->addTextBreak(0);
 
         // ---- JADVAL ----
         $typeCount = count($typeCodes);
         $cellBorder = ['borderSize' => 6, 'borderColor' => '000000', 'valign' => 'center'];
         $hBold = ['bold' => true, 'size' => 10];
-        $hNormal = ['size' => 10];
         $dStyle = ['size' => 10];
         $cp = ['alignment' => 'center', 'spaceAfter' => 20, 'spaceBefore' => 20];
         $lp = ['spaceAfter' => 20, 'spaceBefore' => 20];
@@ -1632,7 +1711,6 @@ class KtrController extends Controller
         }
 
         // 2-qator sarlavha: (merge) | (merge) | (merge) | Ma'ruza | Amaliy | ...
-        // Vertikal yozuv: har bir harfni alohida qatorga qo'yish
         $table->addRow(null, ['tblHeader' => true]);
         $table->addCell($haftaW, array_merge($cellBorder, ['vMerge' => 'continue']));
         $table->addCell($kunlariW, array_merge($cellBorder, ['vMerge' => 'continue']));
@@ -1640,7 +1718,6 @@ class KtrController extends Controller
         foreach ($typeCodes as $code) {
             $name = $filteredTypes[$code]['name'];
             $cell = $table->addCell($soatEachW, $cellBorder);
-            // Har bir harfni alohida qator qilib vertikal yozish
             $chars = mb_str_split($name);
             foreach ($chars as $char) {
                 $cell->addText(
@@ -1658,10 +1735,11 @@ class KtrController extends Controller
             // Hafta raqami
             $table->addCell($haftaW, $cellBorder)->addText($w, $dStyle, $cp);
 
-            // Hafta kunlari (bo'sh - foydalanuvchi to'ldiradi)
-            $table->addCell($kunlariW, $cellBorder)->addText('', $dStyle, $cp);
+            // Hafta kunlari (HEMIS dan olingan sanalar)
+            $dateText = $weekDates[$w] ?? '';
+            $table->addCell($kunlariW, $cellBorder)->addText($dateText, $dStyle, $cp);
 
-            // Mashg'ulotlar mavzulari - barcha turlar bitta katakda
+            // Mashg'ulotlar mavzulari
             $topicCell = $table->addCell($mavzuW, $cellBorder);
             $hasContent = false;
             foreach ($typeCodes as $code) {
@@ -1707,10 +1785,6 @@ class KtrController extends Controller
 
         // ---- IMZOLAR ----
         $section->addTextBreak(2);
-
-        $user = auth()->user();
-        $teacherName = ($user instanceof Teacher) ? ($user->full_name ?? $user->name) : '';
-
         $section->addText("Tuzuvchi o'qituvchi:  ______________  " . $teacherName, ['size' => 12], $left);
         $section->addTextBreak(1);
         $section->addText("Kafedra mudiri:  ______________  " . ($approverInfo['kafedra_mudiri']['name'] ?? ''), ['size' => 12], $left);

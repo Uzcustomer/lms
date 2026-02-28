@@ -151,7 +151,21 @@ class ImportAttendanceControls extends Command
             ->where('education_year', $educationYear)
             ->pluck('semester_hemis_id');
 
-        $semesterStart = CurriculumWeek::whereIn('semester_hemis_id', $currentSemesterIds)
+        // Bahorgi semestrlarni ajratish — kuzgi (yanvardan OLDIN boshlangan) larni chiqarib tashlash
+        // Har bir yo'nalishning o'quv rejasi boshqa sanada boshlanadi, eng ertasini olish kerak
+        $springCutoff = ($educationYear + 1) . '-01-01';
+
+        $springSemesterIds = DB::table('curriculum_weeks')
+            ->whereIn('semester_hemis_id', $currentSemesterIds)
+            ->groupBy('semester_hemis_id')
+            ->havingRaw('MIN(start_date) >= ?', [$springCutoff])
+            ->pluck('semester_hemis_id');
+
+        $targetSemesterIds = $springSemesterIds->isNotEmpty()
+            ? $springSemesterIds
+            : $currentSemesterIds;
+
+        $semesterStart = CurriculumWeek::whereIn('semester_hemis_id', $targetSemesterIds)
             ->orderBy('start_date', 'asc')
             ->value('start_date');
 

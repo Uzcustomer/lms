@@ -95,34 +95,43 @@ class DebugTeacherJournal extends Command
         $this->newLine(2);
         $this->info("━━━ 2-MANBA: schedules fallback (SANA BO'YICHA JORIY SEMESTR) ━━━");
 
-        // curriculum_weeks dan joriy semestr boshlanish sanasini aniqlash
-        $now = now();
-        $currentWeekSemesterIds = DB::table('curriculum_weeks')
-            ->where('start_date', '<=', $now)
-            ->where('end_date', '>=', $now)
-            ->pluck('semester_hemis_id')
-            ->unique()
-            ->toArray();
+        // curriculum_weeks dan joriy bahorgi semestr boshlanish sanasini aniqlash
+        $educationYear = DB::table('semesters')
+            ->where('current', true)
+            ->orderByDesc('education_year')
+            ->value('education_year');
 
-        $semesterDetectionMethod = 'date_range';
-        if (empty($currentWeekSemesterIds)) {
-            $currentWeekSemesterIds = DB::table('curriculum_weeks')
+        $currentSemesterIds = $educationYear
+            ? DB::table('semesters')
                 ->where('current', true)
+                ->where('education_year', $educationYear)
                 ->pluck('semester_hemis_id')
-                ->unique()
-                ->toArray();
-            $semesterDetectionMethod = 'current_flag';
-        }
+                ->toArray()
+            : [];
 
-        $semesterStart = null;
-        if (!empty($currentWeekSemesterIds)) {
-            $semesterStart = DB::table('curriculum_weeks')
-                ->whereIn('semester_hemis_id', $currentWeekSemesterIds)
-                ->min('start_date');
-        }
+        // Bahorgi semestrlarni ajratish — kuzgi (yanvardan OLDIN boshlangan) larni chiqarib tashlash
+        $springCutoff = ($educationYear + 1) . '-01-01';
+
+        $springSemesterIds = !empty($currentSemesterIds)
+            ? DB::table('curriculum_weeks')
+                ->whereIn('semester_hemis_id', $currentSemesterIds)
+                ->groupBy('semester_hemis_id')
+                ->havingRaw('MIN(start_date) >= ?', [$springCutoff])
+                ->pluck('semester_hemis_id')
+                ->toArray()
+            : [];
+
+        $targetSemesterIds = !empty($springSemesterIds) ? $springSemesterIds : $currentSemesterIds;
+        $semesterDetectionMethod = !empty($springSemesterIds) ? 'spring_filter' : 'all_current';
+
+        $semesterStart = !empty($targetSemesterIds)
+            ? DB::table('curriculum_weeks')
+                ->whereIn('semester_hemis_id', $targetSemesterIds)
+                ->min('start_date')
+            : null;
 
         $this->line("  Aniqlash usuli: {$semesterDetectionMethod}");
-        $this->line("  Topilgan semester_hemis_id lar: " . count($currentWeekSemesterIds) . " ta");
+        $this->line("  Topilgan semester_hemis_id lar: " . count($targetSemesterIds) . " ta");
         $this->line("  Semestr boshlanish sanasi: " . ($semesterStart ?? 'TOPILMADI'));
 
         $scheduleGroupIds = [];

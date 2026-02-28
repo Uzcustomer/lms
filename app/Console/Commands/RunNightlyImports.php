@@ -23,9 +23,29 @@ class RunNightlyImports extends Command
 
     public function handle(TelegramService $telegram): int
     {
+        ini_set('memory_limit', '512M');
+
         $this->telegram = $telegram;
         $this->chatId = config('services.telegram.chat_id');
         $this->startTime = microtime(true);
+
+        // OOM crash himoyasi — process o'lganda Telegram ga xabar yuborish
+        register_shutdown_function(function () {
+            $error = error_get_last();
+            if ($error && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR])) {
+                $msg = "💀 nightly:run CRASH: {$error['message']}";
+                Log::critical("[NightlyImports] " . $msg);
+
+                // Telegram xabarni yangilash
+                if ($this->messageId && $this->chatId) {
+                    try {
+                        $this->updateMessage($msg);
+                    } catch (\Throwable $e) {
+                        // ignore
+                    }
+                }
+            }
+        });
 
         $dateStr = Carbon::now()->format('d.m.Y');
         $this->sendMessage("🌙 Kechki import — {$dateStr}\n\n⏳ Boshlanmoqda...");

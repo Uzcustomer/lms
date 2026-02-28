@@ -12,6 +12,26 @@ class ScheduleImportService
 {
     private bool $silent = false;
 
+    /**
+     * Temporary table yaratish — import qilingan ID larni DB da saqlash (PHP memory emas)
+     */
+    private function createTempTable(): void
+    {
+        DB::statement('CREATE TEMPORARY TABLE IF NOT EXISTS _temp_schedule_ids (hemis_id BIGINT UNSIGNED PRIMARY KEY)');
+        DB::table('_temp_schedule_ids')->truncate();
+    }
+
+    /**
+     * Sahifa natijalarini temp table ga yozish
+     */
+    private function insertTempIds(array $items): void
+    {
+        if (empty($items)) return;
+
+        $rows = array_map(fn($item) => ['hemis_id' => $item['id']], $items);
+        DB::table('_temp_schedule_ids')->insert($rows);
+    }
+
     public function importBetween(Carbon $from, Carbon $to, ?\Closure $onProgress = null): void
     {
         $message = "🟢 Jadval importi boshlandi: {$from->toDateString()} — {$to->toDateString()}";
@@ -19,10 +39,12 @@ class ScheduleImportService
         $token = config('services.hemis.token');
         $limit = 200;
         $page = 1;
-        $importedHemisIds = [];
+        $totalImported = 0;
         $failedPages = [];
         $pages = 1;
         $startTime = microtime(true);
+
+        $this->createTempTable();
 
         do {
             $response = $this->fetchPage($token, [
@@ -70,8 +92,10 @@ class ScheduleImportService
                     $schedule->restore();
                 }
                 $schedule->save();
-                $importedHemisIds[] = $item['id'];
             }
+
+            $this->insertTempIds($items);
+            $totalImported += count($items);
 
             if ($onProgress) {
                 $onProgress($page, $pages);
@@ -85,16 +109,22 @@ class ScheduleImportService
                 $this->notifyTelegram("⌛ {$remaining} sahifa qoldi, ~{$eta}s" . ($failed > 0 ? " ({$failed} xato)" : ""));
             }
 
+            // Har 10 sahifada Eloquent modellarini tozalash
+            if ($page % 10 === 0) {
+                gc_collect_cycles();
+            }
+
             $page++;
             sleep(1);
         } while ($page <= $pages);
 
-        $totalImported = count($importedHemisIds);
         $failedCount = count($failedPages);
 
         if ($failedCount === 0 && $totalImported > 0) {
             $deleted = Schedule::whereBetween('lesson_date', [$from, $to->copy()->endOfDay()])
-                ->whereNotIn('schedule_hemis_id', $importedHemisIds)
+                ->whereNotIn('schedule_hemis_id', function ($q) {
+                    $q->select('hemis_id')->from('_temp_schedule_ids');
+                })
                 ->delete();
             if ($deleted > 0) {
                 $this->notifyTelegram("🗑 {$deleted} ta eski jadval o'chirildi (HEMIS'da topilmadi)");
@@ -131,10 +161,12 @@ class ScheduleImportService
         $token = config('services.hemis.token');
         $limit = 200;
         $page = 1;
-        $importedHemisIds = [];
+        $totalImported = 0;
         $failedPages = [];
         $pages = 1;
         $startTime = microtime(true);
+
+        $this->createTempTable();
 
         do {
             $response = $this->fetchPage($token, [
@@ -173,7 +205,7 @@ class ScheduleImportService
             $items = $data['items'] ?? [];
             $pages = $data['pagination']['pageCount'] ?? 1;
             $count = count($items);
-            $total = count($importedHemisIds) + $count;
+            $totalImported += $count;
 
             if ($page === 1) {
                 $this->notifyTelegram("📄 Jami sahifalar: {$pages}");
@@ -187,15 +219,16 @@ class ScheduleImportService
                     $schedule->restore();
                 }
                 $schedule->save();
-                $importedHemisIds[] = $item['id'];
             }
 
-            if ($log) $log("  ✓ Sahifa {$page}/{$pages} — {$count} ta yozuv (jami: {$total})");
+            $this->insertTempIds($items);
+
+            if ($log) $log("  ✓ Sahifa {$page}/{$pages} — {$count} ta yozuv (jami: {$totalImported})");
 
             // Nightly wrapper ga progress yuborish
             if (app()->bound('nightly.progress')) {
                 $nightlyCallback = app('nightly.progress');
-                $nightlyCallback("{$page}/{$pages} sahifa ({$total} ta yozuv)");
+                $nightlyCallback("{$page}/{$pages} sahifa ({$totalImported} ta yozuv)");
             }
 
             if ($page % 50 === 0 || $page === $pages) {
@@ -206,17 +239,23 @@ class ScheduleImportService
                 $this->notifyTelegram("⌛ {$remaining} sahifa qoldi, ~{$eta}s" . ($failed > 0 ? " ({$failed} xato)" : ""));
             }
 
+            // Har 10 sahifada Eloquent modellarini tozalash
+            if ($page % 10 === 0) {
+                gc_collect_cycles();
+            }
+
             $page++;
             sleep(1);
         } while ($page <= $pages);
 
-        $totalImported = count($importedHemisIds);
         $failedCount = count($failedPages);
 
         // Faqat BARCHA sahifalar muvaffaqiyatli bo'lganda eski yozuvlarni o'chirish
         if ($failedCount === 0 && $totalImported > 0) {
             $deleted = Schedule::where('education_year_code', $educationYearCode)
-                ->whereNotIn('schedule_hemis_id', $importedHemisIds)
+                ->whereNotIn('schedule_hemis_id', function ($q) {
+                    $q->select('hemis_id')->from('_temp_schedule_ids');
+                })
                 ->delete();
             if ($deleted > 0) {
                 $this->notifyTelegram("🗑 {$deleted} ta eski jadval o'chirildi (HEMIS'da topilmadi)");

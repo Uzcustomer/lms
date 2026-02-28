@@ -1018,7 +1018,10 @@ class StudentController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
+        $semesterCode = $student->semester_code;
+
         $independents = Independent::where('group_hemis_id', $student->group_id)
+            ->where('semester_code', $semesterCode)
             ->orderBy('deadline', 'asc')
             ->get()
             ->map(function ($independent) use ($student, $hour, $minute, $mtMaxResubmissions, $educationYearCode) {

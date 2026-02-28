@@ -90,6 +90,10 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                        <div class="filter-item" style="flex: 1; min-width: 260px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> O'qituvchi</label>
+                            <select id="employee" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
                         <div class="filter-item" style="min-width: 140px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#16a34a;"></span> Dars ochilgan</label>
                             <select id="lesson_opened" class="select2" style="width: 100%;">
@@ -196,6 +200,7 @@
                 group: $('#group').val() || '',
                 department: $('#department').val() || '',
                 subject: $('#subject').val() || '',
+                employee: $('#employee').val() || '',
                 lesson_opened: $('#lesson_opened').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
                 per_page: $('#per_page').val() || 50,
@@ -336,10 +341,11 @@
             function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
             function rSubj() { rd('#subject'); pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject'); }
             function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
+            function rEmp() { rd('#employee'); pd('{{ route("admin.reports.users-without-ratings.get-employees") }}', fp(), '#employee'); }
 
-            $('#education_type').change(function() { rSpec(); rSubj(); rGrp(); });
-            $('#faculty').change(function() { rSpec(); rSubj(); rGrp(); });
-            $('#department').change(function() { rSubj(); rGrp(); });
+            $('#education_type').change(function() { rSpec(); rSubj(); rGrp(); rEmp(); });
+            $('#faculty').change(function() { rSpec(); rSubj(); rGrp(); rEmp(); });
+            $('#department').change(function() { rSubj(); rGrp(); rEmp(); });
             $('#specialty').change(function() { rGrp(); });
             $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("admin.journal.get-semesters") }}', {level_code:lc}, '#semester_code'); rSubj(); rGrp(); });
             $('#semester_code').change(function() { rSubj(); rGrp(); });
@@ -351,6 +357,7 @@
             pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code');
             pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject');
             pd('{{ route("admin.journal.get-groups") }}', fp(), '#group');
+            pd('{{ route("admin.reports.users-without-ratings.get-employees") }}', fp(), '#employee');
         });
     </script>
 

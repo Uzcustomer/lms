@@ -41,5 +41,9 @@ Schedule::command('teachers:send-group-summary --detail')->dailyAt('22:00');
 // Ertasi kuni ertalab 08:30 da kechagi kunning yakuniy hisoboti (faqat o'qituvchilar kesimi)
 Schedule::command('teachers:send-final-daily-report')->dailyAt('08:30');
 
+// Dars ochilishi eslatmalari: baho qo'yilsa tasdiq, 1 kun qolsa eslatma (kuniga 2 marta)
+Schedule::command('teachers:send-lesson-opening-reminders')->dailyAt('09:00');
+Schedule::command('teachers:send-lesson-opening-reminders')->dailyAt('18:00');
+
 // 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
 // baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)

@@ -248,7 +248,7 @@ class ReportController extends Controller
         // 4-QADAM: Jurnal formulasi bo'yicha hisoblash
         // a) Baho date_pair larini columns ga birlashtirish (jurnal kabi fallback)
         // b) Baholarni kun bo'yicha guruhlash
-        $cutoffDate = $dateTo ?? Carbon::now('Asia/Tashkent')->subDay()->startOfDay()->format('Y-m-d');
+        $cutoffDate = $dateTo ?? Carbon::now('Asia/Tashkent')->format('Y-m-d');
 
         $gradesByDay = [];      // [student|subject|date] => [grade1, ...]
         $studentSubjects = [];  // [student|subject] => info

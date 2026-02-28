@@ -43,6 +43,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/subjects/{subjectId}/mt-submissions', [StudentApiController::class, 'mtSubmissions']);
             Route::get('/pending-lessons', [StudentApiController::class, 'pendingLessons']);
             Route::get('/attendance', [StudentApiController::class, 'attendance']);
+            Route::get('/contract', [StudentApiController::class, 'contract']);
 
             // Profile completion
             Route::post('/complete-profile/phone', [StudentApiController::class, 'savePhone']);

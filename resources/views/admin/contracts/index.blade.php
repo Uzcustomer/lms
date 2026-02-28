@@ -38,13 +38,14 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
                             <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="max-width:130px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Semestr</label>
-                            <select id="semester" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
                         <div class="filter-item">
-                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Shartnoma turi</label>
+                            <select id="contract_type" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($contractTypes as $ct)
+                                    <option value="{{ $ct->edu_contract_type_code }}">{{ $ct->edu_contract_type_name }}</option>
+                                @endforeach
+                            </select>
                         </div>
                     </div>
                     <div class="filter-row">
@@ -57,8 +58,12 @@
                                 @endforeach
                             </select>
                         </div>
+                        <div class="filter-item" style="max-width:200px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#ec4899;"></span> Qidiruv</label>
+                            <input type="text" id="search_input" placeholder="FIO yoki shartnoma raqami" class="filter-input">
+                        </div>
                         <div class="filter-item" style="max-width:180px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#ec4899;"></span> Talaba ID</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Talaba ID</label>
                             <input type="text" id="student_id" placeholder="Talaba HEMIS ID" class="filter-input">
                         </div>
                         <div class="filter-item" style="max-width:90px;">
@@ -77,8 +82,8 @@
                                     Excel
                                 </button>
                                 <button type="button" id="btn-search" class="btn-calc" onclick="loadContracts(1)">
-                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                                    Hisoblash
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    Qidirish
                                 </button>
                             </div>
                         </div>
@@ -89,7 +94,7 @@
                 <div id="result-area">
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
+                        <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Qidirish" tugmasini bosing</p>
                         <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Kontraktlar ro'yxatini ko'rish uchun</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
@@ -100,6 +105,7 @@
                     <div id="table-area" style="display:none;">
                         <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                             <span id="total-badge" class="badge" style="background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                            <span id="sum-badge" class="badge" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
                         </div>
                         <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
@@ -107,13 +113,16 @@
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
-                                        <th>ID</th>
-                                        <th>Talaba ID</th>
-                                        <th>Kalit</th>
-                                        <th>O'quv yili</th>
-                                        <th>Ma'lumotlar</th>
-                                        <th>Yaratilgan</th>
-                                        <th>Yangilangan</th>
+                                        <th>Talaba</th>
+                                        <th>Shartnoma</th>
+                                        <th>Shartnoma turi</th>
+                                        <th>Fakultet / Yo'nalish</th>
+                                        <th>Kurs</th>
+                                        <th>Ta'lim shakli</th>
+                                        <th>Kontrakt summasi</th>
+                                        <th>To'langan</th>
+                                        <th>Qoldiq</th>
+                                        <th>Holat</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -144,6 +153,12 @@
             return null;
         }
 
+        function formatMoney(val) {
+            if (!val && val !== 0) return '-';
+            var n = parseFloat(val);
+            return n.toLocaleString('uz-UZ', {minimumFractionDigits: 0, maximumFractionDigits: 0}) + ' so\'m';
+        }
+
         function formatTimestamp(ts) {
             if (!ts) return '-';
             var d = new Date(ts * 1000);
@@ -159,9 +174,9 @@
                 _education_type: $('#education_type').val() || '',
                 _department: $('#faculty').val() || '',
                 _specialty: $('#specialty').val() || '',
-                _group: $('#group').val() || '',
                 _level: $('#level_code').val() || '',
-                _semester: $('#semester').val() || ''
+                _contract_type: $('#contract_type').val() || '',
+                search: $('#search_input').val() || ''
             };
         }
 
@@ -199,6 +214,13 @@
                     allItems = items;
 
                     $('#total-badge').text('Jami: ' + (pagination.totalCount || items.length) + ' ta kontrakt');
+
+                    var totalSum = 0;
+                    for (var i = 0; i < items.length; i++) {
+                        totalSum += parseFloat(items[i].edu_contract_sum || 0);
+                    }
+                    $('#sum-badge').text('Sahifa summasi: ' + formatMoney(totalSum));
+
                     $('#time-badge').text(elapsed + ' soniyada yuklandi');
                     renderTable(items);
                     renderPagination(pagination);
@@ -211,8 +233,6 @@
                     var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
                     if (xhr.responseJSON && xhr.responseJSON.error) {
                         msg += ' (' + xhr.responseJSON.error + ')';
-                    } else if (xhr.status) {
-                        msg += ' (HTTP ' + xhr.status + ')';
                     }
                     $('#empty-state').show().find('p:first').text(msg);
                     allItems = [];
@@ -225,27 +245,38 @@
             var limit = parseInt($('#per_page').val()) || 50;
             for (var i = 0; i < items.length; i++) {
                 var item = items[i];
+                var unpaid = parseFloat(item.unpaid_credit_amount || 0);
+
                 html += '<tr>';
                 html += '<td class="td-num">' + (i + 1 + ((currentPage - 1) * limit)) + '</td>';
-                html += '<td style="color:#64748b;">' + esc(String(item.id)) + '</td>';
-                html += '<td><span class="badge badge-indigo">' + esc(String(item._student)) + '</span></td>';
-                html += '<td><span class="text-cell" style="font-weight:600;color:#0f172a;">' + esc(item.key) + '</span></td>';
-                html += '<td><span class="badge badge-violet">' + esc(String(item._education_year)) + '</span></td>';
                 html += '<td>';
-                if (item._data && item._data.length > 0) {
-                    for (var d = 0; d < item._data.length; d++) {
-                        var attr = item._data[d];
-                        var keys = Object.keys(attr);
-                        for (var k = 0; k < keys.length; k++) {
-                            html += '<span class="data-badge">' + esc(keys[k]) + ': ' + esc(String(attr[keys[k]])) + '</span>';
-                        }
-                    }
-                } else {
-                    html += '-';
-                }
+                html += '<div style="font-weight:600;color:#0f172a;font-size:12.5px;">' + esc(item.full_name) + '</div>';
+                html += '<div style="font-size:11px;color:#64748b;">ID: ' + esc(String(item.student_hemis_id)) + '</div>';
                 html += '</td>';
-                html += '<td style="color:#64748b;font-size:12px;white-space:nowrap;">' + formatTimestamp(item.created_at) + '</td>';
-                html += '<td style="color:#64748b;font-size:12px;white-space:nowrap;">' + formatTimestamp(item.updated_at) + '</td>';
+                html += '<td><span class="text-cell" style="font-weight:600;color:#2b5ea7;">' + esc(item.contract_number) + '</span></td>';
+                html += '<td><span class="badge badge-cyan">' + esc(item.edu_contract_type_name) + '</span></td>';
+                html += '<td>';
+                html += '<div style="font-size:12px;font-weight:500;">' + esc(item.faculty_name) + '</div>';
+                html += '<div style="font-size:11px;color:#64748b;">' + esc(item.edu_speciality_name) + '</div>';
+                html += '</td>';
+                html += '<td style="text-align:center;"><span class="badge badge-violet">' + esc(item.edu_course) + '</span></td>';
+                html += '<td><span class="badge badge-blue">' + esc(item.edu_form) + '</span></td>';
+                html += '<td style="text-align:right;font-weight:600;white-space:nowrap;">' + formatMoney(item.edu_contract_sum) + '</td>';
+                html += '<td style="text-align:right;color:#16a34a;font-weight:600;white-space:nowrap;">' + formatMoney(item.paid_credit_amount) + '</td>';
+
+                if (unpaid < 0) {
+                    html += '<td style="text-align:right;color:#dc2626;font-weight:600;white-space:nowrap;">' + formatMoney(unpaid) + '</td>';
+                } else {
+                    html += '<td style="text-align:right;color:#16a34a;font-weight:600;white-space:nowrap;">' + formatMoney(unpaid) + '</td>';
+                }
+
+                var statusClass = 'badge-green';
+                if (item.status && (item.status.toLowerCase().includes('отклон') || item.status_id === 17)) {
+                    statusClass = 'badge-red';
+                } else if (item.status && item.status.toLowerCase().includes('ожид')) {
+                    statusClass = 'badge-yellow';
+                }
+                html += '<td><span class="badge ' + statusClass + '">' + esc(item.status) + '</span></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -270,10 +301,23 @@
 
         function downloadExcel() {
             if (allItems.length === 0) return;
-            var csv = '\uFEFF#,ID,Talaba ID,Kalit,O\'quv yili,Yaratilgan,Yangilangan\n';
+            var csv = '\uFEFF#,Talaba,HEMIS ID,Shartnoma raqami,Shartnoma turi,Fakultet,Yo\'nalish,Kurs,Ta\'lim shakli,Kontrakt summasi,To\'langan,Qoldiq,Holat\n';
             for (var i = 0; i < allItems.length; i++) {
                 var item = allItems[i];
-                csv += (i+1) + ',' + (item.id||'') + ',' + (item._student||'') + ',"' + (item.key||'').replace(/"/g,'""') + '",' + (item._education_year||'') + ',' + formatTimestamp(item.created_at) + ',' + formatTimestamp(item.updated_at) + '\n';
+                csv += (i+1) + ',';
+                csv += '"' + (item.full_name || '').replace(/"/g, '""') + '",';
+                csv += (item.student_hemis_id || '') + ',';
+                csv += '"' + (item.contract_number || '').replace(/"/g, '""') + '",';
+                csv += '"' + (item.edu_contract_type_name || '').replace(/"/g, '""') + '",';
+                csv += '"' + (item.faculty_name || '').replace(/"/g, '""') + '",';
+                csv += '"' + (item.edu_speciality_name || '').replace(/"/g, '""') + '",';
+                csv += '"' + (item.edu_course || '').replace(/"/g, '""') + '",';
+                csv += '"' + (item.edu_form || '').replace(/"/g, '""') + '",';
+                csv += (item.edu_contract_sum || 0) + ',';
+                csv += (item.paid_credit_amount || 0) + ',';
+                csv += (item.unpaid_credit_amount || 0) + ',';
+                csv += '"' + (item.status || '').replace(/"/g, '""') + '"';
+                csv += '\n';
             }
             var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
             var link = document.createElement('a');
@@ -288,8 +332,7 @@
                 .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
 
-            // Enter tugmasini bosib qidirish
-            $('#student_id').on('keypress', function(e) {
+            $('#student_id, #search_input').on('keypress', function(e) {
                 if (e.which === 13) loadContracts(1);
             });
 
@@ -307,20 +350,14 @@
             function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
 
             function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
-            function rSem() { rd('#semester'); pd('{{ route("admin.journal.get-semesters") }}', { level_code: $('#level_code').val() || '' }, '#semester'); }
-            function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
+            function rGrp() {}
 
-            $('#education_type').change(function() { rSpec(); rGrp(); });
-            $('#faculty').change(function() { rSpec(); rGrp(); });
-            $('#specialty').change(function() { rGrp(); });
-            $('#level_code').change(function() { rSem(); rGrp(); });
-            $('#semester').change(function() { rGrp(); });
+            $('#education_type').change(function() { rSpec(); });
+            $('#faculty').change(function() { rSpec(); });
 
             // Boshlang'ich yuklash
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
-            pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester');
-            pd('{{ route("admin.journal.get-groups") }}', fp(), '#group');
         });
     </script>
 
@@ -371,10 +408,13 @@
         .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
         .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
+        .badge-blue { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; white-space: nowrap; }
+        .badge-cyan { background: #ecfeff; color: #0e7490; border: 1px solid #a5f3fc; white-space: nowrap; }
+        .badge-green { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; white-space: nowrap; }
+        .badge-red { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; white-space: nowrap; }
+        .badge-yellow { background: #fefce8; color: #a16207; border: 1px solid #fef08a; white-space: nowrap; }
 
         .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
-
-        .data-badge { display: inline-block; padding: 2px 8px; margin: 2px 3px; background: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; font-size: 11px; font-weight: 500; white-space: nowrap; }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }

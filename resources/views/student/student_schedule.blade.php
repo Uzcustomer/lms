@@ -24,7 +24,7 @@
         <div class="bg-white dark:bg-gray-800 shadow-sm">
             <div class="px-4 py-1.5">
                 {{-- Title + Semester --}}
-                <div class="flex items-center justify-between mb-1">
+                <div class="flex items-center justify-between mb-[10px]">
                     <h1 class="text-sm font-bold text-gray-800 dark:text-gray-100">Dars jadvali</h1>
                     <div class="relative">
                         <button @click="semesterOpen = !semesterOpen" class="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
@@ -110,7 +110,7 @@
                 @php $color = $dayColors[$dayEn]; @endphp
                 <div>
                     {{-- Kun sarlavhasi --}}
-                    <div class="flex items-center gap-2 mb-1.5 px-1">
+                    <div class="flex items-center justify-center gap-2 mb-1.5 px-1">
                         <div class="w-2 h-2 rounded-full {{ $color['dot'] }}"></div>
                         <h3 class="text-xs font-bold uppercase tracking-wider {{ $color['text'] }}">
                             {{ $dayUz }}

@@ -76,7 +76,9 @@ class SendAttendanceGroupSummary extends Command
         // 1.6-QADAM: Bugungi baholar — avval crondagi live import muvaffaqiyatini tekshirish
         // Live import har 30 daqiqada ishlaydi (bootstrap/app.php), shuning uchun odatda tayyor bo'ladi
         $liveImportSuccess = Cache::get('live_import_last_success');
-        $liveImportRecent = $liveImportSuccess && Carbon::parse($liveImportSuccess)->diffInMinutes(Carbon::now()) <= 60;
+        // abs() kerak — Carbon 3 da diffInMinutes o'tgan vaqt uchun manfiy qiymat qaytaradi
+        // Masalan: 14:32 → 22:00 = -448 daqiqa. abs() siz -448 <= 60 = true bo'lib, yangilash o'tkaziladi
+        $liveImportRecent = $liveImportSuccess && abs(Carbon::parse($liveImportSuccess)->diffInMinutes(Carbon::now())) <= 60;
 
         if ($liveImportRecent) {
             $reporter->startStep('Baholar: crondagi live import tayyor', 'Baholar mavjud (oxirgi: ' . $liveImportSuccess . ')');

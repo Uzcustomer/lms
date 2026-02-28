@@ -386,16 +386,7 @@
             </div>
 
             {{-- SECTION: KONTRAKT TO'LOV MUDDATLARI --}}
-            <div x-data="{
-                open: true,
-                cutoffs: @json($contractCutoffs ?? []),
-                addRow() {
-                    this.cutoffs.push({ deadline: '', percent: '' });
-                },
-                removeRow(index) {
-                    if (this.cutoffs.length > 1) this.cutoffs.splice(index, 1);
-                }
-            }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+            <div x-data="contractCutoffsApp()" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
                 <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #fff7ed, #ffedd5); border: none; cursor: pointer; border-bottom: 1px solid #fdba74;">
                     <div style="display: flex; align-items: center; gap: 14px;">
                         <div style="width: 44px; height: 44px; min-width: 44px; background: linear-gradient(135deg, #f97316, #ea580c); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(249,115,22,0.3);">
@@ -455,6 +446,20 @@
                     </form>
                 </div>
             </div>
+            <script>
+                function contractCutoffsApp() {
+                    return {
+                        open: true,
+                        cutoffs: @json($contractCutoffs ?? []),
+                        addRow() {
+                            this.cutoffs.push({ deadline: '', percent: '' });
+                        },
+                        removeRow(index) {
+                            if (this.cutoffs.length > 1) this.cutoffs.splice(index, 1);
+                        }
+                    };
+                }
+            </script>
 
             {{-- SECTION 3: SINXRONIZATSIYA --}}
             <div x-data="{ open: true }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">

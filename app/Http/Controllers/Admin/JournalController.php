@@ -2756,6 +2756,12 @@ class JournalController extends Controller
             $query->whereIn('cs.subject_id', $teacherSubjectIds);
         }
 
+        // Baho qo'yilmaydigan fanlarni dropdown'dan chiqarish
+        $excludedSubjectNames = config('app.excluded_rating_subject_names', []);
+        if (!empty($excludedSubjectNames)) {
+            $query->whereNotIn('cs.subject_name', $excludedSubjectNames);
+        }
+
         return $query->select('cs.subject_id', 'cs.subject_name')
             ->groupBy('cs.subject_id', 'cs.subject_name')
             ->orderBy('cs.subject_name')

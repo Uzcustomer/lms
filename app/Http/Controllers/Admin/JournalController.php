@@ -1535,6 +1535,9 @@ class JournalController extends Controller
 
         $newRetakeGrade = round($originalEnteredGrade * $newPercentage, 2);
 
+        // retake_grade 100 dan oshmasligi kerak
+        $newRetakeGrade = min(100, $newRetakeGrade);
+
         // Agar baho o'zgargan bo'lsa — yangilash
         if (abs($newRetakeGrade - $grade->retake_grade) > 0.01) {
             DB::table('student_grades')
@@ -4249,7 +4252,7 @@ class JournalController extends Controller
                 }
             }
             $jn = $totalJbDaysForAverage > 0
-                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                ? min(100, round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP))
                 : 0;
 
             // MT hisoblash
@@ -4262,12 +4265,12 @@ class JournalController extends Controller
                 $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
             }
             $mt = $totalMtDays > 0
-                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                ? min(100, round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP))
                 : 0;
 
             // Manual MT override
             if (isset($manualMtGrades[$hemisId])) {
-                $mt = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+                $mt = min(100, round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP));
             }
 
             $studentGradeSnapshots[$hemisId] = ['jn' => $jn, 'mt' => $mt];
@@ -4610,7 +4613,7 @@ class JournalController extends Controller
                 }
             }
             $jn = $totalJbDaysForAverage > 0
-                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                ? min(100, round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP))
                 : 0;
 
             // MT hisoblash
@@ -4623,11 +4626,11 @@ class JournalController extends Controller
                 $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
             }
             $mt = $totalMtDays > 0
-                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                ? min(100, round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP))
                 : 0;
 
             if (isset($manualMtGrades[$hemisId])) {
-                $mt = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+                $mt = min(100, round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP));
             }
 
             $insertData[] = [
@@ -5564,7 +5567,7 @@ class JournalController extends Controller
                 }
             }
             $calculatedJnGrades[$hemisId] = $totalJbDaysForAverage > 0
-                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                ? min(100, round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP))
                 : 0;
 
             $mtDailySum = 0;
@@ -5576,11 +5579,11 @@ class JournalController extends Controller
                 $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
             }
             $calculatedMtGrades[$hemisId] = $totalMtDays > 0
-                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                ? min(100, round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP))
                 : 0;
 
             if (isset($manualMtGrades[$hemisId])) {
-                $calculatedMtGrades[$hemisId] = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+                $calculatedMtGrades[$hemisId] = min(100, round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP));
             }
         }
 

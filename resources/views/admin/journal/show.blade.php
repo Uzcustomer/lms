@@ -1085,7 +1085,7 @@
                                                 $hasRetakeInDay[$date] = count($dayGrades) > 0 && collect($dayGrades)->contains(fn($g) => $g['is_retake']);
                                             }
                                             $jnAverage = $totalJbDaysForAverage > 0
-                                                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                                                ? min(100, round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP))
                                                 : 0;
 
                                             $studentMtGrades = $mtGrades[$student->hemis_id] ?? [];
@@ -1098,7 +1098,7 @@
                                                 $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                             }
                                             $mtAverage = $totalMtDays > 0
-                                                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                                                ? min(100, round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP))
                                                 : 0;
                                             // Manual MT grade overrides lesson-based average
                                             $manualMt = $manualMtGrades[$student->hemis_id] ?? null;
@@ -1272,7 +1272,7 @@
                                                 }
                                             }
                                             $jnAverage = $totalJbDaysForAverage > 0
-                                                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                                                ? min(100, round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP))
                                                 : 0;
 
                                             $studentMtGrades = $mtGrades[$student->hemis_id] ?? [];
@@ -1285,7 +1285,7 @@
                                                 $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                                             }
                                             $mtAverage = $totalMtDays > 0
-                                                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                                                ? min(100, round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP))
                                                 : 0;
                                             // Manual MT grade overrides lesson-based average
                                             $manualMt = $manualMtGrades[$student->hemis_id] ?? null;

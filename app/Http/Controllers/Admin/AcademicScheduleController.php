@@ -936,7 +936,7 @@ class AcademicScheduleController extends Controller
                     }
                 }
                 $student->jn = $totalJbDaysForAverage > 0
-                    ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                    ? min(100, round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP))
                     : 0;
 
                 // MT hisoblash
@@ -949,12 +949,12 @@ class AcademicScheduleController extends Controller
                     $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
                 }
                 $mt = $totalMtDays > 0
-                    ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                    ? min(100, round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP))
                     : 0;
 
                 // Manual MT override
                 if (isset($manualMtGrades[$hemisId])) {
-                    $mt = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+                    $mt = min(100, round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP));
                 }
 
                 $student->mt = $mt;

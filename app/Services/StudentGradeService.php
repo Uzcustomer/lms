@@ -104,7 +104,7 @@ class StudentGradeService
 
 
         return [
-            'average' => round($totalAverage / $scheduledDaysCount, 2),
+            'average' => min(100, round($totalAverage / $scheduledDaysCount, 2)),
             'days' => $scheduledDaysCount
         ];
 

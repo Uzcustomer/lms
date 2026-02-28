@@ -407,7 +407,7 @@ class StudentApiController extends Controller
                 }
             }
             $jnAverage = $totalJbDaysForAverage > 0
-                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                ? min(100, round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP))
                 : 0;
 
             // MT (Mustaqil ta'lim)
@@ -448,7 +448,7 @@ class StudentApiController extends Controller
                 $mtDailySum += round(array_sum($dayGrades) / $pairsInDay, 0, PHP_ROUND_HALF_UP);
             }
             $mtAverage = $totalMtDays > 0
-                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                ? min(100, round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP))
                 : 0;
 
             // Manual MT grade override
@@ -461,7 +461,7 @@ class StudentApiController extends Controller
                 ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
                 ->value('grade');
             if ($manualMt !== null) {
-                $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
+                $mtAverage = min(100, round((float) $manualMt, 0, PHP_ROUND_HALF_UP));
             }
 
             // ON, OSKI, Test, Quiz (100, 101, 102, 103)

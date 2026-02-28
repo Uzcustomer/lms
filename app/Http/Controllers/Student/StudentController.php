@@ -530,7 +530,7 @@ class StudentController extends Controller
                 }
             }
             $jnAverage = $totalJbDaysForAverage > 0
-                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                ? min(100, round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP))
                 : 0;
 
             // JB daily data for horizontal view
@@ -595,7 +595,7 @@ class StudentController extends Controller
                 $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
             }
             $mtAverage = $totalMtDays > 0
-                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                ? min(100, round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP))
                 : 0;
 
             // MT daily data for horizontal view
@@ -626,7 +626,7 @@ class StudentController extends Controller
                 ->first();
             $manualMt = $manualMtRow?->grade;
             if ($manualMt !== null) {
-                $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
+                $mtAverage = min(100, round((float) $manualMt, 0, PHP_ROUND_HALF_UP));
             }
 
             // ---- ON, OSKI, Test, Quiz (in-memory filter) ----

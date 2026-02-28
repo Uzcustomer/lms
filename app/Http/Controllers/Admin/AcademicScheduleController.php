@@ -15,6 +15,7 @@ use App\Models\Semester;
 use App\Models\Specialty;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\ContractList;
 use App\Models\DocumentVerification;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnStudentGrade;
@@ -1129,22 +1130,40 @@ class AcademicScheduleController extends Controller
             $cellFont = ['size' => 10];
             $cellFontRed = ['size' => 10, 'color' => 'FF0000'];
             $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
-            $groupSeparatorBg = ['bgColor' => 'E2EFDA', 'valign' => 'center', 'gridSpan' => 7];
+            $groupSeparatorBg = ['bgColor' => 'E2EFDA', 'valign' => 'center', 'gridSpan' => 8];
             $cellCenter = ['alignment' => Jc::CENTER];
             $cellLeft = ['alignment' => Jc::START];
+            $cellFontOrange = ['size' => 10, 'color' => 'FF8C00'];
 
             $headerRow = $table->addRow(400);
             $headerRow->addCell(600, $headerBg)->addText('№', $headerFont, $cellCenter);
-            $headerRow->addCell(4500, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
+            $headerRow->addCell(4000, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
             $headerRow->addCell(1800, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
-            $headerRow->addCell(1200, $headerBg)->addText('JN', $headerFont, $cellCenter);
-            $headerRow->addCell(1200, $headerBg)->addText('MT', $headerFont, $cellCenter);
-            $headerRow->addCell(1500, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
-            $headerRow->addCell(2000, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
+            $headerRow->addCell(1000, $headerBg)->addText('JN', $headerFont, $cellCenter);
+            $headerRow->addCell(1000, $headerBg)->addText('MT', $headerFont, $cellCenter);
+            $headerRow->addCell(1300, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
+            $headerRow->addCell(1300, $headerBg)->addText('Kontrakt', $headerFont, $cellCenter);
+            $headerRow->addCell(1800, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
 
             // Talabalar ro'yxati - barcha guruhlar uchun davom etadi
             $rowNum = 1;
             $multipleGroups = count($subjectData['entries']) > 1;
+
+            // Kontrakt to'lov muddatlari va minimal foiz chegaralari
+            $contractCutoffs = [
+                '2025-10-01 23:59:59' => 25,
+                '2026-01-01 23:59:59' => 50,
+                '2026-03-01 23:59:59' => 75,
+                '2026-05-01 23:59:59' => 100,
+            ];
+            $now = time();
+            $contractThreshold = 100; // default: barcha muddatlar o'tgan
+            foreach ($contractCutoffs as $deadline => $requiredPercent) {
+                if ($now <= strtotime($deadline)) {
+                    $contractThreshold = $requiredPercent;
+                    break;
+                }
+            }
 
             foreach ($subjectData['entries'] as $entry) {
                 $entryGroup = $entry['group'];
@@ -1172,6 +1191,23 @@ class AcademicScheduleController extends Controller
                     $totalAcload = $entrySubject->total_acload ?: 1;
                     $qoldiq = round($qoldirgan * 100 / $totalAcload, 2);
 
+                    // Kontrakt qarzdorligi tekshiruvi
+                    $contract = ContractList::where('student_hemis_id', $student->hemis_id)
+                        ->where('year', '2025')
+                        ->where('edu_year', 'like', '2025-2026%')
+                        ->first();
+
+                    $contractPercent = 100; // default: kontrakt topilmasa ruxsat
+                    $contractText = '-';
+                    $contractFailed = false;
+                    if ($contract && $contract->edu_contract_sum > 0) {
+                        $contractPercent = round(($contract->paid_credit_amount / $contract->edu_contract_sum) * 100);
+                        $contractText = $contractPercent . '%';
+                        if ($contractPercent < $contractThreshold) {
+                            $contractFailed = true;
+                        }
+                    }
+
                     $holat = 'Ruxsat';
                     $jnFailed = false;
                     $mtFailed = false;
@@ -1189,27 +1225,42 @@ class AcademicScheduleController extends Controller
                         $davomatFailed = true;
                         $holat = 'X';
                     }
+                    // Kontrakt: "X" emas, "Shartli" holat beradi
+                    if ($contractFailed && $holat === 'Ruxsat') {
+                        $holat = 'Shartli';
+                    }
 
                     $dataRow = $table->addRow();
                     $dataRow->addCell(600)->addText($rowNum, $cellFont, $cellCenter);
-                    $dataRow->addCell(4500)->addText($student->student_name, $cellFont, $cellLeft);
+                    $dataRow->addCell(4000)->addText($student->student_name, $cellFont, $cellLeft);
                     $dataRow->addCell(1800)->addText($student->student_id, $cellFont, $cellCenter);
 
-                    $jnCell = $dataRow->addCell(1200);
+                    $jnCell = $dataRow->addCell(1000);
                     $jnCell->addText($student->jn ?? '0', $jnFailed ? $cellFontRed : $cellFont, $cellCenter);
 
-                    $mtCell = $dataRow->addCell(1200);
+                    $mtCell = $dataRow->addCell(1000);
                     $mtCell->addText($student->mt ?? '0', $mtFailed ? $cellFontRed : $cellFont, $cellCenter);
 
-                    $davomatCell = $dataRow->addCell(1500);
+                    $davomatCell = $dataRow->addCell(1300);
                     $davomatCell->addText(
                         ($qoldiq != 0 ? $qoldiq . '%' : '0%'),
                         $davomatFailed ? $cellFontRed : $cellFont,
                         $cellCenter
                     );
 
-                    $holatCell = $dataRow->addCell(2000);
-                    $holatCell->addText($holat, $holat === 'X' ? $cellFontRed : $cellFont, $cellCenter);
+                    $kontraktCell = $dataRow->addCell(1300);
+                    $kontraktCell->addText(
+                        $contractText,
+                        $contractFailed ? $cellFontOrange : $cellFont,
+                        $cellCenter
+                    );
+
+                    $holatCell = $dataRow->addCell(1800);
+                    if ($holat === 'Shartli') {
+                        $holatCell->addText($holat, $cellFontOrange, $cellCenter);
+                    } else {
+                        $holatCell->addText($holat, $holat === 'X' ? $cellFontRed : $cellFont, $cellCenter);
+                    }
 
                     $rowNum++;
                 }

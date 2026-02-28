@@ -16,11 +16,12 @@
             ['accent' => '#6366f1', 'bg' => '#eef2ff', 'text' => '#4338ca', 'class' => 'bg-indigo-500', 'lightClass' => 'bg-indigo-50 dark:bg-indigo-900/20', 'borderClass' => 'border-indigo-100 dark:border-indigo-800'],
             ['accent' => '#f59e0b', 'bg' => '#fffbeb', 'text' => '#b45309', 'class' => 'bg-amber-500', 'lightClass' => 'bg-amber-50 dark:bg-amber-900/20', 'borderClass' => 'border-amber-100 dark:border-amber-800'],
         ];
-        $grouped = $independents->groupBy('subject_name');
         $colorIndex = 0;
 
         $groupedJson = [];
-        foreach ($grouped as $subjectName => $items) {
+        foreach ($subjectsList as $subjectData) {
+            $subjectName = $subjectData['name'];
+            $items = collect($subjectData['independents']);
             $c = $cardColors[$colorIndex % count($cardColors)];
             $groupedJson[$subjectName] = [
                 'color' => $c,
@@ -109,11 +110,13 @@
                 </div>
             </div>
 
-            @if($grouped->count() > 0)
+            @if($subjectsList->count() > 0)
                 <div class="flex flex-col px-3 mt-1" style="gap:5px;">
                     @php $colorIndex = 0; @endphp
-                    @foreach($grouped as $subjectName => $items)
+                    @foreach($subjectsList as $subjectData)
                         @php
+                            $subjectName = $subjectData['name'];
+                            $items = collect($subjectData['independents']);
                             $color = $cardColors[$colorIndex % count($cardColors)];
                             $itemCount = $items->count();
                             $completedCount = $items->where('grade_locked', true)->count();
@@ -234,7 +237,7 @@
 
                                 {{-- Topshiriq fayli (o'qituvchi yuklagan) --}}
                                 <template x-if="item.task_file_url">
-                                    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-3 mb-2 border border-blue-100 dark:border-blue-800">
+                                    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-2 border border-blue-100 dark:border-blue-800" style="padding: 5px;">
                                         <div style="display: flex; gap: 5px; align-items: center;">
                                             <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
                                             <div class="min-w-0 flex-1">
@@ -251,7 +254,7 @@
 
                                 {{-- Yuklangan fayl (talaba topshirgani) --}}
                                 <template x-if="item.submission_file_url">
-                                    <div class="bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-3 mb-2 border border-green-100 dark:border-green-800">
+                                    <div class="bg-green-50 dark:bg-green-900/20 rounded-lg mb-2 border border-green-100 dark:border-green-800" style="padding: 5px;">
                                         <div style="display: flex; gap: 5px; align-items: center;">
                                             <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                             <div class="min-w-0 flex-1">

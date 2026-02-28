@@ -1079,6 +1079,7 @@ class StudentController extends Controller
 
                 return [
                     'id' => $independent->id,
+                    'subject_hemis_id' => $independent->subject_hemis_id,
                     'subject_name' => $independent->subject_name,
                     'teacher_name' => $independent->teacher_short_name ?? $independent->teacher_name,
                     'start_date' => $independent->start_date,
@@ -1100,7 +1101,25 @@ class StudentController extends Controller
 
         $minimumLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
 
-        return view('student.independents', compact('independents', 'mtDeadlineTime', 'mtMaxResubmissions', 'minimumLimit'));
+        // CurriculumSubject dan fanlarni olish (Fanlar sahifasidek)
+        $curriculumSubjects = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
+            ->where('semester_code', $semesterCode)
+            ->where('is_active', true)
+            ->get();
+
+        // Independentlarni subject_hemis_id bo'yicha guruhlash
+        $independentsByHemisId = $independents->groupBy('subject_hemis_id');
+
+        // Har bir CurriculumSubject uchun independentlarni biriktirish
+        $subjectsList = $curriculumSubjects->map(function ($cs) use ($independentsByHemisId) {
+            return [
+                'name' => $cs->subject_name,
+                'hemis_id' => $cs->curriculum_subject_hemis_id,
+                'independents' => $independentsByHemisId->get($cs->curriculum_subject_hemis_id, collect()),
+            ];
+        });
+
+        return view('student.independents', compact('independents', 'subjectsList', 'mtDeadlineTime', 'mtMaxResubmissions', 'minimumLimit'));
     }
 
     public function submitIndependent(Request $request, $id)

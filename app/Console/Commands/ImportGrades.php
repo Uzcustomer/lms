@@ -676,7 +676,7 @@ class ImportGrades extends Command
 
             while ($retryCount < $maxRetries && !$pageSuccess) {
                 try {
-                    $response = Http::timeout(60)->withoutVerifying()->withToken($this->token)
+                    $response = Http::connectTimeout(30)->timeout(60)->withoutVerifying()->withToken($this->token)
                         ->get("{$this->baseUrl}/v1/data/{$endpoint}", $queryParams);
 
                     if ($response->successful()) {
@@ -883,7 +883,7 @@ class ImportGrades extends Command
 
         while ($retryCount < $maxRetries) {
             try {
-                $response = Http::timeout(60)->withoutVerifying()->withToken($this->token)
+                $response = Http::connectTimeout(30)->timeout(60)->withoutVerifying()->withToken($this->token)
                     ->get("{$this->baseUrl}/v1/data/{$endpoint}", [
                         'limit' => 200,
                         'page' => $page,

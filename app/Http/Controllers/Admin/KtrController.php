@@ -155,6 +155,7 @@ class KtrController extends Controller
         $currentSemesterDefault = $isFanMasuli ? '0' : '1';
         if ($request->get('current_semester', $currentSemesterDefault) == '1') {
             $query->where('s.current', true);
+            $query->where('c.current', true);
         }
 
         // KTR holati filtri (yaratildi/yaratilmadi)

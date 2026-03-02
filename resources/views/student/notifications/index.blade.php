@@ -126,116 +126,47 @@
                             </div>
                         </div>
                     @elseif($notification->type === 'absence_excuse')
-                        {{-- Sababli ariza natijasi — stillantirilgan card --}}
+                        {{-- Sababli ariza natijasi --}}
                         @php
                             $excuseData = $notification->data ?? [];
                             $excuseStatus = $excuseData['status'] ?? '';
                             $isApproved = $excuseStatus === 'approved';
-
-                            $headerBg = $isApproved ? 'bg-emerald-500' : 'bg-red-500';
-                            $headerIcon = $isApproved ? 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z' : 'M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
-                            $statusLabel = $isApproved ? 'Tasdiqlandi' : 'Rad etildi';
-                            $borderColor = $notification->isRead() ? 'border-gray-200' : ($isApproved ? 'border-emerald-300' : 'border-red-300');
                         @endphp
-                        <div class="rounded-xl border {{ $borderColor }} overflow-hidden transition shadow-sm {{ !$notification->isRead() ? 'ring-1 ' . ($isApproved ? 'ring-emerald-200' : 'ring-red-200') : '' }}">
-                            {{-- Rangli sarlavha --}}
-                            <div class="flex items-center justify-between px-4 py-3 {{ $headerBg }}">
-                                <div class="flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="{{ $headerIcon }}" />
+                        <div class="bg-white rounded-xl border {{ $notification->isRead() ? 'border-gray-200' : ($isApproved ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30') }} p-4 transition">
+                            <div class="flex items-start gap-3">
+                                <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 {{ $isApproved ? 'bg-emerald-100' : 'bg-red-100' }}">
+                                    @if($isApproved)
+                                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-sm font-bold text-white">{{ $notification->title }}</h4>
-                                        <span class="text-[11px] text-white/80">Sababli ariza</span>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold {{ $isApproved ? 'bg-white/20 text-white' : 'bg-white/20 text-white' }}">
-                                        {{ $statusLabel }}
-                                    </span>
-                                    @if(!$notification->isRead())
-                                        <span class="w-2.5 h-2.5 rounded-full bg-white animate-pulse flex-shrink-0"></span>
-                                    @endif
-                                </div>
-                            </div>
-
-                            {{-- Ma'lumotlar qismi --}}
-                            <div class="bg-white px-4 py-3">
-                                <div class="grid grid-cols-2 gap-3">
-                                    @if(!empty($excuseData['reason_label']))
-                                        <div class="col-span-2">
-                                            <span class="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Sabab</span>
-                                            <p class="text-sm text-gray-800 font-medium mt-0.5">{{ $excuseData['reason_label'] }}</p>
-                                        </div>
-                                    @endif
-                                    @if(!empty($excuseData['start_date']) && !empty($excuseData['end_date']))
-                                        <div>
-                                            <span class="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Muddat</span>
-                                            <p class="text-sm text-gray-700 mt-0.5 flex items-center gap-1">
-                                                <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                                                </svg>
-                                                {{ $excuseData['start_date'] }} — {{ $excuseData['end_date'] }}
-                                            </p>
-                                        </div>
-                                    @endif
-                                    @if(!empty($excuseData['doc_number']))
-                                        <div>
-                                            <span class="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Hujjat raqami</span>
-                                            <p class="text-sm text-gray-700 mt-0.5">{{ $excuseData['doc_number'] }}</p>
-                                        </div>
-                                    @endif
-                                    @if(!empty($excuseData['reviewer_name']))
-                                        <div class="{{ empty($excuseData['doc_number']) ? '' : 'col-span-2' }}">
-                                            <span class="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Ko'rib chiqdi</span>
-                                            <p class="text-sm text-gray-700 mt-0.5 flex items-center gap-1">
-                                                <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                                                </svg>
-                                                {{ $excuseData['reviewer_name'] }}
-                                            </p>
-                                        </div>
-                                    @endif
-                                </div>
-
-                                {{-- Rad etish sababi (faqat rejected uchun) --}}
-                                @if(!$isApproved && !empty($excuseData['rejection_reason']))
-                                    <div class="mt-3 p-2.5 rounded-lg bg-red-50 border border-red-100">
-                                        <span class="text-[10px] uppercase tracking-wider text-red-400 font-medium">Rad etish sababi</span>
-                                        <p class="text-xs text-red-700 mt-1">{{ $excuseData['rejection_reason'] }}</p>
-                                    </div>
-                                @endif
-                            </div>
-
-                            {{-- Footer --}}
-                            <div class="px-4 py-2.5 bg-gray-50 flex items-center justify-between border-t border-gray-100">
-                                <div class="flex items-center gap-3">
-                                    <a href="{{ $notification->link }}" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    @else
+                                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
-                                        Arizani ko'rish
-                                    </a>
-                                    @if($isApproved && !empty($excuseData['excuse_id']))
-                                        <a href="{{ url('/student/absence-excuses/' . $excuseData['excuse_id'] . '/download-pdf') }}" class="text-xs text-emerald-600 hover:text-emerald-800 font-medium flex items-center gap-1">
-                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                                            </svg>
-                                            PDF yuklab olish
-                                        </a>
                                     @endif
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[11px] text-gray-400">{{ $notification->created_at->diffUz() }}</span>
-                                    @if(!$notification->isRead())
-                                        <form method="POST" action="{{ route('student.notifications.mark-read', $notification->id) }}">
-                                            @csrf
-                                            <button type="submit" class="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium">O'qilgan</button>
-                                        </form>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <h4 class="text-sm font-semibold text-gray-800">{{ $notification->title }}</h4>
+                                            <span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold {{ $isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700' }}">
+                                                {{ $isApproved ? 'Tasdiqlandi' : 'Rad etildi' }}
+                                            </span>
+                                        </div>
+                                        @if(!$notification->isRead())
+                                            <span class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0 ml-2"></span>
+                                        @endif
+                                    </div>
+                                    <p class="text-xs text-gray-600 mt-1">{{ $notification->message }}</p>
+                                    @if(!$isApproved && !empty($excuseData['rejection_reason']))
+                                        <p class="text-xs text-red-600 mt-1 font-medium">Sabab: {{ $excuseData['rejection_reason'] }}</p>
                                     @endif
+                                    <div class="flex items-center justify-between mt-2">
+                                        <span class="text-[11px] text-gray-400">{{ $notification->created_at->diffUz() }}</span>
+                                        @if($notification->link)
+                                            <a href="{{ $notification->link }}" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium">Batafsil</a>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                         </div>

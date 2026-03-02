@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <div class="flex items-center gap-2">
-            <a href="{{ route('student.absence-excuses.index') }}" class="text-gray-400 hover:text-gray-600">
+            <a href="{{ route('student.absence-excuses.index') }}" class="text-gray-400 hover:text-gray-600 hidden sm:inline-flex">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
             </a>
             <h2 class="font-semibold text-sm text-gray-800 leading-tight">

@@ -6,7 +6,7 @@
     </x-slot>
 
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3">
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
 
             {{-- Info banner --}}
             <div class="px-4 py-3 bg-purple-50 border-b border-purple-100">
@@ -35,7 +35,7 @@
                         </div>
                     @else
                         <select name="student_grade_id" id="student_grade_id" required
-                                class="w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 @error('student_grade_id') border-red-300 @enderror">
+                                class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 @error('student_grade_id') border-red-300 @enderror">
                             <option value="">-- Bahoni tanlang --</option>
                             @foreach($grades as $g)
                                 <option value="{{ $g['id'] }}" {{ old('student_grade_id') == $g['id'] ? 'selected' : '' }}>
@@ -50,7 +50,7 @@
                 </div>
 
                 {{-- Tanlangan baho ma'lumotlari --}}
-                <div id="gradeInfo" class="hidden px-4 py-3 rounded-lg bg-gray-50 border border-gray-200">
+                <div id="gradeInfo" class="hidden px-4 py-3 rounded-xl bg-gray-50 border border-gray-200">
                     <div class="grid grid-cols-2 gap-2 text-xs">
                         <div>
                             <span class="text-gray-500">Fan:</span>
@@ -78,7 +78,7 @@
                     </label>
                     <textarea name="reason" id="reason" rows="5" required minlength="20" maxlength="2000"
                               placeholder="Nima uchun bu bahoga e'tiroz bildiryapsiz? Batafsil yozing..."
-                              class="w-full rounded-lg border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 @error('reason') border-red-300 @enderror">{{ old('reason') }}</textarea>
+                              class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 @error('reason') border-red-300 @enderror">{{ old('reason') }}</textarea>
                     <div class="flex justify-between mt-1">
                         @error('reason')
                             <p class="text-xs text-red-600">{{ $message }}</p>
@@ -96,7 +96,7 @@
                     </label>
                     <div class="relative">
                         <input type="file" name="file" id="file" accept=".pdf,.jpg,.jpeg,.png"
-                               class="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 @error('file') border-red-300 @enderror">
+                               class="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-gray-800 file:text-white hover:file:bg-gray-700 file:cursor-pointer file:transition @error('file') border-red-300 @enderror">
                     </div>
                     @error('file')
                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
@@ -108,8 +108,8 @@
                 {{-- Submit --}}
                 <div class="pt-2">
                     <button type="submit" {{ $grades->isEmpty() ? 'disabled' : '' }}
-                            class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition shadow-sm text-sm">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            class="inline-flex items-center justify-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-lg transition shadow-sm text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                         </svg>
                         Apellyatsiya topshirish

@@ -6,6 +6,8 @@ use App\View\Components\CustomSelect;
 use App\View\Components\SelectInput;
 use App\Models\AbsenceExcuse;
 use App\Models\ExamAppeal;
+use App\Models\StudentGrade;
+use App\Observers\StudentGradeObserver;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
@@ -33,6 +35,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        StudentGrade::observe(StudentGradeObserver::class);
+
         App::alias('DataTables', DataTables::class);
         Blade::component('layouts.student-app', 'student-app-layout');
         Blade::component('layouts.teacher-app', 'teacher-app-layout');

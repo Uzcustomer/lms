@@ -283,16 +283,14 @@ class ImportGrades extends Command
             }
         });
 
-        // HEMIS API oxirgi 2 kunlik ma'lumotlarni tayyorlay olmaydi (connection timeout).
-        // Pattern: kecha va oldingi kun DOIM timeout, 3+ kunlik sanalar ishlaydi.
-        // Shuning uchun faqat 3+ kunlik sanalarni qayta ishlaymiz.
-        // Oxirgi 2 kunlik baholar live import orqali (har 30 daqiqada) bazaga tushadi.
+        // Oxirgi 7 kunni tekshirish (bugundan tashqari)
+        // LIVE importga bog'liq emas — har bir kunni mustaqil tekshiramiz
         $lookbackStart = Carbon::today()->subDays(7)->startOfDay();
-        $cutoffDate = Carbon::today()->subDays(2)->startOfDay();
+        $todayStart = Carbon::today()->startOfDay();
 
-        // 3-7 kunlik sanalarni ro'yxatga olish (oxirgi 2 kun o'tkaziladi)
+        // Barcha 7 kunni ro'yxatga olish
         $allDatesToProcess = [];
-        for ($d = $lookbackStart->copy(); $d->lt($cutoffDate); $d->addDay()) {
+        for ($d = $lookbackStart->copy(); $d->lt($todayStart); $d->addDay()) {
             $allDatesToProcess[] = $d->toDateString();
         }
 

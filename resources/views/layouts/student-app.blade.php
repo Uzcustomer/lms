@@ -116,38 +116,38 @@
         elseif (request()->routeIs('student.schedule')) $activeTab = 'jadval';
         elseif (request()->routeIs('student.dashboard')) $activeTab = 'asosiy';
         elseif (request()->routeIs('student.independents')) $activeTab = 'mt';
-        elseif (request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
+        elseif (request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
     @endphp
     <div x-data="{ boshqalarOpen: false }" class="sm:hidden" style="position:fixed !important;bottom:0 !important;left:0 !important;right:0 !important;z-index:9999 !important;">
         <!-- Boshqalar popup overlay -->
         <div x-show="boshqalarOpen" @click="boshqalarOpen = false" style="position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.3);display:none;"></div>
 
         <!-- Boshqalar popup menu -->
-        <div x-show="boshqalarOpen" @click.away="boshqalarOpen = false" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:9999;display:none;" class="mx-auto max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-4">
-            <div class="grid grid-cols-3 gap-3">
-                <a href="{{ route('student.absence-excuses.index') }}" class="flex flex-col items-center gap-2 px-2 py-3 rounded-xl transition {{ request()->routeIs('student.absence-excuses.*') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
-                    <div class="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
-                        <svg class="w-7 h-7 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        <div x-show="boshqalarOpen" @click.away="boshqalarOpen = false" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:9999;display:none;" class="mx-auto max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-3">
+            <div class="grid grid-cols-2 gap-2">
+                <a href="{{ route('student.services') }}" class="flex items-center gap-3 px-3 py-3 rounded-xl transition {{ request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <div class="w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
                         </svg>
                     </div>
-                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">Sababli ariza</span>
+                    <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 leading-tight">Xizmatlar</span>
                 </a>
-                <a href="{{ route('student.attendance') }}" class="flex flex-col items-center gap-2 px-2 py-3 rounded-xl transition {{ request()->routeIs('student.attendance') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
-                    <div class="w-14 h-14 rounded-2xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
-                        <svg class="w-7 h-7 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <a href="{{ route('student.attendance') }}" class="flex items-center gap-3 px-3 py-3 rounded-xl transition {{ request()->routeIs('student.attendance') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <div class="w-11 h-11 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
-                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">Davomat</span>
+                    <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 leading-tight">Davomat</span>
                 </a>
-                <a href="{{ route('student.pending-lessons') }}" class="flex flex-col items-center gap-2 px-2 py-3 rounded-xl transition {{ request()->routeIs('student.pending-lessons') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
-                    <div class="w-14 h-14 rounded-2xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
-                        <svg class="w-7 h-7 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <a href="{{ route('student.pending-lessons') }}" class="flex items-center gap-3 px-3 py-3 rounded-xl transition {{ request()->routeIs('student.pending-lessons') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <div class="w-11 h-11 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
                         </svg>
                     </div>
-                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight">Qayta topshirish</span>
+                    <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 leading-tight">Qayta topshirish</span>
                 </a>
             </div>
         </div>

@@ -537,12 +537,7 @@
                 </div>
 
                 {{-- ===== SUBMIT ===== --}}
-                <div class="flex items-center justify-between py-5">
-                    <a href="{{ route('student.absence-excuses.index') }}"
-                       class="text-base text-gray-500 hover:text-gray-700 font-medium transition">
-                        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-                        Orqaga
-                    </a>
+                <div class="flex items-center justify-end py-5">
                     <button type="submit" :disabled="!canSubmit" class="ae-submit">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                         Ariza yuborish

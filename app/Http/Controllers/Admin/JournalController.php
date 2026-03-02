@@ -5701,16 +5701,18 @@ class JournalController extends Controller
         } else {
             $kurs = preg_replace('/\D/', '', $semester->level_code ?? '');
         }
-        $semesterNum = 0;
-        if (preg_match('/(\d+)/', $semester->name ?? '', $m)) {
-            $semesterNum = (int) $m[1];
-        } else {
-            $semesterNum = (int) ($semester->code ?? 1);
-        }
-        $semesterInYear = ($semesterNum % 2 !== 0) ? 1 : 2;
+        // Semestrni kurs ichidagi pozitsiyasini aniqlash (1 yoki 2)
+        $levelSemesters = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+            ->where('level_code', $semester->level_code)
+            ->orderBy('code')
+            ->pluck('code')
+            ->values();
+        $semesterPos = $levelSemesters->search($semester->code);
+        $semesterInYear = $semesterPos !== false ? $semesterPos + 1 : 1;
 
         // Header
-        $sheet->setCellValue('A4', ($faculty->name ?? '') . ' FAKULTETI');
+        $facultyName = preg_replace('/\s*fakulteti?\s*$/iu', '', $faculty->name ?? '');
+        $sheet->setCellValue('A4', $facultyName . ' FAKULTETI');
         $sheet->setCellValue('C8', '         ' . ($specialty->name ?? ''));
         $sheet->setCellValue('N8', $kurs);
         $sheet->setCellValue('Q8', $semesterInYear);
@@ -5744,10 +5746,21 @@ class JournalController extends Controller
                     ->first();
             }
             if ($mudiri) {
-                $kafedraMudiriName = $mudiri->full_name;
+                // I.O.Familya formati: "SHAMSUTDINOVA MAKSUDA ILYASOVNA" → "M.I.Shamsutdinova"
+                $nameParts = preg_split('/\s+/', trim($mudiri->full_name));
+                if (count($nameParts) >= 3) {
+                    $surname = mb_strtoupper(mb_substr($nameParts[0], 0, 1)) . mb_strtolower(mb_substr($nameParts[0], 1));
+                    $initials = '';
+                    for ($i = 1; $i < count($nameParts); $i++) {
+                        $initials .= mb_strtoupper(mb_substr($nameParts[$i], 0, 1)) . '.';
+                    }
+                    $kafedraMudiriName = $initials . $surname;
+                } else {
+                    $kafedraMudiriName = $mudiri->full_name;
+                }
             }
         }
-        $sheet->setCellValue('U61', $kafedraMudiriName);
+        $sheet->setCellValue('U60', $kafedraMudiriName);
 
         // Vaznlar haqida ma'lumot
         $sheet->setCellValue('V18', 'Yakuniy ball');

@@ -608,6 +608,14 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::post('/{id}/store-makeup-dates', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'storeMakeupDates'])->name('store-makeup-dates');
         });
 
+        // Xabarnomalar
+        Route::prefix('notifications')->name('notifications.')->group(function () {
+            Route::get('/unread-count', [\App\Http\Controllers\Student\NotificationController::class, 'unreadCount'])->name('unread-count');
+            Route::get('/list', [\App\Http\Controllers\Student\NotificationController::class, 'index'])->name('list');
+            Route::post('/{id}/read', [\App\Http\Controllers\Student\NotificationController::class, 'markAsRead'])->name('mark-read');
+            Route::post('/mark-all-read', [\App\Http\Controllers\Student\NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+        });
+
         Route::post('/logout', [StudentAuthController::class, 'logout'])->name('logout');
     });
 });

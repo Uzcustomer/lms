@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\ExamSchedule;
+use App\Models\Notification;
 use App\Models\Student;
 use App\Services\TelegramService;
 use Carbon\Carbon;
@@ -13,7 +14,7 @@ class SendExamReminders extends Command
 {
     protected $signature = 'students:send-exam-reminders';
 
-    protected $description = 'Imtihonga 1 kun qolganda talabalarga Telegram orqali ogohlantirish yuborish';
+    protected $description = 'Imtihonga 1 kun qolganda talabalarga Telegram va xabarnoma orqali ogohlantirish yuborish';
 
     public function handle(TelegramService $telegram): int
     {
@@ -44,26 +45,24 @@ class SendExamReminders extends Command
 
         $this->info("Ertaga imtihoni bor guruhlar: {$groupIds->count()} ta");
 
-        // 2-qadam: Shu guruhlardan Telegram tasdiqlangan talabalarni topish
-        $students = Student::whereIn('group_id', $groupIds)
-            ->whereNotNull('telegram_chat_id')
-            ->whereNotNull('telegram_verified_at')
-            ->get();
+        // 2-qadam: Shu guruhlardan BARCHA talabalarni topish (xabarnoma uchun)
+        $allStudents = Student::whereIn('group_id', $groupIds)->get();
 
-        if ($students->isEmpty()) {
-            $this->warn('Telegram tasdiqlangan talaba topilmadi (guruhlar: ' . $groupIds->take(10)->implode(', ') . ')');
+        if ($allStudents->isEmpty()) {
+            $this->warn('Talaba topilmadi (guruhlar: ' . $groupIds->take(10)->implode(', ') . ')');
             return 0;
         }
 
-        $this->info("Telegram tasdiqlangan talabalar: {$students->count()} ta");
+        $this->info("Jami talabalar: {$allStudents->count()} ta");
 
-        $sentCount = 0;
-        $failedCount = 0;
+        $telegramSentCount = 0;
+        $telegramFailedCount = 0;
+        $notificationCount = 0;
         $skippedCount = 0;
 
         // 3-qadam: Har bir talaba uchun imtihonlarni topish
         // StudentController::examSchedule() bilan BIR XIL mantiq
-        foreach ($students as $student) {
+        foreach ($allStudents as $student) {
             $exams = ExamSchedule::where('group_hemis_id', $student->group_id)
                 ->where('semester_code', $student->semester_code)
                 ->where(function ($query) use ($student) {
@@ -87,35 +86,76 @@ class SendExamReminders extends Command
 
             if ($exams->isEmpty()) {
                 $skippedCount++;
-                $this->warn("  O'tkazildi: {$student->full_name} — semester yoki education_year mos kelmadi (semester: {$student->semester_code}, year: {$student->education_year_code})");
                 continue;
             }
 
-            $message = $this->buildMessage($student, $exams, $tomorrow);
+            $formattedDate = Carbon::parse($tomorrow)->format('d.m.Y');
+            $examList = $this->buildExamList($exams, $tomorrow);
 
-            $success = $telegram->sendToUser($student->telegram_chat_id, $message);
-
-            if ($success) {
-                $sentCount++;
-                $groupLabel = $student->group_name ?: $student->group_id;
-                $this->info("  Yuborildi: {$student->full_name} ({$groupLabel}) — {$exams->count()} ta imtihon");
-            } else {
-                $failedCount++;
-                $this->error("  Xato: {$student->full_name} — Telegram yuborishda muammo");
-                Log::error("Telegram imtihon eslatma yuborishda xato", [
-                    'student' => $student->full_name,
-                    'chat_id' => $student->telegram_chat_id,
-                    'group' => $student->group_id,
+            // Xabarnoma yaratish (barcha talabalar uchun)
+            try {
+                Notification::create([
+                    'recipient_id' => $student->id,
+                    'recipient_type' => Student::class,
+                    'subject' => "Ertaga ({$formattedDate}) imtihon bor!",
+                    'body' => $examList,
+                    'type' => Notification::TYPE_ALERT,
+                    'url' => route('student.exam-schedule'),
+                    'is_draft' => false,
+                    'sent_at' => now(),
                 ]);
+                $notificationCount++;
+            } catch (\Throwable $e) {
+                Log::error("Student notification yaratishda xato: " . $e->getMessage());
+            }
+
+            // Telegram yuborish (faqat tasdiqlangan talabalar uchun)
+            if ($student->telegram_chat_id && $student->telegram_verified_at) {
+                $message = $this->buildTelegramMessage($student, $exams, $tomorrow);
+                $success = $telegram->sendToUser($student->telegram_chat_id, $message);
+
+                if ($success) {
+                    $telegramSentCount++;
+                    $groupLabel = $student->group_name ?: $student->group_id;
+                    $this->info("  Yuborildi: {$student->full_name} ({$groupLabel}) — {$exams->count()} ta imtihon");
+                } else {
+                    $telegramFailedCount++;
+                    Log::error("Telegram imtihon eslatma yuborishda xato", [
+                        'student' => $student->full_name,
+                        'chat_id' => $student->telegram_chat_id,
+                    ]);
+                }
             }
         }
 
-        $this->info("Yakunlandi. Yuborilgan: {$sentCount}, Xato: {$failedCount}, O'tkazilgan: {$skippedCount}");
+        $this->info("Yakunlandi. Telegram: {$telegramSentCount} yuborildi, {$telegramFailedCount} xato. Xabarnoma: {$notificationCount}. O'tkazilgan: {$skippedCount}");
 
         return 0;
     }
 
-    private function buildMessage(Student $student, $schedules, string $tomorrow): string
+    private function buildExamList($schedules, string $tomorrow): string
+    {
+        $lines = [];
+        foreach ($schedules as $schedule) {
+            $examTypes = [];
+
+            if ($schedule->oski_date && !$schedule->oski_na && $schedule->oski_date->format('Y-m-d') === $tomorrow) {
+                $examTypes[] = 'OSKI';
+            }
+            if ($schedule->test_date && !$schedule->test_na && $schedule->test_date->format('Y-m-d') === $tomorrow) {
+                $examTypes[] = 'Test';
+            }
+
+            if (!empty($examTypes)) {
+                $typeStr = implode(', ', $examTypes);
+                $lines[] = "{$schedule->subject_name} ({$typeStr})";
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function buildTelegramMessage(Student $student, $schedules, string $tomorrow): string
     {
         $formattedDate = Carbon::parse($tomorrow)->format('d.m.Y');
 

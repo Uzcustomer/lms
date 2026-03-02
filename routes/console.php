@@ -45,9 +45,10 @@ Schedule::command('teachers:send-final-daily-report')->dailyAt('08:30');
 Schedule::command('teachers:send-lesson-opening-reminders')->dailyAt('09:00');
 Schedule::command('teachers:send-lesson-opening-reminders')->dailyAt('18:00');
 
-// Imtihonga 3 kun qolgandan boshlab talabalarga Telegram eslatma (har 12 soatda: 08:00 va 20:00)
-Schedule::command('students:send-exam-reminders')->dailyAt('08:00');
-Schedule::command('students:send-exam-reminders')->dailyAt('20:00');
+// TEST: 11:35 da test uchun — keyin 08:00 va 20:00 ga qaytarish kerak!
+Schedule::command('students:send-exam-reminders')->dailyAt('11:35');
+// Schedule::command('students:send-exam-reminders')->dailyAt('08:00');
+// Schedule::command('students:send-exam-reminders')->dailyAt('20:00');
 
 // 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
 // baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)

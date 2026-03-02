@@ -82,10 +82,24 @@
                 </x-dropdown>
             </div>
 
-            <!-- Mobile Top Header: Student avatar (right side) -->
-            <div class="flex items-center sm:hidden">
+            <!-- Mobile Top Header: icons + avatar (right side) -->
+            <div class="flex items-center gap-2 sm:hidden">
+                {{-- Notification bell --}}
+                <a href="{{ route('student.notifications.index') }}" class="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                   x-data="{ unread: 0 }"
+                   x-init="fetch('{{ route('student.notifications.unread-count') }}').then(r=>r.json()).then(d=>unread=d.count).catch(()=>{})"
+                >
+                    <svg class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                    </svg>
+                    <span x-show="unread > 0" x-text="unread > 9 ? '9+' : unread"
+                          class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold text-white bg-red-500 rounded-full px-1"
+                          style="display:none;"></span>
+                </a>
+
+                {{-- Profile avatar --}}
                 <a href="{{ route('student.profile') }}">
-                    <img src="{{ Auth::guard('student')->user()->image ?? asset('images/default-avatar.png') }}" alt="{{ Auth::guard('student')->user()->full_name }}" class="rounded-full object-cover border-2 border-indigo-200 dark:border-indigo-700" style="width:50px;height:50px;">
+                    <img src="{{ Auth::guard('student')->user()->image ?? asset('images/default-avatar.png') }}" alt="{{ Auth::guard('student')->user()->full_name }}" class="rounded-full object-cover border-2 border-indigo-200 dark:border-indigo-700" style="width:44px;height:44px;">
                 </a>
             </div>
         </div>

@@ -33,8 +33,21 @@
     <!-- Page Heading -->
     @if (isset($header))
         <header class="bg-white dark:bg-gray-800 shadow" style="margin-bottom:15px;">
-            <div class="max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
+            {{-- Desktop: oddiy header --}}
+            <div class="hidden sm:block max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
                 {{ $header }}
+            </div>
+            {{-- Mobile: back button + centered title --}}
+            <div class="sm:hidden flex items-center justify-between px-4 py-2 relative" style="min-height:44px;">
+                <button onclick="window.history.back()" class="flex items-center justify-center rounded-full hover:bg-gray-100 transition" style="width:32px;height:32px;z-index:1;">
+                    <svg class="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
+                </button>
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="text-sm font-semibold text-gray-800 dark:text-gray-200 text-center">{{ $header }}</div>
+                </div>
+                <div style="width:32px;"></div>
             </div>
         </header>
     @endif

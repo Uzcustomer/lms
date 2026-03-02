@@ -1799,7 +1799,7 @@ class KtrController extends Controller
         }
 
         // 2-qator sarlavha: (merge) | (merge) | (merge) | Ma'ruza | Amaliy | ...
-        $table->addRow(null, ['tblHeader' => true]);
+        $table->addRow(2000, ['tblHeader' => true]);
         $table->addCell($haftaW, array_merge($cellBorder, ['vMerge' => 'continue']));
         $table->addCell($kunlariW, array_merge($cellBorder, ['vMerge' => 'continue']));
         $table->addCell($mavzuW, array_merge($cellBorder, ['vMerge' => 'continue']));

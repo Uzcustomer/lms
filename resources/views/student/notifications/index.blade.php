@@ -77,7 +77,7 @@
                                     <h4 class="text-sm font-bold">{{ $notification->title }}</h4>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-[11px] opacity-70">{{ $notification->created_at->diffForHumans() }}</span>
+                                    <span class="text-[11px] opacity-70">{{ $notification->created_at->diffUz() }}</span>
                                     @if(!$notification->isRead())
                                         <span class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0"></span>
                                     @endif
@@ -149,7 +149,7 @@
                                         @endif
                                     </div>
                                     <p class="text-xs text-gray-600 mt-1 whitespace-pre-line">{{ $notification->message }}</p>
-                                    <span class="text-[11px] text-gray-400 mt-1 block">{{ $notification->created_at->diffForHumans() }}</span>
+                                    <span class="text-[11px] text-gray-400 mt-1 block">{{ $notification->created_at->diffUz() }}</span>
                                 </div>
                             </div>
                             @if(!$notification->isRead())

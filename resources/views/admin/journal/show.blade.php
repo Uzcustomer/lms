@@ -1581,7 +1581,7 @@
                                             @if($oskiDatePassed)
                                                 <span class="text-green-600 font-semibold">(O'tgan)</span>
                                             @else
-                                                <span class="text-yellow-600 font-semibold">({{ $es->oski_date->diffForHumans() }})</span>
+                                                <span class="text-yellow-600 font-semibold">({{ $es->oski_date->diffUz() }})</span>
                                             @endif
                                         </span>
                                     @elseif($es->oski_na)
@@ -1593,7 +1593,7 @@
                                             @if($testDatePassed)
                                                 <span class="text-green-600 font-semibold">(O'tgan)</span>
                                             @else
-                                                <span class="text-yellow-600 font-semibold">({{ $es->test_date->diffForHumans() }})</span>
+                                                <span class="text-yellow-600 font-semibold">({{ $es->test_date->diffUz() }})</span>
                                             @endif
                                         </span>
                                     @elseif($es->test_na)

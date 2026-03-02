@@ -1690,7 +1690,7 @@ class KtrController extends Controller
         if ($specialtyName) {
             $titleSection->addText(
                 $specialtyName,
-                ['size' => 13],
+                ['bold' => true, 'size' => 13],
                 $center
             );
         }
@@ -1719,8 +1719,8 @@ class KtrController extends Controller
             'paperSize' => 'A4',
             'marginTop' => 800,
             'marginBottom' => 600,
-            'marginLeft' => 800,
-            'marginRight' => 600,
+            'marginLeft' => 1200,
+            'marginRight' => 1000,
         ]);
 
         // ---- 2-sahifa sarlavhasi ----
@@ -1806,15 +1806,10 @@ class KtrController extends Controller
         $table->addCell($mavzuW, array_merge($cellBorder, ['vMerge' => 'continue']));
         foreach ($typeCodes as $code) {
             $name = $filteredTypes[$code]['name'];
-            $cell = $table->addCell($soatEachW, $cellBorder);
-            $chars = mb_str_split($name);
-            foreach ($chars as $char) {
-                $cell->addText(
-                    $char,
-                    ['bold' => true, 'size' => 9],
-                    ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0, 'lineHeight' => 0.8]
-                );
-            }
+            $cell = $table->addCell($soatEachW, array_merge($cellBorder, [
+                'textDirection' => \PhpOffice\PhpWord\SimpleType\TextDirection::BTLR,
+            ]));
+            $cell->addText($name, ['bold' => true, 'size' => 9], ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0]);
         }
 
         // ---- MA'LUMOTLAR QATORLARI ----
@@ -1883,8 +1878,8 @@ class KtrController extends Controller
                 'paperSize' => 'A4',
                 'marginTop' => 800,
                 'marginBottom' => 600,
-                'marginLeft' => 800,
-                'marginRight' => 600,
+                'marginLeft' => 1200,
+                'marginRight' => 1000,
             ]);
 
             // Sarlavha

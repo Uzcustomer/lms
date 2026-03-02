@@ -282,7 +282,7 @@ class TeacherController extends Controller
                 $query->where('is_active', true);
             }
 
-            // Kafedra bo'yicha filtrlash (department_id yoki department_name)
+            // Kafedra bo'yicha filtrlash (department_id, department_name, yoki NULL)
             if ($filterByDept && $teacher) {
                 $query->where(function ($q) use ($teacher) {
                     if ($teacher->department_hemis_id) {
@@ -291,6 +291,8 @@ class TeacherController extends Controller
                     if ($teacher->department) {
                         $q->orWhere('department_name', $teacher->department);
                     }
+                    // department_id NULL bo'lgan fanlarni ham qo'shish
+                    $q->orWhereNull('department_id');
                 });
             }
 
@@ -299,7 +301,6 @@ class TeacherController extends Controller
                     $q->where('subject_name', 'like', "%{$search}%");
                 })
                 ->when($levelCode, function ($q, $levelCode) {
-                    // Curricula va semesters orqali to'g'ri join bilan filtr
                     $q->whereExists(function ($sub) use ($levelCode) {
                         $sub->select(DB::raw(1))
                             ->from('semesters as s')
@@ -308,7 +309,7 @@ class TeacherController extends Controller
                             ->where('s.level_code', $levelCode);
                     });
                 })
-                ->selectRaw('MIN(id) as id, subject_name, MIN(subject_code) as subject_code, semester_code, semester_name, MIN(department_name) as department_name')
+                ->selectRaw('COALESCE(MIN(CASE WHEN is_active = 1 THEN id END), MIN(id)) as id, subject_name, COALESCE(MIN(CASE WHEN is_active = 1 THEN subject_code END), MIN(subject_code)) as subject_code, semester_code, semester_name, COALESCE(MIN(CASE WHEN is_active = 1 THEN department_name END), MIN(department_name)) as department_name, MAX(is_active) as is_active')
                 ->groupBy('subject_name', 'semester_code', 'semester_name')
                 ->orderBy('subject_name')
                 ->orderBy('semester_code')

@@ -14,26 +14,32 @@ class SendExamReminders extends Command
 {
     protected $signature = 'students:send-exam-reminders';
 
-    protected $description = 'Imtihonga 1 kun qolganda talabalarga Telegram orqali ogohlantirish yuborish';
+    protected $description = 'Imtihonga 3 kun qolgandan boshlab har 12 soatda talabalarga Telegram eslatma yuborish';
 
     public function handle(TelegramService $telegram): int
     {
-        $tomorrow = Carbon::tomorrow()->format('Y-m-d');
+        $today = Carbon::today();
 
-        $this->info("Ertangi sana: {$tomorrow}");
-        $this->info("Imtihon eslatmalari tekshirilmoqda...");
+        $this->info("Bugungi sana: {$today->format('Y-m-d')}");
+        $this->info("Imtihon eslatmalari tekshirilmoqda (bugundan 3 kungacha)...");
 
         // Joriy o'quv yilini aniqlash
         $currentEducationYear = Semester::where('current', true)->value('education_year');
 
-        $examSchedules = ExamSchedule::where(function ($query) use ($tomorrow) {
-            $query->where(function ($q) use ($tomorrow) {
-                $q->whereDate('oski_date', $tomorrow)
+        // Bugundan 3 kungacha bo'lgan imtihonlarni topish (bugun + 1, 2, 3 kun)
+        $dateRange = [];
+        for ($i = 0; $i <= 3; $i++) {
+            $dateRange[] = $today->copy()->addDays($i)->format('Y-m-d');
+        }
+
+        $examSchedules = ExamSchedule::where(function ($query) use ($dateRange) {
+            $query->where(function ($q) use ($dateRange) {
+                $q->whereIn(\DB::raw('DATE(oski_date)'), $dateRange)
                     ->where(function ($q2) {
                         $q2->where('oski_na', false)->orWhereNull('oski_na');
                     });
-            })->orWhere(function ($q) use ($tomorrow) {
-                $q->whereDate('test_date', $tomorrow)
+            })->orWhere(function ($q) use ($dateRange) {
+                $q->whereIn(\DB::raw('DATE(test_date)'), $dateRange)
                     ->where(function ($q2) {
                         $q2->where('test_na', false)->orWhereNull('test_na');
                     });
@@ -46,7 +52,7 @@ class SendExamReminders extends Command
             ->get();
 
         if ($examSchedules->isEmpty()) {
-            $this->info('Ertaga uchun imtihon topilmadi.');
+            $this->info('Yaqin 3 kun ichida imtihon topilmadi.');
             return 0;
         }
 
@@ -87,7 +93,7 @@ class SendExamReminders extends Command
                     continue;
                 }
 
-                $message = $this->buildMessage($student, $relevantSchedules, $tomorrow);
+                $message = $this->buildMessage($student, $relevantSchedules, $today);
 
                 $success = $telegram->sendToUser($student->telegram_chat_id, $message);
 
@@ -112,34 +118,60 @@ class SendExamReminders extends Command
         return 0;
     }
 
-    private function buildMessage(Student $student, $schedules, string $tomorrow): string
+    private function buildMessage(Student $student, $schedules, Carbon $today): string
     {
-        $formattedDate = Carbon::parse($tomorrow)->format('d.m.Y');
-
         $lines = [];
         $lines[] = "Hurmatli <b>{$student->full_name}</b>!";
         $lines[] = "";
-        $lines[] = "Ertaga (<b>{$formattedDate}</b>) quyidagi imtihon(lar)ingiz bor:";
-        $lines[] = "";
 
+        // Imtihonlarni sanaga qarab guruhlash
+        $examsByDate = [];
         foreach ($schedules as $schedule) {
-            $examTypes = [];
-
-            if ($schedule->oski_date && !$schedule->oski_na && $schedule->oski_date->format('Y-m-d') === $tomorrow) {
-                $examTypes[] = 'OSKI';
+            if ($schedule->oski_date && !$schedule->oski_na) {
+                $dateKey = $schedule->oski_date->format('Y-m-d');
+                $daysLeft = $today->diffInDays($schedule->oski_date);
+                if ($daysLeft <= 3) {
+                    $examsByDate[$dateKey]['exams'][] = ['name' => $schedule->subject_name, 'type' => 'OSKI'];
+                    $examsByDate[$dateKey]['days'] = $daysLeft;
+                    $examsByDate[$dateKey]['date'] = $schedule->oski_date->format('d.m.Y');
+                }
             }
-            if ($schedule->test_date && !$schedule->test_na && $schedule->test_date->format('Y-m-d') === $tomorrow) {
-                $examTypes[] = 'Test';
-            }
-
-            if (!empty($examTypes)) {
-                $typeStr = implode(', ', $examTypes);
-                $lines[] = "📌 <b>{$schedule->subject_name}</b> ({$typeStr})";
+            if ($schedule->test_date && !$schedule->test_na) {
+                $dateKey = $schedule->test_date->format('Y-m-d');
+                $daysLeft = $today->diffInDays($schedule->test_date);
+                if ($daysLeft <= 3) {
+                    $examsByDate[$dateKey]['exams'][] = ['name' => $schedule->subject_name, 'type' => 'Test'];
+                    $examsByDate[$dateKey]['days'] = $daysLeft;
+                    $examsByDate[$dateKey]['date'] = $schedule->test_date->format('d.m.Y');
+                }
             }
         }
 
-        $lines[] = "";
-        $lines[] = "Imtihonga tayyorgarlik ko'ring! Omad tilaymiz! 🍀";
+        ksort($examsByDate);
+
+        foreach ($examsByDate as $dateInfo) {
+            $daysLeft = $dateInfo['days'];
+
+            if ($daysLeft == 0) {
+                $lines[] = "🔴 <b>Bugun</b> ({$dateInfo['date']}) imtihon(lar)ingiz bor:";
+            } elseif ($daysLeft == 1) {
+                $lines[] = "🟠 <b>Ertaga</b> ({$dateInfo['date']}) imtihon(lar)ingiz bor:";
+            } else {
+                $lines[] = "🟡 <b>{$daysLeft} kun qoldi</b> ({$dateInfo['date']}):";
+            }
+
+            foreach ($dateInfo['exams'] as $exam) {
+                $lines[] = "  📌 <b>{$exam['name']}</b> ({$exam['type']})";
+            }
+            $lines[] = "";
+        }
+
+        $hasToday = collect($examsByDate)->contains(fn($d) => $d['days'] == 0);
+        if ($hasToday) {
+            $lines[] = "Imtihonda omad tilaymiz! 🍀";
+        } else {
+            $lines[] = "Imtihonga tayyorgarlik ko'ring! 📚";
+        }
 
         return implode("\n", $lines);
     }

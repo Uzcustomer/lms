@@ -309,7 +309,7 @@ class TeacherController extends Controller
                             ->where('s.level_code', $levelCode);
                     });
                 })
-                ->selectRaw('MIN(id) as id, subject_name, MIN(subject_code) as subject_code, semester_code, semester_name, MIN(department_name) as department_name')
+                ->selectRaw('COALESCE(MIN(CASE WHEN is_active = 1 THEN id END), MIN(id)) as id, subject_name, COALESCE(MIN(CASE WHEN is_active = 1 THEN subject_code END), MIN(subject_code)) as subject_code, semester_code, semester_name, COALESCE(MIN(CASE WHEN is_active = 1 THEN department_name END), MIN(department_name)) as department_name, MAX(is_active) as is_active')
                 ->groupBy('subject_name', 'semester_code', 'semester_name')
                 ->orderBy('subject_name')
                 ->orderBy('semester_code')

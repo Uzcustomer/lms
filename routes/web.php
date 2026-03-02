@@ -148,6 +148,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
         });
 
+        // Imtihon apellyatsiyalari (Admin panel)
+        Route::prefix('exam-appeals')->name('exam-appeals.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\ExamAppealController::class, 'index'])->name('index');
+            Route::get('/{id}', [\App\Http\Controllers\Admin\ExamAppealController::class, 'show'])->name('show');
+            Route::post('/{id}/approve', [\App\Http\Controllers\Admin\ExamAppealController::class, 'approve'])->name('approve');
+            Route::post('/{id}/reject', [\App\Http\Controllers\Admin\ExamAppealController::class, 'reject'])->name('reject');
+            Route::get('/{id}/download', [\App\Http\Controllers\Admin\ExamAppealController::class, 'download'])->name('download');
+        });
+
         // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)
         Route::prefix('contracts')->name('contracts.')->group(function () {
             Route::get('/', [ContractController::class, 'index'])->name('index');

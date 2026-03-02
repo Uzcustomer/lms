@@ -114,7 +114,8 @@
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="lesson_date">Sana <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th>LMS holati</th>
+                                        <th><a href="#" class="sort-link" data-sort="lesson_pair">Juftlik <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="mark_status">Mark <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="hemis_status">HEMIS holati <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="match">Natija <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                     </tr>
@@ -137,6 +138,8 @@
         let currentSort = 'full_name';
         let currentDirection = 'asc';
         let currentPage = 1;
+        let allData = [];  // barcha yuklangan ma'lumotlar
+        let lastResponse = null;  // oxirgi server javobi
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
@@ -167,10 +170,10 @@
             };
         }
 
-        function loadReport(page) {
-            currentPage = page || 1;
+        function loadReport() {
+            currentPage = 1;
             var params = getFilters();
-            params.page = currentPage;
+            params.per_page = 999999;
 
             $('#empty-state').hide();
             $('#table-area').hide();
@@ -190,18 +193,20 @@
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
 
                     if (!res.data || res.data.length === 0) {
+                        allData = [];
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
                         $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
                         return;
                     }
 
+                    allData = res.data;
+                    lastResponse = res;
                     $('#total-badge').text('Jami: ' + res.total + ' ta yozuv');
                     $('#match-badge').text('Mos: ' + (res.match_count || 0));
                     $('#mismatch-badge').text('Mos emas: ' + (res.mismatch_count || 0));
                     $('#time-badge').text(elapsed + ' soniyada tekshirildi');
-                    renderTable(res.data);
-                    renderPagination(res);
+                    renderPage();
                     $('#table-area').show();
                     $('#btn-excel').prop('disabled', false).css('opacity', '1');
                 },
@@ -213,11 +218,56 @@
             });
         }
 
+        function renderPage() {
+            // Client-side saralash
+            var sorted = allData.slice().sort(function(a, b) {
+                var valA = a[currentSort] || '';
+                var valB = b[currentSort] || '';
+                var cmp;
+                if (currentSort === 'lesson_date') {
+                    // dd.mm.yyyy → Date ga parse qilish
+                    var pA = valA.split('.'), pB = valB.split('.');
+                    var dA = new Date(pA[2], pA[1] - 1, pA[0]);
+                    var dB = new Date(pB[2], pB[1] - 1, pB[0]);
+                    cmp = dA - dB;
+                } else {
+                    cmp = valA.toString().localeCompare(valB.toString(), 'uz', {numeric: true});
+                }
+                return currentDirection === 'desc' ? -cmp : cmp;
+            });
+
+            // Client-side sahifalash
+            var perPage = parseInt($('#per_page').val()) || 50;
+            var total = sorted.length;
+            var lastPage = Math.ceil(total / perPage);
+            if (currentPage > lastPage) currentPage = lastPage || 1;
+            var offset = (currentPage - 1) * perPage;
+            var pageData = sorted.slice(offset, offset + perPage);
+
+            // Raqamlash
+            for (var i = 0; i < pageData.length; i++) {
+                pageData[i].row_num = offset + i + 1;
+            }
+
+            renderTable(pageData);
+            renderPagination({current_page: currentPage, last_page: lastPage, total: total});
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            renderPage();
+        }
+
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
         function matchBadge(val) {
             if (val === 'match') return '<span class="badge badge-match">Mos</span>';
             return '<span class="badge badge-mismatch">Mos emas</span>';
+        }
+
+        function markBadge(val) {
+            if (val === 'Sababli') return '<span class="badge badge-lms">Sababli</span>';
+            return '<span class="badge badge-hemis-bad">Sababli emas</span>';
         }
 
         function hemisBadge(val) {
@@ -232,14 +282,15 @@
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
                 var rowClass = r.match === 'mismatch' ? 'row-mismatch' : '';
-                html += '<tr class="journal-row ' + rowClass + '">';
+                html += '<tr class="journal-row ' + rowClass + '" style="cursor:pointer;" onclick="window.open(\'' + r.journal_url + '\', \'_blank\')">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.lesson_date) + '</td>';
-                html += '<td style="text-align:center;"><span class="badge badge-lms">Sababli</span></td>';
+                html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.lesson_pair) + '</td>';
+                html += '<td style="text-align:center;">' + markBadge(r.mark_status) + '</td>';
                 html += '<td style="text-align:center;">' + hemisBadge(r.hemis_status) + '</td>';
                 html += '<td style="text-align:center;">' + matchBadge(r.match) + '</td>';
                 html += '</tr>';
@@ -258,16 +309,16 @@
             if (res.last_page <= 1) { $('#pagination-area').html(''); return; }
             var html = '';
             if (res.current_page > 1)
-                html += '<button class="pg-btn" onclick="loadReport(' + (res.current_page - 1) + ')">&laquo; Oldingi</button>';
+                html += '<button class="pg-btn" onclick="goToPage(' + (res.current_page - 1) + ')">&laquo; Oldingi</button>';
             for (var p = 1; p <= res.last_page; p++) {
                 if (p === 1 || p === res.last_page || (p >= res.current_page - 2 && p <= res.current_page + 2)) {
-                    html += '<button class="pg-btn' + (p === res.current_page ? ' pg-active' : '') + '" onclick="loadReport(' + p + ')">' + p + '</button>';
+                    html += '<button class="pg-btn' + (p === res.current_page ? ' pg-active' : '') + '" onclick="goToPage(' + p + ')">' + p + '</button>';
                 } else if (p === res.current_page - 3 || p === res.current_page + 3) {
                     html += '<span style="color:#94a3b8;padding:0 4px;">...</span>';
                 }
             }
             if (res.current_page < res.last_page)
-                html += '<button class="pg-btn" onclick="loadReport(' + (res.current_page + 1) + ')">Keyingi &raquo;</button>';
+                html += '<button class="pg-btn" onclick="goToPage(' + (res.current_page + 1) + ')">Keyingi &raquo;</button>';
             $('#pagination-area').html(html);
         }
 
@@ -283,7 +334,8 @@
                 }
                 $('.sort-link .sort-icon').removeClass('active').html('&#9650;&#9660;');
                 $(this).find('.sort-icon').addClass('active').html(currentDirection === 'asc' ? '&#9650;' : '&#9660;');
-                loadReport(1);
+                currentPage = 1;
+                renderPage();
             });
 
             $('.select2').each(function() {

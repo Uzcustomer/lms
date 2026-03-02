@@ -57,6 +57,20 @@ return [
     'all_marked_read' => 'Все сообщения отмечены как прочитанные',
     'confirm_delete' => 'Вы уверены, что хотите удалить?',
 
+    // Filters
+    'filter_status' => 'Статус',
+    'filter_unread' => 'Непрочитанные',
+    'filter_read' => 'Прочитанные',
+    'filter_type' => 'Тип',
+    'clear_filters' => 'Сбросить',
+    'subjects' => 'Темы',
+
+    // Multi-select
+    'select_all' => 'Выбрать все',
+    'deselect_all' => 'Снять выбор',
+    'selected_count' => 'выбрано',
+    'search_recipients' => 'Поиск сотрудников...',
+
     // Reply
     'reply' => 'Ответить',
     'reply_to' => 'Ответ:',

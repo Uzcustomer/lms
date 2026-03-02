@@ -14,6 +14,7 @@ use App\Imports\QuizResultImport;
 use App\Exports\QuizResultExport;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -174,35 +175,11 @@ class QuizResultController extends Controller
                 }
             }
 
-            $mtGrades = [];
-            if (!empty($studentHemisIds) && !empty($fanIds)) {
-                $mtRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                    ->whereIn('subject_id', $fanIds)
-                    ->where('training_type_code', 99)
-                    ->whereNotNull('grade')
-                    ->get(['student_hemis_id', 'subject_id', 'grade']);
-                foreach ($mtRows as $row) {
-                    $k = $row->student_hemis_id . '|' . $row->subject_id;
-                    $mtGrades[$k][] = $row->grade;
-                }
-            }
-
-            $oskiGrades = [];
-            if (!empty($studentHemisIds) && !empty($fanIds)) {
-                $oskiRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                    ->whereIn('subject_id', $fanIds)
-                    ->where('training_type_code', 101)
-                    ->whereNotNull('grade')
-                    ->get(['student_hemis_id', 'subject_id', 'grade']);
-                foreach ($oskiRows as $row) {
-                    $k = $row->student_hemis_id . '|' . $row->subject_id;
-                    $oskiGrades[$k][] = $row->grade;
-                }
-            }
-
-            // 4) CurriculumSubject
+            // 4) CurriculumSubject va Groups
             $groupIds = $students->pluck('group_id')->unique()->toArray();
-            $groups = Group::whereIn('group_hemis_id', $groupIds)->get()->keyBy('group_hemis_id');
+            $groups = !empty($groupIds)
+                ? Group::whereIn('group_hemis_id', $groupIds)->get()->keyBy('group_hemis_id')
+                : collect();
             $curriculumHemisIds = $groups->pluck('curriculum_hemis_id')->unique()->toArray();
 
             $curriculumSubjects = [];
@@ -212,6 +189,197 @@ class QuizResultController extends Controller
                     ->get(['curricula_hemis_id', 'subject_id', 'semester_code']);
                 foreach ($csRows as $cs) {
                     $curriculumSubjects[$cs->curricula_hemis_id . '|' . $cs->subject_id] = $cs->semester_code;
+                }
+            }
+
+            // Student->group mapping va semester aniqlash (MT va OSKI uchun)
+            $studentGroupMap = [];
+            $studentSubjectSemester = [];
+
+            if ($groups->isNotEmpty()) {
+                foreach ($students as $s) {
+                    $grp = $groups[$s->group_id] ?? null;
+                    if (!$grp) continue;
+                    $studentGroupMap[$s->hemis_id] = $s->group_id;
+                    foreach ($fanIds as $fId) {
+                        $csK = $grp->curriculum_hemis_id . '|' . $fId;
+                        $semC = $curriculumSubjects[$csK] ?? null;
+                        if (!$semC) continue;
+                        $studentSubjectSemester[$s->hemis_id . '|' . $fId] = $semC;
+                    }
+                }
+            }
+
+            // MT baholar — jurnal logikasi bilan bir xil hisoblash (schedule-based daily average)
+            $mtGrades = [];
+
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($studentGroupMap)) {
+                // MT jadval sanalarini batch olish (schedules jadvalidan)
+                $mtScheduleData = [];
+                $uniqueGroupIds = array_unique(array_values($studentGroupMap));
+
+                if (!empty($uniqueGroupIds)) {
+                    $mtSchedRows = DB::table('schedules')
+                        ->whereNull('deleted_at')
+                        ->whereIn('group_id', $uniqueGroupIds)
+                        ->whereIn('subject_id', $fanIds)
+                        ->where('training_type_code', 99)
+                        ->whereNotNull('lesson_date')
+                        ->select('group_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code')
+                        ->orderBy('lesson_date')
+                        ->orderBy('lesson_pair_code')
+                        ->get();
+
+                    foreach ($mtSchedRows as $sr) {
+                        $schedKey = $sr->group_id . '|' . $sr->subject_id . '|' . $sr->semester_code;
+                        $dateStr = \Carbon\Carbon::parse($sr->lesson_date)->format('Y-m-d');
+                        $pairKey = $dateStr . '_' . $sr->lesson_pair_code;
+
+                        if (!isset($mtScheduleData[$schedKey])) {
+                            $mtScheduleData[$schedKey] = ['dates' => [], 'pairsPerDay' => [], 'datePairSet' => []];
+                        }
+                        if (!isset($mtScheduleData[$schedKey]['datePairSet'][$pairKey])) {
+                            $mtScheduleData[$schedKey]['datePairSet'][$pairKey] = true;
+                            $mtScheduleData[$schedKey]['pairsPerDay'][$dateStr] = ($mtScheduleData[$schedKey]['pairsPerDay'][$dateStr] ?? 0) + 1;
+                        }
+                        if (!in_array($dateStr, $mtScheduleData[$schedKey]['dates'])) {
+                            $mtScheduleData[$schedKey]['dates'][] = $dateStr;
+                        }
+                    }
+                    foreach ($mtScheduleData as &$sd) {
+                        sort($sd['dates']);
+                    }
+                    unset($sd, $mtSchedRows);
+                }
+
+                // MT baholarini olish (semester filtri, status/retake filtri — jurnal logikasi)
+                $mtGradesGrouped = [];
+                $allSemCodes = array_unique(array_values($studentSubjectSemester));
+
+                if (!empty($allSemCodes)) {
+                    foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                        $gradeRows = DB::table('student_grades')
+                            ->whereNull('deleted_at')
+                            ->whereIn('student_hemis_id', $chunk)
+                            ->whereIn('subject_id', $fanIds)
+                            ->whereIn('semester_code', $allSemCodes)
+                            ->whereNotIn('training_type_code', [100, 101, 102, 103])
+                            ->whereNotNull('lesson_date')
+                            ->select('student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                            ->get();
+
+                        foreach ($gradeRows as $gr) {
+                            if ($gr->status === 'pending') continue;
+                            $effGrade = null;
+                            if ($gr->reason === 'absent' && $gr->grade === null) {
+                                $effGrade = $gr->retake_grade !== null ? $gr->retake_grade : null;
+                            } elseif ($gr->status === 'closed' && $gr->reason === 'teacher_victim' && $gr->grade == 0 && $gr->retake_grade === null) {
+                                continue;
+                            } elseif ($gr->status === 'recorded') {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->status === 'closed') {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->retake_grade !== null) {
+                                $effGrade = $gr->retake_grade;
+                            }
+                            if ($effGrade === null) continue;
+
+                            $gHemisId = $studentGroupMap[$gr->student_hemis_id] ?? null;
+                            if (!$gHemisId) continue;
+
+                            $schedKey = $gHemisId . '|' . $gr->subject_id . '|' . $gr->semester_code;
+                            if (!isset($mtScheduleData[$schedKey])) continue;
+
+                            $dateStr = \Carbon\Carbon::parse($gr->lesson_date)->format('Y-m-d');
+                            $pairKey = $dateStr . '_' . $gr->lesson_pair_code;
+                            if (!isset($mtScheduleData[$schedKey]['datePairSet'][$pairKey])) continue;
+
+                            $gKey = $gr->student_hemis_id . '|' . $gr->subject_id;
+                            $mtGradesGrouped[$gKey][$dateStr][$gr->lesson_pair_code] = (float) $effGrade;
+                        }
+                        unset($gradeRows);
+                    }
+                }
+
+                // Manual MT baholarini olish (lesson_date IS NULL — override)
+                $manualMtGrades = [];
+                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                    $manualRows = DB::table('student_grades')
+                        ->whereNull('deleted_at')
+                        ->whereIn('student_hemis_id', $chunk)
+                        ->whereIn('subject_id', $fanIds)
+                        ->where('training_type_code', 99)
+                        ->whereNull('lesson_date')
+                        ->whereNotNull('grade')
+                        ->select('student_hemis_id', 'subject_id', 'grade')
+                        ->get();
+                    foreach ($manualRows as $mr) {
+                        $manualMtGrades[$mr->student_hemis_id . '|' . $mr->subject_id] = (float) $mr->grade;
+                    }
+                    unset($manualRows);
+                }
+
+                // MT o'rtachasini hisoblash (jurnal logikasi: kunlik o'rtacha -> umumiy o'rtacha)
+                foreach ($studentSubjectSemester as $gKey => $semCode) {
+                    [$hId, $fId] = explode('|', $gKey);
+                    $gHemisId = $studentGroupMap[$hId] ?? null;
+                    if (!$gHemisId) continue;
+
+                    $schedKey = $gHemisId . '|' . $fId . '|' . $semCode;
+                    $schedData = $mtScheduleData[$schedKey] ?? null;
+
+                    if (!$schedData || empty($schedData['dates'])) {
+                        if (isset($manualMtGrades[$gKey])) {
+                            $mtGrades[$gKey] = round($manualMtGrades[$gKey], 0, PHP_ROUND_HALF_UP);
+                        }
+                        continue;
+                    }
+
+                    $mtDailySum = 0;
+                    $studentMtG = $mtGradesGrouped[$gKey] ?? [];
+                    $totalMtDays = count($schedData['dates']);
+
+                    foreach ($schedData['dates'] as $date) {
+                        $dayG = $studentMtG[$date] ?? [];
+                        $pairsInDay = $schedData['pairsPerDay'][$date] ?? 1;
+                        $gradeSum = array_sum($dayG);
+                        $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                    }
+
+                    $mt = $totalMtDays > 0
+                        ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                        : 0;
+
+                    if (isset($manualMtGrades[$gKey])) {
+                        $mt = round($manualMtGrades[$gKey], 0, PHP_ROUND_HALF_UP);
+                    }
+
+                    $mtGrades[$gKey] = $mt;
+                }
+            }
+
+            // OSKI baholar (training_type_code = 101) — jurnal logikasi: MAX(grade) + semester filtri
+            $oskiGrades = [];
+            $allSemCodesForOski = !empty($studentSubjectSemester) ? array_unique(array_values($studentSubjectSemester)) : [];
+
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($allSemCodesForOski)) {
+                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                    $oskiRows = DB::table('student_grades')
+                        ->whereNull('deleted_at')
+                        ->whereIn('student_hemis_id', $chunk)
+                        ->whereIn('subject_id', $fanIds)
+                        ->whereIn('semester_code', $allSemCodesForOski)
+                        ->where('training_type_code', 101)
+                        ->whereNotNull('grade')
+                        ->select('student_hemis_id', 'subject_id', DB::raw('MAX(grade) as grade'))
+                        ->groupBy('student_hemis_id', 'subject_id')
+                        ->get();
+
+                    foreach ($oskiRows as $row) {
+                        $k = $row->student_hemis_id . '|' . $row->subject_id;
+                        $oskiGrades[$k] = (float) $row->grade;
+                    }
+                    unset($oskiRows);
                 }
             }
 
@@ -425,9 +593,27 @@ class QuizResultController extends Controller
                 $duplicateMap[$key][] = $result->id;
             }
 
-            // 3) Student lar uchun JN/MT/OSKI baholarini olish (chunk bilan)
+            // 3) Groups va CurriculumSubject — jadval ma'lumotlarini oldindan yuklash
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
             $fanIds = $results->pluck('fan_id')->unique()->values()->toArray();
+
+            $groupIds = $students->pluck('group_id')->unique()->toArray();
+            $groups = !empty($groupIds)
+                ? Group::whereIn('group_hemis_id', $groupIds)->get()->keyBy('group_hemis_id')
+                : collect();
+            $curriculumHemisIds = $groups->pluck('curriculum_hemis_id')->unique()->toArray();
+
+            $curriculumSubjects = [];
+            if (!empty($curriculumHemisIds) && !empty($fanIds)) {
+                $csRows = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumHemisIds)
+                    ->whereIn('subject_id', $fanIds)
+                    ->get(['curricula_hemis_id', 'subject_id', 'semester_code']);
+
+                foreach ($csRows as $cs) {
+                    $csKey = $cs->curricula_hemis_id . '|' . $cs->subject_id;
+                    $curriculumSubjects[$csKey] = $cs->semester_code;
+                }
+            }
 
             // JN baholar (training_type_code NOT IN config list)
             $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
@@ -449,63 +635,200 @@ class QuizResultController extends Controller
                 }
             }
 
-            // MT baholar (training_type_code = 99)
-            $mtGrades = [];
-            if (!empty($studentHemisIds) && !empty($fanIds)) {
-                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                    $mtRows = StudentGrade::whereIn('student_hemis_id', $chunk)
-                        ->whereIn('subject_id', $fanIds)
-                        ->where('training_type_code', 99)
-                        ->whereNotNull('grade')
-                        ->select('student_hemis_id', 'subject_id', 'grade')
-                        ->get();
+            // Student->group mapping va semester aniqlash (MT va OSKI uchun umumiy)
+            $studentGroupMap = [];
+            $studentSubjectSemester = [];
 
-                    foreach ($mtRows as $row) {
-                        $k = $row->student_hemis_id . '|' . $row->subject_id;
-                        $mtGrades[$k][] = $row->grade;
+            if ($groups->isNotEmpty()) {
+                foreach ($students as $s) {
+                    $grp = $groups[$s->group_id] ?? null;
+                    if (!$grp) continue;
+                    $studentGroupMap[$s->hemis_id] = $s->group_id;
+                    foreach ($fanIds as $fId) {
+                        $csK = $grp->curriculum_hemis_id . '|' . $fId;
+                        $semC = $curriculumSubjects[$csK] ?? null;
+                        if (!$semC) continue;
+                        $studentSubjectSemester[$s->hemis_id . '|' . $fId] = $semC;
                     }
-                    unset($mtRows);
                 }
             }
 
-            // OSKI baholar (training_type_code = 101) — YN test uchun kerak
-            $oskiGrades = [];
-            if (!empty($studentHemisIds) && !empty($fanIds)) {
-                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                    $oskiRows = StudentGrade::whereIn('student_hemis_id', $chunk)
+            // MT baholar — jurnal logikasi bilan bir xil hisoblash (schedule-based daily average)
+            $mtGrades = []; // student_hemis_id|subject_id => computed MT average (pre-computed)
+
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($studentGroupMap)) {
+                // 2) MT jadval sanalarini batch olish (schedules jadvalidan)
+                $mtScheduleData = [];
+                $uniqueGroupIds = array_unique(array_values($studentGroupMap));
+
+                if (!empty($uniqueGroupIds)) {
+                    $mtSchedRows = DB::table('schedules')
+                        ->whereNull('deleted_at')
+                        ->whereIn('group_id', $uniqueGroupIds)
                         ->whereIn('subject_id', $fanIds)
-                        ->where('training_type_code', 101)
+                        ->where('training_type_code', 99)
+                        ->whereNotNull('lesson_date')
+                        ->select('group_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code')
+                        ->orderBy('lesson_date')
+                        ->orderBy('lesson_pair_code')
+                        ->get();
+
+                    foreach ($mtSchedRows as $sr) {
+                        $schedKey = $sr->group_id . '|' . $sr->subject_id . '|' . $sr->semester_code;
+                        $dateStr = \Carbon\Carbon::parse($sr->lesson_date)->format('Y-m-d');
+                        $pairKey = $dateStr . '_' . $sr->lesson_pair_code;
+
+                        if (!isset($mtScheduleData[$schedKey])) {
+                            $mtScheduleData[$schedKey] = ['dates' => [], 'pairsPerDay' => [], 'datePairSet' => []];
+                        }
+                        if (!isset($mtScheduleData[$schedKey]['datePairSet'][$pairKey])) {
+                            $mtScheduleData[$schedKey]['datePairSet'][$pairKey] = true;
+                            $mtScheduleData[$schedKey]['pairsPerDay'][$dateStr] = ($mtScheduleData[$schedKey]['pairsPerDay'][$dateStr] ?? 0) + 1;
+                        }
+                        if (!in_array($dateStr, $mtScheduleData[$schedKey]['dates'])) {
+                            $mtScheduleData[$schedKey]['dates'][] = $dateStr;
+                        }
+                    }
+                    foreach ($mtScheduleData as &$sd) {
+                        sort($sd['dates']);
+                    }
+                    unset($sd, $mtSchedRows);
+                }
+
+                // 3) MT baholarini olish (semester filtri, status/retake filtri — jurnal logikasi)
+                $mtGradesGrouped = [];
+                $allSemCodes = array_unique(array_values($studentSubjectSemester));
+
+                if (!empty($allSemCodes)) {
+                    foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                        $gradeRows = DB::table('student_grades')
+                            ->whereNull('deleted_at')
+                            ->whereIn('student_hemis_id', $chunk)
+                            ->whereIn('subject_id', $fanIds)
+                            ->whereIn('semester_code', $allSemCodes)
+                            ->whereNotIn('training_type_code', [100, 101, 102, 103])
+                            ->whereNotNull('lesson_date')
+                            ->select('student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                            ->get();
+
+                        foreach ($gradeRows as $gr) {
+                            // Effective grade filtri (jurnal logikasi bilan bir xil)
+                            if ($gr->status === 'pending') continue;
+                            $effGrade = null;
+                            if ($gr->reason === 'absent' && $gr->grade === null) {
+                                $effGrade = $gr->retake_grade !== null ? $gr->retake_grade : null;
+                            } elseif ($gr->status === 'closed' && $gr->reason === 'teacher_victim' && $gr->grade == 0 && $gr->retake_grade === null) {
+                                continue;
+                            } elseif ($gr->status === 'recorded') {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->status === 'closed') {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->retake_grade !== null) {
+                                $effGrade = $gr->retake_grade;
+                            }
+                            if ($effGrade === null) continue;
+
+                            $gHemisId = $studentGroupMap[$gr->student_hemis_id] ?? null;
+                            if (!$gHemisId) continue;
+
+                            $schedKey = $gHemisId . '|' . $gr->subject_id . '|' . $gr->semester_code;
+                            if (!isset($mtScheduleData[$schedKey])) continue;
+
+                            $dateStr = \Carbon\Carbon::parse($gr->lesson_date)->format('Y-m-d');
+                            $pairKey = $dateStr . '_' . $gr->lesson_pair_code;
+                            if (!isset($mtScheduleData[$schedKey]['datePairSet'][$pairKey])) continue;
+
+                            $gKey = $gr->student_hemis_id . '|' . $gr->subject_id;
+                            $mtGradesGrouped[$gKey][$dateStr][$gr->lesson_pair_code] = (float) $effGrade;
+                        }
+                        unset($gradeRows);
+                    }
+                }
+
+                // 4) Manual MT baholarini olish (lesson_date IS NULL — override)
+                $manualMtGrades = [];
+                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                    $manualRows = DB::table('student_grades')
+                        ->whereNull('deleted_at')
+                        ->whereIn('student_hemis_id', $chunk)
+                        ->whereIn('subject_id', $fanIds)
+                        ->where('training_type_code', 99)
+                        ->whereNull('lesson_date')
                         ->whereNotNull('grade')
                         ->select('student_hemis_id', 'subject_id', 'grade')
+                        ->get();
+                    foreach ($manualRows as $mr) {
+                        $manualMtGrades[$mr->student_hemis_id . '|' . $mr->subject_id] = (float) $mr->grade;
+                    }
+                    unset($manualRows);
+                }
+
+                // 5) MT o'rtachasini hisoblash (jurnal logikasi: kunlik o'rtacha -> umumiy o'rtacha)
+                foreach ($studentSubjectSemester as $gKey => $semCode) {
+                    [$hId, $fId] = explode('|', $gKey);
+                    $gHemisId = $studentGroupMap[$hId] ?? null;
+                    if (!$gHemisId) continue;
+
+                    $schedKey = $gHemisId . '|' . $fId . '|' . $semCode;
+                    $schedData = $mtScheduleData[$schedKey] ?? null;
+
+                    if (!$schedData || empty($schedData['dates'])) {
+                        if (isset($manualMtGrades[$gKey])) {
+                            $mtGrades[$gKey] = round($manualMtGrades[$gKey], 0, PHP_ROUND_HALF_UP);
+                        }
+                        continue;
+                    }
+
+                    $mtDailySum = 0;
+                    $studentMtG = $mtGradesGrouped[$gKey] ?? [];
+                    $totalMtDays = count($schedData['dates']);
+
+                    foreach ($schedData['dates'] as $date) {
+                        $dayG = $studentMtG[$date] ?? [];
+                        $pairsInDay = $schedData['pairsPerDay'][$date] ?? 1;
+                        $gradeSum = array_sum($dayG);
+                        $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                    }
+
+                    $mt = $totalMtDays > 0
+                        ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                        : 0;
+
+                    // Manual MT override (jurnal logikasi bilan bir xil)
+                    if (isset($manualMtGrades[$gKey])) {
+                        $mt = round($manualMtGrades[$gKey], 0, PHP_ROUND_HALF_UP);
+                    }
+
+                    $mtGrades[$gKey] = $mt;
+                }
+            }
+
+            // OSKI baholar (training_type_code = 101) — jurnal logikasi: MAX(grade) + semester filtri
+            $oskiGrades = []; // student_hemis_id|subject_id => max grade (pre-computed)
+            $allSemCodesForOski = !empty($studentSubjectSemester) ? array_unique(array_values($studentSubjectSemester)) : [];
+
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($allSemCodesForOski)) {
+                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                    $oskiRows = DB::table('student_grades')
+                        ->whereNull('deleted_at')
+                        ->whereIn('student_hemis_id', $chunk)
+                        ->whereIn('subject_id', $fanIds)
+                        ->whereIn('semester_code', $allSemCodesForOski)
+                        ->where('training_type_code', 101)
+                        ->whereNotNull('grade')
+                        ->select('student_hemis_id', 'subject_id', DB::raw('MAX(grade) as grade'))
+                        ->groupBy('student_hemis_id', 'subject_id')
                         ->get();
 
                     foreach ($oskiRows as $row) {
                         $k = $row->student_hemis_id . '|' . $row->subject_id;
-                        $oskiGrades[$k][] = $row->grade;
+                        $oskiGrades[$k] = (float) $row->grade;
                     }
                     unset($oskiRows);
                 }
             }
 
-            // 4) CurriculumSubject — fanlar jadvalda bormi tekshirish
-            $groupIds = $students->pluck('group_id')->unique()->toArray();
-            $groups = !empty($groupIds)
-                ? Group::whereIn('group_hemis_id', $groupIds)->get()->keyBy('group_hemis_id')
-                : collect();
-            $curriculumHemisIds = $groups->pluck('curriculum_hemis_id')->unique()->toArray();
-
-            $curriculumSubjects = [];
-            if (!empty($curriculumHemisIds) && !empty($fanIds)) {
-                $csRows = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumHemisIds)
-                    ->whereIn('subject_id', $fanIds)
-                    ->get(['curricula_hemis_id', 'subject_id', 'semester_code']);
-
-                foreach ($csRows as $cs) {
-                    $curriculumSubjects[$cs->curricula_hemis_id . '|' . $cs->subject_id] = $cs->semester_code;
-                }
-            }
-
-            // 5) MarkingSystemScore larni bulk yuklash (N+1 query oldini olish)
+            // 4) MarkingSystemScore larni bulk yuklash (N+1 query oldini olish)
             $markingSystemCodes = $students
                 ->map(fn($s) => optional($s->curriculum)->marking_system_code)
                 ->filter()
@@ -566,18 +889,6 @@ class QuizResultController extends Controller
                     $studentScoreLookup, $defaultScore
                 );
 
-                // Journal uchun group_db_id va semester_code aniqlash
-                $groupDbId = null;
-                $semesterCode = null;
-                if ($student) {
-                    $groupModel = $groups[$student->group_id] ?? null;
-                    if ($groupModel) {
-                        $groupDbId = $groupModel->id;
-                        $csKey = $groupModel->curriculum_hemis_id . '|' . $result->fan_id;
-                        $semesterCode = $curriculumSubjects[$csKey] ?? null;
-                    }
-                }
-
                 $rowNum++;
                 $data[] = [
                     'id' => $result->id,
@@ -599,9 +910,6 @@ class QuizResultController extends Controller
                     'jn_avg' => $xulosa['jn_avg'],
                     'mt_avg' => $xulosa['mt_avg'],
                     'oski_avg' => $xulosa['oski_avg'],
-                    'group_db_id' => $groupDbId,
-                    'fan_id' => $result->fan_id,
-                    'semester_code' => $semesterCode,
                 ];
             }
 
@@ -700,14 +1008,14 @@ class QuizResultController extends Controller
             $jnAvg = count($dateAvgs) > 0 ? round(array_sum($dateAvgs) / count($dateAvgs), 1) : null;
         }
 
-        // MT o'rtachasi
+        // MT o'rtachasi (jurnal logikasi bilan oldindan hisoblangan)
         if (isset($mtGrades[$gradeKey])) {
-            $mtAvg = round(array_sum($mtGrades[$gradeKey]) / count($mtGrades[$gradeKey]), 1);
+            $mtAvg = $mtGrades[$gradeKey];
         }
 
-        // OSKI o'rtachasi
+        // OSKI bahosi (jurnal logikasi bilan oldindan hisoblangan — MAX)
         if (isset($oskiGrades[$gradeKey])) {
-            $oskiAvg = round(array_sum($oskiGrades[$gradeKey]) / count($oskiGrades[$gradeKey]), 1);
+            $oskiAvg = $oskiGrades[$gradeKey];
         }
 
         // 9) YNga ruxsat tekshiruvi (MarkingSystemScore orqali)

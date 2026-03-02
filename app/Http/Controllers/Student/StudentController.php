@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Services\StudentGradeService;
 use App\Models\MarkingSystemScore;
+use App\Models\ExamSchedule;
 use App\Models\YnConsent;
 use App\Models\YnSubmission;
 
@@ -281,7 +282,7 @@ class StudentController extends Controller
         $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
-        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->endOfDay();
 
         // MT settings
         $mtDeadlineTime = Setting::get('mt_deadline_time', '17:00');
@@ -1365,5 +1366,26 @@ class StudentController extends Controller
         ];
 
         return view('student.profile', compact('profileData'));
+    }
+
+    public function examSchedule()
+    {
+        $student = Auth::guard('student')->user();
+
+        if ($redirect = $this->redirectIfPasswordChangeRequired()) {
+            return $redirect;
+        }
+
+        $examSchedules = ExamSchedule::where('group_hemis_id', $student->group_id)
+            ->where('semester_code', $student->semester_code)
+            ->where(function ($query) use ($student) {
+                $query->where('education_year', $student->education_year_code)
+                    ->orWhereNull('education_year');
+            })
+            ->orderBy('oski_date')
+            ->orderBy('test_date')
+            ->get();
+
+        return view('student.exam-schedule', compact('examSchedules', 'student'));
     }
 }

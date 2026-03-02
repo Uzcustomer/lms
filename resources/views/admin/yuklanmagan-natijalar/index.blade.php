@@ -77,6 +77,10 @@
         .adv-btn-apply { padding: 4px 10px; border: none; border-radius: 6px; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #16a34a, #22c55e); cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 4px rgba(22,163,74,0.3); }
         .adv-btn-apply:hover { background: linear-gradient(135deg, #15803d, #16a34a); transform: translateY(-1px); }
 
+        /* ScrollCalendar ichki filtr stillari */
+        .adv-filter-inputs .sc-wrap { flex: 1; }
+        .adv-filter-inputs .sc-wrap .date-input { width: 100%; font-size: 11px; height: 28px; padding: 4px 28px 4px 8px; box-shadow: none; }
+
         .journal-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
         .journal-table tbody tr:nth-child(even) { background: #f8fafc; }
         .journal-table tbody tr:nth-child(odd) { background: #fff; }
@@ -236,8 +240,10 @@
                                                         <option value="between">Orasida</option>
                                                     </select>
                                                     <div class="adv-filter-inputs">
-                                                        <input type="date" id="sana-val1" class="adv-filter-input">
-                                                        <input type="date" id="sana-val2" class="adv-filter-input" style="display:none;">
+                                                        <input type="text" id="sana-val1" class="adv-filter-input" placeholder="Sanani tanlang" autocomplete="off">
+                                                        <div id="sana-val2-wrap" style="display:none;flex:1;">
+                                                            <input type="text" id="sana-val2" class="adv-filter-input" placeholder="Sanani tanlang" autocomplete="off">
+                                                        </div>
                                                     </div>
                                                     <div class="adv-filter-actions">
                                                         <button type="button" class="adv-btn-clear" onclick="clearAdvFilter('sana')">Tozalash</button>
@@ -418,8 +424,8 @@
 
         function toggleSanaSecond() {
             var op = $('#sana-op').val();
-            $('#sana-val2').toggle(op === 'between');
-            if (op !== 'between') $('#sana-val2').val('');
+            $('#sana-val2-wrap').toggle(op === 'between');
+            if (op !== 'between' && window.sanaCalendar2) window.sanaCalendar2.clear();
         }
 
         function applyAdvFilter(type) {
@@ -446,8 +452,14 @@
 
         function clearAdvFilter(type) {
             $('#' + type + '-op').val('');
-            $('#' + type + '-val1').val('');
-            $('#' + type + '-val2').val('').hide();
+            if (type === 'sana') {
+                if (window.sanaCalendar1) window.sanaCalendar1.clear();
+                if (window.sanaCalendar2) window.sanaCalendar2.clear();
+                $('#sana-val2-wrap').hide();
+            } else {
+                $('#' + type + '-val1').val('');
+                $('#' + type + '-val2').val('').hide();
+            }
             advFilters[type] = null;
             $('#' + type + '-filter-label').text(type === 'baho' ? 'Baho' : 'Sana').removeClass('adv-active-label');
             $('#' + type + '-popup').closest('.adv-filter-wrap').find('.adv-filter-btn').removeClass('adv-active');
@@ -613,6 +625,8 @@
         $(document).ready(function() {
             new ScrollCalendar('date_from');
             new ScrollCalendar('date_to');
+            window.sanaCalendar1 = new ScrollCalendar('sana-val1');
+            window.sanaCalendar2 = new ScrollCalendar('sana-val2');
 
             $(document).on('change', 'select.col-filter', function() { applyColumnFilters(); });
             var filterTimer = null;

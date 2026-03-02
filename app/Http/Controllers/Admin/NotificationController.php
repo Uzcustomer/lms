@@ -32,6 +32,11 @@ class NotificationController extends Controller
         $tab = $request->get('tab', 'inbox');
         $search = $request->get('search', '');
         $senderFilter = $request->get('sender_id');
+        $readStatus = $request->get('status'); // 'unread'
+        $subjectFilter = $request->get('subject'); // mavzu bo'yicha filtr
+
+        $subjects = collect();
+        $senders = collect();
 
         try {
             $query = Notification::with('sender');
@@ -63,9 +68,29 @@ class NotificationController extends Controller
                 $query->where('sender_id', $senderFilter);
             }
 
+            if ($readStatus === 'unread') {
+                $query->where('is_read', false);
+            }
+
+            // Mavzular ro'yxati — xuddi shu so'rovdan olish (subject filtr qo'yilmasdan OLDIN)
+            // Bu usul kafolatlaydi: agar xabarlar ko'rinsa, mavzular ham chiqadi
+            $subjects = (clone $query)
+                ->pluck('subject')
+                ->filter(fn ($s) => $s !== null && $s !== '')
+                ->countBy()
+                ->sortDesc()
+                ->take(20)
+                ->map(fn ($count, $subject) => (object) ['subject' => $subject, 'subject_count' => $count])
+                ->values();
+
+            // Mavzu filtri — mavzular ro'yxati olinganidan KEYIN qo'yiladi
+            if ($subjectFilter) {
+                $query->where('subject', $subjectFilter);
+            }
+
             $notifications = $query->paginate(20);
         } catch (\Throwable $e) {
-            \Log::error('NotificationController@index query error: ' . $e->getMessage());
+            \Log::error('NotificationController@index query error: ' . $e->getMessage() . ' | ' . $e->getTraceAsString());
             $notifications = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
         }
 
@@ -79,8 +104,7 @@ class NotificationController extends Controller
             $unreadCount = $inboxCount = $sentCount = $draftsCount = 0;
         }
 
-        // Kelgan xabarlar uchun jo'natuvchilar ro'yxati (filtr uchun)
-        $senders = collect();
+        // Jo'natuvchilar ro'yxati (filtr uchun)
         try {
             if ($tab === 'inbox') {
                 $inboxSenderIds = Notification::inbox($userId, $userType)->distinct()->pluck('sender_id');
@@ -96,7 +120,8 @@ class NotificationController extends Controller
         }
 
         return view('admin.notifications.index', compact(
-            'notifications', 'tab', 'search', 'senderFilter', 'unreadCount', 'inboxCount', 'sentCount', 'draftsCount', 'senders'
+            'notifications', 'tab', 'search', 'senderFilter', 'readStatus', 'subjectFilter',
+            'unreadCount', 'inboxCount', 'sentCount', 'draftsCount', 'senders', 'subjects'
         ));
     }
 
@@ -104,8 +129,15 @@ class NotificationController extends Controller
     {
         [$userId, $userType] = $this->getUserInfo();
 
+        // Faqat o'ziga tegishli xabarlarni ko'rish mumkin
+        $isRecipient = $notification->recipient_id == $userId && $notification->recipient_type === $userType;
+        $isSender = $notification->sender_id == $userId && $notification->sender_type === $userType;
+        if (!$isRecipient && !$isSender) {
+            abort(403, __('notifications.no_permission'));
+        }
+
         // Mark as read if recipient
-        if ($notification->recipient_id == $userId && $notification->recipient_type == $userType) {
+        if ($isRecipient) {
             $notification->markAsRead();
         }
 
@@ -130,10 +162,44 @@ class NotificationController extends Controller
 
     public function create()
     {
-        [$userId, $userType] = $this->getUserInfo();
+        try {
+            [$userId, $userType] = $this->getUserInfo();
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@create getUserInfo error: ' . $e->getMessage());
+            abort(500, 'Auth error: ' . $e->getMessage());
+        }
 
-        $users = User::with('roles')->orderBy('name')->get();
-        $teachers = Teacher::orderBy('full_name')->get(['id', 'full_name']);
+        // Xodimlar ro'yxatini JSON-xavfsiz massiv sifatida tayyorlash
+        $teachersJson = [];
+        try {
+            $teachers = Teacher::with('roles')
+                ->whereNotNull('full_name')
+                ->where('full_name', '!=', '')
+                ->orderBy('full_name')
+                ->get();
+
+            foreach ($teachers as $t) {
+                try {
+                    $roles = $t->relationLoaded('roles') ? $t->roles->pluck('name')->toArray() : [];
+                } catch (\Throwable $e) {
+                    $roles = [];
+                }
+                $name = $t->full_name ?? $t->short_name ?? ('ID: ' . $t->id);
+                // UTF-8 xavfsizligi
+                $name = mb_convert_encoding($name, 'UTF-8', 'UTF-8');
+                $position = mb_convert_encoding($t->staff_position ?? '', 'UTF-8', 'UTF-8');
+
+                $teachersJson[] = [
+                    'id' => (int) $t->id,
+                    'name' => $name,
+                    'position' => $position,
+                    'roles' => $roles,
+                ];
+            }
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@create teachers error: ' . $e->getMessage() . ' | ' . $e->getTraceAsString());
+            $teachersJson = [];
+        }
 
         // Rollar ro'yxati (talabadan tashqari)
         $roles = collect(ProjectRole::staffRoles())->map(fn ($role) => [
@@ -150,38 +216,35 @@ class NotificationController extends Controller
             $unreadCount = $sentCount = $draftsCount = 0;
         }
 
-        return view('admin.notifications.create', compact('users', 'teachers', 'roles', 'unreadCount', 'sentCount', 'draftsCount'));
+        return view('admin.notifications.create', compact('teachersJson', 'roles', 'unreadCount', 'sentCount', 'draftsCount'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'recipient_id' => 'required|integer',
-            'recipient_type' => 'required|string|in:user,teacher',
+            'recipient_ids' => 'required|array|min:1',
+            'recipient_ids.*' => 'integer|exists:teachers,id',
             'subject' => 'required|string|max:255',
             'body' => 'nullable|string',
         ]);
-
-        $typeMap = [
-            'user' => User::class,
-            'teacher' => Teacher::class,
-        ];
 
         [$senderId, $senderType] = $this->getUserInfo();
 
         $isDraft = $request->has('save_draft');
 
-        $notification = Notification::create([
-            'sender_id' => $senderId,
-            'sender_type' => $senderType,
-            'recipient_id' => $validated['recipient_id'],
-            'recipient_type' => $typeMap[$validated['recipient_type']],
-            'subject' => $validated['subject'],
-            'body' => $validated['body'] ?? '',
-            'type' => Notification::TYPE_MESSAGE,
-            'is_draft' => $isDraft,
-            'sent_at' => $isDraft ? null : now(),
-        ]);
+        foreach ($validated['recipient_ids'] as $recipientId) {
+            Notification::create([
+                'sender_id' => $senderId,
+                'sender_type' => $senderType,
+                'recipient_id' => $recipientId,
+                'recipient_type' => Teacher::class,
+                'subject' => $validated['subject'],
+                'body' => $validated['body'] ?? '',
+                'type' => Notification::TYPE_MESSAGE,
+                'is_draft' => $isDraft,
+                'sent_at' => $isDraft ? null : now(),
+            ]);
+        }
 
         if ($isDraft) {
             return redirect()->route('admin.notifications.index', ['tab' => 'drafts'])
@@ -196,8 +259,8 @@ class NotificationController extends Controller
     {
         [$userId, $userType] = $this->getUserInfo();
 
-        if (($notification->sender_id == $userId && $notification->sender_type == $userType)
-            || ($notification->recipient_id == $userId && $notification->recipient_type == $userType)) {
+        if (($notification->sender_id == $userId && $notification->sender_type === $userType)
+            || ($notification->recipient_id == $userId && $notification->recipient_type === $userType)) {
             $notification->delete();
             return redirect()->back()->with('success', __('notifications.deleted'));
         }

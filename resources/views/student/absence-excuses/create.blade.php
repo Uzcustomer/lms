@@ -912,6 +912,14 @@
                     jnStart = sameSubjectJn?.makeup_start || '';
                     jnEnd = sameSubjectJn?.makeup_end || '';
                 }
+                // Yakuniy test uchun: OSKI tanlangan kunni bloklash
+                let oskiDate = '';
+                if (item.assessment_type === 'test') {
+                    const sameSubjectOski = this.assessments.find(
+                        a => a.assessment_type === 'oski' && a.subject_name === item.subject_name
+                    );
+                    oskiDate = sameSubjectOski?.makeup_date || '';
+                }
                 for (let i = 0; i < startWd; i++) {
                     cells.push({ key: 'e' + i, date: null, day: '', disabled: true });
                 }
@@ -926,11 +934,17 @@
                     if (jnStart && jnEnd) {
                         takenByJn = ds >= jnStart && ds <= jnEnd && !isSun;
                     }
+                    // Yakuniy test: OSKI tanlangan kun band
+                    let takenByOski = false;
+                    if (oskiDate && ds === oskiDate) {
+                        takenByOski = true;
+                    }
                     cells.push({
                         key: ds, date: dt, dateStr: ds, day: d,
                         isSunday: isSun, isToday: ds === todayStr,
-                        disabled: isPast || isSun || beyondLimit || takenByJn,
-                        takenByJn: takenByJn
+                        disabled: isPast || isSun || beyondLimit || takenByJn || takenByOski,
+                        takenByJn: takenByJn,
+                        takenByOski: takenByOski
                     });
                 }
                 return cells;
@@ -964,6 +978,14 @@
                 } else {
                     item.makeup_date = item.makeup_date === dateStr ? '' : dateStr;
                     if (item.makeup_date) item.show_cal = false;
+                    // OSKI tanlanganda, shu fan yakuniy test ning o'sha kunini tozalash
+                    if (item.assessment_type === 'oski' && item.makeup_date) {
+                        this.assessments.forEach(a => {
+                            if (a.assessment_type === 'test' && a.subject_name === item.subject_name && a.makeup_date === item.makeup_date) {
+                                a.makeup_date = '';
+                            }
+                        });
+                    }
                 }
             },
             miniInRange(index, dateStr) {

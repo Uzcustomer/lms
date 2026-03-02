@@ -31,7 +31,7 @@ return [
     'subject_placeholder' => 'Xabar mavzusini kiriting',
     'body' => 'Matn',
     'body_placeholder' => 'Xabar matnini kiriting...',
-    'search_placeholder' => 'Xabarlardan qidirish...',
+    'search_placeholder' => 'Qidirish...',
     'senders' => "Jo'natuvchilar",
     'role' => 'Rol',
     'all' => 'Barchasi',
@@ -56,6 +56,20 @@ return [
     'no_permission' => 'Sizda bu amalni bajarish huquqi yo\'q',
     'all_marked_read' => 'Barcha xabarlar o\'qilgan deb belgilandi',
     'confirm_delete' => 'Haqiqatan ham o\'chirmoqchimisiz?',
+
+    // Filters
+    'filter_status' => 'Holati',
+    'filter_unread' => "O'qilmagan",
+    'filter_read' => "O'qilgan",
+    'filter_type' => 'Turi',
+    'clear_filters' => 'Tozalash',
+    'subjects' => 'Mavzular',
+
+    // Multi-select
+    'select_all' => 'Barchasini tanlash',
+    'deselect_all' => 'Bekor qilish',
+    'selected_count' => 'ta tanlandi',
+    'search_recipients' => 'Xodimlarni qidirish...',
 
     // Reply
     'reply' => 'Javob berish',

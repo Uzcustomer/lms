@@ -18,10 +18,14 @@ class YnSubmission extends Model
         'group_hemis_id',
         'submitted_by',
         'submitted_at',
+        'exam_date',
+        'results_fetched',
     ];
 
     protected $casts = [
         'submitted_at' => 'datetime',
+        'exam_date' => 'date',
+        'results_fetched' => 'boolean',
     ];
 
     public function submittedBy()

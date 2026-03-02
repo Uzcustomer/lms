@@ -18,6 +18,11 @@
         return in_array($activeRole, (array) $roles);
     };
 
+    // Foydalanuvchida rol mavjudligini tekshirish (faol bo'lmasa ham)
+    $hasAnyRole = function($roles) use ($userRoles) {
+        return count(array_intersect((array) $roles, $userRoles)) > 0;
+    };
+
     // Route resolver - teacher yoki admin guardga qarab route aniqlash
     $r = function($adminRoute, $teacherRoute = null) use ($isTeacher, $activeRole, $adminRoles) {
         if ($isTeacher && $teacherRoute && !in_array($activeRole, $adminRoles)) {
@@ -173,7 +178,7 @@
 
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'fan_masuli', 'oqituvchi', 'kafedra_mudiri']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'fan_masuli', 'kafedra_mudiri', 'dekan']))
         <a href="{{ route('admin.ktr.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.ktr.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,7 +242,7 @@
             </svg>
             YN kunini belgilash
         </a>
-        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi']))
+        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi', 'fan_masuli']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         <div class="sidebar-section">Qo'shimcha</div>
 
@@ -462,7 +467,13 @@
         </a>
         @endif
 
-        {{-- Sababli arizalar - Talaba arizalari sectionga ko'chirildi --}}
+        <a href="{{ route('admin.reports.users-without-ratings') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.users-without-ratings') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+            </svg>
+            Baho qo'ymaganlar
+        </a>
 
         @if($hasActiveRole(['superadmin', 'admin']))
         <a href="{{ route('admin.document-templates.index') }}"

@@ -11,6 +11,12 @@ class KtrChangeRequest extends Model
         'requested_by',
         'requested_by_guard',
         'status',
+        'draft_week_count',
+        'draft_plan_data',
+    ];
+
+    protected $casts = [
+        'draft_plan_data' => 'array',
     ];
 
     public function approvals()

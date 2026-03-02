@@ -5,7 +5,7 @@
         </h2>
     </x-slot>
 
-    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3">
+    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3 pb-10">
 
         {{-- Yangi ariza topshirish --}}
         <div class="mb-4">

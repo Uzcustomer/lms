@@ -271,8 +271,12 @@ class TeacherController extends Controller
         $search = $request->input('q', '');
         $levelCode = $request->input('level_code', '');
         $teacherId = $request->input('teacher_id');
+        $filterDeptParam = $request->input('filter_dept', '1');
 
         $teacher = $teacherId ? Teacher::find($teacherId) : null;
+
+        // Agar filter_dept=0 bo'lsa, kafedra filtrini o'chirish
+        $forceDeptFilter = $filterDeptParam !== '0';
 
         // Query yaratish funksiyasi
         $buildQuery = function ($filterByDept = true, $onlyActive = true) use ($search, $levelCode, $teacher) {
@@ -316,11 +320,11 @@ class TeacherController extends Controller
                 ->limit(50);
         };
 
-        // 1. Kafedra + active
-        $subjects = $buildQuery(true, true)->get();
+        // 1. Kafedra + active (yoki filter_dept=0 bo'lsa barcha kafedra)
+        $subjects = $buildQuery($forceDeptFilter, true)->get();
 
         // 2. Kafedra + barcha (active bo'lmasa ham)
-        if ($subjects->isEmpty() && $teacher) {
+        if ($subjects->isEmpty() && $teacher && $forceDeptFilter) {
             $subjects = $buildQuery(true, false)->get();
         }
 

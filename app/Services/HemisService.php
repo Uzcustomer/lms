@@ -518,7 +518,7 @@ class HemisService
                     'department_id' => $department->id,
                     'education_year_code' => $data['educationYear']['code'],
                     'education_year_name' => $data['educationYear']['name'],
-                    'education_year_current' => $data['educationYear']['current'],
+                    'current' => $data['educationYear']['current'],
                     'education_type_code' => $data['educationType']['code'],
                     'education_type_name' => $data['educationType']['name'],
                     'education_form_code' => $data['educationForm']['code'],

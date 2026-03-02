@@ -155,7 +155,14 @@ class KtrController extends Controller
         $currentSemesterDefault = $isFanMasuli ? '0' : '1';
         if ($request->get('current_semester', $currentSemesterDefault) == '1') {
             $query->where('s.current', true);
-            $query->where('c.current', true);
+            // Har bir yo'nalish/fakultet uchun faqat eng oxirgi o'quv reja fanlarini ko'rsatish
+            // (eski yillar o'quv rejalaridagi dublikatlarni oldini olish)
+            $query->whereRaw('c.education_year_code = (
+                SELECT MAX(c2.education_year_code) FROM curricula AS c2
+                WHERE c2.specialty_hemis_id = c.specialty_hemis_id
+                AND c2.department_hemis_id = c.department_hemis_id
+                AND c2.education_type_code = c.education_type_code
+            )');
         }
 
         // KTR holati filtri (yaratildi/yaratilmadi)

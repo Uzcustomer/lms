@@ -5761,14 +5761,24 @@ class JournalController extends Controller
             }
 
             // Vaznli yakuniy ball hisoblash
-            $yakuniyBall = round(
-                ($jnVal * $weightJn / 100) +
-                ($mtVal * $weightMt / 100) +
-                ($onVal * $weightOn / 100) +
-                ($oskiVal * $weightOski / 100) +
-                ($testVal * $weightTest / 100)
-            );
-            $sheet->setCellValue('V' . $row, $yakuniyBall);
+            // Agar vaznli komponent bahosi 0 bo'lsa, yakuniy ball hisoblanmasin
+            $hasAllRequired = true;
+            if ($weightJn > 0 && $jnVal == 0) $hasAllRequired = false;
+            if ($weightMt > 0 && $mtVal == 0) $hasAllRequired = false;
+            if ($weightOn > 0 && $onVal == 0) $hasAllRequired = false;
+            if ($weightOski > 0 && $oskiVal == 0) $hasAllRequired = false;
+            if ($weightTest > 0 && $testVal == 0) $hasAllRequired = false;
+
+            if ($hasAllRequired) {
+                $yakuniyBall = round(
+                    ($jnVal * $weightJn / 100) +
+                    ($mtVal * $weightMt / 100) +
+                    ($onVal * $weightOn / 100) +
+                    ($oskiVal * $weightOski / 100) +
+                    ($testVal * $weightTest / 100)
+                );
+                $sheet->setCellValue('V' . $row, $yakuniyBall);
+            }
         }
 
         $tempDir = storage_path('app/public/yn_qaydnoma_excel');

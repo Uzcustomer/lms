@@ -22,7 +22,7 @@
             </a>
 
             {{-- 2. Apellyatsiya --}}
-            <a href="#"
+            <a href="{{ route('student.appeals.index') }}"
                class="flex flex-col items-center bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden active:scale-[0.98] transition-all duration-150"
                style="padding:16px 10px;">
                 <div class="w-14 h-14 rounded-2xl bg-purple-100 flex items-center justify-center mb-3">

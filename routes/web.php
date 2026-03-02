@@ -589,6 +589,15 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::post('/read-all', [\App\Http\Controllers\Student\NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
         });
 
+        // Imtihon natijalari bo'yicha apellyatsiya
+        Route::prefix('appeals')->name('appeals.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\ExamAppealController::class, 'index'])->name('index');
+            Route::get('/create', [\App\Http\Controllers\Student\ExamAppealController::class, 'create'])->name('create');
+            Route::post('/store', [\App\Http\Controllers\Student\ExamAppealController::class, 'store'])->name('store');
+            Route::get('/{id}', [\App\Http\Controllers\Student\ExamAppealController::class, 'show'])->name('show');
+            Route::get('/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'download'])->name('download');
+        });
+
         // Sababli dars qoldirish arizasi
         Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'index'])->name('index');

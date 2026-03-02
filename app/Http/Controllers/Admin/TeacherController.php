@@ -278,6 +278,15 @@ class TeacherController extends Controller
         // Agar filter_dept=0 bo'lsa, kafedra filtrini o'chirish
         $forceDeptFilter = $filterDeptParam !== '0';
 
+        // O'qituvchining biriktirilgan fanlarini olish (subject_name + semester_code bo'yicha)
+        $assignedSubjectKeys = collect();
+        if ($teacher) {
+            $assignedSubjectKeys = $teacher->responsibleSubjects()
+                ->select('subject_name', 'semester_code')
+                ->get()
+                ->map(fn($s) => $s->subject_name . '|' . $s->semester_code);
+        }
+
         // Query yaratish funksiyasi
         $buildQuery = function ($filterByDept = true, $onlyActive = true) use ($search, $levelCode, $teacher, $forceDeptFilter) {
             $query = CurriculumSubject::query();
@@ -317,7 +326,7 @@ class TeacherController extends Controller
                 ->groupBy('subject_name', 'semester_code', 'semester_name')
                 ->orderBy('subject_name')
                 ->orderBy('semester_code')
-                ->limit($forceDeptFilter ? 50 : 100);
+                ->limit($forceDeptFilter ? 50 : 200);
         };
 
         if (!$forceDeptFilter) {
@@ -342,6 +351,12 @@ class TeacherController extends Controller
                 $subjects = $buildQuery(false, false)->get();
             }
         }
+
+        // Har bir fan uchun is_assigned flagini qo'shish
+        $subjects->transform(function ($subject) use ($assignedSubjectKeys) {
+            $subject->is_assigned = $assignedSubjectKeys->contains($subject->subject_name . '|' . $subject->semester_code);
+            return $subject;
+        });
 
         return response()->json($subjects);
     }

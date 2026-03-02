@@ -137,7 +137,7 @@
 
         <!-- Boshqalar popup menu -->
         <div x-show="boshqalarOpen" @click.away="boshqalarOpen = false" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:9999;display:none;" class="mx-auto max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-3">
-            <div class="flex flex-col gap-2">
+            <div class="grid grid-cols-2 gap-2">
                 <a href="{{ route('student.exam-schedule') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.exam-schedule') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}" style="padding:10px;">
                     <div class="rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
                         <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">

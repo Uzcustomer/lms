@@ -588,6 +588,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/independents/download/{submissionId}', [StudentController::class, 'downloadSubmission'])->name('independents.download');
         Route::post('/yn-consent', [StudentController::class, 'submitYnConsent'])->name('yn-consent');
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
+        Route::get('/exam-schedule', [StudentController::class, 'examSchedule'])->name('exam-schedule');
 
         // Xizmatlar sahifasi
         Route::get('/services', function () {

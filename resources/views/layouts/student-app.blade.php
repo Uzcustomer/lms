@@ -116,7 +116,7 @@
         elseif (request()->routeIs('student.schedule')) $activeTab = 'jadval';
         elseif (request()->routeIs('student.dashboard')) $activeTab = 'asosiy';
         elseif (request()->routeIs('student.independents')) $activeTab = 'mt';
-        elseif (request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
+        elseif (request()->routeIs('student.exam-schedule') || request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
     @endphp
     <div x-data="{ boshqalarOpen: false }" class="sm:hidden" style="position:fixed !important;bottom:0 !important;left:0 !important;right:0 !important;z-index:9999 !important;">
         <!-- Boshqalar popup overlay -->
@@ -125,6 +125,14 @@
         <!-- Boshqalar popup menu -->
         <div x-show="boshqalarOpen" @click.away="boshqalarOpen = false" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:9999;display:none;" class="mx-auto max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-3">
             <div class="grid grid-cols-2 gap-2">
+                <a href="{{ route('student.exam-schedule') }}" class="flex items-center gap-3 px-3 py-3 rounded-xl transition {{ request()->routeIs('student.exam-schedule') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                    <div class="w-11 h-11 rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 leading-tight">Imtihon jadvali</span>
+                </a>
                 <a href="{{ route('student.services') }}" class="flex items-center gap-3 px-3 py-3 rounded-xl transition {{ request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}">
                     <div class="w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0">
                         <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">

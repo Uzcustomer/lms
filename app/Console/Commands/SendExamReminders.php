@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\ExamSchedule;
-use App\Models\Semester;
 use App\Models\Student;
 use App\Services\TelegramService;
 use Carbon\Carbon;
@@ -23,10 +22,8 @@ class SendExamReminders extends Command
         $this->info("Ertangi sana: {$tomorrow}");
         $this->info("Imtihon eslatmalari tekshirilmoqda...");
 
-        // Joriy o'quv yilini aniqlash
-        $currentEducationYear = Semester::where('current', true)->value('education_year');
-
-        $examSchedules = ExamSchedule::where(function ($query) use ($tomorrow) {
+        // 1-qadam: Ertaga imtihoni bor guruhlarni topish (tez query)
+        $groupIds = ExamSchedule::where(function ($query) use ($tomorrow) {
             $query->where(function ($q) use ($tomorrow) {
                 $q->whereDate('oski_date', $tomorrow)
                     ->where(function ($q2) {
@@ -38,72 +35,78 @@ class SendExamReminders extends Command
                         $q2->where('test_na', false)->orWhereNull('test_na');
                     });
             });
-        })
-            ->where(function ($query) use ($currentEducationYear) {
-                $query->where('education_year', $currentEducationYear)
-                    ->orWhereNull('education_year');
-            })
-            ->get();
+        })->pluck('group_hemis_id')->unique()->values();
 
-        if ($examSchedules->isEmpty()) {
+        if ($groupIds->isEmpty()) {
             $this->info('Ertaga uchun imtihon topilmadi.');
             return 0;
         }
 
-        $this->info("Topilgan imtihonlar soni: {$examSchedules->count()}");
+        $this->info("Ertaga imtihoni bor guruhlar: {$groupIds->count()} ta");
+
+        // 2-qadam: Shu guruhlardan Telegram tasdiqlangan talabalarni topish
+        $students = Student::whereIn('group_id', $groupIds)
+            ->whereNotNull('telegram_chat_id')
+            ->whereNotNull('telegram_verified_at')
+            ->get();
+
+        if ($students->isEmpty()) {
+            $this->warn('Telegram tasdiqlangan talaba topilmadi (guruhlar: ' . $groupIds->take(10)->implode(', ') . ')');
+            return 0;
+        }
+
+        $this->info("Telegram tasdiqlangan talabalar: {$students->count()} ta");
 
         $sentCount = 0;
         $failedCount = 0;
         $skippedCount = 0;
 
-        $schedulesByGroup = $examSchedules->groupBy('group_hemis_id');
-
-        foreach ($schedulesByGroup as $groupHemisId => $groupSchedules) {
-            $students = Student::where('group_id', $groupHemisId)
-                ->whereNotNull('telegram_chat_id')
-                ->whereNotNull('telegram_verified_at')
+        // 3-qadam: Har bir talaba uchun imtihonlarni topish
+        // StudentController::examSchedule() bilan BIR XIL mantiq
+        foreach ($students as $student) {
+            $exams = ExamSchedule::where('group_hemis_id', $student->group_id)
+                ->where('semester_code', $student->semester_code)
+                ->where(function ($query) use ($student) {
+                    $query->where('education_year', $student->education_year_code)
+                        ->orWhereNull('education_year');
+                })
+                ->where(function ($query) use ($tomorrow) {
+                    $query->where(function ($q) use ($tomorrow) {
+                        $q->whereDate('oski_date', $tomorrow)
+                            ->where(function ($q2) {
+                                $q2->where('oski_na', false)->orWhereNull('oski_na');
+                            });
+                    })->orWhere(function ($q) use ($tomorrow) {
+                        $q->whereDate('test_date', $tomorrow)
+                            ->where(function ($q2) {
+                                $q2->where('test_na', false)->orWhereNull('test_na');
+                            });
+                    });
+                })
                 ->get();
 
-            if ($students->isEmpty()) {
-                $this->warn("Guruh {$groupHemisId}: Telegram tasdiqlangan talaba topilmadi (jami imtihonlar: {$groupSchedules->count()})");
-                $skippedCount += $groupSchedules->count();
+            if ($exams->isEmpty()) {
+                $skippedCount++;
+                $this->warn("  O'tkazildi: {$student->full_name} — semester yoki education_year mos kelmadi (semester: {$student->semester_code}, year: {$student->education_year_code})");
                 continue;
             }
 
-            $this->info("Guruh {$groupHemisId}: {$students->count()} ta talabaga yuborilmoqda...");
+            $message = $this->buildMessage($student, $exams, $tomorrow);
 
-            foreach ($students as $student) {
-                // semester_code bo'yicha filtrlash (loose comparison — null va type mismatch uchun)
-                $relevantSchedules = $groupSchedules->filter(function ($schedule) use ($student) {
-                    // Agar talabaning semester_code null bo'lsa, barcha imtihonlarni ko'rsatish
-                    if (empty($student->semester_code)) {
-                        return true;
-                    }
-                    return $schedule->semester_code == $student->semester_code;
-                });
+            $success = $telegram->sendToUser($student->telegram_chat_id, $message);
 
-                if ($relevantSchedules->isEmpty()) {
-                    $this->warn("  O'tkazildi: {$student->full_name} — semester mos kelmadi (talaba: {$student->semester_code}, imtihon: {$groupSchedules->pluck('semester_code')->unique()->implode(', ')})");
-                    continue;
-                }
-
-                $message = $this->buildMessage($student, $relevantSchedules, $tomorrow);
-
-                $success = $telegram->sendToUser($student->telegram_chat_id, $message);
-
-                if ($success) {
-                    $sentCount++;
-                    $groupLabel = $student->group_name ?: $groupHemisId;
-                    $this->info("  Yuborildi: {$student->full_name} ({$groupLabel})");
-                } else {
-                    $failedCount++;
-                    $this->error("  Xato: {$student->full_name} — Telegram yuborishda muammo");
-                    Log::error("Telegram imtihon eslatma yuborishda xato", [
-                        'student' => $student->full_name,
-                        'chat_id' => $student->telegram_chat_id,
-                        'group' => $groupHemisId,
-                    ]);
-                }
+            if ($success) {
+                $sentCount++;
+                $groupLabel = $student->group_name ?: $student->group_id;
+                $this->info("  Yuborildi: {$student->full_name} ({$groupLabel}) — {$exams->count()} ta imtihon");
+            } else {
+                $failedCount++;
+                $this->error("  Xato: {$student->full_name} — Telegram yuborishda muammo");
+                Log::error("Telegram imtihon eslatma yuborishda xato", [
+                    'student' => $student->full_name,
+                    'chat_id' => $student->telegram_chat_id,
+                    'group' => $student->group_id,
+                ]);
             }
         }
 

@@ -214,32 +214,37 @@ class AbsenceExcuseController extends Controller
                 ],
             ]);
 
-            // Sababli ariza uchun baho ochish: JN tipidagi makeup lar uchun
+            // Sababli ariza uchun baho ochish: ariza sana oralig'idagi baholar uchun
             $openingsCreated = 0;
             try {
                 $excuse->load('makeups');
+
+                // Ariza sana oralig'i = jurnalda ochiq bo'ladigan sanalar
+                $dateFrom = $excuse->start_date;
+                $dateTo = $excuse->end_date;
+                $rangeDays = $dateFrom->diffInDays($dateTo) + 1;
+                $deadline = now()->addDays($rangeDays)->endOfDay();
+
+                // Har bir fan uchun faqat bitta opening yaratish (dublikat oldini olish)
+                $processedSubjects = [];
+
                 foreach ($excuse->makeups as $makeup) {
-                    if ($makeup->assessment_type !== 'jn') {
-                        continue;
-                    }
-                    if (!$makeup->makeup_date || !$makeup->makeup_end_date) {
-                        continue;
-                    }
                     if (!$makeup->subject_id) {
                         continue;
                     }
-
-                    // Range kunlar soni = deadline muddat (kun)
-                    $rangeDays = $makeup->makeup_date->diffInDays($makeup->makeup_end_date) + 1;
-                    $deadline = now()->addDays($rangeDays)->endOfDay();
+                    // Bitta fan uchun bir marta ochish
+                    if (in_array($makeup->subject_id, $processedSubjects)) {
+                        continue;
+                    }
+                    $processedSubjects[] = $makeup->subject_id;
 
                     ExcuseGradeOpening::create([
                         'absence_excuse_id' => $excuse->id,
                         'absence_excuse_makeup_id' => $makeup->id,
                         'student_hemis_id' => $excuse->student_hemis_id,
                         'subject_id' => $makeup->subject_id,
-                        'date_from' => $makeup->makeup_date,
-                        'date_to' => $makeup->makeup_end_date,
+                        'date_from' => $dateFrom,
+                        'date_to' => $dateTo,
                         'deadline' => $deadline,
                         'status' => 'active',
                     ]);

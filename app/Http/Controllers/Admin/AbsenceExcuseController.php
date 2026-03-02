@@ -199,9 +199,18 @@ class AbsenceExcuseController extends Controller
                 'student_id' => $excuse->student_id,
                 'type' => 'absence_excuse',
                 'title' => 'Sababli arizangiz qabul qilindi!',
-                'message' => "Hurmatli {$excuse->student_full_name}, sizning \"{$reasonLabel}\" sababi bilan yuborgan arizangiz ({$excuse->start_date->format('d.m.Y')} — {$excuse->end_date->format('d.m.Y')}) tasdiqlandi. PDF hujjatni yuklab olishingiz mumkin.",
+                'message' => "Sizning \"{$reasonLabel}\" sababi bilan yuborgan arizangiz tasdiqlandi.",
                 'link' => '/student/absence-excuses/' . $excuse->id,
-                'data' => ['excuse_id' => $excuse->id, 'status' => 'approved'],
+                'data' => [
+                    'excuse_id' => $excuse->id,
+                    'status' => 'approved',
+                    'reason_label' => $reasonLabel,
+                    'start_date' => $excuse->start_date->format('d.m.Y'),
+                    'end_date' => $excuse->end_date->format('d.m.Y'),
+                    'reviewer_name' => $reviewerName,
+                    'doc_number' => $excuse->doc_number,
+                    'has_pdf' => true,
+                ],
             ]);
 
             $successMsg = 'Ariza muvaffaqiyatli tasdiqlandi. PDF hujjat yaratildi.';
@@ -241,13 +250,23 @@ class AbsenceExcuseController extends Controller
 
         // Talabaga notification yuborish
         $reasonLabel = $excuse->reason_label ?? $excuse->reason;
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name;
         StudentNotification::create([
             'student_id' => $excuse->student_id,
             'type' => 'absence_excuse',
             'title' => 'Sababli arizangiz rad etildi',
-            'message' => "Hurmatli {$excuse->student_full_name}, sizning \"{$reasonLabel}\" sababi bilan yuborgan arizangiz ({$excuse->start_date->format('d.m.Y')} — {$excuse->end_date->format('d.m.Y')}) rad etildi. Sabab: {$request->rejection_reason}",
+            'message' => "Sizning \"{$reasonLabel}\" sababi bilan yuborgan arizangiz rad etildi.",
             'link' => '/student/absence-excuses/' . $excuse->id,
-            'data' => ['excuse_id' => $excuse->id, 'status' => 'rejected'],
+            'data' => [
+                'excuse_id' => $excuse->id,
+                'status' => 'rejected',
+                'reason_label' => $reasonLabel,
+                'start_date' => $excuse->start_date->format('d.m.Y'),
+                'end_date' => $excuse->end_date->format('d.m.Y'),
+                'reviewer_name' => $reviewerName,
+                'doc_number' => $excuse->doc_number,
+                'rejection_reason' => $request->rejection_reason,
+            ],
         ]);
 
         return back()->with('success', 'Ariza rad etildi.');

@@ -7,6 +7,7 @@ use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumSubjectTeacher;
 use App\Models\Group;
+use App\Models\ExcuseGradeOpening;
 use App\Models\LessonOpening;
 use App\Models\MarkingSystemScore;
 use App\Models\Semester;
@@ -782,6 +783,32 @@ class TeacherApiController extends Controller
             // Silently handle
         }
 
+        // ==================== EXCUSE GRADE OPENINGS (talaba-specific) ====================
+
+        $excuseOpenedDatesPerStudent = [];
+        try {
+            ExcuseGradeOpening::expireOverdue();
+            $excuseOpenings = ExcuseGradeOpening::where('subject_id', $subjectId)
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('status', 'active')
+                ->where('deadline', '>', now())
+                ->get();
+
+            foreach ($excuseOpenings as $eo) {
+                $current = $eo->date_from->copy();
+                while ($current->lte($eo->date_to)) {
+                    $excuseOpenedDatesPerStudent[$eo->student_hemis_id][] = $current->format('Y-m-d');
+                    $current->addDay();
+                }
+            }
+            // Unique dates per student
+            foreach ($excuseOpenedDatesPerStudent as $hemis => $dates) {
+                $excuseOpenedDatesPerStudent[$hemis] = array_values(array_unique($dates));
+            }
+        } catch (\Exception $e) {
+            // Silently handle
+        }
+
         // ==================== COMPUTE JB & MT AVERAGES ====================
 
         $jbPairsPerDay = [];
@@ -809,7 +836,7 @@ class TeacherApiController extends Controller
             $otherGrades, $attendanceData,
             $manualMtGrades, $manualMtGradesRaw, $mtSubmissions,
             $mtGradeHistory, $mtMaxResubmissions,
-            $minimumLimit
+            $minimumLimit, $excuseOpenedDatesPerStudent
         ) {
             $hemis = $student->hemis_id;
 
@@ -917,6 +944,7 @@ class TeacherApiController extends Controller
                 'oski' => $other['oski'],
                 'test' => $other['test'],
                 'absent_count' => (int) ($attendanceData[$hemis] ?? 0),
+                'excuse_opened_dates' => $excuseOpenedDatesPerStudent[$hemis] ?? [],
             ];
         })->values();
 
@@ -983,9 +1011,11 @@ class TeacherApiController extends Controller
             ], 403);
         }
 
-        // Check active lesson opening
+        // Check active lesson opening (guruh bo'yicha YOKI talaba-specific sababli)
         $groupHemisId = $request->group_hemis_id;
         $lessonDate = Carbon::parse($request->lesson_date)->format('Y-m-d');
+        $isExcuseOpening = false;
+
         $opening = LessonOpening::where('group_hemis_id', $groupHemisId)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
@@ -993,11 +1023,17 @@ class TeacherApiController extends Controller
             ->where('status', 'active')
             ->first();
 
-        if (!$opening) {
-            return response()->json(['success' => false, 'message' => 'Dars ochilmagan.'], 403);
-        }
-        if (!$opening->isActive()) {
-            return response()->json(['success' => false, 'message' => 'Dars ochilish muddati tugagan.'], 403);
+        if (!$opening || !$opening->isActive()) {
+            // Guruh bo'yicha ochilmagan — sababli ariza bo'yicha tekshirish
+            $isExcuseOpening = ExcuseGradeOpening::isDateOpenForStudent(
+                $request->student_hemis_id,
+                $request->subject_id,
+                $lessonDate
+            );
+
+            if (!$isExcuseOpening) {
+                return response()->json(['success' => false, 'message' => 'Dars ochilmagan.'], 403);
+            }
         }
 
         // Check teacher assignment
@@ -1044,8 +1080,27 @@ class TeacherApiController extends Controller
             ->whereNotIn('training_type_code', [11, 99, 100, 101, 102])
             ->first();
 
-        if ($existing) {
+        if ($existing && !$isExcuseOpening) {
             return response()->json(['success' => false, 'message' => 'Bu katak uchun baho allaqachon mavjud.'], 409);
+        }
+
+        // Sababli ariza bo'yicha: mavjud bahoni yangilash
+        if ($existing && $isExcuseOpening) {
+            $gradeValue = (float) $request->grade;
+            DB::table('student_grades')
+                ->where('id', $existing->id)
+                ->update([
+                    'grade' => $gradeValue,
+                    'status' => 'recorded',
+                    'updated_at' => now(),
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Sababli ariza asosida baho yangilandi',
+                'grade' => $gradeValue,
+                'updated' => true,
+            ]);
         }
 
         // Find student

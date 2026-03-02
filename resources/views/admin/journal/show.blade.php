@@ -1326,7 +1326,9 @@
                                                         $canRateAdmin = !$isDekan && $isAdminRole;
                                                         $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable);
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
-                                                        $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi;
+                                                        $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
+                                                        $canEditOpened = ($isOpenedDate || $isExcuseOpenedForStudent) && $grade === null && !$isAbsent && $isOqituvchi;
+                                                        $canEditExcuseExisting = $isExcuseOpenedForStudent && $grade !== null && $isOqituvchi;
                                                         $showRatingInput = false;
                                                         $gradeRecordId = null;
                                                         $hasRetake = false;
@@ -1362,7 +1364,18 @@
                                                         }
                                                     @endphp
                                                     @if($grade !== null)
-                                                        @if($showRatingInput)
+                                                        @if($canEditExcuseExisting)
+                                                            {{-- Sababli ariza asosida mavjud bahoni o'zgartirish --}}
+                                                            <div class="editable-cell grade-cell-opened cursor-pointer hover:bg-amber-50"
+                                                                 data-row="{{ $index }}" data-col="{{ $colIndex }}"
+                                                                 data-student="{{ $student->hemis_id }}" data-date="{{ $col['date'] }}"
+                                                                 data-pair="{{ $col['pair'] }}" data-subject="{{ $subjectId }}"
+                                                                 data-semester="{{ $semesterCode }}" data-group="{{ $group->group_hemis_id }}"
+                                                                 onclick="startEditOpened(this)"
+                                                                 title="Sababli ariza — bahoni o'zgartirish" style="background: #fffbeb;">
+                                                                <span class="text-amber-600 font-medium">{{ round($grade, 0) }}</span>
+                                                            </div>
+                                                        @elseif($showRatingInput)
                                                             {{-- minimumLimit dan past baho — otrabotka qilish mumkin --}}
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
                                                                 <span class="text-red-600 font-medium">{{ round($grade, 0) }}</span>
@@ -1422,7 +1435,19 @@
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                             $excuseAlreadySaved = isset($excuseGradeSnapshots[$student->hemis_id]);
                                                         @endphp
-                                                        @if($hasApprovedExcuse && !$hasRetake && !$excuseAlreadySaved)
+                                                        @if($isExcuseOpenedForStudent && !$hasRetake && $isOqituvchi)
+                                                            {{-- Sababli ariza asosida NB ga baho qo'yish --}}
+                                                            <div class="editable-cell grade-cell-opened cursor-pointer hover:bg-amber-50"
+                                                                 data-row="{{ $index }}" data-col="{{ $colIndex }}"
+                                                                 data-student="{{ $student->hemis_id }}" data-date="{{ $col['date'] }}"
+                                                                 data-pair="{{ $col['pair'] }}" data-subject="{{ $subjectId }}"
+                                                                 data-semester="{{ $semesterCode }}" data-group="{{ $group->group_hemis_id }}"
+                                                                 onclick="startEditOpened(this)"
+                                                                 title="Sababli ariza — baho kiriting" style="background: #fffbeb;">
+                                                                <span class="{{ $nbColorClass }} font-medium">NB</span>
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
+                                                            </div>
+                                                        @elseif($hasApprovedExcuse && !$hasRetake && !$excuseAlreadySaved)
                                                             {{-- Sababli NB — modal orqali baho kiritish --}}
                                                             <div class="excuse-nb-cell editable-cell cursor-pointer hover:bg-amber-100"
                                                                  onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }})"

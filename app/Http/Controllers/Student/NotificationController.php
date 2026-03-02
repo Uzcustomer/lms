@@ -16,13 +16,20 @@ class NotificationController extends Controller
         if (Schema::hasTable('student_notifications')) {
             $studentId = auth()->guard('student')->id();
 
-            $notifications = StudentNotification::where('student_id', $studentId)
-                ->orderByDesc('created_at')
-                ->paginate(20);
-
             $unreadCount = StudentNotification::where('student_id', $studentId)
                 ->whereNull('read_at')
                 ->count();
+
+            // Sahifaga kirganida barcha xabarlarni o'qilgan deb belgilash
+            if ($unreadCount > 0) {
+                StudentNotification::where('student_id', $studentId)
+                    ->whereNull('read_at')
+                    ->update(['read_at' => now()]);
+            }
+
+            $notifications = StudentNotification::where('student_id', $studentId)
+                ->orderByDesc('created_at')
+                ->paginate(20);
         }
 
         return view('student.notifications.index', compact('notifications', 'unreadCount'));

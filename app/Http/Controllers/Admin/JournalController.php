@@ -760,14 +760,10 @@ class JournalController extends Controller
                 $q2->where('education_year_code', $educationYearCode)
                     ->orWhere(function ($q3) use ($minScheduleDate) {
                         $q3->whereNull('education_year_code')
-                            ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
-                                $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-                            }));
+                            ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
                     });
             }))
-            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
-                $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
             ->get();
 
@@ -5600,14 +5596,10 @@ class JournalController extends Controller
                 $q2->where('education_year_code', $educationYearCode)
                     ->orWhere(function ($q3) use ($minScheduleDate) {
                         $q3->whereNull('education_year_code')
-                            ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
-                                $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-                            }));
+                            ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
                     });
             }))
-            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
-                $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
             ->get();
 

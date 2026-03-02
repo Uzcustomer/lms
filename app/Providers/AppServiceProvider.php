@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\View\Components\CustomSelect;
 use App\View\Components\SelectInput;
 use App\Models\AbsenceExcuse;
+use App\Models\ExamAppeal;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
@@ -39,6 +40,14 @@ class AppServiceProvider extends ServiceProvider
 
         View::composer('components.admin-sidebar-menu', function ($view) {
             $view->with('pendingExcusesCount', AbsenceExcuse::where('status', 'pending')->count());
+
+            $pendingAppeals = 0;
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('exam_appeals')) {
+                    $pendingAppeals = ExamAppeal::whereIn('status', ['pending', 'reviewing'])->count();
+                }
+            } catch (\Throwable $e) {}
+            $view->with('pendingAppealsCount', $pendingAppeals);
         });
 
         if (env('APP_ENV', 'local') != 'local') {

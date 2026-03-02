@@ -134,16 +134,10 @@
                         @endphp
                         <div class="bg-white rounded-xl border {{ $notification->isRead() ? 'border-gray-200' : ($isApproved ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30') }} p-4 transition">
                             <div class="flex items-start gap-3">
-                                <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 {{ $isApproved ? 'bg-emerald-100' : 'bg-red-100' }}">
-                                    @if($isApproved)
-                                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    @else
-                                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    @endif
+                                <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-gray-100">
+                                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                                    </svg>
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-center justify-between">

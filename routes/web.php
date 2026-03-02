@@ -589,6 +589,11 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::post('/yn-consent', [StudentController::class, 'submitYnConsent'])->name('yn-consent');
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
 
+        // Xizmatlar sahifasi
+        Route::get('/services', function () {
+            return view('student.services');
+        })->name('services');
+
         // Sababli dars qoldirish arizasi
         Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'index'])->name('index');

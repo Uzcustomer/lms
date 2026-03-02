@@ -1,0 +1,70 @@
+<?php
+
+namespace App\Http\Controllers\Student;
+
+use App\Http\Controllers\Controller;
+use App\Models\StudentNotification;
+use Illuminate\Support\Facades\Schema;
+
+class NotificationController extends Controller
+{
+    public function index()
+    {
+        $notifications = collect();
+        $unreadCount = 0;
+
+        if (Schema::hasTable('student_notifications')) {
+            $studentId = auth()->guard('student')->id();
+
+            $notifications = StudentNotification::where('student_id', $studentId)
+                ->orderByDesc('created_at')
+                ->paginate(20);
+
+            $unreadCount = StudentNotification::where('student_id', $studentId)
+                ->whereNull('read_at')
+                ->count();
+        }
+
+        return view('student.notifications.index', compact('notifications', 'unreadCount'));
+    }
+
+    public function unreadCount()
+    {
+        if (!Schema::hasTable('student_notifications')) {
+            return response()->json(['count' => 0]);
+        }
+
+        $count = StudentNotification::where('student_id', auth()->guard('student')->id())
+            ->whereNull('read_at')
+            ->count();
+
+        return response()->json(['count' => $count]);
+    }
+
+    public function markAsRead($id)
+    {
+        if (!Schema::hasTable('student_notifications')) {
+            return response()->json(['success' => true]);
+        }
+
+        StudentNotification::where('id', $id)
+            ->where('student_id', auth()->guard('student')->id())
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function markAllAsRead()
+    {
+        if (!Schema::hasTable('student_notifications')) {
+            return response()->json(['success' => true]);
+        }
+
+        StudentNotification::where('student_id', auth()->guard('student')->id())
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['success' => true]);
+    }
+}

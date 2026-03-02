@@ -581,6 +581,14 @@ Route::prefix('student')->name('student.')->group(function () {
             return view('student.services');
         })->name('services');
 
+        // Xabarnomalar
+        Route::prefix('notifications')->name('notifications.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\NotificationController::class, 'index'])->name('index');
+            Route::get('/unread-count', [\App\Http\Controllers\Student\NotificationController::class, 'unreadCount'])->name('unread-count');
+            Route::post('/{id}/read', [\App\Http\Controllers\Student\NotificationController::class, 'markAsRead'])->name('mark-read');
+            Route::post('/read-all', [\App\Http\Controllers\Student\NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+        });
+
         // Sababli dars qoldirish arizasi
         Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'index'])->name('index');

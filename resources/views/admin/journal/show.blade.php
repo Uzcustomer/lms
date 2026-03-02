@@ -1371,6 +1371,7 @@
                                                                  data-student="{{ $student->hemis_id }}" data-date="{{ $col['date'] }}"
                                                                  data-pair="{{ $col['pair'] }}" data-subject="{{ $subjectId }}"
                                                                  data-semester="{{ $semesterCode }}" data-group="{{ $group->group_hemis_id }}"
+                                                                 data-orig-grade="{{ round($grade, 0) }}"
                                                                  onclick="startEditOpened(this)"
                                                                  title="Sababli ariza — bahoni o'zgartirish" style="background: #fffbeb;">
                                                                 <span class="text-amber-600 font-medium">{{ round($grade, 0) }}</span>
@@ -3633,9 +3634,14 @@
                     storePendingGrade(cellDiv, input.value);
                     moveToCell(cellDiv, e.shiftKey ? 'left' : 'right');
                 } else if (e.key === 'Escape') {
-                    // Bekor qilish — pending bo'lsa ko'rsatish, bo'lmasa dash
+                    // Bekor qilish — pending bo'lsa ko'rsatish, bo'lmasa asl qiymatni tiklash
                     if (pending) {
                         showPendingInCell(cellDiv, pending.grade);
+                    } else if (numVal && numVal !== '') {
+                        // Mavjud baho bor edi — sababli ariza orqali tahrirlash
+                        const color = parseInt(numVal) < (window.minimumLimit || 60) ? 'color:#dc2626' : 'color:#d97706';
+                        cellDiv.innerHTML = `<span class="font-medium" style="${color}">${numVal}</span>`;
+                        cellDiv.style.background = '#fffbeb';
                     } else {
                         cellDiv.innerHTML = '<span class="text-green-400">-</span>';
                         cellDiv.style.background = '#f0fdf4';
@@ -3656,14 +3662,22 @@
         function storePendingGrade(cellDiv, value) {
             const key = getGradeKey(cellDiv);
             const grade = parseInt(value);
+            const origGrade = cellDiv.dataset.origGrade || '';
 
             if (value.trim() === '' || isNaN(grade) || grade < 0 || grade > 100) {
                 // Bo'sh yoki noto'g'ri — pending dan o'chirish
                 if (pendingOpenedGrades[key]) {
                     delete pendingOpenedGrades[key];
                 }
-                cellDiv.innerHTML = '<span class="text-green-400">-</span>';
-                cellDiv.style.background = '#f0fdf4';
+                if (origGrade && origGrade !== '') {
+                    // Mavjud bahoni tiklash (sababli ariza katagi)
+                    const color = parseInt(origGrade) < (window.minimumLimit || 60) ? 'color:#dc2626' : 'color:#d97706';
+                    cellDiv.innerHTML = `<span class="font-medium" style="${color}">${origGrade}</span>`;
+                    cellDiv.style.background = '#fffbeb';
+                } else {
+                    cellDiv.innerHTML = '<span class="text-green-400">-</span>';
+                    cellDiv.style.background = '#f0fdf4';
+                }
                 updatePendingPanel();
                 return;
             }
@@ -3851,12 +3865,20 @@
                     } else {
                         successCount++;
                         const gradeVal = Math.round(data.grade);
+                        const isUpdated = data.updated === true;
                         const color = gradeVal < (window.minimumLimit || 60) ? 'color:#dc2626' : 'color:#16a34a';
                         cellDiv.innerHTML = `<span class="font-medium" style="${color}">${gradeVal}</span>`;
-                        cellDiv.style.background = '#ecfdf5';
                         delete pendingOpenedGrades[key];
-                        cellDiv.classList.remove('grade-cell-opened');
-                        cellDiv.onclick = null;
+
+                        if (isUpdated) {
+                            // Sababli ariza — tahrirlash imkoni saqlansin
+                            cellDiv.style.background = '#fffbeb';
+                            cellDiv.dataset.origGrade = String(gradeVal);
+                        } else {
+                            cellDiv.style.background = '#ecfdf5';
+                            cellDiv.classList.remove('grade-cell-opened');
+                            cellDiv.onclick = null;
+                        }
                     }
                 });
 

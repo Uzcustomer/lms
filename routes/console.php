@@ -45,8 +45,8 @@ Schedule::command('teachers:send-final-daily-report')->dailyAt('08:30');
 Schedule::command('teachers:send-lesson-opening-reminders')->dailyAt('09:00');
 Schedule::command('teachers:send-lesson-opening-reminders')->dailyAt('18:00');
 
-// TEST: 11:35 da test uchun — keyin 08:00 va 20:00 ga qaytarish kerak!
-Schedule::command('students:send-exam-reminders')->dailyAt('11:35');
+// TEST: 11:50 da test uchun — keyin 08:00 va 20:00 ga qaytarish kerak!
+Schedule::command('students:send-exam-reminders')->dailyAt('11:50');
 // Schedule::command('students:send-exam-reminders')->dailyAt('08:00');
 // Schedule::command('students:send-exam-reminders')->dailyAt('20:00');
 

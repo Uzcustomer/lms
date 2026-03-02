@@ -4370,9 +4370,9 @@ class ReportController extends Controller
             ->whereRaw('DATE(sch.lesson_date) < CURDATE()');
 
         // Baho qo'yilmaydigan fanlarni chiqarish (masalan, O'quv amaliyoti)
-        $excludedSubjectNames = config('app.excluded_rating_subject_names', []);
-        if (!empty($excludedSubjectNames)) {
-            $scheduleQuery->whereNotIn('sch.subject_name', $excludedSubjectNames);
+        $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+        foreach ($excludedPatterns as $pattern) {
+            $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
         }
 
         if ($request->get('current_semester', '1') == '1') {

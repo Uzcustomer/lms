@@ -2757,9 +2757,9 @@ class JournalController extends Controller
         }
 
         // Baho qo'yilmaydigan fanlarni dropdown'dan chiqarish
-        $excludedSubjectNames = config('app.excluded_rating_subject_names', []);
-        if (!empty($excludedSubjectNames)) {
-            $query->whereNotIn('cs.subject_name', $excludedSubjectNames);
+        $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+        foreach ($excludedPatterns as $pattern) {
+            $query->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
         }
 
         return $query->select('cs.subject_id', 'cs.subject_name')

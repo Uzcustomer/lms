@@ -155,7 +155,6 @@ class KtrController extends Controller
         $currentSemesterDefault = $isFanMasuli ? '0' : '1';
         if ($request->get('current_semester', $currentSemesterDefault) == '1') {
             $query->where('s.current', true);
-            $query->where('c.current', true);
         }
 
         // KTR holati filtri (yaratildi/yaratilmadi)
@@ -258,7 +257,6 @@ class KtrController extends Controller
         }
         if ($request->get('current_semester', '1') == '1') {
             $query->where('s.current', true);
-            $query->where('c.current', true);
         }
 
         $specialties = $query
@@ -347,7 +345,6 @@ class KtrController extends Controller
         }
         if ($request->get('current_semester', '1') == '1') {
             $query->where('s.current', true);
-            $query->where('c.current', true);
         }
 
         $subjects = $query
@@ -418,7 +415,6 @@ class KtrController extends Controller
 
         if ($request->get('current_semester', '1') == '1') {
             $query->where('s.current', true);
-            $query->where('c.current', true);
         }
 
         $query->orderBy('f.name')->orderBy('cs.subject_name');

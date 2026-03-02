@@ -126,7 +126,6 @@ class JournalController extends Controller
         }
         if ($request->get('current_semester', '1') == '1') {
             $kafedraQuery->where('s.current', true);
-            $kafedraQuery->where('c.current', true);
         }
 
         $kafedras = $kafedraQuery
@@ -210,7 +209,6 @@ class JournalController extends Controller
         // Joriy semestr filtri (default ON)
         if ($request->get('current_semester', '1') == '1') {
             $query->where('s.current', true);
-            $query->where('c.current', true);
         }
 
         // Sorting
@@ -2733,7 +2731,6 @@ class JournalController extends Controller
         }
         if ($request->get('current_semester') == '1') {
             $query->where('s.current', true);
-            $query->where('c.current', true);
         }
 
         if ($isOqituvchi) {
@@ -2800,7 +2797,6 @@ class JournalController extends Controller
         // Joriy semestr bo'yicha filtrlash
         if ($request->get('current_semester') == '1') {
             $curriculaIds = Semester::where('current', true)
-                ->whereIn('curriculum_hemis_id', Curriculum::where('current', true)->pluck('curricula_hemis_id'))
                 ->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }

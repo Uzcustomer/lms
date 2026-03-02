@@ -96,10 +96,10 @@ class StudentAuthController extends Controller
             return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
         }
 
-        // Telegram 2FA: vaqtincha o'chirilgan
-        // if ($student->telegram_chat_id) {
-        //     return $this->sendLoginCode($student, $request);
-        // }
+        // Telegram 2FA: tasdiqlangan talabalar uchun
+        if ($student->telegram_chat_id) {
+            return $this->sendLoginCode($student, $request);
+        }
 
         // Boshqa guardlarni tozalash (admin/teacher session qoldiqlarini yo'q qilish)
         $this->clearOtherGuards($request);

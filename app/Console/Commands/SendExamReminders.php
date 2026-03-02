@@ -93,7 +93,8 @@ class SendExamReminders extends Command
 
                 if ($success) {
                     $sentCount++;
-                    $this->info("  Yuborildi: {$student->full_name} ({$student->group_name ?? $groupHemisId})");
+                    $groupLabel = $student->group_name ?: $groupHemisId;
+                    $this->info("  Yuborildi: {$student->full_name} ({$groupLabel})");
                 } else {
                     $failedCount++;
                     $this->error("  Xato: {$student->full_name} — Telegram yuborishda muammo");

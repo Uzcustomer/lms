@@ -5430,9 +5430,11 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
-        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $jbColumns = $jbScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        $jbLessonDates = $jbColumns->pluck('date')->unique()->sort()->values()->toArray();
         $jbPairsPerDay = [];
         foreach ($jbColumns as $col) {
             $jbPairsPerDay[$col['date']] = ($jbPairsPerDay[$col['date']] ?? 0) + 1;
@@ -5463,9 +5465,11 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $mtColumns = $mtScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
-        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtColumns = $mtScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        $mtLessonDates = $mtColumns->pluck('date')->unique()->sort()->values()->toArray();
         $mtPairsPerDay = [];
         foreach ($mtColumns as $col) {
             $mtPairsPerDay[$col['date']] = ($mtPairsPerDay[$col['date']] ?? 0) + 1;
@@ -5478,8 +5482,8 @@ class JournalController extends Controller
 
         // Eng erta jadval sanasi
         $minScheduleDate = collect()
-            ->merge($jbScheduleRows->pluck('lesson_date'))
-            ->merge($mtScheduleRows->pluck('lesson_date'))
+            ->merge($jbColumns->pluck('date'))
+            ->merge($mtColumns->pluck('date'))
             ->min();
 
         // Baholarni olish (show metodi bilan bir xil logika)
@@ -5584,19 +5588,58 @@ class JournalController extends Controller
             }
         }
 
-        // ON (100), OSKI (101), Test (102) baholarni olish
-        $gradesByType = [];
-        foreach ([100, 101, 102] as $typeCode) {
-            $gradesByType[$typeCode] = DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('student_hemis_id', $studentHemisIds)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->where('training_type_code', $typeCode)
-                ->select('student_hemis_id', DB::raw('MAX(grade) as grade'))
-                ->groupBy('student_hemis_id')
-                ->pluck('grade', 'student_hemis_id')
-                ->toArray();
+        // ON (100), OSKI (101), Test (102), Quiz (103) baholarni olish
+        // Show metodi bilan bir xil logika: getEffectiveGrade + o'rtacha
+        $otherGradesRaw = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereIn('training_type_code', [100, 101, 102, 103])
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhere(function ($q3) use ($minScheduleDate) {
+                        $q3->whereNull('education_year_code')
+                            ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
+                                $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
+                            }));
+                    });
+            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
+                $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
+            }))
+            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
+            ->get();
+
+        $otherGradesGrouped = [];
+        foreach ($otherGradesRaw as $g) {
+            $effectiveGrade = $getEffectiveGrade($g);
+            if ($effectiveGrade === null) continue;
+            $typeCode = $g->training_type_code;
+            if ($typeCode == 103 && $g->quiz_result_id) {
+                $quizType = DB::table('hemis_quiz_results')->where('id', $g->quiz_result_id)->value('quiz_type');
+                $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+                $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+                if (in_array($quizType, $oskiTypes)) {
+                    $typeCode = 101;
+                } elseif (in_array($quizType, $testTypes)) {
+                    $typeCode = 102;
+                }
+            }
+            $otherGradesGrouped[$g->student_hemis_id][$typeCode][] = $effectiveGrade;
+        }
+
+        $gradesByType = [100 => [], 101 => [], 102 => []];
+        foreach ($otherGradesGrouped as $studentId => $types) {
+            if (isset($types[100]) && count($types[100]) > 0) {
+                $gradesByType[100][$studentId] = array_sum($types[100]) / count($types[100]);
+            }
+            if (isset($types[101]) && count($types[101]) > 0) {
+                $gradesByType[101][$studentId] = array_sum($types[101]) / count($types[101]);
+            }
+            if (isset($types[102]) && count($types[102]) > 0) {
+                $gradesByType[102][$studentId] = array_sum($types[102]) / count($types[102]);
+            }
         }
 
         // O'qituvchilar (jadvaldan tur bo'yicha ajratilgan)

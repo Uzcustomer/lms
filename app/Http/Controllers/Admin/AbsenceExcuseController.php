@@ -215,34 +215,38 @@ class AbsenceExcuseController extends Controller
             ]);
 
             // Sababli ariza uchun baho ochish: JN tipidagi makeup lar uchun
-            $excuse->load('makeups');
             $openingsCreated = 0;
-            foreach ($excuse->makeups as $makeup) {
-                if ($makeup->assessment_type !== 'jn') {
-                    continue;
-                }
-                if (!$makeup->makeup_date || !$makeup->makeup_end_date) {
-                    continue;
-                }
-                if (!$makeup->subject_id) {
-                    continue;
-                }
+            try {
+                $excuse->load('makeups');
+                foreach ($excuse->makeups as $makeup) {
+                    if ($makeup->assessment_type !== 'jn') {
+                        continue;
+                    }
+                    if (!$makeup->makeup_date || !$makeup->makeup_end_date) {
+                        continue;
+                    }
+                    if (!$makeup->subject_id) {
+                        continue;
+                    }
 
-                // Range kunlar soni = deadline muddat (kun)
-                $rangeDays = $makeup->makeup_date->diffInDays($makeup->makeup_end_date) + 1;
-                $deadline = now()->addDays($rangeDays)->endOfDay();
+                    // Range kunlar soni = deadline muddat (kun)
+                    $rangeDays = $makeup->makeup_date->diffInDays($makeup->makeup_end_date) + 1;
+                    $deadline = now()->addDays($rangeDays)->endOfDay();
 
-                ExcuseGradeOpening::create([
-                    'absence_excuse_id' => $excuse->id,
-                    'absence_excuse_makeup_id' => $makeup->id,
-                    'student_hemis_id' => $excuse->student_hemis_id,
-                    'subject_id' => $makeup->subject_id,
-                    'date_from' => $makeup->makeup_date,
-                    'date_to' => $makeup->makeup_end_date,
-                    'deadline' => $deadline,
-                    'status' => 'active',
-                ]);
-                $openingsCreated++;
+                    ExcuseGradeOpening::create([
+                        'absence_excuse_id' => $excuse->id,
+                        'absence_excuse_makeup_id' => $makeup->id,
+                        'student_hemis_id' => $excuse->student_hemis_id,
+                        'subject_id' => $makeup->subject_id,
+                        'date_from' => $makeup->makeup_date,
+                        'date_to' => $makeup->makeup_end_date,
+                        'deadline' => $deadline,
+                        'status' => 'active',
+                    ]);
+                    $openingsCreated++;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('ExcuseGradeOpening yaratishda xatolik: ' . $e->getMessage());
             }
 
             $successMsg = 'Ariza muvaffaqiyatli tasdiqlandi. PDF hujjat yaratildi.';

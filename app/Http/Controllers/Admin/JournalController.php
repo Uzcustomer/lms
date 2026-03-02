@@ -5701,7 +5701,13 @@ class JournalController extends Controller
         } else {
             $kurs = preg_replace('/\D/', '', $semester->level_code ?? '');
         }
-        $semesterInYear = ((int)($semester->code ?? 1) % 2 !== 0) ? 1 : 2;
+        $semesterNum = 0;
+        if (preg_match('/(\d+)/', $semester->name ?? '', $m)) {
+            $semesterNum = (int) $m[1];
+        } else {
+            $semesterNum = (int) ($semester->code ?? 1);
+        }
+        $semesterInYear = ($semesterNum % 2 !== 0) ? 1 : 2;
 
         // Header
         $sheet->setCellValue('A4', ($faculty->name ?? '') . ' FAKULTETI');
@@ -5715,7 +5721,33 @@ class JournalController extends Controller
         $sheet->setCellValue('A11', "Ma'ruzachi:");
         $sheet->setCellValue('C11', '         ' . $abbreviatedMaruza);
         $sheet->setCellValue('D13', $subject->total_acload ?? 0);
-        $sheet->setCellValue('G13', $subject->total_credit ?? 0);
+        $sheet->setCellValue('G13', $subject->credit ?? 0);
+
+        // Kafedra mudiri
+        $kafedra = Department::where('department_hemis_id', $subject->department_id)->first();
+        $kafedraMudiriName = '';
+        if ($kafedra) {
+            $mudiri = Teacher::whereHas('roles', fn($q) => $q->where('name', 'kafedra_mudiri'))
+                ->where('department_hemis_id', $kafedra->department_hemis_id)
+                ->where('is_active', true)
+                ->first();
+            if (!$mudiri) {
+                $mudiri = Teacher::where('role', 'kafedra_mudiri')
+                    ->where('department_hemis_id', $kafedra->department_hemis_id)
+                    ->where('is_active', true)
+                    ->first();
+            }
+            if (!$mudiri) {
+                $mudiri = Teacher::where('staff_position', 'LIKE', '%mudiri%')
+                    ->where('department_hemis_id', $kafedra->department_hemis_id)
+                    ->where('is_active', true)
+                    ->first();
+            }
+            if ($mudiri) {
+                $kafedraMudiriName = $mudiri->full_name;
+            }
+        }
+        $sheet->setCellValue('U61', $kafedraMudiriName);
 
         // Vaznlar haqida ma'lumot
         $sheet->setCellValue('V18', 'Yakuniy ball');

@@ -752,7 +752,7 @@
 
                     var html = '';
                     subjects.forEach(function(subject) {
-                        var isAlreadyAdded = isSubjectSelected(subject.id);
+                        var isAlreadyAdded = isSubjectSelected(subject.id) || subject.is_assigned;
                         var isPending = isPendingSubject(subject.id);
 
                         if (isAlreadyAdded) {

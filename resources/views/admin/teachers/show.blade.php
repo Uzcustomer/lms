@@ -471,6 +471,14 @@
                     <option value="">Barcha kurslar</option>
                 </select>
             </div>
+            <div style="padding: 0 16px; padding-top: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick="toggleDeptFilter()">
+                    <div id="dept-filter-toggle" style="width: 36px; height: 20px; border-radius: 10px; background: #3b82f6; position: relative; transition: background 0.2s; flex-shrink: 0;">
+                        <div id="dept-filter-thumb" style="width: 16px; height: 16px; border-radius: 50%; background: #fff; position: absolute; top: 2px; left: 18px; transition: left 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></div>
+                    </div>
+                    <span id="dept-filter-label" style="font-size: 11px; font-weight: 600; color: #64748b;">Kafedra filtri: <span style="color: #3b82f6;">yoqilgan</span></span>
+                </label>
+            </div>
             <div class="subject-modal-search">
                 <svg style="width: 16px; height: 16px; color: #94a3b8; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -693,6 +701,25 @@
             updateSelectedCount();
         }
 
+        var deptFilterEnabled = true;
+
+        function toggleDeptFilter() {
+            deptFilterEnabled = !deptFilterEnabled;
+            var toggle = document.getElementById('dept-filter-toggle');
+            var thumb = document.getElementById('dept-filter-thumb');
+            var label = document.getElementById('dept-filter-label');
+            if (deptFilterEnabled) {
+                toggle.style.background = '#3b82f6';
+                thumb.style.left = '18px';
+                label.innerHTML = 'Kafedra filtri: <span style="color: #3b82f6;">yoqilgan</span>';
+            } else {
+                toggle.style.background = '#cbd5e1';
+                thumb.style.left = '2px';
+                label.innerHTML = 'Kafedra filtri: <span style="color: #94a3b8;">o\'chirilgan</span>';
+            }
+            searchSubjects();
+        }
+
         function searchSubjects() {
             clearTimeout(subjectSearchTimeout);
             var query = document.getElementById('subject-search-input').value.trim();
@@ -704,6 +731,9 @@
                 var url = '{{ route("admin.teachers.search-subjects") }}?q=' + encodeURIComponent(query) + '&teacher_id={{ $teacher->id }}';
                 if (levelCode) {
                     url += '&level_code=' + encodeURIComponent(levelCode);
+                }
+                if (!deptFilterEnabled) {
+                    url += '&filter_dept=0';
                 }
                 fetch(url, {
                     headers: {

@@ -52,7 +52,16 @@ class KtrController extends Controller
 
         // Fan mas'uli uchun faqat mas'ul fanlarni ko'rsatish
         $isFanMasuli = is_active_fan_masuli();
-        $fanMasuliSubjectIds = $isFanMasuli ? get_fan_masuli_subject_ids() : [];
+        $fanMasuliSubjectNames = [];
+        if ($isFanMasuli) {
+            $subjectIds = get_fan_masuli_subject_ids();
+            if (!empty($subjectIds)) {
+                $fanMasuliSubjectNames = CurriculumSubject::whereIn('id', $subjectIds)
+                    ->pluck('subject_name')
+                    ->unique()
+                    ->toArray();
+            }
+        }
 
         // Natija query
         $query = $baseQuery()
@@ -72,9 +81,9 @@ class KtrController extends Controller
                 's.level_code',
             ]);
 
-        // Fan mas'uli filtri
-        if ($isFanMasuli && !empty($fanMasuliSubjectIds)) {
-            $query->whereIn('cs.id', $fanMasuliSubjectIds);
+        // Fan mas'uli filtri — fan nomi bo'yicha (barcha yo'nalishlardagi bir xil fan)
+        if ($isFanMasuli && !empty($fanMasuliSubjectNames)) {
+            $query->whereIn('cs.subject_name', $fanMasuliSubjectNames);
         }
 
         // Filtrlar

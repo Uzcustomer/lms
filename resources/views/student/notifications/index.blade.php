@@ -29,75 +29,92 @@
         @else
             <div class="space-y-3">
                 @foreach($notifications as $notification)
-                    @if($notification->type === 'exam_reminder')
-                        {{-- Imtihon eslatmasi — Telegram stilida --}}
-                        @php
-                            $titleColor = 'text-yellow-700 bg-yellow-50 border-yellow-300';
-                            $titleDot = 'bg-yellow-400';
-                            if (str_contains($notification->title, 'Bugun')) {
-                                $titleColor = 'text-red-700 bg-red-50 border-red-300';
-                                $titleDot = 'bg-red-500';
-                            } elseif (str_contains($notification->title, 'Ertaga')) {
-                                $titleColor = 'text-orange-700 bg-orange-50 border-orange-300';
-                                $titleDot = 'bg-orange-400';
-                            }
+                    @php
+                        // Header ranglari
+                        $headerColor = 'text-gray-700 bg-gray-50 border-gray-200';
+                        $headerDot = 'bg-gray-400';
+                        $statusBadge = null;
 
-                            $lines = explode("\n", $notification->message);
-                            $groups = [];
-                            $currentGroup = null;
-                            foreach ($lines as $line) {
-                                $line = trim($line);
-                                if ($line === '') continue;
-                                if (str_starts_with($line, '- ') || str_starts_with($line, '- ')) {
-                                    if ($currentGroup !== null) {
-                                        $currentGroup['subjects'][] = ltrim($line, '- ');
-                                    }
-                                } else {
-                                    if ($currentGroup !== null) {
-                                        $groups[] = $currentGroup;
-                                    }
-                                    $groupColor = 'yellow';
-                                    if (str_starts_with($line, 'Bugun')) {
-                                        $groupColor = 'red';
-                                    } elseif (str_starts_with($line, 'Ertaga')) {
-                                        $groupColor = 'orange';
-                                    }
-                                    $currentGroup = ['label' => $line, 'color' => $groupColor, 'subjects' => []];
-                                }
+                        if ($notification->type === 'exam_reminder') {
+                            $headerColor = 'text-yellow-700 bg-yellow-50 border-yellow-300';
+                            $headerDot = 'bg-yellow-400';
+                            if (str_contains($notification->title, 'Bugun')) {
+                                $headerColor = 'text-red-700 bg-red-50 border-red-300';
+                                $headerDot = 'bg-red-500';
+                            } elseif (str_contains($notification->title, 'Ertaga')) {
+                                $headerColor = 'text-orange-700 bg-orange-50 border-orange-300';
+                                $headerDot = 'bg-orange-400';
                             }
-                            if ($currentGroup !== null) {
-                                $groups[] = $currentGroup;
+                        } elseif ($notification->type === 'absence_excuse') {
+                            $excuseData = $notification->data ?? [];
+                            $isApproved = ($excuseData['status'] ?? '') === 'approved';
+                            if ($isApproved) {
+                                $headerColor = 'text-emerald-700 bg-emerald-50 border-emerald-300';
+                                $headerDot = 'bg-emerald-400';
+                                $statusBadge = ['text' => 'Tasdiqlandi', 'class' => 'bg-emerald-100 text-emerald-700'];
+                            } else {
+                                $headerColor = 'text-red-700 bg-red-50 border-red-300';
+                                $headerDot = 'bg-red-400';
+                                $statusBadge = ['text' => 'Rad etildi', 'class' => 'bg-red-100 text-red-700'];
                             }
-                        @endphp
-                        <div class="rounded-xl border {{ $notification->isRead() ? 'border-gray-200 bg-white' : 'border-indigo-200 bg-indigo-50/20' }} overflow-hidden transition">
-                            {{-- Sarlavha --}}
-                            <div class="flex items-center justify-between px-4 py-3 border-b {{ $titleColor }}">
-                                <div class="flex items-center gap-2">
-                                    <span class="w-2.5 h-2.5 rounded-full {{ $titleDot }} flex-shrink-0"></span>
-                                    <h4 class="text-sm font-bold">{{ $notification->title }}</h4>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[11px] opacity-70">{{ $notification->created_at->diffUz() }}</span>
-                                    @if(!$notification->isRead())
-                                        <span class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0"></span>
-                                    @endif
-                                </div>
+                        } elseif ($notification->type === 'sms') {
+                            $headerColor = 'text-blue-700 bg-blue-50 border-blue-200';
+                            $headerDot = 'bg-blue-400';
+                        }
+
+                        // Footer link
+                        $linkText = 'Batafsil';
+                        $linkUrl = $notification->link;
+                        if ($notification->type === 'exam_reminder') {
+                            $linkText = 'Imtihon jadvalini ko\'rish';
+                            $linkUrl = $notification->link ?? route('student.exam-schedule');
+                        }
+                    @endphp
+
+                    <div class="rounded-xl border {{ $notification->isRead() ? 'border-gray-200 bg-white' : 'border-indigo-200 bg-indigo-50/20' }} overflow-hidden transition">
+                        {{-- Sarlavha --}}
+                        <div class="flex items-center justify-between px-4 py-3 border-b {{ $headerColor }}">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="w-2.5 h-2.5 rounded-full {{ $headerDot }} flex-shrink-0"></span>
+                                <h4 class="text-sm font-bold truncate">{{ $notification->title }}</h4>
                             </div>
-                            {{-- Fanlar ro'yxati — column layout --}}
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <span class="text-[11px] opacity-70">{{ $notification->created_at->diffUz() }}</span>
+                                @if(!$notification->isRead())
+                                    <span class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0"></span>
+                                @endif
+                            </div>
+                        </div>
+
+                        {{-- Kontent --}}
+                        @if($notification->type === 'exam_reminder')
+                            @php
+                                $lines = explode("\n", $notification->message);
+                                $groups = [];
+                                $currentGroup = null;
+                                foreach ($lines as $line) {
+                                    $line = trim($line);
+                                    if ($line === '') continue;
+                                    if (str_starts_with($line, '- ') || str_starts_with($line, '- ')) {
+                                        if ($currentGroup !== null) {
+                                            $currentGroup['subjects'][] = ltrim($line, '- ');
+                                        }
+                                    } else {
+                                        if ($currentGroup !== null) $groups[] = $currentGroup;
+                                        $groupColor = 'yellow';
+                                        if (str_starts_with($line, 'Bugun')) $groupColor = 'red';
+                                        elseif (str_starts_with($line, 'Ertaga')) $groupColor = 'orange';
+                                        $currentGroup = ['label' => $line, 'color' => $groupColor, 'subjects' => []];
+                                    }
+                                }
+                                if ($currentGroup !== null) $groups[] = $currentGroup;
+                            @endphp
                             <div class="flex flex-col divide-y divide-gray-100">
                                 @foreach($groups as $group)
                                     <div class="px-4 py-3">
                                         <div class="flex items-center gap-2 mb-2">
-                                            @if($group['color'] === 'red')
-                                                <span class="w-2 h-2 rounded-full bg-red-500"></span>
-                                                <span class="text-xs font-semibold text-red-700">{{ $group['label'] }}</span>
-                                            @elseif($group['color'] === 'orange')
-                                                <span class="w-2 h-2 rounded-full bg-orange-400"></span>
-                                                <span class="text-xs font-semibold text-orange-700">{{ $group['label'] }}</span>
-                                            @else
-                                                <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
-                                                <span class="text-xs font-semibold text-yellow-700">{{ $group['label'] }}</span>
-                                            @endif
+                                            <span class="w-2 h-2 rounded-full {{ $group['color'] === 'red' ? 'bg-red-500' : ($group['color'] === 'orange' ? 'bg-orange-400' : 'bg-yellow-400') }}"></span>
+                                            <span class="text-xs font-semibold {{ $group['color'] === 'red' ? 'text-red-700' : ($group['color'] === 'orange' ? 'text-orange-700' : 'text-yellow-700') }}">{{ $group['label'] }}</span>
                                         </div>
                                         <div class="flex flex-col gap-1.5 pl-4">
                                             @foreach($group['subjects'] as $subject)
@@ -112,11 +129,21 @@
                                     </div>
                                 @endforeach
                             </div>
-                            {{-- Link va o'qilgan --}}
-                            <div class="px-4 py-2 bg-gray-50 flex items-center justify-between border-t border-gray-100">
-                                <a href="{{ $notification->link ?? route('student.exam-schedule') }}" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium">
-                                    Imtihon jadvalini ko'rish
-                                </a>
+                        @else
+                            <div class="px-4 py-3">
+                                <p class="text-xs text-gray-600 whitespace-pre-line">{{ $notification->message }}</p>
+                                @if($notification->type === 'absence_excuse' && !($isApproved ?? true) && !empty($excuseData['rejection_reason'] ?? null))
+                                    <p class="text-xs text-red-600 mt-1 font-medium">Sabab: {{ $excuseData['rejection_reason'] }}</p>
+                                @endif
+                            </div>
+                        @endif
+
+                        {{-- Footer --}}
+                        <div class="px-4 py-2 bg-gray-50 flex items-center justify-between border-t border-gray-100">
+                            <div class="flex items-center gap-3">
+                                @if($linkUrl)
+                                    <a href="{{ $linkUrl }}" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium">{{ $linkText }}</a>
+                                @endif
                                 @if(!$notification->isRead())
                                     <form method="POST" action="{{ route('student.notifications.mark-read', $notification->id) }}">
                                         @csrf
@@ -124,87 +151,11 @@
                                     </form>
                                 @endif
                             </div>
-                        </div>
-                    @elseif($notification->type === 'absence_excuse')
-                        {{-- Sababli ariza natijasi --}}
-                        @php
-                            $excuseData = $notification->data ?? [];
-                            $excuseStatus = $excuseData['status'] ?? '';
-                            $isApproved = $excuseStatus === 'approved';
-                        @endphp
-                        <div class="bg-white rounded-xl border {{ $notification->isRead() ? 'border-gray-200' : ($isApproved ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30') }} p-4 transition">
-                            <div class="flex items-start gap-3">
-                                <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-gray-100">
-                                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                                    </svg>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <h4 class="text-sm font-semibold text-gray-800">{{ $notification->title }}</h4>
-                                            <span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold {{ $isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700' }}">
-                                                {{ $isApproved ? 'Tasdiqlandi' : 'Rad etildi' }}
-                                            </span>
-                                        </div>
-                                        @if(!$notification->isRead())
-                                            <span class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0 ml-2"></span>
-                                        @endif
-                                    </div>
-                                    <p class="text-xs text-gray-600 mt-1">{{ $notification->message }}</p>
-                                    @if(!$isApproved && !empty($excuseData['rejection_reason']))
-                                        <p class="text-xs text-red-600 mt-1 font-medium">Sabab: {{ $excuseData['rejection_reason'] }}</p>
-                                    @endif
-                                    <div class="flex items-center justify-between mt-2">
-                                        <span class="text-[11px] text-gray-400">{{ $notification->created_at->diffUz() }}</span>
-                                        @if($notification->link)
-                                            <a href="{{ $notification->link }}" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium">Batafsil</a>
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                    @else
-                        {{-- Boshqa turdagi xabarnomalar --}}
-                        <div class="bg-white rounded-xl border {{ $notification->isRead() ? 'border-gray-200' : 'border-indigo-200 bg-indigo-50/30' }} p-4 transition">
-                            <div class="flex items-start gap-3">
-                                <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0
-                                    {{ $notification->type === 'sms' ? 'bg-blue-100' : 'bg-gray-100' }}">
-                                    @if($notification->type === 'sms')
-                                        <svg class="w-4.5 h-4.5 text-blue-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
-                                        </svg>
-                                    @else
-                                        <svg class="w-4.5 h-4.5 text-gray-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                                        </svg>
-                                    @endif
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center justify-between">
-                                        <h4 class="text-sm font-semibold text-gray-800 truncate">{{ $notification->title }}</h4>
-                                        @if(!$notification->isRead())
-                                            <span class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0 ml-2"></span>
-                                        @endif
-                                    </div>
-                                    <p class="text-xs text-gray-600 mt-1 whitespace-pre-line">{{ $notification->message }}</p>
-                                    <div class="flex items-center justify-between mt-1">
-                                        <span class="text-[11px] text-gray-400">{{ $notification->created_at->diffUz() }}</span>
-                                        @if($notification->link)
-                                            <a href="{{ $notification->link }}" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium">Batafsil</a>
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
-                            @if(!$notification->isRead())
-                                <form method="POST" action="{{ route('student.notifications.mark-read', $notification->id) }}" class="mt-2 flex justify-end">
-                                    @csrf
-                                    <button type="submit" class="text-[11px] text-indigo-500 hover:text-indigo-700">O'qilgan</button>
-                                </form>
+                            @if($statusBadge)
+                                <span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold {{ $statusBadge['class'] }}">{{ $statusBadge['text'] }}</span>
                             @endif
                         </div>
-                    @endif
+                    </div>
                 @endforeach
             </div>
 

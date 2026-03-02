@@ -310,12 +310,14 @@
                 @elseif(!$item['submission'] && !$item['is_overdue'])
                     <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                         @csrf
-                        <div class="flex items-center gap-2">
-                            <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
-                                   class="text-xs w-full file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-blue-500 file:text-white hover:file:bg-blue-600 mt-file-input">
-                            <button type="submit" class="flex-shrink-0 px-4 py-1.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition">Yuklash</button>
-                        </div>
-                        <p class="text-[10px] text-gray-400 mt-1.5">Max 10MB (zip, doc, ppt, pdf)</p>
+                        <label class="w-full flex items-center justify-center gap-2 cursor-pointer px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition mt-choose-btn">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                            Fayl tanlash
+                            <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf" class="hidden mt-file-input">
+                        </label>
+                        <p class="mt-file-name text-[11px] text-gray-500 mt-1.5 truncate hidden"></p>
+                        <p class="text-[10px] text-gray-400 mt-1">Max 10MB (zip, doc, ppt, pdf)</p>
+                        <button type="submit" class="hidden w-full mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition mt-submit-btn">Yuklash</button>
                     </form>
                 @elseif($item['is_overdue'] && !$item['submission'])
                     <p class="text-[11px] text-red-400 font-medium">Muddat tugagan</p>
@@ -334,14 +336,22 @@
             fileInput.addEventListener('change', function(e) {
                 var file = e.target.files[0];
                 if (!file) return;
+                // Fayl nomi va Yuklash tugmasini ko'rsatish (yangi upload form)
+                var nameEl = form.querySelector('.mt-file-name');
+                var submitBtn = form.querySelector('.mt-submit-btn');
+                var chooseBtn = form.querySelector('.mt-choose-btn');
+                if (nameEl) { nameEl.textContent = file.name; nameEl.classList.remove('hidden'); }
+                if (submitBtn) { submitBtn.classList.remove('hidden'); }
+                if (chooseBtn) { chooseBtn.classList.remove('bg-blue-500','hover:bg-blue-600'); chooseBtn.classList.add('bg-gray-500','hover:bg-gray-600'); }
                 if (file.size <= COMPRESS_THRESHOLD) {
-                    if (fileInput.classList.contains('hidden')) { form.submit(); }
+                    // Qayta yuklash formlari uchun avtomatik submit
+                    if (!submitBtn) { form.submit(); }
                     return;
                 }
                 var ext = file.name.split('.').pop().toLowerCase();
                 if (ext === 'zip') {
-                    if (file.size > MAX_FILE_SIZE) { alert('Fayl hajmi ' + (file.size/1024/1024).toFixed(1) + 'MB. Max 10MB.'); fileInput.value = ''; return; }
-                    if (fileInput.classList.contains('hidden')) { form.submit(); }
+                    if (file.size > MAX_FILE_SIZE) { alert('Fayl hajmi ' + (file.size/1024/1024).toFixed(1) + 'MB. Max 10MB.'); fileInput.value = ''; if(nameEl) nameEl.classList.add('hidden'); if(submitBtn) submitBtn.classList.add('hidden'); return; }
+                    if (!submitBtn) { form.submit(); }
                     return;
                 }
                 if (typeof JSZip === 'undefined') { alert('Siqish kutubxonasi yuklanmadi.'); fileInput.value = ''; return; }
@@ -363,6 +373,7 @@
                     var dt = new DataTransfer();
                     dt.items.add(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.zip', {type:'application/zip'}));
                     fileInput.files = dt.files;
+                    if (submitBtn) { overlay.style.display='none'; return; }
                     form.submit();
                 }).catch(function(err) { overlay.style.display='none'; alert('Xatolik: '+err.message); fileInput.value=''; });
             });

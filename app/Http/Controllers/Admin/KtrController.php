@@ -32,7 +32,7 @@ class KtrController extends Controller
             abort(403);
         }
         $activeRole = session('active_role', '');
-        $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'fan_masuli', 'kafedra_mudiri', 'dekan'];
+        $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'fan_masuli', 'kafedra_mudiri', 'dekan', 'registrator_ofisi'];
         if (!in_array($activeRole, $allowedRoles)) {
             abort(403, 'KTR sahifasiga faqat fan mas\'ullari kirishi mumkin.');
         }

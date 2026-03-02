@@ -1732,9 +1732,8 @@ class KtrController extends Controller
         $section->addText('Fan: ' . $cs->subject_name . '.', ['bold' => true, 'size' => 11], $left);
         $section->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['bold' => true, 'size' => 11], $left);
 
-        // Yo'nalish: ... kurs semestr
+        // Yo'nalish: ... semestr
         $yonalishLine = "Yo'nalish: " . $specialtyName;
-        if ($levelName) $yonalishLine .= '  ' . $levelName . '-kurs';
         if ($semesterName) $yonalishLine .= '  ' . $semesterName;
         $section->addText($yonalishLine, ['bold' => true, 'size' => 11], $left);
         $section->addTextBreak(0);
@@ -1807,7 +1806,7 @@ class KtrController extends Controller
         foreach ($typeCodes as $code) {
             $name = $filteredTypes[$code]['name'];
             $cell = $table->addCell($soatEachW, array_merge($cellBorder, [
-                'textDirection' => \PhpOffice\PhpWord\SimpleType\TextDirection::BTLR,
+                'textDirection' => \PhpOffice\PhpWord\Style\Cell::TEXT_DIR_BTLR,
             ]));
             $cell->addText($name, ['bold' => true, 'size' => 9], ['alignment' => 'center', 'spaceAfter' => 0, 'spaceBefore' => 0]);
         }
@@ -1891,7 +1890,6 @@ class KtrController extends Controller
             $section3->addText('Fan: ' . $cs->subject_name, ['bold' => true, 'size' => 11], $left);
             $section3->addText('Fakultet: ' . ($approverInfo['faculty_name'] ?: ''), ['bold' => true, 'size' => 11], $left);
             $yonalishLine3 = "Yo'nalish: " . $specialtyName;
-            if ($levelName) $yonalishLine3 .= '  ' . $levelName . '-kurs';
             if ($semesterName) $yonalishLine3 .= '  ' . $semesterName;
             $section3->addText($yonalishLine3, ['bold' => true, 'size' => 11], $left);
             $section3->addTextBreak(0);
@@ -1969,6 +1967,33 @@ class KtrController extends Controller
         $objWriter->save($tempFile);
 
         return response()->download($tempFile, $filename)->deleteFileAfterSend(true);
+    }
+
+    public function resetPlan($curriculumSubjectId)
+    {
+        $this->checkKtrAccess();
+
+        $activeRole = session('active_role', '');
+        if (!in_array($activeRole, ['superadmin', 'admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Faqat admin KTR rejasini qaytarishi mumkin.',
+            ], 403);
+        }
+
+        if (Schema::hasTable('ktr_plans')) {
+            KtrPlan::where('curriculum_subject_id', $curriculumSubjectId)->delete();
+        }
+
+        // Tegishli o'zgartirish so'rovlarini ham tozalash
+        if (Schema::hasTable('ktr_change_requests')) {
+            KtrChangeRequest::where('curriculum_subject_id', $curriculumSubjectId)->delete();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'KTR rejasi muvaffaqiyatli qaytarildi.',
+        ]);
     }
 
     public function approveChange(Request $request, $approvalId)

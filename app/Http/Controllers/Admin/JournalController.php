@@ -28,6 +28,7 @@ use App\Models\MarkingSystemScore;
 use App\Models\AbsenceExcuse;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\ExamSchedule;
+use App\Models\ExcuseGradeOpening;
 use App\Models\YnConsent;
 use App\Models\YnStudentGrade;
 use App\Models\YnSubmission;
@@ -1079,6 +1080,30 @@ class JournalController extends Controller
             $activeOpenedDates = LessonOpening::getActiveOpenings($group->group_hemis_id, $subjectId, $semesterCode);
         }
 
+        // Sababli ariza asosida talaba-specific baho ochilishlarini olish
+        $excuseOpenedDatesPerStudent = [];
+        try {
+            ExcuseGradeOpening::expireOverdue();
+            $excuseOpenings = ExcuseGradeOpening::where('subject_id', $subjectId)
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('status', 'active')
+                ->where('deadline', '>', now())
+                ->get();
+
+            foreach ($excuseOpenings as $eo) {
+                $current = $eo->date_from->copy();
+                while ($current->lte($eo->date_to)) {
+                    $excuseOpenedDatesPerStudent[$eo->student_hemis_id][$current->format('Y-m-d')] = [
+                        'deadline' => $eo->deadline->format('Y-m-d H:i'),
+                        'excuse_id' => $eo->absence_excuse_id,
+                    ];
+                    $current->addDay();
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('ExcuseGradeOpening query failed: ' . $e->getMessage());
+        }
+
         // Marking system minimum limit for this group's curriculum
         $markingScore = $curriculum && $curriculum->marking_system_code
             ? MarkingSystemScore::where('marking_system_code', $curriculum->marking_system_code)->first()
@@ -1206,7 +1231,8 @@ class JournalController extends Controller
             'canSubmitYn',
             'levelDeadline',
             'approvedExcuses',
-            'excuseGradeSnapshots'
+            'excuseGradeSnapshots',
+            'excuseOpenedDatesPerStudent'
         ));
     }
 
@@ -3906,9 +3932,11 @@ class JournalController extends Controller
             ], 403);
         }
 
-        // Tekshirish: bu kun uchun faol dars ochilishi bormi
+        // Tekshirish: bu kun uchun faol dars ochilishi bormi (guruh bo'yicha YOKI talaba-specific sababli)
         $groupHemisId = $request->group_hemis_id;
         $lessonDate = \Carbon\Carbon::parse($request->lesson_date)->format('Y-m-d');
+        $isExcuseOpening = false;
+
         $opening = LessonOpening::where('group_hemis_id', $groupHemisId)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
@@ -3916,11 +3944,17 @@ class JournalController extends Controller
             ->where('status', 'active')
             ->first();
 
-        if (!$opening) {
-            return response()->json(['success' => false, 'message' => "Dars ochilmagan (group={$groupHemisId}, date={$lessonDate})"], 403);
-        }
-        if (!$opening->isActive()) {
-            return response()->json(['success' => false, 'message' => 'Dars ochilish muddati tugagan'], 403);
+        if (!$opening || !$opening->isActive()) {
+            // Guruh bo'yicha ochilmagan — sababli ariza bo'yicha talaba-specific tekshirish
+            $isExcuseOpening = ExcuseGradeOpening::isDateOpenForStudent(
+                $request->student_hemis_id,
+                $request->subject_id,
+                $lessonDate
+            );
+
+            if (!$isExcuseOpening) {
+                return response()->json(['success' => false, 'message' => "Dars ochilmagan (group={$groupHemisId}, date={$lessonDate})"], 403);
+            }
         }
 
         // O'qituvchi ekanligini va shu guruhga biriktirilganligini tekshirish
@@ -3985,8 +4019,26 @@ class JournalController extends Controller
         $gradeValue = (float) $request->grade;
         $now = now();
 
-        if ($existing) {
+        if ($existing && !$isExcuseOpening) {
             return response()->json(['success' => false, 'message' => 'Bu katak uchun baho allaqachon mavjud.'], 409);
+        }
+
+        // Sababli ariza bo'yicha: mavjud bahoni yangilash
+        if ($existing && $isExcuseOpening) {
+            DB::table('student_grades')
+                ->where('id', $existing->id)
+                ->update([
+                    'grade' => $gradeValue,
+                    'status' => 'recorded',
+                    'updated_at' => $now,
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Sababli ariza asosida baho yangilandi',
+                'grade' => $gradeValue,
+                'updated' => true,
+            ]);
         }
 
         // Talabani topish (student_id uchun)

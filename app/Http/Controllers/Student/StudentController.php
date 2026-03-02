@@ -73,7 +73,14 @@ class StudentController extends Controller
             ->take(10)
             ->get();
 
-        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'recentGrades'));
+        $gradesBySubject = StudentGrade::where('student_id', $student->id)
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->orderBy('subject_name')
+            ->orderBy('lesson_date', 'desc')
+            ->get()
+            ->groupBy('subject_name');
+
+        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'recentGrades', 'gradesBySubject'));
     }
 
     public function getSchedule(Request $request)

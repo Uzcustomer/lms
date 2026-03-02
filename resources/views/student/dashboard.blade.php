@@ -84,56 +84,64 @@
                     </div>
 
                     <div class="bg-white shadow rounded-lg p-6">
-                        <h4 class="text-lg font-semibold mb-4">So'nggi Baholar</h4>
-                        @if($recentGrades->isEmpty())
+                        <h4 class="text-lg font-semibold mb-4">Fanlar bo'yicha baholar</h4>
+                        @if($gradesBySubject->isEmpty())
                             <p class="text-sm text-gray-500">Hozircha baholar yo'q.</p>
                         @else
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fan</th>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Turi</th>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Baho</th>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Holat</th>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sana</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    @foreach($recentGrades as $grade)
-                                        @php
-                                            $statusMap = [
-                                                'pending' => ['color' => 'yellow', 'text' => 'Kutilmoqda'],
-                                                'recorded' => ['color' => 'green', 'text' => 'Baholangan'],
-                                                'retake' => ['color' => 'blue', 'text' => 'Qayta topshirilgan'],
-                                                'closed' => ['color' => 'red', 'text' => 'Yopilgan'],
-                                            ];
-                                            $badge = $statusMap[$grade->status] ?? ['color' => 'gray', 'text' => 'Noma\'lum'];
-                                        @endphp
-                                        <tr>
-                                            <td class="px-4 py-2 text-sm font-medium text-gray-900">{{ $grade->subject_name }}</td>
-                                            <td class="px-4 py-2 text-sm text-gray-500">{{ $grade->training_type_name }}</td>
-                                            <td class="px-4 py-2 text-sm font-medium text-gray-900">
-                                                @if($grade->status == 'pending')
-                                                    {{ $grade->reason == 'absent' ? '0 (NB)' : $grade->grade }}
-                                                @elseif($grade->status == 'retake')
-                                                    {{ $grade->grade ?? '0 (NB)' }}/{{ $grade->retake_grade }}
-                                                @else
-                                                    {{ $grade->grade }}
-                                                @endif
-                                            </td>
-                                            <td class="px-4 py-2 text-sm">
-                                                <span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-{{ $badge['color'] }}-100 text-{{ $badge['color'] }}-800">
-                                                    <svg class="mr-1 h-2 w-2 text-{{ $badge['color'] }}-400" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
-                                                    {{ $badge['text'] }}
-                                                </span>
-                                            </td>
-                                            <td class="px-4 py-2 text-sm text-gray-500">{{ format_date($grade->lesson_date) }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
+                            <div class="space-y-4">
+                                @foreach($gradesBySubject as $subjectName => $grades)
+                                    <div class="border border-gray-200 rounded-lg overflow-hidden">
+                                        <div class="bg-gray-50 px-4 py-3 flex items-center justify-between">
+                                            <h5 class="text-sm font-semibold text-gray-800">{{ $subjectName }}</h5>
+                                            <span class="text-xs text-gray-500">{{ $grades->count() }} ta baho</span>
+                                        </div>
+                                        <div class="overflow-x-auto">
+                                            <table class="min-w-full divide-y divide-gray-200">
+                                                <thead class="bg-gray-50/50">
+                                                    <tr>
+                                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Turi</th>
+                                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Baho</th>
+                                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Holat</th>
+                                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sana</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="bg-white divide-y divide-gray-100">
+                                                    @foreach($grades as $grade)
+                                                        @php
+                                                            $statusMap = [
+                                                                'pending' => ['color' => 'yellow', 'text' => 'Kutilmoqda'],
+                                                                'recorded' => ['color' => 'green', 'text' => 'Baholangan'],
+                                                                'retake' => ['color' => 'blue', 'text' => 'Qayta topshirilgan'],
+                                                                'closed' => ['color' => 'red', 'text' => 'Yopilgan'],
+                                                            ];
+                                                            $badge = $statusMap[$grade->status] ?? ['color' => 'gray', 'text' => 'Noma\'lum'];
+                                                        @endphp
+                                                        <tr>
+                                                            <td class="px-4 py-2 text-sm text-gray-500">{{ $grade->training_type_name }}</td>
+                                                            <td class="px-4 py-2 text-sm font-medium text-gray-900">
+                                                                @if($grade->status == 'pending')
+                                                                    {{ $grade->reason == 'absent' ? '0 (NB)' : $grade->grade }}
+                                                                @elseif($grade->status == 'retake')
+                                                                    {{ $grade->grade ?? '0 (NB)' }}/{{ $grade->retake_grade }}
+                                                                @else
+                                                                    {{ $grade->grade }}
+                                                                @endif
+                                                            </td>
+                                                            <td class="px-4 py-2 text-sm">
+                                                                <span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-{{ $badge['color'] }}-100 text-{{ $badge['color'] }}-800">
+                                                                    <svg class="mr-1 h-2 w-2 text-{{ $badge['color'] }}-400" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
+                                                                    {{ $badge['text'] }}
+                                                                </span>
+                                                            </td>
+                                                            <td class="px-4 py-2 text-sm text-gray-500">{{ format_date($grade->lesson_date) }}</td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
                         @endif
                     </div>
                 </div>

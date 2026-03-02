@@ -283,14 +283,16 @@ class ImportGrades extends Command
             }
         });
 
-        // Oxirgi 7 kunni tekshirish (bugundan tashqari)
-        // LIVE importga bog'liq emas — har bir kunni mustaqil tekshiramiz
+        // HEMIS API oxirgi 2 kunlik ma'lumotlarni tayyorlay olmaydi (connection timeout).
+        // Pattern: kecha va oldingi kun DOIM timeout, 3+ kunlik sanalar ishlaydi.
+        // Shuning uchun faqat 3+ kunlik sanalarni qayta ishlaymiz.
+        // Oxirgi 2 kunlik baholar live import orqali (har 30 daqiqada) bazaga tushadi.
         $lookbackStart = Carbon::today()->subDays(7)->startOfDay();
-        $todayStart = Carbon::today()->startOfDay();
+        $cutoffDate = Carbon::today()->subDays(2)->startOfDay();
 
-        // Barcha 7 kunni ro'yxatga olish
+        // 3-7 kunlik sanalarni ro'yxatga olish (oxirgi 2 kun o'tkaziladi)
         $allDatesToProcess = [];
-        for ($d = $lookbackStart->copy(); $d->lt($todayStart); $d->addDay()) {
+        for ($d = $lookbackStart->copy(); $d->lt($cutoffDate); $d->addDay()) {
             $allDatesToProcess[] = $d->toDateString();
         }
 
@@ -658,7 +660,7 @@ class ImportGrades extends Command
         $allItems = [];
         $currentPage = 1;
         $totalPages = 1;
-        $maxRetries = 3;
+        $maxRetries = 5;
         $this->lastFetchError = '';
         $skippedByFilter = 0;
 
@@ -724,7 +726,9 @@ class ImportGrades extends Command
                         $body = substr($response->body(), 0, 200);
                         Log::error("[Fetch] {$endpoint} page {$currentPage} failed. Status: {$response->status()}, Body: {$body}");
                         if ($retryCount < $maxRetries) {
-                            sleep(5);
+                            $backoff = min(5 * pow(2, $retryCount - 1), 60);
+                            $this->info("  Retry #{$retryCount}/{$maxRetries} — {$backoff}s kutilmoqda...");
+                            sleep($backoff);
                         }
                     }
                 } catch (\Exception $e) {
@@ -732,7 +736,9 @@ class ImportGrades extends Command
                     $lastError = $e->getMessage();
                     Log::error("[Fetch] {$endpoint} page {$currentPage} exception: " . $e->getMessage());
                     if ($retryCount < $maxRetries) {
-                        sleep(5);
+                        $backoff = min(5 * pow(2, $retryCount - 1), 60);
+                        $this->info("  Retry #{$retryCount}/{$maxRetries} — {$backoff}s kutilmoqda...");
+                        sleep($backoff);
                     }
                 }
             }
@@ -766,7 +772,7 @@ class ImportGrades extends Command
         $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
         $currentPage = 1;
         $totalPages = 1;
-        $maxRetries = 3;
+        $maxRetries = 5;
         $this->lastFetchError = '';
         $totalGradeCount = 0;
         $dateStart = $date->copy()->startOfDay();
@@ -876,7 +882,7 @@ class ImportGrades extends Command
     // =========================================================================
     // Bitta API sahifasini olish
     // =========================================================================
-    private function fetchSinglePage(string $endpoint, int $from, int $to, int $page, int $maxRetries = 3): array|false
+    private function fetchSinglePage(string $endpoint, int $from, int $to, int $page, int $maxRetries = 5): array|false
     {
         $retryCount = 0;
         $lastError = '';
@@ -913,13 +919,19 @@ class ImportGrades extends Command
                     $retryCount++;
                     $lastError = "HTTP {$response->status()}";
                     Log::error("[StreamLive] {$endpoint} page {$page} failed: {$lastError}");
-                    if ($retryCount < $maxRetries) sleep(5);
+                    if ($retryCount < $maxRetries) {
+                        $backoff = min(5 * pow(2, $retryCount - 1), 60);
+                        sleep($backoff);
+                    }
                 }
             } catch (\Exception $e) {
                 $retryCount++;
                 $lastError = $e->getMessage();
                 Log::error("[StreamLive] {$endpoint} page {$page} exception: {$lastError}");
-                if ($retryCount < $maxRetries) sleep(5);
+                if ($retryCount < $maxRetries) {
+                    $backoff = min(5 * pow(2, $retryCount - 1), 60);
+                    sleep($backoff);
+                }
             }
         }
 

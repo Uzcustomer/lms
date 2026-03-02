@@ -330,6 +330,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/plan/{curriculumSubjectId}', [KtrController::class, 'savePlan'])->name('save-plan');
             Route::post('/change-request/{curriculumSubjectId}', [KtrController::class, 'requestChange'])->name('request-change');
             Route::post('/change-approve/{approvalId}', [KtrController::class, 'approveChange'])->name('approve-change');
+            Route::delete('/plan/{curriculumSubjectId}', [KtrController::class, 'resetPlan'])->name('reset-plan');
         });
 
         // Kafedra (Fakultet va kafedralar tuzilmasi)

@@ -310,12 +310,22 @@
 
                     <!-- Tugmalar -->
                     <div style="display: flex; justify-content: space-between; margin-top: 16px; align-items: center;">
-                        <a id="ktr-word-export-btn" href="#" class="ktr-btn ktr-btn-export" target="_blank" style="text-decoration:none; display:none;">
-                            <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            Word
-                        </a>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <a id="ktr-word-export-btn" href="#" class="ktr-btn ktr-btn-export" target="_blank" style="text-decoration:none; display:none;">
+                                <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                Word
+                            </a>
+                            @if(in_array(session('active_role'), ['superadmin', 'admin']))
+                            <button type="button" id="ktr-reset-btn" class="ktr-btn" style="display:none; background:#fef2f2; color:#dc2626; border:1px solid #fecaca; font-size:12px; padding:6px 14px; border-radius:8px; cursor:pointer;" onclick="resetKtrPlan()">
+                                <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                                Qaytarish
+                            </button>
+                            @endif
+                        </div>
                         <div style="display: flex; gap: 10px;">
                             <button type="button" class="ktr-btn ktr-btn-edit" id="ktr-edit-btn" onclick="onKtrEditClick()" style="display:none;">
                                 <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -575,8 +585,10 @@
                     $('#ktr-word-export-btn').attr('href', '/admin/ktr/export-word/' + csId);
                     if (ktrState.hasPlan) {
                         $('#ktr-word-export-btn').show();
+                        $('#ktr-reset-btn').show();
                     } else {
                         $('#ktr-word-export-btn').hide();
+                        $('#ktr-reset-btn').hide();
                     }
                     ktrState.changeRequest = data.change_request || null;
 
@@ -1173,6 +1185,28 @@
                     $('#ktr-validation-msg')
                         .html(msg)
                         .removeClass('ktr-msg-success').addClass('ktr-msg-error').show();
+                }
+            });
+        }
+
+        function resetKtrPlan() {
+            if (!confirm("Haqiqatan ham bu fan uchun KTR rejasini o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi.")) return;
+
+            $.ajax({
+                url: '/admin/ktr/plan/' + ktrState.csId,
+                type: 'DELETE',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                success: function(resp) {
+                    if (resp.success) {
+                        alert(resp.message);
+                        $('#ktr-modal-overlay').fadeOut(200);
+                        location.reload();
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Xatolik yuz berdi';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
                 }
             });
         }

@@ -1299,13 +1299,16 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Fanni topish
+            // Fanni topish (faqat faol fanlar, talaba curriculum'iga tegishli)
             $subject = null;
             if ($result->fan_id) {
-                $subject = CurriculumSubject::where('subject_id', $result->fan_id)->first();
+                $subject = CurriculumSubject::where('subject_id', $result->fan_id)
+                    ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                    ->where('is_active', true)
+                    ->first();
             }
             if (!$subject) {
-                $row['error'] = "Fan topilmadi (fan_id: {$result->fan_id})";
+                $row['error'] = "Faol fan topilmadi (fan_id: {$result->fan_id}, curriculum: {$group->curriculum_hemis_id})";
                 $errors[] = $row;
                 continue;
             }
@@ -1415,10 +1418,13 @@ class QuizResultController extends Controller
 
             $subject = null;
             if ($result->fan_id) {
-                $subject = CurriculumSubject::where('subject_id', $result->fan_id)->first();
+                $subject = CurriculumSubject::where('subject_id', $result->fan_id)
+                    ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                    ->where('is_active', true)
+                    ->first();
             }
             if (!$subject) {
-                $rowInfo['error'] = "Fan topilmadi (fan_id: {$result->fan_id})";
+                $rowInfo['error'] = "Faol fan topilmadi (fan_id: {$result->fan_id}, curriculum: {$group->curriculum_hemis_id})";
                 $errors[] = $rowInfo;
                 continue;
             }

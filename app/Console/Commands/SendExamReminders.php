@@ -4,9 +4,11 @@ namespace App\Console\Commands;
 
 use App\Models\ExamSchedule;
 use App\Models\Student;
+use App\Models\StudentNotification;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class SendExamReminders extends Command
@@ -28,27 +30,33 @@ class SendExamReminders extends Command
             $dateRange[] = $today->copy()->addDays($i)->format('Y-m-d');
         }
 
-        // 1-qadam: Yaqin 3 kunda imtihoni bor guruhlarni topish (tez query)
-        $groupIds = ExamSchedule::where(function ($query) use ($dateRange) {
+        // 1-qadam: Yaqin 3 kunda imtihoni bor guruhlarni topish
+        $examSchedules = ExamSchedule::where(function ($query) use ($dateRange) {
             $query->where(function ($q) use ($dateRange) {
-                $q->whereIn(\DB::raw('DATE(oski_date)'), $dateRange)
+                $q->whereIn(DB::raw('DATE(oski_date)'), $dateRange)
                     ->where(function ($q2) {
                         $q2->where('oski_na', false)->orWhereNull('oski_na');
                     });
             })->orWhere(function ($q) use ($dateRange) {
-                $q->whereIn(\DB::raw('DATE(test_date)'), $dateRange)
+                $q->whereIn(DB::raw('DATE(test_date)'), $dateRange)
                     ->where(function ($q2) {
                         $q2->where('test_na', false)->orWhereNull('test_na');
                     });
             });
-        })->pluck('group_hemis_id')->unique()->values();
+        })->get();
 
-        if ($groupIds->isEmpty()) {
+        if ($examSchedules->isEmpty()) {
             $this->info('Yaqin 3 kun ichida imtihon topilmadi.');
             return 0;
         }
 
+        $groupIds = $examSchedules->pluck('group_hemis_id')->unique()->values();
         $this->info("Yaqin 3 kunda imtihoni bor guruhlar: {$groupIds->count()} ta");
+
+        // Imtihonlarni group_id + semester_code bo'yicha indekslash (N+1 muammoni hal qilish)
+        $examsByGroupAndSemester = $examSchedules->groupBy(function ($exam) {
+            return $exam->group_hemis_id . '|' . $exam->semester_code;
+        });
 
         // 2-qadam: Shu guruhlardan Telegram tasdiqlangan talabalarni topish
         $students = Student::whereIn('group_id', $groupIds)
@@ -66,30 +74,18 @@ class SendExamReminders extends Command
         $sentCount = 0;
         $failedCount = 0;
         $skippedCount = 0;
+        $notificationRecords = [];
 
-        // 3-qadam: Har bir talaba uchun imtihonlarni topish
-        // StudentController::examSchedule() bilan BIR XIL mantiq
+        // 3-qadam: Har bir talaba uchun — qo'shimcha query YO'Q, xotiradagi ma'lumotlardan
         foreach ($students as $student) {
-            $exams = ExamSchedule::where('group_hemis_id', $student->group_id)
-                ->where('semester_code', $student->semester_code)
-                ->where(function ($query) use ($student) {
-                    $query->where('education_year', $student->education_year_code)
-                        ->orWhereNull('education_year');
-                })
-                ->where(function ($query) use ($dateRange) {
-                    $query->where(function ($q) use ($dateRange) {
-                        $q->whereIn(\DB::raw('DATE(oski_date)'), $dateRange)
-                            ->where(function ($q2) {
-                                $q2->where('oski_na', false)->orWhereNull('oski_na');
-                            });
-                    })->orWhere(function ($q) use ($dateRange) {
-                        $q->whereIn(\DB::raw('DATE(test_date)'), $dateRange)
-                            ->where(function ($q2) {
-                                $q2->where('test_na', false)->orWhereNull('test_na');
-                            });
-                    });
-                })
-                ->get();
+            $key = $student->group_id . '|' . $student->semester_code;
+            $candidateExams = $examsByGroupAndSemester->get($key, collect());
+
+            // education_year filtri
+            $exams = $candidateExams->filter(function ($exam) use ($student) {
+                return $exam->education_year === $student->education_year_code
+                    || $exam->education_year === null;
+            });
 
             if ($exams->isEmpty()) {
                 $skippedCount++;
@@ -98,8 +94,26 @@ class SendExamReminders extends Command
             }
 
             $message = $this->buildMessage($student, $exams, $today);
+            $plainMessage = $this->buildPlainMessage($exams, $today);
 
+            // Telegram ga yuborish
             $success = $telegram->sendToUser($student->telegram_chat_id, $message);
+
+            // Notification inbox ga yozish (Telegram muvaffaqiyatidan qat'iy nazar)
+            $notificationRecords[] = [
+                'student_id' => $student->id,
+                'type' => 'exam_reminder',
+                'title' => $this->buildNotificationTitle($exams, $today),
+                'message' => $plainMessage,
+                'link' => '/student/exam-schedule',
+                'data' => json_encode([
+                    'exam_count' => $exams->count(),
+                    'dates' => $exams->pluck('oski_date', 'test_date')->toArray(),
+                ]),
+                'read_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
 
             if ($success) {
                 $sentCount++;
@@ -114,6 +128,17 @@ class SendExamReminders extends Command
                     'group' => $student->group_id,
                 ]);
             }
+
+            // Har 50 ta notificationni batch insert qilish
+            if (count($notificationRecords) >= 50) {
+                StudentNotification::insert($notificationRecords);
+                $notificationRecords = [];
+            }
+        }
+
+        // Qolgan notificationlarni yozish
+        if (!empty($notificationRecords)) {
+            StudentNotification::insert($notificationRecords);
         }
 
         $this->info("Yakunlandi. Yuborilgan: {$sentCount}, Xato: {$failedCount}, O'tkazilgan: {$skippedCount}");
@@ -121,13 +146,46 @@ class SendExamReminders extends Command
         return 0;
     }
 
-    private function buildMessage(Student $student, $schedules, Carbon $today): string
+    private function buildNotificationTitle($exams, Carbon $today): string
+    {
+        $examsByDate = $this->groupExamsByDate($exams, $today);
+        $minDays = collect($examsByDate)->min('days');
+
+        if ($minDays == 0) {
+            return "Bugun imtihoningiz bor!";
+        } elseif ($minDays == 1) {
+            return "Ertaga imtihoningiz bor!";
+        } else {
+            return "Imtihonga {$minDays} kun qoldi!";
+        }
+    }
+
+    private function buildPlainMessage($exams, Carbon $today): string
     {
         $lines = [];
-        $lines[] = "Hurmatli <b>{$student->full_name}</b>!";
-        $lines[] = "";
+        $examsByDate = $this->groupExamsByDate($exams, $today);
 
-        // Imtihonlarni sanaga qarab guruhlash
+        foreach ($examsByDate as $dateInfo) {
+            $daysLeft = $dateInfo['days'];
+
+            if ($daysLeft == 0) {
+                $lines[] = "Bugun ({$dateInfo['date']}):";
+            } elseif ($daysLeft == 1) {
+                $lines[] = "Ertaga ({$dateInfo['date']}):";
+            } else {
+                $lines[] = "{$daysLeft} kun qoldi ({$dateInfo['date']}):";
+            }
+
+            foreach ($dateInfo['exams'] as $exam) {
+                $lines[] = "  - {$exam['name']} ({$exam['type']})";
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function groupExamsByDate($schedules, Carbon $today): array
+    {
         $examsByDate = [];
         foreach ($schedules as $schedule) {
             if ($schedule->oski_date && !$schedule->oski_na) {
@@ -149,8 +207,17 @@ class SendExamReminders extends Command
                 }
             }
         }
-
         ksort($examsByDate);
+        return $examsByDate;
+    }
+
+    private function buildMessage(Student $student, $schedules, Carbon $today): string
+    {
+        $lines = [];
+        $lines[] = "Hurmatli <b>{$student->full_name}</b>!";
+        $lines[] = "";
+
+        $examsByDate = $this->groupExamsByDate($schedules, $today);
 
         foreach ($examsByDate as $dateInfo) {
             $daysLeft = $dateInfo['days'];

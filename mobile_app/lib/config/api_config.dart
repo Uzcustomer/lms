@@ -24,6 +24,7 @@ class ApiConfig {
   static const String studentSavePhone = '/student/complete-profile/phone';
   static const String studentSaveTelegram = '/student/complete-profile/telegram';
   static const String studentCheckTelegram = '/student/complete-profile/telegram/check';
+  static const String studentContract = '/student/contract';
 
   // Teacher endpoints
   static const String teacherDashboard = '/teacher/dashboard';

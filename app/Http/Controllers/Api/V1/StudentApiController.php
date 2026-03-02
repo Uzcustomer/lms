@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Curriculum;
+use App\Services\HemisService;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumWeek;
 use App\Models\Independent;
@@ -1040,6 +1041,80 @@ class StudentApiController extends Controller
             'verified' => $student->isTelegramVerified(),
             'telegram_username' => $student->telegram_username,
             'telegram_days_left' => $student->telegramDaysLeft(),
+        ]);
+    }
+
+    /**
+     * Contract — shartnoma ma'lumotlari (HEMIS dan)
+     */
+    public function contract(Request $request): JsonResponse
+    {
+        $student = $request->user();
+        $hemisService = app(HemisService::class);
+
+        $currentSemester = Semester::where('current', true)->first();
+        $educationYearCode = $currentSemester?->education_year ?? $student->education_year_code;
+
+        $result = $hemisService->fetchContracts([
+            '_student' => $student->hemis_id,
+            '_education_year' => $educationYearCode,
+            'limit' => 50,
+        ]);
+
+        if (!($result['success'] ?? false)) {
+            return response()->json([
+                'data' => [
+                    'contracts' => [],
+                    'summary' => [
+                        'total_amount' => 0,
+                        'paid_amount' => 0,
+                        'remaining_amount' => 0,
+                    ],
+                ],
+                'message' => 'Shartnoma ma\'lumotlari topilmadi',
+            ]);
+        }
+
+        $items = $result['data']['items'] ?? [];
+        $contracts = [];
+        $totalAmount = 0;
+        $paidAmount = 0;
+
+        foreach ($items as $item) {
+            $contractData = [];
+            foreach ($item['_data'] ?? [] as $attr) {
+                foreach ($attr as $key => $value) {
+                    $contractData[$key] = $value;
+                }
+            }
+
+            $amount = (float) ($contractData['payment_amount'] ?? $contractData['amount'] ?? $contractData['summa'] ?? $contractData['contract_amount'] ?? 0);
+            $paid = (float) ($contractData['paid_amount'] ?? $contractData['paid'] ?? $contractData['tolangan'] ?? 0);
+
+            $totalAmount += $amount;
+            $paidAmount += $paid;
+
+            $contracts[] = [
+                'id' => $item['id'] ?? null,
+                'key' => $item['key'] ?? null,
+                'education_year' => $item['_education_year'] ?? null,
+                'data' => $contractData,
+                'created_at' => isset($item['created_at']) ? date('Y-m-d H:i:s', $item['created_at']) : null,
+                'updated_at' => isset($item['updated_at']) ? date('Y-m-d H:i:s', $item['updated_at']) : null,
+            ];
+        }
+
+        return response()->json([
+            'data' => [
+                'contracts' => $contracts,
+                'summary' => [
+                    'total_amount' => $totalAmount,
+                    'paid_amount' => $paidAmount,
+                    'remaining_amount' => $totalAmount - $paidAmount,
+                ],
+                'student_name' => $student->full_name,
+                'education_year' => $educationYearCode,
+            ],
         ]);
     }
 }

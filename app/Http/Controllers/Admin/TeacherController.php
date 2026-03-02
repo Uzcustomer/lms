@@ -279,7 +279,7 @@ class TeacherController extends Controller
         $forceDeptFilter = $filterDeptParam !== '0';
 
         // Query yaratish funksiyasi
-        $buildQuery = function ($filterByDept = true, $onlyActive = true) use ($search, $levelCode, $teacher) {
+        $buildQuery = function ($filterByDept = true, $onlyActive = true) use ($search, $levelCode, $teacher, $forceDeptFilter) {
             $query = CurriculumSubject::query();
 
             if ($onlyActive) {
@@ -317,25 +317,30 @@ class TeacherController extends Controller
                 ->groupBy('subject_name', 'semester_code', 'semester_name')
                 ->orderBy('subject_name')
                 ->orderBy('semester_code')
-                ->limit(50);
+                ->limit($forceDeptFilter ? 50 : 100);
         };
 
-        // 1. Kafedra + active (yoki filter_dept=0 bo'lsa barcha kafedra)
-        $subjects = $buildQuery($forceDeptFilter, true)->get();
-
-        // 2. Kafedra + barcha (active bo'lmasa ham)
-        if ($subjects->isEmpty() && $teacher && $forceDeptFilter) {
-            $subjects = $buildQuery(true, false)->get();
-        }
-
-        // 3. Barcha fanlar + active (kafedrada umuman yo'q bo'lsa)
-        if ($subjects->isEmpty() && $teacher) {
-            $subjects = $buildQuery(false, true)->get();
-        }
-
-        // 4. Barcha fanlar + barcha
-        if ($subjects->isEmpty()) {
+        if (!$forceDeptFilter) {
+            // Kafedra filtri o'chirilgan — barcha fanlarni ko'rsatish (active va nofaol)
             $subjects = $buildQuery(false, false)->get();
+        } else {
+            // 1. Kafedra + active
+            $subjects = $buildQuery(true, true)->get();
+
+            // 2. Kafedra + barcha (active bo'lmasa ham)
+            if ($subjects->isEmpty() && $teacher) {
+                $subjects = $buildQuery(true, false)->get();
+            }
+
+            // 3. Barcha fanlar + active (kafedrada umuman yo'q bo'lsa)
+            if ($subjects->isEmpty() && $teacher) {
+                $subjects = $buildQuery(false, true)->get();
+            }
+
+            // 4. Barcha fanlar + barcha
+            if ($subjects->isEmpty()) {
+                $subjects = $buildQuery(false, false)->get();
+            }
         }
 
         return response()->json($subjects);

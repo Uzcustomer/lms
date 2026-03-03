@@ -85,7 +85,7 @@
                                     @endforeach
                                 @endif
                                 @if($teacher->hasRole('fan_masuli') && $teacher->relationLoaded('responsibleSubjects'))
-                                    @foreach($teacher->responsibleSubjects as $subject)
+                                    @foreach($teacher->responsibleSubjects->take(5) as $subject)
                                         <span class="badge badge-subject">
                                             <svg style="width: 12px; height: 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
@@ -93,6 +93,21 @@
                                             {{ $subject->subject_name }}
                                         </span>
                                     @endforeach
+                                    @if($teacher->responsibleSubjects->count() > 5)
+                                        <span class="badge badge-subject" style="cursor: pointer; background: #dbeafe; color: #1d4ed8;" onclick="this.style.display='none'; document.getElementById('header-hidden-subjects').style.display='contents';">
+                                            +{{ $teacher->responsibleSubjects->count() - 5 }} ta
+                                        </span>
+                                        <span id="header-hidden-subjects" style="display: none;">
+                                            @foreach($teacher->responsibleSubjects->slice(5) as $subject)
+                                                <span class="badge badge-subject">
+                                                    <svg style="width: 12px; height: 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                                                    </svg>
+                                                    {{ $subject->subject_name }}
+                                                </span>
+                                            @endforeach
+                                        </span>
+                                    @endif
                                 @endif
                             </div>
                         </div>
@@ -156,9 +171,10 @@
                         @endif
                         @if($teacher->hasRole('fan_masuli') && $teacher->relationLoaded('responsibleSubjects') && $teacher->responsibleSubjects->count())
                             <div class="info-row">
-                                <span class="info-label">Mas'ul fan{{ $teacher->responsibleSubjects->count() > 1 ? 'lar' : '' }}</span>
+                                <span class="info-label">Mas'ul fan{{ $teacher->responsibleSubjects->count() > 1 ? 'lar' : '' }} ({{ $teacher->responsibleSubjects->count() }})</span>
                                 <span class="info-value" style="color: #92400e;">
-                                    {{ $teacher->responsibleSubjects->pluck('subject_name')->join(', ') }}
+                                    {{ $teacher->responsibleSubjects->take(5)->pluck('subject_name')->join(', ') }}@if($teacher->responsibleSubjects->count() > 5)<span id="info-hidden-subjects" style="display: none;">, {{ $teacher->responsibleSubjects->slice(5)->pluck('subject_name')->join(', ') }}</span>
+                                    <a href="javascript:void(0)" onclick="document.getElementById('info-hidden-subjects').style.display='inline'; this.style.display='none';" style="color: #1d4ed8; font-size: 11px; margin-left: 4px; white-space: nowrap;">+{{ $teacher->responsibleSubjects->count() - 5 }} ta</a>@endif
                                 </span>
                             </div>
                         @endif
@@ -418,8 +434,9 @@
                                     <label style="font-size: 11px; font-weight: 600; color: #92400e; display: block; margin-bottom: 6px;">Fan mas'uli roli uchun fanlar:</label>
 
                                     <div id="selected-subjects" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-                                        @foreach(($teacher->relationLoaded('responsibleSubjects') ? $teacher->responsibleSubjects : []) as $subject)
-                                            <div class="selected-subject-item" data-id="{{ $subject->id }}">
+                                        @php $subjectsList = $teacher->relationLoaded('responsibleSubjects') ? $teacher->responsibleSubjects : collect(); @endphp
+                                        @foreach($subjectsList as $index => $subject)
+                                            <div class="selected-subject-item {{ $index >= 5 ? 'subject-hidden-item' : '' }}" data-id="{{ $subject->id }}" {!! $index >= 5 ? 'style="display: none;"' : '' !!}>
                                                 <input type="hidden" name="responsible_subjects[]" value="{{ $subject->id }}">
                                                 <div style="flex: 1; min-width: 0;">
                                                     <span style="font-weight: 600; font-size: 12px; color: #1e293b;">{{ $subject->subject_name }}</span>
@@ -432,6 +449,11 @@
                                             </div>
                                         @endforeach
                                     </div>
+                                    @if($subjectsList->count() > 5)
+                                        <button type="button" id="toggle-subjects-btn" onclick="toggleSelectedSubjects()" style="width: 100%; padding: 5px; border: 1px dashed #d97706; border-radius: 6px; background: transparent; color: #92400e; font-size: 11px; font-weight: 600; cursor: pointer; margin-bottom: 8px;">
+                                            Barchasini ko'rsatish ({{ $subjectsList->count() }} ta)
+                                        </button>
+                                    @endif
 
                                     <button type="button" onclick="openSubjectModal()" class="btn-add-subject">
                                         <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -612,6 +634,20 @@
             });
         }
 
+        var subjectsExpanded = false;
+        function toggleSelectedSubjects() {
+            subjectsExpanded = !subjectsExpanded;
+            var items = document.querySelectorAll('#selected-subjects .subject-hidden-item');
+            var btn = document.getElementById('toggle-subjects-btn');
+            items.forEach(function(item) {
+                item.style.display = subjectsExpanded ? '' : 'none';
+            });
+            if (btn) {
+                var total = document.querySelectorAll('#selected-subjects .selected-subject-item').length;
+                btn.textContent = subjectsExpanded ? 'Yashirish' : 'Barchasini ko\u0027rsatish (' + total + ' ta)';
+            }
+        }
+
         // Vaqtincha tanlangan fanlar (modal ichida)
         var pendingSubjects = [];
 
@@ -682,9 +718,15 @@
             pendingSubjects.forEach(function(subject) {
                 if (isSubjectSelected(subject.id)) return;
 
+                var allItems = container.querySelectorAll('.selected-subject-item');
+                var visibleCount = 0;
+                allItems.forEach(function(item) { if (item.style.display !== 'none') visibleCount++; });
+
                 var div = document.createElement('div');
-                div.className = 'selected-subject-item';
+                var shouldHide = !subjectsExpanded && allItems.length >= 5;
+                div.className = 'selected-subject-item' + (allItems.length >= 5 ? ' subject-hidden-item' : '');
                 div.setAttribute('data-id', subject.id);
+                if (shouldHide) div.style.display = 'none';
                 div.innerHTML =
                     '<input type="hidden" name="responsible_subjects[]" value="' + subject.id + '">' +
                     '<div style="flex: 1; min-width: 0;">' +
@@ -699,6 +741,27 @@
             pendingSubjects = [];
             document.getElementById('subject-modal').style.display = 'none';
             updateSelectedCount();
+            updateToggleButton();
+        }
+
+        function updateToggleButton() {
+            var total = document.querySelectorAll('#selected-subjects .selected-subject-item').length;
+            var btn = document.getElementById('toggle-subjects-btn');
+            if (total > 5) {
+                if (!btn) {
+                    btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.id = 'toggle-subjects-btn';
+                    btn.onclick = toggleSelectedSubjects;
+                    btn.style.cssText = 'width: 100%; padding: 5px; border: 1px dashed #d97706; border-radius: 6px; background: transparent; color: #92400e; font-size: 11px; font-weight: 600; cursor: pointer; margin-bottom: 8px;';
+                    var container = document.getElementById('selected-subjects');
+                    container.parentNode.insertBefore(btn, container.nextSibling);
+                }
+                btn.textContent = subjectsExpanded ? 'Yashirish' : 'Barchasini ko\u0027rsatish (' + total + ' ta)';
+                btn.style.display = '';
+            } else if (btn) {
+                btn.style.display = 'none';
+            }
         }
 
         var deptFilterEnabled = true;

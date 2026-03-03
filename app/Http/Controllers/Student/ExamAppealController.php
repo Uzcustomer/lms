@@ -36,28 +36,29 @@ class ExamAppealController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        // Faqat joriy talabaning oxirgi 24 soat ichida qo'yilgan baholarini ko'rsatish
+        // Jurnaldagi barcha baholarni ko'rsatish
         $grades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
             ->whereNotNull('grade')
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
-            ->where(function ($q) use ($since) {
-                $q->where('created_at', '>=', $since)
-                    ->orWhere('updated_at', '>=', $since)
-                    ->orWhere('created_at_api', '>=', $since);
-            })
-            ->orderByDesc('lesson_date')
+            ->orderByDesc('created_at')
             ->get()
-            ->map(fn($g) => [
-                'id' => $g->id,
-                'subject_name' => $g->subject_name,
-                'training_type_code' => $g->training_type_code,
-                'training_type_name' => $g->training_type_name,
-                'grade' => $g->grade,
-                'employee_name' => $g->employee_name,
-                'lesson_date' => $g->lesson_date ? $g->lesson_date->format('d.m.Y') : null,
-                'label' => $g->subject_name . ' - ' . $g->training_type_name . ' (' . $g->grade . ' ball)',
-            ]);
+            ->map(function ($g) use ($since) {
+                $gradeTime = $g->created_at_api ?? $g->updated_at ?? $g->created_at;
+                $canAppeal = $gradeTime && Carbon::parse($gradeTime)->gte($since);
+
+                return [
+                    'id' => $g->id,
+                    'subject_name' => $g->subject_name,
+                    'training_type_code' => $g->training_type_code,
+                    'training_type_name' => $g->training_type_name,
+                    'grade' => $g->grade,
+                    'employee_name' => $g->employee_name,
+                    'lesson_date' => $g->lesson_date ? $g->lesson_date->format('d.m.Y') : null,
+                    'graded_at' => $gradeTime ? Carbon::parse($gradeTime)->format('d.m.Y H:i') : null,
+                    'can_appeal' => $canAppeal,
+                ];
+            });
 
         return view('student.appeals.create', compact('grades'));
     }
@@ -81,12 +82,15 @@ class ExamAppealController extends Controller
         $since = Carbon::now()->subDay();
         $grade = StudentGrade::where('id', $request->student_grade_id)
             ->where('student_id', $student->id)
-            ->where(function ($q) use ($since) {
-                $q->where('created_at', '>=', $since)
-                    ->orWhere('updated_at', '>=', $since)
-                    ->orWhere('created_at_api', '>=', $since);
-            })
             ->firstOrFail();
+
+        // 24 soat tekshiruvi
+        $gradeTime = $grade->created_at_api ?? $grade->updated_at ?? $grade->created_at;
+        if (!$gradeTime || !Carbon::parse($gradeTime)->gte($since)) {
+            return back()->withErrors([
+                'student_grade_id' => 'Bu bahoga apellyatsiya berish muddati tugagan. Baho qo\'yilganidan 24 soat ichida apellyatsiya topshirish mumkin.',
+            ])->withInput();
+        }
 
         // Bir xil baho uchun takroriy apellyatsiya tekshiruvi
         $existing = ExamAppeal::where('student_id', $student->id)

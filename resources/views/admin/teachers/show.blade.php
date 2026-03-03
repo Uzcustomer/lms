@@ -871,6 +871,9 @@
                         if (subject.education_type_name) extraInfo += (extraInfo ? ' | ' : '') + escapeHtml(subject.education_type_name);
                         if (subject.level_name) extraInfo += (extraInfo ? ' | ' : '') + escapeHtml(subject.level_name);
 
+                        var hasResponsible = subject.responsible_teachers && subject.responsible_teachers.length > 0;
+                        var responsibleLabel = hasResponsible ? subject.responsible_teachers.join(', ') : '';
+
                         if (isAlreadyAdded) {
                             html += '<div class="subject-result-item subject-result-disabled">' +
                                 '<div style="flex: 1; min-width: 0;">' +
@@ -881,7 +884,7 @@
                                 '</div>' +
                                 (extraInfo ? '<div style="font-size: 10px; color: #94a3b8; margin-top: 1px;">' + extraInfo + '</div>' : '') +
                                 '</div>' +
-                                '<span style="font-size: 11px; color: #059669; font-weight: 600;">Qo\'shilgan</span>' +
+                                '<span style="font-size: 10px; color: #059669; font-weight: 600; text-align: right; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="' + escapeHtml(responsibleLabel) + '">' + escapeHtml(responsibleLabel) + '</span>' +
                                 '</div>';
                         } else {
                             html += '<div id="subject-item-' + subject.id + '" class="subject-result-item' + (isPending ? ' subject-result-checked' : '') + '" ' +
@@ -895,6 +898,7 @@
                                 '</div>' +
                                 (extraInfo ? '<div style="font-size: 10px; color: #94a3b8; margin-top: 1px;">' + extraInfo + '</div>' : '') +
                                 '</div>' +
+                                (hasResponsible ? '<span style="font-size: 9px; color: #6366f1; font-weight: 500; text-align: right; max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;" title="' + escapeHtml(responsibleLabel) + '">' + escapeHtml(responsibleLabel) + '</span>' : '') +
                                 '</div>';
                         }
                     });

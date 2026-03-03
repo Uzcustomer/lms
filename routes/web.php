@@ -382,6 +382,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
         Route::get('/reports/debtors/data', [ReportController::class, 'debtorsReportData'])->name('reports.debtors.data');
+        Route::get('/reports/expelled-debtors', [ReportController::class, 'expelledDebtorsReport'])->name('reports.expelled-debtors');
+        Route::get('/reports/expelled-debtors/data', [ReportController::class, 'expelledDebtorsReportData'])->name('reports.expelled-debtors.data');
 
         Route::get('/reports/sababli-check', [ReportController::class, 'sababliCheckReport'])->name('reports.sababli-check');
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');

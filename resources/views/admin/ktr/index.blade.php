@@ -91,8 +91,7 @@
                                 </label>
                                 <input type="text" name="subject_name" id="subject_name" value="{{ request('subject_name') }}"
                                        placeholder="Fan nomini kiriting..."
-                                       style="height: 36px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 10px; font-size: 13px; outline: none; width: 100%;"
-                                       onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                                       class="filter-input">
                             </div>
 
                             <div class="filter-item" style="min-width: 140px;">
@@ -1341,78 +1340,81 @@
         /* Filter container - Journal bilan bir xil */
         .filter-container {
             padding: 16px 20px 12px;
-            border-bottom: 1px solid #e2e8f0;
+            background: linear-gradient(135deg, #f0f4f8 0%, #e8edf5 100%);
+            border-bottom: 2px solid #dbe4ef;
         }
         .filter-row {
             display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 10px;
             flex-wrap: wrap;
+            margin-bottom: 10px;
             align-items: flex-end;
         }
-        .filter-item {
-            display: flex;
-            flex-direction: column;
-        }
+        .filter-row:last-child { margin-bottom: 0; }
+        .filter-item { }
         .filter-label {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 4px;
             display: flex;
             align-items: center;
             gap: 5px;
-            color: #64748b;
+            margin-bottom: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #475569;
         }
         .fl-dot {
-            width: 6px;
-            height: 6px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
             display: inline-block;
+            flex-shrink: 0;
         }
 
         /* Toggle switch */
         .toggle-switch {
-            display: flex;
+            display: inline-flex;
             align-items: center;
+            gap: 10px;
             cursor: pointer;
-            user-select: none;
             padding: 6px 0;
+            height: 36px;
+            user-select: none;
         }
         .toggle-track {
-            width: 36px;
-            height: 20px;
+            width: 40px;
+            height: 22px;
             background: #cbd5e1;
-            border-radius: 10px;
+            border-radius: 11px;
             position: relative;
-            transition: background 0.2s;
-            margin-right: 8px;
+            transition: background 0.25s;
+            flex-shrink: 0;
         }
         .toggle-switch.active .toggle-track {
-            background: #3b82f6;
+            background: linear-gradient(135deg, #2b5ea7, #3b7ddb);
         }
         .toggle-thumb {
-            width: 16px;
-            height: 16px;
-            background: #fff;
+            width: 18px;
+            height: 18px;
+            background: #ffffff;
             border-radius: 50%;
             position: absolute;
             top: 2px;
             left: 2px;
-            transition: transform 0.2s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            transition: transform 0.25s;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
         }
         .toggle-switch.active .toggle-thumb {
-            transform: translateX(16px);
+            transform: translateX(18px);
         }
         .toggle-label {
             font-size: 12px;
-            font-weight: 500;
+            font-weight: 600;
             color: #64748b;
+            white-space: nowrap;
         }
         .toggle-switch.active .toggle-label {
-            color: #3b82f6;
+            color: #1e3a5f;
         }
 
         /* Journal table styles */
@@ -1484,16 +1486,88 @@
 
         /* Select2 customization */
         .select2-container--classic .select2-selection--single {
-            border-radius: 8px !important;
-            border-color: #e2e8f0 !important;
-            height: 36px !important;
+            height: 36px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #ffffff;
+            transition: all 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        .select2-container--classic .select2-selection--single:hover {
+            border-color: #2b5ea7;
+            box-shadow: 0 0 0 2px rgba(43,94,167,0.1);
         }
         .select2-container--classic .select2-selection--single .select2-selection__rendered {
-            line-height: 34px !important;
-            font-size: 13px !important;
+            line-height: 34px;
+            padding-left: 10px;
+            padding-right: 52px;
+            color: #1e293b;
+            font-size: 0.8rem;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .select2-container--classic .select2-selection--single .select2-selection__arrow {
-            height: 34px !important;
+            height: 34px;
+            width: 22px;
+            background: transparent;
+            border-left: none;
+            right: 0;
+        }
+        .select2-container--classic .select2-selection--single .select2-selection__clear {
+            position: absolute;
+            right: 22px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px;
+            font-weight: bold;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 2px 6px;
+            z-index: 2;
+            background: #ffffff;
+            border-radius: 50%;
+            line-height: 1;
+            transition: all 0.15s;
+        }
+        .select2-container--classic .select2-selection--single .select2-selection__clear:hover {
+            color: #ffffff;
+            background: #ef4444;
+        }
+        .select2-dropdown {
+            font-size: 0.8rem;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .select2-container--classic .select2-results__option--highlighted {
+            background-color: #2b5ea7;
+        }
+
+        /* Filter input */
+        .filter-input {
+            width: 100%;
+            height: 36px;
+            padding: 0 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #fff;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #1e293b;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+        .filter-input:hover {
+            border-color: #2b5ea7;
+            box-shadow: 0 0 0 2px rgba(43,94,167,0.1);
+        }
+        .filter-input:focus {
+            outline: none;
+            border-color: #2b5ea7;
+            box-shadow: 0 0 0 2px rgba(43,94,167,0.2);
         }
 
         /* Training type column headers */

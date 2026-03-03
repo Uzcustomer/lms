@@ -213,7 +213,7 @@
         </div>
     </div>
 
-    <!-- Detail Modal -->
+    <!-- Detail Modal (1-chi modal — talaba tafsilotlari) -->
     <div id="detail-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal()">
         <div class="modal-content">
             <div class="modal-header">
@@ -221,6 +221,17 @@
                 <button onclick="closeModal()" class="modal-close">&times;</button>
             </div>
             <div id="modal-body" class="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Semester Grades Modal (2-chi modal — semestr baholar, ustiga ochiladi) -->
+    <div id="semester-modal" class="modal-overlay" style="display:none;z-index:1100;" onclick="if(event.target===this)closeSemesterModal()">
+        <div class="modal-content" style="max-width:700px;">
+            <div class="modal-header" style="background:linear-gradient(135deg,#4338ca 0%,#6366f1 100%);">
+                <h3 id="semester-modal-title" style="margin:0;font-size:16px;font-weight:700;color:#fff;"></h3>
+                <button onclick="closeSemesterModal()" class="modal-close" style="color:#fff;opacity:0.8;">&times;</button>
+            </div>
+            <div id="semester-modal-body" class="modal-body"></div>
         </div>
     </div>
 
@@ -445,15 +456,21 @@
             $('#detail-modal').fadeOut(150);
         }
 
+        function closeSemesterModal() {
+            $('#semester-modal').fadeOut(150);
+        }
+
         function openSemGradesModal(headerRow) {
             var $header = $(headerRow);
             var studentId = $header.data('student');
             var semesterCode = $header.data('semester');
             var studentName = $header.data('student-name') || '';
+            var semesterName = $header.find('td').text().trim().split('(')[0].trim();
 
-            $('#modal-title').text(studentName + ' — Semester baholar');
-            $('#modal-body').html('<div style="padding:24px;text-align:center;color:#94a3b8;"><i>Yuklanmoqda...</i></div>');
-            $('#detail-modal').fadeIn(150);
+            // 2-chi modalni ochish (1-chi modal yopilmaydi)
+            $('#semester-modal-title').text(studentName + ' — ' + semesterName);
+            $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#c7d2fe;"><i>Yuklanmoqda...</i></div>');
+            $('#semester-modal').fadeIn(150);
 
             $.ajax({
                 url: '{{ route("admin.reports.student-semester-grades") }}',
@@ -461,11 +478,10 @@
                 success: function(resp) {
                     var grades = resp.grades || [];
                     if (!grades.length) {
-                        $('#modal-body').html('<div style="padding:24px;text-align:center;color:#94a3b8;">Bu semestrda academic record topilmadi</div>');
+                        $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#94a3b8;">Bu semestrda academic record topilmadi</div>');
                         return;
                     }
                     var gh = '<div style="padding:4px 0;">';
-                    gh += '<div style="font-weight:600;color:#4338ca;margin-bottom:8px;font-size:15px;">' + esc(resp.semester_name) + ' — Barcha baholar</div>';
                     gh += '<table class="detail-table" style="margin:0;">';
                     gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th></tr></thead><tbody>';
                     for (var g = 0; g < grades.length; g++) {
@@ -483,14 +499,14 @@
                         gh += '</tr>';
                     }
                     gh += '</tbody></table></div>';
-                    $('#modal-body').html(gh);
+                    $('#semester-modal-body').html(gh);
                 },
                 error: function(xhr) {
                     var errMsg = 'Xatolik yuz berdi';
                     if (xhr.responseJSON && xhr.responseJSON.error) {
                         errMsg += ': ' + xhr.responseJSON.error;
                     }
-                    $('#modal-body').html('<div style="padding:24px;text-align:center;color:#ef4444;">' + esc(errMsg) + '</div>');
+                    $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#ef4444;">' + esc(errMsg) + '</div>');
                 }
             });
         }

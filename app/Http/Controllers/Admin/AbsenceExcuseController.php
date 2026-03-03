@@ -9,6 +9,7 @@ use App\Models\AbsenceExcuse;
 use App\Models\DocumentTemplate;
 use App\Models\ExcuseGradeOpening;
 use App\Models\StudentNotification;
+use App\Models\Setting;
 use App\Services\DocumentTemplateService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -223,7 +224,8 @@ class AbsenceExcuseController extends Controller
                 $dateFrom = $excuse->start_date;
                 $dateTo = $excuse->end_date;
                 $rangeDays = $dateFrom->diffInDays($dateTo) + 1;
-                $deadline = now()->addDays($rangeDays)->endOfDay();
+                $jnOpeningDays = max((int) Setting::get('lesson_opening_days', 3), 1);
+                $deadline = now()->addDays($jnOpeningDays)->endOfDay();
 
                 // Har bir fan uchun faqat bitta opening yaratish (dublikat oldini olish)
                 $processedSubjects = [];

@@ -159,6 +159,28 @@
                         <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
                     </div>
                     <div id="table-area" style="display:none;">
+                        @if($isExpelledPage ?? false)
+                        <div id="summary-panel" style="display:none;padding:14px 20px;background:linear-gradient(135deg,#f0f4f8,#e8edf5);border-bottom:2px solid #dbe4ef;">
+                            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                <div class="summary-card">
+                                    <div class="summary-num" id="sum-students">0</div>
+                                    <div class="summary-label">Jami talabalar</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-num" id="sum-subjects" style="color:#dc2626;">0</div>
+                                    <div class="summary-label">Jami qarzdor fan</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-num" id="sum-credits" style="color:#7c3aed;">0</div>
+                                    <div class="summary-label">Jami kredit</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-num" id="sum-avg" style="color:#0891b2;">0</div>
+                                    <div class="summary-label">O'rtacha fan/talaba</div>
+                                </div>
+                            </div>
+                        </div>
+                        @endif
                         <div style="padding:10px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;align-items:center;gap:12px;">
                             <span id="total-badge" class="badge" style="background:#dc2626;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
@@ -280,6 +302,16 @@
                     reportData = res.data;
                     $('#total-badge').text('Jami: ' + res.total + (isExpelledPage ? ' ta talaba (academic record yo\'q)' : ' ta qarzdor talaba'));
                     $('#time-badge').text(elapsed + ' soniyada hisoblandi');
+
+                    if (isExpelledPage && res.summary) {
+                        var s = res.summary;
+                        $('#sum-students').text(s.total_students);
+                        $('#sum-subjects').text(s.total_debt_subjects);
+                        $('#sum-credits').text(s.total_credits);
+                        $('#sum-avg').text(s.avg_debts_per_student);
+                        $('#summary-panel').show();
+                    }
+
                     renderTable(res.data);
                     renderPagination(res);
                     $('#table-area').show();
@@ -578,5 +610,9 @@
         .reason-badge { display: inline-block; padding: 2px 8px; margin: 2px 3px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
         .journal-link-modal { display: inline-block; padding: 3px 10px; background: #eff6ff; color: #2b5ea7; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
         .journal-link-modal:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
+
+        .summary-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 20px; min-width: 140px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+        .summary-num { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.2; }
+        .summary-label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
     </style>
 </x-app-layout>

@@ -450,13 +450,13 @@
             $('#detail-modal').fadeIn(150);
 
             // Barcha semestrlarni AJAX bilan yuklash
-            loadAllAcademicRecords(r.hemis_id, r.full_name);
+            loadAllAcademicRecords(r.hemis_id, r.full_name, r.group_name);
         }
 
-        function loadAllAcademicRecords(studentId, studentName) {
+        function loadAllAcademicRecords(studentId, studentName, groupName) {
             $.ajax({
                 url: '{{ route("admin.reports.student-all-records") }}',
-                data: { student_id: studentId },
+                data: { student_id: studentId, group_name: groupName },
                 success: function(resp) {
                     var semesters = resp.semesters || [];
                     if (!semesters.length) {
@@ -466,7 +466,7 @@
                     var gh = '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
                     for (var s = 0; s < semesters.length; s++) {
                         var sem = semesters[s];
-                        gh += '<div data-student="' + esc(studentId) + '" data-semester="' + esc(sem.semester_id) + '" data-student-name="' + esc(studentName) + '" data-sem-name="' + esc(sem.semester_name) + '" ';
+                        gh += '<div data-student="' + esc(studentId) + '" data-semester="' + esc(sem.semester_id) + '" data-student-name="' + esc(studentName) + '" data-sem-name="' + esc(sem.semester_name) + '" data-group="' + esc(groupName) + '" ';
                         gh += 'onclick="openSemGradesModal(this)" class="sem-tab">';
                         gh += esc(sem.semester_name);
                         gh += '<span style="font-size:10px;color:#94a3b8;display:block;">' + sem.subject_count + ' ta fan</span>';
@@ -495,6 +495,7 @@
             var semesterCode = $header.data('semester');
             var studentName = $header.data('student-name') || '';
             var semesterName = $header.data('sem-name') || $header.find('td').text().trim().split('(')[0].trim();
+            var groupName = $header.data('group') || '';
 
             // 2-chi modalni ochish (1-chi modal yopilmaydi)
             $('#semester-modal-title').text(studentName + ' — ' + semesterName);
@@ -503,7 +504,7 @@
 
             $.ajax({
                 url: '{{ route("admin.reports.student-semester-grades") }}',
-                data: { student_id: studentId, semester_code: semesterCode },
+                data: { student_id: studentId, semester_code: semesterCode, group_name: groupName },
                 success: function(resp) {
                     var grades = resp.grades || [];
                     if (!grades.length) {

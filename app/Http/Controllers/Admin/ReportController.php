@@ -3704,8 +3704,6 @@ class ReportController extends Controller
                 return response()->json(['grades' => []]);
             }
 
-            // academic_records.semester_id = semesters.code
-            // Shuning uchun bevosita semester_code bilan solishtiramiz
             $grades = DB::table('academic_records')
                 ->where('student_id', $studentId)
                 ->where('semester_id', $semesterCode)
@@ -3713,7 +3711,10 @@ class ReportController extends Controller
                 ->orderBy('subject_name')
                 ->get();
 
-            // Semester nomini academic_records dan olamiz
+            // Guruh suffiksi bo'yicha filtr: "d1/23-01b" → "b"
+            $groupName = $request->get('group_name', '');
+            $grades = $this->filterSubjectsByGroupSuffix($grades, $groupName);
+
             $semesterName = DB::table('academic_records')
                 ->where('student_id', $studentId)
                 ->where('semester_id', $semesterCode)
@@ -3740,17 +3741,61 @@ class ReportController extends Controller
                 return response()->json(['semesters' => []]);
             }
 
-            $semesters = DB::table('academic_records')
+            $groupName = $request->get('group_name', '');
+
+            $records = DB::table('academic_records')
                 ->where('student_id', $studentId)
-                ->select('semester_id', 'semester_name', DB::raw('COUNT(*) as subject_count'))
-                ->groupBy('semester_id', 'semester_name')
+                ->select('semester_id', 'semester_name', 'subject_name')
                 ->orderBy('semester_id')
                 ->get();
+
+            // Guruh suffiksi bo'yicha filtr
+            $records = $this->filterSubjectsByGroupSuffix($records, $groupName);
+
+            // Semestrlarga guruhlash
+            $semesters = $records->groupBy('semester_id')->map(function ($items, $semesterId) {
+                return (object) [
+                    'semester_id' => $semesterId,
+                    'semester_name' => $items->first()->semester_name,
+                    'subject_count' => $items->count(),
+                ];
+            })->values();
 
             return response()->json(['semesters' => $semesters]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage(), 'semesters' => []], 500);
         }
+    }
+
+    /**
+     * Guruh suffiksi bo'yicha fanlarni filtrlash
+     * "d1/23-01b" → suffix "b" → faqat "(b)" yoki suffixsiz fanlar
+     */
+    private function filterSubjectsByGroupSuffix($records, $groupName)
+    {
+        if (empty($groupName)) {
+            return $records;
+        }
+
+        // Guruh nomidan suffixni ajratish: "d1/23-01b" → "b"
+        $groupSuffix = '';
+        if (preg_match('/(\d+)([a-zA-Z])$/', trim($groupName), $m)) {
+            $groupSuffix = mb_strtolower($m[2]);
+        }
+
+        if (empty($groupSuffix)) {
+            return $records;
+        }
+
+        return $records->filter(function ($record) use ($groupSuffix) {
+            $name = $record->subject_name ?? '';
+            // Agar fan nomida (a), (b), (c) kabi suffix bo'lsa
+            if (preg_match('/\(([a-zA-Zа-яА-Я])\)\s*$/u', $name, $m)) {
+                return mb_strtolower($m[1]) === $groupSuffix;
+            }
+            // Suffixsiz fan — har doim ko'rsatiladi
+            return true;
+        })->values();
     }
 
     /**

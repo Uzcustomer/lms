@@ -3705,16 +3705,16 @@ class ReportController extends Controller
             // Talabaning guruhini topamiz
             $student = DB::table('students')
                 ->where('hemis_id', $studentId)
-                ->select('group_hemis_id')
+                ->select('group_id')
                 ->first();
 
-            if (!$student || !$student->group_hemis_id) {
+            if (!$student || !$student->group_id) {
                 return response()->json(['grades' => []]);
             }
 
             // Guruh curriculum_hemis_id ni topamiz
             $group = DB::table('groups')
-                ->where('group_hemis_id', $student->group_hemis_id)
+                ->where('group_hemis_id', $student->group_id)
                 ->select('curriculum_hemis_id')
                 ->first();
 

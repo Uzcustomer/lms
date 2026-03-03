@@ -284,23 +284,15 @@ class TeacherController extends Controller
                 ->map(fn($s) => $s->subject_name . '|' . $s->semester_code);
         }
 
-        // Har bir o'quv rejaning oxirgi 2 ta semestridagi fanlarni olish
+        // Barcha o'quv rejalardan fanlarni olish (GROUP BY bilan takrorlanishsiz)
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
                 $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
                     ->on('s.code', '=', 'cs.semester_code');
             })
-            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
-            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
             ->where('cs.is_active', true)
-            ->whereNotNull('cs.subject_name')
-            // Faqat har bir o'quv rejaning oxirgi 2 ta semestri
-            ->whereRaw('CAST(cs.semester_code AS UNSIGNED) >= (
-                SELECT MAX(CAST(s2.code AS UNSIGNED)) - 1
-                FROM semesters AS s2
-                WHERE s2.curriculum_hemis_id = cs.curricula_hemis_id
-            )');
+            ->whereNotNull('cs.subject_name');
 
         // Kafedra bo'yicha filtrlash
         if ($filterDept && $teacher) {

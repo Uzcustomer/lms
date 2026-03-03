@@ -284,23 +284,21 @@ class TeacherController extends Controller
                 ->map(fn($s) => $s->subject_name . '|' . $s->semester_code);
         }
 
-        // Har bir o'quv rejaning oxirgi 2 ta semestridagi fanlarni olish
+        // Joriy o'quv yilini aniqlash (sentyabrdan boshlanadi)
+        $academicYearStart = now()->month >= 9 ? now()->year : now()->year - 1;
+        $currentEducationYear = $academicYearStart . '-' . ($academicYearStart + 1);
+
+        // Faqat joriy o'quv yilidagi semestr fanlarini olish
+        // Masalan: 2025-2026 yil uchun 3-kurs → 5,6 semestr, 4-kurs → 7,8 semestr
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
                 $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
                     ->on('s.code', '=', 'cs.semester_code');
             })
-            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
-            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
             ->where('cs.is_active', true)
             ->whereNotNull('cs.subject_name')
-            // Faqat har bir o'quv rejaning oxirgi 2 ta semestri
-            ->whereRaw('CAST(cs.semester_code AS UNSIGNED) >= (
-                SELECT MAX(CAST(s2.code AS UNSIGNED)) - 1
-                FROM semesters AS s2
-                WHERE s2.curriculum_hemis_id = cs.curricula_hemis_id
-            )');
+            ->where('s.education_year', $currentEducationYear);
 
         // Kafedra bo'yicha filtrlash
         if ($filterDept && $teacher) {

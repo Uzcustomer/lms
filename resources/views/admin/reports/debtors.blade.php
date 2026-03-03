@@ -386,14 +386,12 @@
                 var rowNum = 0;
                 for (var si = 0; si < semOrder.length; si++) {
                     var sg = semGroups[semOrder[si]];
-                    // Semestr header row — bosilsa baholarni ko'rsatadi
-                    html += '<tr class="sem-header-row" data-student="' + esc(r.hemis_id) + '" data-semester="' + esc(sg.code) + '" style="cursor:pointer;background:#f1f5f9;" onclick="toggleSemGrades(this)">';
+                    // Semestr header row — bosilsa modal ochiladi
+                    html += '<tr class="sem-header-row" data-student="' + esc(r.hemis_id) + '" data-semester="' + esc(sg.code) + '" data-student-name="' + esc(r.full_name) + '" style="cursor:pointer;background:#f1f5f9;" onclick="openSemGradesModal(this)">';
                     html += '<td colspan="6" style="font-weight:700;color:#4338ca;padding:8px 12px;">';
-                    html += '<span style="margin-right:6px;">&#9654;</span> ';
+                    html += '<span style="margin-right:6px;">&#128218;</span> ';
                     html += esc(sg.name) + ' <span style="font-weight:400;color:#94a3b8;">(' + sg.debts.length + ' ta qarzdorlik)</span>';
                     html += '</td></tr>';
-                    // Semestr baholar row (yashirin, AJAX bilan yuklanadi)
-                    html += '<tr class="sem-grades-row" style="display:none;"><td colspan="6" style="padding:0;"></td></tr>';
                     // Debt rows
                     for (var d = 0; d < sg.debts.length; d++) {
                         var debt = sg.debts[d];
@@ -447,30 +445,15 @@
             $('#detail-modal').fadeOut(150);
         }
 
-        function toggleSemGrades(headerRow) {
+        function openSemGradesModal(headerRow) {
             var $header = $(headerRow);
-            var $gradesRow = $header.next('.sem-grades-row');
-            var $cell = $gradesRow.find('td');
-
-            if ($gradesRow.is(':visible')) {
-                $gradesRow.hide();
-                $header.find('span:first').html('&#9654;');
-                return;
-            }
-
-            $header.find('span:first').html('&#9660;');
-
-            // Agar allaqachon yuklangan bo'lsa, faqat ko'rsat
-            if ($cell.data('loaded')) {
-                $gradesRow.show();
-                return;
-            }
-
             var studentId = $header.data('student');
             var semesterCode = $header.data('semester');
+            var studentName = $header.data('student-name') || '';
 
-            $cell.html('<div style="padding:12px;color:#94a3b8;"><i>Yuklanmoqda...</i></div>');
-            $gradesRow.show();
+            $('#modal-title').text(studentName + ' — Semester baholar');
+            $('#modal-body').html('<div style="padding:24px;text-align:center;color:#94a3b8;"><i>Yuklanmoqda...</i></div>');
+            $('#detail-modal').fadeIn(150);
 
             $.ajax({
                 url: '{{ route("admin.reports.student-semester-grades") }}',
@@ -478,16 +461,11 @@
                 success: function(resp) {
                     var grades = resp.grades || [];
                     if (!grades.length) {
-                        var dbg = resp.debug || {};
-                        var txt = 'Bu semestrda academic record topilmadi';
-                        txt += '<br><small style="color:#cbd5e1;">semesters_table: "' + esc(dbg.semesters_table_name || '') + '"';
-                        txt += ' | ar_names: ' + JSON.stringify(dbg.ar_semester_names || []) + '</small>';
-                        $cell.html('<div style="padding:12px;color:#94a3b8;">' + txt + '</div>');
-                        $cell.data('loaded', true);
+                        $('#modal-body').html('<div style="padding:24px;text-align:center;color:#94a3b8;">Bu semestrda academic record topilmadi</div>');
                         return;
                     }
-                    var gh = '<div style="padding:8px 12px;background:#f8fafc;border-radius:8px;margin:4px 0;">';
-                    gh += '<div style="font-weight:600;color:#4338ca;margin-bottom:6px;">' + esc(resp.semester_name) + ' — Barcha baholar</div>';
+                    var gh = '<div style="padding:4px 0;">';
+                    gh += '<div style="font-weight:600;color:#4338ca;margin-bottom:8px;font-size:15px;">' + esc(resp.semester_name) + ' — Barcha baholar</div>';
                     gh += '<table class="detail-table" style="margin:0;">';
                     gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th></tr></thead><tbody>';
                     for (var g = 0; g < grades.length; g++) {
@@ -505,15 +483,14 @@
                         gh += '</tr>';
                     }
                     gh += '</tbody></table></div>';
-                    $cell.html(gh);
-                    $cell.data('loaded', true);
+                    $('#modal-body').html(gh);
                 },
                 error: function(xhr) {
                     var errMsg = 'Xatolik yuz berdi';
                     if (xhr.responseJSON && xhr.responseJSON.error) {
                         errMsg += ': ' + xhr.responseJSON.error;
                     }
-                    $cell.html('<div style="padding:12px;color:#ef4444;">' + esc(errMsg) + '</div>');
+                    $('#modal-body').html('<div style="padding:24px;text-align:center;color:#ef4444;">' + esc(errMsg) + '</div>');
                 }
             });
         }

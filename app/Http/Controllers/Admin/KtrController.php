@@ -169,7 +169,7 @@ class KtrController extends Controller
             SELECT COUNT(DISTINCT s2.code)
             FROM semesters AS s2
             WHERE s2.curriculum_hemis_id = cs.curricula_hemis_id
-              AND CAST(s2.code AS INTEGER) > CAST(cs.semester_code AS INTEGER)
+              AND (s2.code + 0) > (cs.semester_code + 0)
         ) < 2');
 
         // KTR holati filtri (yaratildi/yaratilmadi)

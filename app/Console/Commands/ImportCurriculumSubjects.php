@@ -42,6 +42,7 @@ class ImportCurriculumSubjects extends Command
         $page = 1;
         $pageSize = 40;
         $totalImported = 0;
+        $importedHemisIds = [];
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/curriculum-subject-list?limit=$pageSize&page=$page");
@@ -81,6 +82,7 @@ class ImportCurriculumSubjects extends Command
                             'department_name' => $subjectData['department']['name'] ?? null,
                         ]
                     );
+                    $importedHemisIds[] = $subjectData['id'];
                     $totalImported++;
 
                     $this->info("Imported curriculum subject: {$subjectData['subject']['name']}");
@@ -93,6 +95,18 @@ class ImportCurriculumSubjects extends Command
                 break;
             }
         } while ($page <= $totalPages);
+
+        // HEMIS'da bo'lmagan fanlarni deaktivatsiya qilish
+        if (!empty($importedHemisIds)) {
+            $deactivatedCount = CurriculumSubject::whereNotIn('curriculum_subject_hemis_id', $importedHemisIds)
+                ->where('is_active', true)
+                ->update(['is_active' => false]);
+
+            if ($deactivatedCount > 0) {
+                $this->info("Deactivated: {$deactivatedCount} curriculum subjects not found in HEMIS");
+                $telegram->notify("⚠️ HEMIS'da topilmagan {$deactivatedCount} ta o'quv reja fani deaktivatsiya qilindi");
+            }
+        }
 
         $telegram->notify("✅ O'quv reja fanlari importi tugadi. Jami: {$totalImported} ta");
         $this->info('Curriculum subjects import completed successfully.');

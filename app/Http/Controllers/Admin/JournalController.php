@@ -309,18 +309,21 @@ class JournalController extends Controller
         $subject = CurriculumSubject::where('subject_id', $subjectId)
             ->where('curricula_hemis_id', $group->curriculum_hemis_id)
             ->where('semester_code', $semesterCode)
+            ->where('is_active', true)
             ->first();
         // Agar yangi semester_code bilan ham topilmasa, original bilan sinab ko'rish
         if (!$subject && $semesterCode !== $originalSemesterCode) {
             $subject = CurriculumSubject::where('subject_id', $subjectId)
                 ->where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('semester_code', $originalSemesterCode)
+                ->where('is_active', true)
                 ->first();
         }
         // Hech biri topilmasa — semester filtrSIZ birinchi natijani olish
         if (!$subject) {
             $subject = CurriculumSubject::where('subject_id', $subjectId)
                 ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->where('is_active', true)
                 ->first();
         }
         if (!$subject) {

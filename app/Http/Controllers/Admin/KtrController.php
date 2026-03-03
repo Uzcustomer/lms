@@ -152,15 +152,22 @@ class KtrController extends Controller
         }
 
         // Joriy semestr (adminlar uchun default ON, fan masuli uchun default OFF)
-        // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
+        // curriculum_weeks sanalariga asoslangan, agar ma'lumot bo'lmasa HEMIS current flagiga qaytadi
         $currentSemesterDefault = $isFanMasuli ? '0' : '1';
         if ($request->get('current_semester', $currentSemesterDefault) == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
-            });
+            // curriculum_weeks orqali joriy semestrlarni aniqlash
+            $currentSemesterIds = DB::table('curriculum_weeks')
+                ->select('semester_hemis_id')
+                ->groupBy('semester_hemis_id')
+                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
+                ->pluck('semester_hemis_id');
+
+            if ($currentSemesterIds->isNotEmpty()) {
+                $query->whereIn('s.semester_hemis_id', $currentSemesterIds);
+            } else {
+                // Fallback: curriculum_weeks bo'sh yoki joriy sana tushmaganida — HEMIS current flagidan foydalanamiz
+                $query->where('s.current', true);
+            }
         }
 
         // Har bir o'quv rejadan faqat oxirgi 2 ta semestr fanlarini chiqarish

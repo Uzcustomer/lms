@@ -3702,29 +3702,19 @@ class ReportController extends Controller
                 return response()->json(['grades' => []]);
             }
 
-            // Talabaning guruhini topamiz
+            // Talabaning curriculum_id ni topamiz
             $student = DB::table('students')
                 ->where('hemis_id', $studentId)
-                ->select('group_id')
+                ->select('curriculum_id')
                 ->first();
 
-            if (!$student || !$student->group_id) {
-                return response()->json(['grades' => []]);
-            }
-
-            // Guruh curriculum_hemis_id ni topamiz
-            $group = DB::table('groups')
-                ->where('group_hemis_id', $student->group_id)
-                ->select('curriculum_hemis_id')
-                ->first();
-
-            if (!$group) {
+            if (!$student || !$student->curriculum_id) {
                 return response()->json(['grades' => []]);
             }
 
             // Shu curriculum + semester_code uchun semester_hemis_id ni topamiz
             $semester = DB::table('semesters')
-                ->where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('curriculum_hemis_id', $student->curriculum_id)
                 ->where('code', $semesterCode)
                 ->select('semester_hemis_id', 'name')
                 ->first();

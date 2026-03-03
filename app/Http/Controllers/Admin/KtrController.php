@@ -55,8 +55,15 @@ class KtrController extends Controller
             ->groupBy('education_type_code', 'education_type_name')
             ->get();
 
-        // Ta'lim turi filtri — foydalanuvchi tanlagan bo'lsa shu bo'yicha filtrlanadi, aks holda barchasi
+        // Fan masuli uchun standart filtrlar bo'sh bo'lsin (barcha fanlar ko'rinsin)
         $selectedEducationType = $request->get('education_type');
+        if (!$request->has('education_type') && !$isFanMasuli) {
+            $selectedEducationType = $educationTypes
+                ->first(function ($type) {
+                    return str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr');
+                })
+                ?->education_type_code;
+        }
 
         // Fakultetlar
         $faculties = Department::where('structure_type_code', 11)
@@ -142,6 +149,25 @@ class KtrController extends Controller
             $query->where('cs.is_active', true);
         } elseif ($activeFilter === 'inactive') {
             $query->where('cs.is_active', false);
+        }
+
+        // Joriy semestr (adminlar uchun default ON, fan masuli uchun default OFF)
+        // curriculum_weeks sanalariga asoslangan, agar ma'lumot bo'lmasa HEMIS current flagiga qaytadi
+        $currentSemesterDefault = $isFanMasuli ? '0' : '1';
+        if ($request->get('current_semester', $currentSemesterDefault) == '1') {
+            // curriculum_weeks orqali joriy semestrlarni aniqlash
+            $currentSemesterIds = DB::table('curriculum_weeks')
+                ->select('semester_hemis_id')
+                ->groupBy('semester_hemis_id')
+                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
+                ->pluck('semester_hemis_id');
+
+            if ($currentSemesterIds->isNotEmpty()) {
+                $query->whereIn('s.semester_hemis_id', $currentSemesterIds);
+            } else {
+                // Fallback: curriculum_weeks bo'sh yoki joriy sana tushmaganida — HEMIS current flagidan foydalanamiz
+                $query->where('s.current', true);
+            }
         }
 
         // Har bir o'quv rejadan faqat joriy kursning 2 ta semestr fanlarini chiqarish
@@ -252,6 +278,14 @@ class KtrController extends Controller
         if ($request->filled('faculty_id')) {
             $query->where('f.id', $request->faculty_id);
         }
+        if ($request->get('current_semester', '1') == '1') {
+            $query->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            });
+        }
         // Yilga asoslangan semestr filtri
         $currentYear = (int) date('Y');
         $query->whereRaw('(cs.semester_code + 0) IN (
@@ -343,6 +377,14 @@ class KtrController extends Controller
         if ($request->filled('education_type')) {
             $query->where('c.education_type_code', $request->education_type);
         }
+        if ($request->get('current_semester', '1') == '1') {
+            $query->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            });
+        }
         // Yilga asoslangan semestr filtri
         $currentYear = (int) date('Y');
         $query->whereRaw('(cs.semester_code + 0) IN (
@@ -414,6 +456,15 @@ class KtrController extends Controller
             $query->where('cs.is_active', true);
         } elseif ($activeFilter === 'inactive') {
             $query->where('cs.is_active', false);
+        }
+
+        if ($request->get('current_semester', '1') == '1') {
+            $query->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            });
         }
 
         // Yilga asoslangan semestr filtri

@@ -5,15 +5,59 @@
         </h2>
     </x-slot>
 
-    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3">
-        @if($unreadCount > 0)
-            <div class="flex justify-end mb-3">
-                <form method="POST" action="{{ route('student.notifications.mark-all-read') }}">
-                    @csrf
-                    <button type="submit" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-                        Barchasini o'qilgan deb belgilash
+    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3" x-data="notificationManager()">
+        @if(!$notifications->isEmpty())
+            {{-- Action toolbar --}}
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2">
+                    {{-- Select all checkbox --}}
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input type="checkbox" x-model="selectAll" @change="toggleAll()"
+                               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+                        <span class="text-xs text-gray-600">Barchasini tanlash</span>
+                    </label>
+                    <span x-show="selectedIds.length > 0" class="text-xs text-indigo-600 font-medium" x-text="selectedIds.length + ' ta tanlangan'"></span>
+                </div>
+
+                <div class="flex items-center gap-2 flex-wrap">
+                    {{-- Mark selected as read --}}
+                    <button x-show="selectedIds.length > 0" @click="markSelectedRead()"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                        </svg>
+                        O'qilgan
                     </button>
-                </form>
+
+                    {{-- Delete selected --}}
+                    <button x-show="selectedIds.length > 0" @click="deleteSelected()"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+                        </svg>
+                        Tanlanganni o'chirish
+                    </button>
+
+                    {{-- Mark all as read --}}
+                    @if($unreadCount > 0)
+                        <button @click="markAllRead()"
+                                class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Barchasini o'qilgan
+                        </button>
+                    @endif
+
+                    {{-- Delete all --}}
+                    <button @click="deleteAll()"
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+                        </svg>
+                        Barchasini o'chirish
+                    </button>
+                </div>
             </div>
         @endif
 
@@ -71,10 +115,15 @@
                         }
                     @endphp
 
-                    <div class="rounded-xl border {{ $notification->isRead() ? 'border-gray-200 bg-white' : 'border-indigo-200 bg-indigo-50/20' }} overflow-hidden transition">
+                    <div class="rounded-xl border {{ $notification->isRead() ? 'border-gray-200 bg-white' : 'border-indigo-200 bg-indigo-50/20' }} overflow-hidden transition"
+                         :class="selectedIds.includes({{ $notification->id }}) ? 'ring-2 ring-indigo-400' : ''">
                         {{-- Sarlavha --}}
                         <div class="flex items-center justify-between px-4 py-3 border-b {{ $headerColor }}">
                             <div class="flex items-center gap-2 min-w-0">
+                                <input type="checkbox" value="{{ $notification->id }}"
+                                       x-model.number="selectedIds"
+                                       @change="updateSelectAll()"
+                                       class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 flex-shrink-0">
                                 <span class="w-2.5 h-2.5 rounded-full {{ $headerDot }} flex-shrink-0"></span>
                                 <h4 class="text-sm font-bold truncate">{{ $notification->title }}</h4>
                             </div>
@@ -164,4 +213,88 @@
             </div>
         @endif
     </div>
+
+    @push('scripts')
+    <script>
+        function notificationManager() {
+            return {
+                selectedIds: [],
+                selectAll: false,
+                allIds: @json($notifications->pluck('id')->toArray()),
+
+                toggleAll() {
+                    this.selectedIds = this.selectAll ? [...this.allIds] : [];
+                },
+
+                updateSelectAll() {
+                    this.selectAll = this.selectedIds.length === this.allIds.length && this.allIds.length > 0;
+                },
+
+                async markSelectedRead() {
+                    if (this.selectedIds.length === 0) return;
+                    if (!confirm(this.selectedIds.length + ' ta xabarnomani o\'qilgan deb belgilansinmi?')) return;
+
+                    const token = document.querySelector('meta[name="csrf-token"]').content;
+                    try {
+                        const response = await fetch('{{ route("student.notifications.bulk-mark-read") }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
+                            body: JSON.stringify({ ids: this.selectedIds })
+                        });
+                        if (response.ok) location.reload();
+                    } catch (e) {
+                        alert('Xatolik yuz berdi');
+                    }
+                },
+
+                async markAllRead() {
+                    if (!confirm('Barcha xabarnomalarni o\'qilgan deb belgilansinmi?')) return;
+
+                    const token = document.querySelector('meta[name="csrf-token"]').content;
+                    try {
+                        const response = await fetch('{{ route("student.notifications.mark-all-read") }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
+                        });
+                        if (response.ok) location.reload();
+                    } catch (e) {
+                        alert('Xatolik yuz berdi');
+                    }
+                },
+
+                async deleteSelected() {
+                    if (this.selectedIds.length === 0) return;
+                    if (!confirm(this.selectedIds.length + ' ta xabarnomani o\'chirishni xohlaysizmi?')) return;
+
+                    const token = document.querySelector('meta[name="csrf-token"]').content;
+                    try {
+                        const response = await fetch('{{ route("student.notifications.bulk-delete") }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
+                            body: JSON.stringify({ ids: this.selectedIds })
+                        });
+                        if (response.ok) location.reload();
+                    } catch (e) {
+                        alert('Xatolik yuz berdi');
+                    }
+                },
+
+                async deleteAll() {
+                    if (!confirm('Barcha xabarnomalarni o\'chirishni xohlaysizmi? Bu amalni qaytarib bo\'lmaydi!')) return;
+
+                    const token = document.querySelector('meta[name="csrf-token"]').content;
+                    try {
+                        const response = await fetch('{{ route("student.notifications.delete-all") }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
+                        });
+                        if (response.ok) location.reload();
+                    } catch (e) {
+                        alert('Xatolik yuz berdi');
+                    }
+                }
+            }
+        }
+    </script>
+    @endpush
 </x-student-app-layout>

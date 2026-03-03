@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\StudentNotification;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 class NotificationController extends Controller
@@ -71,6 +72,49 @@ class NotificationController extends Controller
         StudentNotification::where('student_id', auth()->guard('student')->id())
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function bulkMarkRead(Request $request)
+    {
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
+
+        if (!Schema::hasTable('student_notifications')) {
+            return response()->json(['success' => true]);
+        }
+
+        StudentNotification::whereIn('id', $request->ids)
+            ->where('student_id', auth()->guard('student')->id())
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function bulkDelete(Request $request)
+    {
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
+
+        if (!Schema::hasTable('student_notifications')) {
+            return response()->json(['success' => true]);
+        }
+
+        StudentNotification::whereIn('id', $request->ids)
+            ->where('student_id', auth()->guard('student')->id())
+            ->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    public function deleteAll()
+    {
+        if (!Schema::hasTable('student_notifications')) {
+            return response()->json(['success' => true]);
+        }
+
+        StudentNotification::where('student_id', auth()->guard('student')->id())
+            ->delete();
 
         return response()->json(['success' => true]);
     }

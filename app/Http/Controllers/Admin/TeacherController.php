@@ -15,6 +15,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Role;
@@ -270,40 +271,81 @@ class TeacherController extends Controller
         $search = $request->input('q', '');
         $levelCode = $request->input('level_code', '');
         $teacherId = $request->input('teacher_id');
+        $filterDept = $request->input('filter_dept', '1') !== '0';
 
-        $query = CurriculumSubject::active();
+        $teacher = $teacherId ? Teacher::find($teacherId) : null;
 
-        // O'qituvchining kafedrasidagi fanlarni filtrlash
-        if ($teacherId) {
-            $teacher = Teacher::find($teacherId);
-            if ($teacher) {
-                $query->where(function ($q) use ($teacher) {
-                    if ($teacher->department_hemis_id) {
-                        $q->where('department_id', $teacher->department_hemis_id);
-                    }
-                    if ($teacher->department) {
-                        $q->orWhere('department_name', $teacher->department);
-                    }
-                });
-            }
+        // O'qituvchining biriktirilgan fanlarini olish (subject_name + semester_code bo'yicha)
+        $assignedSubjectKeys = collect();
+        if ($teacher) {
+            $assignedSubjectKeys = $teacher->responsibleSubjects()
+                ->select('subject_name', 'semester_code')
+                ->get()
+                ->map(fn($s) => $s->subject_name . '|' . $s->semester_code);
+        }
+
+        // Har bir o'quv rejaning oxirgi 2 ta semestridagi fanlarni olish
+        $query = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
+            ->where('cs.is_active', true)
+            ->whereNotNull('cs.subject_name')
+            // Faqat har bir o'quv rejaning oxirgi 2 ta semestri
+            ->whereRaw('CAST(cs.semester_code AS UNSIGNED) >= (
+                SELECT MAX(CAST(s2.code AS UNSIGNED)) - 1
+                FROM semesters AS s2
+                WHERE s2.curriculum_hemis_id = cs.curricula_hemis_id
+            )');
+
+        // Kafedra bo'yicha filtrlash
+        if ($filterDept && $teacher) {
+            $query->where(function ($q) use ($teacher) {
+                if ($teacher->department_hemis_id) {
+                    $q->where('cs.department_id', $teacher->department_hemis_id);
+                }
+                if ($teacher->department) {
+                    $q->orWhere('cs.department_name', $teacher->department);
+                }
+                $q->orWhereNull('cs.department_id');
+            });
+        }
+
+        // Fan nomi bo'yicha qidirish
+        if ($search) {
+            $query->where('cs.subject_name', 'like', "%{$search}%");
+        }
+
+        // Kurs (level_code) bo'yicha filtrlash
+        if ($levelCode) {
+            $query->where('s.level_code', $levelCode);
         }
 
         $subjects = $query
-            ->when($search, function ($q, $search) {
-                $q->where('subject_name', 'like', "%{$search}%");
-            })
-            ->when($levelCode, function ($q, $levelCode) {
-                $semesterCodes = Semester::where('level_code', $levelCode)
-                    ->pluck('code')
-                    ->unique()
-                    ->toArray();
-                $q->whereIn('semester_code', $semesterCodes);
-            })
-            ->selectRaw('MIN(id) as id, subject_name, subject_code, semester_code, semester_name, MIN(department_name) as department_name')
-            ->groupBy('subject_name', 'subject_code', 'semester_code', 'semester_name')
-            ->orderBy('subject_name')
-            ->limit(200)
+            ->select([
+                DB::raw('MIN(cs.id) as id'),
+                'cs.subject_name',
+                DB::raw('MIN(cs.subject_code) as subject_code'),
+                'cs.semester_code',
+                'cs.semester_name',
+                DB::raw('MIN(cs.department_name) as department_name'),
+                's.level_name',
+                's.level_code',
+            ])
+            ->groupBy('cs.subject_name', 'cs.semester_code', 'cs.semester_name', 's.level_name', 's.level_code')
+            ->orderBy('cs.subject_name')
+            ->orderBy('cs.semester_code')
             ->get();
+
+        // Har bir fan uchun is_assigned flagini qo'shish
+        $subjects->transform(function ($subject) use ($assignedSubjectKeys) {
+            $subject->is_assigned = $assignedSubjectKeys->contains($subject->subject_name . '|' . $subject->semester_code);
+            return $subject;
+        });
 
         return response()->json($subjects);
     }

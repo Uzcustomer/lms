@@ -18,6 +18,8 @@ class Notification extends Model
         'subject',
         'body',
         'type',
+        'url',
+        'data',
         'is_read',
         'read_at',
         'is_draft',
@@ -29,6 +31,7 @@ class Notification extends Model
         'is_draft' => 'boolean',
         'read_at' => 'datetime',
         'sent_at' => 'datetime',
+        'data' => 'array',
     ];
 
     // Notification types
@@ -47,25 +50,40 @@ class Notification extends Model
         return $this->morphTo();
     }
 
-    public function scopeInbox($query, $userId, $userType = 'App\\Models\\User')
+    public function scopeInbox($query, $userId, $userType = null)
     {
-        return $query->where('recipient_id', $userId)
-                     ->where('recipient_type', $userType)
-                     ->where('is_draft', false);
+        $query->where('recipient_id', $userId)
+              ->where('is_draft', false);
+
+        if ($userType) {
+            $query->where('recipient_type', $userType);
+        }
+
+        return $query;
     }
 
-    public function scopeSent($query, $userId, $userType = 'App\\Models\\User')
+    public function scopeSent($query, $userId, $userType = null)
     {
-        return $query->where('sender_id', $userId)
-                     ->where('sender_type', $userType)
-                     ->where('is_draft', false);
+        $query->where('sender_id', $userId)
+              ->where('is_draft', false);
+
+        if ($userType) {
+            $query->where('sender_type', $userType);
+        }
+
+        return $query;
     }
 
-    public function scopeDrafts($query, $userId, $userType = 'App\\Models\\User')
+    public function scopeDrafts($query, $userId, $userType = null)
     {
-        return $query->where('sender_id', $userId)
-                     ->where('sender_type', $userType)
-                     ->where('is_draft', true);
+        $query->where('sender_id', $userId)
+              ->where('is_draft', true);
+
+        if ($userType) {
+            $query->where('sender_type', $userType);
+        }
+
+        return $query;
     }
 
     public function scopeUnread($query)

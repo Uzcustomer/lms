@@ -33,6 +33,15 @@ class SettingsController extends Controller
         // Telegram data
         $data['telegramDeadlineDays'] = Setting::get('telegram_deadline_days', 7);
 
+        // Kontrakt to'lov muddatlari
+        $defaultCutoffs = json_encode([
+            ['deadline' => '2025-10-01', 'percent' => 25],
+            ['deadline' => '2026-01-01', 'percent' => 50],
+            ['deadline' => '2026-03-01', 'percent' => 75],
+            ['deadline' => '2026-05-01', 'percent' => 100],
+        ]);
+        $data['contractCutoffs'] = json_decode(Setting::get('contract_cutoffs', $defaultCutoffs), true);
+
         return view('admin.settings.index', $data);
     }
 
@@ -177,5 +186,27 @@ class SettingsController extends Controller
         Setting::set('telegram_deadline_days', $request->telegram_deadline_days);
 
         return redirect()->route('admin.settings')->with('success', 'Telegram sozlamalari muvaffaqiyatli yangilandi.');
+    }
+
+    public function updateContractCutoffs(Request $request)
+    {
+        $request->validate([
+            'cutoffs' => 'required|array|min:1',
+            'cutoffs.*.deadline' => 'required|date',
+            'cutoffs.*.percent' => 'required|integer|min:1|max:100',
+        ]);
+
+        $cutoffs = collect($request->cutoffs)
+            ->map(fn($item) => [
+                'deadline' => $item['deadline'],
+                'percent' => (int) $item['percent'],
+            ])
+            ->sortBy('deadline')
+            ->values()
+            ->toArray();
+
+        Setting::set('contract_cutoffs', json_encode($cutoffs));
+
+        return redirect()->route('admin.settings')->with('success', 'Kontrakt to\'lov muddatlari muvaffaqiyatli yangilandi!');
     }
 }

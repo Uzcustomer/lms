@@ -52,4 +52,8 @@ class StudentService {
   Future<Map<String, dynamic>> checkTelegramVerification() async {
     return await _api.get(ApiConfig.studentCheckTelegram);
   }
+
+  Future<Map<String, dynamic>> getContract() async {
+    return await _api.get(ApiConfig.studentContract);
+  }
 }

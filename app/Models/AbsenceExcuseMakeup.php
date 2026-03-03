@@ -22,12 +22,14 @@ class AbsenceExcuseMakeup extends Model
         'assessment_type_code',
         'original_date',
         'makeup_date',
+        'makeup_end_date',
         'status',
     ];
 
     protected $casts = [
         'original_date' => 'date',
         'makeup_date' => 'date',
+        'makeup_end_date' => 'date',
     ];
 
     public function absenceExcuse()

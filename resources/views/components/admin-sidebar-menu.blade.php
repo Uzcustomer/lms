@@ -1,9 +1,9 @@
 @php
     $isTeacher = auth()->guard('teacher')->check();
-    $user = auth()->user();
+    $user = auth()->user() ?? auth()->guard('teacher')->user();
 
     // Foydalanuvchi rollari va faol rol
-    $userRoles = $user->getRoleNames()->toArray();
+    $userRoles = $user ? $user->getRoleNames()->toArray() : [];
     $activeRole = session('active_role', $userRoles[0] ?? '');
     // Session dagi rol foydalanuvchida mavjud ekanligini tekshirish
     if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
@@ -16,6 +16,11 @@
     // Faol rolga qarab menyu ko'rsatish
     $hasActiveRole = function($roles) use ($activeRole) {
         return in_array($activeRole, (array) $roles);
+    };
+
+    // Foydalanuvchida rol mavjudligini tekshirish (faol bo'lmasa ham)
+    $hasAnyRole = function($roles) use ($userRoles) {
+        return count(array_intersect((array) $roles, $userRoles)) > 0;
     };
 
     // Route resolver - teacher yoki admin guardga qarab route aniqlash
@@ -54,7 +59,7 @@
     }
 
     // Foydalanuvchi to'liq ismi
-    $userName = $user->name ?? ($user->full_name ?? $user->short_name ?? 'Foydalanuvchi');
+    $userName = $user ? ($user->name ?? ($user->full_name ?? $user->short_name ?? 'Foydalanuvchi')) : 'Foydalanuvchi';
 @endphp
 <!-- Mobile backdrop -->
 <div x-data x-show="$store.sidebar.open"
@@ -88,6 +93,26 @@
     <!-- Navigation Menu -->
     <nav class="flex-1 py-3 px-3 overflow-y-auto sidebar-nav"
          x-data @click="if($event.target.closest('a')) { if(window.innerWidth < 768) $store.sidebar.close() }">
+        <!-- Xabarnomalar (Notifications) -->
+        @php
+            $sidebarUserType = get_class($user);
+            $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
+                ->where('recipient_type', $sidebarUserType)
+                ->where('is_draft', false)
+                ->where('is_read', false)
+                ->count();
+        @endphp
+        <a href="{{ route('admin.notifications.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.notifications.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+            </svg>
+            {{ __('notifications.notifications') }}
+            @if($sidebarUnreadCount > 0)
+            <span class="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">{{ $sidebarUnreadCount }}</span>
+            @endif
+        </a>
+
         <a href="{{ $r('admin.dashboard', 'teacher.dashboard') }}"
            class="sidebar-link {{ $isActive('admin.dashboard', 'teacher.dashboard') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,6 +176,9 @@
             Baholar
         </a>
 
+        @endif
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'fan_masuli', 'kafedra_mudiri', 'dekan', 'registrator_ofisi']))
         <a href="{{ route('admin.ktr.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.ktr.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -214,7 +242,7 @@
             </svg>
             YN kunini belgilash
         </a>
-        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi']))
+        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi', 'fan_masuli']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         <div class="sidebar-section">Qo'shimcha</div>
 
@@ -421,6 +449,14 @@
             4≥qarzdorlar
         </a>
 
+        <a href="{{ route('admin.reports.expelled-debtors') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.expelled-debtors*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 3h.01M6.938 4h10.124c1.54 0 2.502 1.667 1.732 3L13.732 17a2 2 0 01-3.464 0L5.206 7c-.77-1.333.192-3 1.732-3z"></path>
+            </svg>
+            Akademik ma'lumotnoma
+        </a>
+
         <a href="{{ route('admin.reports.top-students') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.top-students') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -439,15 +475,13 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
-        <a href="{{ route('admin.absence-excuses.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}">
+        <a href="{{ route('admin.reports.users-without-ratings') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.users-without-ratings') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
             </svg>
-            Sababli arizalar
+            Baho qo'ymaganlar
         </a>
-        @endif
 
         @if($hasActiveRole(['superadmin', 'admin']))
         <a href="{{ route('admin.document-templates.index') }}"
@@ -471,40 +505,39 @@
         @endif
         @endif
 
-        <!-- Xabarnomalar (Notifications) -->
-        <div class="sidebar-section">{{ __('notifications.notifications') }}</div>
-        @php
-            $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
-                ->where('recipient_type', get_class($user))
-                ->where('is_draft', false)
-                ->where('is_read', false)
-                ->count();
-        @endphp
-        <a href="{{ route('admin.notifications.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.notifications.*') ? 'sidebar-active' : '' }}">
+        {{-- ============ TALABA ARIZALARI SECTION ============ --}}
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        <div class="sidebar-section">Talaba arizalari</div>
+
+        <a href="{{ route('admin.absence-excuses.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}" style="position: relative;">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
-            {{ __('notifications.notifications') }}
-            @if($sidebarUnreadCount > 0)
-            <span class="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">{{ $sidebarUnreadCount }}</span>
+            Sababli arizalar
+            @if(($pendingExcusesCount ?? 0) > 0)
+                <span class="sidebar-badge">{{ $pendingExcusesCount }}</span>
             @endif
         </a>
+
+        <a href="{{ route('admin.exam-appeals.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.exam-appeals.*') ? 'sidebar-active' : '' }}" style="position: relative;">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285zm0 13.036h.008v.008H12v-.008z"></path>
+            </svg>
+            Imtihon apellyatsiyalari
+            @if(($pendingAppealsCount ?? 0) > 0)
+                <span class="sidebar-badge">{{ $pendingAppealsCount }}</span>
+            @endif
+        </a>
+        @endif
+
     </nav>
 
-    <!-- Sidebar pastki qism - faqat mavzu (tema) almashtirish -->
-    <div class="p-3 flex-shrink-0 sidebar-user-section" x-data="{ themeMenuOpen: false }" @click.outside="themeMenuOpen = false">
-        <button @click="themeMenuOpen = !themeMenuOpen" class="w-full flex items-center px-2 py-2 rounded-lg transition-all duration-200 sidebar-profile-btn cursor-pointer">
-            <svg class="w-5 h-5 mr-3 flex-shrink-0" style="opacity:0.7;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
-            </svg>
-            <span class="sidebar-username text-sm font-medium" style="opacity:0.8;">Mavzu</span>
-            <svg class="w-4 h-4 flex-shrink-0 transition-transform duration-200 sidebar-chevron" :class="{'rotate-180': themeMenuOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
-            </svg>
-        </button>
-        <!-- Theme Dropdown -->
-        <div x-show="themeMenuOpen"
+    <!-- User Section with Profile Dropdown -->
+    <div class="p-3 flex-shrink-0 sidebar-user-section" x-data="{ profileOpen: false, rolesOpen: false }" @click.outside="profileOpen = false; rolesOpen = false">
+        <!-- Dropdown Menu (fixed, opens upward) -->
+        <div x-show="profileOpen"
              x-transition:enter="transition ease-out duration-200"
              x-transition:enter-start="opacity-0 transform translate-y-2"
              x-transition:enter-end="opacity-100 transform translate-y-0"
@@ -512,32 +545,178 @@
              x-transition:leave-start="opacity-100 transform translate-y-0"
              x-transition:leave-end="opacity-0 transform translate-y-2"
              class="fixed rounded-xl sidebar-dropdown"
-             style="bottom: 60px; left: 12px; width: 220px; z-index: 9999;">
-            <button @click="setTheme('kosmik'); themeMenuOpen = false;"
-                    class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
-                <span class="flex items-center">
+             style="bottom: 80px; left: 12px; width: 232px; z-index: 9999; overflow: visible;">
+
+            <!-- Profil -->
+            @if($profileRoute)
+            <div class="py-1 sidebar-dropdown-divider-bottom">
+                <a href="{{ $profileRoute }}" class="profile-dropdown-link">
                     <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                     </svg>
-                    Kosmik
-                </span>
-                <svg x-show="theme === 'kosmik'" class="w-4 h-4 flex-shrink-0 sidebar-check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
-                </svg>
-            </button>
-            <button @click="setTheme('yorug'); themeMenuOpen = false;"
-                    class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
-                <span class="flex items-center">
+                    Profil
+                </a>
+            </div>
+            @endif
+
+            <!-- Mavzu (Theme switcher) with cascade submenu -->
+            <div class="py-1 sidebar-dropdown-divider-bottom" x-data="{ themeOpen: false }" style="position: relative;">
+                <button @mouseenter="themeOpen = true" @mouseleave="themeOpen = false"
+                        @click="themeOpen = !themeOpen"
+                        class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
+                    <span class="flex items-center">
+                        <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                        </svg>
+                        Mavzu
+                    </span>
+                    <svg style="width: 14px; height: 14px; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+
+                <!-- Cascade submenu (opens to the right) -->
+                <div x-show="themeOpen"
+                     @mouseenter="themeOpen = true"
+                     @mouseleave="themeOpen = false"
+                     x-transition:enter="transition ease-out duration-150"
+                     x-transition:enter-start="opacity-0 transform -translate-x-1"
+                     x-transition:enter-end="opacity-100 transform translate-x-0"
+                     x-transition:leave="transition ease-in duration-100"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="sidebar-submenu"
+                     style="position: fixed; left: 248px; width: 170px; z-index: 10000;"
+                     x-init="$nextTick(() => { positionSubmenu($el) })"
+                     x-effect="if (themeOpen) { $nextTick(() => positionSubmenu($el)) }">
+                    <button @click="setTheme('kosmik'); themeOpen = false;"
+                            class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                            </svg>
+                            Kosmik
+                        </span>
+                        <svg x-show="theme === 'kosmik'" class="w-4 h-4 flex-shrink-0 sidebar-check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </button>
+                    <button @click="setTheme('yorug'); themeOpen = false;"
+                            class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                            </svg>
+                            Yorug'
+                        </span>
+                        <svg x-show="theme === 'yorug'" class="w-4 h-4 flex-shrink-0 sidebar-check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Rolni almashtirish (Switch role) with cascade submenu -->
+            @if(count($userRoles) > 1)
+            <div class="py-1 sidebar-dropdown-divider-bottom" x-data="{ rolesSubOpen: false }" style="position: relative;">
+                <button @mouseenter="rolesSubOpen = true" @mouseleave="rolesSubOpen = false"
+                        @click="rolesSubOpen = !rolesSubOpen"
+                        class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
+                    <span class="flex items-center">
+                        <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                        </svg>
+                        Rolni almashtirish...
+                    </span>
+                    <svg style="width: 14px; height: 14px; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+
+                <!-- Roles cascade submenu -->
+                <div x-show="rolesSubOpen"
+                     @mouseenter="rolesSubOpen = true"
+                     @mouseleave="rolesSubOpen = false"
+                     x-transition:enter="transition ease-out duration-150"
+                     x-transition:enter-start="opacity-0 transform -translate-x-1"
+                     x-transition:enter-end="opacity-100 transform translate-x-0"
+                     x-transition:leave="transition ease-in duration-100"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="sidebar-submenu"
+                     style="position: fixed; left: 248px; width: 200px; z-index: 10000;"
+                     x-init="$nextTick(() => { positionSubmenu($el) })"
+                     x-effect="if (rolesSubOpen) { $nextTick(() => positionSubmenu($el)) }">
+                    @foreach($userRoles as $role)
+                    <form method="POST" action="{{ $switchRoleRoute }}">
+                        @csrf
+                        <input type="hidden" name="role" value="{{ $role }}">
+                        <button type="submit" class="profile-dropdown-link w-full text-left" style="justify-content: space-between;">
+                            <span class="flex items-center">
+                                {{ $roleLabels[$role] ?? $role }}
+                            </span>
+                            @if($role === $activeRole)
+                            <svg class="w-4 h-4 flex-shrink-0 sidebar-check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            @endif
+                        </button>
+                    </form>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+
+            @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+            <!-- Sozlamalar -->
+            <div class="py-1 sidebar-dropdown-divider-bottom">
+                <a href="{{ route('admin.settings') }}" class="profile-dropdown-link">
                     <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                     </svg>
-                    Yorug'
-                </span>
-                <svg x-show="theme === 'yorug'" class="w-4 h-4 flex-shrink-0 sidebar-check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
-                </svg>
-            </button>
+                    Sozlamalar
+                </a>
+            </div>
+            @endif
+
+            <!-- Chiqish -->
+            <div class="py-1" style="border-radius: 0 0 12px 12px;">
+                <form method="POST" action="{{ $logoutRoute }}">
+                    @csrf
+                    <button type="submit" class="profile-dropdown-link w-full text-left sidebar-logout-btn">
+                        <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            @if($isImpersonating)
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"></path>
+                            @else
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                            @endif
+                        </svg>
+                        {{ $isImpersonating ? 'Superadminga qaytish' : 'Chiqish' }}
+                    </button>
+                </form>
+            </div>
         </div>
+
+        <!-- Profile Button (clickable) - Rasm, ism va faol rol -->
+        <button @click="profileOpen = !profileOpen" class="w-full flex items-center px-2 py-2 rounded-lg transition-all duration-200 sidebar-profile-btn cursor-pointer">
+            @if($userAvatar)
+            <img src="{{ $userAvatar }}" alt="{{ $userName }}" class="rounded-full object-cover mr-3 flex-shrink-0 sidebar-avatar-img" style="width: 36px; height: 36px; min-width: 36px;">
+            @else
+            <div class="rounded-full flex items-center justify-center mr-3 flex-shrink-0 sidebar-avatar" style="width: 36px; height: 36px; min-width: 36px;">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+            </div>
+            @endif
+            <div class="flex-1 text-left min-w-0">
+                <span class="block truncate sidebar-username text-sm font-medium">{{ $userName }}</span>
+                <span class="block truncate sidebar-role-label text-xs">{{ $activeRoleLabel }}</span>
+            </div>
+            <svg class="w-4 h-4 flex-shrink-0 transition-transform duration-200 sidebar-chevron" :class="{'rotate-180': profileOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+            </svg>
+        </button>
     </div>
 
     <style>
@@ -771,6 +950,28 @@
         }
         .sidebar-themed[data-theme="yorug"] .sidebar-check-icon {
             color: #3b82f6;
+        }
+
+        /* ===== BADGE (notification count) ===== */
+        .sidebar-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            margin-left: auto;
+            font-size: 0.7rem;
+            font-weight: 700;
+            line-height: 1;
+            color: #ffffff;
+            background-color: #ef4444;
+            border-radius: 10px;
+            animation: badge-pulse 2s ease-in-out infinite;
+        }
+        @keyframes badge-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
 
         /* ===== BASE STYLES (shared) ===== */

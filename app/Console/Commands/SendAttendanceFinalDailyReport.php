@@ -8,6 +8,7 @@ use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -27,13 +28,31 @@ class SendAttendanceFinalDailyReport extends Command
         $formattedDate = $reportDate->format('d.m.Y');
         $now = Carbon::now();
 
+        // Kechki final import muvaffaqiyatini tekshirish
+        $lastSuccess = Cache::get('final_import_last_success');
+        if (!$lastSuccess || !Carbon::parse($lastSuccess)->isToday()) {
+            $adminChatId = config('services.telegram.chat_id');
+            $msg = "Yakuniy hisobot ({$formattedDate}) jo'natilmadi.\n\n"
+                 . "Sabab: Kechki final import muvaffaqiyatsiz bo'lgan yoki ishlamagan.\n"
+                 . "Oxirgi muvaffaqiyatli import: " . ($lastSuccess ?: 'topilmadi');
+
+            Log::warning("[FinalDailyReport] " . $msg);
+            $this->warn($msg);
+
+            if ($adminChatId) {
+                $telegram->sendToUser($adminChatId, $msg);
+            }
+
+            return 1;
+        }
+
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         $this->info("Hisobot sanasi: {$reportDateStr} (yakuniy)");
 
-        // Progress reporter: bitta Telegram xabar yuborib, har bosqichda yangilab turadi
-        $progressChatId = $this->option('chat-id') ?: config('services.telegram.attendance_group_id');
+        // Progress reporter: admin chatga yuboriladi (guruhga emas)
+        $progressChatId = $this->option('chat-id') ?: config('services.telegram.chat_id');
         $reporter = new ImportProgressReporter($telegram, $progressChatId, "{$reportDateStr} (yakuniy)");
 
         if ($progressChatId) {
@@ -72,21 +91,6 @@ class SendAttendanceFinalDailyReport extends Command
             $reporter->failStep($e->getMessage());
             Log::warning('Davomat nazorati yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
             $this->warn("Davomat nazorati yangilashda xato: " . $e->getMessage());
-        }
-
-        // 1.6-QADAM: Baholarni HEMIS dan yangilash (student_grades)
-        $reporter->startStep('HEMIS dan baholar yangilanmoqda', 'Baholar muvaffaqiyatli yangilandi');
-        $this->info("HEMIS dan baholar yangilanmoqda ({$reportDateStr})...");
-        try {
-            \Illuminate\Support\Facades\Artisan::call('student:import-data', [
-                '--mode' => 'final',
-            ]);
-            $reporter->completeStep();
-            $this->info("Baholar yangilandi.");
-        } catch (\Throwable $e) {
-            $reporter->failStep($e->getMessage());
-            Log::warning('Baholar yangilashda xato (hisobot davom etadi): ' . $e->getMessage());
-            $this->warn("Baholar yangilashda xato: " . $e->getMessage());
         }
 
         // Progress reporter ni tozalash

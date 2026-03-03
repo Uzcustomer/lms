@@ -75,6 +75,11 @@
 .sc-day.sc-selected { background: #2b5ea7 !important; color: #fff !important; font-weight: 700; }
 .sc-day.sc-selected.sc-sun { background: #dc2626 !important; }
 
+/* Almashinuvchi oy foni — juft/toq oylar ajralib turadi */
+.sc-day.sc-alt-month { background: #f1f5f9; }
+.sc-day.sc-alt-month:hover { background: #e2e8f0; }
+.sc-day.sc-alt-month.sc-today { background: #dbeafe; }
+
 /* Oy boshi labeli */
 .sc-day.sc-month-start::after {
     content: attr(data-month); position: absolute; top: -1px; right: -4px;

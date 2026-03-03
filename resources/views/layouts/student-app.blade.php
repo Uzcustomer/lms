@@ -17,7 +17,8 @@
     <!-- Scripts -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
-    <!-- Alpine.js (student layoutda Livewire yuklanmaydi, shuning uchun alohida kerak) -->
+    <!-- Alpine.js + Collapse plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 
     <!-- JSZip for client-side file compression -->
@@ -31,9 +32,22 @@
 
     <!-- Page Heading -->
     @if (isset($header))
-        <header class="bg-white dark:bg-gray-800 shadow">
-            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <header class="bg-white dark:bg-gray-800 shadow" style="margin-bottom:15px;">
+            {{-- Desktop: oddiy header --}}
+            <div class="hidden sm:block max-w-7xl mx-auto py-2 px-4 sm:px-6 lg:px-8">
                 {{ $header }}
+            </div>
+            {{-- Mobile: back button + centered title --}}
+            <div class="sm:hidden flex items-center justify-between px-4 py-2 relative" style="min-height:44px;">
+                <button onclick="window.history.back()" class="flex items-center justify-center rounded-full hover:bg-gray-100 transition" style="width:32px;height:32px;z-index:1;">
+                    <svg class="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
+                </button>
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="text-sm font-semibold text-gray-800 dark:text-gray-200 text-center">{{ $header }}</div>
+                </div>
+                <div style="width:32px;"></div>
             </div>
         </header>
     @endif
@@ -108,68 +122,163 @@
     </main>
 </div>
 
-<!-- Mobile Bottom Navigation -->
-<nav class="fixed bottom-0 left-0 right-0 z-50 sm:hidden" style="background-color: #0f3487;">
-    <div class="flex justify-around items-center h-16">
-        <a href="{{ route('student.dashboard') }}" class="flex flex-col items-center justify-center w-full h-full {{ request()->routeIs('student.dashboard') ? 'opacity-100' : 'opacity-70' }}">
-            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/>
-            </svg>
-            <span class="text-[10px] mt-1 text-white">Bosh sahifa</span>
-        </a>
-        <a href="{{ route('student.schedule') }}" class="flex flex-col items-center justify-center w-full h-full {{ request()->routeIs('student.schedule') ? 'opacity-100' : 'opacity-70' }}">
-            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
-            <span class="text-[10px] mt-1 text-white">Jadval</span>
-        </a>
-        <a href="{{ route('student.attendance') }}" class="flex flex-col items-center justify-center w-full h-full {{ request()->routeIs('student.attendance') ? 'opacity-100' : 'opacity-70' }}">
-            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-            </svg>
-            <span class="text-[10px] mt-1 text-white">Davomat</span>
-        </a>
-        <a href="{{ route('student.subjects') }}" class="flex flex-col items-center justify-center w-full h-full {{ request()->routeIs('student.subjects') ? 'opacity-100' : 'opacity-70' }}">
-            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-            </svg>
-            <span class="text-[10px] mt-1 text-white">Fanlar</span>
-        </a>
-        <a href="{{ route('student.independents') }}" class="flex flex-col items-center justify-center w-full h-full {{ request()->routeIs('student.independents') ? 'opacity-100' : 'opacity-70' }}">
-            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
-            <span class="text-[10px] mt-1 text-white">MT</span>
-        </a>
-        <a href="{{ route('student.profile') }}" class="flex flex-col items-center justify-center w-full h-full {{ request()->routeIs('student.profile') ? 'opacity-100' : 'opacity-70' }}">
-            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-            </svg>
-            <span class="text-[10px] mt-1 text-white">Profil</span>
-        </a>
+    <!-- Mobile Bottom Navigation Bar -->
+    @php
+        $activeTab = 'none';
+        if (request()->routeIs('student.subjects') || request()->routeIs('student.subject.*')) $activeTab = 'fanlar';
+        elseif (request()->routeIs('student.schedule')) $activeTab = 'jadval';
+        elseif (request()->routeIs('student.dashboard')) $activeTab = 'asosiy';
+        elseif (request()->routeIs('student.independents')) $activeTab = 'mt';
+        elseif (request()->routeIs('student.exam-schedule') || request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
+    @endphp
+    <div x-data="{ boshqalarOpen: false }" class="sm:hidden" style="position:fixed !important;bottom:0 !important;left:0 !important;right:0 !important;z-index:9999 !important;">
+        <!-- Boshqalar popup overlay -->
+        <div x-show="boshqalarOpen" @click="boshqalarOpen = false" style="position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.3);display:none;"></div>
+
+        <!-- Boshqalar popup menu -->
+        <div x-show="boshqalarOpen" @click.away="boshqalarOpen = false" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:9999;display:none;" class="mx-auto max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-3">
+            <div class="grid grid-cols-2 gap-2">
+                <a href="{{ route('student.exam-schedule') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.exam-schedule') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}" style="padding:10px;">
+                    <div class="rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
+                        <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                        </svg>
+                    </div>
+                    <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">Imtihon jadvali</span>
+                    <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                </a>
+                <a href="{{ route('student.services') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}" style="padding:10px;">
+                    <div class="rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
+                        <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
+                        </svg>
+                    </div>
+                    <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">Xizmatlar</span>
+                    <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                </a>
+                <a href="{{ route('student.attendance') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.attendance') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}" style="padding:10px;">
+                    <div class="rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
+                        <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">Davomat</span>
+                    <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                </a>
+                <a href="{{ route('student.pending-lessons') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.pending-lessons') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}" style="padding:10px;">
+                    <div class="rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
+                        <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
+                        </svg>
+                    </div>
+                    <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">Qayta topshirish</span>
+                    <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation Tabs -->
+        <div class="flex items-center justify-between" style="background-color:#0f3487;height:60px;padding:0 15px;padding-bottom:max(5px, env(safe-area-inset-bottom));">
+            <!-- 1. Fanlar -->
+            <a href="{{ route('student.subjects') }}" class="flex flex-col items-center justify-center" style="width:55px;gap:3px;">
+                @if($activeTab === 'fanlar')
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:44px;height:44px;">
+                        <svg class="w-6 h-6" fill="none" stroke="#0f3487" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                        </svg>
+                    </div>
+                @else
+                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24" style="opacity:0.7;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                    </svg>
+                    <span class="text-[11px] font-medium leading-tight" style="color:rgba(255,255,255,0.7);">Fanlar</span>
+                @endif
+            </a>
+
+            <!-- 2. Dars jadvali -->
+            <a href="{{ route('student.schedule') }}" class="flex flex-col items-center justify-center" style="width:55px;gap:3px;">
+                @if($activeTab === 'jadval')
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:44px;height:44px;">
+                        <svg class="w-6 h-6" fill="none" stroke="#0f3487" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                        </svg>
+                    </div>
+                @else
+                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24" style="opacity:0.7;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                    </svg>
+                    <span class="text-[11px] font-medium leading-tight" style="color:rgba(255,255,255,0.7);">Jadval</span>
+                @endif
+            </a>
+
+            <!-- 3. Asosiy -->
+            <a href="{{ route('student.dashboard') }}" class="flex flex-col items-center justify-center" style="width:55px;gap:3px;">
+                @if($activeTab === 'asosiy')
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:44px;height:44px;">
+                        <svg class="w-6 h-6" fill="none" stroke="#0f3487" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                        </svg>
+                    </div>
+                @else
+                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24" style="opacity:0.7;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                    </svg>
+                    <span class="text-[11px] font-medium leading-tight" style="color:rgba(255,255,255,0.7);">Asosiy</span>
+                @endif
+            </a>
+
+            <!-- 4. MT -->
+            <a href="{{ route('student.independents') }}" class="flex flex-col items-center justify-center" style="width:55px;gap:3px;">
+                @if($activeTab === 'mt')
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:44px;height:44px;">
+                        <svg class="w-6 h-6" fill="none" stroke="#0f3487" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.636 50.636 0 00-2.658-.813A59.906 59.906 0 0112 3.493a59.903 59.903 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                        </svg>
+                    </div>
+                @else
+                    <svg class="w-6 h-6" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24" style="opacity:0.7;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.636 50.636 0 00-2.658-.813A59.906 59.906 0 0112 3.493a59.903 59.903 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                    </svg>
+                    <span class="text-[11px] font-medium leading-tight" style="color:rgba(255,255,255,0.7);">MT</span>
+                @endif
+            </a>
+
+            <!-- 5. Boshqalar (radial fan trigger) -->
+            <button @click="boshqalarOpen = !boshqalarOpen" class="flex flex-col items-center justify-center" style="width:55px;gap:3px;background:none;border:none;">
+                @if($activeTab === 'foydali')
+                    <div class="rounded-full flex items-center justify-center bg-white" style="width:44px;height:44px;">
+                        <svg class="w-6 h-6" fill="none" stroke="#0f3487" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+                        </svg>
+                    </div>
+                @else
+                    <svg class="w-6 h-6 transition-transform duration-300" fill="none" stroke="white" stroke-width="1.8" viewBox="0 0 24 24"
+                         style="opacity:0.7;" :style="boshqalarOpen ? 'transform:rotate(45deg);opacity:1' : ''">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+                    </svg>
+                    <span class="text-[11px] font-medium leading-tight" style="color:rgba(255,255,255,0.7);">Boshqa</span>
+                @endif
+            </button>
+        </div>
     </div>
-</nav>
 
     @stack('scripts')
 
-    {{-- DEBUG: Console log - account switching debug --}}
+    @if(config('app.debug'))
+    {{-- DEBUG: Console log - faqat debug rejimda --}}
     <script>
-        console.group('%c🔍 LMS DEBUG: Student Layout', 'color: #3498db; font-weight: bold; font-size: 14px;');
-        console.log('%cLayout:', 'font-weight:bold', 'student-app.blade.php (Student)');
-        console.log('%cURL:', 'font-weight:bold', window.location.href);
-        console.log('%cGuard (server):', 'font-weight:bold', '{{ auth()->guard("web")->check() ? "web ✅ (id=" . auth()->guard("web")->id() . ")" : "web ❌" }}');
-        console.log('%cTeacher guard:', 'font-weight:bold', '{{ auth()->guard("teacher")->check() ? "teacher ✅ (id=" . auth()->guard("teacher")->id() . ")" : "teacher ❌" }}');
-        console.log('%cStudent guard:', 'font-weight:bold', '{{ auth()->guard("student")->check() ? "student ✅ (id=" . auth()->guard("student")->id() . " " . (auth()->guard("student")->user()->full_name ?? "?") . ")" : "student ❌" }}');
-        console.log('%cauth()->user():', 'font-weight:bold', '{{ auth()->user() ? "id=" . auth()->user()->id : "NULL" }}');
-        console.log('%csession.impersonating:', 'font-weight:bold', {{ session('impersonating') ? 'true' : 'false' }});
-        console.log('%csession.impersonated_name:', 'font-weight:bold', '{{ session("impersonated_name", "NULL") }}');
-        console.log('%csession.impersonator_id:', 'font-weight:bold', '{{ session("impersonator_id", "NULL") }}');
-        console.log('%csession.active_role:', 'font-weight:bold', '{{ session("active_role", "NULL") }}');
-        console.log('%csession_id:', 'font-weight:bold', '{{ session()->getId() }}');
-        @if(session('impersonating'))
-            console.log('%c📍 Impersonation mode AKTIV — banner ko\'rinmoqda', 'color: orange; font-weight: bold;');
-        @endif
+        console.group('%c LMS DEBUG: Student Layout', 'color: #3498db; font-weight: bold;');
+        console.log('URL:', window.location.href);
         console.groupEnd();
     </script>
+    @endif
 </body>
 </html>

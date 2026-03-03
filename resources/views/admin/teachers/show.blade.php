@@ -85,7 +85,7 @@
                                     @endforeach
                                 @endif
                                 @if($teacher->hasRole('fan_masuli') && $teacher->relationLoaded('responsibleSubjects'))
-                                    @foreach($teacher->responsibleSubjects as $subject)
+                                    @foreach($teacher->responsibleSubjects->take(5) as $subject)
                                         <span class="badge badge-subject">
                                             <svg style="width: 12px; height: 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
@@ -93,6 +93,21 @@
                                             {{ $subject->subject_name }}
                                         </span>
                                     @endforeach
+                                    @if($teacher->responsibleSubjects->count() > 5)
+                                        <span class="badge badge-subject" style="cursor: pointer; background: #dbeafe; color: #1d4ed8;" onclick="this.style.display='none'; document.getElementById('header-hidden-subjects').style.display='contents';">
+                                            +{{ $teacher->responsibleSubjects->count() - 5 }} ta
+                                        </span>
+                                        <span id="header-hidden-subjects" style="display: none;">
+                                            @foreach($teacher->responsibleSubjects->slice(5) as $subject)
+                                                <span class="badge badge-subject">
+                                                    <svg style="width: 12px; height: 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                                                    </svg>
+                                                    {{ $subject->subject_name }}
+                                                </span>
+                                            @endforeach
+                                        </span>
+                                    @endif
                                 @endif
                             </div>
                         </div>
@@ -156,9 +171,10 @@
                         @endif
                         @if($teacher->hasRole('fan_masuli') && $teacher->relationLoaded('responsibleSubjects') && $teacher->responsibleSubjects->count())
                             <div class="info-row">
-                                <span class="info-label">Mas'ul fan{{ $teacher->responsibleSubjects->count() > 1 ? 'lar' : '' }}</span>
+                                <span class="info-label">Mas'ul fan{{ $teacher->responsibleSubjects->count() > 1 ? 'lar' : '' }} ({{ $teacher->responsibleSubjects->count() }})</span>
                                 <span class="info-value" style="color: #92400e;">
-                                    {{ $teacher->responsibleSubjects->pluck('subject_name')->join(', ') }}
+                                    {{ $teacher->responsibleSubjects->take(5)->pluck('subject_name')->join(', ') }}@if($teacher->responsibleSubjects->count() > 5)<span id="info-hidden-subjects" style="display: none;">, {{ $teacher->responsibleSubjects->slice(5)->pluck('subject_name')->join(', ') }}</span>
+                                    <a href="javascript:void(0)" onclick="document.getElementById('info-hidden-subjects').style.display='inline'; this.style.display='none';" style="color: #1d4ed8; font-size: 11px; margin-left: 4px; white-space: nowrap;">+{{ $teacher->responsibleSubjects->count() - 5 }} ta</a>@endif
                                 </span>
                             </div>
                         @endif
@@ -418,8 +434,9 @@
                                     <label style="font-size: 11px; font-weight: 600; color: #92400e; display: block; margin-bottom: 6px;">Fan mas'uli roli uchun fanlar:</label>
 
                                     <div id="selected-subjects" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-                                        @foreach(($teacher->relationLoaded('responsibleSubjects') ? $teacher->responsibleSubjects : []) as $subject)
-                                            <div class="selected-subject-item" data-id="{{ $subject->id }}">
+                                        @php $subjectsList = $teacher->relationLoaded('responsibleSubjects') ? $teacher->responsibleSubjects : collect(); @endphp
+                                        @foreach($subjectsList as $index => $subject)
+                                            <div class="selected-subject-item {{ $index >= 5 ? 'subject-hidden-item' : '' }}" data-id="{{ $subject->id }}" {!! $index >= 5 ? 'style="display: none;"' : '' !!}>
                                                 <input type="hidden" name="responsible_subjects[]" value="{{ $subject->id }}">
                                                 <div style="flex: 1; min-width: 0;">
                                                     <span style="font-weight: 600; font-size: 12px; color: #1e293b;">{{ $subject->subject_name }}</span>
@@ -432,6 +449,11 @@
                                             </div>
                                         @endforeach
                                     </div>
+                                    @if($subjectsList->count() > 5)
+                                        <button type="button" id="toggle-subjects-btn" onclick="toggleSelectedSubjects()" style="width: 100%; padding: 5px; border: 1px dashed #d97706; border-radius: 6px; background: transparent; color: #92400e; font-size: 11px; font-weight: 600; cursor: pointer; margin-bottom: 8px;">
+                                            Barchasini ko'rsatish ({{ $subjectsList->count() }} ta)
+                                        </button>
+                                    @endif
 
                                     <button type="button" onclick="openSubjectModal()" class="btn-add-subject">
                                         <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -471,6 +493,14 @@
                     <option value="">Barcha kurslar</option>
                 </select>
             </div>
+            <div style="padding: 0 16px; padding-top: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick="toggleDeptFilter()">
+                    <div id="dept-filter-toggle" style="width: 36px; height: 20px; border-radius: 10px; background: #3b82f6; position: relative; transition: background 0.2s; flex-shrink: 0;">
+                        <div id="dept-filter-thumb" style="width: 16px; height: 16px; border-radius: 50%; background: #fff; position: absolute; top: 2px; left: 18px; transition: left 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></div>
+                    </div>
+                    <span id="dept-filter-label" style="font-size: 11px; font-weight: 600; color: #64748b;">Kafedra filtri: <span style="color: #3b82f6;">yoqilgan</span></span>
+                </label>
+            </div>
             <div class="subject-modal-search">
                 <svg style="width: 16px; height: 16px; color: #94a3b8; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -479,6 +509,15 @@
             </div>
             <div id="subject-search-results" class="subject-search-results">
                 <div class="subject-search-empty">Fan nomini kiriting va qidiring</div>
+            </div>
+            <div class="subject-modal-footer">
+                <span id="subject-selected-count" style="font-size: 12px; color: #64748b;">0 ta fan tanlangan</span>
+                <button type="button" id="subject-save-btn" onclick="saveSelectedSubjects()" class="subject-save-btn" disabled>
+                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Saqlash
+                </button>
             </div>
         </div>
     </div>
@@ -595,7 +634,26 @@
             });
         }
 
+        var subjectsExpanded = false;
+        function toggleSelectedSubjects() {
+            subjectsExpanded = !subjectsExpanded;
+            var items = document.querySelectorAll('#selected-subjects .subject-hidden-item');
+            var btn = document.getElementById('toggle-subjects-btn');
+            items.forEach(function(item) {
+                item.style.display = subjectsExpanded ? '' : 'none';
+            });
+            if (btn) {
+                var total = document.querySelectorAll('#selected-subjects .selected-subject-item').length;
+                btn.textContent = subjectsExpanded ? 'Yashirish' : 'Barchasini ko\u0027rsatish (' + total + ' ta)';
+            }
+        }
+
+        // Vaqtincha tanlangan fanlar (modal ichida)
+        var pendingSubjects = [];
+
         function openSubjectModal() {
+            pendingSubjects = [];
+            updateSelectedCount();
             document.getElementById('subject-modal').style.display = 'flex';
             document.getElementById('subject-search-input').value = '';
             document.getElementById('subject-course-filter').value = '';
@@ -608,6 +666,121 @@
 
         function closeSubjectModal() {
             document.getElementById('subject-modal').style.display = 'none';
+            pendingSubjects = [];
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            var count = pendingSubjects.length;
+            var countEl = document.getElementById('subject-selected-count');
+            var btn = document.getElementById('subject-save-btn');
+            countEl.textContent = count + ' ta fan tanlangan';
+            btn.disabled = count === 0;
+        }
+
+        function toggleSubjectCheck(id, name, code, semester) {
+            var idx = -1;
+            for (var i = 0; i < pendingSubjects.length; i++) {
+                if (pendingSubjects[i].id === id) { idx = i; break; }
+            }
+
+            if (idx >= 0) {
+                pendingSubjects.splice(idx, 1);
+            } else {
+                pendingSubjects.push({ id: id, name: name, code: code, semester: semester });
+            }
+
+            // Checkbox ko'rinishini yangilash
+            var checkbox = document.getElementById('subject-check-' + id);
+            if (checkbox) {
+                checkbox.checked = idx < 0;
+            }
+            var item = document.getElementById('subject-item-' + id);
+            if (item) {
+                if (idx < 0) {
+                    item.classList.add('subject-result-checked');
+                } else {
+                    item.classList.remove('subject-result-checked');
+                }
+            }
+            updateSelectedCount();
+        }
+
+        function isPendingSubject(id) {
+            for (var i = 0; i < pendingSubjects.length; i++) {
+                if (pendingSubjects[i].id === id) return true;
+            }
+            return false;
+        }
+
+        function saveSelectedSubjects() {
+            var container = document.getElementById('selected-subjects');
+            pendingSubjects.forEach(function(subject) {
+                if (isSubjectSelected(subject.id)) return;
+
+                var allItems = container.querySelectorAll('.selected-subject-item');
+                var visibleCount = 0;
+                allItems.forEach(function(item) { if (item.style.display !== 'none') visibleCount++; });
+
+                var div = document.createElement('div');
+                var shouldHide = !subjectsExpanded && allItems.length >= 5;
+                div.className = 'selected-subject-item' + (allItems.length >= 5 ? ' subject-hidden-item' : '');
+                div.setAttribute('data-id', subject.id);
+                if (shouldHide) div.style.display = 'none';
+                div.innerHTML =
+                    '<input type="hidden" name="responsible_subjects[]" value="' + subject.id + '">' +
+                    '<div style="flex: 1; min-width: 0;">' +
+                    '<span style="font-weight: 600; font-size: 12px; color: #1e293b;">' + escapeHtml(subject.name) + '</span>' +
+                    (subject.code ? '<span style="font-size: 10px; color: #64748b; margin-left: 4px;">' + escapeHtml(subject.code) + '</span>' : '') +
+                    (subject.semester ? '<span style="font-size: 10px; color: #64748b;"> | ' + escapeHtml(subject.semester) + '</span>' : '') +
+                    '</div>' +
+                    '<button type="button" onclick="removeSubject(this)" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: #fee2e2; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1;">&times;</button>';
+                container.appendChild(div);
+            });
+
+            pendingSubjects = [];
+            document.getElementById('subject-modal').style.display = 'none';
+            updateSelectedCount();
+            updateToggleButton();
+        }
+
+        function updateToggleButton() {
+            var total = document.querySelectorAll('#selected-subjects .selected-subject-item').length;
+            var btn = document.getElementById('toggle-subjects-btn');
+            if (total > 5) {
+                if (!btn) {
+                    btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.id = 'toggle-subjects-btn';
+                    btn.onclick = toggleSelectedSubjects;
+                    btn.style.cssText = 'width: 100%; padding: 5px; border: 1px dashed #d97706; border-radius: 6px; background: transparent; color: #92400e; font-size: 11px; font-weight: 600; cursor: pointer; margin-bottom: 8px;';
+                    var container = document.getElementById('selected-subjects');
+                    container.parentNode.insertBefore(btn, container.nextSibling);
+                }
+                btn.textContent = subjectsExpanded ? 'Yashirish' : 'Barchasini ko\u0027rsatish (' + total + ' ta)';
+                btn.style.display = '';
+            } else if (btn) {
+                btn.style.display = 'none';
+            }
+        }
+
+        var deptFilterEnabled = true;
+
+        function toggleDeptFilter() {
+            deptFilterEnabled = !deptFilterEnabled;
+            var toggle = document.getElementById('dept-filter-toggle');
+            var thumb = document.getElementById('dept-filter-thumb');
+            var label = document.getElementById('dept-filter-label');
+            if (deptFilterEnabled) {
+                toggle.style.background = '#3b82f6';
+                thumb.style.left = '18px';
+                label.innerHTML = 'Kafedra filtri: <span style="color: #3b82f6;">yoqilgan</span>';
+            } else {
+                toggle.style.background = '#cbd5e1';
+                thumb.style.left = '2px';
+                label.innerHTML = 'Kafedra filtri: <span style="color: #94a3b8;">o\'chirilgan</span>';
+            }
+            searchSubjects();
         }
 
         function searchSubjects() {
@@ -621,6 +794,9 @@
                 var url = '{{ route("admin.teachers.search-subjects") }}?q=' + encodeURIComponent(query) + '&teacher_id={{ $teacher->id }}';
                 if (levelCode) {
                     url += '&level_code=' + encodeURIComponent(levelCode);
+                }
+                if (!deptFilterEnabled) {
+                    url += '&filter_dept=0';
                 }
                 fetch(url, {
                     headers: {
@@ -639,20 +815,40 @@
 
                     var html = '';
                     subjects.forEach(function(subject) {
-                        var isAlreadySelected = isSubjectSelected(subject.id);
-                        html += '<div class="subject-result-item ' + (isAlreadySelected ? 'subject-result-disabled' : '') + '" ' +
-                            (isAlreadySelected ? '' : 'onclick="selectSubject(' + subject.id + ', \'' + escapeHtml(subject.subject_name) + '\', \'' + escapeHtml(subject.subject_code || '') + '\', \'' + escapeHtml(subject.semester_name || '') + '\')"') + '>' +
-                            '<div style="flex: 1; min-width: 0;">' +
-                            '<div style="font-weight: 600; font-size: 13px; color: #1e293b;">' + escapeHtml(subject.subject_name) + '</div>' +
-                            '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">' +
-                            (subject.subject_code ? 'Kod: ' + escapeHtml(subject.subject_code) : '') +
-                            (subject.semester_name ? ' | ' + escapeHtml(subject.semester_name) : '') +
-                            (subject.department_name ? ' | ' + escapeHtml(subject.department_name) : '') +
-                            '</div>' +
-                            '</div>' +
-                            (isAlreadySelected ? '<span style="font-size: 11px; color: #059669; font-weight: 600;">Tanlangan</span>' :
-                            '<svg style="width: 16px; height: 16px; color: #3b82f6; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>') +
-                            '</div>';
+                        var isAlreadyAdded = isSubjectSelected(subject.id) || subject.is_assigned;
+                        var isPending = isPendingSubject(subject.id);
+
+                        var extraInfo = '';
+                        if (subject.specialty_name) extraInfo += escapeHtml(subject.specialty_name);
+                        if (subject.education_type_name) extraInfo += (extraInfo ? ' | ' : '') + escapeHtml(subject.education_type_name);
+                        if (subject.level_name) extraInfo += (extraInfo ? ' | ' : '') + escapeHtml(subject.level_name);
+
+                        if (isAlreadyAdded) {
+                            html += '<div class="subject-result-item subject-result-disabled">' +
+                                '<div style="flex: 1; min-width: 0;">' +
+                                '<div style="font-weight: 600; font-size: 13px; color: #1e293b;">' + escapeHtml(subject.subject_name) + '</div>' +
+                                '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">' +
+                                (subject.subject_code ? 'Kod: ' + escapeHtml(subject.subject_code) : '') +
+                                (subject.semester_name ? ' | ' + escapeHtml(subject.semester_name) : '') +
+                                '</div>' +
+                                (extraInfo ? '<div style="font-size: 10px; color: #94a3b8; margin-top: 1px;">' + extraInfo + '</div>' : '') +
+                                '</div>' +
+                                '<span style="font-size: 11px; color: #059669; font-weight: 600;">Qo\'shilgan</span>' +
+                                '</div>';
+                        } else {
+                            html += '<div id="subject-item-' + subject.id + '" class="subject-result-item' + (isPending ? ' subject-result-checked' : '') + '" ' +
+                                'onclick="toggleSubjectCheck(' + subject.id + ', \'' + escapeJsString(subject.subject_name) + '\', \'' + escapeJsString(subject.subject_code || '') + '\', \'' + escapeJsString(subject.semester_name || '') + '\')">' +
+                                '<input type="checkbox" id="subject-check-' + subject.id + '" ' + (isPending ? 'checked' : '') + ' class="subject-checkbox" onclick="event.stopPropagation(); toggleSubjectCheck(' + subject.id + ', \'' + escapeJsString(subject.subject_name) + '\', \'' + escapeJsString(subject.subject_code || '') + '\', \'' + escapeJsString(subject.semester_name || '') + '\')">' +
+                                '<div style="flex: 1; min-width: 0;">' +
+                                '<div style="font-weight: 600; font-size: 13px; color: #1e293b;">' + escapeHtml(subject.subject_name) + '</div>' +
+                                '<div style="font-size: 11px; color: #64748b; margin-top: 2px;">' +
+                                (subject.subject_code ? 'Kod: ' + escapeHtml(subject.subject_code) : '') +
+                                (subject.semester_name ? ' | ' + escapeHtml(subject.semester_name) : '') +
+                                '</div>' +
+                                (extraInfo ? '<div style="font-size: 10px; color: #94a3b8; margin-top: 1px;">' + extraInfo + '</div>' : '') +
+                                '</div>' +
+                                '</div>';
+                        }
                     });
 
                     resultsDiv.innerHTML = html;
@@ -668,24 +864,8 @@
             return !!document.querySelector('#selected-subjects .selected-subject-item[data-id="' + id + '"]');
         }
 
-        function selectSubject(id, name, code, semester) {
-            if (isSubjectSelected(id)) return;
-
-            var container = document.getElementById('selected-subjects');
-            var div = document.createElement('div');
-            div.className = 'selected-subject-item';
-            div.setAttribute('data-id', id);
-            div.innerHTML =
-                '<input type="hidden" name="responsible_subjects[]" value="' + id + '">' +
-                '<div style="flex: 1; min-width: 0;">' +
-                '<span style="font-weight: 600; font-size: 12px; color: #1e293b;">' + escapeHtml(name) + '</span>' +
-                (code ? '<span style="font-size: 10px; color: #64748b; margin-left: 4px;">' + escapeHtml(code) + '</span>' : '') +
-                (semester ? '<span style="font-size: 10px; color: #64748b;"> | ' + escapeHtml(semester) + '</span>' : '') +
-                '</div>' +
-                '<button type="button" onclick="removeSubject(this)" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: #fee2e2; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1;">&times;</button>';
-            container.appendChild(div);
-
-            closeSubjectModal();
+        function escapeJsString(str) {
+            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
 
         function removeSubject(btn) {
@@ -1224,6 +1404,21 @@
             background: #f0f9ff;
             border-color: #bae6fd;
         }
+        .subject-result-checked {
+            background: #eff6ff;
+            border-color: #93c5fd;
+        }
+        .subject-result-checked:hover {
+            background: #dbeafe;
+            border-color: #60a5fa;
+        }
+        .subject-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: #3b82f6;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
         .subject-result-disabled {
             opacity: 0.5;
             cursor: default;
@@ -1231,6 +1426,35 @@
         .subject-result-disabled:hover {
             background: transparent;
             border-color: transparent;
+        }
+        .subject-modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-top: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        .subject-save-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: none;
+            background: #3b82f6;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .subject-save-btn:hover:not(:disabled) {
+            background: #2563eb;
+        }
+        .subject-save-btn:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
         }
     </style>
 </x-app-layout>

@@ -107,11 +107,18 @@ class ImportGrades extends Command
         $this->info('Starting LIVE import...');
         Log::info('[LiveImport] Starting live import at ' . Carbon::now());
 
+        // Crash detection: oldingi import tugallanmaganligini aniqlash
+        $previousCrash = \Illuminate\Support\Facades\Cache::get('live_import_running');
+        if ($previousCrash) {
+            Log::warning("[LiveImport] Oldingi import crash bo'lgan! Boshlangan: {$previousCrash}");
+            $this->warn("Oldingi import crash aniqlandi (boshlangan: {$previousCrash})");
+        }
+        // "Ishlayapti" bayrog'ini o'rnatish — tugaganda o'chiriladi
+        \Illuminate\Support\Facades\Cache::put('live_import_running', Carbon::now()->toDateTimeString(), now()->addMinutes(30));
+
         $today = Carbon::today();
 
         // Agar bugungi BARCHA baholar yakunlangan bo'lsa, import qilmaslik
-        // Faqat bitta is_final=true bor deb butun kunni o'tkazmaslik —
-        // BARCHA yozuvlar is_final=true bo'lgandagina o'tkazish
         $hasUnfinalized = StudentGrade::where('lesson_date', '>=', $today->copy()->startOfDay())
             ->where('lesson_date', '<=', $today->copy()->endOfDay())
             ->where('is_final', false)
@@ -124,6 +131,9 @@ class ImportGrades extends Command
         if ($hasAnyGrades && !$hasUnfinalized) {
             $this->info("Live import: bugungi BARCHA baholar yakunlangan (is_final=true), o'tkazib yuborildi.");
             Log::info("[LiveImport] Today's ALL grades finalized, skipping.");
+            \Illuminate\Support\Facades\Cache::forget('live_import_running');
+            // Cache ni yangilash — hisobot komandlari "yaqinda import bo'lgan" deb bilishi uchun
+            \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), Carbon::today()->endOfDay());
             return;
         }
 
@@ -133,40 +143,40 @@ class ImportGrades extends Command
         $from = Carbon::parse($today->toDateString(), 'UTC')->startOfDay()->timestamp;
         $to = Carbon::parse($today->toDateString(), 'UTC')->endOfDay()->timestamp;
 
-        // 1-qadam: Baholarni API dan tortib olish (xotiraga)
+        // 1-qadam: Baholarni streaming usulida import qilish (sahifama-sahifa)
+        // Eski usul: fetchAllPages barcha sahifalarni xotiraga yig'ar edi → OOM crash
+        // Yangi usul: har sahifani darhol bazaga yozadi, xotira tejaladi
         if ($reporter) {
-            $reporter->setStepContext('baholar API...');
+            $reporter->setStepContext('baholar API (streaming)...');
         }
-        $gradeItems = $this->fetchAllPages('student-grade-list', $from, $to, $today);
-        $gradeCount = 0;
         $gradeError = null;
+        $gradeCount = 0;
 
-        if ($gradeItems === false) {
-            $gradeError = $this->lastFetchError ?: 'noma\'lum xato';
-            $this->error("Grade API failed — eski baholar saqlanib qoldi. ({$gradeError})");
-            Log::error("[LiveImport] Grade API failed: {$gradeError}");
-            if ($reporter) {
-                $reporter->failStep($gradeError);
-            }
-        } else {
-            try {
-                if ($reporter) {
-                    $reporter->setStepContext('bazaga yozilmoqda ' . count($gradeItems) . ' ta yozuv...');
-                }
-                $gradeCount = count($gradeItems);
-                $this->applyGrades($gradeItems, $today, false);
-                if ($reporter) {
-                    $reporter->completeStep();
-                }
-            } catch (\Throwable $e) {
-                $gradeError = substr($e->getMessage(), 0, 100);
-                $this->error("applyGrades EXCEPTION: {$e->getMessage()}");
-                Log::error("[LiveImport] applyGrades exception: {$e->getMessage()}", [
-                    'trace' => $e->getTraceAsString(),
-                ]);
+        try {
+            $result = $this->streamLiveGrades($from, $to, $today);
+            $gradeError = $result['error'];
+            $gradeCount = $result['count'];
+
+            if ($gradeError) {
+                $this->error("Grade API failed — eski baholar saqlanib qoldi. ({$gradeError})");
+                Log::error("[LiveImport] Grade API failed: {$gradeError}");
                 if ($reporter) {
                     $reporter->failStep($gradeError);
                 }
+            } else {
+                if ($reporter) {
+                    $reporter->setStepContext("{$gradeCount} ta baho yozildi");
+                    $reporter->completeStep();
+                }
+            }
+        } catch (\Throwable $e) {
+            $gradeError = substr($e->getMessage(), 0, 100);
+            $this->error("streamLiveGrades EXCEPTION: {$e->getMessage()}");
+            Log::error("[LiveImport] streamLiveGrades exception: {$e->getMessage()}", [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            if ($reporter) {
+                $reporter->failStep($gradeError);
             }
         }
 
@@ -200,7 +210,19 @@ class ImportGrades extends Command
             ->count();
 
         $elapsed = round((microtime(true) - $liveStartTime) / 60, 1);
-        $this->sendDailyLiveReport($gradeCount, $nbCount, $gradeError, $attendanceError, $elapsed);
+
+        // Cache ni yozish — sendDailyLiveReport crash qilsa ham data muvaffaqiyati saqlansin
+        // TTL: kun oxirigacha
+        if (!$gradeError && !$attendanceError) {
+            \Illuminate\Support\Facades\Cache::put('live_import_last_success', Carbon::now()->toDateTimeString(), Carbon::today()->endOfDay());
+        }
+
+        if (!$this->option('silent')) {
+            $this->sendDailyLiveReport($gradeCount, $nbCount, $gradeError, $attendanceError, $elapsed);
+        }
+
+        // Crash detection bayrog'ini o'chirish — import muvaffaqiyatli tugadi
+        \Illuminate\Support\Facades\Cache::forget('live_import_running');
         Log::info('[LiveImport] Completed at ' . Carbon::now());
     }
 
@@ -211,12 +233,55 @@ class ImportGrades extends Command
     // =========================================================================
     private function handleFinalImport()
     {
+        // Final import ko'p xotira ishlatadi (7 kunlik API ma'lumotlari) — OOM oldini olish
+        $currentLimit = trim(ini_get('memory_limit'));
+        if ($currentLimit !== '-1') {
+            ini_set('memory_limit', '512M');
+        }
+
         // Reporter faqat mustaqil chaqirilganda boshlanadi,
         // SendAttendanceFinalDailyReport dan chaqirilganda reporter allaqachon boshqarilmoqda
         $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
 
         $this->info('Starting FINAL import...');
         Log::info('[FinalImport] Starting at ' . Carbon::now());
+
+        // Crash detection: agar process o'lib qolsa (OOM, fatal error),
+        // Telegram ga xabar yuboriladi
+        $crashDetected = true; // sendProgressDone() dan keyin false bo'ladi
+        $shutdownChatId = config('services.telegram.chat_id');
+        $shutdownMsgId = &$this->telegramProgressMsgId;
+        $shutdownDayStatuses = &$this->dayStatuses;
+        $shutdownStartTime = &$this->importStartTime;
+        register_shutdown_function(function () use (&$crashDetected, $shutdownChatId, &$shutdownMsgId, &$shutdownDayStatuses, &$shutdownStartTime) {
+            if (!$crashDetected) return;
+
+            $error = error_get_last();
+            $errorMsg = $error ? "{$error['type']}: {$error['message']}" : 'process killed';
+            Log::critical("[FinalImport] CRASH detected in shutdown handler: {$errorMsg}");
+
+            if (!$shutdownMsgId || !$shutdownChatId) return;
+
+            try {
+                $elapsed = $shutdownStartTime ? round((microtime(true) - $shutdownStartTime) / 60, 1) : 0;
+                $lines = [];
+                foreach ($shutdownDayStatuses as $d => $s) {
+                    $label = (strlen($d) === 10 && ($d[4] ?? '') === '-') ? substr($d, 5) : $d;
+                    $lines[] = "{$label} {$s}";
+                }
+
+                $msg = "💀 FINAL import CRASH\n"
+                     . Carbon::now()->format('d.m.Y H:i') . "\n\n"
+                     . implode("\n", $lines) . "\n\n"
+                     . "❌ Process o'lib qoldi\n"
+                     . "⏱ {$elapsed} daq\n\n"
+                     . "Sabab: " . substr($errorMsg, 0, 200);
+
+                app(TelegramService::class)->editMessage($shutdownChatId, $shutdownMsgId, $msg);
+            } catch (\Throwable $e) {
+                // Shutdown handler ichida exception tashlash xavfli
+            }
+        });
 
         // Oxirgi 7 kunni tekshirish (bugundan tashqari)
         // LIVE importga bog'liq emas — har bir kunni mustaqil tekshiramiz
@@ -300,24 +365,30 @@ class ImportGrades extends Command
                     $this->info("  {$dateStr} — dublikat tozalandi: {$cleaned} o'chirildi, {$upgraded} ta lokal baho yakunlandi.");
                     Log::info("[FinalImport] {$dateStr} — cleaned {$cleaned} duplicate is_final=false, upgraded {$upgraded} unique local records.");
 
-                    // To'liq import bo'lgan bo'lsa (ko'p yozuv), API dan qayta tortish shart emas
-                    if ($finalizedCount >= 500) {
+                    // Oxirgi 3 kun DOIM API dan tortiladi (to'liq ishonch uchun)
+                    // Eski kunlar (4+ kun) uchun — yetarli yozuv bo'lsa skip
+                    // Carbon 3: diffInDays() manfiy qaytaradi, shuning uchun abs()
+                    $daysAgo = abs(Carbon::today()->diffInDays($date));
+                    if ($finalizedCount >= 500 && $daysAgo >= 3) {
                         $this->importDayAttendance($dateStr, $date, true);
                         $this->updateDayProgress($dateStr, '✅', "tozalandi ({$cleaned})", $dayNum, $originalTotal);
                         $successDays++;
                         continue;
                     }
-                    // Kam yozuv (journal sync dan) — API dan to'ldirish kerak
-                    $this->info("  {$dateStr} — qisman yakunlangan ({$finalizedCount} ta yozuv), API dan to'ldirish...");
+                    // Kam yozuv yoki yaqin sana — API dan to'ldirish kerak
+                    $this->info("  {$dateStr} — qisman yakunlangan ({$finalizedCount} ta yozuv, {$daysAgo} kun oldin), API dan to'ldirish...");
                 }
 
-                // ─── Stsenariy B: Faqat is_final=true (journal sync dan) ───
-                // Kam yozuv — to'liq import bo'lmagan, API dan tortish kerak
-                if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500) {
+                // ─── Stsenariy B: Faqat is_final=true mavjud ───
+                // Oxirgi 3 kun DOIM API dan qayta tortiladi (race condition yoki API xato bo'lgan bo'lishi mumkin)
+                // Eski kunlar (4+ kun) — yetarli yozuv bo'lsa skip
+                // Carbon 3: diffInDays() manfiy qaytaradi, shuning uchun abs()
+                $daysAgo = abs(Carbon::today()->diffInDays($date));
+                if (!$hasUnfinalizedForDate && $finalizedCount > 0 && $finalizedCount >= 500 && $daysAgo >= 3) {
                     $this->importDayAttendance($dateStr, $date, true);
-                    $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv), o'tkazildi.");
+                    $this->info("  {$dateStr} — to'liq yakunlangan ({$finalizedCount} ta yozuv, {$daysAgo} kun oldin), o'tkazildi.");
                     $this->updateDayProgress($dateStr, '✅', "to'liq ({$finalizedCount})", $dayNum, $originalTotal);
-                    $totalDays--;
+                    $successDays++;
                     continue;
                 }
 
@@ -375,7 +446,9 @@ class ImportGrades extends Command
                 if ($reporter) {
                     $reporter->setStepContext("{$dayNum}/{$totalDays} kun ({$dateStr}), bazaga yozilmoqda " . count($gradeItems) . " ta yozuv...");
                 }
+                $gradeCount = count($gradeItems);
                 $this->applyGrades($gradeItems, $date, true);
+                unset($gradeItems); // Xotirani bo'shatish — keyingi kun uchun joy
 
                 // Attendance
                 if ($reporter) {
@@ -383,7 +456,7 @@ class ImportGrades extends Command
                 }
                 $this->importDayAttendance($dateStr, $date, true);
 
-                $this->updateDayProgress($dateStr, '✅', count($gradeItems) . " ta baho", $dayNum, $originalTotal);
+                $this->updateDayProgress($dateStr, '✅', "{$gradeCount} ta baho", $dayNum, $originalTotal);
                 $successDays++;
                 $this->info("  {$date->toDateString()} — yakunlandi ({$successDays}/{$totalDays})");
             } catch (\Throwable $e) {
@@ -469,6 +542,7 @@ class ImportGrades extends Command
         ];
 
         $this->sendProgressDone('final', $successDays, $originalTotal, $failedDays);
+        $crashDetected = false; // Normal tugatish — shutdown handler ishlamasligi kerak
         $this->sendTelegramReport();
         Log::info("[FinalImport] Completed at " . Carbon::now() . ": {$successDays}/{$totalDays} days finalized.");
 
@@ -500,7 +574,7 @@ class ImportGrades extends Command
         }
 
         $period = CarbonPeriod::create($startDate, $endDate);
-        $totalDays = $startDate->diffInDays($endDate) + 1;
+        $totalDays = abs($startDate->diffInDays($endDate)) + 1;
 
         $this->info("BACKFILL: {$startDate->toDateString()} → {$endDate->toDateString()} ({$totalDays} kun)");
         Log::info("[Backfill] Starting from {$startDate->toDateString()} to {$endDate->toDateString()}");
@@ -584,7 +658,7 @@ class ImportGrades extends Command
         $allItems = [];
         $currentPage = 1;
         $totalPages = 1;
-        $maxRetries = 3;
+        $maxRetries = 5;
         $this->lastFetchError = '';
         $skippedByFilter = 0;
 
@@ -602,7 +676,7 @@ class ImportGrades extends Command
 
             while ($retryCount < $maxRetries && !$pageSuccess) {
                 try {
-                    $response = Http::timeout(60)->withoutVerifying()->withToken($this->token)
+                    $response = Http::connectTimeout(30)->timeout(60)->withoutVerifying()->withToken($this->token)
                         ->get("{$this->baseUrl}/v1/data/{$endpoint}", $queryParams);
 
                     if ($response->successful()) {
@@ -632,7 +706,10 @@ class ImportGrades extends Command
                             $skippedByFilter += $beforeCount - count($data);
                         }
 
-                        $allItems = array_merge($allItems, $data);
+                        // array_merge o'rniga push — xotira tejash (har merge da yangi massiv yaratilmaydi)
+                        foreach ($data as $item) {
+                            $allItems[] = $item;
+                        }
                         $totalPages = $response->json()['data']['pagination']['pageCount'] ?? $totalPages;
                         $this->info("Fetched {$endpoint} page {$currentPage}/{$totalPages}");
                         if ($reporter) {
@@ -647,7 +724,9 @@ class ImportGrades extends Command
                         $body = substr($response->body(), 0, 200);
                         Log::error("[Fetch] {$endpoint} page {$currentPage} failed. Status: {$response->status()}, Body: {$body}");
                         if ($retryCount < $maxRetries) {
-                            sleep(5);
+                            $backoff = min(5 * pow(2, $retryCount - 1), 60);
+                            $this->info("  Retry #{$retryCount}/{$maxRetries} — {$backoff}s kutilmoqda...");
+                            sleep($backoff);
                         }
                     }
                 } catch (\Exception $e) {
@@ -655,7 +734,9 @@ class ImportGrades extends Command
                     $lastError = $e->getMessage();
                     Log::error("[Fetch] {$endpoint} page {$currentPage} exception: " . $e->getMessage());
                     if ($retryCount < $maxRetries) {
-                        sleep(5);
+                        $backoff = min(5 * pow(2, $retryCount - 1), 60);
+                        $this->info("  Retry #{$retryCount}/{$maxRetries} — {$backoff}s kutilmoqda...");
+                        sleep($backoff);
                     }
                 }
             }
@@ -677,6 +758,363 @@ class ImportGrades extends Command
 
         $this->info("Total {$endpoint} items fetched: " . count($allItems));
         return $allItems;
+    }
+
+    // =========================================================================
+    // Streaming live grade import — sahifama-sahifa tortib, darhol bazaga yozish
+    // fetchAllPages dan farqi: barcha sahifalarni xotiraga yig'masdan, har birini
+    // darhol process qiladi. Bu OOM crash oldini oladi.
+    // =========================================================================
+    private function streamLiveGrades(int $from, int $to, Carbon $date): array
+    {
+        $reporter = app()->bound(ImportProgressReporter::class) ? app(ImportProgressReporter::class) : null;
+        $currentPage = 1;
+        $totalPages = 1;
+        $maxRetries = 5;
+        $this->lastFetchError = '';
+        $totalGradeCount = 0;
+        $dateStart = $date->copy()->startOfDay();
+        $dateEnd = $date->copy()->endOfDay();
+
+        // 1-QADAM: Retake backup — tranzaksiyadan OLDIN
+        $retakeBackup = StudentGrade::where('lesson_date', '>=', $dateStart)
+            ->where('lesson_date', '<=', $dateEnd)
+            ->whereNotNull('retake_grade')
+            ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code',
+                    'retake_grade', 'retake_graded_at', 'retake_by', 'retake_file_path', 'graded_by_user_id'])
+            ->keyBy(function ($item) {
+                return $item->student_hemis_id . '_' . $item->subject_id . '_' .
+                       $item->lesson_date . '_' . $item->lesson_pair_code;
+            });
+
+        if ($retakeBackup->isNotEmpty()) {
+            $this->info("Backed up {$retakeBackup->count()} retake grades");
+        }
+
+        // 1b-QADAM: Aktiv yozuv ID larni saqlash (orphan restore uchun)
+        $activeIdsBeforeDelete = StudentGrade::where('lesson_date', '>=', $dateStart)
+            ->where('lesson_date', '<=', $dateEnd)
+            ->pluck('id')
+            ->toArray();
+
+        // 2-QADAM: Birinchi sahifani olish — totalCount tekshirish
+        $firstPageResult = $this->fetchSinglePage('student-grade-list', $from, $to, 1, $maxRetries);
+        if ($firstPageResult === false) {
+            return ['error' => $this->lastFetchError ?: 'noma\'lum xato', 'count' => 0];
+        }
+
+        $totalPages = $firstPageResult['totalPages'];
+        $totalCount = $firstPageResult['totalCount'];
+
+        $this->info("[StreamLive] totalCount={$totalCount}, totalPages={$totalPages}");
+        Log::info("[StreamLive] Starting: totalCount={$totalCount}, totalPages={$totalPages}");
+
+        if ($totalCount === 0) {
+            $this->warn("[StreamLive] API 0 ta baho qaytardi, mavjud baholar saqlanadi.");
+            Log::warning("[StreamLive] API returned 0 grades, preserving existing data.");
+            return ['error' => null, 'count' => 0];
+        }
+
+        // 3-QADAM: is_final=false yozuvlarni soft-delete (bir marta)
+        $softDeletedCount = $this->retryOnLockTimeout(function () use ($dateStart, $dateEnd) {
+            return DB::transaction(function () use ($dateStart, $dateEnd) {
+                return StudentGrade::where('lesson_date', '>=', $dateStart)
+                    ->where('lesson_date', '<=', $dateEnd)
+                    ->where('is_final', false)
+                    ->delete();
+            });
+        });
+        $this->info("Soft deleted {$softDeletedCount} old live grades");
+
+        // 4-QADAM: Birinchi sahifani process qilish
+        $pageGradeCount = $this->processGradePage($firstPageResult['items'], $date);
+        $totalGradeCount += $pageGradeCount;
+        unset($firstPageResult);
+
+        if ($reporter) {
+            $reporter->updateProgress(1, $totalPages);
+        }
+
+        // 5-QADAM: Qolgan sahifalarni birma-bir tortib process qilish
+        $currentPage = 2;
+        while ($currentPage <= $totalPages) {
+            sleep(2);
+            $pageResult = $this->fetchSinglePage('student-grade-list', $from, $to, $currentPage, $maxRetries);
+
+            if ($pageResult === false) {
+                $this->error("[StreamLive] Page {$currentPage} failed — davom etib bo'lmaydi");
+                Log::error("[StreamLive] Page {$currentPage} failed, aborting remaining pages");
+                break;
+            }
+
+            $pageGradeCount = $this->processGradePage($pageResult['items'], $date);
+            $totalGradeCount += $pageGradeCount;
+            unset($pageResult);
+
+            if ($reporter) {
+                $reporter->updateProgress($currentPage, $totalPages);
+            }
+
+            // Har 5 sahifada GC
+            if ($currentPage % 5 === 0) {
+                gc_collect_cycles();
+            }
+
+            $currentPage++;
+        }
+
+        // 6-QADAM: Retake restore
+        $this->restoreRetakes($retakeBackup, $dateStart, $dateEnd, false);
+        unset($retakeBackup);
+
+        // 7-QADAM: Orphan/lokal baho restore
+        $this->restoreOrphans($activeIdsBeforeDelete, $dateStart, $dateEnd, false);
+        unset($activeIdsBeforeDelete);
+
+        $this->info("[StreamLive] Done: {$totalGradeCount} grades written");
+        Log::info("[StreamLive] Completed: {$totalGradeCount} grades written");
+
+        return ['error' => null, 'count' => $totalGradeCount];
+    }
+
+    // =========================================================================
+    // Bitta API sahifasini olish
+    // =========================================================================
+    private function fetchSinglePage(string $endpoint, int $from, int $to, int $page, int $maxRetries = 5): array|false
+    {
+        $retryCount = 0;
+        $lastError = '';
+
+        while ($retryCount < $maxRetries) {
+            try {
+                $response = Http::connectTimeout(30)->timeout(60)->withoutVerifying()->withToken($this->token)
+                    ->get("{$this->baseUrl}/v1/data/{$endpoint}", [
+                        'limit' => 200,
+                        'page' => $page,
+                        'lesson_date_from' => $from,
+                        'lesson_date_to' => $to,
+                    ]);
+
+                if ($response->successful()) {
+                    $data = $response->json()['data']['items'] ?? [];
+                    $pagination = $response->json()['data']['pagination'] ?? [];
+                    $totalPages = $pagination['pageCount'] ?? 1;
+                    $totalCount = $pagination['totalCount'] ?? $pagination['total'] ?? 0;
+
+                    if ($page === 1) {
+                        Log::info("[StreamLive] API diag: totalCount={$totalCount}, pageCount={$totalPages}, firstPageItems=" . count($data));
+                    }
+
+                    $this->info("Fetched {$endpoint} page {$page}/{$totalPages}");
+                    $this->updateCurrentDayStatus("API {$page}/{$totalPages}");
+
+                    return [
+                        'items' => $data,
+                        'totalPages' => $totalPages,
+                        'totalCount' => $totalCount,
+                    ];
+                } else {
+                    $retryCount++;
+                    $lastError = "HTTP {$response->status()}";
+                    Log::error("[StreamLive] {$endpoint} page {$page} failed: {$lastError}");
+                    if ($retryCount < $maxRetries) {
+                        $backoff = min(5 * pow(2, $retryCount - 1), 60);
+                        sleep($backoff);
+                    }
+                }
+            } catch (\Exception $e) {
+                $retryCount++;
+                $lastError = $e->getMessage();
+                Log::error("[StreamLive] {$endpoint} page {$page} exception: {$lastError}");
+                if ($retryCount < $maxRetries) {
+                    $backoff = min(5 * pow(2, $retryCount - 1), 60);
+                    sleep($backoff);
+                }
+            }
+        }
+
+        $this->lastFetchError = "sahifa {$page}: {$lastError}";
+        return false;
+    }
+
+    // =========================================================================
+    // Bitta sahifadagi baholarni bazaga yozish (insert only, delete allaqachon bo'lgan)
+    // =========================================================================
+    private function processGradePage(array $items, Carbon $date): int
+    {
+        if (empty($items)) return 0;
+
+        // Sana filtri
+        $filteredItems = array_filter($items, function ($item) use ($date) {
+            return Carbon::createFromTimestamp($item['lesson_date'])->isSameDay($date);
+        });
+
+        if (empty($filteredItems)) return 0;
+
+        // Studentlar map — faqat shu sahifadagi studentlar
+        $hemisIds = array_unique(array_column(array_values($filteredItems), '_student'));
+        $studentsMap = Student::whereIn('hemis_id', $hemisIds)->get()->keyBy('hemis_id');
+        $deadlinesMap = Deadline::all()->keyBy('level_code');
+
+        $insertRows = [];
+        $now = Carbon::now();
+
+        foreach ($filteredItems as $item) {
+            $student = $studentsMap->get($item['_student']);
+            if (!$student) continue;
+
+            $gradeValue = $item['grade'];
+            $lessonDate = Carbon::createFromTimestamp($item['lesson_date']);
+
+            $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
+            $studentMinLimit = $markingScore ? $markingScore->minimum_limit : 0;
+
+            $isLowGrade = ($student->level_code == 16 && $gradeValue < 3) ||
+                ($student->level_code != 16 && $gradeValue < $studentMinLimit);
+
+            $status = $isLowGrade ? 'pending' : 'recorded';
+            $reason = $isLowGrade ? 'low_grade' : null;
+            $deadline = null;
+            if ($isLowGrade) {
+                $dl = $deadlinesMap->get($student->level_code);
+                $deadline = $dl
+                    ? $lessonDate->copy()->addDays($dl->deadline_days)->endOfDay()
+                    : $lessonDate->copy()->addWeek()->endOfDay();
+            }
+
+            $insertRows[] = [
+                'hemis_id' => $item['id'],
+                'student_id' => $student->id,
+                'student_hemis_id' => $item['_student'],
+                'semester_code' => $item['semester']['code'],
+                'semester_name' => $item['semester']['name'],
+                'education_year_code' => $item['educationYear']['code'] ?? null,
+                'education_year_name' => $item['educationYear']['name'] ?? null,
+                'subject_schedule_id' => $item['_subject_schedule'],
+                'subject_id' => $item['subject']['id'],
+                'subject_name' => $item['subject']['name'],
+                'subject_code' => $item['subject']['code'],
+                'training_type_code' => $item['trainingType']['code'],
+                'training_type_name' => $item['trainingType']['name'],
+                'employee_id' => $item['employee']['id'],
+                'employee_name' => $item['employee']['name'],
+                'lesson_pair_code' => $item['lessonPair']['code'],
+                'lesson_pair_name' => $item['lessonPair']['name'],
+                'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                'grade' => $gradeValue,
+                'lesson_date' => $lessonDate,
+                'created_at_api' => Carbon::createFromTimestamp($item['created_at']),
+                'reason' => $reason,
+                'deadline' => $deadline,
+                'status' => $status,
+                'is_final' => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        // Bulk insert
+        if (!empty($insertRows)) {
+            foreach (array_chunk($insertRows, 200) as $chunk) {
+                DB::table('student_grades')->insert($chunk);
+            }
+        }
+
+        return count($insertRows);
+    }
+
+    // =========================================================================
+    // Retake baholarni tiklash (streaming va applyGrades uchun umumiy)
+    // =========================================================================
+    private function restoreRetakes($retakeBackup, Carbon $dateStart, Carbon $dateEnd, bool $isFinal): void
+    {
+        if ($retakeBackup->isEmpty()) return;
+
+        $retakeRestored = 0;
+        $restoredKeys = [];
+
+        foreach ($retakeBackup as $key => $retake) {
+            $updated = $this->retryOnLockTimeout(fn () =>
+                StudentGrade::where('student_hemis_id', $retake->student_hemis_id)
+                    ->where('subject_id', $retake->subject_id)
+                    ->whereDate('lesson_date', $retake->lesson_date)
+                    ->where('lesson_pair_code', $retake->lesson_pair_code)
+                    ->whereNull('deleted_at')
+                    ->whereNull('retake_grade')
+                    ->update([
+                        'retake_grade' => $retake->retake_grade,
+                        'status' => 'retake',
+                        'retake_graded_at' => $retake->retake_graded_at,
+                        'retake_by' => $retake->retake_by,
+                        'retake_file_path' => $retake->retake_file_path,
+                        'graded_by_user_id' => $retake->graded_by_user_id,
+                        'is_final' => $isFinal,
+                    ])
+            );
+            if ($updated) {
+                $retakeRestored++;
+                $restoredKeys[] = $key;
+            }
+        }
+
+        // HEMIS da yo'q retake yozuvlarni tiklash
+        $unrestored = $retakeBackup->keys()->diff($restoredKeys)->toArray();
+        $undeleted = 0;
+        if (!empty($unrestored)) {
+            $unrestoredIds = $retakeBackup->only($unrestored)->pluck('id')->toArray();
+            if (!empty($unrestoredIds)) {
+                $undeleted = StudentGrade::onlyTrashed()
+                    ->whereIn('id', $unrestoredIds)
+                    ->update(['deleted_at' => null, 'is_final' => $isFinal]);
+            }
+        }
+
+        if ($retakeRestored > 0 || $undeleted > 0) {
+            $this->info("Retake grades: {$retakeRestored} restored, {$undeleted} un-deleted for {$dateStart->toDateString()}");
+            Log::info("[RestoreRetakes] {$retakeRestored} restored, {$undeleted} un-deleted for {$dateStart->toDateString()}");
+        }
+    }
+
+    // =========================================================================
+    // Lokal/orphan baholarni tiklash (streaming va applyGrades uchun umumiy)
+    // =========================================================================
+    private function restoreOrphans(array $activeIdsBeforeDelete, Carbon $dateStart, Carbon $dateEnd, bool $isFinal): void
+    {
+        if (empty($activeIdsBeforeDelete)) return;
+
+        $activeKeysAfterImport = StudentGrade::where('lesson_date', '>=', $dateStart)
+            ->where('lesson_date', '<=', $dateEnd)
+            ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code', 'training_type_code'])
+            ->map(fn ($g) => $g->student_hemis_id . '_' . $g->subject_id . '_' .
+                Carbon::parse($g->lesson_date)->toDateString() . '_' . $g->lesson_pair_code . '_' . $g->training_type_code)
+            ->flip()
+            ->toArray();
+
+        $orphanCandidates = StudentGrade::onlyTrashed()
+            ->whereIn('id', $activeIdsBeforeDelete)
+            ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code', 'training_type_code']);
+
+        $orphanIds = [];
+        foreach ($orphanCandidates as $orphan) {
+            $key = $orphan->student_hemis_id . '_' . $orphan->subject_id . '_' .
+                Carbon::parse($orphan->lesson_date)->toDateString() . '_' . $orphan->lesson_pair_code . '_' . $orphan->training_type_code;
+            if (!isset($activeKeysAfterImport[$key])) {
+                $orphanIds[] = $orphan->id;
+            }
+        }
+
+        $restoredLocal = 0;
+        if (!empty($orphanIds)) {
+            $restoredLocal = StudentGrade::onlyTrashed()
+                ->whereIn('id', $orphanIds)
+                ->update(['deleted_at' => null, 'is_final' => $isFinal]);
+        }
+
+        if ($restoredLocal > 0) {
+            $this->info("Local grades: {$restoredLocal} restored for {$dateStart->toDateString()}");
+            Log::info("[RestoreOrphans] {$restoredLocal} restored for {$dateStart->toDateString()}");
+        }
     }
 
     // =========================================================================
@@ -818,8 +1256,6 @@ class ImportGrades extends Command
 
         // ====================================================================
         // 2-3 QADAM: Soft-delete + Bulk insert — TRANZAKSIYA ICHIDA
-        // Agar insert xato bersa, soft-delete ROLLBACK qilinadi (ma'lumot yo'qolmaydi)
-        // retryOnLockTimeout butun tranzaksiyani qayta urinadi
         // ====================================================================
         $this->retryOnLockTimeout(function () use ($insertRows, $dateStart, $dateEnd, $isFinal, &$softDeletedCount) {
             DB::transaction(function () use ($insertRows, $dateStart, $dateEnd, $isFinal, &$softDeletedCount) {
@@ -841,88 +1277,11 @@ class ImportGrades extends Command
         $this->info("Soft deleted {$softDeletedCount} old grades for {$dateStart->toDateString()}");
         Log::info("[ApplyGrades] Soft deleted {$softDeletedCount} grades for {$dateStart->toDateString()}");
 
-        // ====================================================================
-        // 4-QADAM: Retake ma'lumotlarni batch qayta qo'yish (tranzaksiyadan tashqarida)
-        // N+1 loop o'rniga — batch update
-        // ====================================================================
-        $retakeRestored = 0;
-        $restoredKeys = [];
-        foreach ($retakeBackup as $key => $retake) {
-            $updated = $this->retryOnLockTimeout(fn () =>
-                StudentGrade::where('student_hemis_id', $retake->student_hemis_id)
-                    ->where('subject_id', $retake->subject_id)
-                    ->whereDate('lesson_date', $retake->lesson_date)
-                    ->where('lesson_pair_code', $retake->lesson_pair_code)
-                    ->whereNull('deleted_at')
-                    ->whereNull('retake_grade')
-                    ->update([
-                        'retake_grade' => $retake->retake_grade,
-                        'status' => 'retake',
-                        'retake_graded_at' => $retake->retake_graded_at,
-                        'retake_by' => $retake->retake_by,
-                        'retake_file_path' => $retake->retake_file_path,
-                        'graded_by_user_id' => $retake->graded_by_user_id,
-                        'is_final' => $isFinal,
-                    ])
-            );
-            if ($updated) {
-                $retakeRestored++;
-                $restoredKeys[] = $key;
-            }
-        }
+        // 4-5 QADAM: Retake restore
+        $this->restoreRetakes($retakeBackup, $dateStart, $dateEnd, $isFinal);
 
-        // 5-QADAM: HEMIS da yo'q retake yozuvlarni batch tiklash
-        $unrestored = $retakeBackup->keys()->diff($restoredKeys)->toArray();
-        $undeleted = 0;
-        if (!empty($unrestored)) {
-            $unrestoredIds = $retakeBackup->only($unrestored)->pluck('id')->toArray();
-            if (!empty($unrestoredIds)) {
-                $undeleted = StudentGrade::onlyTrashed()
-                    ->whereIn('id', $unrestoredIds)
-                    ->update(['deleted_at' => null, 'is_final' => $isFinal]);
-            }
-        }
-
-        if ($retakeRestored > 0 || $undeleted > 0) {
-            $this->info("Retake grades: {$retakeRestored} restored to new records, {$undeleted} un-deleted for {$dateStart->toDateString()}");
-            Log::info("[ApplyGrades] Retake: {$retakeRestored} restored, {$undeleted} un-deleted for {$dateStart->toDateString()}");
-        }
-
-        // ====================================================================
-        // 6-QADAM: Lokal baholarni tiklash (tranzaksiyadan tashqarida)
-        // ====================================================================
-        $activeKeysAfterImport = StudentGrade::where('lesson_date', '>=', $dateStart)
-            ->where('lesson_date', '<=', $dateEnd)
-            ->get(['student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code'])
-            ->map(fn ($g) => $g->student_hemis_id . '_' . $g->subject_id . '_' .
-                Carbon::parse($g->lesson_date)->toDateString() . '_' . $g->lesson_pair_code)
-            ->flip()
-            ->toArray();
-
-        $orphanCandidates = StudentGrade::onlyTrashed()
-            ->whereIn('id', $activeIdsBeforeDelete)
-            ->get(['id', 'student_hemis_id', 'subject_id', 'lesson_date', 'lesson_pair_code']);
-
-        $orphanIds = [];
-        foreach ($orphanCandidates as $orphan) {
-            $key = $orphan->student_hemis_id . '_' . $orphan->subject_id . '_' .
-                Carbon::parse($orphan->lesson_date)->toDateString() . '_' . $orphan->lesson_pair_code;
-            if (!isset($activeKeysAfterImport[$key])) {
-                $orphanIds[] = $orphan->id;
-            }
-        }
-
-        $restoredLocal = 0;
-        if (!empty($orphanIds)) {
-            $restoredLocal = StudentGrade::onlyTrashed()
-                ->whereIn('id', $orphanIds)
-                ->update(['deleted_at' => null, 'is_final' => $isFinal]);
-        }
-
-        if ($restoredLocal > 0) {
-            $this->info("Local grades: {$restoredLocal} restored (HEMIS da yo'q, o'qituvchi qo'ygan) for {$dateStart->toDateString()}");
-            Log::info("[ApplyGrades] Local grades: {$restoredLocal} restored for {$dateStart->toDateString()}");
-        }
+        // 6-QADAM: Lokal baholarni tiklash
+        $this->restoreOrphans($activeIdsBeforeDelete, $dateStart, $dateEnd, $isFinal);
 
         // 7-QADAM: Xavfsizlik tozalash
         if ($isFinal) {
@@ -1235,6 +1594,7 @@ class ImportGrades extends Command
         $this->info("╚══════════════════════════════════════════════════════════╝");
 
         // Telegram — yangi xabar yuborish va ID saqlash
+        if ($this->option('silent')) return;
         $chatId = config('services.telegram.chat_id');
         if (!$chatId) return;
 
@@ -1250,6 +1610,9 @@ class ImportGrades extends Command
     private function updateDayProgress(string $key, string $icon, string $details, int $current, int $total): void
     {
         $this->dayStatuses[$key] = "{$icon} {$details}";
+
+        // Nightly wrapper ga progress yuborish (--silent rejimda)
+        $this->reportToNightly($current, $total);
 
         // Faqat Telegram yangilash — console allaqachon info() orqali yozilmoqda
         $chatId = config('services.telegram.chat_id');
@@ -1295,6 +1658,9 @@ class ImportGrades extends Command
             ? round((microtime(true) - $this->importStartTime) / 60, 1)
             : 0;
         $hasErrors = !empty($failedDays);
+
+        // Nightly wrapper ga yakuniy progress yuborish
+        $this->reportToNightly($successDays, $totalDays, true);
 
         // Console
         $this->newLine();
@@ -1343,6 +1709,29 @@ class ImportGrades extends Command
         if ($total <= 0) return '[' . str_repeat('░', $width) . ']';
         $filled = min($width, (int) round($current / $total * $width));
         return '[' . str_repeat('█', $filled) . str_repeat('░', $width - $filled) . ']';
+    }
+
+    /**
+     * Nightly wrapper ga progress yuborish (nightly:run ichidan chaqirilganda)
+     */
+    private function reportToNightly(int $current, int $total, bool $isDone = false): void
+    {
+        if (!app()->bound('nightly.progress')) return;
+
+        $bar = $this->makeProgressBar($current, $total);
+        $lines = ["{$bar} {$current}/{$total}"];
+
+        foreach ($this->dayStatuses as $d => $s) {
+            $label = (strlen($d) === 10 && ($d[4] ?? '') === '-') ? substr($d, 5) : $d;
+            $lines[] = "{$label} {$s}";
+        }
+
+        if ($isDone) {
+            $lines[] = "📊 {$current}/{$total} muvaffaqiyatli";
+        }
+
+        $callback = app('nightly.progress');
+        $callback(implode("\n", $lines));
     }
 
     // =========================================================================
@@ -1398,7 +1787,12 @@ class ImportGrades extends Command
         }
 
         // Holatni saqlash
-        file_put_contents($stateFile, json_encode($state));
+        try {
+            file_put_contents($stateFile, json_encode($state));
+        } catch (\Throwable $e) {
+            Log::warning("[LiveImport] telegram_live_daily.json yozishda xato: {$e->getMessage()}");
+            $this->warn("State fayl yozishda xato (hisobot davom etadi): {$e->getMessage()}");
+        }
 
         // Console uchun ham chiqarish
         $this->info($line);
@@ -1414,6 +1808,7 @@ class ImportGrades extends Command
 
     private function sendTelegramReport()
     {
+        if ($this->option('silent')) return;
         $mode = $this->option('mode');
         $lines = ["{$mode} import natijasi (" . Carbon::now()->format('d.m.Y H:i') . "):"];
 

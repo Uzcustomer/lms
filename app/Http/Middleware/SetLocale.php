@@ -11,7 +11,7 @@ class SetLocale
 {
     public function handle(Request $request, Closure $next)
     {
-        $locale = Session::get('locale', config('app.locale', 'uz'));
+        $locale = Session::get('locale', 'uz');
 
         if (in_array($locale, ['uz', 'ru', 'en'])) {
             App::setLocale($locale);

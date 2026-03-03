@@ -19,10 +19,14 @@ class YnSubmission extends Model
         'submitted_by',
         'submitted_by_guard',
         'submitted_at',
+        'exam_date',
+        'results_fetched',
     ];
 
     protected $casts = [
         'submitted_at' => 'datetime',
+        'exam_date' => 'date',
+        'results_fetched' => 'boolean',
     ];
 
     public function submittedBy()
@@ -32,5 +36,10 @@ class YnSubmission extends Model
         }
 
         return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function studentGrades()
+    {
+        return $this->hasMany(YnStudentGrade::class);
     }
 }

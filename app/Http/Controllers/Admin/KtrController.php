@@ -170,6 +170,17 @@ class KtrController extends Controller
             }
         }
 
+        // Har bir o'quv rejadan faqat oxirgi 2 ta JORIY semestr fanlarini chiqarish
+        // Faqat current=1 semestrlar ichidan sanaydi, shu sababli
+        // 3-kurs (sem 5,6) ham, 4-kurs (sem 7,8) ham to'g'ri chiqadi
+        $query->whereRaw('(
+            SELECT COUNT(DISTINCT s2.code)
+            FROM semesters AS s2
+            WHERE s2.curriculum_hemis_id = cs.curricula_hemis_id
+              AND s2.current = 1
+              AND (s2.code + 0) > (cs.semester_code + 0)
+        ) < 2');
+
         // KTR holati filtri (yaratildi/yaratilmadi)
         $ktrStatus = $request->get('ktr_status', '');
         if ($ktrStatus === 'created' && Schema::hasTable('ktr_plans')) {

@@ -389,53 +389,36 @@
             var journalBase = '{{ url("/admin/journal/show") }}';
             var html = '';
 
-            if (isExpelledPage) {
-                // Barcha academic records — semestrlarga guruhlangan
-                html += '<div style="padding:16px 20px 8px;font-weight:700;color:#1a3268;font-size:14px;">Barcha academic records</div>';
-                html += '<div id="all-records-wrap" style="padding:0 20px 8px;"><div style="padding:20px;text-align:center;color:#94a3b8;"><i>Yuklanmoqda...</i></div></div>';
+            // Barcha semestrlar — har doim tepada
+            html += '<div style="padding:16px 20px 8px;font-weight:700;color:#1a3268;font-size:14px;">Semestrlar</div>';
+            html += '<div id="all-records-wrap" style="padding:0 20px 12px;"><div style="padding:20px;text-align:center;color:#94a3b8;"><i>Yuklanmoqda...</i></div></div>';
 
-                // Qarzdorliklar bo'limi
-                var semGroups = {};
-                var semOrder = [];
-                if (r.debts && r.debts.length) {
-                    html += '<div style="padding:8px 20px 4px;font-weight:700;color:#dc2626;font-size:14px;border-top:2px solid #fee2e2;">Qarzdorliklar (' + r.debt_count + ' ta fan)</div>';
-                    for (var d = 0; d < r.debts.length; d++) {
-                        var debt = r.debts[d];
-                        var sk = debt.semester_code;
-                        if (!semGroups[sk]) {
-                            semGroups[sk] = { name: debt.semester_name, code: sk, debts: [] };
-                            semOrder.push(sk);
-                        }
-                        semGroups[sk].debts.push(debt);
-                    }
+            // Qarzdorliklar bo'limi
+            if (r.debts && r.debts.length) {
+                html += '<div style="padding:8px 20px 4px;font-weight:700;color:#dc2626;font-size:14px;border-top:2px solid #fee2e2;">Qarzdorliklar (' + r.debt_count + ' ta fan)</div>';
+
+                if (isExpelledPage) {
                     html += '<table class="detail-table">';
                     html += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
                     html += '<tbody>';
                     var rowNum = 0;
-                    for (var si = 0; si < semOrder.length; si++) {
-                        var sg = semGroups[semOrder[si]];
-                        for (var d = 0; d < sg.debts.length; d++) {
-                            var debt = sg.debts[d];
-                            rowNum++;
-                            html += '<tr>';
-                            html += '<td>' + rowNum + '</td>';
-                            html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
-                            html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
-                            html += '<td>' + esc(debt.credit) + '</td>';
-                            html += '<td>' + esc(debt.total_acload) + '</td>';
-                            html += '<td><span class="reason-badge">Academic record yo\'q</span></td>';
-                            html += '</tr>';
-                        }
+                    for (var d = 0; d < r.debts.length; d++) {
+                        var debt = r.debts[d];
+                        rowNum++;
+                        html += '<tr>';
+                        html += '<td>' + rowNum + '</td>';
+                        html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
+                        html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
+                        html += '<td>' + esc(debt.credit) + '</td>';
+                        html += '<td>' + esc(debt.total_acload) + '</td>';
+                        html += '<td><span class="reason-badge">Academic record yo\'q</span></td>';
+                        html += '</tr>';
                     }
                     html += '</tbody></table>';
                 } else {
-                    html += '<div style="padding:12px 20px;color:#16a34a;font-weight:600;border-top:2px solid #dcfce7;">Qarzdorlik yo\'q</div>';
-                }
-            } else {
-                html += '<table class="detail-table">';
-                html += '<thead><tr><th>#</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
-                html += '<tbody>';
-                if (r.debts && r.debts.length) {
+                    html += '<table class="detail-table">';
+                    html += '<thead><tr><th>#</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
+                    html += '<tbody>';
                     for (var d = 0; d < r.debts.length; d++) {
                         var debt = r.debts[d];
                         html += '<tr>';
@@ -459,17 +442,15 @@
                         html += '<td style="text-align:center;"><a href="' + jUrl + '" target="_blank" class="journal-link-modal">Jurnal</a></td>';
                         html += '</tr>';
                     }
+                    html += '</tbody></table>';
                 }
-                html += '</tbody></table>';
             }
 
             $('#modal-body').html(html);
             $('#detail-modal').fadeIn(150);
 
-            // Expelled page uchun barcha academic recordlarni AJAX bilan yuklash
-            if (isExpelledPage) {
-                loadAllAcademicRecords(r.hemis_id, r.full_name);
-            }
+            // Barcha semestrlarni AJAX bilan yuklash
+            loadAllAcademicRecords(r.hemis_id, r.full_name);
         }
 
         function loadAllAcademicRecords(studentId, studentName) {
@@ -482,16 +463,16 @@
                         $('#all-records-wrap').html('<div style="padding:12px;color:#94a3b8;">Academic record topilmadi</div>');
                         return;
                     }
-                    var gh = '';
+                    var gh = '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
                     for (var s = 0; s < semesters.length; s++) {
                         var sem = semesters[s];
-                        gh += '<div style="margin-bottom:12px;">';
-                        gh += '<div data-student="' + esc(studentId) + '" data-semester="' + esc(sem.semester_id) + '" data-student-name="' + esc(studentName) + '" ';
-                        gh += 'onclick="openSemGradesModal(this)" style="cursor:pointer;padding:8px 12px;background:#eef2ff;border-radius:8px;font-weight:700;color:#4338ca;font-size:13px;display:flex;align-items:center;justify-content:space-between;">';
-                        gh += '<span>' + esc(sem.semester_name) + ' <span style="font-weight:400;color:#94a3b8;">(' + sem.subject_count + ' ta fan)</span></span>';
-                        gh += '<span style="font-size:11px;color:#6366f1;">Batafsil &rarr;</span>';
-                        gh += '</div></div>';
+                        gh += '<div data-student="' + esc(studentId) + '" data-semester="' + esc(sem.semester_id) + '" data-student-name="' + esc(studentName) + '" data-sem-name="' + esc(sem.semester_name) + '" ';
+                        gh += 'onclick="openSemGradesModal(this)" class="sem-tab">';
+                        gh += esc(sem.semester_name);
+                        gh += '<span style="font-size:10px;color:#94a3b8;display:block;">' + sem.subject_count + ' ta fan</span>';
+                        gh += '</div>';
                     }
+                    gh += '</div>';
                     $('#all-records-wrap').html(gh);
                 },
                 error: function() {
@@ -513,7 +494,7 @@
             var studentId = $header.data('student');
             var semesterCode = $header.data('semester');
             var studentName = $header.data('student-name') || '';
-            var semesterName = $header.find('td').text().trim().split('(')[0].trim();
+            var semesterName = $header.data('sem-name') || $header.find('td').text().trim().split('(')[0].trim();
 
             // 2-chi modalni ochish (1-chi modal yopilmaydi)
             $('#semester-modal-title').text(studentName + ' — ' + semesterName);
@@ -737,6 +718,9 @@
         .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 20px; }
         .info-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
         .info-value { font-size: 13px; font-weight: 600; color: #0f172a; }
+        .sem-tab { cursor: pointer; padding: 10px 16px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; font-weight: 700; color: #4338ca; font-size: 13px; text-align: center; min-width: 100px; transition: all 0.15s; }
+        .sem-tab:hover { background: #4338ca; color: #fff; border-color: #4338ca; }
+        .sem-tab:hover span { color: #e0e7ff !important; }
 
         .detail-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .detail-table thead tr { background: #f8fafc; }

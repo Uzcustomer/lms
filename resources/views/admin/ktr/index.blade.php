@@ -405,6 +405,16 @@
             return str.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase();
         }
 
+        function fuzzyMatcher(params, data) {
+            if ($.trim(params.term) === '') return data;
+            if (typeof data.text === 'undefined') return null;
+            var searchClean = stripSpecialChars(params.term);
+            var optionClean = stripSpecialChars(data.text);
+            if (optionClean.indexOf(searchClean) > -1) return $.extend({}, data, true);
+            if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) return $.extend({}, data, true);
+            return null;
+        }
+
         function toggleCurrentSemester() {
             const btn = document.getElementById('current-semester-toggle');
             const input = document.getElementById('current_semester_input');
@@ -417,17 +427,6 @@
                 input.value = '1';
             }
         }
-
-        function fuzzyMatcher(params, data) {
-            if ($.trim(params.term) === '') return data;
-            if (typeof data.text === 'undefined') return null;
-            var searchClean = stripSpecialChars(params.term);
-            var optionClean = stripSpecialChars(data.text);
-            if (optionClean.indexOf(searchClean) > -1) return $.extend({}, data, true);
-            if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) return $.extend({}, data, true);
-            return null;
-        }
-
 
         $(document).ready(function () {
             $('.select2').each(function () {

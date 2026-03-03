@@ -174,7 +174,9 @@
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="debt_count">Qarzdor fanlar <span class="sort-icon active">&#9660;</span></a></th>
+                                        @unless($isExpelledPage ?? false)
                                         <th><a href="#" class="sort-link" data-sort="lesson_days">Darslar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        @endunless
                                         <th style="text-align:center;width:90px;">Batafsil</th>
                                     </tr>
                                 </thead>
@@ -208,6 +210,7 @@
         let currentDirection = 'desc';
         let currentPage = 1;
         let reportData = [];
+        let isExpelledPage = {{ ($isExpelledPage ?? false) ? 'true' : 'false' }};
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
@@ -274,7 +277,7 @@
                     }
 
                     reportData = res.data;
-                    $('#total-badge').text('Jami: ' + res.total + ' ta qarzdor talaba');
+                    $('#total-badge').text('Jami: ' + res.total + (isExpelledPage ? ' ta talaba (academic record yo\'q)' : ' ta qarzdor talaba'));
                     $('#time-badge').text(elapsed + ' soniyada hisoblandi');
                     renderTable(res.data);
                     renderPagination(res);
@@ -311,7 +314,9 @@
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-debt">' + r.debt_count + '</span></td>';
-                html += '<td style="text-align:center;"><span class="badge badge-violet">' + (r.lesson_days || 0) + ' kun</span></td>';
+                if (!isExpelledPage) {
+                    html += '<td style="text-align:center;"><span class="badge badge-violet">' + (r.lesson_days || 0) + ' kun</span></td>';
+                }
                 html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(' + i + ')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Batafsil</button></td>';
                 html += '</tr>';
             }
@@ -326,32 +331,49 @@
 
             var journalBase = '{{ url("/admin/journal/show") }}';
             var html = '<table class="detail-table">';
-            html += '<thead><tr><th>#</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
-            html += '<tbody>';
 
-            if (r.debts && r.debts.length) {
-                for (var d = 0; d < r.debts.length; d++) {
-                    var debt = r.debts[d];
-                    html += '<tr>';
-                    html += '<td>' + (d + 1) + '</td>';
-                    html += '<td style="font-weight:600;color:#0f172a;min-width:160px;">' + esc(debt.subject_name) + '</td>';
-                    var minL = debt.minimum_limit || 60;
-                    html += '<td class="' + (debt.jb < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.jb + '</td>';
-                    html += '<td class="' + (debt.mt < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.mt + '</td>';
-                    html += '<td class="' + (debt.on !== null && debt.on < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.on !== null ? debt.on : '-') + '</td>';
-                    html += '<td class="' + (debt.jn_percent < minL ? 'cell-fail' : 'cell-pass') + '" style="font-weight:700;">' + debt.jn_percent + '</td>';
-                    html += '<td class="' + (debt.oski !== null && debt.oski < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.oski !== null ? debt.oski : '-') + '</td>';
-                    html += '<td class="' + (debt.test !== null && debt.test < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.test !== null ? debt.test : '-') + '</td>';
-                    html += '<td class="' + (debt.absence_percent > 25 ? 'cell-fail' : 'cell-pass') + '">' + debt.absence_percent + '%</td>';
-                    html += '<td>';
-                    var reasons = debt.reasons || [];
-                    for (var ri = 0; ri < reasons.length; ri++) {
-                        html += '<span class="reason-badge">' + esc(reasons[ri]) + '</span>';
+            if (isExpelledPage) {
+                html += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
+                html += '<tbody>';
+                if (r.debts && r.debts.length) {
+                    for (var d = 0; d < r.debts.length; d++) {
+                        var debt = r.debts[d];
+                        html += '<tr>';
+                        html += '<td>' + (d + 1) + '</td>';
+                        html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
+                        html += '<td>' + esc(debt.credit) + '</td>';
+                        html += '<td>' + esc(debt.total_acload) + '</td>';
+                        html += '<td><span class="reason-badge">Academic record yo\'q</span></td>';
+                        html += '</tr>';
                     }
-                    html += '</td>';
-                    var jUrl = journalBase + '/' + encodeURIComponent(debt.group_id) + '/' + encodeURIComponent(debt.subject_id) + '/' + encodeURIComponent(debt.semester_code);
-                    html += '<td style="text-align:center;"><a href="' + jUrl + '" target="_blank" class="journal-link-modal">Jurnal</a></td>';
-                    html += '</tr>';
+                }
+            } else {
+                html += '<thead><tr><th>#</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
+                html += '<tbody>';
+                if (r.debts && r.debts.length) {
+                    for (var d = 0; d < r.debts.length; d++) {
+                        var debt = r.debts[d];
+                        html += '<tr>';
+                        html += '<td>' + (d + 1) + '</td>';
+                        html += '<td style="font-weight:600;color:#0f172a;min-width:160px;">' + esc(debt.subject_name) + '</td>';
+                        var minL = debt.minimum_limit || 60;
+                        html += '<td class="' + (debt.jb < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.jb + '</td>';
+                        html += '<td class="' + (debt.mt < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.mt + '</td>';
+                        html += '<td class="' + (debt.on !== null && debt.on < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.on !== null ? debt.on : '-') + '</td>';
+                        html += '<td class="' + (debt.jn_percent < minL ? 'cell-fail' : 'cell-pass') + '" style="font-weight:700;">' + debt.jn_percent + '</td>';
+                        html += '<td class="' + (debt.oski !== null && debt.oski < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.oski !== null ? debt.oski : '-') + '</td>';
+                        html += '<td class="' + (debt.test !== null && debt.test < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.test !== null ? debt.test : '-') + '</td>';
+                        html += '<td class="' + (debt.absence_percent > 25 ? 'cell-fail' : 'cell-pass') + '">' + debt.absence_percent + '%</td>';
+                        html += '<td>';
+                        var reasons = debt.reasons || [];
+                        for (var ri = 0; ri < reasons.length; ri++) {
+                            html += '<span class="reason-badge">' + esc(reasons[ri]) + '</span>';
+                        }
+                        html += '</td>';
+                        var jUrl = journalBase + '/' + encodeURIComponent(debt.group_id) + '/' + encodeURIComponent(debt.subject_id) + '/' + encodeURIComponent(debt.semester_code);
+                        html += '<td style="text-align:center;"><a href="' + jUrl + '" target="_blank" class="journal-link-modal">Jurnal</a></td>';
+                        html += '</tr>';
+                    }
                 }
             }
 

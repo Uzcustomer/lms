@@ -3690,6 +3690,63 @@ class ReportController extends Controller
     }
 
     /**
+     * Talabaning ma'lum semestrdagi barcha baholari (academic_records)
+     */
+    public function studentSemesterGrades(Request $request)
+    {
+        $studentId = $request->get('student_id');
+        $semesterCode = $request->get('semester_code');
+
+        if (!$studentId || !$semesterCode) {
+            return response()->json(['grades' => []]);
+        }
+
+        // Talabaning guruhini topamiz
+        $student = DB::table('students')
+            ->where('hemis_id', $studentId)
+            ->select('group_hemis_id')
+            ->first();
+
+        if (!$student) {
+            return response()->json(['grades' => []]);
+        }
+
+        // Guruh curriculum_hemis_id ni topamiz
+        $group = DB::table('groups')
+            ->where('group_hemis_id', $student->group_hemis_id)
+            ->select('curriculum_hemis_id')
+            ->first();
+
+        if (!$group) {
+            return response()->json(['grades' => []]);
+        }
+
+        // Shu curriculum + semester_code uchun semester_hemis_id ni topamiz
+        $semester = DB::table('semesters')
+            ->where('curriculum_hemis_id', $group->curriculum_hemis_id)
+            ->where('code', $semesterCode)
+            ->select('semester_hemis_id', 'name')
+            ->first();
+
+        if (!$semester) {
+            return response()->json(['grades' => []]);
+        }
+
+        // Academic records dan shu talaba + shu semester uchun barcha baholarni olamiz
+        $grades = DB::table('academic_records')
+            ->where('student_id', $studentId)
+            ->where('semester_id', $semester->semester_hemis_id)
+            ->select('subject_name', 'credit', 'total_acload', 'total_point', 'grade')
+            ->orderBy('subject_name')
+            ->get();
+
+        return response()->json([
+            'semester_name' => $semester->name,
+            'grades' => $grades,
+        ]);
+    }
+
+    /**
      * Sababli check hisoboti sahifasi
      * Onlayn sababli qilishga ariza yozganlar bilan HEMISda davomat sababli qilinganini tekshirish
      */

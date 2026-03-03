@@ -367,13 +367,39 @@
             var html = '<table class="detail-table">';
 
             if (isExpelledPage) {
-                html += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
-                html += '<tbody>';
+                // Semestrlarga guruhlash
+                var semGroups = {};
+                var semOrder = [];
                 if (r.debts && r.debts.length) {
                     for (var d = 0; d < r.debts.length; d++) {
                         var debt = r.debts[d];
+                        var sk = debt.semester_code;
+                        if (!semGroups[sk]) {
+                            semGroups[sk] = { name: debt.semester_name, code: sk, debts: [] };
+                            semOrder.push(sk);
+                        }
+                        semGroups[sk].debts.push(debt);
+                    }
+                }
+                html += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
+                html += '<tbody>';
+                var rowNum = 0;
+                for (var si = 0; si < semOrder.length; si++) {
+                    var sg = semGroups[semOrder[si]];
+                    // Semestr header row — bosilsa baholarni ko'rsatadi
+                    html += '<tr class="sem-header-row" data-student="' + esc(r.hemis_id) + '" data-semester="' + esc(sg.code) + '" style="cursor:pointer;background:#f1f5f9;" onclick="toggleSemGrades(this)">';
+                    html += '<td colspan="6" style="font-weight:700;color:#4338ca;padding:8px 12px;">';
+                    html += '<span style="margin-right:6px;">&#9654;</span> ';
+                    html += esc(sg.name) + ' <span style="font-weight:400;color:#94a3b8;">(' + sg.debts.length + ' ta qarzdorlik)</span>';
+                    html += '</td></tr>';
+                    // Semestr baholar row (yashirin, AJAX bilan yuklanadi)
+                    html += '<tr class="sem-grades-row" style="display:none;"><td colspan="6" style="padding:0;"></td></tr>';
+                    // Debt rows
+                    for (var d = 0; d < sg.debts.length; d++) {
+                        var debt = sg.debts[d];
+                        rowNum++;
                         html += '<tr>';
-                        html += '<td>' + (d + 1) + '</td>';
+                        html += '<td>' + rowNum + '</td>';
                         html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
                         html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
                         html += '<td>' + esc(debt.credit) + '</td>';
@@ -419,6 +445,69 @@
 
         function closeModal() {
             $('#detail-modal').fadeOut(150);
+        }
+
+        function toggleSemGrades(headerRow) {
+            var $header = $(headerRow);
+            var $gradesRow = $header.next('.sem-grades-row');
+            var $cell = $gradesRow.find('td');
+
+            if ($gradesRow.is(':visible')) {
+                $gradesRow.hide();
+                $header.find('span:first').html('&#9654;');
+                return;
+            }
+
+            $header.find('span:first').html('&#9660;');
+
+            // Agar allaqachon yuklangan bo'lsa, faqat ko'rsat
+            if ($cell.data('loaded')) {
+                $gradesRow.show();
+                return;
+            }
+
+            var studentId = $header.data('student');
+            var semesterCode = $header.data('semester');
+
+            $cell.html('<div style="padding:12px;color:#94a3b8;"><i>Yuklanmoqda...</i></div>');
+            $gradesRow.show();
+
+            $.ajax({
+                url: '{{ route("admin.reports.student-semester-grades") }}',
+                data: { student_id: studentId, semester_code: semesterCode },
+                success: function(resp) {
+                    var grades = resp.grades || [];
+                    if (!grades.length) {
+                        $cell.html('<div style="padding:12px;color:#94a3b8;">Bu semestrda academic record topilmadi</div>');
+                        $cell.data('loaded', true);
+                        return;
+                    }
+                    var gh = '<div style="padding:8px 12px;background:#f8fafc;border-radius:8px;margin:4px 0;">';
+                    gh += '<div style="font-weight:600;color:#4338ca;margin-bottom:6px;">' + esc(resp.semester_name) + ' — Barcha baholar</div>';
+                    gh += '<table class="detail-table" style="margin:0;">';
+                    gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th></tr></thead><tbody>';
+                    for (var g = 0; g < grades.length; g++) {
+                        var gr = grades[g];
+                        var point = gr.total_point || '-';
+                        var grade = gr.grade || '-';
+                        var gradeClass = (point !== '-' && parseFloat(point) >= 60) ? 'cell-pass' : 'cell-fail';
+                        gh += '<tr style="background:#fff;">';
+                        gh += '<td>' + (g + 1) + '</td>';
+                        gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name) + '</td>';
+                        gh += '<td>' + esc(gr.credit) + '</td>';
+                        gh += '<td>' + esc(gr.total_acload) + '</td>';
+                        gh += '<td class="' + gradeClass + '">' + esc(point) + '</td>';
+                        gh += '<td><span class="badge badge-indigo">' + esc(grade) + '</span></td>';
+                        gh += '</tr>';
+                    }
+                    gh += '</tbody></table></div>';
+                    $cell.html(gh);
+                    $cell.data('loaded', true);
+                },
+                error: function() {
+                    $cell.html('<div style="padding:12px;color:#ef4444;">Xatolik yuz berdi</div>');
+                }
+            });
         }
 
         function toggleExcelMenu() {

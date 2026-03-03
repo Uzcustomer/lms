@@ -2707,28 +2707,302 @@ class ReportController extends Controller
         return $this->debtorsReport($request);
     }
 
+    /**
+     * Akademik ma'lumotnoma: academic_records da ma'lumoti yo'q fanlarni aniqlash
+     * Schedule da fan bor, lekin academic_records da yozuv yo'q = qarzdor
+     */
     public function expelledDebtorsReportData(Request $request)
     {
-        if (!$request->filled('min_debt_count')) {
-            $request->merge(['min_debt_count' => 4]);
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyId]);
         }
 
-        if (!$request->filled('student_status')) {
-            $expelledStatusCode = DB::table('students')
-                ->whereNotNull('student_status_code')
-                ->whereNotNull('student_status_name')
-                ->where(function ($q) {
-                    $q->whereRaw('LOWER(student_status_name) like ?', ['%chetlat%'])
-                      ->orWhereRaw('LOWER(student_status_name) like ?', ['%haydal%']);
-                })
-                ->value('student_status_code');
+        try {
+            ini_set('memory_limit', '512M');
+            set_time_limit(120);
 
-            if ($expelledStatusCode) {
-                $request->merge(['student_status' => $expelledStatusCode]);
+            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+            $minDebtCount = (int) $request->get('min_debt_count', 1);
+
+            // 1-QADAM: Schedule dan unique (group, subject, semester) olish
+            $scheduleQuery = DB::table('schedules as sch')
+                ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code')
+                ->distinct()
+                ->whereNotIn('sch.training_type_code', $excludedCodes)
+                ->whereNotNull('sch.lesson_date');
+
+            $isCurrentSemester = $request->get('current_semester', '1') == '1';
+            if ($isCurrentSemester) {
+                $scheduleQuery
+                    ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
+                    ->join('semesters as sem', function ($join) {
+                        $join->on('sem.code', '=', 'sch.semester_code')
+                            ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
+                    })
+                    ->where('sem.current', true)
+                    ->where('sch.education_year_current', true);
             }
-        }
 
-        return $this->debtorsReportData($request);
+            if ($request->filled('education_type')) {
+                $educationGroupIds = DB::table('groups')
+                    ->whereIn('curriculum_hemis_id',
+                        Curriculum::where('education_type_code', $request->education_type)
+                            ->pluck('curricula_hemis_id')
+                    )
+                    ->pluck('group_hemis_id')
+                    ->toArray();
+                $scheduleQuery->whereIn('sch.group_id', $educationGroupIds);
+            }
+            if ($request->filled('semester_code')) {
+                $scheduleQuery->where('sch.semester_code', $request->semester_code);
+            }
+            if ($request->filled('group')) {
+                $scheduleQuery->where('sch.group_id', $request->group);
+            }
+            if ($request->filled('subject')) {
+                $scheduleQuery->where('sch.subject_id', $request->subject);
+            }
+            if ($request->filled('department')) {
+                $deptSubjectIds = DB::table('curriculum_subjects')
+                    ->where('department_id', $request->department)
+                    ->pluck('subject_id')
+                    ->unique()
+                    ->values()
+                    ->toArray();
+                if (!empty($deptSubjectIds)) {
+                    $scheduleQuery->whereIn('sch.subject_id', $deptSubjectIds);
+                }
+            }
+
+            $scheduleCombos = $scheduleQuery->get();
+            if ($scheduleCombos->isEmpty()) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $scheduleGroupIds = $scheduleCombos->pluck('group_id')->unique()->toArray();
+            $validSubjectIds = $scheduleCombos->pluck('subject_id')->unique()->toArray();
+            $validSemesterCodes = $scheduleCombos->pluck('semester_code')->unique()->toArray();
+
+            // Group → subjects map
+            $groupSubjects = [];
+            foreach ($scheduleCombos as $combo) {
+                $key = $combo->subject_id . '|' . $combo->semester_code;
+                $groupSubjects[$combo->group_id][$key] = [
+                    'subject_id' => $combo->subject_id,
+                    'semester_code' => $combo->semester_code,
+                ];
+            }
+
+            // 2-QADAM: Talabalar ro'yxati
+            $studentQuery = DB::table('students as s')
+                ->select('s.hemis_id', 's.full_name', 's.student_id_number', 's.group_id',
+                    's.department_name', 's.specialty_name', 's.level_name',
+                    's.semester_name', 's.group_name', 's.level_code');
+
+            if ($request->filled('student_status')) {
+                $studentQuery->where('s.student_status_code', $request->student_status);
+            }
+            if ($request->filled('student_name')) {
+                $studentQuery->where('s.full_name', 'like', '%' . $request->student_name . '%');
+            }
+            if ($request->filled('faculty')) {
+                $faculty = Department::find($request->faculty);
+                if ($faculty) {
+                    $studentQuery->where('s.department_id', $faculty->department_hemis_id);
+                }
+            }
+            if ($request->filled('specialty')) {
+                $studentQuery->where('s.specialty_id', $request->specialty);
+            }
+            if ($request->filled('level_code')) {
+                $studentQuery->where('s.level_code', $request->level_code);
+            }
+            if ($request->filled('group')) {
+                $studentQuery->where('s.group_id', $request->group);
+            }
+            if ($request->filled('education_type')) {
+                $studentQuery->where('s.education_type_code', $request->education_type);
+            }
+
+            $students = $studentQuery->whereIn('s.group_id', $scheduleGroupIds)->get();
+            if ($students->isEmpty()) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $studentHemisIds = $students->pluck('hemis_id')->toArray();
+
+            // 3-QADAM: Semester code → semester_hemis_id mapping
+            $groupsData = DB::table('groups')
+                ->whereIn('group_hemis_id', $scheduleGroupIds)
+                ->select('group_hemis_id', 'curriculum_hemis_id')
+                ->get()
+                ->keyBy('group_hemis_id');
+
+            $curriculumIds = $groupsData->pluck('curriculum_hemis_id')->unique()->toArray();
+
+            $semesterMap = [];
+            $semesters = DB::table('semesters')
+                ->whereIn('code', $validSemesterCodes)
+                ->whereIn('curriculum_hemis_id', $curriculumIds)
+                ->select('code', 'curriculum_hemis_id', 'semester_hemis_id')
+                ->get();
+            foreach ($semesters as $sem) {
+                $semesterMap[$sem->curriculum_hemis_id . '|' . $sem->code] = (string) $sem->semester_hemis_id;
+            }
+
+            // 4-QADAM: Academic records — mavjud yozuvlarni aniqlash
+            $arSet = [];
+            foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
+                $records = DB::table('academic_records')
+                    ->whereIn('student_id', $chunk)
+                    ->whereIn('subject_id', $validSubjectIds)
+                    ->select('student_id', 'subject_id', 'semester_id')
+                    ->get();
+
+                foreach ($records as $ar) {
+                    $arSet[$ar->student_id . '|' . $ar->subject_id . '|' . (string) $ar->semester_id] = true;
+                }
+            }
+
+            // 5-QADAM: Fan nomlari va kredit ma'lumotlari
+            $subjectInfoMap = [];
+            $csRecords = DB::table('curriculum_subjects')
+                ->whereIn('subject_id', $validSubjectIds)
+                ->whereIn('semester_code', $validSemesterCodes)
+                ->select('subject_id', 'subject_name', 'semester_code', 'credit', 'total_acload')
+                ->get();
+            foreach ($csRecords as $cs) {
+                $key = $cs->subject_id . '|' . $cs->semester_code;
+                if (!isset($subjectInfoMap[$key])) {
+                    $subjectInfoMap[$key] = $cs;
+                }
+            }
+
+            // 6-QADAM: Qarzdorliklarni aniqlash — academic_records da yozuv yo'q = qarzdor
+            $studentDebts = [];
+            foreach ($students as $student) {
+                $groupId = $student->group_id;
+                $subjectsForGroup = $groupSubjects[$groupId] ?? [];
+                $curriculumHemisId = $groupsData[$groupId]->curriculum_hemis_id ?? null;
+
+                if (!$curriculumHemisId || empty($subjectsForGroup)) continue;
+
+                foreach ($subjectsForGroup as $subjectCombo) {
+                    $semKey = $curriculumHemisId . '|' . $subjectCombo['semester_code'];
+                    $semesterHemisId = $semesterMap[$semKey] ?? null;
+
+                    if (!$semesterHemisId) continue;
+
+                    $arKey = $student->hemis_id . '|' . $subjectCombo['subject_id'] . '|' . $semesterHemisId;
+
+                    if (!isset($arSet[$arKey])) {
+                        $snKey = $subjectCombo['subject_id'] . '|' . $subjectCombo['semester_code'];
+                        $csInfo = $subjectInfoMap[$snKey] ?? null;
+                        $subjectName = $csInfo->subject_name ?? 'Noma\'lum fan';
+
+                        if (!isset($studentDebts[$student->hemis_id])) {
+                            $studentDebts[$student->hemis_id] = [];
+                        }
+
+                        $studentDebts[$student->hemis_id][] = [
+                            'subject_id' => $subjectCombo['subject_id'],
+                            'subject_name' => $subjectName,
+                            'semester_code' => $subjectCombo['semester_code'],
+                            'credit' => $csInfo->credit ?? '-',
+                            'total_acload' => $csInfo->total_acload ?? '-',
+                        ];
+                    }
+                }
+            }
+
+            // 7-QADAM: Dublikat fanlarni filtrlash — "(a)", "(b)" kabi variantlar
+            foreach ($studentDebts as $hemisId => &$debts) {
+                $grouped = [];
+                foreach ($debts as $d) {
+                    $baseName = preg_replace('/\s*\([a-zA-Zа-яА-Яa-zа-я]\)\s*$/u', '', $d['subject_name']);
+                    $grouped[$baseName][] = $d;
+                }
+                $filtered = [];
+                foreach ($grouped as $variants) {
+                    $filtered[] = $variants[0];
+                }
+                $debts = $filtered;
+            }
+            unset($debts);
+
+            // 8-QADAM: minDebtCount bo'yicha filtrlash
+            $studentDebts = array_filter($studentDebts, fn($debts) => count($debts) >= $minDebtCount);
+
+            if (empty($studentDebts)) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            // Talaba ma'lumotlarini biriktirish
+            $studentInfo = $students->keyBy('hemis_id');
+
+            $finalResults = [];
+            foreach ($studentDebts as $hemisId => $debts) {
+                $st = $studentInfo[$hemisId] ?? null;
+                if (!$st) continue;
+
+                $finalResults[] = [
+                    'hemis_id' => $hemisId,
+                    'full_name' => $st->full_name ?? 'Noma\'lum',
+                    'student_id_number' => $st->student_id_number ?? '-',
+                    'department_name' => $st->department_name ?? '-',
+                    'specialty_name' => $st->specialty_name ?? '-',
+                    'level_name' => $st->level_name ?? '-',
+                    'semester_name' => $st->semester_name ?? '-',
+                    'group_name' => $st->group_name ?? '-',
+                    'group_id' => $st->group_id ?? '',
+                    'debt_count' => count($debts),
+                    'debts' => $debts,
+                ];
+            }
+
+            // Saralash
+            $sortColumn = $request->get('sort', 'debt_count');
+            $sortDirection = $request->get('direction', 'desc');
+
+            usort($finalResults, function ($a, $b) use ($sortColumn, $sortDirection) {
+                $valA = $a[$sortColumn] ?? '';
+                $valB = $b[$sortColumn] ?? '';
+                $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
+                return $sortDirection === 'desc' ? -$cmp : $cmp;
+            });
+
+            // Excel eksport
+            if ($request->get('export') === 'summary') {
+                return $this->exportDebtorsSummaryExcel($finalResults);
+            }
+            if ($request->get('export') === 'full') {
+                return $this->exportDebtorsFullExcel($finalResults);
+            }
+
+            // Sahifalash
+            $page = $request->get('page', 1);
+            $perPage = $request->get('per_page', 50);
+            $total = count($finalResults);
+            $offset = ($page - 1) * $perPage;
+            $pageData = array_slice($finalResults, $offset, $perPage);
+
+            foreach ($pageData as $i => &$item) {
+                $item['row_num'] = $offset + $i + 1;
+            }
+            unset($item);
+
+            return response()->json([
+                'data' => $pageData,
+                'total' => $total,
+                'per_page' => $perPage,
+                'current_page' => (int) $page,
+                'last_page' => ceil($total / $perPage),
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Academic debts report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     /**

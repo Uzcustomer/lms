@@ -52,17 +52,6 @@
                                 </select>
                             </div>
 
-                            <div class="filter-item" style="min-width: 160px;">
-                                <label class="filter-label">&nbsp;</label>
-                                @php $csDefault = ($isFanMasuli ?? false) ? '0' : '1'; @endphp
-                                <input type="hidden" name="current_semester" id="current_semester_input" value="{{ request('current_semester', $csDefault) }}">
-                                <div class="toggle-switch {{ request('current_semester', $csDefault) == '1' ? 'active' : '' }}" id="current-semester-toggle" onclick="toggleCurrentSemester()">
-                                    <div class="toggle-track">
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                    <span class="toggle-label">Joriy semestr</span>
-                                </div>
-                            </div>
                         </div>
 
                         <!-- Row 2 -->
@@ -415,18 +404,6 @@
             return null;
         }
 
-        function toggleCurrentSemester() {
-            const btn = document.getElementById('current-semester-toggle');
-            const input = document.getElementById('current_semester_input');
-            const isActive = btn.classList.contains('active');
-            if (isActive) {
-                btn.classList.remove('active');
-                input.value = '0';
-            } else {
-                btn.classList.add('active');
-                input.value = '1';
-            }
-        }
 
         $(document).ready(function () {
             $('.select2').each(function () {
@@ -472,7 +449,6 @@
                 return {
                     education_type: $('#education_type').val() || '',
                     faculty_id: $('#faculty').val() || '',
-                    current_semester: $('#current_semester_input').val() || '1',
                 };
             }
 

@@ -215,23 +215,24 @@
 
     <!-- Detail Modal (1-chi modal — talaba tafsilotlari) -->
     <div id="detail-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal()">
-        <div class="modal-content">
+        <div class="modal-box">
             <div class="modal-header">
-                <h3 id="modal-title" style="margin:0;font-size:16px;font-weight:700;color:#0f172a;"></h3>
+                <h3 id="modal-title">Batafsil ma'lumot</h3>
                 <button onclick="closeModal()" class="modal-close">&times;</button>
             </div>
-            <div id="modal-body" class="modal-body"></div>
+            <div id="modal-student-info" class="modal-info"></div>
+            <div id="modal-body" style="max-height:60vh;overflow-y:auto;padding:0;"></div>
         </div>
     </div>
 
     <!-- Semester Grades Modal (2-chi modal — semestr baholar, ustiga ochiladi) -->
-    <div id="semester-modal" class="modal-overlay" style="display:none;z-index:10000;" onclick="if(event.target===this)closeSemesterModal()">
-        <div class="modal-content">
+    <div id="semester-modal" class="modal-overlay" style="display:none;z-index:10001;" onclick="if(event.target===this)closeSemesterModal()">
+        <div class="modal-box" style="max-width:800px;">
             <div class="modal-header">
-                <h3 id="semester-modal-title" style="margin:0;font-size:16px;font-weight:700;color:#0f172a;"></h3>
-                <button onclick="closeSemesterModal()" class="modal-close" style="background:#dc2626;color:#fff;">&times;</button>
+                <h3 id="semester-modal-title">Semester baholar</h3>
+                <button onclick="closeSemesterModal()" class="modal-close">&times;</button>
             </div>
-            <div id="semester-modal-body" class="modal-body"></div>
+            <div id="semester-modal-body" style="max-height:60vh;overflow-y:auto;padding:0;"></div>
         </div>
     </div>
 
@@ -372,16 +373,32 @@
             var r = reportData[idx];
             if (!r) return;
 
-            $('#modal-title').text(r.full_name + ' - Qarzdorliklar (' + r.debt_count + ' ta fan)');
+            $('#modal-title').text(r.full_name + ' — Qarzdorliklar (' + r.debt_count + ' ta fan)');
+
+            // Talaba info qismi
+            var info = '<div class="info-grid">';
+            info += '<div><div class="info-label">Talaba</div><div class="info-value">' + esc(r.full_name) + '</div></div>';
+            info += '<div><div class="info-label">ID raqam</div><div class="info-value">' + esc(r.student_id_number) + '</div></div>';
+            info += '<div><div class="info-label">Guruh</div><div class="info-value">' + esc(r.group_name) + '</div></div>';
+            info += '<div><div class="info-label">Fakultet</div><div class="info-value">' + esc(r.department_name) + '</div></div>';
+            info += '<div><div class="info-label">Yo\'nalish</div><div class="info-value">' + esc(r.specialty_name) + '</div></div>';
+            info += '<div><div class="info-label">Bosqich</div><div class="info-value">' + esc(r.level_name) + ' / ' + esc(r.semester_name) + '</div></div>';
+            info += '</div>';
+            $('#modal-student-info').html(info);
 
             var journalBase = '{{ url("/admin/journal/show") }}';
-            var html = '<table class="detail-table">';
+            var html = '';
 
             if (isExpelledPage) {
-                // Semestrlarga guruhlash
+                // Barcha academic records — semestrlarga guruhlangan
+                html += '<div style="padding:16px 20px 8px;font-weight:700;color:#1a3268;font-size:14px;">Barcha academic records</div>';
+                html += '<div id="all-records-wrap" style="padding:0 20px 8px;"><div style="padding:20px;text-align:center;color:#94a3b8;"><i>Yuklanmoqda...</i></div></div>';
+
+                // Qarzdorliklar bo'limi
                 var semGroups = {};
                 var semOrder = [];
                 if (r.debts && r.debts.length) {
+                    html += '<div style="padding:8px 20px 4px;font-weight:700;color:#dc2626;font-size:14px;border-top:2px solid #fee2e2;">Qarzdorliklar (' + r.debt_count + ' ta fan)</div>';
                     for (var d = 0; d < r.debts.length; d++) {
                         var debt = r.debts[d];
                         var sk = debt.semester_code;
@@ -391,33 +408,31 @@
                         }
                         semGroups[sk].debts.push(debt);
                     }
-                }
-                html += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
-                html += '<tbody>';
-                var rowNum = 0;
-                for (var si = 0; si < semOrder.length; si++) {
-                    var sg = semGroups[semOrder[si]];
-                    // Semestr header row — bosilsa modal ochiladi
-                    html += '<tr class="sem-header-row" data-student="' + esc(r.hemis_id) + '" data-semester="' + esc(sg.code) + '" data-student-name="' + esc(r.full_name) + '" style="cursor:pointer;background:#f1f5f9;" onclick="openSemGradesModal(this)">';
-                    html += '<td colspan="6" style="font-weight:700;color:#4338ca;padding:8px 12px;">';
-                    html += '<span style="margin-right:6px;">&#128218;</span> ';
-                    html += esc(sg.name) + ' <span style="font-weight:400;color:#94a3b8;">(' + sg.debts.length + ' ta qarzdorlik)</span>';
-                    html += '</td></tr>';
-                    // Debt rows
-                    for (var d = 0; d < sg.debts.length; d++) {
-                        var debt = sg.debts[d];
-                        rowNum++;
-                        html += '<tr>';
-                        html += '<td>' + rowNum + '</td>';
-                        html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
-                        html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
-                        html += '<td>' + esc(debt.credit) + '</td>';
-                        html += '<td>' + esc(debt.total_acload) + '</td>';
-                        html += '<td><span class="reason-badge">Academic record yo\'q</span></td>';
-                        html += '</tr>';
+                    html += '<table class="detail-table">';
+                    html += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
+                    html += '<tbody>';
+                    var rowNum = 0;
+                    for (var si = 0; si < semOrder.length; si++) {
+                        var sg = semGroups[semOrder[si]];
+                        for (var d = 0; d < sg.debts.length; d++) {
+                            var debt = sg.debts[d];
+                            rowNum++;
+                            html += '<tr>';
+                            html += '<td>' + rowNum + '</td>';
+                            html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
+                            html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
+                            html += '<td>' + esc(debt.credit) + '</td>';
+                            html += '<td>' + esc(debt.total_acload) + '</td>';
+                            html += '<td><span class="reason-badge">Academic record yo\'q</span></td>';
+                            html += '</tr>';
+                        }
                     }
+                    html += '</tbody></table>';
+                } else {
+                    html += '<div style="padding:12px 20px;color:#16a34a;font-weight:600;border-top:2px solid #dcfce7;">Qarzdorlik yo\'q</div>';
                 }
             } else {
+                html += '<table class="detail-table">';
                 html += '<thead><tr><th>#</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
                 html += '<tbody>';
                 if (r.debts && r.debts.length) {
@@ -445,11 +460,44 @@
                         html += '</tr>';
                     }
                 }
+                html += '</tbody></table>';
             }
 
-            html += '</tbody></table>';
             $('#modal-body').html(html);
             $('#detail-modal').fadeIn(150);
+
+            // Expelled page uchun barcha academic recordlarni AJAX bilan yuklash
+            if (isExpelledPage) {
+                loadAllAcademicRecords(r.hemis_id, r.full_name);
+            }
+        }
+
+        function loadAllAcademicRecords(studentId, studentName) {
+            $.ajax({
+                url: '{{ route("admin.reports.student-all-records") }}',
+                data: { student_id: studentId },
+                success: function(resp) {
+                    var semesters = resp.semesters || [];
+                    if (!semesters.length) {
+                        $('#all-records-wrap').html('<div style="padding:12px;color:#94a3b8;">Academic record topilmadi</div>');
+                        return;
+                    }
+                    var gh = '';
+                    for (var s = 0; s < semesters.length; s++) {
+                        var sem = semesters[s];
+                        gh += '<div style="margin-bottom:12px;">';
+                        gh += '<div data-student="' + esc(studentId) + '" data-semester="' + esc(sem.semester_id) + '" data-student-name="' + esc(studentName) + '" ';
+                        gh += 'onclick="openSemGradesModal(this)" style="cursor:pointer;padding:8px 12px;background:#eef2ff;border-radius:8px;font-weight:700;color:#4338ca;font-size:13px;display:flex;align-items:center;justify-content:space-between;">';
+                        gh += '<span>' + esc(sem.semester_name) + ' <span style="font-weight:400;color:#94a3b8;">(' + sem.subject_count + ' ta fan)</span></span>';
+                        gh += '<span style="font-size:11px;color:#6366f1;">Batafsil &rarr;</span>';
+                        gh += '</div></div>';
+                    }
+                    $('#all-records-wrap').html(gh);
+                },
+                error: function() {
+                    $('#all-records-wrap').html('<div style="padding:12px;color:#ef4444;">Xatolik yuz berdi</div>');
+                }
+            });
         }
 
         function closeModal() {
@@ -678,13 +726,17 @@
         .pg-btn:hover { background: #fef2f2; border-color: #dc2626; color: #dc2626; }
         .pg-active { background: linear-gradient(135deg, #dc2626, #ef4444) !important; color: #fff !important; border-color: #dc2626 !important; }
 
-        /* Modal */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-        .modal-content { background: #fff; border-radius: 16px; width: 95%; max-width: 1100px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.2); }
-        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-radius: 16px 16px 0 0; }
-        .modal-close { width: 32px; height: 32px; border-radius: 8px; border: none; background: #fee2e2; color: #dc2626; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
-        .modal-close:hover { background: #dc2626; color: #fff; }
-        .modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        /* Modal — sababli ariza stili */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+        .modal-box { background: #fff; border-radius: 16px; width: 100%; max-width: 1100px; box-shadow: 0 25px 60px rgba(0,0,0,0.25); overflow: hidden; }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; }
+        .modal-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #fff; }
+        .modal-close { width: 32px; height: 32px; border: none; background: rgba(255,255,255,0.15); color: #fff; border-radius: 8px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+        .modal-close:hover { background: rgba(255,255,255,0.3); }
+        .modal-info { padding: 14px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+        .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 20px; }
+        .info-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+        .info-value { font-size: 13px; font-weight: 600; color: #0f172a; }
 
         .detail-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .detail-table thead tr { background: #f8fafc; }

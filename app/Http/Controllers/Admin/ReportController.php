@@ -2677,14 +2677,59 @@ class ReportController extends Controller
             ->orderBy('student_status_name')
             ->get();
 
+        $reportMode = $request->get('report_mode', 'debtors');
+        $isExpelledPage = $reportMode === 'expelled';
+        $defaultStatusKeyword = $isExpelledPage ? 'chetlat' : 'qimoqda';
+        $dataRouteName = $isExpelledPage ? 'admin.reports.expelled-debtors.data' : 'admin.reports.debtors.data';
+        $reportTitle = $isExpelledPage ? 'Chetlatgan sahifada qarzdorlar' : 'Qarzdorlar hisoboti';
+        $emptySubtitle = $isExpelledPage
+            ? "Chetlatilgan talabalar orasida qarzdorlik ro'yxati"
+            : "4 va undan ortiq fandan qarzdor talabalar ro'yxati";
+
         return view('admin.reports.debtors', compact(
             'faculties',
             'educationTypes',
             'selectedEducationType',
             'kafedras',
             'studentStatuses',
-            'dekanFacultyId'
+            'dekanFacultyId',
+            'isExpelledPage',
+            'defaultStatusKeyword',
+            'dataRouteName',
+            'reportTitle',
+            'emptySubtitle'
         ));
+    }
+
+
+    public function expelledDebtorsReport(Request $request)
+    {
+        $request->merge(['report_mode' => 'expelled']);
+        return $this->debtorsReport($request);
+    }
+
+    public function expelledDebtorsReportData(Request $request)
+    {
+        if (!$request->filled('min_debt_count')) {
+            $request->merge(['min_debt_count' => 4]);
+        }
+
+        if (!$request->filled('student_status')) {
+            $expelledStatusCode = DB::table('students')
+                ->whereNotNull('student_status_code')
+                ->whereNotNull('student_status_name')
+                ->where(function ($q) {
+                    $q->whereRaw('LOWER(student_status_name) like ?', ['%chetlat%'])
+                      ->orWhereRaw('LOWER(student_status_name) like ?', ['%haydal%']);
+                })
+                ->value('student_status_code');
+
+            if ($expelledStatusCode) {
+                $request->merge(['student_status' => $expelledStatusCode]);
+            }
+        }
+
+        return $this->debtorsReportData($request);
     }
 
     /**
@@ -2852,6 +2897,9 @@ class ReportController extends Controller
 
             if ($request->filled('student_status')) {
                 $studentQuery->where('s.student_status_code', $request->student_status);
+            }
+            if ($request->filled('student_name')) {
+                $studentQuery->where('s.full_name', 'like', '%' . $request->student_name . '%');
             }
             if ($request->filled('faculty')) {
                 $faculty = Department::find($request->faculty);

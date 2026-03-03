@@ -275,14 +275,16 @@ class TeacherController extends Controller
 
         $teacher = $teacherId ? Teacher::find($teacherId) : null;
 
-        // O'qituvchining biriktirilgan fan ID larini olish
-        $assignedSubjectIds = collect();
+        // O'qituvchining biriktirilgan fanlarini olish (subject_name + semester_code bo'yicha)
+        $assignedSubjectKeys = collect();
         if ($teacher) {
-            $assignedSubjectIds = $teacher->responsibleSubjects()
-                ->pluck('curriculum_subjects.id');
+            $assignedSubjectKeys = $teacher->responsibleSubjects()
+                ->select('subject_name', 'semester_code')
+                ->get()
+                ->map(fn($s) => $s->subject_name . '|' . $s->semester_code);
         }
 
-        // KTR bilan bir xil usulda fanlarni olish (GROUP BY siz, har bir qator alohida)
+        // Har bir o'quv rejaning oxirgi 2 ta semestridagi fanlarni olish
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
@@ -292,7 +294,13 @@ class TeacherController extends Controller
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
             ->where('cs.is_active', true)
-            ->whereNotNull('cs.subject_name');
+            ->whereNotNull('cs.subject_name')
+            // Faqat har bir o'quv rejaning oxirgi 2 ta semestri
+            ->whereRaw('CAST(cs.semester_code AS UNSIGNED) >= (
+                SELECT MAX(CAST(s2.code AS UNSIGNED)) - 1
+                FROM semesters AS s2
+                WHERE s2.curriculum_hemis_id = cs.curricula_hemis_id
+            )');
 
         // Kafedra bo'yicha filtrlash
         if ($filterDept && $teacher) {
@@ -319,24 +327,23 @@ class TeacherController extends Controller
 
         $subjects = $query
             ->select([
-                'cs.id',
+                DB::raw('MIN(cs.id) as id'),
                 'cs.subject_name',
-                'cs.subject_code',
+                DB::raw('MIN(cs.subject_code) as subject_code'),
                 'cs.semester_code',
                 'cs.semester_name',
-                'cs.department_name',
-                'c.education_type_name',
-                'sp.name as specialty_name',
+                DB::raw('MIN(cs.department_name) as department_name'),
                 's.level_name',
                 's.level_code',
             ])
+            ->groupBy('cs.subject_name', 'cs.semester_code', 'cs.semester_name', 's.level_name', 's.level_code')
             ->orderBy('cs.subject_name')
             ->orderBy('cs.semester_code')
             ->get();
 
         // Har bir fan uchun is_assigned flagini qo'shish
-        $subjects->transform(function ($subject) use ($assignedSubjectIds) {
-            $subject->is_assigned = $assignedSubjectIds->contains($subject->id);
+        $subjects->transform(function ($subject) use ($assignedSubjectKeys) {
+            $subject->is_assigned = $assignedSubjectKeys->contains($subject->subject_name . '|' . $subject->semester_code);
             return $subject;
         });
 

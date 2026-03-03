@@ -493,7 +493,13 @@
                     <option value="">Barcha kurslar</option>
                 </select>
             </div>
-            <div style="padding: 0 16px; padding-top: 8px;">
+            <div style="padding: 0 16px; padding-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick="toggleCurrentSemesterFilter()">
+                    <div id="semester-filter-toggle" style="width: 36px; height: 20px; border-radius: 10px; background: #3b82f6; position: relative; transition: background 0.2s; flex-shrink: 0;">
+                        <div id="semester-filter-thumb" style="width: 16px; height: 16px; border-radius: 50%; background: #fff; position: absolute; top: 2px; left: 18px; transition: left 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></div>
+                    </div>
+                    <span id="semester-filter-label" style="font-size: 11px; font-weight: 600; color: #64748b;">Joriy semestr: <span style="color: #3b82f6;">yoqilgan</span></span>
+                </label>
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;" onclick="toggleDeptFilter()">
                     <div id="dept-filter-toggle" style="width: 36px; height: 20px; border-radius: 10px; background: #3b82f6; position: relative; transition: background 0.2s; flex-shrink: 0;">
                         <div id="dept-filter-thumb" style="width: 16px; height: 16px; border-radius: 50%; background: #fff; position: absolute; top: 2px; left: 18px; transition: left 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></div>
@@ -764,6 +770,25 @@
             }
         }
 
+        var currentSemesterEnabled = true;
+
+        function toggleCurrentSemesterFilter() {
+            currentSemesterEnabled = !currentSemesterEnabled;
+            var toggle = document.getElementById('semester-filter-toggle');
+            var thumb = document.getElementById('semester-filter-thumb');
+            var label = document.getElementById('semester-filter-label');
+            if (currentSemesterEnabled) {
+                toggle.style.background = '#3b82f6';
+                thumb.style.left = '18px';
+                label.innerHTML = 'Joriy semestr: <span style="color: #3b82f6;">yoqilgan</span>';
+            } else {
+                toggle.style.background = '#cbd5e1';
+                thumb.style.left = '2px';
+                label.innerHTML = 'Joriy semestr: <span style="color: #94a3b8;">o\'chirilgan</span>';
+            }
+            searchSubjects();
+        }
+
         var deptFilterEnabled = true;
 
         function toggleDeptFilter() {
@@ -798,6 +823,9 @@
                 if (!deptFilterEnabled) {
                     url += '&filter_dept=0';
                 }
+                if (!currentSemesterEnabled) {
+                    url += '&current_semester=0';
+                }
                 fetch(url, {
                     headers: {
                         'Accept': 'application/json',
@@ -819,7 +847,8 @@
                         var isPending = isPendingSubject(subject.id);
 
                         var extraInfo = '';
-                        if (subject.specialty_name) extraInfo += escapeHtml(subject.specialty_name);
+                        if (subject.faculty_name) extraInfo += escapeHtml(subject.faculty_name);
+                        if (subject.specialty_name) extraInfo += (extraInfo ? ' | ' : '') + escapeHtml(subject.specialty_name);
                         if (subject.education_type_name) extraInfo += (extraInfo ? ' | ' : '') + escapeHtml(subject.education_type_name);
                         if (subject.level_name) extraInfo += (extraInfo ? ' | ' : '') + escapeHtml(subject.level_name);
 

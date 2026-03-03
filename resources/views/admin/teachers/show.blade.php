@@ -841,6 +841,20 @@
                         return;
                     }
 
+                    // Qidiruv natijalarini avtomatik belgilash (allaqachon qo'shilmaganlarini)
+                    subjects.forEach(function(subject) {
+                        var isAlreadyAdded = isSubjectSelected(subject.id) || subject.is_assigned;
+                        if (!isAlreadyAdded && !isPendingSubject(subject.id)) {
+                            pendingSubjects.push({
+                                id: subject.id,
+                                name: subject.subject_name,
+                                code: subject.subject_code || '',
+                                semester: subject.semester_name || ''
+                            });
+                        }
+                    });
+                    updateSelectedCount();
+
                     var html = '';
                     subjects.forEach(function(subject) {
                         var isAlreadyAdded = isSubjectSelected(subject.id) || subject.is_assigned;

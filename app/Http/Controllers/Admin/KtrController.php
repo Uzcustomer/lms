@@ -152,14 +152,15 @@ class KtrController extends Controller
         }
 
         // Joriy semestr (adminlar uchun default ON, fan masuli uchun default OFF)
-        // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
+        // semester code bo'yicha — eskirgan curriculum_weeks'dan himoya
         $currentSemesterDefault = $isFanMasuli ? '0' : '1';
         if ($request->get('current_semester', $currentSemesterDefault) == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            $query->whereIn('cs.semester_code', function ($sub) {
+                $sub->select('s_cw.code')
+                    ->from('curriculum_weeks as cw_inner')
+                    ->join('semesters as s_cw', 's_cw.semester_hemis_id', '=', 'cw_inner.semester_hemis_id')
+                    ->groupBy('s_cw.code')
+                    ->havingRaw('MIN(cw_inner.start_date) <= NOW() AND MAX(cw_inner.end_date) >= NOW()');
             });
         }
 
@@ -262,11 +263,12 @@ class KtrController extends Controller
             $query->where('f.id', $request->faculty_id);
         }
         if ($request->get('current_semester', '1') == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            $query->whereIn('cs.semester_code', function ($sub) {
+                $sub->select('s_cw.code')
+                    ->from('curriculum_weeks as cw_inner')
+                    ->join('semesters as s_cw', 's_cw.semester_hemis_id', '=', 'cw_inner.semester_hemis_id')
+                    ->groupBy('s_cw.code')
+                    ->havingRaw('MIN(cw_inner.start_date) <= NOW() AND MAX(cw_inner.end_date) >= NOW()');
             });
         }
 
@@ -355,11 +357,12 @@ class KtrController extends Controller
             $query->where('c.education_type_code', $request->education_type);
         }
         if ($request->get('current_semester', '1') == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            $query->whereIn('cs.semester_code', function ($sub) {
+                $sub->select('s_cw.code')
+                    ->from('curriculum_weeks as cw_inner')
+                    ->join('semesters as s_cw', 's_cw.semester_hemis_id', '=', 'cw_inner.semester_hemis_id')
+                    ->groupBy('s_cw.code')
+                    ->havingRaw('MIN(cw_inner.start_date) <= NOW() AND MAX(cw_inner.end_date) >= NOW()');
             });
         }
 
@@ -430,11 +433,12 @@ class KtrController extends Controller
         }
 
         if ($request->get('current_semester', '1') == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            $query->whereIn('cs.semester_code', function ($sub) {
+                $sub->select('s_cw.code')
+                    ->from('curriculum_weeks as cw_inner')
+                    ->join('semesters as s_cw', 's_cw.semester_hemis_id', '=', 'cw_inner.semester_hemis_id')
+                    ->groupBy('s_cw.code')
+                    ->havingRaw('MIN(cw_inner.start_date) <= NOW() AND MAX(cw_inner.end_date) >= NOW()');
             });
         }
 

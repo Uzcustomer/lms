@@ -3702,49 +3702,24 @@ class ReportController extends Controller
                 return response()->json(['grades' => []]);
             }
 
-            // Talabaning curriculum_id ni topamiz
-            $student = DB::table('students')
-                ->where('hemis_id', $studentId)
-                ->select('curriculum_id')
-                ->first();
-
-            if (!$student || !$student->curriculum_id) {
-                return response()->json(['grades' => []]);
-            }
-
-            // Shu curriculum + semester_code uchun semester nomini topamiz
-            $semester = DB::table('semesters')
-                ->where('curriculum_hemis_id', $student->curriculum_id)
-                ->where('code', $semesterCode)
-                ->select('name')
-                ->first();
-
-            if (!$semester) {
-                return response()->json(['grades' => []]);
-            }
-
-            // Academic records dan shu talaba + shu semester_name uchun barcha baholarni olamiz
+            // academic_records.semester_id = semesters.code
+            // Shuning uchun bevosita semester_code bilan solishtiramiz
             $grades = DB::table('academic_records')
                 ->where('student_id', $studentId)
-                ->where('semester_name', $semester->name)
+                ->where('semester_id', $semesterCode)
                 ->select('subject_name', 'credit', 'total_acload', 'total_point', 'grade')
                 ->orderBy('subject_name')
                 ->get();
 
-            // DEBUG
-            $arSemesterNames = DB::table('academic_records')
+            // Semester nomini academic_records dan olamiz
+            $semesterName = DB::table('academic_records')
                 ->where('student_id', $studentId)
-                ->select('semester_name')
-                ->distinct()
-                ->pluck('semester_name');
+                ->where('semester_id', $semesterCode)
+                ->value('semester_name');
 
             return response()->json([
-                'semester_name' => $semester->name,
+                'semester_name' => $semesterName ?? $semesterCode . '-semestr',
                 'grades' => $grades,
-                'debug' => [
-                    'semesters_table_name' => $semester->name,
-                    'ar_semester_names' => $arSemesterNames,
-                ],
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage(), 'grades' => []], 500);

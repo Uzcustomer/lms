@@ -10,6 +10,7 @@ use App\Models\MarkingSystemScore;
 use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Student;
+use App\Models\StudentGrade;
 use App\Models\Vedomost;
 use App\Models\VedomostGroup;
 use App\Services\StudentGradeService;
@@ -357,6 +358,25 @@ class VedomostController extends Controller
                 $sheet->setCellValue('D13', $subject->total_acload);
                 $sheet->setCellValue('G13', $subject->credit);
                 $sheet->setCellValue('G13', $subject->credit);
+
+                // Yakuniy o'tkazilgan sana
+                $dateQuery = StudentGrade::where('subject_id', $subject->subject_id)
+                    ->where('semester_code', $vedomost->semester_code)
+                    ->whereDate('lesson_date', '<=', $currentDate);
+
+                if ($vedomost->test_percent > 0) {
+                    $finalDate = (clone $dateQuery)->where('training_type_code', 102)
+                        ->whereHas('examTest', fn($q) => $q->where('shakl', $vedomost->shakl))
+                        ->max('lesson_date');
+                } elseif ($vedomost->oski_percent > 0) {
+                    $finalDate = (clone $dateQuery)->where('training_type_code', 101)
+                        ->whereHas('oski', fn($q) => $q->where('shakl', $vedomost->shakl))
+                        ->max('lesson_date');
+                } else {
+                    $finalDate = (clone $dateQuery)->max('lesson_date');
+                }
+                $sheet->setCellValue('K13', $finalDate ? Carbon::parse($finalDate)->format('d.m.Y') : '');
+
                 $sheet->setCellValue('D19', $vedomost->jb_percent);
                 $sheet->setCellValue('G19', $vedomost->independent_percent);
                 $sheet->setCellValue('J19', $vedomost->oraliq_percent);
@@ -763,6 +783,25 @@ class VedomostController extends Controller
                 $sheet->setCellValue('C10', $vedomost->subject_name);
                 $sheet->setCellValue('D13', $subject->total_acload);
                 $sheet->setCellValue('G13', $subject->credit);
+
+                // Yakuniy o'tkazilgan sana
+                $dateQuery = StudentGrade::where('subject_id', $subject->subject_id)
+                    ->where('semester_code', $vedomost->semester_code)
+                    ->whereDate('lesson_date', '<=', $currentDate);
+
+                if ($vedomost->test_percent > 0) {
+                    $finalDate = (clone $dateQuery)->where('training_type_code', 102)
+                        ->whereHas('examTest', fn($q) => $q->where('shakl', $vedomost->shakl))
+                        ->max('lesson_date');
+                } elseif ($vedomost->oski_percent > 0) {
+                    $finalDate = (clone $dateQuery)->where('training_type_code', 101)
+                        ->whereHas('oski', fn($q) => $q->where('shakl', $vedomost->shakl))
+                        ->max('lesson_date');
+                } else {
+                    $finalDate = (clone $dateQuery)->max('lesson_date');
+                }
+                $sheet->setCellValue('K13', $finalDate ? Carbon::parse($finalDate)->format('d.m.Y') : '');
+
                 $sheet->setCellValue('D19', $vedomost->jb_percent);
                 $sheet->setCellValue('G19', $vedomost->independent_percent);
                 $sheet->setCellValue('J19', $vedomost->jb_percent_secend);

@@ -2681,7 +2681,7 @@ class ReportController extends Controller
         $isExpelledPage = $reportMode === 'expelled';
         $defaultStatusKeyword = $isExpelledPage ? 'chetlat' : 'qimoqda';
         $dataRouteName = $isExpelledPage ? 'admin.reports.expelled-debtors.data' : 'admin.reports.debtors.data';
-        $reportTitle = $isExpelledPage ? 'Chetlatgan sahifada qarzdorlar' : 'Qarzdorlar hisoboti';
+        $reportTitle = $isExpelledPage ? 'Akademik ma\'lumotnoma' : 'Qarzdorlar hisoboti';
         $emptySubtitle = $isExpelledPage
             ? "Chetlatilgan talabalar orasida qarzdorlik ro'yxati"
             : "4 va undan ortiq fandan qarzdor talabalar ro'yxati";
@@ -2700,7 +2700,6 @@ class ReportController extends Controller
             'emptySubtitle'
         ));
     }
-
 
     public function expelledDebtorsReport(Request $request)
     {

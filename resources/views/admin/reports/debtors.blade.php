@@ -478,7 +478,11 @@
                 success: function(resp) {
                     var grades = resp.grades || [];
                     if (!grades.length) {
-                        $cell.html('<div style="padding:12px;color:#94a3b8;">Bu semestrda academic record topilmadi</div>');
+                        var dbg = resp.debug || {};
+                        var txt = 'Bu semestrda academic record topilmadi';
+                        txt += '<br><small style="color:#cbd5e1;">semesters_table: "' + esc(dbg.semesters_table_name || '') + '"';
+                        txt += ' | ar_names: ' + JSON.stringify(dbg.ar_semester_names || []) + '</small>';
+                        $cell.html('<div style="padding:12px;color:#94a3b8;">' + txt + '</div>');
                         $cell.data('loaded', true);
                         return;
                     }

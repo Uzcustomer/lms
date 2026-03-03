@@ -3731,9 +3731,20 @@ class ReportController extends Controller
                 ->orderBy('subject_name')
                 ->get();
 
+            // DEBUG
+            $arSemesterNames = DB::table('academic_records')
+                ->where('student_id', $studentId)
+                ->select('semester_name')
+                ->distinct()
+                ->pluck('semester_name');
+
             return response()->json([
                 'semester_name' => $semester->name,
                 'grades' => $grades,
+                'debug' => [
+                    'semesters_table_name' => $semester->name,
+                    'ar_semester_names' => $arSemesterNames,
+                ],
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage(), 'grades' => []], 500);

@@ -80,7 +80,8 @@ class KtrController extends Controller
                         ->on('s.code', '=', 'cs.semester_code');
                 })
                 ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
-                ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id');
+                ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
+                ->whereNull('cs.deleted_at');
         };
 
         // Natija query
@@ -252,6 +253,7 @@ class KtrController extends Controller
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
             ->where('cs.is_active', true)
+            ->whereNull('cs.deleted_at')
             ->whereNotNull('sp.specialty_hemis_id')
             ->whereNotNull('sp.name');
 
@@ -349,6 +351,7 @@ class KtrController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->where('cs.is_active', true)
+            ->whereNull('cs.deleted_at')
             ->whereNotNull('cs.subject_name');
 
         if ($request->filled('education_type')) {
@@ -392,6 +395,7 @@ class KtrController extends Controller
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
+            ->whereNull('cs.deleted_at')
             ->select([
                 'f.name as faculty_name',
                 'sp.name as specialty_name',
@@ -424,9 +428,9 @@ class KtrController extends Controller
 
         $activeFilter = $request->get('active_filter', 'active');
         if ($activeFilter === 'active') {
-            $query->where('cs.is_active', true);
+            $query->where('cs.is_active', true)->whereNull('cs.deleted_at');
         } elseif ($activeFilter === 'inactive') {
-            $query->where('cs.is_active', false);
+            $query->where('cs.is_active', false)->whereNull('cs.deleted_at');
         }
 
         if ($request->get('current_semester', '1') == '1') {

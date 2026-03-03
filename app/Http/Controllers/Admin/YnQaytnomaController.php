@@ -53,7 +53,8 @@ class YnQaytnomaController extends Controller
             })
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
-            ->where('g.active', true);
+            ->where('g.active', true)
+            ->whereNull('cs.deleted_at');
     }
 
     private function applyFilters($query, Request $request)

@@ -292,6 +292,7 @@ class TeacherController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->where('cs.is_active', true)
+            ->whereNull('cs.deleted_at')
             ->whereNotNull('cs.subject_name');
 
         // Kafedra bo'yicha filtrlash

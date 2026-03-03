@@ -113,7 +113,8 @@ class JournalController extends Controller
                 ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
                 ->where('g.department_active', true)
-                ->where('g.active', true);
+                ->where('g.active', true)
+                ->whereNull('cs.deleted_at');
         };
 
         // Kafedra dropdown uchun - faqat haqiqiy natija bor kafedralar
@@ -864,6 +865,7 @@ class JournalController extends Controller
         try {
             // Cross-curriculum support: search all hemis_ids for this subject
             $allCsHemisIds = DB::table('curriculum_subjects')
+                ->whereNull('deleted_at')
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->pluck('curriculum_subject_hemis_id')
@@ -1982,6 +1984,7 @@ class JournalController extends Controller
         // Check if student has uploaded a file for this subject's MT assignment
         // Search across all curriculum_subject_hemis_ids for this subject (cross-curriculum support)
         $allCsHemisIds = DB::table('curriculum_subjects')
+            ->whereNull('deleted_at')
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->pluck('curriculum_subject_hemis_id')
@@ -2805,7 +2808,8 @@ class JournalController extends Controller
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->where('g.department_active', true)
-            ->where('g.active', true);
+            ->where('g.active', true)
+            ->whereNull('cs.deleted_at');
 
         // O'qituvchi uchun faqat o'zi o'tadigan fanlar
         // O'qituvchi uchun faqat o'zi o'tadigan fanlar/guruhlar
@@ -3526,9 +3530,8 @@ class JournalController extends Controller
                 $sub->select(DB::raw(1))
                     ->from('curriculum_subjects as cs2')
                     ->whereColumn('cs2.curricula_hemis_id', 'g.curriculum_hemis_id')
-                    ->where('cs2.subject_id', $request->subject_id);
-                // semester_code ni chiqarib tashladik — curriculum_subjects va schedules
-                // orasida semester_code farq qilishi mumkin
+                    ->where('cs2.subject_id', $request->subject_id)
+                    ->whereNull('cs2.deleted_at');
             });
         }
         // O'qituvchi uchun faqat o'zi o'tadigan guruhlar
@@ -3544,7 +3547,8 @@ class JournalController extends Controller
         $subjectsQuery = DB::table('curriculum_subjects as cs')
             ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
             ->where('g.department_active', true)
-            ->where('g.active', true);
+            ->where('g.active', true)
+            ->whereNull('cs.deleted_at');
         if ($request->filled('semester_code')) {
             $subjectsQuery->where('cs.semester_code', $request->semester_code);
             // Faqat joriy semestr fanlari (eski curriculumlarni chiqarmaslik uchun)

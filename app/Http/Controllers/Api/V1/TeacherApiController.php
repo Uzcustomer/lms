@@ -706,6 +706,7 @@ class TeacherApiController extends Controller
         $mtSubmissions = [];
         try {
             $allCsHemisIds = DB::table('curriculum_subjects')
+                ->whereNull('deleted_at')
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->pluck('curriculum_subject_hemis_id')
@@ -1201,6 +1202,7 @@ class TeacherApiController extends Controller
 
         // Check file submission
         $allCsHemisIds = DB::table('curriculum_subjects')
+            ->whereNull('deleted_at')
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->pluck('curriculum_subject_hemis_id')
@@ -1453,6 +1455,7 @@ class TeacherApiController extends Controller
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->where('g.department_active', true)
             ->where('g.active', true)
+            ->whereNull('cs.deleted_at')
             ->where('s.current', true)
             ->whereIn('cs.subject_id', $teacherSubjectIds)
             ->whereIn('g.group_hemis_id', $teacherGroupIds)

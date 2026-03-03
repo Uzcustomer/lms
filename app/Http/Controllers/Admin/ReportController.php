@@ -56,6 +56,7 @@ class ReportController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->whereNull('cs.deleted_at')
             ->where('g.department_active', true)
             ->where('g.active', true)
             ->whereNotNull('cs.department_id')
@@ -193,6 +194,7 @@ class ReportController extends Controller
         $allowedSubjectIds = null;
         if ($request->filled('department')) {
             $allowedSubjectIds = DB::table('curriculum_subjects')
+                ->whereNull('deleted_at')
                 ->where('department_id', $request->department)
                 ->pluck('subject_id')
                 ->unique()
@@ -503,6 +505,7 @@ class ReportController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->whereNull('cs.deleted_at')
             ->where('g.department_active', true)
             ->where('g.active', true)
             ->whereNotNull('cs.department_id')
@@ -1129,6 +1132,7 @@ class ReportController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->whereNull('cs.deleted_at')
             ->where('g.department_active', true)
             ->where('g.active', true)
             ->whereNotNull('cs.department_id')
@@ -1181,6 +1185,7 @@ class ReportController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->whereNull('cs.deleted_at')
             ->where('g.department_active', true)
             ->where('g.active', true);
 
@@ -1723,6 +1728,7 @@ class ReportController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->whereNull('cs.deleted_at')
             ->where('g.department_active', true)
             ->where('g.active', true)
             ->whereNotNull('cs.department_id')
@@ -1911,6 +1917,7 @@ class ReportController extends Controller
         $allowedSubjectIds = null;
         if ($request->filled('department')) {
             $allowedSubjectIds = DB::table('curriculum_subjects')
+                ->whereNull('deleted_at')
                 ->where('department_id', $request->department)
                 ->pluck('subject_id')
                 ->unique()
@@ -2342,6 +2349,7 @@ class ReportController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->whereNull('cs.deleted_at')
             ->where('g.department_active', true)
             ->where('g.active', true)
             ->whereNotNull('cs.department_id')
@@ -2649,6 +2657,7 @@ class ReportController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->whereNull('cs.deleted_at')
             ->where('g.department_active', true)
             ->where('g.active', true)
             ->whereNotNull('cs.department_id')
@@ -2789,6 +2798,7 @@ class ReportController extends Controller
             }
             if ($request->filled('department')) {
                 $deptSubjectIds = DB::table('curriculum_subjects')
+                    ->whereNull('deleted_at')
                     ->where('department_id', $request->department)
                     ->pluck('subject_id')
                     ->unique()
@@ -3809,6 +3819,7 @@ class ReportController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->whereNull('cs.deleted_at')
             ->where('g.department_active', true)
             ->where('g.active', true)
             ->whereNotNull('cs.department_id')
@@ -3906,6 +3917,7 @@ class ReportController extends Controller
             }
             if ($request->filled('department')) {
                 $deptSubjectIds = DB::table('curriculum_subjects')
+                    ->whereNull('deleted_at')
                     ->where('department_id', $request->department)
                     ->pluck('subject_id')
                     ->unique()
@@ -4400,6 +4412,7 @@ class ReportController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->whereNull('cs.deleted_at')
             ->where('g.department_active', true)
             ->where('g.active', true)
             ->whereNotNull('cs.department_id')

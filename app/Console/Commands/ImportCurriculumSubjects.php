@@ -42,6 +42,8 @@ class ImportCurriculumSubjects extends Command
         $page = 1;
         $pageSize = 40;
         $totalImported = 0;
+        $nofaol = 0;
+        $restored = 0;
         $importedHemisIds = [];
 
         do {
@@ -54,34 +56,57 @@ class ImportCurriculumSubjects extends Command
                 $this->info("Processing page $page of $totalPages for curriculum subjects...");
 
                 foreach ($curriculumSubjects as $subjectData) {
-                    CurriculumSubject::updateOrCreate(
-                        ['curriculum_subject_hemis_id' => $subjectData['id']],
-                        [
-                            'curricula_hemis_id' => $subjectData['_curriculum'],
-                            'subject_id' => $subjectData['subject']['id'],
-                            'subject_name' => $subjectData['subject']['name'],
-                            'subject_code' => $subjectData['subject']['code'],
-                            'subject_type_code' => $subjectData['subjectType']['code'] ?? null,
-                            'subject_type_name' => $subjectData['subjectType']['name'] ?? null,
-                            'subject_block_code' => $subjectData['subjectBlock']['code'] ?? null,
-                            'subject_block_name' => $subjectData['subjectBlock']['name'] ?? null,
-                            'semester_code' => $subjectData['semester']['code'],
-                            'semester_name' => $subjectData['semester']['name'],
-                            'total_acload' => $subjectData['total_acload'],
-                            'credit' => $subjectData['credit'],
-                            'in_group' => $subjectData['in_group'],
-                            'at_semester' => $subjectData['at_semester'],
-                            'is_active' => $subjectData['active'] ?? true,
-                            'subject_details' => ($subjectData['subjectDetails']),
-                            'subject_exam_types' => ($subjectData['subjectExamTypes']),
-                            'rating_grade_code' => $subjectData['ratingGrade']['code'] ?? null,
-                            'rating_grade_name' => $subjectData['ratingGrade']['name'] ?? null,
-                            'exam_finish_code' => $subjectData['examFinish']['code'] ?? null,
-                            'exam_finish_name' => $subjectData['examFinish']['name'] ?? null,
-                            'department_id' => $subjectData['department']['id'] ?? null,
-                            'department_name' => $subjectData['department']['name'] ?? null,
-                        ]
-                    );
+                    // withTrashed — avval soft-delete qilingan fanlarni ham topish uchun
+                    $subject = CurriculumSubject::withTrashed()
+                        ->where('curriculum_subject_hemis_id', $subjectData['id'])
+                        ->first();
+
+                    $attributes = [
+                        'curricula_hemis_id' => $subjectData['_curriculum'],
+                        'subject_id' => $subjectData['subject']['id'],
+                        'subject_name' => $subjectData['subject']['name'],
+                        'subject_code' => $subjectData['subject']['code'],
+                        'subject_type_code' => $subjectData['subjectType']['code'] ?? null,
+                        'subject_type_name' => $subjectData['subjectType']['name'] ?? null,
+                        'subject_block_code' => $subjectData['subjectBlock']['code'] ?? null,
+                        'subject_block_name' => $subjectData['subjectBlock']['name'] ?? null,
+                        'semester_code' => $subjectData['semester']['code'],
+                        'semester_name' => $subjectData['semester']['name'],
+                        'total_acload' => $subjectData['total_acload'],
+                        'credit' => $subjectData['credit'],
+                        'in_group' => $subjectData['in_group'],
+                        'at_semester' => $subjectData['at_semester'],
+                        'is_active' => $subjectData['active'] ?? true,
+                        'subject_details' => ($subjectData['subjectDetails']),
+                        'subject_exam_types' => ($subjectData['subjectExamTypes']),
+                        'rating_grade_code' => $subjectData['ratingGrade']['code'] ?? null,
+                        'rating_grade_name' => $subjectData['ratingGrade']['name'] ?? null,
+                        'exam_finish_code' => $subjectData['examFinish']['code'] ?? null,
+                        'exam_finish_name' => $subjectData['examFinish']['name'] ?? null,
+                        'department_id' => $subjectData['department']['id'] ?? null,
+                        'department_name' => $subjectData['department']['name'] ?? null,
+                    ];
+
+                    if ($subject) {
+                        // Avval o'chirilgan bo'lsa — qayta tiklash
+                        if ($subject->trashed()) {
+                            $subject->restore();
+                            $restored++;
+                            $this->info("Restored: {$subjectData['subject']['name']}");
+                        }
+                        $subject->update($attributes);
+                    } else {
+                        CurriculumSubject::create(array_merge(
+                            ['curriculum_subject_hemis_id' => $subjectData['id']],
+                            $attributes
+                        ));
+                    }
+
+                    // Nofaol (HEMIS active: false) sanash
+                    if (!($subjectData['active'] ?? true)) {
+                        $nofaol++;
+                    }
+
                     $importedHemisIds[] = $subjectData['id'];
                     $totalImported++;
 
@@ -96,15 +121,30 @@ class ImportCurriculumSubjects extends Command
             }
         } while ($page <= $totalPages);
 
-        // API'dan qaytmagan fanlarni nofaol qilish (soft delete)
-        $deactivated = 0;
+        // API'dan qaytmagan fanlarni soft-delete qilish (HEMIS'dan o'chirilgan)
+        $deleted = 0;
         if (!empty($importedHemisIds)) {
-            $deactivated = CurriculumSubject::where('is_active', true)
-                ->whereNotIn('curriculum_subject_hemis_id', $importedHemisIds)
-                ->update(['is_active' => false]);
+            $deleted = CurriculumSubject::whereNotIn('curriculum_subject_hemis_id', $importedHemisIds)
+                ->count();
+
+            if ($deleted > 0) {
+                CurriculumSubject::whereNotIn('curriculum_subject_hemis_id', $importedHemisIds)
+                    ->delete();
+            }
         }
 
-        $telegram->notify("✅ O'quv reja fanlari importi tugadi. Jami: {$totalImported} ta, nofaol: {$deactivated} ta");
-        $this->info("Curriculum subjects import completed. Imported: {$totalImported}, deactivated: {$deactivated}");
+        $msg = "✅ O'quv reja fanlari importi tugadi. Jami: {$totalImported} ta";
+        if ($nofaol > 0) {
+            $msg .= ", nofaol: {$nofaol} ta";
+        }
+        if ($deleted > 0) {
+            $msg .= ", o'chirilgan: {$deleted} ta";
+        }
+        if ($restored > 0) {
+            $msg .= ", qaytgan: {$restored} ta";
+        }
+
+        $telegram->notify($msg);
+        $this->info("Import completed. Total: {$totalImported}, inactive: {$nofaol}, deleted: {$deleted}, restored: {$restored}");
     }
 }

@@ -2896,7 +2896,9 @@ class ReportController extends Controller
 
                     if (!$semesterHemisId) continue;
 
-                    $arKey = $student->hemis_id . '|' . $subjectCombo['subject_id'] . '|' . $semesterHemisId;
+                    // academic_records.semester_id = semesters.code (11,12,13...)
+                    // semester_hemis_id (668,669,670...) EMAS!
+                    $arKey = $student->hemis_id . '|' . $subjectCombo['subject_id'] . '|' . $subjectCombo['semester_code'];
 
                     if (!isset($arSet[$arKey])) {
                         $snKey = $subjectCombo['subject_id'] . '|' . $subjectCombo['semester_code'];

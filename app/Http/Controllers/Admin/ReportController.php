@@ -2679,7 +2679,7 @@ class ReportController extends Controller
 
         $reportMode = $request->get('report_mode', 'debtors');
         $isExpelledPage = $reportMode === 'expelled';
-        $defaultStatusKeyword = $isExpelledPage ? 'chetlat' : 'qimoqda';
+        $defaultStatusKeyword = $isExpelledPage ? 'qimoqda' : 'qimoqda';
         $dataRouteName = $isExpelledPage ? 'admin.reports.expelled-debtors.data' : 'admin.reports.debtors.data';
         $reportTitle = $isExpelledPage ? 'Akademik ma\'lumotnoma' : 'Qarzdorlar hisoboti';
         $emptySubtitle = $isExpelledPage
@@ -2842,13 +2842,15 @@ class ReportController extends Controller
             $curriculumIds = $groupsData->pluck('curriculum_hemis_id')->unique()->toArray();
 
             $semesterMap = [];
+            $semesterNameMap = [];
             $semesters = DB::table('semesters')
                 ->whereIn('code', $validSemesterCodes)
                 ->whereIn('curriculum_hemis_id', $curriculumIds)
-                ->select('code', 'curriculum_hemis_id', 'semester_hemis_id')
+                ->select('code', 'name', 'curriculum_hemis_id', 'semester_hemis_id')
                 ->get();
             foreach ($semesters as $sem) {
                 $semesterMap[$sem->curriculum_hemis_id . '|' . $sem->code] = (string) $sem->semester_hemis_id;
+                $semesterNameMap[$sem->code] = $sem->name;
             }
 
             // 4-QADAM: Academic records — mavjud yozuvlarni aniqlash
@@ -2909,6 +2911,7 @@ class ReportController extends Controller
                             'subject_id' => $subjectCombo['subject_id'],
                             'subject_name' => $subjectName,
                             'semester_code' => $subjectCombo['semester_code'],
+                            'semester_name' => $semesterNameMap[$subjectCombo['semester_code']] ?? $subjectCombo['semester_code'],
                             'credit' => $csInfo->credit ?? '-',
                             'total_acload' => $csInfo->total_acload ?? '-',
                         ];

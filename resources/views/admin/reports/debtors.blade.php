@@ -367,13 +367,14 @@
             var html = '<table class="detail-table">';
 
             if (isExpelledPage) {
-                html += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
+                html += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
                 html += '<tbody>';
                 if (r.debts && r.debts.length) {
                     for (var d = 0; d < r.debts.length; d++) {
                         var debt = r.debts[d];
                         html += '<tr>';
                         html += '<td>' + (d + 1) + '</td>';
+                        html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
                         html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
                         html += '<td>' + esc(debt.credit) + '</td>';
                         html += '<td>' + esc(debt.total_acload) + '</td>';

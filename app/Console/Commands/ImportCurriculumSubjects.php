@@ -96,28 +96,6 @@ class ImportCurriculumSubjects extends Command
             }
         } while ($page <= $totalPages);
 
-        // HEMIS'da bo'lmagan fanlarni deaktivatsiya qilish
-        // Faqat HEMIS qaytargan o'quv rejalar ichidagi fanlarni tekshiramiz
-        // (eski o'quv rejalar HEMIS API'da qaytarilmasligi mumkin, ularni deaktivatsiya qilmaymiz)
-        if (!empty($importedHemisIds)) {
-            // HEMIS qaytargan o'quv reja IDlarini aniqlash
-            $importedCurriculaIds = CurriculumSubject::whereIn('curriculum_subject_hemis_id', $importedHemisIds)
-                ->pluck('curricula_hemis_id')
-                ->unique()
-                ->values()
-                ->toArray();
-
-            $deactivatedCount = CurriculumSubject::whereIn('curricula_hemis_id', $importedCurriculaIds)
-                ->whereNotIn('curriculum_subject_hemis_id', $importedHemisIds)
-                ->where('is_active', true)
-                ->update(['is_active' => false]);
-
-            if ($deactivatedCount > 0) {
-                $this->info("Deactivated: {$deactivatedCount} curriculum subjects not found in HEMIS");
-                $telegram->notify("⚠️ HEMIS'da topilmagan {$deactivatedCount} ta o'quv reja fani deaktivatsiya qilindi");
-            }
-        }
-
         $telegram->notify("✅ O'quv reja fanlari importi tugadi. Jami: {$totalImported} ta");
         $this->info('Curriculum subjects import completed successfully.');
     }

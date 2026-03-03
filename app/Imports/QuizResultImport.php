@@ -66,10 +66,7 @@ class QuizResultImport implements ToCollection, WithHeadingRow, WithValidation
 
             $subject = null;
             if ($fanId) {
-                $subject = CurriculumSubject::where('subject_id', $fanId)
-                    ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-                    ->where('is_active', true)
-                    ->first();
+                $subject = CurriculumSubject::where('subject_id', $fanId)->first();
             }
 
             if (!$subject) {
@@ -79,7 +76,7 @@ class QuizResultImport implements ToCollection, WithHeadingRow, WithValidation
                     'student_name' => $row['student_name'] ?? '',
                     'fan_name' => $row['fan_name'] ?? '',
                     'grade' => $grade,
-                    'error' => "Faol fan topilmadi (fan_id: $fanId, curriculum: {$group->curriculum_hemis_id})",
+                    'error' => "Fan topilmadi (fan_id: $fanId)",
                 ];
                 continue;
             }

@@ -284,12 +284,6 @@ class TeacherController extends Controller
                 ->map(fn($s) => $s->subject_name . '|' . $s->semester_code);
         }
 
-        // Joriy o'quv yilini aniqlash (sentyabrdan boshlanadi)
-        $academicYearStart = now()->month >= 9 ? now()->year : now()->year - 1;
-        $currentEducationYear = $academicYearStart . '-' . ($academicYearStart + 1);
-
-        // Faqat joriy o'quv yilidagi semestr fanlarini olish
-        // Masalan: 2025-2026 yil uchun 3-kurs → 5,6 semestr, 4-kurs → 7,8 semestr
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
@@ -297,8 +291,7 @@ class TeacherController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->where('cs.is_active', true)
-            ->whereNotNull('cs.subject_name')
-            ->where('s.education_year', $currentEducationYear);
+            ->whereNotNull('cs.subject_name');
 
         // Kafedra bo'yicha filtrlash
         if ($filterDept && $teacher) {

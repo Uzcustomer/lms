@@ -170,14 +170,15 @@ class KtrController extends Controller
             }
         }
 
-        // Har bir o'quv rejadan faqat oxirgi 2 ta semestr fanlarini chiqarish
-        // (o'sha curriculumdagi semester_code dan kattaroq kodlar soni < 2 bo'lsa = oxirgi 2 ta)
-        $query->whereRaw('(
-            SELECT COUNT(DISTINCT s2.code)
-            FROM semesters AS s2
-            WHERE s2.curriculum_hemis_id = cs.curricula_hemis_id
-              AND (s2.code + 0) > (cs.semester_code + 0)
-        ) < 2');
+        // Har bir o'quv rejadan faqat joriy kursning 2 ta semestr fanlarini chiqarish
+        // kurs = joriy_yil - education_year_code
+        // Misol: 2026 - 2020 = 6-kurs → semestrlar 11, 12
+        //        2026 - 2022 = 4-kurs → semestrlar 7, 8
+        $currentYear = (int) date('Y');
+        $query->whereRaw('(cs.semester_code + 0) IN (
+            (? - c.education_year_code) * 2 - 1,
+            (? - c.education_year_code) * 2
+        )', [$currentYear, $currentYear]);
 
         // KTR holati filtri (yaratildi/yaratilmadi)
         $ktrStatus = $request->get('ktr_status', '');

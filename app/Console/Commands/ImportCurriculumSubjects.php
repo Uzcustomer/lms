@@ -96,7 +96,15 @@ class ImportCurriculumSubjects extends Command
             }
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ O'quv reja fanlari importi tugadi. Jami: {$totalImported} ta");
-        $this->info('Curriculum subjects import completed successfully.');
+        // API'dan qaytmagan fanlarni nofaol qilish (soft delete)
+        $deactivated = 0;
+        if (!empty($importedHemisIds)) {
+            $deactivated = CurriculumSubject::where('is_active', true)
+                ->whereNotIn('curriculum_subject_hemis_id', $importedHemisIds)
+                ->update(['is_active' => false]);
+        }
+
+        $telegram->notify("✅ O'quv reja fanlari importi tugadi. Jami: {$totalImported} ta, nofaol: {$deactivated} ta");
+        $this->info("Curriculum subjects import completed. Imported: {$totalImported}, deactivated: {$deactivated}");
     }
 }

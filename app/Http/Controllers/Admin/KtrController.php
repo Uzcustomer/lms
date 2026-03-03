@@ -152,33 +152,16 @@ class KtrController extends Controller
         }
 
         // Joriy semestr (adminlar uchun default ON, fan masuli uchun default OFF)
-        // curriculum_weeks sanalariga asoslangan, agar ma'lumot bo'lmasa HEMIS current flagiga qaytadi
+        // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
         $currentSemesterDefault = $isFanMasuli ? '0' : '1';
         if ($request->get('current_semester', $currentSemesterDefault) == '1') {
-            // curriculum_weeks orqali joriy semestrlarni aniqlash
-            $currentSemesterIds = DB::table('curriculum_weeks')
-                ->select('semester_hemis_id')
-                ->groupBy('semester_hemis_id')
-                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
-                ->pluck('semester_hemis_id');
-
-            if ($currentSemesterIds->isNotEmpty()) {
-                $query->whereIn('s.semester_hemis_id', $currentSemesterIds);
-            } else {
-                // Fallback: curriculum_weeks bo'sh yoki joriy sana tushmaganida — HEMIS current flagidan foydalanamiz
-                $query->where('s.current', true);
-            }
+            $query->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            });
         }
-
-        // Har bir o'quv rejadan faqat joriy kursning 2 ta semestr fanlarini chiqarish
-        // kurs = joriy_yil - education_year_code
-        // Misol: 2026 - 2020 = 6-kurs → semestrlar 11, 12
-        //        2026 - 2022 = 4-kurs → semestrlar 7, 8
-        $currentYear = (int) date('Y');
-        $query->whereRaw('(cs.semester_code + 0) IN (
-            (? - c.education_year_code) * 2 - 1,
-            (? - c.education_year_code) * 2
-        )', [$currentYear, $currentYear]);
 
         // KTR holati filtri (yaratildi/yaratilmadi)
         $ktrStatus = $request->get('ktr_status', '');
@@ -286,12 +269,6 @@ class KtrController extends Controller
                     ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
             });
         }
-        // Yilga asoslangan semestr filtri
-        $currentYear = (int) date('Y');
-        $query->whereRaw('(cs.semester_code + 0) IN (
-            (? - c.education_year_code) * 2 - 1,
-            (? - c.education_year_code) * 2
-        )', [$currentYear, $currentYear]);
 
         $specialties = $query
             ->select('sp.specialty_hemis_id', 'sp.name')
@@ -385,12 +362,6 @@ class KtrController extends Controller
                     ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
             });
         }
-        // Yilga asoslangan semestr filtri
-        $currentYear = (int) date('Y');
-        $query->whereRaw('(cs.semester_code + 0) IN (
-            (? - c.education_year_code) * 2 - 1,
-            (? - c.education_year_code) * 2
-        )', [$currentYear, $currentYear]);
 
         $subjects = $query
             ->select('cs.subject_name')
@@ -466,13 +437,6 @@ class KtrController extends Controller
                     ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
             });
         }
-
-        // Yilga asoslangan semestr filtri
-        $currentYear = (int) date('Y');
-        $query->whereRaw('(cs.semester_code + 0) IN (
-            (? - c.education_year_code) * 2 - 1,
-            (? - c.education_year_code) * 2
-        )', [$currentYear, $currentYear]);
 
         $query->orderBy('f.name')->orderBy('cs.subject_name');
         $items = $query->get();

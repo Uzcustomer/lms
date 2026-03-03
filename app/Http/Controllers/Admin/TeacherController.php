@@ -271,67 +271,72 @@ class TeacherController extends Controller
         $search = $request->input('q', '');
         $levelCode = $request->input('level_code', '');
         $teacherId = $request->input('teacher_id');
+        $filterDept = $request->input('filter_dept', '1') !== '0';
 
         $teacher = $teacherId ? Teacher::find($teacherId) : null;
 
-        // Query yaratish funksiyasi
-        $buildQuery = function ($filterByDept = true, $onlyActive = true) use ($search, $levelCode, $teacher) {
-            $query = CurriculumSubject::query();
-
-            if ($onlyActive) {
-                $query->where('is_active', true);
-            }
-
-            // Kafedra bo'yicha filtrlash (department_id yoki department_name)
-            if ($filterByDept && $teacher) {
-                $query->where(function ($q) use ($teacher) {
-                    if ($teacher->department_hemis_id) {
-                        $q->where('department_id', $teacher->department_hemis_id);
-                    }
-                    if ($teacher->department) {
-                        $q->orWhere('department_name', $teacher->department);
-                    }
-                });
-            }
-
-            return $query
-                ->when($search, function ($q, $search) {
-                    $q->where('subject_name', 'like', "%{$search}%");
-                })
-                ->when($levelCode, function ($q, $levelCode) {
-                    // Curricula va semesters orqali to'g'ri join bilan filtr
-                    $q->whereExists(function ($sub) use ($levelCode) {
-                        $sub->select(DB::raw(1))
-                            ->from('semesters as s')
-                            ->whereColumn('s.curriculum_hemis_id', 'curriculum_subjects.curricula_hemis_id')
-                            ->whereColumn('s.code', 'curriculum_subjects.semester_code')
-                            ->where('s.level_code', $levelCode);
-                    });
-                })
-                ->selectRaw('MIN(id) as id, subject_name, MIN(subject_code) as subject_code, semester_code, semester_name, MIN(department_name) as department_name')
-                ->groupBy('subject_name', 'semester_code', 'semester_name')
-                ->orderBy('subject_name')
-                ->orderBy('semester_code')
-                ->limit(50);
-        };
-
-        // 1. Kafedra + active
-        $subjects = $buildQuery(true, true)->get();
-
-        // 2. Kafedra + barcha (active bo'lmasa ham)
-        if ($subjects->isEmpty() && $teacher) {
-            $subjects = $buildQuery(true, false)->get();
+        // O'qituvchining biriktirilgan fanlarini olish (subject_name + semester_code bo'yicha)
+        $assignedSubjectKeys = collect();
+        if ($teacher) {
+            $assignedSubjectKeys = $teacher->responsibleSubjects()
+                ->select('subject_name', 'semester_code')
+                ->get()
+                ->map(fn($s) => $s->subject_name . '|' . $s->semester_code);
         }
 
-        // 3. Barcha fanlar + active (kafedrada umuman yo'q bo'lsa)
-        if ($subjects->isEmpty() && $teacher) {
-            $subjects = $buildQuery(false, true)->get();
+        // KTR bilan bir xil usulda fanlarni olish (curricula va semesters bilan JOIN)
+        $query = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->where('cs.is_active', true)
+            ->whereNotNull('cs.subject_name');
+
+        // Kafedra bo'yicha filtrlash
+        if ($filterDept && $teacher) {
+            $query->where(function ($q) use ($teacher) {
+                if ($teacher->department_hemis_id) {
+                    $q->where('cs.department_id', $teacher->department_hemis_id);
+                }
+                if ($teacher->department) {
+                    $q->orWhere('cs.department_name', $teacher->department);
+                }
+                $q->orWhereNull('cs.department_id');
+            });
         }
 
-        // 4. Barcha fanlar + barcha
-        if ($subjects->isEmpty()) {
-            $subjects = $buildQuery(false, false)->get();
+        // Fan nomi bo'yicha qidirish
+        if ($search) {
+            $query->where('cs.subject_name', 'like', "%{$search}%");
         }
+
+        // Kurs (level_code) bo'yicha filtrlash
+        if ($levelCode) {
+            $query->where('s.level_code', $levelCode);
+        }
+
+        $subjects = $query
+            ->select([
+                DB::raw('MIN(cs.id) as id'),
+                'cs.subject_name',
+                DB::raw('MIN(cs.subject_code) as subject_code'),
+                'cs.semester_code',
+                'cs.semester_name',
+                DB::raw('MIN(cs.department_name) as department_name'),
+                DB::raw('1 as is_active'),
+            ])
+            ->groupBy('cs.subject_name', 'cs.semester_code', 'cs.semester_name')
+            ->orderBy('cs.subject_name')
+            ->orderBy('cs.semester_code')
+            ->get();
+
+        // Har bir fan uchun is_assigned flagini qo'shish
+        $subjects->transform(function ($subject) use ($assignedSubjectKeys) {
+            $subject->is_assigned = $assignedSubjectKeys->contains($subject->subject_name . '|' . $subject->semester_code);
+            return $subject;
+        });
 
         return response()->json($subjects);
     }

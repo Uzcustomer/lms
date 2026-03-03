@@ -9,6 +9,7 @@ use App\Models\AbsenceExcuse;
 use App\Models\DocumentTemplate;
 use App\Models\ExcuseGradeOpening;
 use App\Models\StudentNotification;
+use App\Models\Setting;
 use App\Services\DocumentTemplateService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -223,7 +224,8 @@ class AbsenceExcuseController extends Controller
                 $dateFrom = $excuse->start_date;
                 $dateTo = $excuse->end_date;
                 $rangeDays = $dateFrom->diffInDays($dateTo) + 1;
-                $deadline = now()->addDays($rangeDays)->endOfDay();
+                $jnOpeningDays = max((int) Setting::get('lesson_opening_days', 3), 1);
+                $deadline = now()->addDays($jnOpeningDays)->endOfDay();
 
                 // Har bir fan uchun faqat bitta opening yaratish (dublikat oldini olish)
                 $processedSubjects = [];
@@ -266,6 +268,29 @@ class AbsenceExcuseController extends Controller
         } catch (\Throwable $e) {
             return back()->with('error', 'PDF generatsiyada xatolik: ' . $e->getMessage());
         }
+    }
+
+
+    public function destroy($id)
+    {
+        $excuse = AbsenceExcuse::findOrFail($id);
+
+        if (!in_array($excuse->status, ['pending', 'approved'], true)) {
+            return back()->with('error', "Faqat yangi yoki tasdiqlangan arizani o'chirish mumkin.");
+        }
+
+        if ($excuse->file_path && Storage::disk('public')->exists($excuse->file_path)) {
+            Storage::disk('public')->delete($excuse->file_path);
+        }
+
+        if ($excuse->approved_pdf_path && Storage::disk('public')->exists($excuse->approved_pdf_path)) {
+            Storage::disk('public')->delete($excuse->approved_pdf_path);
+        }
+
+        $excuse->delete();
+
+        return redirect()->route('admin.absence-excuses.index')
+            ->with('success', "Ariza o'chirildi.");
     }
 
     public function reject(Request $request, $id)

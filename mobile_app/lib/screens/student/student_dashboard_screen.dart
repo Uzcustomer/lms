@@ -25,6 +25,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       final provider = context.read<StudentProvider>();
       provider.loadDashboard();
       provider.loadProfile();
+      provider.loadContract();
     });
   }
 
@@ -87,6 +88,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               await Future.wait([
                 provider.loadDashboard(),
                 provider.loadProfile(),
+                provider.loadContract(),
               ]);
             },
             child: SingleChildScrollView(
@@ -146,7 +148,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
-                        _buildTuitionFeeSection(context, profile, l, isDark),
+                        _buildTuitionFeeSection(context, profile, provider.contract, l, isDark),
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -642,9 +644,20 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return name.isNotEmpty ? name[0] : '?';
   }
 
+  String _formatMoney(num amount) {
+    final str = amount.toInt().toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) buf.write(' ');
+      buf.write(str[i]);
+    }
+    return buf.toString();
+  }
+
   Widget _buildTuitionFeeSection(
     BuildContext context,
     Map<String, dynamic>? profile,
+    Map<String, dynamic>? contractData,
     AppLocalizations l,
     bool isDark,
   ) {
@@ -655,6 +668,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final cardColor = isDark ? AppTheme.darkCard : Colors.white;
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+
+    final summary = contractData?['summary'] as Map<String, dynamic>?;
+    final totalAmount = (summary?['total_amount'] ?? 0).toDouble();
+    final paidAmount = (summary?['paid_amount'] ?? 0).toDouble();
+    final remainingAmount = (summary?['remaining_amount'] ?? 0).toDouble();
+    final progress = totalAmount > 0 ? (paidAmount / totalAmount).clamp(0.0, 1.0) : 0.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -729,7 +748,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       style: TextStyle(fontSize: 13, color: subTextColor),
                     ),
                     Text(
-                      '-- / -- so\'m',
+                      '${_formatMoney(paidAmount)} / ${_formatMoney(totalAmount)} so\'m',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -742,14 +761,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: 0,
+                    value: progress,
                     backgroundColor: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
-                    valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.successColor),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      remainingAmount <= 0 ? AppTheme.successColor : AppTheme.warningColor,
+                    ),
                     minHeight: 6,
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Remaining & deadline
+                // Remaining
                 Row(
                   children: [
                     Expanded(
@@ -759,11 +780,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           Text(l.remaining, style: TextStyle(fontSize: 11, color: subTextColor)),
                           const SizedBox(height: 2),
                           Text(
-                            '-- so\'m',
+                            '${_formatMoney(remainingAmount)} so\'m',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: AppTheme.warningColor,
+                              color: remainingAmount <= 0 ? AppTheme.successColor : AppTheme.warningColor,
                             ),
                           ),
                         ],
@@ -776,7 +797,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           Text(l.deadline, style: TextStyle(fontSize: 11, color: subTextColor)),
                           const SizedBox(height: 2),
                           Text(
-                            '--',
+                            contractData?['education_year']?.toString() ?? '--',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,

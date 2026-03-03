@@ -2897,6 +2897,9 @@ class ReportController extends Controller
             if ($request->filled('student_status')) {
                 $studentQuery->where('s.student_status_code', $request->student_status);
             }
+            if ($request->filled('student_name')) {
+                $studentQuery->where('s.full_name', 'like', '%' . $request->student_name . '%');
+            }
             if ($request->filled('faculty')) {
                 $faculty = Department::find($request->faculty);
                 if ($faculty) {

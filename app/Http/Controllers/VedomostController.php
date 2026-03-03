@@ -345,7 +345,7 @@ class VedomostController extends Controller
                 $sheet = $spreadsheet->getActiveSheet();
 
                 $group = Group::whereIn("group_hemis_id", $request->group_id)->first();
-                $sheet->setCellValue('A4', $deportment->name);
+                $sheet->setCellValue('A4', mb_strtoupper($deportment->name));
                 $sheet->setCellValue('Y1', $shakl['name']);
                 $sheet->setCellValue('C8', $group->specialty_name);
                 $sheet->setCellValue('Q8', explode('-', $semester->name)[0]);
@@ -751,7 +751,7 @@ class VedomostController extends Controller
                 $sheet = $spreadsheet->getActiveSheet();
 
                 $group = Group::whereIn("group_hemis_id", $request->group_id)->first();
-                $sheet->setCellValue('A4', $deportment->name);
+                $sheet->setCellValue('A4', mb_strtoupper($deportment->name));
                 $sheet->setCellValue('C8', $group->specialty_name);
                 $sheet->setCellValue('T8', explode('-', $semester->name)[0]);
                 $sheet->setCellValue('Q8', explode('-', $semester->level_name)[0]);

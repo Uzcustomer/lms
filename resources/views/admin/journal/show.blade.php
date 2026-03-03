@@ -1135,7 +1135,7 @@
                                                             $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
                                                             $dayAvgColorClass = $dayAvg < ($minimumLimit ?? 60) ? 'text-red-600' : ($hasTeacherGradeInDay ? 'text-green-600' : 'text-gray-900');
                                                         @endphp
-                                                        <span class="{{ $isRetake ? 'grade-retake' : $dayAvgColorClass }} font-medium">{{ $dayAvg }}</span>
+                                                        <span class="{{ $dayAvgColorClass }} font-medium">{{ $dayAvg }}</span>
                                                         @if(count($dayGrades) > 1)
                                                             <span class="tooltip-content">{{ $gradesText }}</span>
                                                         @endif
@@ -1327,8 +1327,8 @@
                                                         $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable);
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
-                                                        $canEditOpened = ($isOpenedDate || $isExcuseOpenedForStudent) && $grade === null && !$isAbsent && $isOqituvchi;
-                                                        $canEditExcuseExisting = $isExcuseOpenedForStudent && $grade !== null && $isOqituvchi;
+                                                        $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi;
+                                                        $canEditExcuseExisting = false;
                                                         $showRatingInput = false;
                                                         $gradeRecordId = null;
                                                         $hasRetake = false;
@@ -1401,7 +1401,8 @@
                                                             @php
                                                                 $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
                                                                 $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
-                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                                $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
+                                                                $nbColorClass = ($isSababli || $hasApprovedExcuse) ? 'text-green-600' : 'text-red-600';
                                                             @endphp
                                                             <div class="split-cell cursor-pointer hover:bg-red-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'chirish"
                                                                 onclick="deleteRetakeGrade(this, {{ $gradeRecordId }})">
@@ -1414,7 +1415,8 @@
                                                             @php
                                                                 $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
                                                                 $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
-                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                                $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
+                                                                $nbColorClass = ($isSababli || $hasApprovedExcuse) ? 'text-green-600' : 'text-red-600';
                                                             @endphp
                                                             <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
@@ -1432,8 +1434,8 @@
                                                         @php
                                                             $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
                                                             $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
-                                                            $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
+                                                            $nbColorClass = ($isSababli || $hasApprovedExcuse) ? 'text-green-600' : 'text-red-600';
                                                             $excuseAlreadySaved = isset($excuseGradeSnapshots[$student->hemis_id]);
                                                         @endphp
                                                         @if($isExcuseOpenedForStudent && !$hasRetake && $isOqituvchi)
@@ -1453,7 +1455,7 @@
                                                             <div class="excuse-nb-cell editable-cell cursor-pointer hover:bg-amber-100"
                                                                  onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }})"
                                                                  title="Sababli — bosib baho kiriting">
-                                                                <span class="font-medium">NB</span>
+                                                                <span class="text-green-600 font-medium">NB</span>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
                                                             </div>
                                                         @elseif($showRatingInput)

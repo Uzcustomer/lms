@@ -139,7 +139,12 @@ class JournalController extends Controller
             $kafedraQuery->whereIn('cs.subject_id', $teacherSubjectIds);
         }
         if ($request->get('current_semester', '1') == '1') {
-            $kafedraQuery->where('s.current', true);
+            $kafedraQuery->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            });
         }
 
         $kafedras = $kafedraQuery
@@ -221,8 +226,14 @@ class JournalController extends Controller
         }
 
         // Joriy semestr filtri (default ON)
+        // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
         if ($request->get('current_semester', '1') == '1') {
-            $query->where('s.current', true);
+            $query->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            });
         }
 
         // Sorting
@@ -761,14 +772,10 @@ class JournalController extends Controller
                 $q2->where('education_year_code', $educationYearCode)
                     ->orWhere(function ($q3) use ($minScheduleDate) {
                         $q3->whereNull('education_year_code')
-                            ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
-                                $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-                            }));
+                            ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
                     });
             }))
-            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
-                $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
             ->get();
 
@@ -2838,7 +2845,12 @@ class JournalController extends Controller
             $query->where('s.level_code', $request->level_code);
         }
         if ($request->get('current_semester') == '1') {
-            $query->where('s.current', true);
+            $query->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            });
         }
 
         if ($isOqituvchi) {
@@ -2908,17 +2920,27 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Joriy semestr bo'yicha filtrlash
+        // Joriy semestr bo'yicha filtrlash (curriculum_weeks sanalariga asoslangan)
         if ($request->get('current_semester') == '1') {
-            $curriculaIds = Semester::where('current', true)
+            $currentSemesterHemisIds = DB::table('curriculum_weeks')
+                ->select('semester_hemis_id')
+                ->groupBy('semester_hemis_id')
+                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
+                ->pluck('semester_hemis_id');
+            $curriculaIds = Semester::whereIn('semester_hemis_id', $currentSemesterHemisIds)
                 ->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
         // Semestr bo'yicha filtrlash (joriy semestr orqali guruh aniqlanadi)
         if ($request->filled('semester_code')) {
+            $currentSemesterHemisIds = DB::table('curriculum_weeks')
+                ->select('semester_hemis_id')
+                ->groupBy('semester_hemis_id')
+                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
+                ->pluck('semester_hemis_id');
             $curriculaIds = Semester::where('code', $request->semester_code)
-                ->where('current', true)
+                ->whereIn('semester_hemis_id', $currentSemesterHemisIds)
                 ->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
@@ -5652,14 +5674,10 @@ class JournalController extends Controller
                 $q2->where('education_year_code', $educationYearCode)
                     ->orWhere(function ($q3) use ($minScheduleDate) {
                         $q3->whereNull('education_year_code')
-                            ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
-                                $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-                            }));
+                            ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
                     });
             }))
-            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
-                $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
             ->get();
 
@@ -5753,10 +5771,18 @@ class JournalController extends Controller
         } else {
             $kurs = preg_replace('/\D/', '', $semester->level_code ?? '');
         }
-        $semesterInYear = ((int)($semester->code ?? 1) % 2 !== 0) ? 1 : 2;
+        // Semestrni kurs ichidagi pozitsiyasini aniqlash (1 yoki 2)
+        $levelSemesters = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+            ->where('level_code', $semester->level_code)
+            ->orderBy('code')
+            ->pluck('code')
+            ->values();
+        $semesterPos = $levelSemesters->search($semester->code);
+        $semesterInYear = $semesterPos !== false ? $semesterPos + 1 : 1;
 
         // Header
-        $sheet->setCellValue('A4', ($faculty->name ?? '') . ' FAKULTETI');
+        $facultyName = preg_replace('/\s*fakulteti?\s*$/iu', '', $faculty->name ?? '');
+        $sheet->setCellValue('A4', $facultyName . ' FAKULTETI');
         $sheet->setCellValue('C8', '         ' . ($specialty->name ?? ''));
         $sheet->setCellValue('N8', $kurs);
         $sheet->setCellValue('Q8', $semesterInYear);
@@ -5767,7 +5793,44 @@ class JournalController extends Controller
         $sheet->setCellValue('A11', "Ma'ruzachi:");
         $sheet->setCellValue('C11', '         ' . $abbreviatedMaruza);
         $sheet->setCellValue('D13', $subject->total_acload ?? 0);
-        $sheet->setCellValue('G13', $subject->total_credit ?? 0);
+        $sheet->setCellValue('G13', $subject->credit ?? 0);
+
+        // Kafedra mudiri
+        $kafedra = Department::where('department_hemis_id', $subject->department_id)->first();
+        $kafedraMudiriName = '';
+        if ($kafedra) {
+            $mudiri = Teacher::whereHas('roles', fn($q) => $q->where('name', 'kafedra_mudiri'))
+                ->where('department_hemis_id', $kafedra->department_hemis_id)
+                ->where('is_active', true)
+                ->first();
+            if (!$mudiri) {
+                $mudiri = Teacher::where('role', 'kafedra_mudiri')
+                    ->where('department_hemis_id', $kafedra->department_hemis_id)
+                    ->where('is_active', true)
+                    ->first();
+            }
+            if (!$mudiri) {
+                $mudiri = Teacher::where('staff_position', 'LIKE', '%mudiri%')
+                    ->where('department_hemis_id', $kafedra->department_hemis_id)
+                    ->where('is_active', true)
+                    ->first();
+            }
+            if ($mudiri) {
+                // I.O.Familya formati: "SHAMSUTDINOVA MAKSUDA ILYASOVNA" → "M.I.Shamsutdinova"
+                $nameParts = preg_split('/\s+/', trim($mudiri->full_name));
+                if (count($nameParts) >= 3) {
+                    $surname = mb_strtoupper(mb_substr($nameParts[0], 0, 1)) . mb_strtolower(mb_substr($nameParts[0], 1));
+                    $initials = '';
+                    for ($i = 1; $i < count($nameParts); $i++) {
+                        $initials .= mb_strtoupper(mb_substr($nameParts[$i], 0, 1)) . '.';
+                    }
+                    $kafedraMudiriName = $initials . $surname;
+                } else {
+                    $kafedraMudiriName = $mudiri->full_name;
+                }
+            }
+        }
+        $sheet->setCellValue('U60', $kafedraMudiriName);
 
         // Vaznlar haqida ma'lumot
         $sheet->setCellValue('V18', 'Yakuniy ball');

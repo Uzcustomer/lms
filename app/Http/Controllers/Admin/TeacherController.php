@@ -271,6 +271,7 @@ class TeacherController extends Controller
         $search = $request->input('q', '');
         $levelCode = $request->input('level_code', '');
         $teacherId = $request->input('teacher_id');
+        $filterDept = $request->input('filter_dept', '1') !== '0';
 
         $teacher = $teacherId ? Teacher::find($teacherId) : null;
 
@@ -292,6 +293,19 @@ class TeacherController extends Controller
             })
             ->where('cs.is_active', true)
             ->whereNotNull('cs.subject_name');
+
+        // Kafedra bo'yicha filtrlash
+        if ($filterDept && $teacher) {
+            $query->where(function ($q) use ($teacher) {
+                if ($teacher->department_hemis_id) {
+                    $q->where('cs.department_id', $teacher->department_hemis_id);
+                }
+                if ($teacher->department) {
+                    $q->orWhere('cs.department_name', $teacher->department);
+                }
+                $q->orWhereNull('cs.department_id');
+            });
+        }
 
         // Fan nomi bo'yicha qidirish
         if ($search) {
@@ -316,7 +330,6 @@ class TeacherController extends Controller
             ->groupBy('cs.subject_name', 'cs.semester_code', 'cs.semester_name')
             ->orderBy('cs.subject_name')
             ->orderBy('cs.semester_code')
-            ->limit(200)
             ->get();
 
         // Har bir fan uchun is_assigned flagini qo'shish

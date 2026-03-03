@@ -3729,6 +3729,31 @@ class ReportController extends Controller
     }
 
     /**
+     * Talabaning barcha academic records — semestrlarga guruhlangan
+     */
+    public function studentAllRecords(Request $request)
+    {
+        try {
+            $studentId = $request->get('student_id');
+
+            if (!$studentId) {
+                return response()->json(['semesters' => []]);
+            }
+
+            $semesters = DB::table('academic_records')
+                ->where('student_id', $studentId)
+                ->select('semester_id', 'semester_name', DB::raw('COUNT(*) as subject_count'))
+                ->groupBy('semester_id', 'semester_name')
+                ->orderBy('semester_id')
+                ->get();
+
+            return response()->json(['semesters' => $semesters]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage(), 'semesters' => []], 500);
+        }
+    }
+
+    /**
      * Sababli check hisoboti sahifasi
      * Onlayn sababli qilishga ariza yozganlar bilan HEMISda davomat sababli qilinganini tekshirish
      */

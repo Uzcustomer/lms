@@ -615,6 +615,9 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/unread-count', [\App\Http\Controllers\Student\NotificationController::class, 'unreadCount'])->name('unread-count');
             Route::post('/{id}/read', [\App\Http\Controllers\Student\NotificationController::class, 'markAsRead'])->name('mark-read');
             Route::post('/read-all', [\App\Http\Controllers\Student\NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+            Route::post('/bulk-mark-read', [\App\Http\Controllers\Student\NotificationController::class, 'bulkMarkRead'])->name('bulk-mark-read');
+            Route::post('/bulk-delete', [\App\Http\Controllers\Student\NotificationController::class, 'bulkDelete'])->name('bulk-delete');
+            Route::post('/delete-all', [\App\Http\Controllers\Student\NotificationController::class, 'deleteAll'])->name('delete-all');
         });
 
         // Imtihon natijalari bo'yicha apellyatsiya

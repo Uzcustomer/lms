@@ -348,8 +348,10 @@ class VedomostController extends Controller
                 $sheet->setCellValue('A4', mb_strtoupper($deportment->name));
                 $sheet->setCellValue('Y1', $shakl['name']);
                 $sheet->setCellValue('C8', $group->specialty_name);
-                $sheet->setCellValue('Q8', explode('-', $semester->name)[0]);
-                $sheet->setCellValue('N8', explode('-', $semester->level_name)[0]);
+                $kurs = (int) explode('-', $semester->level_name)[0];
+                $semWithinYear = (int) explode('-', $semester->name)[0];
+                $sheet->setCellValue('Q8', ($kurs - 1) * 2 + $semWithinYear);
+                $sheet->setCellValue('N8', $kurs);
                 $sheet->setCellValue('W8', $vedomost->group_name);
                 $sheet->setCellValue('C10', $vedomost->subject_name);
                 $sheet->setCellValue('D13', $subject->total_acload);
@@ -753,8 +755,10 @@ class VedomostController extends Controller
                 $group = Group::whereIn("group_hemis_id", $request->group_id)->first();
                 $sheet->setCellValue('A4', mb_strtoupper($deportment->name));
                 $sheet->setCellValue('C8', $group->specialty_name);
-                $sheet->setCellValue('T8', explode('-', $semester->name)[0]);
-                $sheet->setCellValue('Q8', explode('-', $semester->level_name)[0]);
+                $kurs = (int) explode('-', $semester->level_name)[0];
+                $semWithinYear = (int) explode('-', $semester->name)[0];
+                $sheet->setCellValue('T8', ($kurs - 1) * 2 + $semWithinYear);
+                $sheet->setCellValue('Q8', $kurs);
                 $sheet->setCellValue('Z8', $vedomost->group_name);
                 $sheet->setCellValue('C10', $vedomost->subject_name);
                 $sheet->setCellValue('D13', $subject->total_acload);

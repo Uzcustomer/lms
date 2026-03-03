@@ -16,7 +16,7 @@
                     </svg>
                     <div>
                         <p class="text-xs text-purple-700 font-medium">Imtihon natijasiga e'tiroz bildirish uchun apellyatsiya topshiring.</p>
-                        <p class="text-[11px] text-purple-500 mt-0.5">Bahoni tanlang, sababni batafsil yozing. Ariza ko'rib chiqiladi.</p>
+                        <p class="text-[11px] text-purple-500 mt-0.5">Oxirgi 24 soatda qo'yilgan bahoni va baho turini tanlang, sababni batafsil yozing. Ariza ko'rib chiqiladi.</p>
                     </div>
                 </div>
             </div>
@@ -24,8 +24,21 @@
             <form method="POST" action="{{ route('student.appeals.store') }}" enctype="multipart/form-data" class="p-4 space-y-5">
                 @csrf
 
-                {{-- 1. Baho tanlash --}}
+                {{-- 1. Baho turi + baho tanlash --}}
                 <div>
+                    @if(!$grades->isEmpty())
+                        <label for="training_type_filter" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                            Baho turi
+                        </label>
+                        <select id="training_type_filter"
+                                class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 mb-3">
+                            <option value="">-- Barcha baho turlari --</option>
+                            @foreach($grades->pluck('training_type_name')->filter()->unique()->values() as $typeName)
+                                <option value="{{ $typeName }}">{{ $typeName }}</option>
+                            @endforeach
+                        </select>
+                    @endif
+
                     <label for="student_grade_id" class="block text-sm font-semibold text-gray-700 mb-1.5">
                         Bahoni tanlang <span class="text-red-500">*</span>
                     </label>
@@ -38,7 +51,9 @@
                                 class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 @error('student_grade_id') border-red-300 @enderror">
                             <option value="">-- Bahoni tanlang --</option>
                             @foreach($grades as $g)
-                                <option value="{{ $g['id'] }}" {{ old('student_grade_id') == $g['id'] ? 'selected' : '' }}>
+                                <option value="{{ $g['id'] }}"
+                                        data-type="{{ $g['training_type_name'] }}"
+                                        {{ old('student_grade_id') == $g['id'] ? 'selected' : '' }}>
                                     {{ $g['label'] }}{{ $g['lesson_date'] ? ' - ' . $g['lesson_date'] : '' }}
                                 </option>
                             @endforeach
@@ -124,9 +139,39 @@
         document.addEventListener('DOMContentLoaded', function() {
             const grades = @json($grades);
             const select = document.getElementById('student_grade_id');
+            const typeFilter = document.getElementById('training_type_filter');
             const infoBox = document.getElementById('gradeInfo');
             const textarea = document.getElementById('reason');
             const charCount = document.getElementById('charCount');
+
+            if (!select) {
+                return;
+            }
+
+            const refreshGradeOptions = () => {
+                const selectedType = typeFilter ? typeFilter.value : '';
+
+                Array.from(select.options).forEach((option, index) => {
+                    if (index === 0) {
+                        option.hidden = false;
+                        return;
+                    }
+
+                    const optionType = option.dataset.type || '';
+                    option.hidden = !!selectedType && optionType !== selectedType;
+                });
+
+                const selectedOption = select.options[select.selectedIndex];
+                if (selectedOption && selectedOption.hidden) {
+                    select.value = '';
+                    infoBox.classList.add('hidden');
+                }
+            };
+
+            if (typeFilter) {
+                typeFilter.addEventListener('change', refreshGradeOptions);
+                refreshGradeOptions();
+            }
 
             // Baho tanlanganda info ko'rsatish
             select.addEventListener('change', function() {

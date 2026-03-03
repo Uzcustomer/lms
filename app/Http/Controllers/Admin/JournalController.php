@@ -138,12 +138,11 @@ class JournalController extends Controller
             $kafedraQuery->whereIn('cs.subject_id', $teacherSubjectIds);
         }
         if ($request->get('current_semester', '1') == '1') {
-            $kafedraQuery->whereIn('cs.semester_code', function ($sub) {
-                $sub->select('s_cw.code')
-                    ->from('curriculum_weeks as cw_inner')
-                    ->join('semesters as s_cw', 's_cw.semester_hemis_id', '=', 'cw_inner.semester_hemis_id')
-                    ->groupBy('s_cw.code')
-                    ->havingRaw('MIN(cw_inner.start_date) <= NOW() AND MAX(cw_inner.end_date) >= NOW()');
+            $kafedraQuery->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
             });
         }
 
@@ -226,15 +225,13 @@ class JournalController extends Controller
         }
 
         // Joriy semestr filtri (default ON)
-        // curriculum_weeks sanalariga asoslangan — semester CODE bo'yicha moslashtirish
-        // (biror curriculum'da code joriy bo'lsa, barcha curriculum'lardagi shu code ham joriy)
+        // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
         if ($request->get('current_semester', '1') == '1') {
-            $query->whereIn('cs.semester_code', function ($sub) {
-                $sub->select('s_cw.code')
-                    ->from('curriculum_weeks as cw_inner')
-                    ->join('semesters as s_cw', 's_cw.semester_hemis_id', '=', 'cw_inner.semester_hemis_id')
-                    ->groupBy('s_cw.code')
-                    ->havingRaw('MIN(cw_inner.start_date) <= NOW() AND MAX(cw_inner.end_date) >= NOW()');
+            $query->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
             });
         }
 
@@ -2846,12 +2843,11 @@ class JournalController extends Controller
             $query->where('s.level_code', $request->level_code);
         }
         if ($request->get('current_semester') == '1') {
-            $query->whereIn('cs.semester_code', function ($sub) {
-                $sub->select('s_cw.code')
-                    ->from('curriculum_weeks as cw_inner')
-                    ->join('semesters as s_cw', 's_cw.semester_hemis_id', '=', 'cw_inner.semester_hemis_id')
-                    ->groupBy('s_cw.code')
-                    ->havingRaw('MIN(cw_inner.start_date) <= NOW() AND MAX(cw_inner.end_date) >= NOW()');
+            $query->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
             });
         }
 
@@ -2922,29 +2918,27 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Joriy semestr bo'yicha filtrlash (semester code bo'yicha — eskirgan curriculum_weeks'dan himoya)
+        // Joriy semestr bo'yicha filtrlash (curriculum_weeks sanalariga asoslangan)
         if ($request->get('current_semester') == '1') {
-            $currentSemesterCodes = DB::table('curriculum_weeks as cw')
-                ->join('semesters as s2', 's2.semester_hemis_id', '=', 'cw.semester_hemis_id')
-                ->select('s2.code')
-                ->groupBy('s2.code')
-                ->havingRaw('MIN(cw.start_date) <= NOW() AND MAX(cw.end_date) >= NOW()')
-                ->pluck('code');
-            $curriculaIds = Semester::whereIn('code', $currentSemesterCodes)
+            $currentSemesterHemisIds = DB::table('curriculum_weeks')
+                ->select('semester_hemis_id')
+                ->groupBy('semester_hemis_id')
+                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
+                ->pluck('semester_hemis_id');
+            $curriculaIds = Semester::whereIn('semester_hemis_id', $currentSemesterHemisIds)
                 ->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
         // Semestr bo'yicha filtrlash (joriy semestr orqali guruh aniqlanadi)
         if ($request->filled('semester_code')) {
-            $currentSemesterCodes = DB::table('curriculum_weeks as cw')
-                ->join('semesters as s2', 's2.semester_hemis_id', '=', 'cw.semester_hemis_id')
-                ->select('s2.code')
-                ->groupBy('s2.code')
-                ->havingRaw('MIN(cw.start_date) <= NOW() AND MAX(cw.end_date) >= NOW()')
-                ->pluck('code');
+            $currentSemesterHemisIds = DB::table('curriculum_weeks')
+                ->select('semester_hemis_id')
+                ->groupBy('semester_hemis_id')
+                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
+                ->pluck('semester_hemis_id');
             $curriculaIds = Semester::where('code', $request->semester_code)
-                ->whereIn('code', $currentSemesterCodes)
+                ->whereIn('semester_hemis_id', $currentSemesterHemisIds)
                 ->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }

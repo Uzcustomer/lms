@@ -755,6 +755,11 @@
                         var isAlreadyAdded = isSubjectSelected(subject.id) || subject.is_assigned;
                         var isPending = isPendingSubject(subject.id);
 
+                        var extraInfo = '';
+                        if (subject.specialty_name) extraInfo += escapeHtml(subject.specialty_name);
+                        if (subject.education_type_name) extraInfo += (extraInfo ? ' | ' : '') + escapeHtml(subject.education_type_name);
+                        if (subject.level_name) extraInfo += (extraInfo ? ' | ' : '') + escapeHtml(subject.level_name);
+
                         if (isAlreadyAdded) {
                             html += '<div class="subject-result-item subject-result-disabled">' +
                                 '<div style="flex: 1; min-width: 0;">' +
@@ -763,6 +768,7 @@
                                 (subject.subject_code ? 'Kod: ' + escapeHtml(subject.subject_code) : '') +
                                 (subject.semester_name ? ' | ' + escapeHtml(subject.semester_name) : '') +
                                 '</div>' +
+                                (extraInfo ? '<div style="font-size: 10px; color: #94a3b8; margin-top: 1px;">' + extraInfo + '</div>' : '') +
                                 '</div>' +
                                 '<span style="font-size: 11px; color: #059669; font-weight: 600;">Qo\'shilgan</span>' +
                                 '</div>';
@@ -776,6 +782,7 @@
                                 (subject.subject_code ? 'Kod: ' + escapeHtml(subject.subject_code) : '') +
                                 (subject.semester_name ? ' | ' + escapeHtml(subject.semester_name) : '') +
                                 '</div>' +
+                                (extraInfo ? '<div style="font-size: 10px; color: #94a3b8; margin-top: 1px;">' + extraInfo + '</div>' : '') +
                                 '</div>' +
                                 '</div>';
                         }

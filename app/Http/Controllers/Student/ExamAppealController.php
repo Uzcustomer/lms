@@ -40,7 +40,10 @@ class ExamAppealController extends Controller
         $grades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
             ->whereNotNull('grade')
-            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->orderByDesc('created_at')
             ->get()
             ->map(function ($g) use ($since) {
@@ -54,7 +57,7 @@ class ExamAppealController extends Controller
                     'training_type_name' => $g->training_type_name,
                     'grade' => $g->grade,
                     'employee_name' => $g->employee_name,
-                    'lesson_date' => $g->lesson_date ? $g->lesson_date->format('d.m.Y') : null,
+                    'lesson_date' => $g->lesson_date ? Carbon::parse($g->lesson_date)->format('d.m.Y') : null,
                     'graded_at' => $gradeTime ? Carbon::parse($gradeTime)->format('d.m.Y H:i') : null,
                     'can_appeal' => $canAppeal,
                 ];

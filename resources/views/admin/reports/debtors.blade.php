@@ -225,11 +225,11 @@
     </div>
 
     <!-- Semester Grades Modal (2-chi modal — semestr baholar, ustiga ochiladi) -->
-    <div id="semester-modal" class="modal-overlay" style="display:none;z-index:1100;" onclick="if(event.target===this)closeSemesterModal()">
-        <div class="modal-content" style="max-width:700px;">
-            <div class="modal-header" style="background:linear-gradient(135deg,#4338ca 0%,#6366f1 100%);">
-                <h3 id="semester-modal-title" style="margin:0;font-size:16px;font-weight:700;color:#fff;"></h3>
-                <button onclick="closeSemesterModal()" class="modal-close" style="color:#fff;opacity:0.8;">&times;</button>
+    <div id="semester-modal" class="modal-overlay" style="display:none;z-index:10000;" onclick="if(event.target===this)closeSemesterModal()">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="semester-modal-title" style="margin:0;font-size:16px;font-weight:700;color:#0f172a;"></h3>
+                <button onclick="closeSemesterModal()" class="modal-close" style="background:#dc2626;color:#fff;">&times;</button>
             </div>
             <div id="semester-modal-body" class="modal-body"></div>
         </div>

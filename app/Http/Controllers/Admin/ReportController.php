@@ -3731,9 +3731,20 @@ class ReportController extends Controller
                 ->orderBy('subject_name')
                 ->get();
 
+            // DEBUG: qaysi qadamda muammo borligini aniqlash uchun
+            $debug = [
+                'input_student_id' => $studentId,
+                'input_semester_code' => $semesterCode,
+                'student_curriculum_id' => $student->curriculum_id,
+                'semester_hemis_id' => $semester->semester_hemis_id,
+                'ar_count_by_student' => DB::table('academic_records')->where('student_id', $studentId)->count(),
+                'ar_count_by_semester' => DB::table('academic_records')->where('student_id', $studentId)->where('semester_id', (string) $semester->semester_hemis_id)->count(),
+            ];
+
             return response()->json([
                 'semester_name' => $semester->name,
                 'grades' => $grades,
+                'debug' => $debug,
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage(), 'grades' => []], 500);

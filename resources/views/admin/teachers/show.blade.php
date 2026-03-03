@@ -843,9 +843,10 @@
 
                     // Qidiruv matni kiritilganda natijalarni avtomatik belgilash
                     if (query.length > 0) {
+                        pendingSubjects = [];
                         subjects.forEach(function(subject) {
                             var isAlreadyAdded = isSubjectSelected(subject.id) || subject.is_assigned;
-                            if (!isAlreadyAdded && !isPendingSubject(subject.id)) {
+                            if (!isAlreadyAdded) {
                                 pendingSubjects.push({
                                     id: subject.id,
                                     name: subject.subject_name,
@@ -854,6 +855,8 @@
                                 });
                             }
                         });
+                    } else {
+                        pendingSubjects = [];
                     }
                     updateSelectedCount();
 

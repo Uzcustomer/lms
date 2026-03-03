@@ -275,22 +275,22 @@ class TeacherController extends Controller
 
         $teacher = $teacherId ? Teacher::find($teacherId) : null;
 
-        // O'qituvchining biriktirilgan fanlarini olish (subject_name + semester_code bo'yicha)
-        $assignedSubjectKeys = collect();
+        // O'qituvchining biriktirilgan fan ID larini olish
+        $assignedSubjectIds = collect();
         if ($teacher) {
-            $assignedSubjectKeys = $teacher->responsibleSubjects()
-                ->select('subject_name', 'semester_code')
-                ->get()
-                ->map(fn($s) => $s->subject_name . '|' . $s->semester_code);
+            $assignedSubjectIds = $teacher->responsibleSubjects()
+                ->pluck('curriculum_subjects.id');
         }
 
-        // KTR bilan bir xil usulda fanlarni olish (curricula va semesters bilan JOIN)
+        // KTR bilan bir xil usulda fanlarni olish (GROUP BY siz, har bir qator alohida)
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
                 $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
                     ->on('s.code', '=', 'cs.semester_code');
             })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
             ->where('cs.is_active', true)
             ->whereNotNull('cs.subject_name');
 
@@ -319,22 +319,24 @@ class TeacherController extends Controller
 
         $subjects = $query
             ->select([
-                DB::raw('MIN(cs.id) as id'),
+                'cs.id',
                 'cs.subject_name',
-                DB::raw('MIN(cs.subject_code) as subject_code'),
+                'cs.subject_code',
                 'cs.semester_code',
                 'cs.semester_name',
-                DB::raw('MIN(cs.department_name) as department_name'),
-                DB::raw('1 as is_active'),
+                'cs.department_name',
+                'c.education_type_name',
+                'sp.name as specialty_name',
+                's.level_name',
+                's.level_code',
             ])
-            ->groupBy('cs.subject_name', 'cs.semester_code', 'cs.semester_name')
             ->orderBy('cs.subject_name')
             ->orderBy('cs.semester_code')
             ->get();
 
         // Har bir fan uchun is_assigned flagini qo'shish
-        $subjects->transform(function ($subject) use ($assignedSubjectKeys) {
-            $subject->is_assigned = $assignedSubjectKeys->contains($subject->subject_name . '|' . $subject->semester_code);
+        $subjects->transform(function ($subject) use ($assignedSubjectIds) {
+            $subject->is_assigned = $assignedSubjectIds->contains($subject->id);
             return $subject;
         });
 

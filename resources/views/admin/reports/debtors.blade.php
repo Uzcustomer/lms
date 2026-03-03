@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            Qarzdorlar hisoboti
+            {{ $reportTitle ?? 'Qarzdorlar hisoboti' }}
         </h2>
     </x-slot>
 
@@ -51,7 +51,7 @@
                             <select id="student_status" class="select2" style="width: 100%;">
                                 @foreach($studentStatuses as $status)
                                     <option value="{{ $status->student_status_code }}"
-                                        {{ str_contains(mb_strtolower($status->student_status_name ?? ''), 'qimoqda') ? 'selected' : '' }}>
+                                        {{ str_contains(mb_strtolower($status->student_status_name ?? ''), $defaultStatusKeyword ?? 'qimoqda') ? 'selected' : '' }}>
                                         {{ $status->student_status_name }}
                                     </option>
                                 @endforeach
@@ -65,6 +65,7 @@
                                 @endforeach
                             </select>
                         </div>
+                        @unless($isExpelledPage ?? false)
                         <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Min. qarzdorlik</label>
                             <select id="min_debt_count" class="select2" style="width: 100%;">
@@ -73,6 +74,7 @@
                                 @endforeach
                             </select>
                         </div>
+                        @endunless
                     </div>
                     <!-- Row 2 -->
                     <div class="filter-row">
@@ -88,6 +90,7 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                             <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                        @unless($isExpelledPage ?? false)
                         <div class="filter-item" style="flex: 1; min-width: 220px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Kafedra</label>
                             <select id="department" class="select2" style="width: 100%;">
@@ -97,6 +100,12 @@
                                 @endforeach
                             </select>
                         </div>
+                        @else
+                        <div class="filter-item" style="flex: 1; min-width: 220px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Talaba F.I.Sh</label>
+                            <input id="student_name" type="text" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm" placeholder="Talaba ismi..." />
+                        </div>
+                        @endunless
                         <div class="filter-item" style="flex: 1; min-width: 280px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
@@ -142,7 +151,7 @@
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">4 va undan ortiq fandan qarzdor talabalar ro'yxati</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">{{ $emptySubtitle ?? "4 va undan ortiq fandan qarzdor talabalar ro'yxati" }}</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
@@ -227,7 +236,8 @@
                 subject: $('#subject').val() || '',
                 student_status: $('#student_status').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
-                min_debt_count: $('#min_debt_count').val() || 4,
+                min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() || 4) : 4),
+                student_name: ($('#student_name').length ? ($('#student_name').val() || '') : ''),
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
                 direction: currentDirection,
@@ -247,7 +257,7 @@
             var startTime = performance.now();
 
             $.ajax({
-                url: '{{ route("admin.reports.debtors.data") }}',
+                url: '{{ route($dataRouteName ?? 'admin.reports.debtors.data') }}',
                 type: 'GET',
                 data: params,
                 timeout: 120000,
@@ -372,7 +382,7 @@
             var params = getFilters();
             params.export = type;
             var query = $.param(params);
-            window.location.href = '{{ route("admin.reports.debtors.data") }}?' + query;
+            window.location.href = '{{ route($dataRouteName ?? 'admin.reports.debtors.data') }}?' + query;
         }
 
         function renderPagination(res) {

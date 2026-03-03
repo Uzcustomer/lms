@@ -146,6 +146,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'show'])->name('show');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'reject'])->name('reject');
+            Route::delete('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'destroy'])->name('destroy');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'download'])->name('download');
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
         });
@@ -382,6 +383,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
         Route::get('/reports/debtors/data', [ReportController::class, 'debtorsReportData'])->name('reports.debtors.data');
+        Route::get('/reports/expelled-debtors', [ReportController::class, 'expelledDebtorsReport'])->name('reports.expelled-debtors');
+        Route::get('/reports/expelled-debtors/data', [ReportController::class, 'expelledDebtorsReportData'])->name('reports.expelled-debtors.data');
 
         Route::get('/reports/sababli-check', [ReportController::class, 'sababliCheckReport'])->name('reports.sababli-check');
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');

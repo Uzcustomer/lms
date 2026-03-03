@@ -2980,6 +2980,29 @@ class ReportController extends Controller
                 return $this->exportDebtorsFullExcel($finalResults);
             }
 
+            // Umumiy ko'rsatkichlar
+            $totalDebtSubjects = 0;
+            $totalCredits = 0;
+            $debtsByFaculty = [];
+            foreach ($finalResults as $r) {
+                $totalDebtSubjects += $r['debt_count'];
+                $fac = $r['department_name'] ?? 'Noma\'lum';
+                $debtsByFaculty[$fac] = ($debtsByFaculty[$fac] ?? 0) + 1;
+                foreach ($r['debts'] as $d) {
+                    $cr = is_numeric($d['credit']) ? (float) $d['credit'] : 0;
+                    $totalCredits += $cr;
+                }
+            }
+            arsort($debtsByFaculty);
+
+            $summary = [
+                'total_students' => count($finalResults),
+                'total_debt_subjects' => $totalDebtSubjects,
+                'total_credits' => round($totalCredits, 1),
+                'avg_debts_per_student' => count($finalResults) > 0 ? round($totalDebtSubjects / count($finalResults), 1) : 0,
+                'by_faculty' => $debtsByFaculty,
+            ];
+
             // Sahifalash
             $page = $request->get('page', 1);
             $perPage = $request->get('per_page', 50);
@@ -2998,6 +3021,7 @@ class ReportController extends Controller
                 'per_page' => $perPage,
                 'current_page' => (int) $page,
                 'last_page' => ceil($total / $perPage),
+                'summary' => $summary,
             ]);
         } catch (\Throwable $e) {
             \Log::error('Academic debts report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);

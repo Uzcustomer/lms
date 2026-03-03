@@ -22,6 +22,9 @@ Schedule::command('student:import-data --mode=final')->dailyAt('04:00')->when(fu
 });
 Schedule::command('command:independent-auto-create')->dailyAt('06:00');
 
+// Akademik ma'lumotnoma: HEMIS dan academic records import (har kuni 02:00 da)
+Schedule::command('import:academic-records')->dailyAt('02:00')->withoutOverlapping(120);
+
 // O'qituvchilarga davomat va baho eslatmalari (har kuni 13:00, 15:00, 17:00, 19:00, 21:00, 23:00)
 Schedule::command('teachers:send-reminders')->dailyAt('13:00');
 Schedule::command('teachers:send-reminders')->dailyAt('15:00');

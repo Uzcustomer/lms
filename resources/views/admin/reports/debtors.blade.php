@@ -478,15 +478,7 @@
                 success: function(resp) {
                     var grades = resp.grades || [];
                     if (!grades.length) {
-                        var dbg = resp.debug || {};
-                        var dbgHtml = '<div style="padding:12px;color:#94a3b8;">Bu semestrda academic record topilmadi';
-                        dbgHtml += '<br><small style="color:#cbd5e1;">DEBUG: student_id=' + dbg.input_student_id;
-                        dbgHtml += ', curriculum_id=' + dbg.student_curriculum_id;
-                        dbgHtml += ', semester_hemis_id=' + dbg.semester_hemis_id;
-                        dbgHtml += ', ar_by_student=' + dbg.ar_count_by_student;
-                        dbgHtml += ', ar_by_sem=' + dbg.ar_count_by_semester;
-                        dbgHtml += '</small></div>';
-                        $cell.html(dbgHtml);
+                        $cell.html('<div style="padding:12px;color:#94a3b8;">Bu semestrda academic record topilmadi</div>');
                         $cell.data('loaded', true);
                         return;
                     }

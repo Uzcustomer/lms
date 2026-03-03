@@ -3712,39 +3712,28 @@ class ReportController extends Controller
                 return response()->json(['grades' => []]);
             }
 
-            // Shu curriculum + semester_code uchun semester_hemis_id ni topamiz
+            // Shu curriculum + semester_code uchun semester nomini topamiz
             $semester = DB::table('semesters')
                 ->where('curriculum_hemis_id', $student->curriculum_id)
                 ->where('code', $semesterCode)
-                ->select('semester_hemis_id', 'name')
+                ->select('name')
                 ->first();
 
             if (!$semester) {
                 return response()->json(['grades' => []]);
             }
 
-            // Academic records dan shu talaba + shu semester uchun barcha baholarni olamiz
+            // Academic records dan shu talaba + shu semester_name uchun barcha baholarni olamiz
             $grades = DB::table('academic_records')
                 ->where('student_id', $studentId)
-                ->where('semester_id', (string) $semester->semester_hemis_id)
+                ->where('semester_name', $semester->name)
                 ->select('subject_name', 'credit', 'total_acload', 'total_point', 'grade')
                 ->orderBy('subject_name')
                 ->get();
 
-            // DEBUG: qaysi qadamda muammo borligini aniqlash uchun
-            $debug = [
-                'input_student_id' => $studentId,
-                'input_semester_code' => $semesterCode,
-                'student_curriculum_id' => $student->curriculum_id,
-                'semester_hemis_id' => $semester->semester_hemis_id,
-                'ar_count_by_student' => DB::table('academic_records')->where('student_id', $studentId)->count(),
-                'ar_count_by_semester' => DB::table('academic_records')->where('student_id', $studentId)->where('semester_id', (string) $semester->semester_hemis_id)->count(),
-            ];
-
             return response()->json([
                 'semester_name' => $semester->name,
                 'grades' => $grades,
-                'debug' => $debug,
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage(), 'grades' => []], 500);

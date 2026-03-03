@@ -284,7 +284,7 @@ class TeacherController extends Controller
                 ->map(fn($s) => $s->subject_name . '|' . $s->semester_code);
         }
 
-        // Barcha o'quv rejalardan fanlarni olish (GROUP BY bilan takrorlanishsiz)
+        // Joriy semestr fanlarini olish (curriculum_weeks sanalariga asoslangan — KTR kabi)
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
@@ -292,7 +292,14 @@ class TeacherController extends Controller
                     ->on('s.code', '=', 'cs.semester_code');
             })
             ->where('cs.is_active', true)
-            ->whereNotNull('cs.subject_name');
+            ->whereNotNull('cs.subject_name')
+            // Faqat joriy semestr — curriculum_weeks sanalariga asoslangan
+            ->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            });
 
         // Kafedra bo'yicha filtrlash
         if ($filterDept && $teacher) {

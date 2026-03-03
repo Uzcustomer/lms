@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Carbon;
 
 class ExamAppealController extends Controller
 {
@@ -30,15 +31,21 @@ class ExamAppealController extends Controller
     public function create()
     {
         $student = Auth::guard('student')->user();
+        $since = Carbon::now()->subDay();
 
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        // Faqat yakuniy (is_final) va OSKI/Test baholarni ko'rsatish
+        // Faqat joriy talabaning oxirgi 24 soat ichida qo'yilgan baholarini ko'rsatish
         $grades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
             ->whereNotNull('grade')
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->where(function ($q) use ($since) {
+                $q->where('created_at', '>=', $since)
+                    ->orWhere('updated_at', '>=', $since)
+                    ->orWhere('created_at_api', '>=', $since);
+            })
             ->orderByDesc('lesson_date')
             ->get()
             ->map(fn($g) => [
@@ -71,8 +78,14 @@ class ExamAppealController extends Controller
         ]);
 
         $student = Auth::guard('student')->user();
+        $since = Carbon::now()->subDay();
         $grade = StudentGrade::where('id', $request->student_grade_id)
             ->where('student_id', $student->id)
+            ->where(function ($q) use ($since) {
+                $q->where('created_at', '>=', $since)
+                    ->orWhere('updated_at', '>=', $since)
+                    ->orWhere('created_at_api', '>=', $since);
+            })
             ->firstOrFail();
 
         // Bir xil baho uchun takroriy apellyatsiya tekshiruvi

@@ -504,8 +504,12 @@
                     $cell.html(gh);
                     $cell.data('loaded', true);
                 },
-                error: function() {
-                    $cell.html('<div style="padding:12px;color:#ef4444;">Xatolik yuz berdi</div>');
+                error: function(xhr) {
+                    var errMsg = 'Xatolik yuz berdi';
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errMsg += ': ' + xhr.responseJSON.error;
+                    }
+                    $cell.html('<div style="padding:12px;color:#ef4444;">' + esc(errMsg) + '</div>');
                 }
             });
         }

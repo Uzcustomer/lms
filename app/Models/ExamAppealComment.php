@@ -12,6 +12,8 @@ class ExamAppealComment extends Model
         'user_id',
         'user_name',
         'comment',
+        'file_path',
+        'file_original_name',
     ];
 
     public function appeal()

@@ -146,24 +146,44 @@
                                             <span class="text-[10px] text-gray-400">{{ $comment->created_at->format('d.m H:i') }}</span>
                                         </div>
                                         <p class="text-[13px] text-gray-700 whitespace-pre-line leading-relaxed">{{ $comment->comment }}</p>
+                                        @if($comment->file_path)
+                                            <a href="{{ Storage::url($comment->file_path) }}" target="_blank"
+                                               class="inline-flex items-center gap-1 mt-1 text-xs text-indigo-600 hover:text-indigo-800">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                                                {{ $comment->file_original_name }}
+                                            </a>
+                                        @endif
                                     </div>
                                 </div>
                             @endforeach
                         </div>
                     @endif
 
-                    <form method="POST" action="{{ route('student.appeals.comment', $appeal->id) }}" class="flex items-center gap-2">
+                    <form method="POST" action="{{ route('student.appeals.comment', $appeal->id) }}" enctype="multipart/form-data" class="flex items-center gap-2">
                         @csrf
                         <input type="text" name="comment" required minlength="3" maxlength="1000"
                                class="flex-1 rounded-lg border-2 border-indigo-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3"
                                style="height: 40px;"
                                placeholder="Izoh yozing...">
+                        <input type="file" name="file" id="comment-file-input" class="hidden"
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip">
+                        <button type="button" onclick="document.getElementById('comment-file-input').click()"
+                                class="flex items-center justify-center bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition flex-shrink-0 border border-gray-300 relative"
+                                style="height: 40px; width: 40px;" title="Hujjat yuklash">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                            <span id="file-indicator" class="hidden absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border border-white"></span>
+                        </button>
                         <button type="submit"
                                 class="flex items-center justify-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex-shrink-0"
                                 style="height: 40px; width: 40px;">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                         </button>
                     </form>
+                    <script>
+                        document.getElementById('comment-file-input').addEventListener('change', function() {
+                            document.getElementById('file-indicator').classList.toggle('hidden', !this.files.length);
+                        });
+                    </script>
                     @error('comment')
                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                     @enderror

@@ -58,6 +58,18 @@
                                 $headerDot = 'bg-red-400';
                                 $statusBadge = ['text' => 'Rad etildi', 'class' => 'bg-red-100 text-red-700'];
                             }
+                        } elseif ($notification->type === 'appeal') {
+                            $appealData = $notification->data ?? [];
+                            $isAppealApproved = ($appealData['status'] ?? '') === 'approved';
+                            if ($isAppealApproved) {
+                                $headerColor = 'text-emerald-700 bg-emerald-50 border-emerald-300';
+                                $headerDot = 'bg-emerald-400';
+                                $statusBadge = ['text' => 'Qabul qilindi', 'class' => 'bg-emerald-100 text-emerald-700'];
+                            } else {
+                                $headerColor = 'text-red-700 bg-red-50 border-red-300';
+                                $headerDot = 'bg-red-400';
+                                $statusBadge = ['text' => 'Rad etildi', 'class' => 'bg-red-100 text-red-700'];
+                            }
                         } elseif ($notification->type === 'sms') {
                             $headerColor = 'text-blue-700 bg-blue-50 border-blue-200';
                             $headerDot = 'bg-blue-400';

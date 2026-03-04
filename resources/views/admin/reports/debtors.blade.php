@@ -513,14 +513,19 @@
                     }
                     var gh = '<div style="padding:4px 0;">';
                     gh += '<table class="detail-table" style="margin:0;">';
-                    gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th></tr></thead><tbody>';
+                    gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th></tr></thead><tbody>';
                     for (var g = 0; g < grades.length; g++) {
                         var gr = grades[g];
+                        var point = gr.total_point || '-';
+                        var grade = gr.grade || '-';
+                        var gradeClass = (point !== '-' && parseFloat(point) >= 60) ? 'cell-pass' : 'cell-fail';
                         gh += '<tr style="background:#fff;">';
                         gh += '<td>' + (g + 1) + '</td>';
                         gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name) + '</td>';
                         gh += '<td>' + esc(gr.credit) + '</td>';
                         gh += '<td>' + esc(gr.total_acload) + '</td>';
+                        gh += '<td class="' + gradeClass + '">' + esc(point) + '</td>';
+                        gh += '<td><span class="badge badge-indigo">' + esc(grade) + '</span></td>';
                         gh += '</tr>';
                     }
                     gh += '</tbody></table></div>';

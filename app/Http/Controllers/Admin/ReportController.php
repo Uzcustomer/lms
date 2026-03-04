@@ -3711,12 +3711,17 @@ class ReportController extends Controller
 
             $groupName = $request->get('group_name', '');
 
-            $grades = DB::table('curriculum_subjects')
-                ->where('curricula_hemis_id', $student->curriculum_id)
-                ->where('semester_code', $semesterCode)
-                ->where('is_active', true)
-                ->select('subject_name', 'credit', 'total_acload')
-                ->orderBy('subject_name')
+            $grades = DB::table('curriculum_subjects as cs')
+                ->leftJoin('academic_records as ar', function ($join) use ($studentId, $semesterCode) {
+                    $join->on('ar.subject_id', '=', 'cs.subject_id')
+                        ->where('ar.student_id', '=', $studentId)
+                        ->where('ar.semester_id', '=', $semesterCode);
+                })
+                ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->where('cs.semester_code', $semesterCode)
+                ->where('cs.is_active', true)
+                ->select('cs.subject_name', 'cs.credit', 'cs.total_acload', 'ar.total_point', 'ar.grade')
+                ->orderBy('cs.subject_name')
                 ->get();
 
             // Guruh suffiksi bo'yicha filtr: "d1/23-01b" → "b"

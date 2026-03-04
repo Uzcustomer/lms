@@ -1857,7 +1857,8 @@
                                                 }
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
-                                            $inputDisabled = $isDekan || $isRegistrator || $hasGrade || !$hasFile;
+                                            $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+                                            $inputDisabled = $isDekan || $isRegistrator || $hasGrade || (!$hasFile && !$isAdminMt);
 
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade
                                             $urgency = 'none'; // none, fresh, warning, danger
@@ -1908,7 +1909,7 @@
                                                 @endif
                                             </td>
                                             <td class="px-1 py-1 text-center">
-                                                @if($hasFile)
+                                                @if($hasFile || $isAdminMt)
                                                     <input type="number"
                                                         id="mt-grade-{{ $student->hemis_id }}"
                                                         class="mt-grade-input"
@@ -1923,7 +1924,7 @@
                                                 @endif
                                             </td>
                                             <td class="px-1 py-1" id="mt-comment-{{ $student->hemis_id }}">
-                                                @if($hasFile)
+                                                @if($hasFile || $isAdminMt)
                                                     @if($isLockedPermanent)
                                                         <span style="font-size: 12px; color: #6b7280; font-style: italic;">{{ $gradeRow->grade_comment ?? '' }}</span>
                                                     @elseif($hasGrade && !$canRegrade)
@@ -1955,8 +1956,8 @@
                                                 @endif
                                             </td>
                                             <td class="px-1 py-1 text-center" id="mt-action-{{ $student->hemis_id }}">
-                                                @if(!$hasFile)
-                                                    {{-- No file: cannot grade --}}
+                                                @if(!$hasFile && !$isAdminMt)
+                                                    {{-- No file and not admin: cannot grade --}}
                                                     <span style="color: #9ca3af; font-size: 12px;">—</span>
                                                 @elseif(!$hasGrade)
                                                     {{-- Has file, no grade yet: show Save button --}}

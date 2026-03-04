@@ -248,4 +248,15 @@ class ExamAppealController extends Controller
 
         return Storage::disk('public')->download($appeal->file_path, $appeal->file_original_name);
     }
+
+    public function downloadCommentFile($id)
+    {
+        $comment = ExamAppealComment::findOrFail($id);
+
+        if (!$comment->file_path || !Storage::disk('public')->exists($comment->file_path)) {
+            abort(404, 'Fayl topilmadi.');
+        }
+
+        return Storage::disk('public')->download($comment->file_path, $comment->file_original_name);
+    }
 }

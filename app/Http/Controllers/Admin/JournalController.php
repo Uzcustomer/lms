@@ -1945,6 +1945,7 @@ class JournalController extends Controller
         $grade = $request->grade;
         $gradeComment = $request->input('grade_comment');
         $isRegrade = (bool) $request->input('regrade', false);
+        $isAdminEdit = (bool) $request->input('admin_edit', false);
 
         // YN ga yuborilganligini tekshirish — qulflangan bo'lsa tahrirlash mumkin emas
         $ynLocked = DB::table('student_grades')
@@ -2035,6 +2036,52 @@ class JournalController extends Controller
 
         // If existing grade >= minimum_limit, it's permanently locked
         $minimumLimit = MarkingSystemScore::getByStudentHemisId($studentHemisId)->minimum_limit;
+
+        // Admin edit: directly update existing grade, bypass all locks
+        if ($isAdminEdit && $isAdminRole && $existingGrade) {
+            DB::table('student_grades')
+                ->where('id', $existingGrade->id)
+                ->update([
+                    'grade' => $grade,
+                    'grade_comment' => $gradeComment,
+                    'updated_at' => now(),
+                ]);
+
+            $maxResubmissions = (int) \App\Models\Setting::get('mt_max_resubmissions', 3);
+            $historyCount = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->count();
+
+            $history = DB::table('mt_grade_history')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->orderBy('attempt_number')
+                ->get()
+                ->map(fn($h) => [
+                    'id' => $h->id,
+                    'attempt' => $h->attempt_number,
+                    'grade' => round($h->grade),
+                    'has_file' => !empty($h->file_path),
+                ])
+                ->toArray();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Baho o\'zgartirildi (admin)',
+                'locked' => true,
+                'can_regrade' => false,
+                'waiting_resubmit' => $grade < $minimumLimit && ($historyCount + 1) <= $maxResubmissions,
+                'grade' => $grade,
+                'attempt' => $historyCount + 1,
+                'max_attempts' => $maxResubmissions,
+                'history' => $history,
+                'admin_edited' => true,
+            ]);
+        }
+
         if ($existingGrade && $existingGrade->grade >= $minimumLimit) {
             return response()->json([
                 'success' => false,

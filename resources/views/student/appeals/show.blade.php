@@ -84,6 +84,7 @@
                 @endif
 
                 {{-- Izohlar --}}
+                @if($appeal->relationLoaded('comments'))
                 <div>
                     <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Izohlar ({{ $appeal->comments->count() }})</h3>
                     @if($appeal->comments->count() > 0)
@@ -123,6 +124,7 @@
                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                     @enderror
                 </div>
+                @endif
 
                 {{-- Ko'rib chiqish natijasi --}}
                 @if($appeal->status === 'approved' || $appeal->status === 'rejected')

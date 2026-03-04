@@ -76,7 +76,11 @@ class ExamAppealController extends Controller
 
     public function show($id)
     {
-        $appeal = ExamAppeal::with(['student', 'comments'])->findOrFail($id);
+        $eagerLoad = ['student'];
+        if (Schema::hasTable('exam_appeal_comments')) {
+            $eagerLoad[] = 'comments';
+        }
+        $appeal = ExamAppeal::with($eagerLoad)->findOrFail($id);
 
         return view('admin.exam-appeals.show', compact('appeal'));
     }

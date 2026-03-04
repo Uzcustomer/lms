@@ -137,7 +137,8 @@ class ExamAppealController extends Controller
     public function show($id)
     {
         $student = Auth::guard('student')->user();
-        $appeal = ExamAppeal::with('comments')
+        $eagerLoad = Schema::hasTable('exam_appeal_comments') ? ['comments'] : [];
+        $appeal = ExamAppeal::with($eagerLoad)
             ->where('id', $id)
             ->where('student_id', $student->id)
             ->firstOrFail();

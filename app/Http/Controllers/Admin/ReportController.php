@@ -3692,7 +3692,7 @@ class ReportController extends Controller
     }
 
     /**
-     * Talabaning ma'lum semestrdagi barcha baholari (academic_records)
+     * Talabaning ma'lum semestrdagi barcha fanlari (curriculum_subjects dan)
      */
     public function studentSemesterGrades(Request $request)
     {
@@ -3704,20 +3704,28 @@ class ReportController extends Controller
                 return response()->json(['grades' => []]);
             }
 
-            $grades = DB::table('academic_records')
-                ->where('student_id', $studentId)
-                ->where('semester_id', $semesterCode)
-                ->select('subject_name', 'credit', 'total_acload', 'total_point', 'grade')
+            $student = DB::table('students')->where('hemis_id', $studentId)->first();
+            if (!$student || !$student->curriculum_id) {
+                return response()->json(['grades' => []]);
+            }
+
+            $groupName = $request->get('group_name', '');
+
+            $grades = DB::table('curriculum_subjects')
+                ->where('curricula_hemis_id', $student->curriculum_id)
+                ->where('semester_code', $semesterCode)
+                ->where('is_active', true)
+                ->select('subject_name', 'credit', 'total_acload')
                 ->orderBy('subject_name')
                 ->get();
 
             // Guruh suffiksi bo'yicha filtr: "d1/23-01b" → "b"
-            $groupName = $request->get('group_name', '');
             $grades = $this->filterSubjectsByGroupSuffix($grades, $groupName);
 
-            $semesterName = DB::table('academic_records')
-                ->where('student_id', $studentId)
-                ->where('semester_id', $semesterCode)
+            $semesterName = DB::table('curriculum_subjects')
+                ->where('curricula_hemis_id', $student->curriculum_id)
+                ->where('semester_code', $semesterCode)
+                ->where('is_active', true)
                 ->value('semester_name');
 
             return response()->json([
@@ -3730,7 +3738,7 @@ class ReportController extends Controller
     }
 
     /**
-     * Talabaning barcha academic records — semestrlarga guruhlangan
+     * Talabaning barcha semestrlari — curriculum_subjects dan
      */
     public function studentAllRecords(Request $request)
     {
@@ -3741,21 +3749,27 @@ class ReportController extends Controller
                 return response()->json(['semesters' => []]);
             }
 
+            $student = DB::table('students')->where('hemis_id', $studentId)->first();
+            if (!$student || !$student->curriculum_id) {
+                return response()->json(['semesters' => []]);
+            }
+
             $groupName = $request->get('group_name', '');
 
-            $records = DB::table('academic_records')
-                ->where('student_id', $studentId)
-                ->select('semester_id', 'semester_name', 'subject_name')
-                ->orderBy('semester_id')
+            $records = DB::table('curriculum_subjects')
+                ->where('curricula_hemis_id', $student->curriculum_id)
+                ->where('is_active', true)
+                ->select('semester_code', 'semester_name', 'subject_name')
+                ->orderBy('semester_code')
                 ->get();
 
             // Guruh suffiksi bo'yicha filtr
             $records = $this->filterSubjectsByGroupSuffix($records, $groupName);
 
             // Semestrlarga guruhlash
-            $semesters = $records->groupBy('semester_id')->map(function ($items, $semesterId) {
+            $semesters = $records->groupBy('semester_code')->map(function ($items, $semesterCode) {
                 return (object) [
-                    'semester_id' => $semesterId,
+                    'semester_id' => $semesterCode,
                     'semester_name' => $items->first()->semester_name,
                     'subject_count' => $items->count(),
                 ];

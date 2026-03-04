@@ -143,13 +143,26 @@
                     @endif
                 </div>
 
-                {{-- Xato xabar --}}
-                <div x-show="errorMessage" x-transition
-                     class="px-3 py-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-start gap-2">
-                    <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
-                    </svg>
-                    <span x-text="errorMessage"></span>
+                {{-- Xato modal --}}
+                <div x-show="showErrorModal" x-transition.opacity style="position:fixed;inset:0;z-index:99999;display:none;" class="flex items-center justify-center">
+                    <div @click="showErrorModal = false" style="position:absolute;inset:0;background:rgba(0,0,0,0.4);"></div>
+                    <div x-show="showErrorModal" x-transition.scale.90 class="relative bg-white rounded-2xl shadow-2xl mx-4 w-full max-w-sm overflow-hidden" @click.away="showErrorModal = false">
+                        <div class="flex flex-col items-center px-5 pt-6 pb-4">
+                            <div class="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mb-3">
+                                <svg class="w-7 h-7 text-red-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-base font-bold text-gray-800 mb-1">Muddat tugagan</h3>
+                            <p class="text-sm text-gray-500 text-center">Baho qo'yilganidan 24 soat o'tgan. Faqat 24 soat ichida apellyatsiya topshirish mumkin.</p>
+                        </div>
+                        <div class="px-5 pb-5">
+                            <button @click="showErrorModal = false"
+                                    class="w-full py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition">
+                                Tushundim
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 {{-- 2. Sabab --}}
@@ -208,12 +221,11 @@
                 selectedGradeId: '{{ old("student_grade_id", "") }}',
                 typeFilter: '',
                 charCount: {{ old('reason') ? strlen(old('reason')) : 0 }},
-                errorMessage: '',
+                showErrorModal: false,
 
                 selectGrade(id, canAppeal) {
-                    this.errorMessage = '';
                     if (!canAppeal) {
-                        this.errorMessage = 'Bu bahoga apellyatsiya berish muddati tugagan. Baho qo\'yilganidan 24 soat ichida apellyatsiya topshirish mumkin.';
+                        this.showErrorModal = true;
                         this.selectedGradeId = '';
                         return;
                     }

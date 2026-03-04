@@ -36,10 +36,11 @@ class ExamAppealController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        // Jurnaldagi barcha baholarni ko'rsatish
+        // Faqat OSKI (101), ON (100), Test (102), YN test larni ko'rsatish
         $grades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
             ->whereNotNull('grade')
+            ->whereIn('training_type_code', [100, 101, 102])
             ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
                 $q2->where('education_year_code', $educationYearCode)
                     ->orWhereNull('education_year_code');

@@ -1050,13 +1050,24 @@ class StudentApiController extends Controller
         $currentSemester = Semester::where('current', true)->first();
         $educationYearCode = $currentSemester?->education_year ?? $student->education_year_code;
 
+        // edu_year formati: "2025-2026 o`quv yili"
         $items = \App\Models\ContractList::where('student_hemis_id', $student->hemis_id)
+            ->where('edu_year', 'like', $educationYearCode . '%')
             ->orderByDesc('education_year')
             ->get();
 
         $contracts = [];
         $totalAmount = 0;
         $paidAmount = 0;
+
+        // Kontrakt summa turi — ruscha -> o'zbekcha
+        $sumTypeTranslations = [
+            'С стипендией' => 'Stipendiya bilan',
+            'Без стипендии' => 'Stipendiyasiz',
+            'Со скидкой' => 'Chegirma bilan',
+            'Полная оплата' => "To'liq to'lov",
+            'Грант' => 'Grant',
+        ];
 
         foreach ($items as $item) {
             $amount = (float) ($item->edu_contract_sum ?? 0);
@@ -1068,19 +1079,32 @@ class StudentApiController extends Controller
 
             $status = $unpaid <= 0 ? 'paid' : 'unpaid';
 
+            $sumTypeName = $item->edu_contract_sum_type_name;
+            $sumTypeNameUz = $sumTypeTranslations[$sumTypeName] ?? $sumTypeName;
+
             $contracts[] = [
                 'id' => $item->hemis_id,
                 'key' => $item->key,
                 'education_year' => $item->education_year,
+                'edu_year' => $item->edu_year,
+                'edu_course' => $item->edu_course,
                 'contract_amount' => $amount,
                 'paid_amount' => $paid,
                 'unpaid_amount' => $unpaid,
                 'status' => $status,
                 'contract_number' => $item->contract_number,
                 'edu_contract_type_name' => $item->edu_contract_type_name,
+                'edu_contract_sum_type_name' => $sumTypeNameUz,
                 'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
                 'updated_at' => $item->updated_at?->format('Y-m-d H:i:s'),
             ];
+        }
+
+        // Kurs va semestr
+        $course = null;
+        if ($student->semester_name && preg_match('/(\d+)/', $student->semester_name, $matches)) {
+            $semNum = (int) $matches[1];
+            $course = (int) ceil($semNum / 2);
         }
 
         return response()->json([
@@ -1093,6 +1117,8 @@ class StudentApiController extends Controller
                 ],
                 'student_name' => $student->full_name,
                 'education_year' => $educationYearCode,
+                'course' => $course,
+                'semester_name' => $student->semester_name,
             ],
         ]);
     }

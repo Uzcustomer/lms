@@ -1041,69 +1041,45 @@ class StudentApiController extends Controller
     }
 
     /**
-     * Contract — shartnoma ma'lumotlari (HEMIS dan)
+     * Contract — shartnoma ma'lumotlari (lokal DB dan)
      */
     public function contract(Request $request): JsonResponse
     {
         $student = $request->user();
-        $hemisService = app(HemisService::class);
 
         $currentSemester = Semester::where('current', true)->first();
         $educationYearCode = $currentSemester?->education_year ?? $student->education_year_code;
 
-        $result = $hemisService->fetchContracts([
-            '_student' => $student->hemis_id,
-            '_education_year' => $educationYearCode,
-            'limit' => 50,
-        ]);
+        $items = \App\Models\ContractList::where('student_hemis_id', $student->hemis_id)
+            ->orderByDesc('education_year')
+            ->get();
 
-        if (!($result['success'] ?? false)) {
-            return response()->json([
-                'data' => [
-                    'contracts' => [],
-                    'summary' => [
-                        'total_amount' => 0,
-                        'paid_amount' => 0,
-                        'remaining_amount' => 0,
-                    ],
-                ],
-                'message' => 'Shartnoma ma\'lumotlari topilmadi',
-            ]);
-        }
-
-        $items = $result['data']['items'] ?? [];
         $contracts = [];
         $totalAmount = 0;
         $paidAmount = 0;
 
         foreach ($items as $item) {
-            $contractData = [];
-            foreach ($item['_data'] ?? [] as $attr) {
-                foreach ($attr as $key => $value) {
-                    $contractData[$key] = $value;
-                }
-            }
-
-            $amount = (float) ($contractData['payment_amount'] ?? $contractData['amount'] ?? $contractData['summa'] ?? $contractData['contract_amount'] ?? 0);
-            $paid = (float) ($contractData['paid_amount'] ?? $contractData['paid'] ?? $contractData['tolangan'] ?? 0);
+            $amount = (float) ($item->edu_contract_sum ?? 0);
+            $paid = (float) ($item->paid_credit_amount ?? 0);
+            $unpaid = (float) ($item->unpaid_credit_amount ?? ($amount - $paid));
 
             $totalAmount += $amount;
             $paidAmount += $paid;
 
-            $unpaid = $amount - $paid;
             $status = $unpaid <= 0 ? 'paid' : 'unpaid';
 
             $contracts[] = [
-                'id' => $item['id'] ?? null,
-                'key' => $item['key'] ?? null,
-                'education_year' => $item['_education_year'] ?? null,
+                'id' => $item->hemis_id,
+                'key' => $item->key,
+                'education_year' => $item->education_year,
                 'contract_amount' => $amount,
                 'paid_amount' => $paid,
                 'unpaid_amount' => $unpaid,
                 'status' => $status,
-                'data' => $contractData,
-                'created_at' => isset($item['created_at']) ? date('Y-m-d H:i:s', $item['created_at']) : null,
-                'updated_at' => isset($item['updated_at']) ? date('Y-m-d H:i:s', $item['updated_at']) : null,
+                'contract_number' => $item->contract_number,
+                'edu_contract_type_name' => $item->edu_contract_type_name,
+                'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
+                'updated_at' => $item->updated_at?->format('Y-m-d H:i:s'),
             ];
         }
 

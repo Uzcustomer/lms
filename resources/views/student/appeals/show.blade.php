@@ -63,7 +63,7 @@
                 </div>
 
                 {{-- O'qituvchi va sana --}}
-                <div class="flex flex-wrap gap-x-4 gap-y-1">
+                <div class="flex flex-col gap-1">
                     @if($appeal->employee_name)
                         <div class="flex items-center gap-1.5">
                             <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/></svg>
@@ -81,7 +81,7 @@
                 {{-- Sabab --}}
                 <div>
                     <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Sabab</p>
-                    <div class="bg-gray-50 rounded-lg px-3 py-2.5">
+                    <div class="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5">
                         <p class="text-[13px] text-gray-700 whitespace-pre-line leading-relaxed">{{ $appeal->reason }}</p>
                     </div>
                 </div>
@@ -152,13 +152,13 @@
                         </div>
                     @endif
 
-                    <form method="POST" action="{{ route('student.appeals.comment', $appeal->id) }}" class="flex gap-2">
+                    <form method="POST" action="{{ route('student.appeals.comment', $appeal->id) }}" class="flex items-center gap-2">
                         @csrf
                         <input type="text" name="comment" required minlength="3" maxlength="1000"
-                               class="flex-1 rounded-full border-gray-200 shadow-sm focus:border-indigo-400 focus:ring-indigo-400 text-sm px-4 py-2"
+                               class="flex-1 rounded-full border-gray-200 shadow-sm focus:border-indigo-400 focus:ring-indigo-400 text-xs px-3 py-1.5"
                                placeholder="Izoh yozing...">
                         <button type="submit"
-                                class="w-9 h-9 flex items-center justify-center bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition flex-shrink-0">
+                                class="w-8 h-8 flex items-center justify-center bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition flex-shrink-0">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                         </button>
                     </form>
@@ -171,15 +171,6 @@
             </div>
         </div>
 
-        {{-- Orqaga --}}
-        <div class="mt-4 mb-6">
-            <a href="{{ route('student.appeals.index') }}"
-               class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                </svg>
-                Barcha arizalar
-            </a>
-        </div>
+        <div class="mb-6"></div>
     </div>
 </x-student-app-layout>

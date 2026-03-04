@@ -346,9 +346,20 @@ class TeacherController extends Controller
             ->orderBy('cs.semester_code')
             ->get();
 
-        // Har bir fan uchun is_assigned flagini qo'shish
-        $subjects->transform(function ($subject) use ($assignedSubjectIds) {
+        // Har bir curriculum_subject_id uchun mas'ul o'qituvchilar ro'yxatini olish
+        $subjectIds = $subjects->pluck('id')->toArray();
+        $responsibleTeachers = DB::table('teacher_responsible_subjects as trs')
+            ->join('teachers as t', 't.id', '=', 'trs.teacher_id')
+            ->whereIn('trs.curriculum_subject_id', $subjectIds)
+            ->select('trs.curriculum_subject_id', 't.id as teacher_id', 't.full_name')
+            ->get()
+            ->groupBy('curriculum_subject_id');
+
+        // Har bir fan uchun is_assigned va responsible_teachers qo'shish
+        $subjects->transform(function ($subject) use ($assignedSubjectIds, $responsibleTeachers) {
             $subject->is_assigned = $assignedSubjectIds->contains($subject->id);
+            $teachers = $responsibleTeachers->get($subject->id, collect());
+            $subject->responsible_teachers = $teachers->pluck('full_name')->values()->toArray();
             return $subject;
         });
 

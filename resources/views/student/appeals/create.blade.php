@@ -72,7 +72,7 @@
                                     <div class="flex items-start justify-between gap-2">
                                         <div class="min-w-0 flex-1">
                                             <p class="text-sm font-semibold text-gray-800 truncate">{{ $g['subject_name'] }}</p>
-                                            <p class="text-[11px] text-gray-500 mt-0.5">{{ $g['training_type_name'] }}</p>
+                                            <p class="text-sm font-bold text-green-600 mt-0.5">{{ $g['training_type_name'] }}</p>
                                         </div>
                                         <div class="flex-shrink-0 text-right">
                                             <span class="inline-flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold
@@ -156,7 +156,7 @@
                             <h3 class="text-base font-bold text-gray-800 mb-1">Muddat tugagan</h3>
                             <p class="text-sm text-gray-500 text-center">Baho qo'yilganidan 24 soat o'tgan. Faqat 24 soat ichida apellyatsiya topshirish mumkin.</p>
                         </div>
-                        <div class="px-5 pb-5">
+                        <div class="px-5 pb-5 pt-1">
                             <button @click="showErrorModal = false"
                                     class="w-full py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition">
                                 Tushundim

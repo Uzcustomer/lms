@@ -150,6 +150,7 @@ class ExamAppealController extends Controller
     {
         $request->validate([
             'comment' => ['required', 'string', 'min:3', 'max:1000'],
+            'file' => ['nullable', 'file', 'max:2048', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip'],
         ], [
             'comment.required' => 'Izoh yozing.',
             'comment.min' => 'Izoh kamida 3 ta belgidan iborat bo\'lishi kerak.',
@@ -160,13 +161,21 @@ class ExamAppealController extends Controller
             ->where('student_id', $student->id)
             ->firstOrFail();
 
-        ExamAppealComment::create([
+        $data = [
             'exam_appeal_id' => $appeal->id,
             'user_type' => 'student',
             'user_id' => $student->id,
             'user_name' => $student->full_name ?? 'Talaba',
             'comment' => $request->comment,
-        ]);
+        ];
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $data['file_path'] = $file->store('appeal-comments', 'public');
+            $data['file_original_name'] = $file->getClientOriginalName();
+        }
+
+        ExamAppealComment::create($data);
 
         return redirect()->route('student.appeals.show', $appeal->id)
             ->with('success', 'Izoh qo\'shildi.');

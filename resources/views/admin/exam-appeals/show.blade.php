@@ -261,6 +261,54 @@
                 @endif
             </div>
 
+            {{-- ═══════ Izohlar ═══════ --}}
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-5">
+                <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
+                    <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                    <h3 class="text-base font-bold text-white">Izohlar ({{ $appeal->comments->count() }})</h3>
+                </div>
+                <div class="p-4">
+                    @if($appeal->comments->count() > 0)
+                        <div class="space-y-3 mb-4 max-h-96 overflow-y-auto">
+                            @foreach($appeal->comments->sortBy('created_at') as $comment)
+                                <div class="flex gap-3 {{ $comment->user_type === 'admin' ? '' : 'flex-row-reverse' }}">
+                                    <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white {{ $comment->user_type === 'admin' ? 'bg-indigo-600' : 'bg-green-600' }}">
+                                        {{ $comment->user_type === 'admin' ? 'A' : 'T' }}
+                                    </div>
+                                    <div class="max-w-[75%] {{ $comment->user_type === 'admin' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800' : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' }} border rounded-lg p-3">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="text-xs font-bold {{ $comment->user_type === 'admin' ? 'text-indigo-700 dark:text-indigo-300' : 'text-green-700 dark:text-green-300' }}">
+                                                {{ $comment->user_name }}
+                                            </span>
+                                            <span class="text-xs text-gray-400">{{ $comment->created_at->format('d.m.Y H:i') }}</span>
+                                        </div>
+                                        <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ $comment->comment }}</p>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <p class="text-sm text-gray-400 dark:text-gray-500 mb-4">Hali izoh yo'q.</p>
+                    @endif
+
+                    {{-- Izoh yozish formasi --}}
+                    <form method="POST" action="{{ route('admin.exam-appeals.comment', $appeal->id) }}" class="flex gap-2">
+                        @csrf
+                        <input type="text" name="comment" required minlength="3" maxlength="1000"
+                               class="flex-1 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                               placeholder="Izoh yozing...">
+                        <button type="submit"
+                                class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition flex-shrink-0">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                            Yuborish
+                        </button>
+                    </form>
+                    @error('comment')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+            </div>
+
             {{-- ═══════ Tasdiqlash / Rad etish ═══════ --}}
             @if(in_array($appeal->status, ['pending', 'reviewing']))
                 <div class="flex justify-end mb-6" x-data="{ showReject: false }">

@@ -158,6 +158,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\ExamAppealController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\ExamAppealController::class, 'reject'])->name('reject');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\ExamAppealController::class, 'download'])->name('download');
+            Route::post('/{id}/comment', [\App\Http\Controllers\Admin\ExamAppealController::class, 'addComment'])->name('comment');
         });
 
         // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)
@@ -628,6 +629,7 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::post('/store', [\App\Http\Controllers\Student\ExamAppealController::class, 'store'])->name('store');
             Route::get('/{id}', [\App\Http\Controllers\Student\ExamAppealController::class, 'show'])->name('show');
             Route::get('/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'download'])->name('download');
+            Route::post('/{id}/comment', [\App\Http\Controllers\Student\ExamAppealController::class, 'addComment'])->name('comment');
         });
 
         // Sababli dars qoldirish arizasi

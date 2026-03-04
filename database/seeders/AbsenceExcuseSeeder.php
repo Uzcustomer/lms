@@ -94,9 +94,9 @@ class AbsenceExcuseSeeder extends Seeder
         foreach ($records as $index => $record) {
             [$hemisId, $reason, $startDate, $endDate, $docNumber, $description] = $record;
 
-            $student = Student::where('hemis_id', $hemisId)->first();
+            $student = Student::where('student_id_number', $hemisId)->first();
             if (!$student) {
-                $errors[] = "Qator " . ($index + 1) . ": Talaba topilmadi - HEMIS ID: {$hemisId}";
+                $errors[] = "Qator " . ($index + 1) . ": Talaba topilmadi - student_id_number: {$hemisId}";
                 continue;
             }
 
@@ -117,7 +117,7 @@ class AbsenceExcuseSeeder extends Seeder
 
             AbsenceExcuse::create([
                 'student_id' => $student->id,
-                'student_hemis_id' => $hemisId,
+                'student_hemis_id' => $student->hemis_id ?? $hemisId,
                 'student_full_name' => $student->full_name ?? $student->short_name,
                 'group_name' => $student->group_name,
                 'department_name' => $student->department_name,

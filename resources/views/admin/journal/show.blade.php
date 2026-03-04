@@ -1858,7 +1858,9 @@
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
                                             $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
-                                            $inputDisabled = $isDekan || $isRegistrator || $hasGrade || (!$hasFile && !$isAdminMt);
+                                            $inputDisabled = $isAdminMt
+                                                ? ($isDekan || $isRegistrator || (!$hasFile && !$isAdminMt))
+                                                : ($isDekan || $isRegistrator || $hasGrade || !$hasFile);
 
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade
                                             $urgency = 'none'; // none, fresh, warning, danger
@@ -1925,9 +1927,9 @@
                                             </td>
                                             <td class="px-1 py-1" id="mt-comment-{{ $student->hemis_id }}">
                                                 @if($hasFile || $isAdminMt)
-                                                    @if($isLockedPermanent)
+                                                    @if(!$isAdminMt && $isLockedPermanent)
                                                         <span style="font-size: 12px; color: #6b7280; font-style: italic;">{{ $gradeRow->grade_comment ?? '' }}</span>
-                                                    @elseif($hasGrade && !$canRegrade)
+                                                    @elseif(!$isAdminMt && $hasGrade && !$canRegrade)
                                                         <span style="font-size: 12px; color: #6b7280; font-style: italic;">{{ $gradeRow->grade_comment ?? '' }}</span>
                                                     @else
                                                         <input type="text"
@@ -1971,7 +1973,7 @@
                                                 @elseif($isAdminMt && $hasGrade)
                                                     {{-- Admin: can always edit grade --}}
                                                     <button type="button"
-                                                        onclick="adminEnableEdit('{{ $student->hemis_id }}')"
+                                                        onclick="saveMtGrade('{{ $student->hemis_id }}', false, true)"
                                                         id="mt-save-btn-{{ $student->hemis_id }}"
                                                         style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #7c3aed; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                                                         O'zgartirish
@@ -2818,9 +2820,9 @@
 
             const grade = parseFloat(data.grade);
 
-            // Admin: show edit button (opens inputs for editing)
+            // Admin: always show edit button
             if (window.isAdminRole) {
-                cell.innerHTML = '<button type="button" onclick="adminEnableEdit(\'' + studentHemisId + '\')" ' +
+                cell.innerHTML = '<button type="button" onclick="saveMtGrade(\'' + studentHemisId + '\', false, true)" ' +
                     'style="padding:6px 16px;font-size:13px;font-weight:600;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;">' +
                     'O\'zgartirish</button>';
                 return;
@@ -2837,40 +2839,6 @@
                 cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#fef9c3;color:#92400e;border-radius:6px;">&#128274; Kutilmoqda</span>';
             } else {
                 cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#fee2e2;color:#b91c1c;border-radius:6px;">Limit tugagan</span>';
-            }
-        }
-
-        function adminEnableEdit(studentHemisId) {
-            // Enable grade input
-            const input = document.getElementById('mt-grade-' + studentHemisId);
-            if (input) {
-                input.disabled = false;
-                input.style.background = '#fff';
-                input.style.color = '#111827';
-                input.focus();
-            }
-            // Enable comment input — if it's a span, replace with input
-            const commentCell = document.getElementById('mt-comment-' + studentHemisId);
-            if (commentCell) {
-                let commentInput = document.getElementById('mt-comment-input-' + studentHemisId);
-                if (!commentInput) {
-                    // Comment was rendered as span, replace with input
-                    const existingText = commentCell.textContent.trim();
-                    commentCell.innerHTML = '<input type="text" id="mt-comment-input-' + studentHemisId + '" ' +
-                        'style="width:100%;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:4px;outline:none;color:#111827;" ' +
-                        'value="' + existingText + '" placeholder="Ixtiyoriy">';
-                } else {
-                    commentInput.disabled = false;
-                    commentInput.style.background = '#fff';
-                    commentInput.style.color = '#111827';
-                }
-            }
-            // Show save button
-            const actionCell = document.getElementById('mt-action-' + studentHemisId);
-            if (actionCell) {
-                actionCell.innerHTML = '<button type="button" onclick="saveMtGrade(\'' + studentHemisId + '\', false, true)" ' +
-                    'style="padding:6px 16px;font-size:13px;font-weight:600;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;">' +
-                    'Saqlash</button>';
             }
         }
 

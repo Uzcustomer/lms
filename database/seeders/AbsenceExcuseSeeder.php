@@ -126,6 +126,8 @@ class AbsenceExcuseSeeder extends Seeder
                 'end_date' => $end,
                 'doc_number' => $docNumber,
                 'description' => $description,
+                'file_path' => '',
+                'file_original_name' => '',
                 'status' => 'approved',
                 'reviewed_at' => now(),
                 'verification_token' => Str::uuid()->toString(),

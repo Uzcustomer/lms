@@ -150,6 +150,13 @@ class AppLocalizations {
   String get file => get('file');
   String get attempt => get('attempt');
   String get absent => get('absent');
+  String get contractAmount => get('contract_amount');
+  String get paidAmount => get('paid_amount');
+  String get unpaidAmount => get('unpaid_amount');
+  String get contractStatus => get('contract_status');
+  String get contractList => get('contract_list');
+  String get statusPaid => get('status_paid');
+  String get statusUnpaid => get('status_unpaid');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
@@ -282,6 +289,13 @@ class AppLocalizations {
       'file': 'Fayl',
       'attempt': 'urinish',
       'absent': 'NB',
+      'contract_amount': 'Jami summa',
+      'paid_amount': 'To\'langan',
+      'unpaid_amount': 'Qarzdorlik',
+      'contract_status': 'Holati',
+      'contract_list': 'Shartnomalar',
+      'status_paid': 'To\'langan',
+      'status_unpaid': 'Qarzdor',
     },
     'ru': {
       'app_title': 'Tashmedunitf Lms',
@@ -413,6 +427,13 @@ class AppLocalizations {
       'file': 'Файл',
       'attempt': 'попытка',
       'absent': 'Н',
+      'contract_amount': 'Сумма договора',
+      'paid_amount': 'Оплачено',
+      'unpaid_amount': 'Задолженность',
+      'contract_status': 'Статус',
+      'contract_list': 'Договоры',
+      'status_paid': 'Оплачено',
+      'status_unpaid': 'Задолженность',
     },
     'en': {
       'app_title': 'Tashmedunitf Lms',
@@ -544,6 +565,13 @@ class AppLocalizations {
       'file': 'File',
       'attempt': 'attempt',
       'absent': 'A',
+      'contract_amount': 'Contract Amount',
+      'paid_amount': 'Paid',
+      'unpaid_amount': 'Unpaid',
+      'contract_status': 'Status',
+      'contract_list': 'Contracts',
+      'status_paid': 'Paid',
+      'status_unpaid': 'Unpaid',
     },
   };
 

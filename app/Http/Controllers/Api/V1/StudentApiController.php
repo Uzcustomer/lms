@@ -1094,10 +1094,17 @@ class StudentApiController extends Controller
             $totalAmount += $amount;
             $paidAmount += $paid;
 
+            $unpaid = $amount - $paid;
+            $status = $unpaid <= 0 ? 'paid' : 'unpaid';
+
             $contracts[] = [
                 'id' => $item['id'] ?? null,
                 'key' => $item['key'] ?? null,
                 'education_year' => $item['_education_year'] ?? null,
+                'contract_amount' => $amount,
+                'paid_amount' => $paid,
+                'unpaid_amount' => $unpaid,
+                'status' => $status,
                 'data' => $contractData,
                 'created_at' => isset($item['created_at']) ? date('Y-m-d H:i:s', $item['created_at']) : null,
                 'updated_at' => isset($item['updated_at']) ? date('Y-m-d H:i:s', $item['updated_at']) : null,

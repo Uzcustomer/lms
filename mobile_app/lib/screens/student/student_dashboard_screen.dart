@@ -148,7 +148,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
-                        _buildTuitionFeeSection(context, profile, provider.contract, l, isDark),
+                        _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -658,6 +658,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     BuildContext context,
     Map<String, dynamic>? profile,
     Map<String, dynamic>? contractData,
+    List<dynamic>? contractList,
     AppLocalizations l,
     bool isDark,
   ) {
@@ -821,6 +822,124 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 ),
               ],
             ],
+          ),
+        ),
+        // Contract list section
+        if (isContract && contractList != null && contractList.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text(
+            l.contractList,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 12),
+          ...contractList.map((contract) {
+            final c = contract as Map<String, dynamic>;
+            final cAmount = (c['contract_amount'] ?? 0).toDouble();
+            final cPaid = (c['paid_amount'] ?? 0).toDouble();
+            final cUnpaid = (c['unpaid_amount'] ?? 0).toDouble();
+            final cStatus = c['status']?.toString() ?? '';
+            final educYear = c['education_year']?.toString() ?? '';
+            final isPaid = cStatus == 'paid';
+
+            return Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(isDark ? 30 : 8),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Education year & status row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (educYear.isNotEmpty)
+                        Text(
+                          educYear,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isPaid
+                              ? AppTheme.successColor.withAlpha(25)
+                              : AppTheme.errorColor.withAlpha(25),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          isPaid ? l.statusPaid : l.statusUnpaid,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isPaid ? AppTheme.successColor : AppTheme.errorColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Contract amount
+                  _buildContractRow(
+                    l.contractAmount,
+                    '${_formatMoney(cAmount)} so\'m',
+                    subTextColor,
+                    textColor,
+                  ),
+                  const SizedBox(height: 6),
+                  // Paid amount
+                  _buildContractRow(
+                    l.paidAmount,
+                    '${_formatMoney(cPaid)} so\'m',
+                    subTextColor,
+                    AppTheme.successColor,
+                  ),
+                  const SizedBox(height: 6),
+                  // Unpaid amount
+                  _buildContractRow(
+                    l.unpaidAmount,
+                    '${_formatMoney(cUnpaid)} so\'m',
+                    subTextColor,
+                    cUnpaid > 0 ? AppTheme.errorColor : AppTheme.successColor,
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildContractRow(String label, String value, Color labelColor, Color valueColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: labelColor),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: valueColor,
           ),
         ),
       ],

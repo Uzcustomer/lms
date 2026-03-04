@@ -1858,7 +1858,9 @@
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
                                             $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
-                                            $inputDisabled = $isDekan || $isRegistrator || $hasGrade || (!$hasFile && !$isAdminMt);
+                                            $inputDisabled = $isAdminMt
+                                                ? ($isDekan || $isRegistrator || (!$hasFile && !$isAdminMt))
+                                                : ($isDekan || $isRegistrator || $hasGrade || !$hasFile);
 
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade
                                             $urgency = 'none'; // none, fresh, warning, danger
@@ -1925,9 +1927,9 @@
                                             </td>
                                             <td class="px-1 py-1" id="mt-comment-{{ $student->hemis_id }}">
                                                 @if($hasFile || $isAdminMt)
-                                                    @if($isLockedPermanent)
+                                                    @if(!$isAdminMt && $isLockedPermanent)
                                                         <span style="font-size: 12px; color: #6b7280; font-style: italic;">{{ $gradeRow->grade_comment ?? '' }}</span>
-                                                    @elseif($hasGrade && !$canRegrade)
+                                                    @elseif(!$isAdminMt && $hasGrade && !$canRegrade)
                                                         <span style="font-size: 12px; color: #6b7280; font-style: italic;">{{ $gradeRow->grade_comment ?? '' }}</span>
                                                     @else
                                                         <input type="text"
@@ -1968,6 +1970,14 @@
                                                         Saqlash
                                                     </button>
                                                     @endif
+                                                @elseif($isAdminMt && $hasGrade)
+                                                    {{-- Admin: can always edit grade --}}
+                                                    <button type="button"
+                                                        onclick="saveMtGrade('{{ $student->hemis_id }}', false, true)"
+                                                        id="mt-save-btn-{{ $student->hemis_id }}"
+                                                        style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #7c3aed; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+                                                        O'zgartirish
+                                                    </button>
                                                 @elseif($isLockedPermanent)
                                                     {{-- Grade >= minimumLimit: permanently locked --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #dcfce7; color: #15803d; border-radius: 6px;">
@@ -2809,6 +2819,15 @@
             if (!cell) return;
 
             const grade = parseFloat(data.grade);
+
+            // Admin: always show edit button
+            if (window.isAdminRole) {
+                cell.innerHTML = '<button type="button" onclick="saveMtGrade(\'' + studentHemisId + '\', false, true)" ' +
+                    'style="padding:6px 16px;font-size:13px;font-weight:600;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;">' +
+                    'O\'zgartirish</button>';
+                return;
+            }
+
             if (grade >= (window.minimumLimit || 60)) {
                 cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#dcfce7;color:#15803d;border-radius:6px;">&#128274; Qabul qilindi</span>';
             } else if (data.can_regrade && !isDekan) {
@@ -2823,7 +2842,7 @@
             }
         }
 
-        function saveMtGrade(studentHemisId, isRegrade) {
+        function saveMtGrade(studentHemisId, isRegrade, adminEdit) {
             if (isDekan) return;
             const input = document.getElementById('mt-grade-' + studentHemisId);
             const grade = input.value;
@@ -2853,7 +2872,8 @@
                     semester_code: mtGradeConfig.semesterCode,
                     grade: parseFloat(grade),
                     grade_comment: comment,
-                    regrade: isRegrade ? true : false
+                    regrade: isRegrade ? true : false,
+                    admin_edit: adminEdit ? true : false
                 })
             })
             .then(response => response.json().then(data => ({ ok: response.ok, data })))

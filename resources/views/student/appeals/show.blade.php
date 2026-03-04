@@ -156,11 +156,11 @@
                         @csrf
                         <input type="text" name="comment" required minlength="3" maxlength="1000"
                                class="flex-1 rounded-lg border-2 border-indigo-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3"
-                               style="height: 50px;"
+                               style="height: 40px;"
                                placeholder="Izoh yozing...">
                         <button type="submit"
                                 class="flex items-center justify-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex-shrink-0"
-                                style="height: 50px; width: 50px;">
+                                style="height: 40px; width: 40px;">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                         </button>
                     </form>

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ExamAppeal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
@@ -46,7 +47,29 @@ class ExamAppealController extends Controller
             'rejected' => ExamAppeal::where('status', 'rejected')->count(),
         ];
 
-        return view('admin.exam-appeals.index', compact('appeals', 'stats'));
+        // Reviewer statistika
+        $reviewerStats = ExamAppeal::whereNotNull('reviewed_by')
+            ->select(
+                'reviewed_by',
+                'reviewed_by_name',
+                DB::raw("SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_count"),
+                DB::raw("SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count"),
+                DB::raw("COUNT(*) as total_count")
+            )
+            ->groupBy('reviewed_by', 'reviewed_by_name')
+            ->orderByDesc('total_count')
+            ->get();
+
+        $reviewerAppeals = [];
+        foreach ($reviewerStats as $reviewer) {
+            $reviewerAppeals[$reviewer->reviewed_by] = ExamAppeal::with('student')
+                ->where('reviewed_by', $reviewer->reviewed_by)
+                ->whereIn('status', ['approved', 'rejected'])
+                ->orderByDesc('reviewed_at')
+                ->get();
+        }
+
+        return view('admin.exam-appeals.index', compact('appeals', 'stats', 'reviewerStats', 'reviewerAppeals'));
     }
 
     public function show($id)

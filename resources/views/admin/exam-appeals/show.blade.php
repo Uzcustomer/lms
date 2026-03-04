@@ -293,9 +293,10 @@
                     @endif
 
                     {{-- Izoh yozish formasi --}}
-                    <form method="POST" action="{{ route('admin.exam-appeals.comment', $appeal->id) }}" class="flex gap-2">
+                    <form method="POST" action="{{ route('admin.exam-appeals.comment', $appeal->id) }}" class="flex gap-2"
+                          onsubmit="var v=document.getElementById('appeal-comment-input').value.trim(); if(v.length<3){alert('Izoh kamida 3 ta belgi bo\'lishi kerak');return false;}">
                         @csrf
-                        <input type="text" name="comment" required minlength="3" maxlength="1000"
+                        <input type="text" name="comment" id="appeal-comment-input" minlength="3" maxlength="1000"
                                class="flex-1 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                                placeholder="Izoh yozing...">
                         <button type="submit"
@@ -316,9 +317,10 @@
                 <div class="flex justify-end mb-6" x-data="{ showReject: false }">
                     <div class="flex flex-col items-end gap-3">
                         <div class="flex gap-3">
-                            <form method="POST" action="{{ route('admin.exam-appeals.approve', $appeal->id) }}"
-                                  onsubmit="return confirm('Apellyatsiyani qabul qilmoqchimisiz?')">
+                            <form method="POST" action="{{ route('admin.exam-appeals.approve', $appeal->id) }}" id="approveForm"
+                                  onsubmit="return handleApproveSubmit()">
                                 @csrf
+                                <input type="hidden" name="comment_text" id="approveCommentText">
                                 <button type="submit"
                                         class="inline-flex items-center px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">
                                     <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
@@ -332,9 +334,11 @@
                             </button>
                         </div>
                         <div x-show="showReject" x-transition class="w-full max-w-md">
-                            <form method="POST" action="{{ route('admin.exam-appeals.reject', $appeal->id) }}"
+                            <form method="POST" action="{{ route('admin.exam-appeals.reject', $appeal->id) }}" id="rejectForm"
+                                  onsubmit="copyCommentToForm('rejectCommentText')"
                                   class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
                                 @csrf
+                                <input type="hidden" name="comment_text" id="rejectCommentText">
                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Rad etish sababi</label>
                                 <textarea name="review_comment" rows="3" required minlength="5" maxlength="1000"
                                           class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-red-500 focus:ring-red-500 text-sm mb-2"
@@ -352,6 +356,21 @@
                         </div>
                     </div>
                 </div>
+                <script>
+                    function handleApproveSubmit() {
+                        var input = document.getElementById('appeal-comment-input');
+                        if (input) {
+                            document.getElementById('approveCommentText').value = input.value;
+                        }
+                        return confirm('Apellyatsiyani qabul qilmoqchimisiz?');
+                    }
+                    function copyCommentToForm(targetId) {
+                        var input = document.getElementById('appeal-comment-input');
+                        if (input) {
+                            document.getElementById(targetId).value = input.value;
+                        }
+                    }
+                </script>
             @endif
 
         </div>

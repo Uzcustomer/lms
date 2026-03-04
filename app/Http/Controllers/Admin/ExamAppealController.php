@@ -180,18 +180,6 @@ class ExamAppealController extends Controller
             'comment' => $request->comment,
         ]);
 
-        StudentNotification::create([
-            'student_id' => $appeal->student_id,
-            'type' => 'appeal',
-            'title' => 'Apellyatsiyangizga izoh qoldirildi',
-            'message' => "Sizning \"{$appeal->subject_name}\" fani bo'yicha apellyatsiyangizga yangi izoh qoldirildi.\nIzoh: {$request->comment}",
-            'link' => '/student/appeals/' . $appeal->id,
-            'data' => [
-                'appeal_id' => $appeal->id,
-                'subject_name' => $appeal->subject_name,
-            ],
-        ]);
-
         return redirect()->route('admin.exam-appeals.show', $appeal->id)
             ->with('success', 'Izoh qo\'shildi.');
     }

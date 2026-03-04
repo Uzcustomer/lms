@@ -83,6 +83,47 @@
                 </div>
                 @endif
 
+                {{-- Izohlar --}}
+                <div>
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Izohlar ({{ $appeal->comments->count() }})</h3>
+                    @if($appeal->comments->count() > 0)
+                        <div class="space-y-2 mb-3 max-h-80 overflow-y-auto">
+                            @foreach($appeal->comments->sortBy('created_at') as $comment)
+                                <div class="flex gap-2 {{ $comment->user_type === 'student' ? 'flex-row-reverse' : '' }}">
+                                    <div class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white {{ $comment->user_type === 'admin' ? 'bg-indigo-600' : 'bg-green-600' }}">
+                                        {{ $comment->user_type === 'admin' ? 'A' : 'T' }}
+                                    </div>
+                                    <div class="max-w-[80%] {{ $comment->user_type === 'admin' ? 'bg-indigo-50 border-indigo-100' : 'bg-green-50 border-green-100' }} border rounded-lg p-2.5">
+                                        <div class="flex items-center gap-2 mb-0.5">
+                                            <span class="text-xs font-bold {{ $comment->user_type === 'admin' ? 'text-indigo-700' : 'text-green-700' }}">
+                                                {{ $comment->user_name }}
+                                            </span>
+                                            <span class="text-xs text-gray-400">{{ $comment->created_at->format('d.m.Y H:i') }}</span>
+                                        </div>
+                                        <p class="text-sm text-gray-700 whitespace-pre-line">{{ $comment->comment }}</p>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <p class="text-xs text-gray-400 mb-3">Hali izoh yo'q.</p>
+                    @endif
+
+                    <form method="POST" action="{{ route('student.appeals.comment', $appeal->id) }}" class="flex gap-2">
+                        @csrf
+                        <input type="text" name="comment" required minlength="3" maxlength="1000"
+                               class="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                               placeholder="Izoh yozing...">
+                        <button type="submit"
+                                class="inline-flex items-center px-3 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition flex-shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                        </button>
+                    </form>
+                    @error('comment')
+                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
                 {{-- Ko'rib chiqish natijasi --}}
                 @if($appeal->status === 'approved' || $appeal->status === 'rejected')
                 <div>

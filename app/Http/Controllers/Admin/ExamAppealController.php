@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ExamAppeal;
+use App\Models\ExamAppealComment;
+use App\Models\StudentNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -74,7 +76,7 @@ class ExamAppealController extends Controller
 
     public function show($id)
     {
-        $appeal = ExamAppeal::with('student')->findOrFail($id);
+        $appeal = ExamAppeal::with(['student', 'comments'])->findOrFail($id);
 
         return view('admin.exam-appeals.show', compact('appeal'));
     }
@@ -96,6 +98,21 @@ class ExamAppealController extends Controller
             'review_comment' => $request->review_comment,
             'new_grade' => $request->new_grade,
             'reviewed_at' => now(),
+        ]);
+
+        StudentNotification::create([
+            'student_id' => $appeal->student_id,
+            'type' => 'appeal',
+            'title' => 'Apellyatsiyangiz qabul qilindi!',
+            'message' => "Sizning \"{$appeal->subject_name}\" fani bo'yicha apellyatsiyangiz qabul qilindi."
+                . ($request->review_comment ? "\nIzoh: {$request->review_comment}" : '')
+                . ($request->new_grade ? "\nYangi baho: {$request->new_grade}" : ''),
+            'link' => '/student/appeals/' . $appeal->id,
+            'data' => [
+                'appeal_id' => $appeal->id,
+                'status' => 'approved',
+                'subject_name' => $appeal->subject_name,
+            ],
         ]);
 
         return redirect()->route('admin.exam-appeals.show', $appeal->id)
@@ -122,8 +139,57 @@ class ExamAppealController extends Controller
             'reviewed_at' => now(),
         ]);
 
+        StudentNotification::create([
+            'student_id' => $appeal->student_id,
+            'type' => 'appeal',
+            'title' => 'Apellyatsiyangiz rad etildi',
+            'message' => "Sizning \"{$appeal->subject_name}\" fani bo'yicha apellyatsiyangiz rad etildi.\nSabab: {$request->review_comment}",
+            'link' => '/student/appeals/' . $appeal->id,
+            'data' => [
+                'appeal_id' => $appeal->id,
+                'status' => 'rejected',
+                'subject_name' => $appeal->subject_name,
+            ],
+        ]);
+
         return redirect()->route('admin.exam-appeals.show', $appeal->id)
             ->with('success', 'Apellyatsiya rad etildi.');
+    }
+
+    public function addComment(Request $request, $id)
+    {
+        $request->validate([
+            'comment' => ['required', 'string', 'min:3', 'max:1000'],
+        ], [
+            'comment.required' => 'Izoh yozing.',
+            'comment.min' => 'Izoh kamida 3 ta belgidan iborat bo\'lishi kerak.',
+        ]);
+
+        $appeal = ExamAppeal::findOrFail($id);
+        $user = Auth::user() ?? Auth::guard('teacher')->user();
+
+        ExamAppealComment::create([
+            'exam_appeal_id' => $appeal->id,
+            'user_type' => 'admin',
+            'user_id' => $user->id,
+            'user_name' => $user->name ?? $user->full_name ?? 'Admin',
+            'comment' => $request->comment,
+        ]);
+
+        StudentNotification::create([
+            'student_id' => $appeal->student_id,
+            'type' => 'appeal',
+            'title' => 'Apellyatsiyangizga izoh qoldirildi',
+            'message' => "Sizning \"{$appeal->subject_name}\" fani bo'yicha apellyatsiyangizga yangi izoh qoldirildi.\nIzoh: {$request->comment}",
+            'link' => '/student/appeals/' . $appeal->id,
+            'data' => [
+                'appeal_id' => $appeal->id,
+                'subject_name' => $appeal->subject_name,
+            ],
+        ]);
+
+        return redirect()->route('admin.exam-appeals.show', $appeal->id)
+            ->with('success', 'Izoh qo\'shildi.');
     }
 
     public function download($id)

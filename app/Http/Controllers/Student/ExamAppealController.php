@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\ExamAppeal;
+use App\Models\ExamAppealComment;
 use App\Models\StudentGrade;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -136,11 +137,38 @@ class ExamAppealController extends Controller
     public function show($id)
     {
         $student = Auth::guard('student')->user();
-        $appeal = ExamAppeal::where('id', $id)
+        $appeal = ExamAppeal::with('comments')
+            ->where('id', $id)
             ->where('student_id', $student->id)
             ->firstOrFail();
 
         return view('student.appeals.show', compact('appeal'));
+    }
+
+    public function addComment(Request $request, $id)
+    {
+        $request->validate([
+            'comment' => ['required', 'string', 'min:3', 'max:1000'],
+        ], [
+            'comment.required' => 'Izoh yozing.',
+            'comment.min' => 'Izoh kamida 3 ta belgidan iborat bo\'lishi kerak.',
+        ]);
+
+        $student = Auth::guard('student')->user();
+        $appeal = ExamAppeal::where('id', $id)
+            ->where('student_id', $student->id)
+            ->firstOrFail();
+
+        ExamAppealComment::create([
+            'exam_appeal_id' => $appeal->id,
+            'user_type' => 'student',
+            'user_id' => $student->id,
+            'user_name' => $student->full_name ?? 'Talaba',
+            'comment' => $request->comment,
+        ]);
+
+        return redirect()->route('student.appeals.show', $appeal->id)
+            ->with('success', 'Izoh qo\'shildi.');
     }
 
     public function download($id)

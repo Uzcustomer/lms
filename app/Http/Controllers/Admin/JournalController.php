@@ -2014,7 +2014,9 @@ class JournalController extends Controller
             }
         }
 
-        if (!$studentSubmission) {
+        $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+
+        if (!$studentSubmission && !$isAdminRole) {
             return response()->json([
                 'success' => false,
                 'message' => 'Talaba fayl yuklamagan. Baholardan oldin fayl yuklashi kerak.',
@@ -2103,7 +2105,7 @@ class JournalController extends Controller
             // Verify student has resubmitted after the last grade
             $gradeTime = $existingGrade->updated_at ?? $existingGrade->created_at;
             $hasResubmitted = false;
-            if ($gradeTime && $studentSubmission->submitted_at) {
+            if ($studentSubmission && $gradeTime && $studentSubmission->submitted_at) {
                 $hasResubmitted = \Carbon\Carbon::parse($studentSubmission->submitted_at)
                     ->gt(\Carbon\Carbon::parse($gradeTime));
             }
@@ -2144,8 +2146,8 @@ class JournalController extends Controller
                 'semester_code' => $semesterCode,
                 'attempt_number' => $currentAttempt,
                 'grade' => $existingGrade->grade,
-                'file_path' => $studentSubmission->file_path ?? null,
-                'file_original_name' => $studentSubmission->file_original_name ?? null,
+                'file_path' => $studentSubmission?->file_path ?? null,
+                'file_original_name' => $studentSubmission?->file_original_name ?? null,
                 'graded_by' => auth()->user()?->name ?? 'Admin',
                 'graded_at' => $existingGrade->updated_at ?? $existingGrade->created_at,
                 'created_at' => $now,

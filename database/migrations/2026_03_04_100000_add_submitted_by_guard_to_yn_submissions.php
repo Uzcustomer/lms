@@ -2,26 +2,37 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('yn_submissions', function (Blueprint $table) {
-            // Add submitted_by_guard column if it doesn't exist yet
-            if (!Schema::hasColumn('yn_submissions', 'submitted_by_guard')) {
+        // Add submitted_by_guard column if it doesn't exist yet
+        if (!Schema::hasColumn('yn_submissions', 'submitted_by_guard')) {
+            Schema::table('yn_submissions', function (Blueprint $table) {
                 $table->string('submitted_by_guard', 20)->default('web')->after('submitted_by');
-            }
+            });
+        }
 
-            // Drop foreign key on submitted_by so it can reference both users and teachers tables
-            try {
+        // Drop foreign key on submitted_by only if it exists
+        $fkExists = DB::select("
+            SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'yn_submissions'
+              AND CONSTRAINT_NAME = 'yn_submissions_submitted_by_foreign'
+              AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+        ");
+
+        if ($fkExists) {
+            Schema::table('yn_submissions', function (Blueprint $table) {
                 $table->dropForeign(['submitted_by']);
-            } catch (\Exception $e) {
-                // Foreign key may already be dropped
-            }
+            });
+        }
 
-            // Ensure submitted_by is nullable
+        // Ensure submitted_by is nullable
+        Schema::table('yn_submissions', function (Blueprint $table) {
             $table->unsignedBigInteger('submitted_by')->nullable()->change();
         });
     }

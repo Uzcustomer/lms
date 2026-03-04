@@ -66,7 +66,7 @@
                                      class="relative rounded-xl border p-3 cursor-pointer transition"
                                      :class="selectedGradeId == {{ $g['id'] }}
                                          ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-300'
-                                         : '{{ $g['can_appeal'] ? 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/30' : 'border-gray-100 bg-gray-50 opacity-60' }}'">
+                                         : '{{ $g['can_appeal'] ? 'border-green-300 bg-green-50 hover:border-green-400 hover:bg-green-100/60' : 'border-gray-200 bg-gray-100 opacity-60' }}'">
 
                                     {{-- Ustki qism: fan nomi + baho --}}
                                     <div class="flex items-start justify-between gap-2">

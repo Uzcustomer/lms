@@ -1,6 +1,6 @@
 <x-student-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+        <h2 class="font-semibold text-sm text-gray-800 leading-tight">
             Sababli dars qoldirish arizasi
         </h2>
     </x-slot>
@@ -537,12 +537,7 @@
                 </div>
 
                 {{-- ===== SUBMIT ===== --}}
-                <div class="flex items-center justify-between py-5">
-                    <a href="{{ route('student.absence-excuses.index') }}"
-                       class="text-base text-gray-500 hover:text-gray-700 font-medium transition">
-                        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-                        Orqaga
-                    </a>
+                <div class="flex items-center justify-end py-5">
                     <button type="submit" :disabled="!canSubmit" class="ae-submit">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                         Ariza yuborish
@@ -912,6 +907,14 @@
                     jnStart = sameSubjectJn?.makeup_start || '';
                     jnEnd = sameSubjectJn?.makeup_end || '';
                 }
+                // Yakuniy test uchun: OSKI tanlangan kunni bloklash
+                let oskiDate = '';
+                if (item.assessment_type === 'test') {
+                    const sameSubjectOski = this.assessments.find(
+                        a => a.assessment_type === 'oski' && a.subject_name === item.subject_name
+                    );
+                    oskiDate = sameSubjectOski?.makeup_date || '';
+                }
                 for (let i = 0; i < startWd; i++) {
                     cells.push({ key: 'e' + i, date: null, day: '', disabled: true });
                 }
@@ -926,11 +929,17 @@
                     if (jnStart && jnEnd) {
                         takenByJn = ds >= jnStart && ds <= jnEnd && !isSun;
                     }
+                    // Yakuniy test: OSKI tanlangan kun band
+                    let takenByOski = false;
+                    if (oskiDate && ds === oskiDate) {
+                        takenByOski = true;
+                    }
                     cells.push({
                         key: ds, date: dt, dateStr: ds, day: d,
                         isSunday: isSun, isToday: ds === todayStr,
-                        disabled: isPast || isSun || beyondLimit || takenByJn,
-                        takenByJn: takenByJn
+                        disabled: isPast || isSun || beyondLimit || takenByJn || takenByOski,
+                        takenByJn: takenByJn,
+                        takenByOski: takenByOski
                     });
                 }
                 return cells;
@@ -964,6 +973,14 @@
                 } else {
                     item.makeup_date = item.makeup_date === dateStr ? '' : dateStr;
                     if (item.makeup_date) item.show_cal = false;
+                    // OSKI tanlanganda, shu fan yakuniy test ning o'sha kunini tozalash
+                    if (item.assessment_type === 'oski' && item.makeup_date) {
+                        this.assessments.forEach(a => {
+                            if (a.assessment_type === 'test' && a.subject_name === item.subject_name && a.makeup_date === item.makeup_date) {
+                                a.makeup_date = '';
+                            }
+                        });
+                    }
                 }
             },
             miniInRange(index, dateStr) {

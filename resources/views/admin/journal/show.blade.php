@@ -802,10 +802,11 @@
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Nazad tugma -->
             <div class="mb-2">
-                <a href="javascript:void(0)" onclick="window.history.back()" style="display: inline-flex; align-items: center; gap: 6px; color: #1e40af; font-size: 14px; font-weight: 500; text-decoration: none;">
+                <a href="javascript:void(0)" onclick="goBack()" style="display: inline-flex; align-items: center; gap: 6px; color: #1e40af; font-size: 14px; font-weight: 500; text-decoration: none;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                     Jurnal
                 </a>
+                <script>function goBack(){var r=new URLSearchParams(window.location.search).get('ref');if(r){window.location.href=r;}else{window.history.back();}}</script>
             </div>
             <!-- Full-width Tabs with View Toggle -->
             <div class="mb-4">
@@ -983,7 +984,7 @@
                         @php
                             $totalJbDays = count($jbLessonDates);
                             $totalMtDays = count($mtLessonDates);
-                            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+                            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
                             $openLessonRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
                             $canOpenLesson = (auth()->guard('web')->user()?->hasAnyRole($openLessonRoles) ?? false)
                                 || (auth()->guard('teacher')->user()?->hasAnyRole($openLessonRoles) ?? false);
@@ -1134,7 +1135,7 @@
                                                             $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
                                                             $dayAvgColorClass = $dayAvg < ($minimumLimit ?? 60) ? 'text-red-600' : ($hasTeacherGradeInDay ? 'text-green-600' : 'text-gray-900');
                                                         @endphp
-                                                        <span class="{{ $isRetake ? 'grade-retake' : $dayAvgColorClass }} font-medium">{{ $dayAvg }}</span>
+                                                        <span class="{{ $dayAvgColorClass }} font-medium">{{ $dayAvg }}</span>
                                                         @if(count($dayGrades) > 1)
                                                             <span class="tooltip-content">{{ $gradesText }}</span>
                                                         @endif
@@ -1325,7 +1326,9 @@
                                                         $canRateAdmin = !$isDekan && $isAdminRole;
                                                         $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable);
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
+                                                        $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
                                                         $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi;
+                                                        $canEditExcuseExisting = false;
                                                         $showRatingInput = false;
                                                         $gradeRecordId = null;
                                                         $hasRetake = false;
@@ -1361,7 +1364,19 @@
                                                         }
                                                     @endphp
                                                     @if($grade !== null)
-                                                        @if($showRatingInput)
+                                                        @if($canEditExcuseExisting)
+                                                            {{-- Sababli ariza asosida mavjud bahoni o'zgartirish --}}
+                                                            <div class="editable-cell grade-cell-opened cursor-pointer hover:bg-amber-50"
+                                                                 data-row="{{ $index }}" data-col="{{ $colIndex }}"
+                                                                 data-student="{{ $student->hemis_id }}" data-date="{{ $col['date'] }}"
+                                                                 data-pair="{{ $col['pair'] }}" data-subject="{{ $subjectId }}"
+                                                                 data-semester="{{ $semesterCode }}" data-group="{{ $group->group_hemis_id }}"
+                                                                 data-orig-grade="{{ round($grade, 0) }}"
+                                                                 onclick="startEditOpened(this)"
+                                                                 title="Sababli ariza — bahoni o'zgartirish" style="background: #fffbeb;">
+                                                                <span class="text-amber-600 font-medium">{{ round($grade, 0) }}</span>
+                                                            </div>
+                                                        @elseif($showRatingInput)
                                                             {{-- minimumLimit dan past baho — otrabotka qilish mumkin --}}
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
                                                                 <span class="text-red-600 font-medium">{{ round($grade, 0) }}</span>
@@ -1386,7 +1401,8 @@
                                                             @php
                                                                 $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
                                                                 $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
-                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                                $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
+                                                                $nbColorClass = ($isSababli || $hasApprovedExcuse) ? 'text-green-600' : 'text-red-600';
                                                             @endphp
                                                             <div class="split-cell cursor-pointer hover:bg-red-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'chirish"
                                                                 onclick="deleteRetakeGrade(this, {{ $gradeRecordId }})">
@@ -1399,7 +1415,8 @@
                                                             @php
                                                                 $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
                                                                 $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
-                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                                $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
+                                                                $nbColorClass = ($isSababli || $hasApprovedExcuse) ? 'text-green-600' : 'text-red-600';
                                                             @endphp
                                                             <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
@@ -1417,16 +1434,28 @@
                                                         @php
                                                             $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
                                                             $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
-                                                            $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
+                                                            $nbColorClass = ($isSababli || $hasApprovedExcuse) ? 'text-green-600' : 'text-red-600';
                                                             $excuseAlreadySaved = isset($excuseGradeSnapshots[$student->hemis_id]);
                                                         @endphp
-                                                        @if($hasApprovedExcuse && !$hasRetake && !$excuseAlreadySaved)
+                                                        @if($isExcuseOpenedForStudent && !$hasRetake && $isOqituvchi)
+                                                            {{-- Sababli ariza asosida NB ga baho qo'yish --}}
+                                                            <div class="editable-cell grade-cell-opened cursor-pointer hover:bg-amber-50"
+                                                                 data-row="{{ $index }}" data-col="{{ $colIndex }}"
+                                                                 data-student="{{ $student->hemis_id }}" data-date="{{ $col['date'] }}"
+                                                                 data-pair="{{ $col['pair'] }}" data-subject="{{ $subjectId }}"
+                                                                 data-semester="{{ $semesterCode }}" data-group="{{ $group->group_hemis_id }}"
+                                                                 onclick="startEditOpened(this)"
+                                                                 title="Sababli ariza — baho kiriting" style="background: #fffbeb;">
+                                                                <span class="{{ $nbColorClass }} font-medium">NB</span>
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
+                                                            </div>
+                                                        @elseif($hasApprovedExcuse && !$hasRetake && !$excuseAlreadySaved)
                                                             {{-- Sababli NB — modal orqali baho kiritish --}}
                                                             <div class="excuse-nb-cell editable-cell cursor-pointer hover:bg-amber-100"
                                                                  onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }})"
                                                                  title="Sababli — bosib baho kiriting">
-                                                                <span class="font-medium">NB</span>
+                                                                <span class="text-green-600 font-medium">NB</span>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
                                                             </div>
                                                         @elseif($showRatingInput)
@@ -1529,16 +1558,182 @@
                                     YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
                                 </div>
                             @elseif($canSubmitYn ?? false)
-                                <button type="button" id="btn-submit-yn"
-                                    class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
-                                    onclick="submitToYn()">
-                                    YN ga yuborish
-                                </button>
+                                <div class="flex items-center space-x-3">
+                                    @if(isset($examSchedule) && $examSchedule)
+                                        <div class="text-sm text-gray-600 mr-2">
+                                            @if($examSchedule->oski_date)
+                                                <span>OSKI: <strong>{{ $examSchedule->oski_date->format('d.m.Y') }}</strong></span>
+                                            @elseif($examSchedule->oski_na)
+                                                <span>OSKI: <strong class="text-gray-400">n/a</strong></span>
+                                            @endif
+                                            @if($examSchedule->test_date)
+                                                <span class="ml-2">Test: <strong>{{ $examSchedule->test_date->format('d.m.Y') }}</strong></span>
+                                            @elseif($examSchedule->test_na)
+                                                <span class="ml-2">Test: <strong class="text-gray-400">n/a</strong></span>
+                                            @endif
+                                        </div>
+                                    @endif
+                                    <button type="button" id="btn-submit-yn"
+                                        class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
+                                        onclick="submitToYn()">
+                                        YN ga yuborish
+                                    </button>
+                                </div>
                             @endif
                         </div>
                     </div>
                 </div>
                 @endif
+
+                {{-- YN natijalari paneli — YN yuborilgandan keyin ko'rinadi --}}
+                @if(isset($ynSubmission) && $ynSubmission)
+                @php
+                    $resultsFetched = $ynSubmission->results_fetched;
+                    $es = $examSchedule ?? null;
+                    $oskiDatePassed = $es && $es->oski_date && $es->oski_date->isPast();
+                    $testDatePassed = $es && $es->test_date && $es->test_date->isPast();
+                    $anyDatePassed = $oskiDatePassed || $testDatePassed;
+                @endphp
+                <div class="mt-4 p-4 {{ $resultsFetched ? 'bg-green-50 border-green-200' : ($anyDatePassed ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200') }} border rounded-lg">
+                    <div class="flex items-center justify-between flex-wrap gap-3">
+                        <div>
+                            <h4 class="font-semibold {{ $resultsFetched ? 'text-green-800' : ($anyDatePassed ? 'text-indigo-800' : 'text-gray-800') }} flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" /></svg>
+                                OSKI va Test natijalari
+                            </h4>
+                            @if($es)
+                                <div class="text-sm mt-1 flex flex-wrap gap-x-4">
+                                    @if($es->oski_date)
+                                        <span class="{{ $oskiDatePassed ? 'text-indigo-700' : 'text-gray-600' }}">
+                                            OSKI: <span class="font-semibold">{{ $es->oski_date->format('d.m.Y') }}</span>
+                                            @if($oskiDatePassed)
+                                                <span class="text-green-600 font-semibold">(O'tgan)</span>
+                                            @else
+                                                <span class="text-yellow-600 font-semibold">({{ $es->oski_date->diffUz() }})</span>
+                                            @endif
+                                        </span>
+                                    @elseif($es->oski_na)
+                                        <span class="text-gray-400">OSKI: n/a</span>
+                                    @endif
+                                    @if($es->test_date)
+                                        <span class="{{ $testDatePassed ? 'text-indigo-700' : 'text-gray-600' }}">
+                                            Test: <span class="font-semibold">{{ $es->test_date->format('d.m.Y') }}</span>
+                                            @if($testDatePassed)
+                                                <span class="text-green-600 font-semibold">(O'tgan)</span>
+                                            @else
+                                                <span class="text-yellow-600 font-semibold">({{ $es->test_date->diffUz() }})</span>
+                                            @endif
+                                        </span>
+                                    @elseif($es->test_na)
+                                        <span class="text-gray-400">Test: n/a</span>
+                                    @endif
+                                </div>
+                            @else
+                                <p class="text-sm text-gray-500 mt-1">OSKI/Test sanalari belgilanmagan</p>
+                            @endif
+                            @if($resultsFetched)
+                                <p class="text-sm text-green-700 mt-1 font-medium">OSKI va Test natijalari muvaffaqiyatli yuklangan</p>
+                            @endif
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            @if($anyDatePassed && !$resultsFetched)
+                                <button type="button" id="btn-fetch-yn-results"
+                                    class="px-5 py-2.5 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm text-sm"
+                                    onclick="fetchYnResults()">
+                                    Natijalarni tortish
+                                </button>
+                            @elseif($anyDatePassed && $resultsFetched)
+                                <button type="button" id="btn-fetch-yn-results-refresh"
+                                    class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm"
+                                    onclick="fetchYnResults()"
+                                    title="HEMIS tizimidan OSKI va Test natijalarini qayta yuklash">
+                                    Yangilash
+                                </button>
+                            @endif
+
+                            <button type="button" id="btn-export-yn-qaydnoma"
+                                class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
+                                onclick="openYnWeightsModal()"
+                                title="Vaznlarni taqsimlab YN qaydnoma (Excel) yaratish">
+                                <svg style="width:14px;height:14px;display:inline-block;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                YN qaydnoma yaratish
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
+                {{-- YN qaydnoma vazn taqsimlash modali --}}
+                <div id="yn-weights-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeYnWeightsModal()"></div>
+                    <div class="fixed inset-0 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md relative">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h3 class="text-lg font-bold text-gray-800">Vaznlarni taqsimlang</h3>
+                                <p class="text-sm text-gray-500 mt-1">Jami 100 bo'lishi kerak</p>
+                            </div>
+                            <div class="px-6 py-4 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">Shakl</label>
+                                    <select id="yn-shakl"
+                                        class="w-48 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                        @foreach(config('app.shakllar', []) as $sh)
+                                            <option value="{{ $sh['id'] }}">{{ $sh['name'] }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="border-t border-gray-200 my-2"></div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">JN</label>
+                                    <input type="number" id="yn-weight-jn" min="0" max="100" value="30"
+                                        class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        oninput="updateYnWeightsTotal()">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">MT</label>
+                                    <input type="number" id="yn-weight-mt" min="0" max="100" value="10"
+                                        class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        oninput="updateYnWeightsTotal()">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">ON</label>
+                                    <input type="number" id="yn-weight-on" min="0" max="100" value="0"
+                                        class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        oninput="updateYnWeightsTotal()">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">OSKI</label>
+                                    <input type="number" id="yn-weight-oski" min="0" max="100" value="0"
+                                        class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        oninput="updateYnWeightsTotal()">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-semibold text-gray-700 w-20">Test</label>
+                                    <input type="number" id="yn-weight-test" min="0" max="100" value="60"
+                                        class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        oninput="updateYnWeightsTotal()">
+                                </div>
+                                <div class="flex items-center justify-between pt-2 border-t border-gray-200">
+                                    <span class="text-sm font-bold text-gray-800">Jami:</span>
+                                    <span id="yn-weights-total" class="text-lg font-bold text-green-600">100</span>
+                                </div>
+                                <p id="yn-weights-error" class="text-sm text-red-600 hidden">Jami 100 bo'lishi kerak!</p>
+                            </div>
+                            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                                <button type="button" onclick="closeYnWeightsModal()"
+                                    class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm">
+                                    Bekor qilish
+                                </button>
+                                <button type="button" id="btn-yn-weights-submit" onclick="submitYnQaydnoma()"
+                                    class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm">
+                                    Yaratish
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 {{-- Sababli baholar paneli — YN yuborilgandan keyin ko'rinadi --}}
                 @if(isset($ynSubmission) && $ynSubmission && $approvedExcuses->isNotEmpty())
@@ -2134,7 +2329,9 @@
         // Kafedra erkin, fanga ta'sir qiladi.
         const currentGroupId = '{{ $groupId }}';
         const currentGroupHemisId = '{{ $group->group_hemis_id }}';
+        const currentGroupName = @json($group->name);
         const currentSubjectId = '{{ $subjectId }}';
+        const currentSubjectName = @json($subject->subject_name);
         const currentSemesterCode = '{{ $semesterCode }}';
         const currentFacultyId = '{{ $facultyId }}';
         const currentSpecialtyId = '{{ $specialtyId }}';
@@ -2314,6 +2511,13 @@
                     populateSelect('filter-specialty', data.specialties, values.specialty_id, true);
                     populateSelect('filter-level', data.levels, values.level_code, true);
                     populateSelect('filter-semester', data.semesters, values.semester_code, true);
+                    // Guruh va fan — AJAX natijasida joriy qiymat yo'q bo'lsa, qo'shib qo'yish
+                    if (currentGroupId && currentGroupName && !data.groups[currentGroupId]) {
+                        data.groups[currentGroupId] = currentGroupName;
+                    }
+                    if (currentSubjectId && currentSubjectName && !data.subjects[currentSubjectId]) {
+                        data.subjects[currentSubjectId] = currentSubjectName;
+                    }
                     populateSelect('filter-group', data.groups, values.group_id, false);
                     populateSelect('filter-subject', data.subjects, values.subject_id, false);
                     // O'qituvchi ma'lumotlarini yangilash (tur bo'yicha)
@@ -3432,9 +3636,14 @@
                     storePendingGrade(cellDiv, input.value);
                     moveToCell(cellDiv, e.shiftKey ? 'left' : 'right');
                 } else if (e.key === 'Escape') {
-                    // Bekor qilish — pending bo'lsa ko'rsatish, bo'lmasa dash
+                    // Bekor qilish — pending bo'lsa ko'rsatish, bo'lmasa asl qiymatni tiklash
                     if (pending) {
                         showPendingInCell(cellDiv, pending.grade);
+                    } else if (numVal && numVal !== '') {
+                        // Mavjud baho bor edi — sababli ariza orqali tahrirlash
+                        const color = parseInt(numVal) < (window.minimumLimit || 60) ? 'color:#dc2626' : 'color:#d97706';
+                        cellDiv.innerHTML = `<span class="font-medium" style="${color}">${numVal}</span>`;
+                        cellDiv.style.background = '#fffbeb';
                     } else {
                         cellDiv.innerHTML = '<span class="text-green-400">-</span>';
                         cellDiv.style.background = '#f0fdf4';
@@ -3455,14 +3664,22 @@
         function storePendingGrade(cellDiv, value) {
             const key = getGradeKey(cellDiv);
             const grade = parseInt(value);
+            const origGrade = cellDiv.dataset.origGrade || '';
 
             if (value.trim() === '' || isNaN(grade) || grade < 0 || grade > 100) {
                 // Bo'sh yoki noto'g'ri — pending dan o'chirish
                 if (pendingOpenedGrades[key]) {
                     delete pendingOpenedGrades[key];
                 }
-                cellDiv.innerHTML = '<span class="text-green-400">-</span>';
-                cellDiv.style.background = '#f0fdf4';
+                if (origGrade && origGrade !== '') {
+                    // Mavjud bahoni tiklash (sababli ariza katagi)
+                    const color = parseInt(origGrade) < (window.minimumLimit || 60) ? 'color:#dc2626' : 'color:#d97706';
+                    cellDiv.innerHTML = `<span class="font-medium" style="${color}">${origGrade}</span>`;
+                    cellDiv.style.background = '#fffbeb';
+                } else {
+                    cellDiv.innerHTML = '<span class="text-green-400">-</span>';
+                    cellDiv.style.background = '#f0fdf4';
+                }
                 updatePendingPanel();
                 return;
             }
@@ -3650,12 +3867,20 @@
                     } else {
                         successCount++;
                         const gradeVal = Math.round(data.grade);
+                        const isUpdated = data.updated === true;
                         const color = gradeVal < (window.minimumLimit || 60) ? 'color:#dc2626' : 'color:#16a34a';
                         cellDiv.innerHTML = `<span class="font-medium" style="${color}">${gradeVal}</span>`;
-                        cellDiv.style.background = '#ecfdf5';
                         delete pendingOpenedGrades[key];
-                        cellDiv.classList.remove('grade-cell-opened');
-                        cellDiv.onclick = null;
+
+                        if (isUpdated) {
+                            // Sababli ariza — tahrirlash imkoni saqlansin
+                            cellDiv.style.background = '#fffbeb';
+                            cellDiv.dataset.origGrade = String(gradeVal);
+                        } else {
+                            cellDiv.style.background = '#ecfdf5';
+                            cellDiv.classList.remove('grade-cell-opened');
+                            cellDiv.onclick = null;
+                        }
                     }
                 });
 
@@ -3913,6 +4138,176 @@
                 btn.style.opacity = '1';
             });
         }
+
+        // OSKI va Test natijalarini tortish
+        function fetchYnResults() {
+            const btn = document.getElementById('btn-fetch-yn-results') || document.getElementById('btn-fetch-yn-results-refresh');
+            if (!btn) return;
+
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Yuklanmoqda...';
+            btn.style.opacity = '0.6';
+
+            fetch('{{ route("admin.journal.fetch-yn-results") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                })
+            })
+            .then(r => r.json().then(data => ({ok: r.ok, data})))
+            .then(({ok, data}) => {
+                if (ok && data.success) {
+                    const notif = document.createElement('div');
+                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#10b981; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
+                    notif.textContent = data.message;
+                    document.body.appendChild(notif);
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    alert(data.message || 'Natijalarni yuklashda xatolik yuz berdi');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    btn.style.opacity = '1';
+                }
+            })
+            .catch(err => {
+                alert('Xatolik: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = originalText;
+                btn.style.opacity = '1';
+            });
+        }
+
+        // YN qaydnoma vazn modali
+        function openYnWeightsModal() {
+            document.getElementById('yn-weights-modal').classList.remove('hidden');
+            updateYnWeightsTotal();
+        }
+
+        function closeYnWeightsModal() {
+            document.getElementById('yn-weights-modal').classList.add('hidden');
+        }
+
+        function updateYnWeightsTotal() {
+            var jn = parseInt(document.getElementById('yn-weight-jn').value) || 0;
+            var mt = parseInt(document.getElementById('yn-weight-mt').value) || 0;
+            var on = parseInt(document.getElementById('yn-weight-on').value) || 0;
+            var oski = parseInt(document.getElementById('yn-weight-oski').value) || 0;
+            var test = parseInt(document.getElementById('yn-weight-test').value) || 0;
+            var total = jn + mt + on + oski + test;
+
+            var totalEl = document.getElementById('yn-weights-total');
+            var errorEl = document.getElementById('yn-weights-error');
+            var submitBtn = document.getElementById('btn-yn-weights-submit');
+
+            totalEl.textContent = total;
+
+            if (total === 100) {
+                totalEl.className = 'text-lg font-bold text-green-600';
+                errorEl.classList.add('hidden');
+                submitBtn.disabled = false;
+                submitBtn.className = 'px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm';
+            } else {
+                totalEl.className = 'text-lg font-bold text-red-600';
+                errorEl.classList.remove('hidden');
+                submitBtn.disabled = true;
+                submitBtn.className = 'px-5 py-2.5 bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed text-sm';
+            }
+        }
+
+        function submitYnQaydnoma() {
+            var jn = parseInt(document.getElementById('yn-weight-jn').value) || 0;
+            var mt = parseInt(document.getElementById('yn-weight-mt').value) || 0;
+            var on = parseInt(document.getElementById('yn-weight-on').value) || 0;
+            var oski = parseInt(document.getElementById('yn-weight-oski').value) || 0;
+            var test = parseInt(document.getElementById('yn-weight-test').value) || 0;
+
+            if (jn + mt + on + oski + test !== 100) {
+                alert('Vaznlar jami 100 bo\'lishi kerak!');
+                return;
+            }
+
+            closeYnWeightsModal();
+
+            var btn = document.getElementById('btn-export-yn-qaydnoma');
+            if (!btn) return;
+
+            btn.disabled = true;
+            var originalText = btn.innerHTML;
+            btn.innerHTML = '<svg class="animate-spin" style="height:14px;width:14px;display:inline-block;margin-right:4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle style="opacity:0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path style="opacity:0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Yuklanmoqda...';
+            btn.style.opacity = '0.6';
+
+            fetch('{{ route("admin.journal.export-yn-qaydnoma") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/octet-stream',
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                    shakl: parseInt(document.getElementById('yn-shakl').value) || 1,
+                    weight_jn: jn,
+                    weight_mt: mt,
+                    weight_on: on,
+                    weight_oski: oski,
+                    weight_test: test,
+                })
+            })
+            .then(function(response) {
+                if (!response.ok) throw new Error('Server xatosi');
+                var contentDisposition = response.headers.get('Content-Disposition');
+                var fileName = 'yn_qaydnoma.xlsx';
+                if (contentDisposition) {
+                    var match = contentDisposition.match(/filename="?([^";\n]+)"?/);
+                    if (match && match[1]) fileName = match[1];
+                }
+                return response.blob().then(function(blob) {
+                    return { blob: blob, fileName: fileName };
+                });
+            })
+            .then(function(result) {
+                var url = window.URL.createObjectURL(result.blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = result.fileName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(function(err) {
+                alert('Xatolik yuz berdi: ' + err.message);
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                btn.style.opacity = '1';
+            });
+        }
+
+        // Sahifa yuklanganda — agar OSKI/Test sanasi o'tgan va natijalar tortilmagan bo'lsa, avtomatik tortish
+        @php
+            $autoFetchEs = $examSchedule ?? null;
+            $autoFetchOskiPassed = $autoFetchEs && $autoFetchEs->oski_date && $autoFetchEs->oski_date->isPast();
+            $autoFetchTestPassed = $autoFetchEs && $autoFetchEs->test_date && $autoFetchEs->test_date->isPast();
+            $autoFetchAnyPassed = $autoFetchOskiPassed || $autoFetchTestPassed;
+        @endphp
+        @if(isset($ynSubmission) && $ynSubmission && $autoFetchAnyPassed && !$ynSubmission->results_fetched)
+        document.addEventListener('DOMContentLoaded', function() {
+            // Avtomatik natijalarni tortish
+            fetchYnResults();
+        });
+        @endif
     </script>
 
     {{-- Sababli baho kiritish modal oynasi --}}

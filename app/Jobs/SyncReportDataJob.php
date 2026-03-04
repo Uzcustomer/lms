@@ -72,7 +72,19 @@ class SyncReportDataJob implements ShouldQueue
             if ($includestoday) {
                 $todayStr = $today->toDateString();
                 $liveImportSuccess = Cache::get('live_import_last_success');
-                $isRecent = $liveImportSuccess && Carbon::parse($liveImportSuccess)->diffInMinutes(now()) <= 60;
+                $isRecent = $liveImportSuccess && Carbon::parse($liveImportSuccess)->diffInMinutes(now()) <= 180;
+
+                // DB fallback: cache expire bo'lgan bo'lsa ham, bazada bugungi baholar bormi tekshirish
+                if (!$isRecent) {
+                    $hasGradesToday = \Illuminate\Support\Facades\DB::table('student_grades')
+                        ->whereNull('deleted_at')
+                        ->whereRaw('DATE(lesson_date) = ?', [$todayStr])
+                        ->exists();
+                    if ($hasGradesToday) {
+                        $isRecent = true;
+                        $liveImportSuccess = $liveImportSuccess ?: 'DB da mavjud';
+                    }
+                }
 
                 if ($isRecent) {
                     $this->updateProgress("Baholar: DB da yangi ({$todayStr})", $currentStep, $totalSteps);

@@ -12,6 +12,7 @@ use App\Models\OraliqNazorat;
 use App\Models\Oski;
 use App\Models\Schedule;
 use App\Models\Student;
+use App\Models\Teacher;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -372,19 +373,40 @@ class AbsenceExcuseController extends Controller
     private function notifyAdmins(AbsenceExcuse $excuse): void
     {
         $student = Auth::guard('student')->user();
-        $adminUsers = User::role(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'])->get();
+        $roles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
 
         $reasonLabel = $excuse->reason_label;
         $url = route('admin.absence-excuses.show', $excuse->id);
+        $subject = "Yangi sababli ariza: {$excuse->student_full_name}";
+        $body = "Talaba: {$excuse->student_full_name}\nGuruh: {$excuse->group_name}\nSabab: {$reasonLabel}\nSana: {$excuse->start_date->format('d.m.Y')} — {$excuse->end_date->format('d.m.Y')}";
 
+        // User modelidagi adminlar
+        $adminUsers = User::role($roles)->get();
         foreach ($adminUsers as $user) {
             Notification::create([
                 'sender_id' => $student->id,
                 'sender_type' => Student::class,
                 'recipient_id' => $user->id,
                 'recipient_type' => User::class,
-                'subject' => "Yangi sababli ariza: {$excuse->student_full_name}",
-                'body' => "Talaba: {$excuse->student_full_name}\nGuruh: {$excuse->group_name}\nSabab: {$reasonLabel}\nSana: {$excuse->start_date->format('d.m.Y')} — {$excuse->end_date->format('d.m.Y')}",
+                'subject' => $subject,
+                'body' => $body,
+                'type' => Notification::TYPE_SYSTEM,
+                'url' => $url,
+                'is_draft' => false,
+                'sent_at' => now(),
+            ]);
+        }
+
+        // Teacher modelidagi adminlar (registrator_ofisi va boshqalar)
+        $adminTeachers = Teacher::role($roles)->get();
+        foreach ($adminTeachers as $teacher) {
+            Notification::create([
+                'sender_id' => $student->id,
+                'sender_type' => Student::class,
+                'recipient_id' => $teacher->id,
+                'recipient_type' => Teacher::class,
+                'subject' => $subject,
+                'body' => $body,
                 'type' => Notification::TYPE_SYSTEM,
                 'url' => $url,
                 'is_draft' => false,

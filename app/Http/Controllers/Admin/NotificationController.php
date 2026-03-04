@@ -35,18 +35,21 @@ class NotificationController extends Controller
         $readStatus = $request->get('status'); // 'unread'
         $subjectFilter = $request->get('subject'); // mavzu bo'yicha filtr
 
+        $subjects = collect();
+        $senders = collect();
+
         try {
             $query = Notification::with('sender');
 
             switch ($tab) {
                 case 'sent':
-                    $query->sent($userId)->orderByDesc('sent_at');
+                    $query->sent($userId, $userType)->orderByDesc('sent_at');
                     break;
                 case 'drafts':
-                    $query->drafts($userId)->orderByDesc('updated_at');
+                    $query->drafts($userId, $userType)->orderByDesc('updated_at');
                     break;
                 default: // inbox
-                    $query->inbox($userId)->orderByDesc('sent_at');
+                    $query->inbox($userId, $userType)->orderByDesc('sent_at');
                     break;
             }
 
@@ -69,53 +72,51 @@ class NotificationController extends Controller
                 $query->where('is_read', false);
             }
 
+            // Mavzular ro'yxati — xuddi shu so'rovdan olish (subject filtr qo'yilmasdan OLDIN)
+            // Bu usul kafolatlaydi: agar xabarlar ko'rinsa, mavzular ham chiqadi
+            $subjects = (clone $query)
+                ->pluck('subject')
+                ->filter(fn ($s) => $s !== null && $s !== '')
+                ->countBy()
+                ->sortDesc()
+                ->take(20)
+                ->map(fn ($count, $subject) => (object) ['subject' => $subject, 'subject_count' => $count])
+                ->values();
+
+            // Mavzu filtri — mavzular ro'yxati olinganidan KEYIN qo'yiladi
             if ($subjectFilter) {
                 $query->where('subject', $subjectFilter);
             }
 
             $notifications = $query->paginate(20);
         } catch (\Throwable $e) {
-            \Log::error('NotificationController@index query error: ' . $e->getMessage());
+            \Log::error('NotificationController@index query error: ' . $e->getMessage() . ' | ' . $e->getTraceAsString());
             $notifications = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20);
         }
 
         try {
-            $unreadCount = Notification::inbox($userId)->unread()->count();
-            $inboxCount = Notification::inbox($userId)->count();
-            $sentCount = Notification::sent($userId)->count();
-            $draftsCount = Notification::drafts($userId)->count();
+            $unreadCount = Notification::inbox($userId, $userType)->unread()->count();
+            $inboxCount = Notification::inbox($userId, $userType)->count();
+            $sentCount = Notification::sent($userId, $userType)->count();
+            $draftsCount = Notification::drafts($userId, $userType)->count();
         } catch (\Throwable $e) {
             \Log::error('NotificationController@index counts error: ' . $e->getMessage());
             $unreadCount = $inboxCount = $sentCount = $draftsCount = 0;
         }
 
-        // Kelgan xabarlar uchun jo'natuvchilar ro'yxati (filtr uchun)
-        $senders = collect();
-        $subjects = collect();
+        // Jo'natuvchilar ro'yxati (filtr uchun)
         try {
             if ($tab === 'inbox') {
-                $inboxSenderIds = Notification::inbox($userId)->distinct()->pluck('sender_id');
+                $inboxSenderIds = Notification::inbox($userId, $userType)->distinct()->pluck('sender_id');
                 $senders = User::whereIn('id', $inboxSenderIds)->orderBy('name')->get(['id', 'name'])
                     ->merge(
                         Teacher::whereIn('id', $inboxSenderIds)->orderBy('full_name')
                             ->get(['id', 'full_name'])->map(fn ($t) => (object) ['id' => $t->id, 'name' => $t->full_name])
                     );
-
-                // Unikal mavzular ro'yxati
-                $subjects = Notification::where('recipient_id', $userId)
-                    ->where('is_draft', false)
-                    ->whereNotNull('subject')
-                    ->where('subject', '!=', '')
-                    ->selectRaw('subject, count(*) as subject_count')
-                    ->groupBy('subject')
-                    ->orderByRaw('subject_count DESC')
-                    ->limit(20)
-                    ->get();
             }
         } catch (\Throwable $e) {
             \Log::error('NotificationController@index senders error: ' . $e->getMessage());
             $senders = collect();
-            $subjects = collect();
         }
 
         return view('admin.notifications.index', compact(
@@ -128,8 +129,15 @@ class NotificationController extends Controller
     {
         [$userId, $userType] = $this->getUserInfo();
 
+        // Faqat o'ziga tegishli xabarlarni ko'rish mumkin
+        $isRecipient = $notification->recipient_id == $userId && $notification->recipient_type === $userType;
+        $isSender = $notification->sender_id == $userId && $notification->sender_type === $userType;
+        if (!$isRecipient && !$isSender) {
+            abort(403, __('notifications.no_permission'));
+        }
+
         // Mark as read if recipient
-        if ($notification->recipient_id == $userId) {
+        if ($isRecipient) {
             $notification->markAsRead();
         }
 
@@ -141,9 +149,9 @@ class NotificationController extends Controller
         $notification->load(['sender', 'recipient']);
 
         try {
-            $unreadCount = Notification::inbox($userId)->unread()->count();
-            $sentCount = Notification::sent($userId)->count();
-            $draftsCount = Notification::drafts($userId)->count();
+            $unreadCount = Notification::inbox($userId, $userType)->unread()->count();
+            $sentCount = Notification::sent($userId, $userType)->count();
+            $draftsCount = Notification::drafts($userId, $userType)->count();
         } catch (\Throwable $e) {
             \Log::error('NotificationController@show counts error: ' . $e->getMessage());
             $unreadCount = $sentCount = $draftsCount = 0;
@@ -154,10 +162,44 @@ class NotificationController extends Controller
 
     public function create()
     {
-        [$userId, $userType] = $this->getUserInfo();
+        try {
+            [$userId, $userType] = $this->getUserInfo();
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@create getUserInfo error: ' . $e->getMessage());
+            abort(500, 'Auth error: ' . $e->getMessage());
+        }
 
-        // Faqat xodimlar (Teacher) ro'yxati, rollari bilan
-        $teachers = Teacher::with('roles')->orderBy('full_name')->get();
+        // Xodimlar ro'yxatini JSON-xavfsiz massiv sifatida tayyorlash
+        $teachersJson = [];
+        try {
+            $teachers = Teacher::with('roles')
+                ->whereNotNull('full_name')
+                ->where('full_name', '!=', '')
+                ->orderBy('full_name')
+                ->get();
+
+            foreach ($teachers as $t) {
+                try {
+                    $roles = $t->relationLoaded('roles') ? $t->roles->pluck('name')->toArray() : [];
+                } catch (\Throwable $e) {
+                    $roles = [];
+                }
+                $name = $t->full_name ?? $t->short_name ?? ('ID: ' . $t->id);
+                // UTF-8 xavfsizligi
+                $name = mb_convert_encoding($name, 'UTF-8', 'UTF-8');
+                $position = mb_convert_encoding($t->staff_position ?? '', 'UTF-8', 'UTF-8');
+
+                $teachersJson[] = [
+                    'id' => (int) $t->id,
+                    'name' => $name,
+                    'position' => $position,
+                    'roles' => $roles,
+                ];
+            }
+        } catch (\Throwable $e) {
+            \Log::error('NotificationController@create teachers error: ' . $e->getMessage() . ' | ' . $e->getTraceAsString());
+            $teachersJson = [];
+        }
 
         // Rollar ro'yxati (talabadan tashqari)
         $roles = collect(ProjectRole::staffRoles())->map(fn ($role) => [
@@ -166,15 +208,15 @@ class NotificationController extends Controller
         ]);
 
         try {
-            $unreadCount = Notification::inbox($userId)->unread()->count();
-            $sentCount = Notification::sent($userId)->count();
-            $draftsCount = Notification::drafts($userId)->count();
+            $unreadCount = Notification::inbox($userId, $userType)->unread()->count();
+            $sentCount = Notification::sent($userId, $userType)->count();
+            $draftsCount = Notification::drafts($userId, $userType)->count();
         } catch (\Throwable $e) {
             \Log::error('NotificationController@create counts error: ' . $e->getMessage());
             $unreadCount = $sentCount = $draftsCount = 0;
         }
 
-        return view('admin.notifications.create', compact('teachers', 'roles', 'unreadCount', 'sentCount', 'draftsCount'));
+        return view('admin.notifications.create', compact('teachersJson', 'roles', 'unreadCount', 'sentCount', 'draftsCount'));
     }
 
     public function store(Request $request)
@@ -217,7 +259,8 @@ class NotificationController extends Controller
     {
         [$userId, $userType] = $this->getUserInfo();
 
-        if ($notification->sender_id == $userId || $notification->recipient_id == $userId) {
+        if (($notification->sender_id == $userId && $notification->sender_type === $userType)
+            || ($notification->recipient_id == $userId && $notification->recipient_type === $userType)) {
             $notification->delete();
             return redirect()->back()->with('success', __('notifications.deleted'));
         }
@@ -265,7 +308,7 @@ class NotificationController extends Controller
     public function markAllRead()
     {
         [$userId, $userType] = $this->getUserInfo();
-        Notification::inbox($userId)->unread()->update([
+        Notification::inbox($userId, $userType)->unread()->update([
             'is_read' => true,
             'read_at' => now(),
         ]);
@@ -276,7 +319,7 @@ class NotificationController extends Controller
     public function getUnreadCount()
     {
         [$userId, $userType] = $this->getUserInfo();
-        $count = Notification::inbox($userId)->unread()->count();
+        $count = Notification::inbox($userId, $userType)->unread()->count();
 
         return response()->json(['count' => $count]);
     }

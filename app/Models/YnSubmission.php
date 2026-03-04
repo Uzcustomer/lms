@@ -17,15 +17,24 @@ class YnSubmission extends Model
         'semester_code',
         'group_hemis_id',
         'submitted_by',
+        'submitted_by_guard',
         'submitted_at',
+        'exam_date',
+        'results_fetched',
     ];
 
     protected $casts = [
         'submitted_at' => 'datetime',
+        'exam_date' => 'date',
+        'results_fetched' => 'boolean',
     ];
 
     public function submittedBy()
     {
+        if ($this->submitted_by_guard === 'teacher') {
+            return $this->belongsTo(Teacher::class, 'submitted_by');
+        }
+
         return $this->belongsTo(User::class, 'submitted_by');
     }
 

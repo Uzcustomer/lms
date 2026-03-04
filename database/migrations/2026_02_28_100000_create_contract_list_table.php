@@ -10,11 +10,13 @@ return new class extends Migration
     {
         Schema::create('contract_list', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('hemis_id')->unique();
+            $table->unsignedBigInteger('hemis_id')->unique()->comment('HEMIS contract id');
             $table->string('key')->nullable();
             $table->string('education_year')->nullable();
-            $table->unsignedBigInteger('student_hemis_id')->nullable()->index();
-            $table->string('year', 10)->nullable()->index();
+            $table->unsignedBigInteger('student_hemis_id')->nullable()->comment('_student');
+
+            // _data fields
+            $table->string('year', 10)->nullable();
             $table->string('status')->nullable();
             $table->unsignedSmallInteger('status_id')->nullable();
             $table->string('edu_form')->nullable();
@@ -26,13 +28,13 @@ return new class extends Migration
             $table->string('edu_type_code', 20)->nullable();
             $table->string('edu_type_name')->nullable();
             $table->string('faculty_code', 50)->nullable();
-            $table->string('faculty_name')->nullable()->index();
-            $table->string('contract_number')->nullable()->index();
+            $table->string('faculty_name')->nullable();
+            $table->string('contract_number')->nullable();
             $table->decimal('edu_contract_sum', 15, 2)->nullable();
             $table->string('edu_organization')->nullable();
             $table->string('edu_organization_code', 50)->nullable();
             $table->decimal('paid_credit_amount', 15, 2)->nullable();
-            $table->string('edu_speciality_code', 50)->nullable()->index();
+            $table->string('edu_speciality_code', 50)->nullable();
             $table->string('edu_speciality_name')->nullable();
             $table->decimal('end_rest_debet_amount', 15, 2)->nullable();
             $table->decimal('unpaid_credit_amount', 15, 2)->nullable();
@@ -45,9 +47,16 @@ return new class extends Migration
             $table->decimal('begin_rest_credit_amount', 15, 2)->nullable();
             $table->string('edu_contract_sum_type_code', 20)->nullable();
             $table->string('edu_contract_sum_type_name')->nullable();
+
             $table->unsignedInteger('hemis_created_at')->nullable();
             $table->unsignedInteger('hemis_updated_at')->nullable();
             $table->timestamps();
+
+            $table->index('student_hemis_id');
+            $table->index('contract_number');
+            $table->index('faculty_code');
+            $table->index('edu_speciality_code');
+            $table->index('year');
         });
     }
 

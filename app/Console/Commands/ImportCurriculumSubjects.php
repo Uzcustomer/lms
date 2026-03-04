@@ -42,6 +42,7 @@ class ImportCurriculumSubjects extends Command
         $page = 1;
         $pageSize = 40;
         $totalImported = 0;
+        $importedHemisIds = [];
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/curriculum-subject-list?limit=$pageSize&page=$page");
@@ -81,6 +82,7 @@ class ImportCurriculumSubjects extends Command
                             'department_name' => $subjectData['department']['name'] ?? null,
                         ]
                     );
+                    $importedHemisIds[] = $subjectData['id'];
                     $totalImported++;
 
                     $this->info("Imported curriculum subject: {$subjectData['subject']['name']}");
@@ -94,7 +96,15 @@ class ImportCurriculumSubjects extends Command
             }
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ O'quv reja fanlari importi tugadi. Jami: {$totalImported} ta");
-        $this->info('Curriculum subjects import completed successfully.');
+        // API'dan qaytmagan fanlarni nofaol qilish (soft delete)
+        $deactivated = 0;
+        if (!empty($importedHemisIds)) {
+            $deactivated = CurriculumSubject::where('is_active', true)
+                ->whereNotIn('curriculum_subject_hemis_id', $importedHemisIds)
+                ->update(['is_active' => false]);
+        }
+
+        $telegram->notify("✅ O'quv reja fanlari importi tugadi. Jami: {$totalImported} ta, nofaol: {$deactivated} ta");
+        $this->info("Curriculum subjects import completed. Imported: {$totalImported}, deactivated: {$deactivated}");
     }
 }

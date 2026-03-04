@@ -54,8 +54,9 @@
 
                             <div class="filter-item" style="min-width: 160px;">
                                 <label class="filter-label">&nbsp;</label>
-                                <input type="hidden" name="current_semester" id="current_semester_input" value="{{ request('current_semester', '1') }}">
-                                <div class="toggle-switch {{ request('current_semester', '1') == '1' ? 'active' : '' }}" id="current-semester-toggle" onclick="toggleCurrentSemester()">
+                                @php $csDefault = ($isFanMasuli ?? false) ? '0' : '1'; @endphp
+                                <input type="hidden" name="current_semester" id="current_semester_input" value="{{ request('current_semester', $csDefault) }}">
+                                <div class="toggle-switch {{ request('current_semester', $csDefault) == '1' ? 'active' : '' }}" id="current-semester-toggle" onclick="toggleCurrentSemester()">
                                     <div class="toggle-track">
                                         <div class="toggle-thumb"></div>
                                     </div>
@@ -90,18 +91,29 @@
                                 </label>
                                 <input type="text" name="subject_name" id="subject_name" value="{{ request('subject_name') }}"
                                        placeholder="Fan nomini kiriting..."
-                                       style="height: 36px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0 10px; font-size: 13px; outline: none; width: 100%;"
-                                       onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                                       class="filter-input">
+                            </div>
+
+                            <div class="filter-item" style="min-width: 140px;">
+                                <label class="filter-label" style="color: #059669;">
+                                    <span class="fl-dot" style="background:#059669;"></span> KTR holati
+                                </label>
+                                <select name="ktr_status" id="ktr_status" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                    <option value="created" {{ request('ktr_status') == 'created' ? 'selected' : '' }}>Yaratildi</option>
+                                    <option value="not_created" {{ request('ktr_status') == 'not_created' ? 'selected' : '' }}>Yaratilmadi</option>
+                                </select>
                             </div>
 
                             <div class="filter-item" style="min-width: 130px;">
                                 <label class="filter-label fl-slate">
                                     <span class="fl-dot" style="background:#94a3b8;"></span> Holati
                                 </label>
+                                @php $afDefault = ($isFanMasuli ?? false) ? 'all' : 'active'; @endphp
                                 <select name="active_filter" id="active_filter" class="select2" style="width: 100%;">
-                                    <option value="active" {{ request('active_filter', 'active') == 'active' ? 'selected' : '' }}>Faol</option>
+                                    <option value="active" {{ request('active_filter', $afDefault) == 'active' ? 'selected' : '' }}>Faol</option>
                                     <option value="inactive" {{ request('active_filter') == 'inactive' ? 'selected' : '' }}>Nofaol</option>
-                                    <option value="all" {{ request('active_filter') == 'all' ? 'selected' : '' }}>Barchasi</option>
+                                    <option value="all" {{ request('active_filter', $afDefault) == 'all' ? 'selected' : '' }}>Barchasi</option>
                                 </select>
                             </div>
 
@@ -193,6 +205,7 @@
                                     @foreach($trainingTypes as $code => $name)
                                         <th class="ktr-type-th">{{ $name }}</th>
                                     @endforeach
+                                    <th style="min-width: 90px; text-align: center;">Holat</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -231,6 +244,13 @@
                                                 @endif
                                             </td>
                                         @endforeach
+                                        <td style="text-align: center;">
+                                            @if($item->has_ktr ?? false)
+                                                <span class="badge" style="background:#dcfce7;color:#16a34a;font-size:11px;padding:2px 8px;border-radius:6px;">Yaratildi</span>
+                                            @else
+                                                <span class="badge" style="background:#fef2f2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:6px;">Yaratilmadi</span>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -289,12 +309,22 @@
 
                     <!-- Tugmalar -->
                     <div style="display: flex; justify-content: space-between; margin-top: 16px; align-items: center;">
-                        <a id="ktr-word-export-btn" href="#" class="ktr-btn ktr-btn-export" target="_blank" style="text-decoration:none; display:none;">
-                            <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            Word
-                        </a>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <a id="ktr-word-export-btn" href="#" class="ktr-btn ktr-btn-export" target="_blank" style="text-decoration:none; display:none;">
+                                <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                Word
+                            </a>
+                            @if(in_array(session('active_role'), ['superadmin', 'admin']))
+                            <button type="button" id="ktr-reset-btn" class="ktr-btn" style="display:none; background:#fef2f2; color:#dc2626; border:1px solid #fecaca; font-size:12px; padding:6px 14px; border-radius:8px; cursor:pointer;" onclick="resetKtrPlan()">
+                                <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                                Qaytarish
+                            </button>
+                            @endif
+                        </div>
                         <div style="display: flex; gap: 10px;">
                             <button type="button" class="ktr-btn ktr-btn-edit" id="ktr-edit-btn" onclick="onKtrEditClick()" style="display:none;">
                                 <svg style="width: 15px; height: 15px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -315,6 +345,53 @@
                     <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- KTR Warning Modal (fan masuli uchun) -->
+    <div id="ktr-warning-modal-overlay" class="ktr-modal-overlay" style="display:none;z-index:10000;" onclick="closeWarningModal(event)">
+        <div class="ktr-warning-modal" onclick="event.stopPropagation()">
+            <div class="ktr-warning-modal-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:36px;height:36px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <svg style="width:20px;height:20px;color:#d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size:16px;font-weight:700;color:#92400e;margin:0;">Diqqat!</h3>
+                </div>
+                <button style="background:none;border:none;font-size:22px;color:#9ca3af;cursor:pointer;padding:0;line-height:1;" onclick="closeWarningModal()">&times;</button>
+            </div>
+            <div class="ktr-warning-modal-body" id="ktr-warning-modal-body"></div>
+            <div class="ktr-warning-modal-footer">
+                <button type="button" class="ktr-btn ktr-btn-secondary" onclick="closeWarningModal()">Bekor qilish</button>
+                <button type="button" class="ktr-btn ktr-btn-primary" onclick="confirmAndEnableEdit()">Tushundim, davom etish</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEMIS mavzular ogohlantirish modali -->
+    <div id="ktr-topics-modal-overlay" class="ktr-modal-overlay" style="display:none;z-index:10001;" onclick="closeTopicsModal(event)">
+        <div class="ktr-warning-modal" onclick="event.stopPropagation()" style="max-width:500px;">
+            <div class="ktr-warning-modal-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;">
+                        <svg style="width:18px;height:18px;color:#dc2626;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size:16px;font-weight:700;color:#dc2626;margin:0;">Mavzular topilmadi!</h3>
+                </div>
+                <button style="background:none;border:none;font-size:22px;color:#9ca3af;cursor:pointer;padding:0;line-height:1;" onclick="closeTopicsModal()">&times;</button>
+            </div>
+            <div class="ktr-warning-modal-body">
+                <p style="margin:0 0 12px;color:#374151;font-size:14px;">Quyidagi mashg'ulot turlari uchun HEMIS tizimida mavzular kiritilmagan:</p>
+                <div id="ktr-missing-topics-list" style="margin-bottom:12px;"></div>
+                <p style="margin:0;color:#6b7280;font-size:13px;">Iltimos, avval <b>HEMIS</b> tizimiga mavzularni kiriting, so'ng KTR ni saqlang.</p>
+            </div>
+            <div class="ktr-warning-modal-footer">
+                <button type="button" class="ktr-btn ktr-btn-secondary" onclick="closeTopicsModal()">Yopish</button>
             </div>
         </div>
     </div>
@@ -507,8 +584,10 @@
                     $('#ktr-word-export-btn').attr('href', '/admin/ktr/export-word/' + csId);
                     if (ktrState.hasPlan) {
                         $('#ktr-word-export-btn').show();
+                        $('#ktr-reset-btn').show();
                     } else {
                         $('#ktr-word-export-btn').hide();
+                        $('#ktr-reset-btn').hide();
                     }
                     ktrState.changeRequest = data.change_request || null;
 
@@ -571,12 +650,12 @@
 
         function onKtrEditClick() {
             var cr = ktrState.changeRequest;
-            // So'rov allaqachon jo'natilgan (draft saqlangan) - panelni ko'rsatish
-            if (cr && !cr.is_approved) {
+            // So'rov allaqachon jo'natilgan va hali kutilmoqda - panelni ko'rsatish
+            if (cr && cr.status === 'pending' && !cr.is_approved) {
                 renderChangePanel();
                 return;
             }
-            // So'rov yo'q - ogohlantirish ko'rsatish va tahrirlashga ruxsat berish
+            // So'rov yo'q yoki rad etilgan - ogohlantirish ko'rsatish va tahrirlashga ruxsat berish
             showEditWarningAndEnable();
         }
 
@@ -607,49 +686,83 @@
 
         function showEditWarningAndEnable() {
             var info = ktrState.approverInfo;
-            var html = '<div class="ktr-change-box" style="border-left: 4px solid #f59e0b; background: #fffbeb;">';
-            html += '<div class="ktr-change-title" style="color:#b45309;"><svg style="width:18px;height:18px;vertical-align:middle;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>Diqqat!</div>';
-            html += '<div class="ktr-change-desc" style="margin-bottom:10px;">O\'zgartirgan KTRingizni saqlash uchun quyidagilardan ruxsat so\'rashingiz kerak:</div>';
+            var html = '';
+            html += '<p style="margin:0 0 12px;color:#374151;font-size:14px;">O\'zgartirgan KTRingizni saqlash uchun quyidagilardan ruxsat so\'rashingiz kerak:</p>';
             if (info.kafedra_name || info.faculty_name) {
-                html += '<div style="margin-bottom:8px; font-size:13px; color:#374151;">';
+                html += '<div style="margin-bottom:10px;padding:8px 12px;background:#f9fafb;border-radius:8px;font-size:13px;color:#374151;">';
                 if (info.faculty_name) html += '<div><b>Fakultet:</b> ' + info.faculty_name + '</div>';
                 if (info.kafedra_name) html += '<div><b>Kafedra:</b> ' + info.kafedra_name + '</div>';
                 html += '</div>';
             }
-            html += '<ul class="ktr-approver-list">';
+            html += '<ul class="ktr-approver-list" style="margin:0 0 12px;">';
             html += '<li><b>Kafedra mudiri</b>: ' + (info.kafedra_mudiri ? info.kafedra_mudiri.name : 'Topilmadi') + '</li>';
             html += '<li><b>Dekan</b>: ' + (info.dekan ? info.dekan.name : 'Topilmadi') + '</li>';
             html += '<li><b>Registrator ofisi</b></li>';
             html += '</ul>';
-            html += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280; margin-bottom:10px;">Tahrirlashdan so\'ng "Saqlash" tugmasini bossangiz, o\'zgarishlar draft sifatida saqlanadi va tasdiqlash so\'rovi yuboriladi. Tasdiqlangandan keyin KTR yangilanadi.</div>';
-            html += '<button type="button" class="ktr-btn ktr-btn-primary" onclick="confirmAndEnableEdit()">Tushundim, davom etish</button>';
-            html += '</div>';
-            $('#ktr-change-panel').html(html).show();
+            html += '<p style="font-size:12px;color:#6b7280;margin:0;">Tahrirlashdan so\'ng "Saqlash" tugmasini bossangiz, o\'zgarishlar draft sifatida saqlanadi va tasdiqlash so\'rovi yuboriladi. Tasdiqlangandan keyin KTR yangilanadi.</p>';
+            $('#ktr-warning-modal-body').html(html);
+            $('#ktr-warning-modal-overlay').fadeIn(200);
+        }
+
+        function closeWarningModal(event) {
+            if (event && event.target !== document.getElementById('ktr-warning-modal-overlay')) return;
+            $('#ktr-warning-modal-overlay').fadeOut(200);
         }
 
         function confirmAndEnableEdit() {
-            $('#ktr-change-panel').hide().html('');
+            $('#ktr-warning-modal-overlay').fadeOut(200);
             enableKtrEdit();
+        }
+
+        function closeTopicsModal(event) {
+            if (event && event.target !== document.getElementById('ktr-topics-modal-overlay')) return;
+            $('#ktr-topics-modal-overlay').fadeOut(200);
+        }
+
+        // Saqlashdan oldin HEMIS mavzularini tekshirish
+        function checkHemisTopics() {
+            var codes = ktrState.filteredCodes;
+            var types = ktrState.trainingTypes;
+            var missingTypes = [];
+
+            codes.forEach(function(code) {
+                // Bu tur uchun soat kiritilganmi?
+                var hasHours = false;
+                for (var w = 1; w <= ktrState.weekCount; w++) {
+                    var val = parseInt($('.ktr-hours[data-week="' + w + '"][data-code="' + code + '"]').val()) || 0;
+                    if (val > 0) { hasHours = true; break; }
+                }
+                if (!hasHours) return;
+
+                // HEMIS da mavzular bormi?
+                var topics = ktrState.hemisTopics[code];
+                if (!topics || !topics.length) {
+                    missingTypes.push(types[code] ? types[code].name : code);
+                }
+            });
+
+            return missingTypes;
         }
 
         function renderChangePanel() {
             var cr = ktrState.changeRequest;
             if (!cr) return;
-            var html = '<div class="ktr-change-box">';
-            if (cr.is_approved) {
-                html += '<div class="ktr-change-title" style="color:#059669;">Barcha tasdiqlar olingan! KTR yangilandi.</div>';
-            } else {
-                html += '<div class="ktr-change-title">Tasdiqlash kutilmoqda (draft saqlangan)</div>';
-                html += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280;">O\'zgarishlar draft sifatida saqlangan. Barcha tasdiqlar olingandan keyin KTR yangilanadi.</div>';
-            }
+            var html = '<div class="ktr-change-box" style="display:flex; gap:16px; flex-wrap:wrap;">';
 
-            // O'zgarishlar diffini ko'rsatish
-            if (cr.draft_plan_data && ktrState.savedHours) {
-                html += renderDraftDiff(cr);
+            // Chap tomon - tasdiqlash holati
+            var leftHtml = '<div style="flex:1; min-width:280px;">';
+            if (cr.is_approved) {
+                leftHtml += '<div class="ktr-change-title" style="color:#059669;">Barcha tasdiqlar olingan! KTR yangilandi.</div>';
+            } else if (cr.status === 'rejected') {
+                leftHtml += '<div class="ktr-change-title" style="color:#dc2626;">O\'zgartirish so\'rovi rad etildi</div>';
+                leftHtml += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280; margin-bottom:8px;">So\'rov rad etilgan. Yangi o\'zgartirish kiritib qayta yuborishingiz mumkin.</div>';
+            } else {
+                leftHtml += '<div class="ktr-change-title">Tasdiqlash kutilmoqda</div>';
+                leftHtml += '<div class="ktr-change-desc" style="font-size:12px; color:#6b7280; margin-bottom:8px;">O\'zgarishlar draft sifatida saqlangan. Barcha tasdiqlar olingandan keyin KTR yangilanadi.</div>';
             }
 
             var info = ktrState.approverInfo;
-            html += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Bo\'lim</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
+            leftHtml += '<table class="ktr-approval-table"><thead><tr><th>Lavozim</th><th>Ism</th><th>Bo\'lim</th><th>Holat</th><th>Sana</th></tr></thead><tbody>';
             cr.approvals.forEach(function(a) {
                 var bolim = '-';
                 if (a.role === 'kafedra_mudiri') {
@@ -657,18 +770,32 @@
                 } else if (a.role === 'dekan') {
                     bolim = info.faculty_name ? (info.faculty_name + ' fakulteti') : '-';
                 }
-                html += '<tr>';
-                html += '<td>' + getRoleName(a.role) + '</td>';
-                html += '<td>' + a.approver_name + '</td>';
-                html += '<td>' + bolim + '</td>';
-                html += '<td>' + getStatusBadge(a.status) + '</td>';
-                html += '<td>' + (a.responded_at || '-') + '</td>';
-                html += '</tr>';
+                leftHtml += '<tr>';
+                leftHtml += '<td>' + getRoleName(a.role) + '</td>';
+                leftHtml += '<td>' + a.approver_name + '</td>';
+                leftHtml += '<td>' + bolim + '</td>';
+                leftHtml += '<td>' + getStatusBadge(a.status) + '</td>';
+                leftHtml += '<td>' + (a.responded_at || '-') + '</td>';
+                leftHtml += '</tr>';
             });
-            html += '</tbody></table>';
+            leftHtml += '</tbody></table>';
+            leftHtml += '</div>';
+
+            html += leftHtml;
+
+            // O'ng tomon - o'zgarishlar jadvali
+            if (cr.draft_plan_data && ktrState.savedHours) {
+                html += renderDraftDiff(cr);
+            }
+
             html += '</div>';
             $('#ktr-change-panel').html(html).show();
-            $('#ktr-edit-btn').hide();
+            // Rad etilgan bo'lsa, tahrirlash tugmasini ko'rsatish (qayta yuborish uchun)
+            if (cr.status === 'rejected' && ktrState.canEdit) {
+                $('#ktr-edit-btn').show();
+            } else {
+                $('#ktr-edit-btn').hide();
+            }
         }
 
         function renderDraftDiff(cr) {
@@ -677,21 +804,19 @@
             var newHours = newData.hours || newData;
             var types = ktrState.trainingTypes;
             var codes = ktrState.filteredCodes;
-            var changes = [];
 
-            // Hafta soni tekshirish
-            if (ktrState.hasPlan && cr.draft_week_count) {
-                var oldWeekCount = Object.keys(oldHours).length;
-                if (oldWeekCount != cr.draft_week_count) {
-                    changes.push('<b>Hafta soni:</b> ' + oldWeekCount + ' → ' + cr.draft_week_count);
-                }
-            }
+            // Hafta soni
+            var oldWeekCount = Object.keys(oldHours).length;
+            var newWeekCount = cr.draft_week_count || oldWeekCount;
 
-            // Har bir hafta va tur bo'yicha soatlar farqi
             var allWeeks = [];
             for (var k in oldHours) allWeeks.push(k);
             for (var k in newHours) { if (allWeeks.indexOf(k) === -1) allWeeks.push(k); }
             allWeeks.sort(function(a,b) { return parseInt(a) - parseInt(b); });
+
+            // O'zgargan haftalarni yig'ish: week => {code: {old, new}}
+            var changedWeeks = {};
+            var changedCodes = {};
 
             allWeeks.forEach(function(week) {
                 var oldW = oldHours[week] || {};
@@ -700,25 +825,68 @@
                     var oldVal = parseInt(oldW[code]) || 0;
                     var newVal = parseInt(newW[code]) || 0;
                     if (oldVal !== newVal) {
-                        var typeName = types[code] ? types[code].name : code;
-                        changes.push(week + '-hafta <b>' + typeName + '</b>: <span style="color:#dc2626;text-decoration:line-through;">' + oldVal + '</span> → <span style="color:#059669;font-weight:600;">' + newVal + '</span> soat');
+                        if (!changedWeeks[week]) changedWeeks[week] = {};
+                        changedWeeks[week][code] = { old: oldVal, new: newVal };
+                        changedCodes[code] = true;
                     }
                 });
             });
 
-            if (changes.length === 0) return '';
+            var changedWeekKeys = Object.keys(changedWeeks).sort(function(a,b) { return parseInt(a) - parseInt(b); });
+            var activeCodesList = Object.keys(changedCodes);
 
-            var html = '<div style="margin:10px 0; padding:10px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">';
-            html += '<div style="font-weight:600; margin-bottom:6px; color:#0369a1;">O\'zgarishlar:</div>';
-            html += '<ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.8;">';
-            var maxShow = Math.min(changes.length, 15);
-            for (var i = 0; i < maxShow; i++) {
-                html += '<li>' + changes[i] + '</li>';
+            if (changedWeekKeys.length === 0 && oldWeekCount == newWeekCount) return '';
+
+            var html = '<div style="flex:1; min-width:260px;">';
+            html += '<div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:12px;">';
+            html += '<div style="font-weight:600; margin-bottom:8px; color:#0369a1; font-size:14px;">O\'zgarishlar</div>';
+
+            if (oldWeekCount != newWeekCount) {
+                html += '<div style="font-size:13px; margin-bottom:8px; padding:4px 8px; background:#fef3c7; border-radius:4px;">Hafta soni: <span style="color:#dc2626;text-decoration:line-through;">' + oldWeekCount + '</span> → <span style="color:#059669;font-weight:600;">' + newWeekCount + '</span></div>';
             }
-            if (changes.length > 15) {
-                html += '<li style="color:#6b7280;">... va yana ' + (changes.length - 15) + ' ta o\'zgarish</li>';
+
+            if (changedWeekKeys.length > 0) {
+                html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+                // Header 1: Hafta + tur nomlari
+                html += '<thead><tr style="background:#e0f2fe;">';
+                html += '<th rowspan="2" style="padding:5px 8px; text-align:center; border:1px solid #bae6fd;">Hafta</th>';
+                activeCodesList.forEach(function(code) {
+                    html += '<th colspan="2" style="padding:5px 8px; text-align:center; border:1px solid #bae6fd;">' + (types[code] ? types[code].name : code) + '</th>';
+                });
+                html += '</tr>';
+                // Header 2: Eski/Yangi
+                html += '<tr style="background:#dbeafe;">';
+                activeCodesList.forEach(function() {
+                    html += '<th style="padding:3px 6px; text-align:center; border:1px solid #bae6fd; font-size:10px; color:#dc2626;">Eski</th>';
+                    html += '<th style="padding:3px 6px; text-align:center; border:1px solid #bae6fd; font-size:10px; color:#059669;">Yangi</th>';
+                });
+                html += '</tr></thead><tbody>';
+
+                var maxShow = Math.min(changedWeekKeys.length, 20);
+                for (var i = 0; i < maxShow; i++) {
+                    var week = changedWeekKeys[i];
+                    var weekData = changedWeeks[week];
+                    html += '<tr style="border-bottom:1px solid #e0f2fe;">';
+                    html += '<td style="padding:4px 8px; text-align:center; font-weight:500; border:1px solid #e0f2fe;">' + week + '</td>';
+                    activeCodesList.forEach(function(code) {
+                        if (weekData[code]) {
+                            html += '<td style="padding:4px 8px; text-align:center; color:#dc2626; border:1px solid #e0f2fe;">' + weekData[code].old + '</td>';
+                            html += '<td style="padding:4px 8px; text-align:center; color:#059669; font-weight:600; border:1px solid #e0f2fe;">' + weekData[code].new + '</td>';
+                        } else {
+                            html += '<td style="padding:4px 8px; text-align:center; color:#9ca3af; border:1px solid #e0f2fe;">-</td>';
+                            html += '<td style="padding:4px 8px; text-align:center; color:#9ca3af; border:1px solid #e0f2fe;">-</td>';
+                        }
+                    });
+                    html += '</tr>';
+                }
+                if (changedWeekKeys.length > 20) {
+                    var colSpan = 1 + activeCodesList.length * 2;
+                    html += '<tr><td colspan="' + colSpan + '" style="padding:4px 8px; color:#6b7280; text-align:center; border:1px solid #e0f2fe;">... va yana ' + (changedWeekKeys.length - 20) + ' ta hafta</td></tr>';
+                }
+                html += '</tbody></table>';
             }
-            html += '</ul></div>';
+
+            html += '</div></div>';
             return html;
         }
 
@@ -940,6 +1108,18 @@
         }
 
         function saveKtrPlan() {
+            // HEMIS mavzulari tekshiruvi
+            var missingTypes = checkHemisTopics();
+            if (missingTypes.length > 0) {
+                var listHtml = '';
+                missingTypes.forEach(function(name) {
+                    listHtml += '<div style="padding:6px 12px;margin-bottom:4px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;color:#dc2626;font-size:13px;font-weight:500;">' + name + '</div>';
+                });
+                $('#ktr-missing-topics-list').html(listHtml);
+                $('#ktr-topics-modal-overlay').fadeIn(200);
+                return;
+            }
+
             var codes = ktrState.filteredCodes;
             var hours = {};
             var topics = {};
@@ -1004,6 +1184,28 @@
                     $('#ktr-validation-msg')
                         .html(msg)
                         .removeClass('ktr-msg-success').addClass('ktr-msg-error').show();
+                }
+            });
+        }
+
+        function resetKtrPlan() {
+            if (!confirm("Haqiqatan ham bu fan uchun KTR rejasini o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi.")) return;
+
+            $.ajax({
+                url: '/admin/ktr/plan/' + ktrState.csId,
+                type: 'DELETE',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                success: function(resp) {
+                    if (resp.success) {
+                        alert(resp.message);
+                        $('#ktr-modal-overlay').fadeOut(200);
+                        location.reload();
+                    }
+                },
+                error: function(xhr) {
+                    var msg = 'Xatolik yuz berdi';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    alert(msg);
                 }
             });
         }
@@ -1138,78 +1340,81 @@
         /* Filter container - Journal bilan bir xil */
         .filter-container {
             padding: 16px 20px 12px;
-            border-bottom: 1px solid #e2e8f0;
+            background: linear-gradient(135deg, #f0f4f8 0%, #e8edf5 100%);
+            border-bottom: 2px solid #dbe4ef;
         }
         .filter-row {
             display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 10px;
             flex-wrap: wrap;
+            margin-bottom: 10px;
             align-items: flex-end;
         }
-        .filter-item {
-            display: flex;
-            flex-direction: column;
-        }
+        .filter-row:last-child { margin-bottom: 0; }
+        .filter-item { }
         .filter-label {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 4px;
             display: flex;
             align-items: center;
             gap: 5px;
-            color: #64748b;
+            margin-bottom: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #475569;
         }
         .fl-dot {
-            width: 6px;
-            height: 6px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
             display: inline-block;
+            flex-shrink: 0;
         }
 
         /* Toggle switch */
         .toggle-switch {
-            display: flex;
+            display: inline-flex;
             align-items: center;
+            gap: 10px;
             cursor: pointer;
-            user-select: none;
             padding: 6px 0;
+            height: 36px;
+            user-select: none;
         }
         .toggle-track {
-            width: 36px;
-            height: 20px;
+            width: 40px;
+            height: 22px;
             background: #cbd5e1;
-            border-radius: 10px;
+            border-radius: 11px;
             position: relative;
-            transition: background 0.2s;
-            margin-right: 8px;
+            transition: background 0.25s;
+            flex-shrink: 0;
         }
         .toggle-switch.active .toggle-track {
-            background: #3b82f6;
+            background: linear-gradient(135deg, #2b5ea7, #3b7ddb);
         }
         .toggle-thumb {
-            width: 16px;
-            height: 16px;
-            background: #fff;
+            width: 18px;
+            height: 18px;
+            background: #ffffff;
             border-radius: 50%;
             position: absolute;
             top: 2px;
             left: 2px;
-            transition: transform 0.2s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            transition: transform 0.25s;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
         }
         .toggle-switch.active .toggle-thumb {
-            transform: translateX(16px);
+            transform: translateX(18px);
         }
         .toggle-label {
             font-size: 12px;
-            font-weight: 500;
+            font-weight: 600;
             color: #64748b;
+            white-space: nowrap;
         }
         .toggle-switch.active .toggle-label {
-            color: #3b82f6;
+            color: #1e3a5f;
         }
 
         /* Journal table styles */
@@ -1281,16 +1486,88 @@
 
         /* Select2 customization */
         .select2-container--classic .select2-selection--single {
-            border-radius: 8px !important;
-            border-color: #e2e8f0 !important;
-            height: 36px !important;
+            height: 36px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #ffffff;
+            transition: all 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        .select2-container--classic .select2-selection--single:hover {
+            border-color: #2b5ea7;
+            box-shadow: 0 0 0 2px rgba(43,94,167,0.1);
         }
         .select2-container--classic .select2-selection--single .select2-selection__rendered {
-            line-height: 34px !important;
-            font-size: 13px !important;
+            line-height: 34px;
+            padding-left: 10px;
+            padding-right: 52px;
+            color: #1e293b;
+            font-size: 0.8rem;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .select2-container--classic .select2-selection--single .select2-selection__arrow {
-            height: 34px !important;
+            height: 34px;
+            width: 22px;
+            background: transparent;
+            border-left: none;
+            right: 0;
+        }
+        .select2-container--classic .select2-selection--single .select2-selection__clear {
+            position: absolute;
+            right: 22px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px;
+            font-weight: bold;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 2px 6px;
+            z-index: 2;
+            background: #ffffff;
+            border-radius: 50%;
+            line-height: 1;
+            transition: all 0.15s;
+        }
+        .select2-container--classic .select2-selection--single .select2-selection__clear:hover {
+            color: #ffffff;
+            background: #ef4444;
+        }
+        .select2-dropdown {
+            font-size: 0.8rem;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .select2-container--classic .select2-results__option--highlighted {
+            background-color: #2b5ea7;
+        }
+
+        /* Filter input */
+        .filter-input {
+            width: 100%;
+            height: 36px;
+            padding: 0 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #fff;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #1e293b;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+        .filter-input:hover {
+            border-color: #2b5ea7;
+            box-shadow: 0 0 0 2px rgba(43,94,167,0.1);
+        }
+        .filter-input:focus {
+            outline: none;
+            border-color: #2b5ea7;
+            box-shadow: 0 0 0 2px rgba(43,94,167,0.2);
         }
 
         /* Training type column headers */
@@ -1405,7 +1682,8 @@
         /* Plan table */
         .ktr-plan-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             margin-top: 16px;
             font-size: 13px;
         }
@@ -1420,8 +1698,13 @@
             color: #475569;
             border: 1px solid #e2e8f0;
             position: sticky;
-            top: 0;
             z-index: 5;
+        }
+        .ktr-plan-table thead tr:first-child th {
+            top: 0;
+        }
+        .ktr-plan-table thead tr:nth-child(2) th {
+            top: 35px;
         }
         .ktr-th-hours {
             font-size: 10px;
@@ -1586,6 +1869,37 @@
             background: #f0fdf4;
             color: #16a34a;
             border: 1px solid #bbf7d0;
+        }
+
+        /* Warning Modal (fan masuli uchun) */
+        .ktr-warning-modal {
+            background: #fff;
+            border-radius: 16px;
+            width: 480px;
+            max-width: 92vw;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .ktr-warning-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #fde68a;
+            background: #fffbeb;
+        }
+        .ktr-warning-modal-body {
+            padding: 20px;
+        }
+        .ktr-warning-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 14px 20px;
+            border-top: 1px solid #e5e7eb;
+            background: #f9fafb;
         }
 
         /* O'zgartirish so'rovi paneli */

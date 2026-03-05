@@ -1774,15 +1774,38 @@ class ImportGrades extends Command
         $line .= " ({$elapsed} daq)";
 
         if ($state && !empty($state['message_id'])) {
-            // Mavjud xabarga qo'shish
+            // Mavjud xabarga qo'shish (xabarni tahrirlash)
             $state['lines'][] = $line;
             $msg = $this->buildDailyMessage($today, $state['lines']);
-            $telegram->editMessage($chatId, $state['message_id'], $msg);
+            $edited = $telegram->editMessage($chatId, $state['message_id'], $msg);
+
+            if (!$edited) {
+                // Edit muvaffaqiyatsiz (xabar o'chirilgan yoki topilmadi) — yangi xabar yuborish
+                Log::warning("[LiveImport] editMessage muvaffaqiyatsiz (msg_id={$state['message_id']}), yangi xabar yuborilmoqda.");
+                $msgId = $telegram->sendAndGetId($chatId, $msg);
+                if ($msgId) {
+                    $state['message_id'] = $msgId;
+                } else {
+                    // Yangi xabar ham yuborilmadi — state ni saqlashni o'tkazib yuborish
+                    $this->warn("[LiveImport] Telegram xabar yuborishda xato, state saqlanmaydi.");
+                    return;
+                }
+            }
         } else {
-            // Yangi xabar yuborish
-            $state = ['date' => $today, 'lines' => [$line]];
+            // Yangi xabar yuborish (kunning birinchi importi)
+            $existingLines = $state['lines'] ?? [];
+            $existingLines[] = $line;
+            $state = ['date' => $today, 'lines' => $existingLines];
             $msg = $this->buildDailyMessage($today, $state['lines']);
             $msgId = $telegram->sendAndGetId($chatId, $msg);
+
+            if (!$msgId) {
+                // Xabar yuborilmadi — state saqlanmaydi, keyingi run qayta urinadi
+                Log::warning("[LiveImport] sendAndGetId null qaytardi, state saqlanmaydi.");
+                $this->warn("[LiveImport] Telegram xabar yuborishda xato, state saqlanmaydi.");
+                return;
+            }
+
             $state['message_id'] = $msgId;
         }
 

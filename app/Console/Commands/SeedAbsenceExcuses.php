@@ -103,14 +103,19 @@ class SeedAbsenceExcuses extends Command
             $description = $r[5];
             $reviewerName = $r[6];
 
+            // Avval hemis_id bo'yicha, topilmasa student id bo'yicha qidirish
             $student = Student::where('hemis_id', $hemisId)->first();
             if (!$student) {
-                $errors[] = "Qator " . ($i + 1) . ": Talaba topilmadi HEMIS ID {$hemisId}";
+                $student = Student::find($hemisId);
+            }
+            if (!$student) {
+                $errors[] = "Qator " . ($i + 1) . ": Talaba topilmadi ID/HEMIS ID {$hemisId}";
                 continue;
             }
+            $actualHemisId = $student->hemis_id;
 
             // Dublikat tekshiruvi
-            $exists = AbsenceExcuse::where('student_hemis_id', $hemisId)
+            $exists = AbsenceExcuse::where('student_hemis_id', $actualHemisId)
                 ->where('reason', $reason)
                 ->where('start_date', $startDate)
                 ->where('end_date', $endDate)
@@ -123,7 +128,7 @@ class SeedAbsenceExcuses extends Command
 
             AbsenceExcuse::create([
                 'student_id' => $student->id,
-                'student_hemis_id' => $hemisId,
+                'student_hemis_id' => $actualHemisId,
                 'student_full_name' => $student->full_name ?? $student->short_name,
                 'group_name' => $student->group_name,
                 'department_name' => $student->department_name,

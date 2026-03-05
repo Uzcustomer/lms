@@ -1428,13 +1428,7 @@
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
                                                                 $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
                                                             @endphp
-                                                            @if($isAdminRole && $gradeData)
-                                                                <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeData['id'] }}, true)" title="Admin: bahoni o'zgartirish">
-                                                                    <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                                </div>
-                                                            @else
-                                                                <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                            @endif
+                                                            <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php
@@ -3147,7 +3141,7 @@
         // Retake grade functionality - Excel-like inline editing
         let currentEditingCell = null;
 
-        function makeEditable(cellDiv, gradeId, adminEdit) {
+        function makeEditable(cellDiv, gradeId) {
             if (isDekan) return;
             if (currentEditingCell) return;
 
@@ -3175,7 +3169,7 @@
                     if (saving) return;
                     saving = true;
                     input.removeEventListener('blur', blurHandler);
-                    saveInlineGrade(gradeId, input.value, cellDiv, originalContent, adminEdit);
+                    saveInlineGrade(gradeId, input.value, cellDiv, originalContent);
                 } else if (e.key === 'Escape') {
                     saving = true;
                     input.removeEventListener('blur', blurHandler);
@@ -3188,7 +3182,7 @@
                 if (saving) return;
                 saving = true;
                 if (input.value.trim() !== '') {
-                    saveInlineGrade(gradeId, input.value, cellDiv, originalContent, adminEdit);
+                    saveInlineGrade(gradeId, input.value, cellDiv, originalContent);
                 } else {
                     cellDiv.innerHTML = originalContent;
                     currentEditingCell = null;
@@ -3305,7 +3299,7 @@
             });
         }
 
-        function saveInlineGrade(gradeId, gradeValue, cellDiv, originalContent, adminEdit) {
+        function saveInlineGrade(gradeId, gradeValue, cellDiv, originalContent) {
             const gradeNum = parseFloat(gradeValue);
 
             if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
@@ -3318,12 +3312,6 @@
             // Show loading
             cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
 
-            const bodyData = {
-                grade_id: gradeId,
-                grade: gradeNum
-            };
-            if (adminEdit) bodyData.admin_edit = true;
-
             fetch('{{ route("admin.journal.save-retake-grade") }}', {
                 method: 'POST',
                 headers: {
@@ -3331,18 +3319,14 @@
                     'X-CSRF-TOKEN': '{{ csrf_token() }}',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify(bodyData)
+                body: JSON.stringify({
+                    grade_id: gradeId,
+                    grade: gradeNum
+                })
             })
             .then(response => response.json())
             .then(data => {
-                if (data.success && data.admin_edited) {
-                    // Admin directly edited the grade
-                    const gradeVal = Math.round(data.grade);
-                    const colorClass = gradeVal < (window.minimumLimit || 60) ? 'text-red-600' : 'text-gray-900';
-                    cellDiv.innerHTML = `<span class="${colorClass} font-medium">${gradeVal}</span>`;
-                    cellDiv.onclick = function() { makeEditable(cellDiv, gradeId, true); };
-                    currentEditingCell = null;
-                } else if (data.success) {
+                if (data.success) {
                     const retakeVal = Math.round(data.retake_grade);
                     const canDelete = window.isAdminRole;
 

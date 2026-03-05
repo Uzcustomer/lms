@@ -15,6 +15,7 @@ use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Setting;
 use App\Models\Student;
+use App\Models\AcademicRecord;
 use App\Models\StudentGrade;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -80,7 +81,35 @@ class StudentController extends Controller
             ->get()
             ->groupBy('subject_name');
 
-        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'recentGrades', 'gradesBySubject'));
+        $semesterCode = $student->semester_code;
+        $curriculumId = $student->curriculum_id;
+
+        $curriculumSubjects = CurriculumSubject::where('curricula_hemis_id', $curriculumId)
+            ->where('semester_code', $semesterCode)
+            ->orderBy('subject_name')
+            ->get();
+
+        $academicRecords = AcademicRecord::where('student_id', $student->hemis_id)
+            ->where('semester_id', $semesterCode)
+            ->get()
+            ->keyBy('subject_id');
+
+        $semesterGrades = $curriculumSubjects->map(function ($cs) use ($academicRecords) {
+            $record = $academicRecords->get($cs->subject_id);
+            return (object) [
+                'subject_name' => $cs->subject_name,
+                'credit' => $cs->credit,
+                'total_acload' => $cs->total_acload,
+                'subject_type_name' => $cs->subject_type_name,
+                'total_point' => $record?->total_point,
+                'grade' => $record?->grade,
+                'employee_name' => $record?->employee_name,
+                'finish_credit_status' => $record?->finish_credit_status,
+                'retraining_status' => $record?->retraining_status,
+            ];
+        });
+
+        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'recentGrades', 'gradesBySubject', 'semesterGrades', 'semesterCode'));
     }
 
     public function getSchedule(Request $request)

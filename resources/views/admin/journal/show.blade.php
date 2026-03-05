@@ -1390,22 +1390,22 @@
                                                                 $origVal = round($gradeData['original_grade'], 0);
                                                                 $retakeVal = round($gradeData['retake_grade'], 0);
                                                             @endphp
-                                                            <div class="split-cell @if($canRateAdmin) cursor-pointer hover:bg-red-50 @endif" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $canRateAdmin ? ' — bosib o\'chirish' : '' }}"
-                                                                @if($canRateAdmin) onclick="deleteRetakeGrade(this, {{ $gradeData['id'] }})" @endif>
+                                                            <div class="split-cell @if($canRateAdmin) cursor-pointer hover:bg-blue-50 @endif" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $canRateAdmin ? ' — bosib o\'zgartirish' : '' }}"
+                                                                @if($canRateAdmin) onclick="makeEditable(this, {{ $gradeData['id'] }})" @endif>
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
                                                         @elseif($hasRetake && $retakeType === 'absent' && $canRateAdmin)
-                                                            {{-- NB + retake baho — admin o'chira oladi --}}
+                                                            {{-- NB + retake baho — admin o'zgartira oladi --}}
                                                             @php
                                                                 $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
                                                                 $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
                                                                 $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                                 $nbColorClass = ($isSababli || $hasApprovedExcuse) ? 'text-green-600' : 'text-red-600';
                                                             @endphp
-                                                            <div class="split-cell cursor-pointer hover:bg-red-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'chirish"
-                                                                onclick="deleteRetakeGrade(this, {{ $gradeRecordId }})">
+                                                            <div class="split-cell cursor-pointer hover:bg-blue-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'zgartirish"
+                                                                onclick="makeEditable(this, {{ $gradeRecordId }})">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ round($grade, 0) }}</span>

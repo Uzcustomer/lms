@@ -123,6 +123,7 @@
                                     <th class="sortable" data-col="10" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="12" style="width:120px;text-align:center;">YN yuborilgan <span class="sort-icon"></span></th>
+                                    <th style="width:160px;text-align:center;">Test vaqti</th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
@@ -151,6 +152,7 @@
                                             <option value="red" data-color="#dc2626">Yuborilmagan</option>
                                         </select>
                                     </th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -216,6 +218,18 @@
                                                     <span class="yn-submitted-no">Yuborilmagan</span>
                                                 @endif
                                             </td>
+                                            <td style="text-align:center;padding:4px 6px;">
+                                                @if($item['yn_submitted'] ?? false)
+                                                    <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
+                                                        <input type="time" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;">
+                                                        <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
+                                                            <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                        </button>
+                                                    </div>
+                                                @else
+                                                    <span style="color:#cbd5e1;font-size:11px;">—</span>
+                                                @endif
+                                            </td>
                                         </tr>
                                     @endforeach
                                 @endforeach
@@ -245,6 +259,53 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <link href="/css/scroll-calendar.css" rel="stylesheet" />
     <script src="/js/scroll-calendar.js"></script>
+
+    <script>
+        function saveTestTime(btn) {
+            var container = btn.parentElement;
+            var input = container.querySelector('.test-time-input');
+            var timeVal = input.value;
+            if (!timeVal) {
+                alert('Iltimos, vaqtni kiriting');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+
+            var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            fetch('{{ route($routePrefix . ".academic-schedule.test-center.save-test-time") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    group_hemis_id: input.getAttribute('data-group-hemis-id'),
+                    subject_id: input.getAttribute('data-subject-id'),
+                    semester_code: input.getAttribute('data-semester-code'),
+                    test_time: timeVal
+                })
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    btn.style.background = '#16a34a';
+                    setTimeout(function() { btn.style.background = '#3b82f6'; }, 1500);
+                } else {
+                    alert(data.message || 'Xatolik yuz berdi');
+                }
+            })
+            .catch(function() {
+                alert('Xatolik yuz berdi');
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            });
+        }
+    </script>
 
     <script>
         var isUpdatingFilters = false;

@@ -177,7 +177,8 @@ class SendExamReminders extends Command
             }
 
             foreach ($dateInfo['exams'] as $exam) {
-                $lines[] = "  - {$exam['name']} ({$exam['type']})";
+                $timeStr = !empty($exam['time']) ? " — soat {$exam['time']}" : '';
+                $lines[] = "  - {$exam['name']} ({$exam['type']}){$timeStr}";
             }
         }
 
@@ -192,7 +193,7 @@ class SendExamReminders extends Command
                 $dateKey = $schedule->oski_date->format('Y-m-d');
                 $daysLeft = $today->diffInDays($schedule->oski_date);
                 if ($daysLeft <= 3) {
-                    $examsByDate[$dateKey]['exams'][] = ['name' => $schedule->subject_name, 'type' => 'OSKI'];
+                    $examsByDate[$dateKey]['exams'][] = ['name' => $schedule->subject_name, 'type' => 'OSKI', 'time' => null];
                     $examsByDate[$dateKey]['days'] = $daysLeft;
                     $examsByDate[$dateKey]['date'] = $schedule->oski_date->format('d.m.Y');
                 }
@@ -201,7 +202,8 @@ class SendExamReminders extends Command
                 $dateKey = $schedule->test_date->format('Y-m-d');
                 $daysLeft = $today->diffInDays($schedule->test_date);
                 if ($daysLeft <= 3) {
-                    $examsByDate[$dateKey]['exams'][] = ['name' => $schedule->subject_name, 'type' => 'Test'];
+                    $testTime = $schedule->test_time ? Carbon::parse($schedule->test_time)->format('H:i') : null;
+                    $examsByDate[$dateKey]['exams'][] = ['name' => $schedule->subject_name, 'type' => 'Test', 'time' => $testTime];
                     $examsByDate[$dateKey]['days'] = $daysLeft;
                     $examsByDate[$dateKey]['date'] = $schedule->test_date->format('d.m.Y');
                 }
@@ -231,7 +233,8 @@ class SendExamReminders extends Command
             }
 
             foreach ($dateInfo['exams'] as $exam) {
-                $lines[] = "  📌 <b>{$exam['name']}</b> ({$exam['type']})";
+                $timeStr = !empty($exam['time']) ? " — ⏰ {$exam['time']}" : '';
+                $lines[] = "  📌 <b>{$exam['name']}</b> ({$exam['type']}){$timeStr}";
             }
             $lines[] = "";
         }

@@ -313,16 +313,10 @@
                                             @endif
                                         </td>
                                         <td class="px-3 py-3 whitespace-nowrap">
-                                            @if($appeal->status === 'approved' && session('active_role') === 'test_markazi')
-                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                                    Test ga ruxsat etildi
-                                                </span>
-                                            @else
-                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                                    bg-{{ $appeal->getStatusColor() }}-100 text-{{ $appeal->getStatusColor() }}-800">
-                                                    {{ $appeal->getStatusLabel() }}
-                                                </span>
-                                            @endif
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                                bg-{{ $appeal->getStatusColor() }}-100 text-{{ $appeal->getStatusColor() }}-800">
+                                                {{ $appeal->getStatusLabel() }}
+                                            </span>
                                         </td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             @if($appeal->reviewed_by_name)

@@ -329,6 +329,21 @@
                 </form>
             </div>
 
+            {{-- Bulk delete panel --}}
+            <div id="bulkPanel" style="display:none;" class="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 flex items-center justify-between">
+                <span class="text-sm text-red-800 font-medium">
+                    <span id="selectedCount">0</span> ta ariza tanlangan
+                </span>
+                <form method="POST" action="{{ route('admin.absence-excuses.bulk-delete') }}" id="bulkDeleteForm"
+                      onsubmit="return confirm('Tanlangan arizalarni o\'chirishni xohlaysizmi?')">
+                    @csrf
+                    <div id="bulkIdsContainer"></div>
+                    <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition">
+                        Tanlanganlarni o'chirish
+                    </button>
+                </form>
+            </div>
+
             {{-- Jadval --}}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
                 @if($excuses->isEmpty())
@@ -340,6 +355,9 @@
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
+                                    <th class="px-3 py-3 text-center">
+                                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                    </th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Talaba FISH</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fakultet</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Yo'nalish</th>
@@ -355,6 +373,9 @@
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 @foreach($excuses as $excuse)
                                     <tr class="{{ $excuse->isPending() ? 'bg-yellow-50 dark:bg-yellow-900/10' : '' }}">
+                                        <td class="px-3 py-3 text-center">
+                                            <input type="checkbox" class="row-checkbox rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" value="{{ $excuse->id }}" onchange="updateBulkPanel()">
+                                        </td>
                                         <td class="px-3 py-3 whitespace-nowrap">
                                             <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $excuse->student_full_name }}</div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400">{{ $excuse->student_hemis_id }}</div>
@@ -430,4 +451,41 @@
 
         </div>
     </div>
+
+    <script>
+        function toggleSelectAll(el) {
+            document.querySelectorAll('.row-checkbox').forEach(function(cb) {
+                cb.checked = el.checked;
+            });
+            updateBulkPanel();
+        }
+
+        function updateBulkPanel() {
+            var checked = document.querySelectorAll('.row-checkbox:checked');
+            var panel = document.getElementById('bulkPanel');
+            var countEl = document.getElementById('selectedCount');
+            var container = document.getElementById('bulkIdsContainer');
+
+            if (checked.length > 0) {
+                panel.style.display = 'flex';
+                countEl.textContent = checked.length;
+                container.innerHTML = '';
+                checked.forEach(function(cb) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'ids[]';
+                    input.value = cb.value;
+                    container.appendChild(input);
+                });
+            } else {
+                panel.style.display = 'none';
+            }
+
+            var allCbs = document.querySelectorAll('.row-checkbox');
+            var selectAll = document.getElementById('selectAll');
+            if (selectAll) {
+                selectAll.checked = allCbs.length > 0 && checked.length === allCbs.length;
+            }
+        }
+    </script>
 </x-app-layout>

@@ -490,6 +490,7 @@ class AcademicScheduleController extends Controller
                     'oski_na' => (bool) $existing?->oski_na,
                     'test_date' => $existing?->test_date?->format('Y-m-d'),
                     'test_na' => (bool) $existing?->test_na,
+                    'test_time' => $existing?->test_time,
                     'schedule_id' => $existing?->id,
                 ];
 
@@ -1405,5 +1406,26 @@ class AcademicScheduleController extends Controller
                 'file' => $e->getFile() . ':' . $e->getLine(),
             ], 500);
         }
+    }
+
+    public function saveTestTime(Request $request)
+    {
+        $request->validate([
+            'group_hemis_id' => 'required|string',
+            'subject_id' => 'required|string',
+            'semester_code' => 'required|string',
+            'test_time' => 'required|date_format:H:i',
+        ]);
+
+        $updated = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->update(['test_time' => $request->test_time]);
+
+        if ($updated) {
+            return response()->json(['success' => true, 'message' => 'Test vaqti saqlandi']);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Jadval topilmadi'], 404);
     }
 }

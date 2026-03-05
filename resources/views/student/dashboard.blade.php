@@ -83,6 +83,69 @@
                         </div>
                     </div>
 
+                    <div class="bg-white shadow rounded-lg p-6 mb-6">
+                        <h4 class="text-lg font-semibold mb-4">{{ $semesterCode }}-semestr fanlari va baholar</h4>
+                        @if($semesterGrades->isEmpty())
+                            <p class="text-sm text-gray-500">Bu semestr uchun fanlar topilmadi.</p>
+                        @else
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fan nomi</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Turi</th>
+                                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Kredit</th>
+                                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Soat</th>
+                                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ball</th>
+                                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Baho</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">O'qituvchi</th>
+                                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Holat</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-100">
+                                        @foreach($semesterGrades as $index => $sg)
+                                            <tr>
+                                                <td class="px-4 py-2 text-sm text-gray-500">{{ $index + 1 }}</td>
+                                                <td class="px-4 py-2 text-sm font-medium text-gray-900">{{ $sg->subject_name }}</td>
+                                                <td class="px-4 py-2 text-sm text-gray-500">{{ $sg->subject_type_name ?? '-' }}</td>
+                                                <td class="px-4 py-2 text-sm text-center text-gray-900">{{ $sg->credit }}</td>
+                                                <td class="px-4 py-2 text-sm text-center text-gray-900">{{ $sg->total_acload }}</td>
+                                                <td class="px-4 py-2 text-sm text-center font-semibold {{ $sg->total_point ? 'text-gray-900' : 'text-gray-400' }}">{{ $sg->total_point ?? '-' }}</td>
+                                                <td class="px-4 py-2 text-sm text-center">
+                                                    @if($sg->grade)
+                                                        @php
+                                                            $gradeColor = match(true) {
+                                                                in_array($sg->grade, ['A+', 'A']) => 'green',
+                                                                in_array($sg->grade, ['B+', 'B']) => 'blue',
+                                                                in_array($sg->grade, ['C+', 'C']) => 'yellow',
+                                                                in_array($sg->grade, ['D+', 'D']) => 'orange',
+                                                                default => 'red',
+                                                            };
+                                                        @endphp
+                                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-{{ $gradeColor }}-100 text-{{ $gradeColor }}-800">{{ $sg->grade }}</span>
+                                                    @else
+                                                        <span class="text-gray-400">-</span>
+                                                    @endif
+                                                </td>
+                                                <td class="px-4 py-2 text-sm text-gray-500">{{ $sg->employee_name ?? '-' }}</td>
+                                                <td class="px-4 py-2 text-sm text-center">
+                                                    @if($sg->retraining_status)
+                                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Qayta</span>
+                                                    @elseif($sg->finish_credit_status)
+                                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Yakunlangan</span>
+                                                    @else
+                                                        <span class="text-gray-400">-</span>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
+                    </div>
+
                     <div class="bg-white shadow rounded-lg p-6">
                         <h4 class="text-lg font-semibold mb-4">Fanlar bo'yicha baholar</h4>
                         @if($gradesBySubject->isEmpty())

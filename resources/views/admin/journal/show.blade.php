@@ -1322,12 +1322,13 @@
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+                                                        $isYnSubmitted = isset($ynSubmission) && $ynSubmission;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
-                                                        $canRateAdmin = !$isDekan && $isAdminRole;
-                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable);
+                                                        $canRateAdmin = !$isDekan && $isAdminRole && !$isYnSubmitted;
+                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && !$isYnSubmitted;
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
-                                                        $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi;
+                                                        $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi && !$isYnSubmitted;
                                                         $canEditExcuseExisting = false;
                                                         $showRatingInput = false;
                                                         $gradeRecordId = null;
@@ -1562,6 +1563,9 @@
                             @if(isset($ynSubmission) && $ynSubmission)
                                 <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
                                     YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
+                                    @if($ynSubmission->submittedBy)
+                                        <div class="text-xs text-blue-600 mt-1">Yuborgan: {{ $ynSubmission->submittedBy->name }}</div>
+                                    @endif
                                 </div>
                             @elseif($canSubmitYn ?? false)
                                 <div class="flex items-center space-x-3">
@@ -1864,9 +1868,17 @@
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
                                             $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
-                                            $inputDisabled = $isAdminMt
-                                                ? ($isDekan || $isRegistrator || (!$hasFile && !$isAdminMt))
-                                                : ($isDekan || $isRegistrator || $hasGrade || !$hasFile);
+                                            $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
+                                            $inputDisabled = $isYnSubmittedMt
+                                                ? true
+                                                : ($isAdminMt
+                                                    ? ($isDekan || $isRegistrator || (!$hasFile && !$isAdminMt))
+                                                    : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
+                                            // YN yuborilgan bo'lsa hamma action bloklash
+                                            if ($isYnSubmittedMt) {
+                                                $canRegrade = false;
+                                                $isAdminMt = false;
+                                            }
 
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade
                                             $urgency = 'none'; // none, fresh, warning, danger

@@ -1127,7 +1127,8 @@ class JournalController extends Controller
             ->get()
             ->keyBy('student_hemis_id');
 
-        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
+        $ynSubmission = YnSubmission::with('submittedBy')
+            ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->where('group_hemis_id', $group->group_hemis_id)
             ->first();

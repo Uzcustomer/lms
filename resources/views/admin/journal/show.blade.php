@@ -2881,30 +2881,13 @@
                 if (data.success) {
                     // Lock the input
                     input.value = Math.round(data.grade);
-                    if (window.isAdminRole) {
-                        // Admin: keep inputs editable, show O'zgartirish button
-                        input.disabled = false;
-                        input.style.background = '#fff';
-                        input.style.color = '#111827';
-                        // Keep comment input editable
-                        const commentCell = document.getElementById('mt-comment-' + studentHemisId);
-                        if (commentCell) {
-                            let ci = document.getElementById('mt-comment-input-' + studentHemisId);
-                            if (!ci) {
-                                commentCell.innerHTML = '<input type="text" id="mt-comment-input-' + studentHemisId + '" ' +
-                                    'style="width:100%;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:4px;outline:none;color:#111827;" ' +
-                                    'value="' + (comment || '') + '" placeholder="Ixtiyoriy">';
-                            }
-                        }
-                    } else {
-                        input.disabled = true;
-                        input.style.background = '#f3f4f6';
-                        input.style.color = '#6b7280';
-                        // Lock the comment input - show as text
-                        const commentCell = document.getElementById('mt-comment-' + studentHemisId);
-                        if (commentCell) {
-                            commentCell.innerHTML = '<span style="font-size:12px;color:#6b7280;font-style:italic;">' + (comment || '') + '</span>';
-                        }
+                    input.disabled = true;
+                    input.style.background = '#f3f4f6';
+                    input.style.color = '#6b7280';
+                    // Lock the comment input - show as text
+                    const commentCell = document.getElementById('mt-comment-' + studentHemisId);
+                    if (commentCell) {
+                        commentCell.innerHTML = '<span style="font-size:12px;color:#6b7280;font-style:italic;">' + (comment || '') + '</span>';
                     }
                     // Update history
                     if (data.history) {
@@ -2919,29 +2902,17 @@
                 } else if (data.locked && !data.can_regrade) {
                     // Permanently locked
                     input.value = Math.round(data.grade);
-                    if (window.isAdminRole) {
-                        input.disabled = false;
-                        input.style.background = '#fff';
-                        input.style.color = '#111827';
-                    } else {
-                        input.disabled = true;
-                        input.style.background = '#f3f4f6';
-                        input.style.color = '#6b7280';
-                    }
+                    input.disabled = true;
+                    input.style.background = '#f3f4f6';
+                    input.style.color = '#6b7280';
                     updateMtActionCell(studentHemisId, data);
-                    if (!window.isAdminRole) alert(data.message);
+                    alert(data.message);
                 } else if (data.locked && data.can_regrade) {
                     // Already graded, can regrade
                     input.value = Math.round(data.grade);
-                    if (window.isAdminRole) {
-                        input.disabled = false;
-                        input.style.background = '#fff';
-                        input.style.color = '#111827';
-                    } else {
-                        input.disabled = true;
-                        input.style.background = '#f3f4f6';
-                        input.style.color = '#6b7280';
-                    }
+                    input.disabled = true;
+                    input.style.background = '#f3f4f6';
+                    input.style.color = '#6b7280';
                     updateMtActionCell(studentHemisId, data);
                 } else if (data.no_file) {
                     // Student has no file uploaded

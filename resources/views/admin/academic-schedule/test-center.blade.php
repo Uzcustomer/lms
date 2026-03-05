@@ -221,7 +221,7 @@
                                             <td style="text-align:center;padding:4px 6px;">
                                                 @if($item['yn_submitted'] ?? false)
                                                     <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
-                                                        <input type="time" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:pointer;">
+                                                        <input type="time" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:pointer;">
                                                         <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
                                                             <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                         </button>
@@ -260,15 +260,95 @@
     <link href="/css/scroll-calendar.css" rel="stylesheet" />
     <script src="/js/scroll-calendar.js"></script>
 
+    <style>
+        .toast-popup {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 99999;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+            padding: 18px 24px;
+            min-width: 320px;
+            max-width: 420px;
+            animation: toastSlideIn 0.3s ease-out;
+            border-left: 4px solid #16a34a;
+        }
+        .toast-popup.toast-error {
+            border-left-color: #dc2626;
+        }
+        .toast-popup .toast-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #16a34a;
+            margin-bottom: 6px;
+        }
+        .toast-popup.toast-error .toast-title {
+            color: #dc2626;
+        }
+        .toast-popup .toast-body {
+            font-size: 13px;
+            color: #334155;
+            line-height: 1.5;
+        }
+        .toast-popup .toast-close {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #94a3b8;
+            cursor: pointer;
+        }
+        @keyframes toastSlideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes toastSlideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+    </style>
+
     <script>
+        function showToast(title, body, isError) {
+            var existing = document.querySelector('.toast-popup');
+            if (existing) existing.remove();
+
+            var toast = document.createElement('div');
+            toast.className = 'toast-popup' + (isError ? ' toast-error' : '');
+            toast.innerHTML = '<button class="toast-close" onclick="this.parentElement.remove()">&times;</button>'
+                + '<div class="toast-title">' + title + '</div>'
+                + '<div class="toast-body">' + body + '</div>';
+            document.body.appendChild(toast);
+
+            setTimeout(function() {
+                toast.style.animation = 'toastSlideOut 0.3s ease-in forwards';
+                setTimeout(function() { toast.remove(); }, 300);
+            }, 4000);
+        }
+
+        function formatTime24(timeStr) {
+            if (!timeStr) return '';
+            var parts = timeStr.split(':');
+            var h = parseInt(parts[0], 10);
+            var m = parts[1];
+            return (h < 10 ? '0' + h : h) + ':' + m;
+        }
+
         function saveTestTime(btn) {
             var container = btn.parentElement;
             var input = container.querySelector('.test-time-input');
             var timeVal = input.value;
             if (!timeVal) {
-                alert('Iltimos, vaqtni kiriting');
+                showToast('Xatolik', 'Iltimos, vaqtni kiriting', true);
                 return;
             }
+
+            var subjectName = input.getAttribute('data-subject-name') || 'Fan';
+            var formattedTime = formatTime24(timeVal);
 
             btn.disabled = true;
             btn.style.opacity = '0.6';
@@ -291,14 +371,15 @@
             .then(function(resp) { return resp.json(); })
             .then(function(data) {
                 if (data.success) {
+                    showToast('Saqlandi!', '<b>Fan:</b> ' + subjectName + '<br><b>Test vaqti belgilandi:</b> ' + formattedTime, false);
                     btn.style.background = '#16a34a';
                     setTimeout(function() { btn.style.background = '#3b82f6'; }, 1500);
                 } else {
-                    alert(data.message || 'Xatolik yuz berdi');
+                    showToast('Xatolik', data.message || 'Xatolik yuz berdi', true);
                 }
             })
             .catch(function() {
-                alert('Xatolik yuz berdi');
+                showToast('Xatolik', 'Xatolik yuz berdi', true);
             })
             .finally(function() {
                 btn.disabled = false;

@@ -1428,7 +1428,13 @@
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
                                                                 $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
                                                             @endphp
-                                                            <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
+                                                            @if($canRateAdmin && $gradeData)
+                                                                <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="adminEditGrade(this, {{ $gradeData['id'] }}, {{ round($grade, 0) }})" title="Bosib o'zgartirish yoki o'chirish">
+                                                                    <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
+                                                                </div>
+                                                            @else
+                                                                <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
+                                                            @endif
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php
@@ -1469,8 +1475,8 @@
                                                         @elseif($hasRetake)
                                                             {{-- NB + otrabotka qilgan: diagonal split --}}
                                                             @php $retakeVal = round($absenceData['retake_grade'], 0); @endphp
-                                                            <div class="split-cell @if($canRateAdmin) cursor-pointer hover:bg-red-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ $canRateAdmin ? ' — bosib o\'chirish' : '' }}"
-                                                                @if($canRateAdmin) onclick="deleteRetakeGrade(this, {{ $gradeRecordId }})" @endif>
+                                                            <div class="split-cell @if($canRateAdmin) cursor-pointer hover:bg-blue-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ $canRateAdmin ? ' — bosib o\'zgartirish' : '' }}"
+                                                                @if($canRateAdmin) onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -3305,27 +3311,27 @@
                     if (data.reason === 'absent') {
                         const nbColor = data.is_excused ? 'color:#16a34a' : 'color:#dc2626';
                         const nbTitle = data.is_excused ? 'sababli' : 'sababsiz';
-                        const deleteAttr = canDelete ? `cursor-pointer hover:bg-red-50` : '';
-                        const deleteTitle = canDelete ? ` — bosib o'chirish` : '';
-                        cellDiv.innerHTML = `<div class="split-cell ${deleteAttr}" title="NB (${nbTitle}), Otrabotka: ${retakeVal}${deleteTitle}">
+                        const editAttr = canDelete ? `cursor-pointer hover:bg-blue-50` : '';
+                        const editTitle = canDelete ? ` — bosib o'zgartirish` : '';
+                        cellDiv.innerHTML = `<div class="split-cell ${editAttr}" title="NB (${nbTitle}), Otrabotka: ${retakeVal}${editTitle}">
                             <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                             <span class="split-top" style="${nbColor};font-size:10px;">NB</span>
                             <span class="split-bottom">${retakeVal}</span>
                         </div>`;
                         if (canDelete) {
-                            cellDiv.querySelector('.split-cell').onclick = function() { deleteRetakeGrade(cellDiv, gradeId); };
+                            cellDiv.querySelector('.split-cell').onclick = function() { makeEditable(cellDiv, gradeId); };
                         }
                     } else if (data.reason === 'low_grade' && data.original_grade !== null) {
                         const origVal = Math.round(data.original_grade);
-                        const deleteAttr = canDelete ? `cursor-pointer hover:bg-red-50` : '';
-                        const deleteTitle = canDelete ? ` — bosib o'chirish` : '';
-                        cellDiv.innerHTML = `<div class="split-cell ${deleteAttr}" title="Oldingi: ${origVal}, Otrabotka: ${retakeVal}${deleteTitle}">
+                        const editAttr = canDelete ? `cursor-pointer hover:bg-blue-50` : '';
+                        const editTitle = canDelete ? ` — bosib o'zgartirish` : '';
+                        cellDiv.innerHTML = `<div class="split-cell ${editAttr}" title="Oldingi: ${origVal}, Otrabotka: ${retakeVal}${editTitle}">
                             <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                             <span class="split-top" style="color:#dc2626;">${origVal}</span>
                             <span class="split-bottom">${retakeVal}</span>
                         </div>`;
                         if (canDelete) {
-                            cellDiv.querySelector('.split-cell').onclick = function() { deleteRetakeGrade(cellDiv, gradeId); };
+                            cellDiv.querySelector('.split-cell').onclick = function() { makeEditable(cellDiv, gradeId); };
                         }
                     } else {
                         cellDiv.innerHTML = `<div class="flex items-center justify-center gap-1">
@@ -3424,6 +3430,114 @@
                 alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
                 cellDiv.innerHTML = originalContent;
             });
+        }
+
+        function adminEditGrade(cellDiv, gradeId, currentGrade) {
+            if (currentEditingCell) return;
+            currentEditingCell = cellDiv;
+            const originalContent = cellDiv.innerHTML;
+            let saving = false;
+
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display:flex; align-items:center; gap:2px;';
+
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.max = '100';
+            input.value = currentGrade;
+            input.className = 'text-center border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-300';
+            input.style.cssText = 'width:42px; height:26px; padding:1px 2px; font-size:12px;';
+
+            const delBtn = document.createElement('button');
+            delBtn.innerHTML = '&times;';
+            delBtn.title = "O'chirish";
+            delBtn.className = 'text-red-500 hover:text-red-700 font-bold';
+            delBtn.style.cssText = 'font-size:16px; line-height:1; padding:0 2px; cursor:pointer; border:none; background:none;';
+
+            wrapper.appendChild(input);
+            wrapper.appendChild(delBtn);
+            cellDiv.innerHTML = '';
+            cellDiv.appendChild(wrapper);
+            input.focus();
+            input.select();
+
+            function doSave() {
+                if (saving) return;
+                saving = true;
+                const val = input.value.trim();
+                if (val === '' || val == currentGrade) {
+                    cellDiv.innerHTML = originalContent;
+                    currentEditingCell = null;
+                    return;
+                }
+                const gradeNum = parseFloat(val);
+                if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
+                    alert('0 dan 100 gacha baho kiriting');
+                    cellDiv.innerHTML = originalContent;
+                    currentEditingCell = null;
+                    return;
+                }
+                cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
+                fetch('{{ route("admin.journal.admin-edit-grade") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+                    body: JSON.stringify({ grade_id: gradeId, grade: gradeNum, action: 'update' })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const v = Math.round(data.grade);
+                        const minLimit = {{ $minimumLimit ?? 60 }};
+                        const colorClass = v < minLimit ? 'text-red-600' : 'text-gray-900';
+                        cellDiv.innerHTML = `<span class="${colorClass} font-medium">${v}</span>`;
+                        cellDiv.onclick = function() { adminEditGrade(this, gradeId, v); };
+                        currentEditingCell = null;
+                    } else {
+                        alert(data.message || 'Xatolik');
+                        cellDiv.innerHTML = originalContent;
+                        currentEditingCell = null;
+                    }
+                })
+                .catch(() => { alert('Xatolik'); cellDiv.innerHTML = originalContent; currentEditingCell = null; });
+            }
+
+            function doDelete() {
+                if (saving) return;
+                if (!confirm('Bahoni butunlay o\'chirmoqchimisiz?')) return;
+                saving = true;
+                cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
+                fetch('{{ route("admin.journal.admin-edit-grade") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+                    body: JSON.stringify({ grade_id: gradeId, action: 'delete' })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        cellDiv.innerHTML = '<span class="text-gray-300">-</span>';
+                        cellDiv.onclick = null;
+                        cellDiv.className = '';
+                        currentEditingCell = null;
+                    } else {
+                        alert(data.message || 'Xatolik');
+                        cellDiv.innerHTML = originalContent;
+                        currentEditingCell = null;
+                    }
+                })
+                .catch(() => { alert('Xatolik'); cellDiv.innerHTML = originalContent; currentEditingCell = null; });
+            }
+
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); input.removeEventListener('blur', blurHandler); doSave(); }
+                else if (e.key === 'Escape') { saving = true; cellDiv.innerHTML = originalContent; currentEditingCell = null; }
+            });
+
+            function blurHandler() {
+                setTimeout(() => { if (!saving) { cellDiv.innerHTML = originalContent; currentEditingCell = null; } }, 150);
+            }
+            input.addEventListener('blur', blurHandler);
+            delBtn.addEventListener('click', function(e) { e.stopPropagation(); input.removeEventListener('blur', blurHandler); doDelete(); });
         }
     </script>
 

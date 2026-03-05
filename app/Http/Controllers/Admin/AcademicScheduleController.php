@@ -1428,6 +1428,9 @@ class AcademicScheduleController extends Controller
             return response()->json(['success' => false, 'message' => 'Jadval topilmadi'], 404);
         }
 
+        $oldTime = $examSchedule->test_time;
+        $timeChanged = $oldTime !== null && $oldTime !== $request->test_time;
+
         $examSchedule->update(['test_time' => $request->test_time]);
 
         // Shu guruhdagi Telegram tasdiqlangan talabalarga notification yuborish
@@ -1440,13 +1443,27 @@ class AcademicScheduleController extends Controller
             $telegram = app(TelegramService::class);
             $subjectName = $examSchedule->subject_name ?? 'Fan';
             $testDate = $examSchedule->test_date ? \Carbon\Carbon::parse($examSchedule->test_date)->format('d.m.Y') : '';
-            $timeFormatted = \Carbon\Carbon::parse($request->test_time)->format('H:i');
+            $timeFormatted = $request->test_time;
 
-            $message = "📋 <b>Test vaqti belgilandi!</b>\n\n"
-                . "📌 Fan: <b>{$subjectName}</b>\n"
-                . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
-                . "⏰ Vaqt: <b>{$timeFormatted}</b>\n\n"
-                . "Imtihonga tayyorgarlik ko'ring! 📚";
+            if ($timeChanged) {
+                $oldTimeFormatted = $oldTime;
+                $message = "📋 <b>Test vaqti o'zgartirildi!</b>\n\n"
+                    . "📌 Fan: <b>{$subjectName}</b>\n"
+                    . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
+                    . "⏰ Eski vaqt: <s>{$oldTimeFormatted}</s>\n"
+                    . "⏰ Yangi vaqt: <b>{$timeFormatted}</b>\n\n"
+                    . "E'tibor bering! 📚";
+                $notifTitle = "Test vaqti o'zgartirildi: {$subjectName}";
+                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Eski vaqt: {$oldTimeFormatted}, Yangi vaqt: {$timeFormatted}";
+            } else {
+                $message = "📋 <b>Test vaqti belgilandi!</b>\n\n"
+                    . "📌 Fan: <b>{$subjectName}</b>\n"
+                    . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
+                    . "⏰ Vaqt: <b>{$timeFormatted}</b>\n\n"
+                    . "Imtihonga tayyorgarlik ko'ring! 📚";
+                $notifTitle = "Test vaqti belgilandi: {$subjectName}";
+                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Vaqt: {$timeFormatted}";
+            }
 
             $notificationRecords = [];
 
@@ -1456,10 +1473,10 @@ class AcademicScheduleController extends Controller
                 $notificationRecords[] = [
                     'student_id' => $student->id,
                     'type' => 'exam_reminder',
-                    'title' => "Test vaqti belgilandi: {$subjectName}",
-                    'message' => "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Vaqt: {$timeFormatted}",
+                    'title' => $notifTitle,
+                    'message' => $notifMessage,
                     'link' => '/student/exam-schedule',
-                    'data' => json_encode(['subject' => $subjectName, 'test_time' => $timeFormatted, 'test_date' => $testDate]),
+                    'data' => json_encode(['subject' => $subjectName, 'test_time' => $timeFormatted, 'test_date' => $testDate, 'time_changed' => $timeChanged]),
                     'read_at' => null,
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -1471,9 +1488,12 @@ class AcademicScheduleController extends Controller
             }
         }
 
+        $statusMsg = $timeChanged ? 'Test vaqti o\'zgartirildi' : 'Test vaqti saqlandi';
+
         return response()->json([
             'success' => true,
-            'message' => 'Test vaqti saqlandi' . ($students->count() > 0 ? " va {$students->count()} ta talabaga xabar yuborildi" : ''),
+            'time_changed' => $timeChanged,
+            'message' => $statusMsg . ($students->count() > 0 ? " va {$students->count()} ta talabaga xabar yuborildi" : ''),
         ]);
     }
 }

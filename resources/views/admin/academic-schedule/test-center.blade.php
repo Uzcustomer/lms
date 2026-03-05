@@ -221,7 +221,7 @@
                                             <td style="text-align:center;padding:4px 6px;">
                                                 @if($item['yn_submitted'] ?? false)
                                                     <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
-                                                        <input type="time" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:pointer;">
+                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:pointer;" oninput="formatTimeInput(this)" onblur="validateTimeInput(this)">
                                                         <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
                                                             <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                         </button>
@@ -330,25 +330,50 @@
             }, 4000);
         }
 
-        function formatTime24(timeStr) {
-            if (!timeStr) return '';
-            var parts = timeStr.split(':');
-            var h = parseInt(parts[0], 10);
-            var m = parts[1];
-            return (h < 10 ? '0' + h : h) + ':' + m;
+        function formatTimeInput(input) {
+            var val = input.value.replace(/[^0-9]/g, '');
+            if (val.length > 4) val = val.substring(0, 4);
+            if (val.length >= 3) {
+                val = val.substring(0, 2) + ':' + val.substring(2);
+            }
+            input.value = val;
+        }
+
+        function validateTimeInput(input) {
+            var val = input.value.trim();
+            if (!val) return;
+            var match = val.match(/^(\d{1,2}):(\d{2})$/);
+            if (!match) {
+                input.value = '';
+                showToast('Xatolik', 'Vaqt formati noto\'g\'ri. HH:MM formatida kiriting (masalan: 09:00, 14:30)', true);
+                return;
+            }
+            var h = parseInt(match[1], 10);
+            var m = parseInt(match[2], 10);
+            if (h > 23 || m > 59) {
+                input.value = '';
+                showToast('Xatolik', 'Vaqt noto\'g\'ri. Soat 0-23, daqiqa 0-59 oralig\'ida bo\'lishi kerak', true);
+                return;
+            }
+            input.value = (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
         }
 
         function saveTestTime(btn) {
             var container = btn.parentElement;
             var input = container.querySelector('.test-time-input');
-            var timeVal = input.value;
+            var timeVal = input.value.trim();
             if (!timeVal) {
                 showToast('Xatolik', 'Iltimos, vaqtni kiriting', true);
                 return;
             }
 
+            var match = timeVal.match(/^(\d{1,2}):(\d{2})$/);
+            if (!match || parseInt(match[1]) > 23 || parseInt(match[2]) > 59) {
+                showToast('Xatolik', 'Vaqt formati noto\'g\'ri. HH:MM formatida kiriting', true);
+                return;
+            }
+
             var subjectName = input.getAttribute('data-subject-name') || 'Fan';
-            var formattedTime = formatTime24(timeVal);
 
             btn.disabled = true;
             btn.style.opacity = '0.6';
@@ -371,7 +396,10 @@
             .then(function(resp) { return resp.json(); })
             .then(function(data) {
                 if (data.success) {
-                    showToast('Saqlandi!', '<b>Fan:</b> ' + subjectName + '<br><b>Test vaqti belgilandi:</b> ' + formattedTime, false);
+                    var isChanged = data.time_changed;
+                    var title = isChanged ? 'O\'zgartirildi!' : 'Saqlandi!';
+                    var body = '<b>Fan:</b> ' + subjectName + '<br><b>Test vaqti ' + (isChanged ? 'o\'zgartirildi' : 'belgilandi') + ':</b> ' + timeVal;
+                    showToast(title, body, false);
                     btn.style.background = '#16a34a';
                     setTimeout(function() { btn.style.background = '#3b82f6'; }, 1500);
                 } else {

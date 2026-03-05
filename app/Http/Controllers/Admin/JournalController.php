@@ -5989,6 +5989,15 @@ class JournalController extends Controller
                 return response()->json(['success' => false, 'message' => 'Baho topilmadi'], 404);
             }
 
+            // YN ga yuborilganligini tekshirish
+            if ($studentGrade->is_yn_locked) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
+
             if ($action === 'delete') {
                 DB::table('student_grades')->where('id', $gradeId)->delete();
                 return response()->json([

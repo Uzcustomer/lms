@@ -1428,13 +1428,7 @@
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
                                                                 $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
                                                             @endphp
-                                                            @if($isAdminRole && $gradeData)
-                                                                <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeData['id'] }}, true)" title="Admin: bahoni o'zgartirish">
-                                                                    <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                                </div>
-                                                            @else
-                                                                <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                            @endif
+                                                            <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php
@@ -2887,30 +2881,13 @@
                 if (data.success) {
                     // Lock the input
                     input.value = Math.round(data.grade);
-                    if (window.isAdminRole) {
-                        // Admin: keep inputs editable, show O'zgartirish button
-                        input.disabled = false;
-                        input.style.background = '#fff';
-                        input.style.color = '#111827';
-                        // Keep comment input editable
-                        const commentCell = document.getElementById('mt-comment-' + studentHemisId);
-                        if (commentCell) {
-                            let ci = document.getElementById('mt-comment-input-' + studentHemisId);
-                            if (!ci) {
-                                commentCell.innerHTML = '<input type="text" id="mt-comment-input-' + studentHemisId + '" ' +
-                                    'style="width:100%;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:4px;outline:none;color:#111827;" ' +
-                                    'value="' + (comment || '') + '" placeholder="Ixtiyoriy">';
-                            }
-                        }
-                    } else {
-                        input.disabled = true;
-                        input.style.background = '#f3f4f6';
-                        input.style.color = '#6b7280';
-                        // Lock the comment input - show as text
-                        const commentCell = document.getElementById('mt-comment-' + studentHemisId);
-                        if (commentCell) {
-                            commentCell.innerHTML = '<span style="font-size:12px;color:#6b7280;font-style:italic;">' + (comment || '') + '</span>';
-                        }
+                    input.disabled = true;
+                    input.style.background = '#f3f4f6';
+                    input.style.color = '#6b7280';
+                    // Lock the comment input - show as text
+                    const commentCell = document.getElementById('mt-comment-' + studentHemisId);
+                    if (commentCell) {
+                        commentCell.innerHTML = '<span style="font-size:12px;color:#6b7280;font-style:italic;">' + (comment || '') + '</span>';
                     }
                     // Update history
                     if (data.history) {
@@ -2925,29 +2902,17 @@
                 } else if (data.locked && !data.can_regrade) {
                     // Permanently locked
                     input.value = Math.round(data.grade);
-                    if (window.isAdminRole) {
-                        input.disabled = false;
-                        input.style.background = '#fff';
-                        input.style.color = '#111827';
-                    } else {
-                        input.disabled = true;
-                        input.style.background = '#f3f4f6';
-                        input.style.color = '#6b7280';
-                    }
+                    input.disabled = true;
+                    input.style.background = '#f3f4f6';
+                    input.style.color = '#6b7280';
                     updateMtActionCell(studentHemisId, data);
-                    if (!window.isAdminRole) alert(data.message);
+                    alert(data.message);
                 } else if (data.locked && data.can_regrade) {
                     // Already graded, can regrade
                     input.value = Math.round(data.grade);
-                    if (window.isAdminRole) {
-                        input.disabled = false;
-                        input.style.background = '#fff';
-                        input.style.color = '#111827';
-                    } else {
-                        input.disabled = true;
-                        input.style.background = '#f3f4f6';
-                        input.style.color = '#6b7280';
-                    }
+                    input.disabled = true;
+                    input.style.background = '#f3f4f6';
+                    input.style.color = '#6b7280';
                     updateMtActionCell(studentHemisId, data);
                 } else if (data.no_file) {
                     // Student has no file uploaded
@@ -3147,7 +3112,7 @@
         // Retake grade functionality - Excel-like inline editing
         let currentEditingCell = null;
 
-        function makeEditable(cellDiv, gradeId, adminEdit) {
+        function makeEditable(cellDiv, gradeId) {
             if (isDekan) return;
             if (currentEditingCell) return;
 
@@ -3175,7 +3140,7 @@
                     if (saving) return;
                     saving = true;
                     input.removeEventListener('blur', blurHandler);
-                    saveInlineGrade(gradeId, input.value, cellDiv, originalContent, adminEdit);
+                    saveInlineGrade(gradeId, input.value, cellDiv, originalContent);
                 } else if (e.key === 'Escape') {
                     saving = true;
                     input.removeEventListener('blur', blurHandler);
@@ -3188,7 +3153,7 @@
                 if (saving) return;
                 saving = true;
                 if (input.value.trim() !== '') {
-                    saveInlineGrade(gradeId, input.value, cellDiv, originalContent, adminEdit);
+                    saveInlineGrade(gradeId, input.value, cellDiv, originalContent);
                 } else {
                     cellDiv.innerHTML = originalContent;
                     currentEditingCell = null;
@@ -3305,7 +3270,7 @@
             });
         }
 
-        function saveInlineGrade(gradeId, gradeValue, cellDiv, originalContent, adminEdit) {
+        function saveInlineGrade(gradeId, gradeValue, cellDiv, originalContent) {
             const gradeNum = parseFloat(gradeValue);
 
             if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
@@ -3318,12 +3283,6 @@
             // Show loading
             cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
 
-            const bodyData = {
-                grade_id: gradeId,
-                grade: gradeNum
-            };
-            if (adminEdit) bodyData.admin_edit = true;
-
             fetch('{{ route("admin.journal.save-retake-grade") }}', {
                 method: 'POST',
                 headers: {
@@ -3331,18 +3290,14 @@
                     'X-CSRF-TOKEN': '{{ csrf_token() }}',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify(bodyData)
+                body: JSON.stringify({
+                    grade_id: gradeId,
+                    grade: gradeNum
+                })
             })
             .then(response => response.json())
             .then(data => {
-                if (data.success && data.admin_edited) {
-                    // Admin directly edited the grade
-                    const gradeVal = Math.round(data.grade);
-                    const colorClass = gradeVal < (window.minimumLimit || 60) ? 'text-red-600' : 'text-gray-900';
-                    cellDiv.innerHTML = `<span class="${colorClass} font-medium">${gradeVal}</span>`;
-                    cellDiv.onclick = function() { makeEditable(cellDiv, gradeId, true); };
-                    currentEditingCell = null;
-                } else if (data.success) {
+                if (data.success) {
                     const retakeVal = Math.round(data.retake_grade);
                     const canDelete = window.isAdminRole;
 

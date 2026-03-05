@@ -1947,7 +1947,6 @@ class JournalController extends Controller
         $isAdminEdit = (bool) $request->input('admin_edit', false);
 
         // YN ga yuborilganligini tekshirish — qulflangan bo'lsa tahrirlash mumkin emas
-        $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
         $ynLocked = DB::table('student_grades')
             ->where('student_hemis_id', $studentHemisId)
             ->where('subject_id', $subjectId)
@@ -1955,7 +1954,7 @@ class JournalController extends Controller
             ->where('is_yn_locked', true)
             ->exists();
 
-        if ($ynLocked && !$isAdminRole) {
+        if ($ynLocked) {
             return response()->json([
                 'success' => false,
                 'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
@@ -2485,34 +2484,12 @@ class JournalController extends Controller
             }
 
             // YN ga yuborilganligini tekshirish
-            if ($studentGrade->is_yn_locked && !$isAdmin) {
+            if ($studentGrade->is_yn_locked) {
                 return response()->json([
                     'success' => false,
                     'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
                     'yn_locked' => true,
                 ], 403);
-            }
-
-            // Admin: oddiy bahoni to'g'ridan-to'g'ri o'zgartirish (retake emas)
-            $isAdminEdit = (bool) $request->input('admin_edit', false);
-            if ($isAdminEdit && $isAdmin) {
-                $now = now();
-                $gradedByUserId = DB::table('users')->where('id', auth()->id())->exists() ? auth()->id() : null;
-
-                DB::table('student_grades')
-                    ->where('id', $gradeId)
-                    ->update([
-                        'grade' => round($enteredGrade, 2),
-                        'graded_by_user_id' => $gradedByUserId,
-                        'updated_at' => $now,
-                    ]);
-
-                return response()->json([
-                    'success' => true,
-                    'admin_edited' => true,
-                    'message' => 'Baho o\'zgartirildi (admin)',
-                    'grade' => round($enteredGrade, 2),
-                ]);
             }
 
             // Check if retake grade already exists
@@ -2623,8 +2600,14 @@ class JournalController extends Controller
                 return response()->json(['success' => false, 'message' => 'Bu yozuvda retake bahosi yo\'q.'], 400);
             }
 
-            // YN ga yuborilganligini tekshirish — admin uchun bypass
-            // (bu metod faqat admin uchun, shuning uchun tekshirmaymiz)
+            // YN ga yuborilganligini tekshirish
+            if ($studentGrade->is_yn_locked) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
 
             // Sababli/sababsiz tekshirish (NB uchun)
             $isExcused = false;
@@ -2691,8 +2674,21 @@ class JournalController extends Controller
             $semesterCode = $request->semester_code;
             $enteredGrade = $request->grade;
 
-            // YN ga yuborilganligini tekshirish — admin uchun bypass
-            // (bu metod faqat admin uchun, shuning uchun tekshirmaymiz)
+            // YN ga yuborilganligini tekshirish
+            $ynLocked = DB::table('student_grades')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('is_yn_locked', true)
+                ->exists();
+
+            if ($ynLocked) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
 
             // Get student info
             $student = DB::table('students')
@@ -3997,7 +3993,7 @@ class JournalController extends Controller
             ->where('is_yn_locked', true)
             ->exists();
 
-        if ($ynLocked && !(auth()->user()?->hasAnyRole(['admin', 'superadmin']))) {
+        if ($ynLocked) {
             return response()->json([
                 'success' => false,
                 'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',

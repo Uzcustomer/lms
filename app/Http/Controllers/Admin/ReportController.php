@@ -2855,6 +2855,7 @@ class ReportController extends Controller
 
             // 4-QADAM: Academic records — mavjud yozuvlarni aniqlash
             $arSet = [];
+            $arSetAny = []; // semester-agnostic: fan istalgan semestrlarda topshirilganmi
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $records = DB::table('academic_records')
                     ->whereIn('student_id', $chunk)
@@ -2864,6 +2865,7 @@ class ReportController extends Controller
 
                 foreach ($records as $ar) {
                     $arSet[$ar->student_id . '|' . $ar->subject_id . '|' . (string) $ar->semester_id] = true;
+                    $arSetAny[$ar->student_id . '|' . $ar->subject_id] = true;
                 }
             }
 
@@ -2899,8 +2901,10 @@ class ReportController extends Controller
                     // academic_records.semester_id = semesters.code (11,12,13...)
                     // semester_hemis_id (668,669,670...) EMAS!
                     $arKey = $student->hemis_id . '|' . $subjectCombo['subject_id'] . '|' . $subjectCombo['semester_code'];
+                    $arKeyAny = $student->hemis_id . '|' . $subjectCombo['subject_id'];
 
-                    if (!isset($arSet[$arKey])) {
+                    // Fan shu semestrlarda YOKI oldingi semestrlarda topshirilgan bo'lsa — qarzdor emas
+                    if (!isset($arSet[$arKey]) && !isset($arSetAny[$arKeyAny])) {
                         $snKey = $subjectCombo['subject_id'] . '|' . $subjectCombo['semester_code'];
                         $csInfo = $subjectInfoMap[$snKey] ?? null;
                         $subjectName = $csInfo->subject_name ?? 'Noma\'lum fan';

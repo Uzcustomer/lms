@@ -2492,8 +2492,8 @@ class JournalController extends Controller
                 ], 403);
             }
 
-            // Check if retake grade already exists
-            if ($studentGrade->retake_grade !== null) {
+            // Check if retake grade already exists — admin o'zgartira oladi
+            if ($studentGrade->retake_grade !== null && !$isAdmin) {
                 return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
             }
 

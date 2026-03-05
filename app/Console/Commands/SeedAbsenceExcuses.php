@@ -137,6 +137,8 @@ class SeedAbsenceExcuses extends Command
                 'end_date' => $endDate,
                 'doc_number' => $docNumber,
                 'description' => $description,
+                'file_path' => '',
+                'file_original_name' => '',
                 'status' => 'approved',
                 'reviewed_by_name' => $reviewerName,
                 'reviewed_at' => now(),

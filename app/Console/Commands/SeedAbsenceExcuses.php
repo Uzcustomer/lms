@@ -103,13 +103,13 @@ class SeedAbsenceExcuses extends Command
             $description = $r[5];
             $reviewerName = $r[6];
 
-            // Avval hemis_id bo'yicha, topilmasa student id bo'yicha qidirish
-            $student = Student::where('hemis_id', $hemisId)->first();
+            // student_id_number bo'yicha qidirish (368... raqamlar)
+            $student = Student::where('student_id_number', $hemisId)->first();
             if (!$student) {
-                $student = Student::find($hemisId);
+                $student = Student::where('hemis_id', $hemisId)->first();
             }
             if (!$student) {
-                $errors[] = "Qator " . ($i + 1) . ": Talaba topilmadi ID/HEMIS ID {$hemisId}";
+                $errors[] = "Qator " . ($i + 1) . ": Talaba topilmadi student_id_number/hemis_id {$hemisId}";
                 continue;
             }
             $actualHemisId = $student->hemis_id;

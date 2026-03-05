@@ -5963,4 +5963,62 @@ class JournalController extends Controller
 
         return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
     }
+
+    /**
+     * Admin uchun istalgan bahoni o'zgartirish yoki o'chirish
+     */
+    public function adminEditGrade(Request $request)
+    {
+        if (!auth()->user()->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'grade_id' => 'required|integer',
+            'grade' => 'nullable|numeric|min:0|max:100',
+            'action' => 'required|in:update,delete',
+        ]);
+
+        try {
+            $gradeId = $request->grade_id;
+            $action = $request->action;
+
+            $studentGrade = DB::table('student_grades')->where('id', $gradeId)->first();
+
+            if (!$studentGrade) {
+                return response()->json(['success' => false, 'message' => 'Baho topilmadi'], 404);
+            }
+
+            if ($action === 'delete') {
+                DB::table('student_grades')->where('id', $gradeId)->delete();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Baho o\'chirildi',
+                    'deleted' => true,
+                ]);
+            }
+
+            // update
+            $newGrade = $request->grade;
+            $updateData = ['updated_at' => now()];
+
+            if ($studentGrade->retake_grade !== null) {
+                // Retake baho bo'lsa — retake_grade ni yangilaymiz
+                $updateData['retake_grade'] = $newGrade;
+            } else {
+                $updateData['grade'] = $newGrade;
+            }
+
+            DB::table('student_grades')->where('id', $gradeId)->update($updateData);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Baho yangilandi',
+                'grade' => $newGrade,
+                'is_retake' => $studentGrade->retake_grade !== null,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
+        }
+    }
 }

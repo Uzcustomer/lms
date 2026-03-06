@@ -249,9 +249,6 @@ class AcademicScheduleController extends Controller
             return $item;
         });
 
-        // Faqat YN yuborilgan guruhlarni ko'rsatish (test markazi faqat yuborilganlarni ko'radi)
-        $transformedData = $transformedData->filter(fn($item) => $item['yn_submitted']);
-
         // Sababli talabalar sonini hisoblash (YN ga yuborilgan sabablilar)
         $excuseCounts = [];
         if (!empty($groupHemisIds) && !empty($subjectIds)) {

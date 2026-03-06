@@ -1445,6 +1445,8 @@ class AcademicScheduleController extends Controller
             $testDate = $examSchedule->test_date ? \Carbon\Carbon::parse($examSchedule->test_date)->format('d.m.Y') : '';
             $timeFormatted = $request->test_time;
 
+            $warningText = "⚠️ <i>Test vaqti o'zgarishi mumkin, habardor bo'lib turing!</i>";
+
             if ($timeChanged) {
                 $oldTimeFormatted = $oldTime;
                 $message = "📋 <b>Test vaqti o'zgartirildi!</b>\n\n"
@@ -1452,17 +1454,17 @@ class AcademicScheduleController extends Controller
                     . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
                     . "⏰ Eski vaqt: <s>{$oldTimeFormatted}</s>\n"
                     . "⏰ Yangi vaqt: <b>{$timeFormatted}</b>\n\n"
-                    . "E'tibor bering! 📚";
+                    . $warningText;
                 $notifTitle = "Test vaqti o'zgartirildi: {$subjectName}";
-                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Eski vaqt: {$oldTimeFormatted}, Yangi vaqt: {$timeFormatted}";
+                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Eski vaqt: {$oldTimeFormatted}, Yangi vaqt: {$timeFormatted}. Test vaqti o'zgarishi mumkin, habardor bo'lib turing!";
             } else {
                 $message = "📋 <b>Test vaqti belgilandi!</b>\n\n"
                     . "📌 Fan: <b>{$subjectName}</b>\n"
                     . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
                     . "⏰ Vaqt: <b>{$timeFormatted}</b>\n\n"
-                    . "Imtihonga tayyorgarlik ko'ring! 📚";
+                    . $warningText;
                 $notifTitle = "Test vaqti belgilandi: {$subjectName}";
-                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Vaqt: {$timeFormatted}";
+                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Vaqt: {$timeFormatted}. Test vaqti o'zgarishi mumkin, habardor bo'lib turing!";
             }
 
             $notificationRecords = [];

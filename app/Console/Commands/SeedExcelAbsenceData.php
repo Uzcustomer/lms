@@ -174,6 +174,7 @@ class SeedExcelAbsenceData extends Command
                         'assessment_type' => $assessmentType,
                         'assessment_type_code' => $assessmentTypeCode,
                         'original_date' => $originalDate,
+                        'makeup_date' => $originalDate,
                         'makeup_end_date' => $makeupEndDate,
                         'status' => 'scheduled',
                     ]);

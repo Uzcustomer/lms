@@ -20,7 +20,9 @@ use App\Models\Setting;
 use App\Models\DocumentVerification;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnStudentGrade;
+use App\Models\StudentNotification;
 use App\Enums\ProjectRole;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpWord\PhpWord;
@@ -179,6 +181,7 @@ class AcademicScheduleController extends Controller
                     $ynItem['yn_date'] = $testDate;
                     $ynItem['yn_date_carbon'] = $item['test_date_carbon'] ?? null;
                     $ynItem['yn_na'] = $testNa;
+                    $ynItem['test_time'] = $item['test_time'] ?? null;
                     $transformedData->push($ynItem);
                 }
             }
@@ -490,6 +493,7 @@ class AcademicScheduleController extends Controller
                     'oski_na' => (bool) $existing?->oski_na,
                     'test_date' => $existing?->test_date?->format('Y-m-d'),
                     'test_na' => (bool) $existing?->test_na,
+                    'test_time' => $existing?->test_time ? substr($existing->test_time, 0, 5) : null,
                     'schedule_id' => $existing?->id,
                 ];
 
@@ -617,6 +621,105 @@ class AcademicScheduleController extends Controller
             DB::rollBack();
             return redirect()->back()->with('error', 'Xatolik yuz berdi: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Test markazi: test vaqtini saqlash + talabalarga notification yuborish
+     */
+    public function saveTestTime(Request $request)
+    {
+        $request->validate([
+            'group_hemis_id' => 'required|string',
+            'subject_id' => 'required|string',
+            'semester_code' => 'required|string',
+            'test_time' => 'required|date_format:H:i',
+        ]);
+
+        $schedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->first();
+
+        if (!$schedule) {
+            return response()->json(['success' => false, 'message' => 'Imtihon jadvali topilmadi'], 404);
+        }
+
+        $oldTime = $schedule->test_time ? substr($schedule->test_time, 0, 5) : null;
+        $newTime = $request->test_time;
+        $timeChanged = $oldTime && $oldTime !== $newTime;
+
+        $schedule->test_time = $newTime;
+        $schedule->updated_by = auth()->id();
+        $schedule->save();
+
+        // Talabalarga notification yuborish
+        $students = Student::where('group_id', $request->group_hemis_id)
+            ->where('student_status_code', 11)
+            ->get();
+
+        $telegramStudents = $students->filter(fn($s) => $s->telegram_chat_id && $s->telegram_verified_at);
+        $telegram = app(TelegramService::class);
+        $sentCount = 0;
+
+        $subjectName = $schedule->subject_name;
+        $testDate = $schedule->test_date ? $schedule->test_date->format('d.m.Y') : '';
+
+        foreach ($telegramStudents as $student) {
+            if ($timeChanged) {
+                $msg = "Hurmatli <b>{$student->full_name}</b>!\n\n";
+                $msg .= "Test vaqti <b>o'zgartirildi</b>!\n";
+                $msg .= "📌 <b>{$subjectName}</b> (Test)\n";
+                $msg .= "📅 Sana: {$testDate}\n";
+                $msg .= "⏰ <s>{$oldTime}</s> → <b>{$newTime}</b>\n\n";
+                $msg .= "Diqqat bilan kuzatib boring! 📚";
+            } else {
+                $msg = "Hurmatli <b>{$student->full_name}</b>!\n\n";
+                $msg .= "Test vaqti <b>belgilandi</b>!\n";
+                $msg .= "📌 <b>{$subjectName}</b> (Test)\n";
+                $msg .= "📅 Sana: {$testDate}\n";
+                $msg .= "⏰ Vaqt: <b>{$newTime}</b>\n\n";
+                $msg .= "Imtihonga tayyorgarlik ko'ring! 📚";
+            }
+
+            if ($telegram->sendToUser($student->telegram_chat_id, $msg)) {
+                $sentCount++;
+            }
+        }
+
+        // Inbox notification
+        $notificationTitle = $timeChanged
+            ? "Test vaqti o'zgartirildi: {$subjectName}"
+            : "Test vaqti belgilandi: {$subjectName}";
+
+        $notificationMessage = $timeChanged
+            ? "{$subjectName} (Test) — {$testDate}\nVaqt: {$oldTime} → {$newTime}"
+            : "{$subjectName} (Test) — {$testDate}\nVaqt: {$newTime}";
+
+        $notificationRecords = [];
+        foreach ($students as $student) {
+            $notificationRecords[] = [
+                'student_id' => $student->id,
+                'type' => 'exam_time',
+                'title' => $notificationTitle,
+                'message' => $notificationMessage,
+                'link' => '/student/exam-schedule',
+                'data' => json_encode(['subject' => $subjectName, 'time' => $newTime]),
+                'read_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+        if (!empty($notificationRecords)) {
+            StudentNotification::insert($notificationRecords);
+        }
+
+        return response()->json([
+            'success' => true,
+            'time_changed' => $timeChanged,
+            'old_time' => $oldTime,
+            'telegram_sent' => $sentCount,
+            'total_students' => $students->count(),
+        ]);
     }
 
     /**

@@ -21,6 +21,7 @@ class ExamSchedule extends Model
         'oski_na',
         'test_date',
         'test_na',
+        'test_time',
         'education_year',
         'created_by',
         'updated_by',

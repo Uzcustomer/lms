@@ -39,6 +39,7 @@
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fan nomi</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">OSKI sanasi</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Test sanasi</th>
+                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Test vaqti</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Holat</th>
                                     </tr>
                                 </thead>
@@ -89,6 +90,15 @@
                                                     </span>
                                                 @else
                                                     <span class="text-gray-400">Belgilanmagan</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
+                                                @if($schedule->test_time)
+                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                        {{ substr($schedule->test_time, 0, 5) }}
+                                                    </span>
+                                                @else
+                                                    <span class="text-gray-400">—</span>
                                                 @endif
                                             </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
@@ -195,6 +205,12 @@
                                                 <span class="text-gray-400 ml-1">Belgilanmagan</span>
                                             @endif
                                         </div>
+                                        @if($schedule->test_time)
+                                        <div>
+                                            <span class="text-gray-500">Vaqt:</span>
+                                            <span class="font-medium ml-1 text-blue-700">{{ substr($schedule->test_time, 0, 5) }}</span>
+                                        </div>
+                                        @endif
                                     </div>
                                 </div>
                             @endforeach

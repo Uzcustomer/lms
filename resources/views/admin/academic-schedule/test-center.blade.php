@@ -123,6 +123,7 @@
                                     <th class="sortable" data-col="10" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="12" style="width:120px;text-align:center;">YN yuborilgan <span class="sort-icon"></span></th>
+                                    <th style="width:160px;text-align:center;">Test vaqti</th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
@@ -151,6 +152,7 @@
                                             <option value="red" data-color="#dc2626">Yuborilmagan</option>
                                         </select>
                                     </th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -216,6 +218,16 @@
                                                     <span class="yn-submitted-no">Yuborilmagan</span>
                                                 @endif
                                             </td>
+                                            <td style="text-align:center;padding:4px 6px;">
+                                                @if(($item['yn_submitted'] ?? false) && ($item['yn_type'] ?? '') === 'Test')
+                                                    <div style="display:flex;align-items:center;gap:4px;justify-content:center;">
+                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ?? '' }}" placeholder="HH:MM" maxlength="5" style="width:60px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;text-align:center;font-size:13px;cursor:pointer;" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name }}" oninput="formatTimeInput(this)">
+                                                        <button type="button" class="btn-save-time" onclick="saveTestTime(this)" style="padding:3px 8px;border:none;border-radius:6px;background:#2b5ea7;color:#fff;font-size:12px;cursor:pointer;white-space:nowrap;">Saqlash</button>
+                                                    </div>
+                                                @else
+                                                    <span style="color:#cbd5e1;">—</span>
+                                                @endif
+                                            </td>
                                         </tr>
                                     @endforeach
                                 @endforeach
@@ -246,7 +258,85 @@
     <link href="/css/scroll-calendar.css" rel="stylesheet" />
     <script src="/js/scroll-calendar.js"></script>
 
+    <!-- Toast container -->
+    <div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+
     <script>
+        var saveTestTimeUrl = '{{ route($routePrefix . ".academic-schedule.test-center.save-test-time") }}';
+
+        function formatTimeInput(el) {
+            var v = el.value.replace(/[^0-9]/g, '');
+            if (v.length >= 3) {
+                v = v.substring(0, 2) + ':' + v.substring(2, 4);
+            }
+            el.value = v.substring(0, 5);
+        }
+
+        function showToast(html, type) {
+            var bg = type === 'success' ? '#10b981' : (type === 'warning' ? '#f59e0b' : '#ef4444');
+            var toast = document.createElement('div');
+            toast.style.cssText = 'background:' + bg + ';color:#fff;padding:12px 20px;border-radius:10px;margin-bottom:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);font-size:13px;max-width:350px;display:flex;align-items:flex-start;gap:8px;animation:slideIn .3s ease;';
+            toast.innerHTML = '<div style="flex:1;">' + html + '</div><span onclick="this.parentElement.remove()" style="cursor:pointer;font-size:16px;line-height:1;">&times;</span>';
+            document.getElementById('toast-container').appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 5000);
+        }
+
+        function saveTestTime(btn) {
+            var wrap = btn.parentElement;
+            var input = wrap.querySelector('.test-time-input');
+            var time = input.value.trim();
+
+            if (!/^\d{2}:\d{2}$/.test(time)) {
+                showToast('Vaqtni HH:MM formatida kiriting', 'error');
+                input.focus();
+                return;
+            }
+            var h = parseInt(time.split(':')[0]), m = parseInt(time.split(':')[1]);
+            if (h > 23 || m > 59) {
+                showToast('Noto\'g\'ri vaqt', 'error');
+                input.focus();
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '...';
+
+            $.ajax({
+                url: saveTestTimeUrl,
+                method: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    group_hemis_id: input.dataset.groupId,
+                    subject_id: input.dataset.subjectId,
+                    semester_code: input.dataset.semesterCode,
+                    test_time: time,
+                },
+                success: function(res) {
+                    btn.disabled = false;
+                    if (res.success) {
+                        var subjectName = input.dataset.subjectName;
+                        btn.style.background = '#10b981';
+                        btn.textContent = '✓';
+                        setTimeout(function() { btn.style.background = '#2b5ea7'; btn.textContent = 'Saqlash'; }, 2000);
+
+                        if (res.time_changed) {
+                            showToast('<b>O\'zgartirildi!</b><br>Fan: ' + subjectName + '<br>Test vaqti: <s>' + res.old_time + '</s> → <b>' + time + '</b><br><small>Telegram: ' + res.telegram_sent + '/' + res.total_students + ' talabaga yuborildi</small>', 'warning');
+                        } else {
+                            showToast('<b>Saqlandi!</b><br>Fan: ' + subjectName + '<br>Test vaqti belgilandi: <b>' + time + '</b><br><small>Telegram: ' + res.telegram_sent + '/' + res.total_students + ' talabaga yuborildi</small>', 'success');
+                        }
+                    } else {
+                        btn.textContent = 'Saqlash';
+                        showToast(res.message || 'Xatolik yuz berdi', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    btn.disabled = false;
+                    btn.textContent = 'Saqlash';
+                    showToast('Xatolik: ' + (xhr.responseJSON?.message || 'Server xatosi'), 'error');
+                }
+            });
+        }
+
         var isUpdatingFilters = false;
         var filterUrl = '{{ route($routePrefix . ".academic-schedule.get-filter-options") }}';
 

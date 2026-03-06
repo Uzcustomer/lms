@@ -55,7 +55,9 @@ class ScheduleImportService
         $fish = $userName ? self::fishName($userName) : '';
         $dateRange = $from->format('d.m') . '–' . $to->format('d.m');
         $prefix = $fish ? "Jadval | {$fish} | {$dateRange}" : "Jadval | {$dateRange}";
-        $this->notifyTelegram("🟢 {$prefix} | " . now()->format('H:i:s'));
+
+        $msgId = $this->notifyAndGetId("⏳ {$prefix} | " . now()->format('H:i:s'));
+
         $token = config('services.hemis.token');
         $limit = 200;
         $page = 1;
@@ -80,14 +82,14 @@ class ScheduleImportService
                 $failedPages[] = $page;
 
                 if ($page === 1) {
-                    $this->notifyTelegram("❌ {$prefix} | API xato ({$status})");
+                    $this->editNotification($msgId, "❌ {$prefix} | API xato ({$status})");
                     break;
                 }
 
                 if (count($failedPages) >= 5) {
                     $lastFive = array_slice($failedPages, -5);
                     if ($lastFive[4] - $lastFive[0] === 4) {
-                        $this->notifyTelegram("❌ {$prefix} | Ketma-ket 5 xato (sahifa {$page})");
+                        $this->editNotification($msgId, "❌ {$prefix} | Ketma-ket 5 xato (sahifa {$page})");
                         break;
                     }
                 }
@@ -100,10 +102,6 @@ class ScheduleImportService
             $data = $response->json('data', []);
             $items = $data['items'] ?? [];
             $pages = $data['pagination']['pageCount'] ?? 1;
-
-            if ($page === 1) {
-                $this->notifyTelegram("📄 {$pages} sahifa");
-            }
 
             foreach ($items as $item) {
                 $schedule = Schedule::withTrashed()->firstOrNew(['schedule_hemis_id' => $item['id']]);
@@ -126,7 +124,7 @@ class ScheduleImportService
                 $remaining = max(0, $pages - $page);
                 $eta = round(($elapsed / $page) * $remaining);
                 $failed = count($failedPages);
-                $this->notifyTelegram("⌛ {$page}/{$pages} | {$remaining} qoldi ~{$eta}s" . ($failed > 0 ? " | {$failed} xato" : ""));
+                $this->editNotification($msgId, "⏳ {$prefix} | {$page}/{$pages} | ~{$eta}s" . ($failed > 0 ? " | {$failed} xato" : ""));
             }
 
             // Har 10 sahifada Eloquent modellarini tozalash
@@ -139,6 +137,7 @@ class ScheduleImportService
         } while ($page <= $pages);
 
         $failedCount = count($failedPages);
+        $deleted = 0;
 
         if ($failedCount === 0 && $totalImported > 0) {
             $deleted = Schedule::whereBetween('lesson_date', [$from, $to->copy()->endOfDay()])
@@ -146,19 +145,15 @@ class ScheduleImportService
                     $q->select('hemis_id')->from('_temp_schedule_ids');
                 })
                 ->delete();
-            if ($deleted > 0) {
-                $this->notifyTelegram("🗑 {$deleted} ta eski yozuv o'chirildi");
-            }
         }
 
         $elapsed = microtime(true) - $startTime;
         $min = (int) ($elapsed / 60);
         $sec = (int) ($elapsed % 60);
         $msg = "✅ {$prefix} | {$totalImported} yozuv | {$min}m {$sec}s";
-        if ($failedCount > 0) {
-            $msg .= " | {$failedCount} xato";
-        }
-        $this->notifyTelegram($msg);
+        if ($failedCount > 0) $msg .= " | {$failedCount} xato";
+        if ($deleted > 0) $msg .= " | {$deleted} o'chirildi";
+        $this->editNotification($msgId, $msg);
     }
 
     /**
@@ -178,7 +173,8 @@ class ScheduleImportService
             return;
         }
 
-        $this->notifyTelegram("🟢 Jadval (Cron) | {$educationYearCode} | " . now()->format('H:i:s'));
+        $cronPrefix = "Jadval (Cron) | {$educationYearCode}";
+        $msgId = $this->notifyAndGetId("⏳ {$cronPrefix} | " . now()->format('H:i:s'));
         if ($log) $log("O'quv yili: {$educationYearCode}");
 
         $token = config('services.hemis.token');
@@ -205,7 +201,7 @@ class ScheduleImportService
                 if ($log) $log("  ❌ Sahifa {$page}/{$pages} — xato (status {$status}), o'tkazib yuborildi");
 
                 if ($page === 1) {
-                    $this->notifyTelegram("❌ Jadval (Cron) | API xato ({$status})");
+                    $this->editNotification($msgId, "❌ {$cronPrefix} | API xato ({$status})");
                     if ($log) $log("Birinchi sahifa xato — import to'xtatildi");
                     break;
                 }
@@ -213,7 +209,7 @@ class ScheduleImportService
                 if (count($failedPages) >= 5) {
                     $lastFive = array_slice($failedPages, -5);
                     if ($lastFive[4] - $lastFive[0] === 4) {
-                        $this->notifyTelegram("❌ Jadval (Cron) | Ketma-ket 5 xato (sahifa {$page})");
+                        $this->editNotification($msgId, "❌ {$cronPrefix} | Ketma-ket 5 xato (sahifa {$page})");
                         if ($log) $log("Ketma-ket 5 ta xato — import to'xtatildi");
                         break;
                     }
@@ -230,10 +226,7 @@ class ScheduleImportService
             $count = count($items);
             $totalImported += $count;
 
-            if ($page === 1) {
-                $this->notifyTelegram("📄 {$pages} sahifa");
-                if ($log) $log("Jami sahifalar: {$pages}");
-            }
+            if ($page === 1 && $log) $log("Jami sahifalar: {$pages}");
 
             foreach ($items as $item) {
                 $schedule = Schedule::withTrashed()->firstOrNew(['schedule_hemis_id' => $item['id']]);
@@ -259,7 +252,7 @@ class ScheduleImportService
                 $remaining = max(0, $pages - $page);
                 $eta = round(($elapsed / $page) * $remaining);
                 $failed = count($failedPages);
-                $this->notifyTelegram("⌛ {$page}/{$pages} | {$remaining} qoldi ~{$eta}s" . ($failed > 0 ? " | {$failed} xato" : ""));
+                $this->editNotification($msgId, "⏳ {$cronPrefix} | {$page}/{$pages} | ~{$eta}s" . ($failed > 0 ? " | {$failed} xato" : ""));
             }
 
             // Har 10 sahifada Eloquent modellarini tozalash
@@ -272,6 +265,7 @@ class ScheduleImportService
         } while ($page <= $pages);
 
         $failedCount = count($failedPages);
+        $deleted = 0;
 
         // Faqat BARCHA sahifalar muvaffaqiyatli bo'lganda eski yozuvlarni o'chirish
         if ($failedCount === 0 && $totalImported > 0) {
@@ -280,19 +274,15 @@ class ScheduleImportService
                     $q->select('hemis_id')->from('_temp_schedule_ids');
                 })
                 ->delete();
-            if ($deleted > 0) {
-                $this->notifyTelegram("🗑 {$deleted} ta eski yozuv o'chirildi");
-            }
         }
 
         $elapsed = microtime(true) - $startTime;
         $min = (int) ($elapsed / 60);
         $sec = (int) ($elapsed % 60);
-        $msg = "✅ Jadval (Cron) | {$educationYearCode} | {$totalImported} yozuv | {$min}m {$sec}s";
-        if ($failedCount > 0) {
-            $msg .= " | {$failedCount} xato";
-        }
-        $this->notifyTelegram($msg);
+        $msg = "✅ {$cronPrefix} | {$totalImported} yozuv | {$min}m {$sec}s";
+        if ($failedCount > 0) $msg .= " | {$failedCount} xato";
+        if ($deleted > 0) $msg .= " | {$deleted} o'chirildi";
+        $this->editNotification($msgId, $msg);
         if ($log) $log($msg);
 
         // Nightly wrapper ga yakuniy natija
@@ -487,6 +477,58 @@ class ScheduleImportService
                 ->throw();
         } catch (\Throwable $e) {
             $this->safeLog('error', 'Telegramga yuborishda xato: ' . $e->getMessage());
+        }
+    }
+
+    protected function notifyAndGetId(string $message): ?int
+    {
+        if ($this->silent) return null;
+
+        $botToken = config('services.telegram.bot_token');
+        $chatId = config('services.telegram.chat_id');
+
+        try {
+            $response = Http::retry(3, 1000)
+                ->post("https://api.telegram.org/bot{$botToken}/sendMessage", [
+                    'chat_id' => $chatId,
+                    'text' => $message,
+                ]);
+
+            if ($response->successful()) {
+                return $response->json('result.message_id');
+            }
+        } catch (\Throwable $e) {
+            $this->safeLog('error', 'Telegramga yuborishda xato: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    protected function editNotification(?int $messageId, string $message): void
+    {
+        if ($this->silent || !$messageId) return;
+
+        $botToken = config('services.telegram.bot_token');
+        $chatId = config('services.telegram.chat_id');
+
+        try {
+            $response = Http::retry(2, 500)
+                ->post("https://api.telegram.org/bot{$botToken}/editMessageText", [
+                    'chat_id' => $chatId,
+                    'message_id' => $messageId,
+                    'text' => $message,
+                ]);
+
+            if (!$response->successful()) {
+                $desc = $response->json('description') ?? '';
+                if (!str_contains($desc, 'message is not modified')) {
+                    $this->safeLog('warning', 'Telegram editMessage muvaffaqiyatsiz: ' . $desc);
+                }
+            }
+        } catch (\Throwable $e) {
+            if (!str_contains($e->getMessage(), 'message is not modified')) {
+                $this->safeLog('error', 'Telegram xabarni tahrirlashda xato: ' . $e->getMessage());
+            }
         }
     }
 }

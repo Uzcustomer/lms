@@ -1265,6 +1265,17 @@ class JournalController extends Controller
         $userName = auth()->user()?->name ?? auth()->guard('teacher')->user()?->name ?? '';
         $fish = $userName ? \App\Services\ScheduleImportService::fishName($userName) : 'Noma\'lum';
 
+        $existing = \App\Models\Schedule::where('group_id', $data['group_id'])
+            ->where('subject_id', $data['subject_id'])
+            ->first();
+        $groupName = $existing?->group_name ?? "Guruh#{$data['group_id']}";
+        $subjectName = $existing?->subject_name ?? "Fan#{$data['subject_id']}";
+        $tgPrefix = "Jurnal | {$fish} | {$groupName} · {$subjectName}";
+
+        $telegram = app(TelegramService::class);
+        $chatId = config('services.telegram.chat_id');
+        $msgId = $telegram->sendAndGetId($chatId, "⏳ {$tgPrefix}");
+
         try {
             $startTime = microtime(true);
             $service = app(ScheduleImportService::class);
@@ -1276,27 +1287,29 @@ class JournalController extends Controller
             $min = (int) ($elapsed / 60);
             $sec = (int) ($elapsed % 60);
 
-            $schedule = \App\Models\Schedule::where('group_id', $data['group_id'])
-                ->where('subject_id', $data['subject_id'])
-                ->first();
-            $groupName = $schedule?->group_name ?? "Guruh#{$data['group_id']}";
-            $subjectName = $schedule?->subject_name ?? "Fan#{$data['subject_id']}";
-
-            $telegram = app(TelegramService::class);
+            // Agar import muvaffaqiyatli bo'lsa, yangi nomlarni olish
+            if (!($result['failed'] ?? false) && $result['count'] > 0) {
+                $fresh = \App\Models\Schedule::where('group_id', $data['group_id'])
+                    ->where('subject_id', $data['subject_id'])
+                    ->first();
+                $groupName = $fresh?->group_name ?? $groupName;
+                $subjectName = $fresh?->subject_name ?? $subjectName;
+                $tgPrefix = "Jurnal | {$fish} | {$groupName} · {$subjectName}";
+            }
 
             ActivityLogService::log('import', 'schedule',
                 "Jurnal orqali jadval sinxronizatsiyasi: {$userName} (guruh: {$data['group_id']}, fan: {$data['subject_id']}) — {$result['count']} ta yozuv"
             );
 
             if ($result['failed'] ?? false) {
-                $telegram->notify("❌ Jurnal | {$fish} | {$groupName} · {$subjectName} | API xato");
+                $telegram->editMessage($chatId, $msgId, "❌ {$tgPrefix} | API xato");
                 return response()->json([
                     'success' => false,
                     'message' => "HEMIS API xatolik berdi. Mavjud jadvallar saqlab qolindi. Keyinroq urinib ko'ring.",
                 ], 502);
             }
 
-            $telegram->notify("✅ Jurnal | {$fish} | {$groupName} · {$subjectName} | {$result['count']} yozuv | {$min}m {$sec}s");
+            $telegram->editMessage($chatId, $msgId, "✅ {$tgPrefix} | {$result['count']} yozuv | {$min}m {$sec}s");
 
             // Talabalar ro'yxatini sinxronlash (davomat va baholardan OLDIN)
             $hemisService = app(HemisService::class);

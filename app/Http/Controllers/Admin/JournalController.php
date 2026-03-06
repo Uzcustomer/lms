@@ -1262,24 +1262,41 @@ class JournalController extends Controller
             ], 429);
         }
 
-        $userName = auth()->user()?->name ?? auth()->guard('teacher')->user()?->name ?? 'Noma\'lum';
+        $userName = auth()->user()?->name ?? auth()->guard('teacher')->user()?->name ?? '';
+        $fish = $userName ? \App\Services\ScheduleImportService::fishName($userName) : 'Noma\'lum';
 
         try {
+            $startTime = microtime(true);
             $service = app(ScheduleImportService::class);
             $result = $service->importForGroupSubject((int) $data['group_id'], (int) $data['subject_id']);
 
             Cache::put($cacheKey, now()->addMinutes(5)->timestamp, 300);
+
+            $elapsed = microtime(true) - $startTime;
+            $min = (int) ($elapsed / 60);
+            $sec = (int) ($elapsed % 60);
+
+            $schedule = \App\Models\Schedule::where('group_id', $data['group_id'])
+                ->where('subject_id', $data['subject_id'])
+                ->first();
+            $groupName = $schedule?->group_name ?? "Guruh#{$data['group_id']}";
+            $subjectName = $schedule?->subject_name ?? "Fan#{$data['subject_id']}";
+
+            $telegram = app(TelegramService::class);
 
             ActivityLogService::log('import', 'schedule',
                 "Jurnal orqali jadval sinxronizatsiyasi: {$userName} (guruh: {$data['group_id']}, fan: {$data['subject_id']}) — {$result['count']} ta yozuv"
             );
 
             if ($result['failed'] ?? false) {
+                $telegram->notify("❌ Jurnal | {$fish} | {$groupName} · {$subjectName} | API xato");
                 return response()->json([
                     'success' => false,
                     'message' => "HEMIS API xatolik berdi. Mavjud jadvallar saqlab qolindi. Keyinroq urinib ko'ring.",
                 ], 502);
             }
+
+            $telegram->notify("✅ Jurnal | {$fish} | {$groupName} · {$subjectName} | {$result['count']} yozuv | {$min}m {$sec}s");
 
             // Talabalar ro'yxatini sinxronlash (davomat va baholardan OLDIN)
             $hemisService = app(HemisService::class);

@@ -1430,6 +1430,7 @@ class AcademicScheduleController extends Controller
 
         $oldTime = $examSchedule->test_time;
         $timeChanged = $oldTime !== null && $oldTime !== $request->test_time;
+        $ynSubmitted = (bool) $request->input('yn_submitted', false);
 
         $examSchedule->update(['test_time' => $request->test_time]);
 
@@ -1445,7 +1446,9 @@ class AcademicScheduleController extends Controller
             $testDate = $examSchedule->test_date ? \Carbon\Carbon::parse($examSchedule->test_date)->format('d.m.Y') : '';
             $timeFormatted = $request->test_time;
 
-            $warningText = "⚠️ <i>Test vaqti o'zgarishi mumkin, habardor bo'lib turing!</i>";
+            // Ogohlantirish faqat YN yuborilmagan holatlarda ko'rsatiladi
+            $warningText = !$ynSubmitted ? "\n⚠️ <i>Test vaqti o'zgarishi mumkin, habardor bo'lib turing!</i>" : '';
+            $warningPlain = !$ynSubmitted ? " Test vaqti o'zgarishi mumkin, habardor bo'lib turing!" : '';
 
             if ($timeChanged) {
                 $oldTimeFormatted = $oldTime;
@@ -1453,18 +1456,18 @@ class AcademicScheduleController extends Controller
                     . "📌 Fan: <b>{$subjectName}</b>\n"
                     . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
                     . "⏰ Eski vaqt: <s>{$oldTimeFormatted}</s>\n"
-                    . "⏰ Yangi vaqt: <b>{$timeFormatted}</b>\n\n"
+                    . "⏰ Yangi vaqt: <b>{$timeFormatted}</b>"
                     . $warningText;
                 $notifTitle = "Test vaqti o'zgartirildi: {$subjectName}";
-                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Eski vaqt: {$oldTimeFormatted}, Yangi vaqt: {$timeFormatted}. Test vaqti o'zgarishi mumkin, habardor bo'lib turing!";
+                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Eski vaqt: {$oldTimeFormatted}, Yangi vaqt: {$timeFormatted}." . $warningPlain;
             } else {
                 $message = "📋 <b>Test vaqti belgilandi!</b>\n\n"
                     . "📌 Fan: <b>{$subjectName}</b>\n"
                     . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
-                    . "⏰ Vaqt: <b>{$timeFormatted}</b>\n\n"
+                    . "⏰ Vaqt: <b>{$timeFormatted}</b>"
                     . $warningText;
                 $notifTitle = "Test vaqti belgilandi: {$subjectName}";
-                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Vaqt: {$timeFormatted}. Test vaqti o'zgarishi mumkin, habardor bo'lib turing!";
+                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Vaqt: {$timeFormatted}." . $warningPlain;
             }
 
             $notificationRecords = [];

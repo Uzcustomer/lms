@@ -386,7 +386,8 @@
                     group_hemis_id: input.getAttribute('data-group-hemis-id'),
                     subject_id: input.getAttribute('data-subject-id'),
                     semester_code: input.getAttribute('data-semester-code'),
-                    test_time: timeVal
+                    test_time: timeVal,
+                    yn_submitted: input.getAttribute('data-yn-submitted') === '1'
                 })
             })
             .then(function(resp) { return resp.json(); })

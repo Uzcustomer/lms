@@ -225,7 +225,7 @@
                                                             <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                         </button>
                                                         @if(!($item['yn_submitted'] ?? false) && $item['test_time'])
-                                                            <div style="width:100%;text-align:center;margin-top:2px;">
+                                                            <div class="yn-time-note" style="width:100%;text-align:center;margin-top:2px;">
                                                                 <span style="font-size:10px;color:#d97706;font-style:italic;">⚠️ Vaqt o'zgarishi mumkin</span>
                                                             </div>
                                                         @endif
@@ -404,6 +404,21 @@
                     showToast(title, body, false);
                     btn.style.background = '#16a34a';
                     setTimeout(function() { btn.style.background = '#3b82f6'; }, 1500);
+
+                    // YN yuborilmagan bo'lsa izoh qo'shish/yangilash
+                    var wrapper = input.closest('div');
+                    var existingNote = wrapper.querySelector('.yn-time-note');
+                    if (input.getAttribute('data-yn-submitted') !== '1' && timeVal) {
+                        if (!existingNote) {
+                            var noteDiv = document.createElement('div');
+                            noteDiv.style.cssText = 'width:100%;text-align:center;margin-top:2px;';
+                            noteDiv.className = 'yn-time-note';
+                            noteDiv.innerHTML = '<span style="font-size:10px;color:#d97706;font-style:italic;">⚠️ Vaqt o\'zgarishi mumkin</span>';
+                            wrapper.appendChild(noteDiv);
+                        }
+                    } else if (existingNote) {
+                        existingNote.remove();
+                    }
                 } else {
                     showToast('Xatolik', data.message || 'Xatolik yuz berdi', true);
                 }

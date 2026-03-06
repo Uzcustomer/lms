@@ -32,10 +32,30 @@ class ScheduleImportService
         DB::table('_temp_schedule_ids')->insert($rows);
     }
 
-    public function importBetween(Carbon $from, Carbon $to, ?\Closure $onProgress = null): void
+    public static function fishName(string $name): string
     {
-        $message = "🟢 Jadval importi boshlandi: {$from->toDateString()} — {$to->toDateString()}";
-        $this->notifyTelegram($message);
+        $parts = preg_split('/\s+/', trim($name));
+        if (count($parts) <= 1) return mb_strtoupper($name);
+        $surname = mb_strtoupper($parts[0]);
+        $initials = '';
+        for ($i = 1; $i < count($parts); $i++) {
+            $word = $parts[$i];
+            $upper2 = mb_strtoupper(mb_substr($word, 0, 2));
+            if ($upper2 === 'SH' || $upper2 === 'CH') {
+                $initials .= mb_strtoupper(mb_substr($word, 0, 1)) . mb_strtolower(mb_substr($word, 1, 1)) . '.';
+            } else {
+                $initials .= mb_strtoupper(mb_substr($word, 0, 1)) . '.';
+            }
+        }
+        return $surname . ' ' . $initials;
+    }
+
+    public function importBetween(Carbon $from, Carbon $to, string $userName = '', ?\Closure $onProgress = null): void
+    {
+        $fish = $userName ? self::fishName($userName) : '';
+        $dateRange = $from->format('d.m') . '–' . $to->format('d.m');
+        $prefix = $fish ? "Jadval | {$fish} | {$dateRange}" : "Jadval | {$dateRange}";
+        $this->notifyTelegram("🟢 {$prefix} | " . now()->format('H:i:s'));
         $token = config('services.hemis.token');
         $limit = 200;
         $page = 1;
@@ -60,14 +80,14 @@ class ScheduleImportService
                 $failedPages[] = $page;
 
                 if ($page === 1) {
-                    $this->notifyTelegram("❌ API birinchi sahifada xato (status {$status}) — import to'xtatildi");
+                    $this->notifyTelegram("❌ {$prefix} | API xato ({$status})");
                     break;
                 }
 
                 if (count($failedPages) >= 5) {
                     $lastFive = array_slice($failedPages, -5);
                     if ($lastFive[4] - $lastFive[0] === 4) {
-                        $this->notifyTelegram("❌ Ketma-ket 5 ta sahifa xato — import to'xtatildi (sahifa {$page})");
+                        $this->notifyTelegram("❌ {$prefix} | Ketma-ket 5 xato (sahifa {$page})");
                         break;
                     }
                 }
@@ -82,7 +102,7 @@ class ScheduleImportService
             $pages = $data['pagination']['pageCount'] ?? 1;
 
             if ($page === 1) {
-                $this->notifyTelegram("📄 Jami sahifalar: {$pages}");
+                $this->notifyTelegram("📄 {$pages} sahifa");
             }
 
             foreach ($items as $item) {
@@ -106,7 +126,7 @@ class ScheduleImportService
                 $remaining = max(0, $pages - $page);
                 $eta = round(($elapsed / $page) * $remaining);
                 $failed = count($failedPages);
-                $this->notifyTelegram("⌛ {$remaining} sahifa qoldi, ~{$eta}s" . ($failed > 0 ? " ({$failed} xato)" : ""));
+                $this->notifyTelegram("⌛ {$page}/{$pages} | {$remaining} qoldi ~{$eta}s" . ($failed > 0 ? " | {$failed} xato" : ""));
             }
 
             // Har 10 sahifada Eloquent modellarini tozalash
@@ -127,13 +147,16 @@ class ScheduleImportService
                 })
                 ->delete();
             if ($deleted > 0) {
-                $this->notifyTelegram("🗑 {$deleted} ta eski jadval o'chirildi (HEMIS'da topilmadi)");
+                $this->notifyTelegram("🗑 {$deleted} ta eski yozuv o'chirildi");
             }
         }
 
-        $msg = "✅ Jadval importi tugadi ({$from->toDateString()} — {$to->toDateString()}) — {$totalImported} ta yozuv";
+        $elapsed = microtime(true) - $startTime;
+        $min = (int) ($elapsed / 60);
+        $sec = (int) ($elapsed % 60);
+        $msg = "✅ {$prefix} | {$totalImported} yozuv | {$min}m {$sec}s";
         if ($failedCount > 0) {
-            $msg .= " ({$failedCount} ta sahifa o'tkazib yuborildi)";
+            $msg .= " | {$failedCount} xato";
         }
         $this->notifyTelegram($msg);
     }
@@ -155,7 +178,7 @@ class ScheduleImportService
             return;
         }
 
-        $this->notifyTelegram("🟢 Cron: Jadval importi boshlandi (o'quv yili: {$educationYearCode})");
+        $this->notifyTelegram("🟢 Jadval (Cron) | {$educationYearCode} | " . now()->format('H:i:s'));
         if ($log) $log("O'quv yili: {$educationYearCode}");
 
         $token = config('services.hemis.token');
@@ -182,7 +205,7 @@ class ScheduleImportService
                 if ($log) $log("  ❌ Sahifa {$page}/{$pages} — xato (status {$status}), o'tkazib yuborildi");
 
                 if ($page === 1) {
-                    $this->notifyTelegram("❌ API birinchi sahifada xato (status {$status}) — import to'xtatildi");
+                    $this->notifyTelegram("❌ Jadval (Cron) | API xato ({$status})");
                     if ($log) $log("Birinchi sahifa xato — import to'xtatildi");
                     break;
                 }
@@ -190,7 +213,7 @@ class ScheduleImportService
                 if (count($failedPages) >= 5) {
                     $lastFive = array_slice($failedPages, -5);
                     if ($lastFive[4] - $lastFive[0] === 4) {
-                        $this->notifyTelegram("❌ Ketma-ket 5 ta sahifa xato — import to'xtatildi (sahifa {$page})");
+                        $this->notifyTelegram("❌ Jadval (Cron) | Ketma-ket 5 xato (sahifa {$page})");
                         if ($log) $log("Ketma-ket 5 ta xato — import to'xtatildi");
                         break;
                     }
@@ -208,7 +231,7 @@ class ScheduleImportService
             $totalImported += $count;
 
             if ($page === 1) {
-                $this->notifyTelegram("📄 Jami sahifalar: {$pages}");
+                $this->notifyTelegram("📄 {$pages} sahifa");
                 if ($log) $log("Jami sahifalar: {$pages}");
             }
 
@@ -236,7 +259,7 @@ class ScheduleImportService
                 $remaining = max(0, $pages - $page);
                 $eta = round(($elapsed / $page) * $remaining);
                 $failed = count($failedPages);
-                $this->notifyTelegram("⌛ {$remaining} sahifa qoldi, ~{$eta}s" . ($failed > 0 ? " ({$failed} xato)" : ""));
+                $this->notifyTelegram("⌛ {$page}/{$pages} | {$remaining} qoldi ~{$eta}s" . ($failed > 0 ? " | {$failed} xato" : ""));
             }
 
             // Har 10 sahifada Eloquent modellarini tozalash
@@ -258,13 +281,16 @@ class ScheduleImportService
                 })
                 ->delete();
             if ($deleted > 0) {
-                $this->notifyTelegram("🗑 {$deleted} ta eski jadval o'chirildi (HEMIS'da topilmadi)");
+                $this->notifyTelegram("🗑 {$deleted} ta eski yozuv o'chirildi");
             }
         }
 
-        $msg = "✅ Cron: Jadval importi tugadi ({$educationYearCode}) — {$totalImported} ta yozuv";
+        $elapsed = microtime(true) - $startTime;
+        $min = (int) ($elapsed / 60);
+        $sec = (int) ($elapsed % 60);
+        $msg = "✅ Jadval (Cron) | {$educationYearCode} | {$totalImported} yozuv | {$min}m {$sec}s";
         if ($failedCount > 0) {
-            $msg .= " ({$failedCount} ta sahifa o'tkazib yuborildi)";
+            $msg .= " | {$failedCount} xato";
         }
         $this->notifyTelegram($msg);
         if ($log) $log($msg);

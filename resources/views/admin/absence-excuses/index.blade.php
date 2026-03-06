@@ -428,16 +428,4 @@
         </div>
     </div>
 
-    <style>
-        /* Pagination markazda va active sahifa rangli */
-        .px-4.py-3.border-t nav {
-            display: flex;
-            justify-content: center;
-        }
-        .px-4.py-3.border-t nav span[aria-current="page"] span {
-            background-color: #4f46e5 !important;
-            color: white !important;
-            border-color: #4f46e5 !important;
-        }
-    </style>
 </x-app-layout>

@@ -1446,8 +1446,8 @@ class AcademicScheduleController extends Controller
             $testDate = $examSchedule->test_date ? \Carbon\Carbon::parse($examSchedule->test_date)->format('d.m.Y') : '';
             $timeFormatted = $request->test_time;
 
-            // Ogohlantirish faqat YN yuborilmagan holatlarda ko'rsatiladi
-            $warningText = !$ynSubmitted ? "\n⚠️ <i>Test vaqti o'zgarishi mumkin, habardor bo'lib turing!</i>" : '';
+            // Ogohlantirish faqat YN yuborilmagan holatlarda Telegram xabarga ham qo'shiladi
+            $warningText = !$ynSubmitted ? "\n\n⚠️ <i>Test vaqti o'zgarishi mumkin, habardor bo'lib turing!</i>" : '';
             $warningPlain = !$ynSubmitted ? " Test vaqti o'zgarishi mumkin, habardor bo'lib turing!" : '';
 
             if ($timeChanged) {

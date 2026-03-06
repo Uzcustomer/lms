@@ -1274,7 +1274,6 @@ class JournalController extends Controller
 
         $telegram = app(TelegramService::class);
         $chatId = config('services.telegram.chat_id');
-        $msgId = $telegram->sendAndGetId($chatId, "⏳ {$tgPrefix}");
 
         try {
             $startTime = microtime(true);
@@ -1302,14 +1301,14 @@ class JournalController extends Controller
             );
 
             if ($result['failed'] ?? false) {
-                $telegram->editMessage($chatId, $msgId, "❌ {$tgPrefix} | API xato");
+                $this->appendJournalLog($telegram, $chatId, "❌ {$tgPrefix} | API xato");
                 return response()->json([
                     'success' => false,
                     'message' => "HEMIS API xatolik berdi. Mavjud jadvallar saqlab qolindi. Keyinroq urinib ko'ring.",
                 ], 502);
             }
 
-            $telegram->editMessage($chatId, $msgId, "✅ {$tgPrefix} | {$result['count']} yozuv | {$min}m {$sec}s");
+            $this->appendJournalLog($telegram, $chatId, "✅ {$tgPrefix} | {$result['count']} yozuv | {$min}m {$sec}s");
 
             // Talabalar ro'yxatini sinxronlash (davomat va baholardan OLDIN)
             $hemisService = app(HemisService::class);
@@ -1363,6 +1362,31 @@ class JournalController extends Controller
                 'success' => false,
                 'message' => 'Sinxronizatsiyada xatolik: ' . $e->getMessage(),
             ], 500);
+        }
+    }
+
+    private function appendJournalLog(TelegramService $telegram, string $chatId, string $line): void
+    {
+        $cacheKey = 'telegram_journal_log';
+        $log = Cache::get($cacheKey, ['msg_id' => null, 'lines' => []]);
+
+        $lines = $log['lines'];
+        $lines[] = $line;
+        if (count($lines) > 20) {
+            $lines = array_slice($lines, -20);
+        }
+
+        $text = implode("\n", $lines);
+
+        if ($log['msg_id'] && $telegram->editMessage($chatId, $log['msg_id'], $text)) {
+            Cache::put($cacheKey, ['msg_id' => $log['msg_id'], 'lines' => $lines], 3600 * 8);
+            return;
+        }
+
+        // Xabar yo'q yoki edit muvaffaqiyatsiz — yangi xabar
+        $newId = $telegram->sendAndGetId($chatId, $line);
+        if ($newId) {
+            Cache::put($cacheKey, ['msg_id' => $newId, 'lines' => [$line]], 3600 * 8);
         }
     }
 

@@ -181,6 +181,17 @@ class FaceIdAdminController extends Controller
     }
 
     /**
+     * Admin uchun sinov sahifasi — real vaqtda debug ma'lumotlari bilan.
+     */
+    public function testPage()
+    {
+        $settings        = FaceIdService::getSettings();
+        $enrolledCount   = FaceIdDescriptor::count();
+        $totalStudents   = Student::whereNotNull('image')->count();
+        return view('admin.face-id.test', compact('settings', 'enrolledCount', 'totalStudents'));
+    }
+
+    /**
      * Enrollment sahifasi — HEMIS rasmlari asosida descriptor olish.
      */
     public function enrollment(Request $request)

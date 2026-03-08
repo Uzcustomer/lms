@@ -327,6 +327,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/enrollment', [FaceIdAdminController::class, 'enrollment'])->name('enrollment');
             Route::post('/descriptor', [FaceIdAdminController::class, 'saveDescriptor'])->name('descriptor.save');
             Route::delete('/descriptor/{studentId}', [FaceIdAdminController::class, 'deleteDescriptor'])->name('descriptor.delete');
+            Route::get('/ping', fn() => response('pong:' . now()))->name('ping');
             Route::get('/test', [FaceIdAdminController::class, 'testPage'])->name('test');
             Route::post('/check-teacher', [FaceIdAdminController::class, 'checkTeacher'])->name('check-teacher');
             Route::get('/teacher-photo/{id}', [FaceIdAdminController::class, 'teacherPhoto'])->name('teacher-photo');

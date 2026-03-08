@@ -7,8 +7,11 @@ use App\Models\FaceIdDescriptor;
 use App\Models\FaceIdLog;
 use App\Models\Setting;
 use App\Models\Student;
+use App\Models\Teacher;
 use App\Services\FaceIdService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class FaceIdAdminController extends Controller
 {
@@ -188,7 +191,86 @@ class FaceIdAdminController extends Controller
         $settings        = FaceIdService::getSettings();
         $enrolledCount   = FaceIdDescriptor::count();
         $totalStudents   = Student::whereNotNull('image')->count();
-        return view('admin.face-id.test', compact('settings', 'enrolledCount', 'totalStudents'));
+        $totalTeachers   = Teacher::whereNotNull('image')->count();
+        return view('admin.face-id.test', compact('settings', 'enrolledCount', 'totalStudents', 'totalTeachers'));
+    }
+
+    /**
+     * Xodimni employee_id_number bo'yicha topish (test sahifasi uchun).
+     */
+    public function checkTeacher(Request $request)
+    {
+        $request->validate(['employee_id_number' => 'required|string|max:50']);
+
+        $teacher = Teacher::where('employee_id_number', trim($request->employee_id_number))->first();
+
+        if (!$teacher) {
+            return response()->json(['error' => 'Xodim topilmadi.'], 404);
+        }
+
+        return response()->json([
+            'teacher_id'  => $teacher->id,
+            'full_name'   => $teacher->full_name,
+            'position'    => $teacher->staff_position,
+            'department'  => $teacher->department,
+            'photo_url'   => route('admin.face-id.teacher-photo', ['id' => $teacher->id]),
+            'has_photo'   => !empty($teacher->image),
+        ]);
+    }
+
+    /**
+     * Xodim rasmini proxy orqali berish (CORS muammosini hal qilish).
+     */
+    public function teacherPhoto(int $id)
+    {
+        $teacher = Teacher::find($id);
+
+        if (!$teacher || empty($teacher->image)) {
+            abort(404, 'Rasm topilmadi');
+        }
+
+        $url = $teacher->image;
+        if (!str_starts_with($url, 'http')) {
+            $base = rtrim(config('services.hemis.base_url', 'https://student.ttatf.uz'), '/');
+            $url  = $base . '/' . ltrim($url, '/');
+        }
+
+        try {
+            $response = Http::withoutVerifying()->timeout(10)->get($url);
+            if (!$response->successful()) {
+                abort(404, 'Rasm yuklab bo\'lmadi');
+            }
+            return response($response->body())
+                ->header('Content-Type', $response->header('Content-Type') ?? 'image/jpeg')
+                ->header('Cache-Control', 'private, max-age=3600')
+                ->header('Access-Control-Allow-Origin', '*');
+        } catch (\Throwable $e) {
+            Log::warning('[FaceID] Teacher rasm fetch xatosi', ['id' => $id, 'error' => $e->getMessage()]);
+            abort(404, 'Rasm yuklab bo\'lmadi');
+        }
+    }
+
+    /**
+     * Barcha enrolled talabalar descriptorlarini qaytarish (live recognition uchun).
+     * Limit: 500 ta so'nggi enrolled.
+     */
+    public function allDescriptors()
+    {
+        $rows = FaceIdDescriptor::with(['student:id,full_name,student_id_number,image'])
+            ->orderByDesc('enrolled_at')
+            ->limit(500)
+            ->get();
+
+        $data = $rows->filter(fn($r) => $r->student !== null)->map(fn($r) => [
+            'id'         => $r->student->id,
+            'name'       => $r->student->full_name,
+            'id_number'  => $r->student->student_id_number,
+            'photo_url'  => route('student.face-id.photo', ['id' => $r->student->id]),
+            'descriptor' => $r->descriptor,   // array[128]
+            'type'       => 'student',
+        ])->values();
+
+        return response()->json(['people' => $data, 'count' => $data->count()]);
     }
 
     /**

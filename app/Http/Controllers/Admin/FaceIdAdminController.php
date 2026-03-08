@@ -336,21 +336,26 @@ class FaceIdAdminController extends Controller
                 'type'       => 'student',
             ]);
 
-        // Xodimlar (teacher_face_descriptors)
-        $teachers = TeacherFaceDescriptor::with(['teacher:id,full_name,employee_id_number,image,staff_position'])
-            ->orderByDesc('enrolled_at')
-            ->limit(1000)
-            ->get()
-            ->filter(fn($r) => $r->teacher !== null)
-            ->map(fn($r) => [
-                'id'         => $r->teacher->id,
-                'name'       => $r->teacher->full_name,
-                'id_number'  => $r->teacher->employee_id_number,
-                'position'   => $r->teacher->staff_position,
-                'photo_url'  => route('admin.face-id.teacher-photo', ['id' => $r->teacher->id]),
-                'descriptor' => $r->descriptor,
-                'type'       => 'teacher',
-            ]);
+        // Xodimlar (teacher_face_descriptors) — jadval mavjud bo'lmasa gracefully skip
+        $teachers = collect();
+        try {
+            $teachers = TeacherFaceDescriptor::with(['teacher:id,full_name,employee_id_number,image,staff_position'])
+                ->orderByDesc('enrolled_at')
+                ->limit(1000)
+                ->get()
+                ->filter(fn($r) => $r->teacher !== null)
+                ->map(fn($r) => [
+                    'id'         => $r->teacher->id,
+                    'name'       => $r->teacher->full_name,
+                    'id_number'  => $r->teacher->employee_id_number,
+                    'position'   => $r->teacher->staff_position,
+                    'photo_url'  => route('admin.face-id.teacher-photo', ['id' => $r->teacher->id]),
+                    'descriptor' => $r->descriptor,
+                    'type'       => 'teacher',
+                ]);
+        } catch (\Exception $e) {
+            Log::warning('teacher_face_descriptors jadval mavjud emas: ' . $e->getMessage());
+        }
 
         $data = $students->values()->merge($teachers->values())->values();
 
@@ -367,7 +372,11 @@ class FaceIdAdminController extends Controller
      */
     public function teachersWithoutDescriptor()
     {
-        $enrolled = TeacherFaceDescriptor::pluck('teacher_id')->toArray();
+        try {
+            $enrolled = TeacherFaceDescriptor::pluck('teacher_id')->toArray();
+        } catch (\Exception $e) {
+            $enrolled = [];
+        }
 
         $teachers = Teacher::whereNotNull('image')
             ->whereNotIn('id', $enrolled)
@@ -396,14 +405,18 @@ class FaceIdAdminController extends Controller
             'source_url' => 'nullable|string|max:500',
         ]);
 
-        TeacherFaceDescriptor::updateOrCreate(
-            ['teacher_id' => $request->teacher_id],
-            [
-                'descriptor'       => $request->descriptor,
-                'source_image_url' => $request->source_url,
-                'enrolled_at'      => now(),
-            ]
-        );
+        try {
+            TeacherFaceDescriptor::updateOrCreate(
+                ['teacher_id' => $request->teacher_id],
+                [
+                    'descriptor'       => $request->descriptor,
+                    'source_image_url' => $request->source_url,
+                    'enrolled_at'      => now(),
+                ]
+            );
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'DB xato: migration ishlatilmagan bo\'lishi mumkin.'], 500);
+        }
 
         $teacher = Teacher::find($request->teacher_id);
         return response()->json(['success' => true, 'message' => ($teacher->full_name ?? 'Xodim') . ' descriptori saqlandi.']);

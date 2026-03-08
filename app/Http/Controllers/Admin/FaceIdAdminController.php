@@ -321,50 +321,60 @@ class FaceIdAdminController extends Controller
      */
     public function allDescriptors()
     {
-        // Talabalar (face_id_descriptors)
-        $students = FaceIdDescriptor::with(['student:id,full_name,student_id_number,image'])
-            ->orderByDesc('enrolled_at')
-            ->limit(1000)
-            ->get()
-            ->filter(fn($r) => $r->student !== null)
-            ->map(fn($r) => [
-                'id'         => $r->student->id,
-                'name'       => $r->student->full_name,
-                'id_number'  => $r->student->student_id_number,
-                'photo_url'  => route('student.face-id.photo', ['id' => $r->student->id]),
-                'descriptor' => $r->descriptor,
-                'type'       => 'student',
-            ]);
-
-        // Xodimlar (teacher_face_descriptors) — jadval mavjud bo'lmasa gracefully skip
-        $teachers = collect();
         try {
-            $teachers = TeacherFaceDescriptor::with(['teacher:id,full_name,employee_id_number,image,staff_position'])
-                ->orderByDesc('enrolled_at')
-                ->limit(1000)
-                ->get()
-                ->filter(fn($r) => $r->teacher !== null)
-                ->map(fn($r) => [
-                    'id'         => $r->teacher->id,
-                    'name'       => $r->teacher->full_name,
-                    'id_number'  => $r->teacher->employee_id_number,
-                    'position'   => $r->teacher->staff_position,
-                    'photo_url'  => route('admin.face-id.teacher-photo', ['id' => $r->teacher->id]),
-                    'descriptor' => $r->descriptor,
-                    'type'       => 'teacher',
-                ]);
+            // Talabalar (face_id_descriptors)
+            $students = collect();
+            try {
+                $students = FaceIdDescriptor::with(['student:id,full_name,student_id_number,image'])
+                    ->orderByDesc('enrolled_at')
+                    ->limit(1000)
+                    ->get()
+                    ->filter(fn($r) => $r->student !== null && $r->descriptor !== null)
+                    ->map(fn($r) => [
+                        'id'         => $r->student->id,
+                        'name'       => $r->student->full_name ?? 'Noma\'lum',
+                        'id_number'  => $r->student->student_id_number ?? '',
+                        'photo_url'  => route('student.face-id.photo', ['id' => $r->student->id]),
+                        'descriptor' => $r->descriptor,
+                        'type'       => 'student',
+                    ]);
+            } catch (\Exception $e) {
+                Log::warning('allDescriptors students error: ' . $e->getMessage());
+            }
+
+            // Xodimlar (teacher_face_descriptors)
+            $teachers = collect();
+            try {
+                $teachers = TeacherFaceDescriptor::with(['teacher:id,full_name,employee_id_number,image,staff_position'])
+                    ->orderByDesc('enrolled_at')
+                    ->limit(1000)
+                    ->get()
+                    ->filter(fn($r) => $r->teacher !== null && $r->descriptor !== null)
+                    ->map(fn($r) => [
+                        'id'         => $r->teacher->id,
+                        'name'       => $r->teacher->full_name ?? 'Noma\'lum',
+                        'id_number'  => $r->teacher->employee_id_number ?? '',
+                        'position'   => $r->teacher->staff_position ?? '',
+                        'photo_url'  => route('admin.face-id.teacher-photo', ['id' => $r->teacher->id]),
+                        'descriptor' => $r->descriptor,
+                        'type'       => 'teacher',
+                    ]);
+            } catch (\Exception $e) {
+                Log::warning('allDescriptors teachers error: ' . $e->getMessage());
+            }
+
+            $data = $students->values()->merge($teachers->values())->values();
+
+            return response()->json([
+                'people'        => $data,
+                'count'         => $data->count(),
+                'student_count' => $students->count(),
+                'teacher_count' => $teachers->count(),
+            ]);
         } catch (\Exception $e) {
-            Log::warning('teacher_face_descriptors jadval mavjud emas: ' . $e->getMessage());
+            Log::error('allDescriptors fatal: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage(), 'people' => [], 'count' => 0], 500);
         }
-
-        $data = $students->values()->merge($teachers->values())->values();
-
-        return response()->json([
-            'people'          => $data,
-            'count'           => $data->count(),
-            'student_count'   => $students->count(),
-            'teacher_count'   => $teachers->count(),
-        ]);
     }
 
     /**

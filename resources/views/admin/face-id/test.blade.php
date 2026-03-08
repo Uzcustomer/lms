@@ -524,7 +524,11 @@ async function autoLoadFromDB(){
     setStatus('Bazadan yuklanmoqda...', 15);
     try{
         const r=await fetch(URL_ALL_DESC,{headers:{'X-CSRF-TOKEN':CSRF,'Accept':'application/json'}});
-        if(!r.ok){const txt=await r.text();throw new Error('Server '+r.status+': '+(txt.startsWith('<')?'HTML error (migration kerak?)':txt.substring(0,100)));}
+        if(!r.ok){
+            let errMsg='Server '+r.status;
+            try{const j=await r.json();errMsg=j.error||j.message||errMsg;}catch(e2){const t=await r.text().catch(()=>'');errMsg+=': '+(t.startsWith('<')?'HTML error':t.substring(0,120));}
+            throw new Error(errMsg);
+        }
         const d=await r.json();
         setStatus('Descriptorlar olinmoqda: '+d.count+' ta...', 40);
 

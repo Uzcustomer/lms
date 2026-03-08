@@ -67,6 +67,24 @@
         <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
     </div>
 
+    <!-- Face ID tugmasi -->
+    <a href="{{ route('student.face-id.login') }}"
+       style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.65rem 1rem; background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 600; border-radius: 0.5rem; text-decoration: none; margin-bottom: 0.65rem; transition: background-color 0.2s;"
+       onmouseover="this.style.backgroundColor='#4338ca'"
+       onmouseout="this.style.backgroundColor='#4f46e5'">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 1.25rem; height: 1.25rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75H6A2.25 2.25 0 0 0 3.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0 1 20.25 6v1.5m0 9V18A2.25 2.25 0 0 1 18 20.25h-1.5m-9 0H6A2.25 2.25 0 0 1 3.75 18v-1.5M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+        Face ID bilan kirish
+    </a>
+
+    <!-- Ajratuvchi chiziq -->
+    <div style="display: flex; align-items: center; margin: 1rem 0;">
+        <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
+        <span style="padding: 0 0.75rem; font-size: 12px; color: #9ca3af;">yoki</span>
+        <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
+    </div>
+
     <!-- HEMIS OAuth tugmasi -->
     <a href="{{ route('auth.hemis.redirect') }}"
        style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.65rem 1rem; background-color: #065f46; color: #ffffff; font-size: 14px; font-weight: 600; border-radius: 0.5rem; text-decoration: none; transition: background-color 0.2s;"

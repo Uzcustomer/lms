@@ -328,7 +328,22 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/descriptor', [FaceIdAdminController::class, 'saveDescriptor'])->name('descriptor.save');
             Route::delete('/descriptor/{studentId}', [FaceIdAdminController::class, 'deleteDescriptor'])->name('descriptor.delete');
             Route::get('/ping', fn() => response('pong:' . now()))->name('ping');
-            Route::get('/test', [FaceIdAdminController::class, 'testPage'])->name('test');
+            Route::get('/test', function () {
+                $out = "STEP1:route_ok\n";
+                try {
+                    $ctrl = new \App\Http\Controllers\Admin\FaceIdAdminController();
+                    $out .= "STEP2:controller_loaded\n";
+                } catch (\Throwable $e) {
+                    return response("FAIL_controller: " . $e->getMessage() . "\n" . $e->getTraceAsString(), 200);
+                }
+                try {
+                    $r = $ctrl->testPage();
+                    $out .= "STEP3:method_ok\n";
+                    return $r;
+                } catch (\Throwable $e) {
+                    return response($out . "FAIL_testPage: " . $e->getMessage() . "\n" . substr($e->getTraceAsString(),0,2000), 200);
+                }
+            })->name('test');
             Route::post('/check-teacher', [FaceIdAdminController::class, 'checkTeacher'])->name('check-teacher');
             Route::get('/teacher-photo/{id}', [FaceIdAdminController::class, 'teacherPhoto'])->name('teacher-photo');
             Route::get('/all-descriptors', [FaceIdAdminController::class, 'allDescriptors'])->name('all-descriptors');

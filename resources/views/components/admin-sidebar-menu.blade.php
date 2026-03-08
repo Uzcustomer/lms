@@ -371,6 +371,14 @@
             </svg>
             Faoliyat jurnali
         </a>
+
+        <a href="{{ route('admin.face-id.test') }}"
+           class="sidebar-link {{ request()->routeIs('admin.face-id.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"></path>
+            </svg>
+            Face ID Test
+        </a>
         @endif
 
         @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi', 'oqituvchi']))

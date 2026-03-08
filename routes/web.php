@@ -328,6 +328,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/descriptor', [FaceIdAdminController::class, 'saveDescriptor'])->name('descriptor.save');
             Route::delete('/descriptor/{studentId}', [FaceIdAdminController::class, 'deleteDescriptor'])->name('descriptor.delete');
             Route::get('/test', [FaceIdAdminController::class, 'testPage'])->name('test');
+            Route::post('/check-teacher', [FaceIdAdminController::class, 'checkTeacher'])->name('check-teacher');
+            Route::get('/teacher-photo/{id}', [FaceIdAdminController::class, 'teacherPhoto'])->name('teacher-photo');
+            Route::get('/all-descriptors', [FaceIdAdminController::class, 'allDescriptors'])->name('all-descriptors');
         });
 
         // Unified settings page

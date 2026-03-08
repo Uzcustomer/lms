@@ -188,10 +188,63 @@ class FaceIdAdminController extends Controller
      */
     public function testPage()
     {
-        $settings        = FaceIdService::getSettings();
-        $enrolledCount   = FaceIdDescriptor::count();
-        $totalStudents   = Student::whereNotNull('image')->count();
-        $totalTeachers   = Teacher::whereNotNull('image')->count();
+        $debug = [];
+        $errors = [];
+
+        // 1. FaceIdService settings
+        try {
+            $settings = FaceIdService::getSettings();
+            $debug['settings'] = $settings;
+        } catch (\Throwable $e) {
+            $errors[] = 'FaceIdService::getSettings() — ' . $e->getMessage();
+            $settings = ['threshold'=>0.4,'blinks_required'=>2,'head_turn_required'=>true,'liveness_timeout'=>30];
+        }
+
+        // 2. FaceIdDescriptor count
+        try {
+            $enrolledCount = FaceIdDescriptor::count();
+            $debug['enrolled_count'] = $enrolledCount;
+        } catch (\Throwable $e) {
+            $errors[] = 'FaceIdDescriptor::count() — ' . $e->getMessage();
+            $enrolledCount = 0;
+        }
+
+        // 3. Student count
+        try {
+            $totalStudents = Student::whereNotNull('image')->count();
+            $debug['students'] = $totalStudents;
+        } catch (\Throwable $e) {
+            $errors[] = 'Student::count() — ' . $e->getMessage();
+            $totalStudents = 0;
+        }
+
+        // 4. Teacher count
+        try {
+            $totalTeachers = Teacher::whereNotNull('image')->count();
+            $debug['teachers'] = $totalTeachers;
+        } catch (\Throwable $e) {
+            $errors[] = 'Teacher::count() — ' . $e->getMessage();
+            $totalTeachers = 0;
+        }
+
+        // 5. View mavjudmi?
+        try {
+            $viewExists = view()->exists('admin.face-id.test');
+            $debug['view_exists'] = $viewExists;
+        } catch (\Throwable $e) {
+            $errors[] = 'view check — ' . $e->getMessage();
+        }
+
+        // Agar xato bo'lsa — debug sahifasini ko'rsat
+        if (!empty($errors)) {
+            return response('<pre style="background:#1e293b;color:#f8fafc;padding:24px;font-size:13px;line-height:1.8;">'
+                . '<b style="color:#f87171;font-size:16px;">⚠️ Face ID Test — Xato tafsiloti</b>' . "\n\n"
+                . implode("\n", array_map(fn($e) => '❌ ' . htmlspecialchars($e), $errors)) . "\n\n"
+                . '<b style="color:#38bdf8;">Debug info:</b>' . "\n"
+                . htmlspecialchars(json_encode($debug, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
+                . '</pre>', 200);
+        }
+
         return view('admin.face-id.test', compact('settings', 'enrolledCount', 'totalStudents', 'totalTeachers'));
     }
 

@@ -8,6 +8,7 @@ use App\Models\FaceIdLog;
 use App\Models\Setting;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\TeacherFaceDescriptor;
 use App\Services\FaceIdService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -316,26 +317,96 @@ class FaceIdAdminController extends Controller
     }
 
     /**
-     * Barcha enrolled talabalar descriptorlarini qaytarish (live recognition uchun).
-     * Limit: 500 ta so'nggi enrolled.
+     * Barcha enrolled talabalar VA xodimlar descriptorlarini qaytarish (live recognition uchun).
      */
     public function allDescriptors()
     {
-        $rows = FaceIdDescriptor::with(['student:id,full_name,student_id_number,image'])
+        // Talabalar (face_id_descriptors)
+        $students = FaceIdDescriptor::with(['student:id,full_name,student_id_number,image'])
             ->orderByDesc('enrolled_at')
+            ->limit(1000)
+            ->get()
+            ->filter(fn($r) => $r->student !== null)
+            ->map(fn($r) => [
+                'id'         => $r->student->id,
+                'name'       => $r->student->full_name,
+                'id_number'  => $r->student->student_id_number,
+                'photo_url'  => route('student.face-id.photo', ['id' => $r->student->id]),
+                'descriptor' => $r->descriptor,
+                'type'       => 'student',
+            ]);
+
+        // Xodimlar (teacher_face_descriptors)
+        $teachers = TeacherFaceDescriptor::with(['teacher:id,full_name,employee_id_number,image,staff_position'])
+            ->orderByDesc('enrolled_at')
+            ->limit(1000)
+            ->get()
+            ->filter(fn($r) => $r->teacher !== null)
+            ->map(fn($r) => [
+                'id'         => $r->teacher->id,
+                'name'       => $r->teacher->full_name,
+                'id_number'  => $r->teacher->employee_id_number,
+                'position'   => $r->teacher->staff_position,
+                'photo_url'  => route('admin.face-id.teacher-photo', ['id' => $r->teacher->id]),
+                'descriptor' => $r->descriptor,
+                'type'       => 'teacher',
+            ]);
+
+        $data = $students->values()->merge($teachers->values())->values();
+
+        return response()->json([
+            'people'          => $data,
+            'count'           => $data->count(),
+            'student_count'   => $students->count(),
+            'teacher_count'   => $teachers->count(),
+        ]);
+    }
+
+    /**
+     * Descriptori yo'q xodimlar ro'yxati (foto yuklab descriptor hisoblash uchun).
+     */
+    public function teachersWithoutDescriptor()
+    {
+        $enrolled = TeacherFaceDescriptor::pluck('teacher_id')->toArray();
+
+        $teachers = Teacher::whereNotNull('image')
+            ->whereNotIn('id', $enrolled)
+            ->select('id', 'full_name', 'employee_id_number', 'image', 'staff_position')
             ->limit(500)
-            ->get();
+            ->get()
+            ->map(fn($t) => [
+                'id'         => $t->id,
+                'name'       => $t->full_name,
+                'id_number'  => $t->employee_id_number,
+                'position'   => $t->staff_position,
+                'photo_url'  => route('admin.face-id.teacher-photo', ['id' => $t->id]),
+            ]);
 
-        $data = $rows->filter(fn($r) => $r->student !== null)->map(fn($r) => [
-            'id'         => $r->student->id,
-            'name'       => $r->student->full_name,
-            'id_number'  => $r->student->student_id_number,
-            'photo_url'  => route('student.face-id.photo', ['id' => $r->student->id]),
-            'descriptor' => $r->descriptor,   // array[128]
-            'type'       => 'student',
-        ])->values();
+        return response()->json(['teachers' => $teachers, 'count' => $teachers->count()]);
+    }
 
-        return response()->json(['people' => $data, 'count' => $data->count()]);
+    /**
+     * Xodim yuz descriptorini saqlash (test sahifasidan enrollment).
+     */
+    public function saveTeacherDescriptor(Request $request)
+    {
+        $request->validate([
+            'teacher_id' => 'required|integer|exists:teachers,id',
+            'descriptor' => 'required|array|size:128',
+            'source_url' => 'nullable|string|max:500',
+        ]);
+
+        TeacherFaceDescriptor::updateOrCreate(
+            ['teacher_id' => $request->teacher_id],
+            [
+                'descriptor'       => $request->descriptor,
+                'source_image_url' => $request->source_url,
+                'enrolled_at'      => now(),
+            ]
+        );
+
+        $teacher = Teacher::find($request->teacher_id);
+        return response()->json(['success' => true, 'message' => ($teacher->full_name ?? 'Xodim') . ' descriptori saqlandi.']);
     }
 
     /**

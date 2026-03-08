@@ -200,20 +200,17 @@
 
         {{-- O'ng: Pool --}}
         <div>
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px;">
-                <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:10px;">📚 Talabalar bazadan (enrolled)</div>
-                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-                    <div style="flex:1;font-size:12px;color:#64748b;">DB da <strong>{{ $enrolledCount }}</strong> ta descriptor</div>
-                    <button id="fi-btn-load-all" style="padding:8px 14px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:12px;cursor:pointer;white-space:nowrap;">⬇️ Yuklash</button>
-                </div>
-                <div id="fi-students-status" style="font-size:11px;color:#94a3b8;"></div>
-                <div style="margin-top:6px;background:#e2e8f0;border-radius:4px;height:4px;">
-                    <div id="fi-students-bar" style="height:4px;border-radius:4px;background:#6366f1;width:0%;transition:width 0.3s;"></div>
+            {{-- Auto-load holati --}}
+            <div id="fi-autoload-box" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px;margin-bottom:12px;">
+                <div style="font-size:12px;font-weight:600;color:#0369a1;margin-bottom:8px;">🔄 Avtomatik yuklash</div>
+                <div id="fi-autoload-status" style="font-size:12px;color:#64748b;">Kamerani yoqing — bazadan avtomatik yuklanadi</div>
+                <div style="margin-top:8px;background:#bae6fd;border-radius:4px;height:5px;">
+                    <div id="fi-autoload-bar" style="height:5px;border-radius:4px;background:#0284c7;width:0%;transition:width 0.4s;"></div>
                 </div>
             </div>
 
             <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px;">
-                <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:10px;">👷 Xodim qo'shish</div>
+                <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:10px;">👷 Yangi xodim qo'shish (ID bilan)</div>
                 <div style="display:flex;gap:8px;">
                     <input type="text" id="fi-inp-teacher" placeholder="employee_id_number"
                            style="flex:1;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;outline:none;">
@@ -275,10 +272,11 @@
 
 const MODELS   = '/face-models';
 const CSRF     = document.querySelector('meta[name="csrf-token"]')?.content || '';
-const URL_STUDENT_CHECK = '{{ route("student.face-id.check-student") }}';
-const URL_SAVE_DESC     = '{{ route("student.face-id.save-descriptor") }}';
-const URL_TEACHER_CHECK = '{{ route("admin.face-id.check-teacher") }}';
-const URL_ALL_DESC      = '{{ route("admin.face-id.all-descriptors") }}';
+const URL_STUDENT_CHECK  = '{{ route("student.face-id.check-student") }}';
+const URL_SAVE_DESC      = '{{ route("student.face-id.save-descriptor") }}';
+const URL_TEACHER_CHECK  = '{{ route("admin.face-id.check-teacher") }}';
+const URL_ALL_DESC       = '{{ route("admin.face-id.all-descriptors") }}';
+const URL_SAVE_TEACHER   = '{{ route("admin.face-id.save-teacher-descriptor") }}';
 
 const EAR_CLOSED = 0.22, EAR_OPEN = 0.28, YAW_THRESH = 0.18;
 const G = id => document.getElementById(id);
@@ -501,9 +499,87 @@ G('fi-btn-recog-on').addEventListener('click', async()=>{
         await new Promise(r=>G('fi-video2').onloadedmetadata=r);
         G('fi-overlay2').width=G('fi-video2').videoWidth; G('fi-overlay2').height=G('fi-video2').videoHeight;
         if(!modelsLoaded)await loadModels();
-        startRecog(); G('fi-live-badge').style.display='inline';
+        startRecog();
+        G('fi-live-badge').style.display='inline';
+        // Kamera yoqilgandan so'ng avtomatik bazadan yuklash
+        autoLoadFromDB();
     }catch(e){alert('Kamera xato: '+e.message);}
 });
+
+// ── AUTO LOAD FROM DB ─────────────────────────────────────────────────────
+async function autoLoadFromDB(){
+    const setStatus=(t,pct,c='#0284c7')=>{
+        G('fi-autoload-status').textContent=t;
+        G('fi-autoload-bar').style.width=pct+'%';
+        G('fi-autoload-bar').style.background=c;
+    };
+    setStatus('Bazadan yuklanmoqda...', 15);
+    try{
+        const r=await fetch(URL_ALL_DESC,{headers:{'X-CSRF-TOKEN':CSRF}});
+        const d=await r.json();
+        setStatus('Descriptorlar olinmoqda: '+d.count+' ta...', 40);
+
+        let addedS=0, addedT=0;
+        d.people.forEach(p=>{
+            if(!pool.find(x=>x.id===p.id&&x.type===p.type)){
+                pool.push({id:p.id,name:p.name,idNumber:p.id_number,type:p.type,
+                    descriptor:new Float32Array(p.descriptor),
+                    photoUrl:p.photo_url,position:p.position||''});
+                if(p.type==='student')addedS++;
+                else addedT++;
+            }
+        });
+        setStatus('✅ Bazadan yuklandi: '+addedS+' talaba, '+addedT+' xodim (jami '+pool.length+')', 100, '#16a34a');
+        renderPool();
+
+        // Agar hali foto bilan yuklanmagan xodimlar bo'lsa, ularni yuklaymiz
+        const teachersWithoutDesc = await fetchTeachersWithoutDescriptors();
+        if(teachersWithoutDesc.length > 0){
+            setStatus('📸 '+teachersWithoutDesc.length+' xodimning rasmi yuklanmoqda...', 100, '#f59e0b');
+            await loadTeacherPhotosInBatches(teachersWithoutDesc, setStatus);
+        }
+    }catch(e){
+        setStatus('❌ Xato: '+e.message, 0, '#ef4444');
+    }
+}
+
+async function fetchTeachersWithoutDescriptors(){
+    // Descriptori yo'q xodimlar ro'yxatini olish
+    try{
+        const r=await fetch('{{ route("admin.face-id.teachers-without-descriptor") }}',{headers:{'X-CSRF-TOKEN':CSRF}});
+        if(!r.ok) return [];
+        const d=await r.json();
+        return d.teachers || [];
+    }catch(e){ return []; }
+}
+
+async function loadTeacherPhotosInBatches(teachers, setStatus){
+    const BATCH=5;
+    let processed=0, saved=0;
+    for(let i=0;i<teachers.length;i+=BATCH){
+        const batch=teachers.slice(i,i+BATCH);
+        await Promise.all(batch.map(async t=>{
+            try{
+                const img=await faceapi.fetchImage(t.photo_url);
+                const det=await faceapi.detectSingleFace(img,OPTS(320)).withFaceLandmarks().withFaceDescriptor();
+                if(!det){processed++;return;}
+                // Serverga saqlash
+                await fetch(URL_SAVE_TEACHER,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF},
+                    body:JSON.stringify({teacher_id:t.id,descriptor:Array.from(det.descriptor),source_url:t.photo_url})});
+                // Poolga qo'shish
+                if(!pool.find(x=>x.id===t.id&&x.type==='teacher')){
+                    pool.push({id:t.id,name:t.name,idNumber:t.id_number,type:'teacher',descriptor:det.descriptor,photoUrl:t.photo_url,position:t.position||''});
+                }
+                processed++; saved++;
+                renderPool();
+            }catch(e){processed++;}
+        }));
+        const pct=Math.round(processed/teachers.length*100);
+        setStatus('📸 Xodimlar: '+processed+'/'+teachers.length+' ('+saved+' saqlandi)', pct, '#f59e0b');
+    }
+    setStatus('✅ Hammasi yuklandi! Pool: '+pool.length+' kishi', 100, '#16a34a');
+    renderPool();
+}
 G('fi-btn-recog-off').addEventListener('click',()=>{
     if(recogLoop){clearInterval(recogLoop);recogLoop=null;}
     if(recogStream){recogStream.getTracks().forEach(t=>t.stop());recogStream=null;}

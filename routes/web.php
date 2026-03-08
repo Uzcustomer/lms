@@ -28,6 +28,8 @@ use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
+use App\Http\Controllers\Student\FaceIdController;
+use App\Http\Controllers\Admin\FaceIdAdminController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\LectureScheduleController;
 use App\Http\Controllers\Admin\TimetableViewController;
@@ -312,6 +314,22 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
         Route::get('/notifications-unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
 
+        // Face ID boshqaruvi
+        Route::prefix('face-id')->name('face-id.')->group(function () {
+            Route::get('/settings', [FaceIdAdminController::class, 'settings'])->name('settings');
+            Route::post('/settings', [FaceIdAdminController::class, 'updateSettings'])->name('settings.update');
+            Route::get('/logs', [FaceIdAdminController::class, 'logs'])->name('logs');
+            Route::get('/logs/{id}/snapshot', [FaceIdAdminController::class, 'showSnapshot'])->name('logs.snapshot');
+            Route::delete('/logs/{id}', [FaceIdAdminController::class, 'deleteLog'])->name('logs.delete');
+            Route::post('/logs/clear', [FaceIdAdminController::class, 'clearLogs'])->name('logs.clear');
+            Route::get('/students', [FaceIdAdminController::class, 'students'])->name('students');
+            Route::post('/students/{id}/toggle', [FaceIdAdminController::class, 'toggleStudent'])->name('students.toggle');
+            Route::get('/enrollment', [FaceIdAdminController::class, 'enrollment'])->name('enrollment');
+            Route::post('/descriptor', [FaceIdAdminController::class, 'saveDescriptor'])->name('descriptor.save');
+            Route::delete('/descriptor/{studentId}', [FaceIdAdminController::class, 'deleteDescriptor'])->name('descriptor.delete');
+            Route::get('/test', [FaceIdAdminController::class, 'testPage'])->name('test');
+        });
+
         // Unified settings page
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
         Route::post('/settings/deadlines', [SettingsController::class, 'updateDeadlines'])->name('settings.update.deadlines');
@@ -565,6 +583,15 @@ Route::prefix('student')->name('student.')->group(function () {
     // Login POST — guest:student olib tashlandi, chunki talaba brauzer yopib
     // logout qilmasa, eski sessiya yangi loginni bloklaydi
     Route::post('/login', [StudentAuthController::class, 'login'])->name('login.post');
+
+    // Face ID login (auth kerak emas)
+    Route::prefix('face-id')->name('face-id.')->group(function () {
+        Route::get('/login', [FaceIdController::class, 'showPage'])->name('login');
+        Route::post('/check-student', [FaceIdController::class, 'checkStudent'])->name('check-student');
+        Route::get('/photo/{id}', [FaceIdController::class, 'getPhoto'])->name('photo');
+        Route::post('/verify', [FaceIdController::class, 'verifyAndLogin'])->name('verify');
+        Route::post('/save-descriptor', [FaceIdController::class, 'saveDescriptor'])->name('save-descriptor');
+    });
 
     // Telegram 2FA login tasdiqlash (auth kerak emas)
     Route::get('/verify-login', [StudentAuthController::class, 'showVerifyLogin'])->name('verify-login');

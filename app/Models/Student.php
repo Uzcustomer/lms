@@ -47,6 +47,7 @@ class Student extends Authenticatable
         'telegram_verified_at',
         'login_code',
         'login_code_expires_at',
+        'face_id_enabled',
     ];
 
     protected $casts = [
@@ -62,6 +63,7 @@ class Student extends Authenticatable
         'is_five_candidate' => 'boolean',
         'telegram_verified_at' => 'datetime',
         'login_code_expires_at' => 'datetime',
+        'face_id_enabled'       => 'boolean',
     ];
 
     protected $hidden = [
@@ -308,6 +310,11 @@ class Student extends Authenticatable
     public function grades()
     {
         return $this->hasMany(StudentGrade::class, 'student_hemis_id', 'hemis_id');
+    }
+
+    public function faceDescriptor()
+    {
+        return $this->hasOne(\App\Models\FaceIdDescriptor::class);
     }
 
     public function isProfileComplete(): bool

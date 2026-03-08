@@ -189,6 +189,12 @@
                 <button id="fi-btn-recog-off" style="padding:9px 14px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;cursor:pointer;">⏹ To'xtatish</button>
             </div>
 
+            {{-- Real-time debug panel --}}
+            <div id="fi-debug-dist" style="background:#1e293b;border-radius:8px;padding:8px 12px;margin-top:8px;font-size:11px;font-family:monospace;display:none;">
+                <div style="color:#94a3b8;margin-bottom:4px;">📊 Jonli masofa (top 3, kichik = yaqinroq):</div>
+                <div id="fi-debug-rows" style="color:#f1f5f9;line-height:1.8;"></div>
+            </div>
+
             <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-top:12px;">
                 <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:10px;">
                     🎯 So'nggi tanishlar
@@ -222,8 +228,9 @@
             <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px;">
                 <div style="font-size:11px;font-weight:600;color:#475569;margin-bottom:8px;">Tanish threshold</div>
                 <div style="display:flex;align-items:center;gap:8px;">
-                    <input type="range" id="fi-recog-thr" min="0.25" max="0.70" step="0.01" value="{{ $settings['threshold'] }}" style="flex:1;accent-color:#6366f1;">
-                    <span id="fi-recog-thr-val" style="font-size:12px;font-weight:700;color:#6366f1;min-width:36px;">{{ $settings['threshold'] }}</span>
+                    <input type="range" id="fi-recog-thr" min="0.25" max="0.75" step="0.01" value="0.55" style="flex:1;accent-color:#6366f1;">
+                    <span id="fi-recog-thr-val" style="font-size:12px;font-weight:700;color:#6366f1;min-width:36px;">0.55</span>
+                    <span style="font-size:10px;color:#94a3b8;">(HEMIS uchun 0.50–0.60)</span>
                 </div>
             </div>
 
@@ -307,7 +314,8 @@ G('fi-cfg-thr').addEventListener('input', function(){
     G('fi-thr-pct').textContent = '≈ ' + Math.round((1 - parseFloat(this.value)/0.6)*100) + '% yaqinlik';
 });
 G('fi-recog-thr').addEventListener('input', function(){
-    G('fi-recog-thr-val').textContent = parseFloat(this.value).toFixed(2);
+    const v=parseFloat(this.value).toFixed(2);
+    G('fi-recog-thr-val').textContent = v;
 });
 
 // ── Logger ────────────────────────────────────────────────────────────────
@@ -583,12 +591,15 @@ async function loadTeacherPhotosInBatches(teachers, setStatus){
 G('fi-btn-recog-off').addEventListener('click',()=>{
     if(recogLoop){clearInterval(recogLoop);recogLoop=null;}
     if(recogStream){recogStream.getTracks().forEach(t=>t.stop());recogStream=null;}
-    G('fi-live-badge').style.display='none'; G('fi-recog-overlay').style.display='none';
+    G('fi-live-badge').style.display='none';
+    G('fi-recog-overlay').style.display='none';
+    G('fi-debug-dist').style.display='none';
 });
 
 function startRecog(){
     if(recogLoop)clearInterval(recogLoop);
     const ctx=G('fi-overlay2').getContext('2d');
+    G('fi-debug-dist').style.display='block';
     let tick=0;
     recogLoop=setInterval(async()=>{
         if(!recogStream||!G('fi-video2').videoWidth)return;
@@ -596,33 +607,51 @@ function startRecog(){
         ctx.clearRect(0,0,G('fi-overlay2').width,G('fi-overlay2').height);
         let det;
         try{det=await faceapi.detectSingleFace(G('fi-video2'),OPTS(224)).withFaceLandmarks().withFaceDescriptor();}catch(e){return;}
-        if(!det){G('fi-recog-overlay').style.display='none';return;}
+        if(!det){G('fi-recog-overlay').style.display='none';G('fi-debug-rows').textContent='Yuz aniqlanmadi';return;}
         ctx.fillStyle='rgba(99,102,241,0.6)';
         det.landmarks.positions.forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,1.5,0,2*Math.PI);ctx.fill();});
-        if(pool.length===0){G('fi-recog-overlay').style.display='block';G('fi-recog-name').textContent='Pool bo\'sh — odamlarni yuklang';G('fi-recog-sub').textContent='';return;}
+        if(pool.length===0){
+            G('fi-recog-overlay').style.display='block';
+            G('fi-recog-name').textContent='Pool bo\'sh — yuklanmoqda...';
+            G('fi-recog-sub').textContent='';
+            G('fi-debug-rows').textContent='Pool bo\'sh';
+            return;
+        }
         const thr=parseFloat(G('fi-recog-thr').value);
-        let best=null, bestD=Infinity;
-        pool.forEach(p=>{const d=eucl(det.descriptor,p.descriptor);if(d<bestD){bestD=d;best=p;}});
-        const conf=Math.max(0,Math.min(100,(1-bestD/0.6)*100));
+
+        // Barcha masofalarni hisoblash va sort qilish (debugging uchun)
+        const dists=pool.map(p=>({p, d:eucl(det.descriptor,p.descriptor)}));
+        dists.sort((a,b)=>a.d-b.d);
+        const best3=dists.slice(0,3);
+
+        // Debug panel yangilash
+        G('fi-debug-rows').innerHTML=best3.map((r,i)=>{
+            const color=i===0?(r.d<=thr?'#4ade80':'#fbbf24'):'#94a3b8';
+            const mark=r.d<=thr?'✅':'❌';
+            return '<span style="color:'+color+'">'+mark+' '+(i+1)+'. '+r.p.name.substring(0,20)+'  d='+r.d.toFixed(4)+'  thr='+thr+'</span>';
+        }).join('<br>');
+
+        const bestD=best3[0].d, best=best3[0].p;
+        const conf=Math.max(0,Math.min(100,(1-bestD/thr)*100));
         G('fi-recog-overlay').style.display='block';
         const box=det.detection.box;
         if(bestD<=thr){
             G('fi-recog-name').textContent=best.name; G('fi-recog-name').style.color='#fff';
-            G('fi-recog-sub').textContent=(best.type==='teacher'?'👷 Xodim':'🎓 Talaba')+' · '+conf.toFixed(1)+'% · d='+bestD.toFixed(3);
-            ctx.strokeStyle='#4ade80';ctx.lineWidth=2;ctx.strokeRect(box.x,box.y,box.width,box.height);
+            G('fi-recog-sub').textContent=(best.type==='teacher'?'👷 Xodim':'🎓 Talaba')+' · '+conf.toFixed(0)+'% · d='+bestD.toFixed(3);
+            ctx.strokeStyle='#4ade80';ctx.lineWidth=3;ctx.strokeRect(box.x,box.y,box.width,box.height);
             ctx.fillStyle='rgba(74,222,128,0.1)';ctx.fillRect(box.x,box.y,box.width,box.height);
             const last=recogHistory[recogHistory.length-1];
             if(!last||last.id!==best.id||Date.now()-last.ts>3000){
-                recogHistory.push({id:best.id,name:best.name,type:best.type,conf:conf.toFixed(1),ts:Date.now()});
+                recogHistory.push({id:best.id,name:best.name,type:best.type,conf:conf.toFixed(0),ts:Date.now()});
                 if(recogHistory.length>10)recogHistory.shift();
                 renderHistory(); sessionOk++;G('fi-stat-ok').textContent=sessionOk;
             }
         }else{
             G('fi-recog-name').textContent='Noma\'lum shaxs'; G('fi-recog-name').style.color='#fbbf24';
-            G('fi-recog-sub').textContent='Eng yaqin: '+(best?.name||'—')+' · d='+bestD.toFixed(3)+' (> '+thr+')';
+            G('fi-recog-sub').textContent='Eng yaqin: '+best.name.substring(0,20)+' d='+bestD.toFixed(3)+' > '+thr;
             ctx.strokeStyle='#f87171';ctx.lineWidth=2;ctx.strokeRect(box.x,box.y,box.width,box.height);
         }
-    },150);
+    },200);
 }
 
 function renderHistory(){

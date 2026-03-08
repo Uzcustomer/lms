@@ -523,7 +523,8 @@ async function autoLoadFromDB(){
     };
     setStatus('Bazadan yuklanmoqda...', 15);
     try{
-        const r=await fetch(URL_ALL_DESC,{headers:{'X-CSRF-TOKEN':CSRF}});
+        const r=await fetch(URL_ALL_DESC,{headers:{'X-CSRF-TOKEN':CSRF,'Accept':'application/json'}});
+        if(!r.ok){const txt=await r.text();throw new Error('Server '+r.status+': '+(txt.startsWith('<')?'HTML error (migration kerak?)':txt.substring(0,100)));}
         const d=await r.json();
         setStatus('Descriptorlar olinmoqda: '+d.count+' ta...', 40);
 
@@ -554,7 +555,7 @@ async function autoLoadFromDB(){
 async function fetchTeachersWithoutDescriptors(){
     // Descriptori yo'q xodimlar ro'yxatini olish
     try{
-        const r=await fetch('{{ route("admin.face-id.teachers-without-descriptor") }}',{headers:{'X-CSRF-TOKEN':CSRF}});
+        const r=await fetch('{{ route("admin.face-id.teachers-without-descriptor") }}',{headers:{'X-CSRF-TOKEN':CSRF,'Accept':'application/json'}});
         if(!r.ok) return [];
         const d=await r.json();
         return d.teachers || [];

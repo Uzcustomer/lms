@@ -235,17 +235,29 @@ class FaceIdAdminController extends Controller
             $errors[] = 'view check — ' . $e->getMessage();
         }
 
-        // Agar xato bo'lsa — debug sahifasini ko'rsat
-        if (!empty($errors)) {
-            return response('<pre style="background:#1e293b;color:#f8fafc;padding:24px;font-size:13px;line-height:1.8;">'
-                . '<b style="color:#f87171;font-size:16px;">⚠️ Face ID Test — Xato tafsiloti</b>' . "\n\n"
-                . implode("\n", array_map(fn($e) => '❌ ' . htmlspecialchars($e), $errors)) . "\n\n"
-                . '<b style="color:#38bdf8;">Debug info:</b>' . "\n"
-                . htmlspecialchars(json_encode($debug, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
+        // Debug chiqish funksiyasi
+        $showDebug = function(array $errs, array $dbg) {
+            return response('<pre style="background:#1e293b;color:#f8fafc;padding:24px;font-size:13px;line-height:1.8;margin:0;">'
+                . '<b style="color:#f87171;font-size:16px;">⚠️ Face ID Test — Xato</b>' . "\n\n"
+                . (empty($errs) ? '<span style="color:#4ade80;">✅ Controller OK</span>' : implode("\n", array_map(fn($e) => '❌ ' . htmlspecialchars($e), $errs)))
+                . "\n\n<b style=\"color:#38bdf8;\">Debug:</b>\n"
+                . htmlspecialchars(json_encode($dbg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                 . '</pre>', 200);
+        };
+
+        // Controller xatosi bo'lsa — ko'rsat
+        if (!empty($errors)) {
+            return $showDebug($errors, $debug);
         }
 
-        return view('admin.face-id.test', compact('settings', 'enrolledCount', 'totalStudents', 'totalTeachers'));
+        // View render xatosini ham ushla
+        try {
+            return view('admin.face-id.test', compact('settings', 'enrolledCount', 'totalStudents', 'totalTeachers'));
+        } catch (\Throwable $e) {
+            $errors[] = 'view render — ' . $e->getMessage();
+            $debug['view_error_trace'] = substr($e->getTraceAsString(), 0, 1000);
+            return $showDebug($errors, $debug);
+        }
     }
 
     /**

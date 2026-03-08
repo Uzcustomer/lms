@@ -363,7 +363,7 @@ class FaceIdAdminController extends Controller
                 Log::warning('allDescriptors teachers error: ' . $e->getMessage());
             }
 
-            $data = $students->values()->merge($teachers->values())->values();
+            $data = collect($students->values()->all())->merge($teachers->values()->all())->values();
 
             return response()->json([
                 'people'        => $data,

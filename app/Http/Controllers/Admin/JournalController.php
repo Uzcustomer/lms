@@ -4964,13 +4964,35 @@ class JournalController extends Controller
             ->get();
 
         if ($quizResults->isEmpty()) {
-            // Natijalar yo'q — ammo allaqachon yuklanganlarni tekshirish
-            $existingCount = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->whereIn('training_type_code', [101, 102])
-                ->where('reason', 'quiz_result')
-                ->count();
+            // Natijalar yo'q — ammo allaqachon yuklanganlarni tekshirish.
+            // quiz_result_id orqali tekshiramiz (semester_code mosligiga bog'liq emas)
+            $relevantResultIds = HemisQuizResult::where('is_active', 1)
+                ->where('fan_id', $subjectId)
+                ->where(function ($q) use ($studentHemisIds, $studentIdNumbers) {
+                    $q->whereIn('student_id', $studentHemisIds);
+                    if (!empty($studentIdNumbers)) {
+                        $q->orWhereIn('student_id', $studentIdNumbers);
+                    }
+                })
+                ->whereIn('quiz_type', array_merge($oskiTypes, $testTypes))
+                ->pluck('id')
+                ->toArray();
+
+            $existingCount = 0;
+            if (!empty($relevantResultIds)) {
+                $existingCount = StudentGrade::whereIn('quiz_result_id', $relevantResultIds)
+                    ->where('reason', 'quiz_result')
+                    ->count();
+            }
+
+            // Fallback: semester_code bo'yicha ham tekshirish (quiz_result_id bo'lmagan eski yozuvlar uchun)
+            if ($existingCount === 0) {
+                $existingCount = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->whereIn('training_type_code', [101, 102])
+                    ->where('reason', 'quiz_result')
+                    ->count();
+            }
 
             if ($existingCount > 0) {
                 $ynSubmission->update(['results_fetched' => true]);

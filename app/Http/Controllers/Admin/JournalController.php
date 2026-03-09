@@ -4963,53 +4963,6 @@ class JournalController extends Controller
             })
             ->get();
 
-        if ($quizResults->isEmpty()) {
-            // Natijalar yo'q — ammo allaqachon yuklanganlarni tekshirish.
-            // quiz_result_id orqali tekshiramiz (semester_code mosligiga bog'liq emas)
-            $relevantResultIds = HemisQuizResult::where('is_active', 1)
-                ->where('fan_id', $subjectId)
-                ->where(function ($q) use ($studentHemisIds, $studentIdNumbers) {
-                    $q->whereIn('student_id', $studentHemisIds);
-                    if (!empty($studentIdNumbers)) {
-                        $q->orWhereIn('student_id', $studentIdNumbers);
-                    }
-                })
-                ->whereIn('quiz_type', array_merge($oskiTypes, $testTypes))
-                ->pluck('id')
-                ->toArray();
-
-            $existingCount = 0;
-            if (!empty($relevantResultIds)) {
-                $existingCount = StudentGrade::whereIn('quiz_result_id', $relevantResultIds)
-                    ->where('reason', 'quiz_result')
-                    ->count();
-            }
-
-            // Fallback: semester_code bo'yicha ham tekshirish (quiz_result_id bo'lmagan eski yozuvlar uchun)
-            if ($existingCount === 0) {
-                $existingCount = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                    ->where('subject_id', $subjectId)
-                    ->whereIn('training_type_code', [101, 102])
-                    ->where('reason', 'quiz_result')
-                    ->count();
-            }
-
-            if ($existingCount > 0) {
-                $ynSubmission->update(['results_fetched' => true]);
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Natijalar avval yuklangan. Jami: ' . $existingCount . ' ta.',
-                    'fetched_count' => 0,
-                    'existing_count' => $existingCount,
-                ]);
-            }
-
-            return response()->json([
-                'success' => false,
-                'message' => 'OSKI va Test natijalari topilmadi. Natijalar hali tizimga yuklanmagan bo\'lishi mumkin.',
-            ], 404);
-        }
-
         // Student lookup
         $studentLookup = [];
         foreach ($students as $student) {
@@ -5023,6 +4976,52 @@ class JournalController extends Controller
         $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
             ->where('code', $semesterCode)
             ->first();
+
+        if ($quizResults->isEmpty()) {
+            // Natijalar yo'q — diagnostika orqali yuklangan bo'lishi mumkin.
+            // Ularning semester_code ni jornal semesteriga moslashtirish.
+            $relevantResultIds = HemisQuizResult::where('is_active', 1)
+                ->where('fan_id', $subjectId)
+                ->where(function ($q) use ($studentHemisIds, $studentIdNumbers) {
+                    $q->whereIn('student_id', $studentHemisIds);
+                    if (!empty($studentIdNumbers)) {
+                        $q->orWhereIn('student_id', $studentIdNumbers);
+                    }
+                })
+                ->whereIn('quiz_type', array_merge($oskiTypes, $testTypes))
+                ->pluck('id')
+                ->toArray();
+
+            if (!empty($relevantResultIds)) {
+                // semester_code noto'g'ri bo'lgan yozuvlarni jornal semesteriga tuzatish
+                StudentGrade::whereIn('quiz_result_id', $relevantResultIds)
+                    ->where('reason', 'quiz_result')
+                    ->where('semester_code', '!=', $semesterCode)
+                    ->update([
+                        'semester_code' => $semesterCode,
+                        'semester_name' => $semester?->name ?? '',
+                    ]);
+
+                $existingCount = StudentGrade::whereIn('quiz_result_id', $relevantResultIds)
+                    ->where('reason', 'quiz_result')
+                    ->count();
+
+                if ($existingCount > 0) {
+                    $ynSubmission->update(['results_fetched' => true]);
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Natijalar avval yuklangan. Jami: ' . $existingCount . ' ta.',
+                        'fetched_count' => 0,
+                        'existing_count' => $existingCount,
+                    ]);
+                }
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'OSKI va Test natijalari topilmadi. Natijalar hali tizimga yuklanmagan bo\'lishi mumkin.',
+            ], 404);
+        }
 
         $subject = CurriculumSubject::where('subject_id', $subjectId)
             ->where('curricula_hemis_id', $group->curriculum_hemis_id)

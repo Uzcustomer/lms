@@ -360,14 +360,14 @@
                                     Tasdiqlash
                                 </button>
                             </form>
-                            <button @click="showReject = !showReject"
+                            <button @click="if (showReject) { $refs.rejectForm.requestSubmit() } else { showReject = true }"
                                     class="inline-flex items-center px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                 Rad etish
                             </button>
                         </div>
                         <div x-show="showReject" x-transition class="w-full max-w-md">
-                            <form method="POST" action="{{ route('admin.absence-excuses.reject', $excuse->id) }}"
+                            <form method="POST" action="{{ route('admin.absence-excuses.reject', $excuse->id) }}" x-ref="rejectForm"
                                   class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
                                 @csrf
                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Rad etish sababi</label>

@@ -2648,40 +2648,12 @@ class ReportController extends Controller
             ->orderBy('student_status_name')
             ->get();
 
-        $kafedraQuery = DB::table('curriculum_subjects as cs')
-            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-            ->join('semesters as s', function ($join) {
-                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                    ->on('s.code', '=', 'cs.semester_code');
-            })
-            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
-            ->where('g.department_active', true)
-            ->where('g.active', true)
-            ->whereNotNull('cs.department_id')
-            ->whereNotNull('cs.department_name');
-
-        if ($selectedEducationType) {
-            $kafedraQuery->where('c.education_type_code', $selectedEducationType);
-        }
-        if ($dekanFacultyId) {
-            $kafedraQuery->where('f.id', $dekanFacultyId);
-        }
-        $kafedraQuery->where('s.current', true);
-
-        $kafedras = $kafedraQuery
-            ->select('cs.department_id', 'cs.department_name')
-            ->groupBy('cs.department_id', 'cs.department_name')
-            ->orderBy('cs.department_name')
-            ->get();
-
         return view('admin.reports.debtors', compact(
             'educationTypes',
             'selectedEducationType',
             'faculties',
             'studentStatuses',
-            'dekanFacultyId',
-            'kafedras'
+            'dekanFacultyId'
         ));
     }
 
@@ -3179,16 +3151,8 @@ class ReportController extends Controller
                     $arKey = $hemisId . '|' . $sub->subject_id . '|' . $sub->semester_code;
                     $ar = $arRecordsLookup[$arKey] ?? null;
 
-                    $totalPoint = $ar->total_point ?? null;
-                    $grade = $ar->grade ?? null;
-                    $retraining = $ar->retraining_status ?? null;
-
-                    $hasPassingGrade = !empty($totalPoint) && floatval($totalPoint) >= 60 && !empty($grade) && !in_array($grade, ['2', '0']);
-                    $isMissingGrade = empty($totalPoint) && empty($grade);
-                    $isFailedGrade = !empty($grade) && in_array($grade, ['2', '0']);
-                    $isRetraining = !empty($retraining);
-
-                    if (!$hasPassingGrade && ($isMissingGrade || $isFailedGrade || $isRetraining)) {
+                    // Agar academic_records da ma'lumot bo'lmasa — qarzdorlik
+                    if (!$ar) {
                         $count++;
                     }
                 }

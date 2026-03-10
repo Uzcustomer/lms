@@ -137,14 +137,29 @@
                     </div>
                     @endif
 
-                    <div class="bg-white shadow rounded-lg p-6">
-                        <h4 class="text-lg font-semibold mb-4">Fanlar bo'yicha baholar</h4>
+                    <div class="bg-white shadow rounded-lg p-6" x-data="{ showCurrentSemester: false }">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-lg font-semibold">Fanlar bo'yicha baholar</h4>
+                            @if(!empty($currentSemesterSubjects))
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <span class="mr-2 text-sm text-gray-600">{{ $currentSemesterName ?? 'Joriy semester' }}</span>
+                                    <div class="relative" @click="showCurrentSemester = !showCurrentSemester">
+                                        <div class="w-10 h-5 rounded-full transition-colors" :class="showCurrentSemester ? 'bg-blue-500' : 'bg-gray-300'"></div>
+                                        <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform" :class="showCurrentSemester ? 'translate-x-5' : ''"></div>
+                                    </div>
+                                </label>
+                            @endif
+                        </div>
                         @if($gradesBySubject->isEmpty())
                             <p class="text-sm text-gray-500">Hozircha baholar yo'q.</p>
                         @else
                             <div class="space-y-4">
                                 @foreach($gradesBySubject as $subjectName => $grades)
-                                    <div class="border border-gray-200 rounded-lg overflow-hidden">
+                                    @php
+                                        $isCurrentSemester = in_array($subjectName, $currentSemesterSubjects ?? []);
+                                    @endphp
+                                    <div class="border border-gray-200 rounded-lg overflow-hidden"
+                                         @if($isCurrentSemester) x-show="showCurrentSemester" x-transition @endif>
                                         <div class="bg-gray-50 px-4 py-3 flex items-center justify-between">
                                             <h5 class="text-sm font-semibold text-gray-800">{{ $subjectName }}</h5>
                                             <span class="text-xs text-gray-500">{{ $grades->count() }} ta baho</span>

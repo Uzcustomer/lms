@@ -41,6 +41,7 @@ class StudentApiController extends Controller
         $educationYearCode = $curriculum?->education_year_code;
 
         $currentSemesterId = $student->semester_id;
+        $currentSemesterName = $student->semester_name;
 
         $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
             ->where(function ($q) {
@@ -49,6 +50,7 @@ class StudentApiController extends Controller
                   ->orWhere('retraining_status', true);
             })
             ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
+            ->when(!$currentSemesterId && $currentSemesterName, fn($q) => $q->where('semester_name', '!=', $currentSemesterName))
             ->orderBy('semester_name')
             ->orderBy('subject_name')
             ->get();
@@ -90,6 +92,8 @@ class StudentApiController extends Controller
                 'debt_by_semester' => $debtBySemester,
                 'total_absences' => $totalAbsent,
                 'recent_grades' => $recentGrades,
+                'current_semester_name' => $student->semester_name,
+                'current_semester_code' => $student->semester_code,
             ],
         ]);
     }

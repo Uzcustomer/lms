@@ -2882,6 +2882,7 @@ class ReportController extends Controller
             $csRecords = DB::table('curriculum_subjects')
                 ->whereIn('subject_id', $validSubjectIds)
                 ->whereIn('semester_code', $validSemesterCodes)
+                ->where('subject_code', 'not like', '%/%')
                 ->select('subject_id', 'subject_name', 'semester_code', 'credit', 'total_acload')
                 ->get();
             foreach ($csRecords as $cs) {
@@ -3173,6 +3174,7 @@ class ReportController extends Controller
             $curriculumSubjects = CurriculumSubject::whereIn('curricula_hemis_id', array_unique(array_values($groupCurriculumMap)))
                 ->whereIn('subject_id', $validSubjectIds)
                 ->whereIn('semester_code', $validSemesterCodes)
+                ->excludeSlashCodes()
                 ->get()
                 ->keyBy(function ($item) {
                     return $item->curricula_hemis_id . '|' . $item->subject_id . '|' . $item->semester_code;
@@ -3731,6 +3733,7 @@ class ReportController extends Controller
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
                 ->where('cs.semester_code', $semesterCode)
                 ->where('cs.is_active', true)
+                ->where('cs.subject_code', 'not like', '%/%')
                 ->select('cs.subject_name', 'cs.credit', 'cs.total_acload', 'ar.total_point', 'ar.grade')
                 ->orderBy('cs.subject_name')
                 ->get();
@@ -3775,6 +3778,7 @@ class ReportController extends Controller
             $records = DB::table('curriculum_subjects')
                 ->where('curricula_hemis_id', $student->curriculum_id)
                 ->where('is_active', true)
+                ->where('subject_code', 'not like', '%/%')
                 ->select('semester_code', 'semester_name', 'subject_name')
                 ->orderBy('semester_code')
                 ->get();

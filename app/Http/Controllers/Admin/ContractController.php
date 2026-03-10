@@ -62,12 +62,32 @@ class ContractController extends Controller
             ->groupBy('edu_contract_type_code', 'edu_contract_type_name')
             ->get();
 
+        $eduForms = ContractList::select('edu_form')
+            ->whereNotNull('edu_form')->where('edu_form', '!=', '')
+            ->groupBy('edu_form')->orderBy('edu_form')->pluck('edu_form');
+
+        $statuses = ContractList::select('status', 'status_id')
+            ->whereNotNull('status')->where('status', '!=', '')
+            ->groupBy('status', 'status_id')->orderBy('status')->get();
+
+        $organizations = ContractList::select('edu_organization')
+            ->whereNotNull('edu_organization')->where('edu_organization', '!=', '')
+            ->groupBy('edu_organization')->orderBy('edu_organization')->pluck('edu_organization');
+
+        $sumTypes = ContractList::select('edu_contract_sum_type_code', 'edu_contract_sum_type_name')
+            ->whereNotNull('edu_contract_sum_type_code')
+            ->groupBy('edu_contract_sum_type_code', 'edu_contract_sum_type_name')->get();
+
         return view('admin.contracts.index', compact(
             'faculties',
             'educationTypes',
             'educationYears',
             'currentEducationYear',
-            'contractTypes'
+            'contractTypes',
+            'eduForms',
+            'statuses',
+            'organizations',
+            'sumTypes'
         ));
     }
 
@@ -105,6 +125,22 @@ class ContractController extends Controller
 
         if ($request->filled('_contract_type')) {
             $query->where('edu_contract_type_code', $request->input('_contract_type'));
+        }
+
+        if ($request->filled('_edu_form')) {
+            $query->where('edu_form', $request->input('_edu_form'));
+        }
+
+        if ($request->filled('_status')) {
+            $query->where('status', $request->input('_status'));
+        }
+
+        if ($request->filled('_organization')) {
+            $query->where('edu_organization', $request->input('_organization'));
+        }
+
+        if ($request->filled('_sum_type')) {
+            $query->where('edu_contract_sum_type_code', $request->input('_sum_type'));
         }
 
         if ($request->filled('search')) {

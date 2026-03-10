@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Exports\StudentGradeBox;
 use App\Exports\StudentGradesExport;
 use App\Exports\StudentGradesExportAdmin;
+use App\Exports\StudentsExport;
 use App\Http\Controllers\Controller;
 use App\Imports\StudentGradeUpdateViaExcel;
 use App\Services\ActivityLogService;
@@ -914,6 +915,17 @@ class StudentController extends Controller
         $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject', 'semester_code']);
         $export = new StudentGradeBox($filters);
         return $export->export();
+    }
+
+    public function exportStudents(Request $request)
+    {
+        ActivityLogService::log('export', 'student', 'Talabalar ro\'yxati eksport qilindi');
+        $filters = $request->only([
+            'student_id_number', 'full_name', 'level_code', 'semester_code',
+            'department', 'specialty', 'group', 'education_type',
+        ]);
+        $filename = 'talabalar_' . now()->format('Y-m-d_H-i') . '.xlsx';
+        return Excel::download(new StudentsExport($filters), $filename);
     }
 
 

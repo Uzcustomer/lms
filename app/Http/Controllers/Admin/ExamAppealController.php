@@ -117,6 +117,11 @@ class ExamAppealController extends Controller
         $appeal = ExamAppeal::findOrFail($id);
         $user = Auth::user() ?? Auth::guard('teacher')->user();
 
+        if (!$user) {
+            return redirect()->route('admin.exam-appeals.show', $id)
+                ->with('error', 'Foydalanuvchi aniqlanmadi. Qayta login qiling.');
+        }
+
         $userName = $user->name ?? $user->full_name ?? 'Admin';
 
         // Izoh inputda yozilgan bo'lsa — comment jadvaliga ham saqlash
@@ -148,18 +153,22 @@ class ExamAppealController extends Controller
             $message .= "\nYangi baho: {$request->new_grade}";
         }
 
-        StudentNotification::create([
-            'student_id' => $appeal->student_id,
-            'type' => 'appeal',
-            'title' => 'Apellyatsiyangiz qabul qilindi!',
-            'message' => $message,
-            'link' => '/student/appeals/' . $appeal->id,
-            'data' => [
-                'appeal_id' => $appeal->id,
-                'status' => 'approved',
-                'subject_name' => $appeal->subject_name,
-            ],
-        ]);
+        try {
+            StudentNotification::create([
+                'student_id' => $appeal->student_id,
+                'type' => 'appeal',
+                'title' => 'Apellyatsiyangiz qabul qilindi!',
+                'message' => $message,
+                'link' => '/student/appeals/' . $appeal->id,
+                'data' => [
+                    'appeal_id' => $appeal->id,
+                    'status' => 'approved',
+                    'subject_name' => $appeal->subject_name,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning('Approve notification yaratishda xatolik: ' . $e->getMessage());
+        }
 
         return redirect()->route('admin.exam-appeals.show', $appeal->id)
             ->with('success', 'Apellyatsiya qabul qilindi.');
@@ -176,6 +185,11 @@ class ExamAppealController extends Controller
 
         $appeal = ExamAppeal::findOrFail($id);
         $user = Auth::user() ?? Auth::guard('teacher')->user();
+
+        if (!$user) {
+            return redirect()->route('admin.exam-appeals.show', $id)
+                ->with('error', 'Foydalanuvchi aniqlanmadi. Qayta login qiling.');
+        }
 
         $userName = $user->name ?? $user->full_name ?? 'Admin';
 
@@ -204,18 +218,22 @@ class ExamAppealController extends Controller
             $message .= "\nIzoh: {$commentText}";
         }
 
-        StudentNotification::create([
-            'student_id' => $appeal->student_id,
-            'type' => 'appeal',
-            'title' => 'Apellyatsiyangiz rad etildi',
-            'message' => $message,
-            'link' => '/student/appeals/' . $appeal->id,
-            'data' => [
-                'appeal_id' => $appeal->id,
-                'status' => 'rejected',
-                'subject_name' => $appeal->subject_name,
-            ],
-        ]);
+        try {
+            StudentNotification::create([
+                'student_id' => $appeal->student_id,
+                'type' => 'appeal',
+                'title' => 'Apellyatsiyangiz rad etildi',
+                'message' => $message,
+                'link' => '/student/appeals/' . $appeal->id,
+                'data' => [
+                    'appeal_id' => $appeal->id,
+                    'status' => 'rejected',
+                    'subject_name' => $appeal->subject_name,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning('Reject notification yaratishda xatolik: ' . $e->getMessage());
+        }
 
         return redirect()->route('admin.exam-appeals.show', $appeal->id)
             ->with('success', 'Apellyatsiya rad etildi.');

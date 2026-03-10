@@ -396,67 +396,8 @@
             html += '<div style="padding:16px 20px 8px;font-weight:700;color:#1a3268;font-size:14px;">Semestrlar</div>';
             html += '<div id="all-records-wrap" style="padding:0 20px 12px;"><div style="padding:20px;text-align:center;color:#94a3b8;"><i>Yuklanmoqda...</i></div></div>';
 
-            // Qarzdorliklar bo'limi
-            if (r.debts && r.debts.length) {
-                html += '<div style="padding:8px 20px 4px;font-weight:700;color:#dc2626;font-size:14px;border-top:2px solid #fee2e2;">Qarzdorliklar (' + r.debt_count + ' ta fan)</div>';
-
-                if (isExpelledPage) {
-                    html += '<table class="detail-table">';
-                    html += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
-                    html += '<tbody>';
-                    var rowNum = 0;
-                    for (var d = 0; d < r.debts.length; d++) {
-                        var debt = r.debts[d];
-                        rowNum++;
-                        html += '<tr>';
-                        html += '<td>' + rowNum + '</td>';
-                        html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
-                        html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
-                        html += '<td>' + esc(debt.credit) + '</td>';
-                        html += '<td>' + esc(debt.total_acload) + '</td>';
-                        var statusText = '';
-                        if (debt.retraining_status) {
-                            statusText = '<span class="reason-badge" style="background:#fef3c7;color:#92400e;border-color:#fde68a;">Qayta o\'qish</span>';
-                        } else if (debt.grade === '2' || debt.grade === '0') {
-                            statusText = '<span class="reason-badge">Baho: ' + esc(debt.grade) + '</span>';
-                        } else {
-                            statusText = '<span class="reason-badge">Qarzdor</span>';
-                        }
-                        html += '<td>' + statusText + '</td>';
-                        html += '</tr>';
-                    }
-                    html += '</tbody></table>';
-                } else {
-                    html += '<table class="detail-table">';
-                    html += '<thead><tr><th>#</th><th>Semestr</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
-                    html += '<tbody>';
-                    for (var d = 0; d < r.debts.length; d++) {
-                        var debt = r.debts[d];
-                        html += '<tr>';
-                        html += '<td>' + (d + 1) + '</td>';
-                        html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name || '') + '</span></td>';
-                        html += '<td style="font-weight:600;color:#0f172a;min-width:160px;">' + esc(debt.subject_name) + '</td>';
-                        var minL = debt.minimum_limit || 60;
-                        html += '<td class="' + (debt.jb < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.jb + '</td>';
-                        html += '<td class="' + (debt.mt < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.mt + '</td>';
-                        html += '<td class="' + (debt.on !== null && debt.on < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.on !== null ? debt.on : '-') + '</td>';
-                        html += '<td class="' + (debt.jn_percent < minL ? 'cell-fail' : 'cell-pass') + '" style="font-weight:700;">' + debt.jn_percent + '</td>';
-                        html += '<td class="' + (debt.oski !== null && debt.oski < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.oski !== null ? debt.oski : '-') + '</td>';
-                        html += '<td class="' + (debt.test !== null && debt.test < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.test !== null ? debt.test : '-') + '</td>';
-                        html += '<td class="' + (debt.absence_percent > 25 ? 'cell-fail' : 'cell-pass') + '">' + debt.absence_percent + '%</td>';
-                        html += '<td>';
-                        var reasons = debt.reasons || [];
-                        for (var ri = 0; ri < reasons.length; ri++) {
-                            html += '<span class="reason-badge">' + esc(reasons[ri]) + '</span>';
-                        }
-                        html += '</td>';
-                        var jUrl = journalBase + '/' + encodeURIComponent(debt.group_id) + '/' + encodeURIComponent(debt.subject_id) + '/' + encodeURIComponent(debt.semester_code);
-                        html += '<td style="text-align:center;"><a href="' + jUrl + '" target="_blank" class="journal-link-modal">Jurnal</a></td>';
-                        html += '</tr>';
-                    }
-                    html += '</tbody></table>';
-                }
-            }
+            // Qarzdorliklar bo'limi — semestr baholaridan yuklanadi (grade_debts)
+            html += '<div id="grade-debts-wrap" style="display:none;"></div>';
 
             $('#modal-body').html(html);
             $('#detail-modal').fadeIn(150);
@@ -486,6 +427,46 @@
                     }
                     gh += '</div>';
                     $('#all-records-wrap').html(gh);
+
+                    // Semestr baholaridan Qarzdorliklar ro'yxatini qurish
+                    var gradeDebts = resp.grade_debts || [];
+                    if (gradeDebts.length > 0) {
+                        var dh = '<div style="padding:8px 20px 4px;font-weight:700;color:#dc2626;font-size:14px;border-top:2px solid #fee2e2;">Qarzdorliklar (' + gradeDebts.length + ' ta fan)</div>';
+                        dh += '<table class="detail-table">';
+                        dh += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
+                        dh += '<tbody>';
+                        for (var d = 0; d < gradeDebts.length; d++) {
+                            var debt = gradeDebts[d];
+                            dh += '<tr>';
+                            dh += '<td>' + (d + 1) + '</td>';
+                            dh += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
+                            dh += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
+                            dh += '<td>' + esc(debt.credit) + '</td>';
+                            dh += '<td>' + esc(debt.total_acload) + '</td>';
+                            var statusText = '';
+                            if (debt.status === 'Qayta o\'qish') {
+                                statusText = '<span class="reason-badge" style="background:#fef3c7;color:#92400e;border-color:#fde68a;">Qayta o\'qish</span>';
+                            } else if (debt.status && debt.status.indexOf('Baho:') === 0) {
+                                statusText = '<span class="reason-badge">' + esc(debt.status) + '</span>';
+                            } else {
+                                statusText = '<span class="reason-badge">Qarzdor</span>';
+                            }
+                            dh += '<td>' + statusText + '</td>';
+                            dh += '</tr>';
+                        }
+                        dh += '</tbody></table>';
+
+                        // Modal sarlavhasini yangilash
+                        $('#modal-title').text($('#modal-title').text().replace(/Qarzdorliklar \(\d+ ta fan\)/, 'Qarzdorliklar (' + gradeDebts.length + ' ta fan)'));
+
+                        $('#grade-debts-wrap').html(dh).show();
+                    } else {
+                        $('#grade-debts-wrap').html('<div style="padding:8px 20px 4px;font-weight:700;color:#16a34a;font-size:14px;border-top:2px solid #dcfce7;">Qarzdorlik yo\'q</div>').show();
+                        $('#modal-title').text($('#modal-title').text().replace(/Qarzdorliklar \(\d+ ta fan\)/, 'Qarzdorliklar (0 ta fan)'));
+                    }
+
+                    // currentDebtSubjects ni yangilash (2-chi modal uchun)
+                    currentDebtSubjects = gradeDebts;
                 },
                 error: function() {
                     $('#all-records-wrap').html('<div style="padding:12px;color:#ef4444;">Xatolik yuz berdi</div>');
@@ -548,10 +529,11 @@
                         var grade = gr.grade || '-';
                         var gradeClass = (point !== '-' && parseFloat(point) >= 60) ? 'cell-pass' : 'cell-fail';
                         var subNameLower = (gr.subject_name || '').trim().toLowerCase();
-                        var hasPassingGrade = point !== '-' && parseFloat(point) >= 60 && grade !== '-';
-                        var isDebt = debtNamesForSemester.indexOf(subNameLower) > -1 && !hasPassingGrade;
+                        var hasPassingGrade = point !== '-' && parseFloat(point) >= 60 && grade !== '-' && grade !== '2' && grade !== '0';
                         var isMissingGrade = (point === '-' && grade === '-');
-                        var rowBg = (isDebt || isMissingGrade) ? 'background:#fef2f2;' : 'background:#fff;';
+                        var isFailedGrade = (grade !== '-' && (grade === '2' || grade === '0'));
+                        var isDebt = !hasPassingGrade && (isMissingGrade || isFailedGrade || (point !== '-' && parseFloat(point) < 60));
+                        var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';
                         gh += '<tr style="' + rowBg + '">';
                         gh += '<td>' + (g + 1) + '</td>';
                         gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name) + '</td>';
@@ -560,9 +542,9 @@
                         gh += '<td class="' + gradeClass + '">' + esc(point) + '</td>';
                         gh += '<td><span class="badge badge-indigo">' + esc(grade) + '</span></td>';
                         gh += '<td>';
-                        if (isDebt || isMissingGrade) {
+                        if (isDebt) {
                             gh += '<span class="reason-badge">Qarzdor</span>';
-                        } else if (point !== '-' && parseFloat(point) >= 60) {
+                        } else if (hasPassingGrade) {
                             gh += '<span style="color:#16a34a;font-weight:600;font-size:12px;">&#10003;</span>';
                         }
                         gh += '</td>';

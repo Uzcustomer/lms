@@ -3736,15 +3736,27 @@ class ReportController extends Controller
             $studentId = $request->get('student_id');
 
             if (!$studentId) {
-                return response()->json(['semesters' => []]);
+                return response()->json(['semesters' => [], 'grade_debts' => []]);
             }
 
             $student = DB::table('students')->where('hemis_id', $studentId)->first();
             if (!$student || !$student->curriculum_id) {
-                return response()->json(['semesters' => []]);
+                return response()->json(['semesters' => [], 'grade_debts' => []]);
             }
 
             $groupName = $request->get('group_name', '');
+
+            // Talabaning joriy semester kodini aniqlash
+            $currentSemesterCode = null;
+            if ($student->semester_id) {
+                $currentSemesterCode = $student->semester_id;
+            } else {
+                $currentSem = DB::table('semesters')
+                    ->where('curriculum_hemis_id', $student->curriculum_id)
+                    ->where('current', true)
+                    ->value('semester_hemis_id');
+                $currentSemesterCode = $currentSem;
+            }
 
             $records = DB::table('curriculum_subjects')
                 ->where('curricula_hemis_id', $student->curriculum_id)
@@ -3766,9 +3778,64 @@ class ReportController extends Controller
                 ];
             })->values();
 
-            return response()->json(['semesters' => $semesters]);
+            // Har bir semester ichidagi bahosi/balli yo'q fanlarni aniqlash (joriy semestrdan tashqari)
+            $gradeDebts = [];
+            $allSubjects = DB::table('curriculum_subjects as cs')
+                ->leftJoin('academic_records as ar', function ($join) use ($studentId) {
+                    $join->on('ar.subject_id', '=', 'cs.subject_id')
+                        ->where('ar.student_id', '=', $studentId)
+                        ->on('ar.semester_id', '=', 'cs.semester_code');
+                })
+                ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->where('cs.is_active', true)
+                ->where('cs.subject_code', 'not like', '%/%')
+                ->when($currentSemesterCode, fn($q) => $q->where('cs.semester_code', '!=', $currentSemesterCode))
+                ->select(
+                    'cs.semester_code',
+                    'cs.semester_name',
+                    'cs.subject_name',
+                    'cs.credit',
+                    'cs.total_acload',
+                    'ar.total_point',
+                    'ar.grade',
+                    'ar.retraining_status'
+                )
+                ->orderBy('cs.semester_code')
+                ->orderBy('cs.subject_name')
+                ->get();
+
+            $allSubjects = $this->filterSubjectsByGroupSuffix($allSubjects, $groupName);
+
+            foreach ($allSubjects as $sub) {
+                $hasPassingGrade = !empty($sub->total_point) && floatval($sub->total_point) >= 60 && !empty($sub->grade) && !in_array($sub->grade, ['2', '0']);
+                $isMissingGrade = empty($sub->total_point) && empty($sub->grade);
+                $isFailedGrade = (!empty($sub->grade) && in_array($sub->grade, ['2', '0']));
+                $isRetraining = !empty($sub->retraining_status);
+
+                if (!$hasPassingGrade && ($isMissingGrade || $isFailedGrade || $isRetraining)) {
+                    $status = 'Qarzdor';
+                    if ($isRetraining) {
+                        $status = 'Qayta o\'qish';
+                    } elseif ($isFailedGrade) {
+                        $status = 'Baho: ' . $sub->grade;
+                    }
+
+                    $gradeDebts[] = [
+                        'semester_code' => $sub->semester_code,
+                        'semester_name' => $sub->semester_name,
+                        'subject_name' => $sub->subject_name,
+                        'credit' => $sub->credit,
+                        'total_acload' => $sub->total_acload,
+                        'total_point' => $sub->total_point,
+                        'grade' => $sub->grade,
+                        'status' => $status,
+                    ];
+                }
+            }
+
+            return response()->json(['semesters' => $semesters, 'grade_debts' => $gradeDebts]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage(), 'semesters' => []], 500);
+            return response()->json(['error' => $e->getMessage(), 'semesters' => [], 'grade_debts' => []], 500);
         }
     }
 

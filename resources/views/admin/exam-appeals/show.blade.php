@@ -331,8 +331,8 @@
                 <div class="flex justify-end mb-6" x-data="{ showReject: {{ $errors->has('review_comment') ? 'true' : 'false' }} }">
                     <div class="flex flex-col items-end gap-3">
                         <div class="flex gap-3">
-                            <form method="POST" action="{{ route('admin.exam-appeals.approve', $appeal->id) }}" id="approveForm"
-                                  onsubmit="return handleApproveSubmit()">
+                            <form method="POST" action="{{ route('admin.exam-appeals.approve', $appeal->id) }}"
+                                  onsubmit="var ci=document.getElementById('appeal-comment-input'); if(ci){document.getElementById('approveCommentText').value=ci.value;} return confirm('Apellyatsiyani qabul qilmoqchimisiz?');">
                                 @csrf
                                 <input type="hidden" name="comment_text" id="approveCommentText">
                                 <button type="submit"
@@ -341,23 +341,22 @@
                                     Qabul qilish
                                 </button>
                             </form>
-                            <button @click="showReject = !showReject"
+                            <button @click="if (showReject) { $refs.rejectForm.requestSubmit() } else { showReject = true }"
                                     class="inline-flex items-center px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                 Rad etish
                             </button>
                         </div>
                         <div x-show="showReject" x-transition class="w-full max-w-md">
-                            <form method="POST" action="{{ route('admin.exam-appeals.reject', $appeal->id) }}" id="rejectForm"
-                                  onsubmit="return handleRejectSubmit()"
+                            <form method="POST" action="{{ route('admin.exam-appeals.reject', $appeal->id) }}" x-ref="rejectForm"
+                                  onsubmit="var ci=document.getElementById('appeal-comment-input'); if(ci){this.querySelector('[name=comment_text]').value=ci.value;}"
                                   class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
                                 @csrf
-                                <input type="hidden" name="comment_text" id="rejectCommentText">
+                                <input type="hidden" name="comment_text">
                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Rad etish sababi</label>
-                                <textarea name="review_comment" id="rejectReviewComment" rows="3" maxlength="1000"
+                                <textarea name="review_comment" rows="3" required minlength="5" maxlength="1000"
                                           class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-red-500 focus:ring-red-500 text-sm mb-2"
                                           placeholder="Nima uchun rad etilyapti..."></textarea>
-                                <p id="rejectError" class="mb-2 text-sm text-red-600 hidden"></p>
                                 @error('review_comment')
                                     <p class="mb-2 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
@@ -371,36 +370,6 @@
                         </div>
                     </div>
                 </div>
-                <script>
-                    function handleApproveSubmit() {
-                        var input = document.getElementById('appeal-comment-input');
-                        if (input) {
-                            document.getElementById('approveCommentText').value = input.value;
-                        }
-                        return confirm('Apellyatsiyani qabul qilmoqchimisiz?');
-                    }
-                    function handleRejectSubmit() {
-                        var textarea = document.getElementById('rejectReviewComment');
-                        var errorEl = document.getElementById('rejectError');
-                        var value = textarea.value.trim();
-
-                        errorEl.classList.add('hidden');
-                        errorEl.textContent = '';
-
-                        if (value.length < 5) {
-                            errorEl.textContent = 'Rad etish sababini yozing (kamida 5 ta belgi).';
-                            errorEl.classList.remove('hidden');
-                            textarea.focus();
-                            return false;
-                        }
-
-                        var input = document.getElementById('appeal-comment-input');
-                        if (input) {
-                            document.getElementById('rejectCommentText').value = input.value;
-                        }
-                        return true;
-                    }
-                </script>
             @endif
 
         </div>

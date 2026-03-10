@@ -63,22 +63,77 @@ class StudentController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        // Qarzdor fanlarni academic_records dan olish (joriy semestrdan tashqari)
-        $currentSemesterId = $student->semester_id;
+        // Qarzdor fanlarni curriculum_subjects + academic_records lookup orqali hisoblash
+        // (Admin report bilan bir xil natija berishi uchun)
+        $studentSemesterCode = $student->semester_code ? (string) $student->semester_code : null;
+        $groupName = $student->group_name ?? '';
 
-        $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
-            ->where(function ($q) {
-                $q->whereNull('grade')
-                  ->orWhereIn('grade', ['2', '0'])
-                  ->orWhere('retraining_status', true);
-            })
-            ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
-            ->orderBy('semester_name')
-            ->orderBy('subject_name')
-            ->get();
+        $debtSubjects = collect();
 
-        $debtBySemester = $debtRecords->groupBy('semester_name');
-        $debtSubjectsCount = $debtRecords->count();
+        if ($curriculum) {
+            $currSubjects = DB::table('curriculum_subjects')
+                ->where('curricula_hemis_id', $student->curriculum_id)
+                ->where('is_active', true)
+                ->where('subject_code', 'not like', '%/%')
+                ->select('semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
+                ->orderBy('semester_code')
+                ->orderBy('subject_name')
+                ->get();
+
+            // Guruh suffiksi bo'yicha filtrlash
+            $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
+
+            // Academic records lookup
+            $arRecords = DB::table('academic_records')
+                ->where('student_id', $student->hemis_id)
+                ->select('subject_id', 'semester_id', 'total_point', 'grade', 'retraining_status')
+                ->get();
+
+            $arLookup = [];
+            foreach ($arRecords as $ar) {
+                $arLookup[$ar->subject_id . '|' . $ar->semester_id] = $ar;
+            }
+
+            foreach ($currSubjects as $sub) {
+                // Joriy semesterni chiqarib tashlash
+                if ($studentSemesterCode && (string) $sub->semester_code === $studentSemesterCode) continue;
+
+                $ar = $arLookup[$sub->subject_id . '|' . $sub->semester_code] ?? null;
+
+                $totalPoint = $ar->total_point ?? null;
+                $grade = $ar->grade ?? null;
+                $retraining = $ar->retraining_status ?? null;
+
+                $hasPassingGrade = !empty($totalPoint) && floatval($totalPoint) >= 60 && !empty($grade) && !in_array($grade, ['2', '0']);
+                $isMissingGrade = empty($totalPoint) && empty($grade);
+                $isFailedGrade = !empty($grade) && in_array($grade, ['2', '0']);
+                $isRetraining = !empty($retraining);
+
+                if (!$hasPassingGrade && ($isMissingGrade || $isFailedGrade || $isRetraining)) {
+                    $status = 'Qarzdor';
+                    if ($isRetraining) {
+                        $status = 'Qayta o\'qish';
+                    } elseif ($isFailedGrade) {
+                        $status = 'Baho: ' . $grade;
+                    }
+
+                    $debtSubjects->push((object) [
+                        'semester_code' => $sub->semester_code,
+                        'semester_name' => $sub->semester_name,
+                        'subject_name' => $sub->subject_name,
+                        'credit' => $sub->credit,
+                        'total_acload' => $sub->total_acload,
+                        'total_point' => $totalPoint,
+                        'grade' => $grade,
+                        'retraining_status' => $retraining,
+                        'status' => $status,
+                    ]);
+                }
+            }
+        }
+
+        $debtBySemester = $debtSubjects->groupBy('semester_name');
+        $debtSubjectsCount = $debtSubjects->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
@@ -1407,5 +1462,32 @@ class StudentController extends Controller
             ->get();
 
         return view('student.exam-schedule', compact('examSchedules', 'student'));
+    }
+
+    /**
+     * Guruh suffiksi bo'yicha fanlarni filtrlash
+     */
+    private function filterSubjectsByGroupSuffix($records, $groupName)
+    {
+        if (empty($groupName)) {
+            return $records;
+        }
+
+        $groupSuffix = '';
+        if (preg_match('/(\d+)([a-zA-Z])$/', trim($groupName), $m)) {
+            $groupSuffix = mb_strtolower($m[2]);
+        }
+
+        if (empty($groupSuffix)) {
+            return $records;
+        }
+
+        return $records->filter(function ($record) use ($groupSuffix) {
+            $name = $record->subject_name ?? '';
+            if (preg_match('/\(([a-zA-Zа-яА-Я])\)\s*$/u', $name, $m)) {
+                return mb_strtolower($m[1]) === $groupSuffix;
+            }
+            return true;
+        })->values();
     }
 }

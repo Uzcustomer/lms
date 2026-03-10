@@ -376,7 +376,7 @@
             // Qarzdorlik fanlarini saqlash (2-chi modal uchun)
             currentDebtSubjects = r.debts || [];
 
-            $('#modal-title').text(r.full_name + ' — Qarzdorliklar (' + r.debt_count + ' ta fan)');
+            $('#modal-title').text(r.full_name + ' — Qarzdorliklar');
 
             // Talaba info qismi
             var info = '<div class="info-grid">';
@@ -396,7 +396,7 @@
             html += '<div style="padding:16px 20px 8px;font-weight:700;color:#1a3268;font-size:14px;">Semestrlar</div>';
             html += '<div id="all-records-wrap" style="padding:0 20px 12px;"><div style="padding:20px;text-align:center;color:#94a3b8;"><i>Yuklanmoqda...</i></div></div>';
 
-            // Qarzdorliklar bo'limi — semestr baholaridan yuklanadi (grade_debts)
+            // Qarzdorliklar bo'limi — AJAX orqali yuklanadi
             html += '<div id="grade-debts-wrap" style="display:none;"></div>';
 
             $('#modal-body').html(html);
@@ -456,16 +456,16 @@
                         }
                         dh += '</tbody></table>';
 
-                        // Modal sarlavhasini yangilash
-                        $('#modal-title').text($('#modal-title').text().replace(/Qarzdorliklar \(\d+ ta fan\)/, 'Qarzdorliklar (' + gradeDebts.length + ' ta fan)'));
+                        var currentTitle = $('#modal-title').text().split(' — ')[0];
+                        $('#modal-title').text(currentTitle + ' — Qarzdorliklar (' + gradeDebts.length + ' ta fan)');
 
                         $('#grade-debts-wrap').html(dh).show();
                     } else {
                         $('#grade-debts-wrap').html('<div style="padding:8px 20px 4px;font-weight:700;color:#16a34a;font-size:14px;border-top:2px solid #dcfce7;">Qarzdorlik yo\'q</div>').show();
-                        $('#modal-title').text($('#modal-title').text().replace(/Qarzdorliklar \(\d+ ta fan\)/, 'Qarzdorliklar (0 ta fan)'));
+                        var currentTitle = $('#modal-title').text().split(' — ')[0];
+                        $('#modal-title').text(currentTitle + ' — Qarzdorliklar (0 ta fan)');
                     }
 
-                    // currentDebtSubjects ni yangilash (2-chi modal uchun)
                     currentDebtSubjects = gradeDebts;
                 },
                 error: function() {
@@ -551,28 +551,6 @@
                         gh += '</tr>';
                     }
                     gh += '</tbody></table>';
-
-                    // 1-chi modaldagi lekin academic recordda yo'q fanlar
-                    var missingInAcademic = [];
-                    for (var mi = 0; mi < currentDebtSubjects.length; mi++) {
-                        var dName = (currentDebtSubjects[mi].subject_name || '').trim().toLowerCase();
-                        if (dName && academicSubjectNames.indexOf(dName) === -1) {
-                            missingInAcademic.push(currentDebtSubjects[mi]);
-                        }
-                    }
-                    if (missingInAcademic.length > 0) {
-                        gh += '<div style="padding:12px 12px 4px;font-weight:700;color:#dc2626;font-size:13px;border-top:2px solid #fee2e2;">Academic recordda yo\'q fanlar (' + missingInAcademic.length + ' ta)</div>';
-                        gh += '<table class="detail-table" style="margin:0;">';
-                        gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Holat</th></tr></thead><tbody>';
-                        for (var mm = 0; mm < missingInAcademic.length; mm++) {
-                            gh += '<tr style="background:#fef2f2;">';
-                            gh += '<td>' + (mm + 1) + '</td>';
-                            gh += '<td style="text-align:left;font-weight:500;">' + esc(missingInAcademic[mm].subject_name) + '</td>';
-                            gh += '<td><span class="reason-badge">Academic record yo\'q</span></td>';
-                            gh += '</tr>';
-                        }
-                        gh += '</tbody></table>';
-                    }
 
                     gh += '</div>';
                     $('#semester-modal-body').html(gh);

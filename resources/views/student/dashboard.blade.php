@@ -114,10 +114,15 @@
                                                         <td class="px-4 py-2 text-sm text-gray-600">{{ $record->total_point ?? '-' }}</td>
                                                         <td class="px-4 py-2 text-sm font-medium text-gray-900">{{ $record->grade ?? '-' }}</td>
                                                         <td class="px-4 py-2 text-sm">
-                                                            @if($record->retraining_status)
+                                                            @if(!empty($record->retraining_status))
                                                                 <span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
                                                                     <svg class="mr-1 h-2 w-2 text-red-400" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
                                                                     Qayta o'qish
+                                                                </span>
+                                                            @elseif(!empty($record->grade) && in_array($record->grade, ['2', '0']))
+                                                                <span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">
+                                                                    <svg class="mr-1 h-2 w-2 text-orange-400" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
+                                                                    Baho: {{ $record->grade }}
                                                                 </span>
                                                             @else
                                                                 <span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">

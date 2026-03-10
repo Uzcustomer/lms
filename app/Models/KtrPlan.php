@@ -11,6 +11,7 @@ class KtrPlan extends Model
         'week_count',
         'plan_data',
         'created_by',
+        'created_by_guard',
     ];
 
     protected $casts = [
@@ -20,5 +21,38 @@ class KtrPlan extends Model
     public function curriculumSubject()
     {
         return $this->belongsTo(CurriculumSubject::class);
+    }
+
+    /**
+     * Tuzuvchi (yaratuvchi) xodimni olish
+     */
+    public function getCreatorAttribute()
+    {
+        if (!$this->created_by) {
+            return null;
+        }
+
+        if ($this->created_by_guard === 'teacher') {
+            return Teacher::find($this->created_by);
+        }
+
+        return User::find($this->created_by);
+    }
+
+    /**
+     * Tuzuvchi ismini olish
+     */
+    public function getCreatorNameAttribute(): string
+    {
+        $creator = $this->creator;
+        if (!$creator) {
+            return '';
+        }
+
+        if ($creator instanceof Teacher) {
+            return $creator->full_name ?? $creator->name ?? '';
+        }
+
+        return $creator->name ?? '';
     }
 }

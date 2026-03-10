@@ -67,6 +67,7 @@ class SendAttendanceFinalDailyReport extends Command
             $importService->importBetween(
                 $reportDate->copy()->startOfDay(),
                 $reportDate->copy()->endOfDay(),
+                '',
                 fn(int $page, int $total) => $reporter->updateProgress($page, $total)
             );
             $reporter->completeStep();

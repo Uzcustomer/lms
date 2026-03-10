@@ -227,7 +227,7 @@
 
     <!-- Semester Grades Modal (2-chi modal — semestr baholar, ustiga ochiladi) -->
     <div id="semester-modal" class="modal-overlay" style="display:none;z-index:10001;" onclick="if(event.target===this)closeSemesterModal()">
-        <div class="modal-box" style="max-width:800px;">
+        <div class="modal-box" style="max-width:1100px;">
             <div class="modal-header">
                 <h3 id="semester-modal-title">Semester baholar</h3>
                 <button onclick="closeSemesterModal()" class="modal-close">&times;</button>
@@ -373,6 +373,9 @@
             var r = reportData[idx];
             if (!r) return;
 
+            // Qarzdorlik fanlarini saqlash (2-chi modal uchun)
+            currentDebtSubjects = r.debts || [];
+
             $('#modal-title').text(r.full_name + ' — Qarzdorliklar (' + r.debt_count + ' ta fan)');
 
             // Talaba info qismi
@@ -489,6 +492,9 @@
             $('#semester-modal').fadeOut(150);
         }
 
+        // 1-chi modaldagi qarzdorlik fanlari (showDetail dan saqlanadi)
+        var currentDebtSubjects = [];
+
         function openSemGradesModal(headerRow) {
             var $header = $(headerRow);
             var studentId = $header.data('student');
@@ -498,9 +504,15 @@
             var groupName = $header.data('group') || '';
 
             // 2-chi modalni ochish (1-chi modal yopilmaydi)
-            $('#semester-modal-title').text(studentName + ' — ' + semesterName);
+            $('#semester-modal-title').html(esc(studentName) + ' &mdash; <span style="color:#a5b4fc;">' + esc(groupName) + '</span> &mdash; ' + esc(semesterName));
             $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#c7d2fe;"><i>Yuklanmoqda...</i></div>');
             $('#semester-modal').fadeIn(150);
+
+            // 1-chi modaldagi shu semestrga tegishli qarzdorlik fan nomlari
+            var debtNamesForSemester = [];
+            for (var di = 0; di < currentDebtSubjects.length; di++) {
+                debtNamesForSemester.push(currentDebtSubjects[di].subject_name ? currentDebtSubjects[di].subject_name.trim().toLowerCase() : '');
+            }
 
             $.ajax({
                 url: '{{ route("admin.reports.student-semester-grades") }}',
@@ -511,24 +523,65 @@
                         $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#94a3b8;">Bu semestrda academic record topilmadi</div>');
                         return;
                     }
+
+                    // Birinchi modaldagi fanlarni belgilash uchun
+                    var academicSubjectNames = [];
+                    for (var ag = 0; ag < grades.length; ag++) {
+                        academicSubjectNames.push((grades[ag].subject_name || '').trim().toLowerCase());
+                    }
+
                     var gh = '<div style="padding:4px 0;">';
                     gh += '<table class="detail-table" style="margin:0;">';
-                    gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th></tr></thead><tbody>';
+                    gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th><th>Holat</th></tr></thead><tbody>';
                     for (var g = 0; g < grades.length; g++) {
                         var gr = grades[g];
                         var point = gr.total_point || '-';
                         var grade = gr.grade || '-';
                         var gradeClass = (point !== '-' && parseFloat(point) >= 60) ? 'cell-pass' : 'cell-fail';
-                        gh += '<tr style="background:#fff;">';
+                        var subNameLower = (gr.subject_name || '').trim().toLowerCase();
+                        var isDebt = debtNamesForSemester.indexOf(subNameLower) > -1;
+                        var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';
+                        gh += '<tr style="' + rowBg + '">';
                         gh += '<td>' + (g + 1) + '</td>';
                         gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name) + '</td>';
                         gh += '<td>' + esc(gr.credit) + '</td>';
                         gh += '<td>' + esc(gr.total_acload) + '</td>';
                         gh += '<td class="' + gradeClass + '">' + esc(point) + '</td>';
                         gh += '<td><span class="badge badge-indigo">' + esc(grade) + '</span></td>';
+                        gh += '<td>';
+                        if (isDebt) {
+                            gh += '<span class="reason-badge">Qarzdor</span>';
+                        } else if (point !== '-' && parseFloat(point) >= 60) {
+                            gh += '<span style="color:#16a34a;font-weight:600;font-size:12px;">&#10003;</span>';
+                        }
+                        gh += '</td>';
                         gh += '</tr>';
                     }
-                    gh += '</tbody></table></div>';
+                    gh += '</tbody></table>';
+
+                    // 1-chi modaldagi lekin academic recordda yo'q fanlar
+                    var missingInAcademic = [];
+                    for (var mi = 0; mi < currentDebtSubjects.length; mi++) {
+                        var dName = (currentDebtSubjects[mi].subject_name || '').trim().toLowerCase();
+                        if (dName && academicSubjectNames.indexOf(dName) === -1) {
+                            missingInAcademic.push(currentDebtSubjects[mi]);
+                        }
+                    }
+                    if (missingInAcademic.length > 0) {
+                        gh += '<div style="padding:12px 12px 4px;font-weight:700;color:#dc2626;font-size:13px;border-top:2px solid #fee2e2;">Academic recordda yo\'q fanlar (' + missingInAcademic.length + ' ta)</div>';
+                        gh += '<table class="detail-table" style="margin:0;">';
+                        gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Holat</th></tr></thead><tbody>';
+                        for (var mm = 0; mm < missingInAcademic.length; mm++) {
+                            gh += '<tr style="background:#fef2f2;">';
+                            gh += '<td>' + (mm + 1) + '</td>';
+                            gh += '<td style="text-align:left;font-weight:500;">' + esc(missingInAcademic[mm].subject_name) + '</td>';
+                            gh += '<td><span class="reason-badge">Academic record yo\'q</span></td>';
+                            gh += '</tr>';
+                        }
+                        gh += '</tbody></table>';
+                    }
+
+                    gh += '</div>';
                     $('#semester-modal-body').html(gh);
                 },
                 error: function(xhr) {

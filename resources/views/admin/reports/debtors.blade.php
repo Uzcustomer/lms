@@ -420,12 +420,13 @@
                     html += '</tbody></table>';
                 } else {
                     html += '<table class="detail-table">';
-                    html += '<thead><tr><th>#</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
+                    html += '<thead><tr><th>#</th><th>Semestr</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
                     html += '<tbody>';
                     for (var d = 0; d < r.debts.length; d++) {
                         var debt = r.debts[d];
                         html += '<tr>';
                         html += '<td>' + (d + 1) + '</td>';
+                        html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name || '') + '</span></td>';
                         html += '<td style="font-weight:600;color:#0f172a;min-width:160px;">' + esc(debt.subject_name) + '</td>';
                         var minL = debt.minimum_limit || 60;
                         html += '<td class="' + (debt.jb < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.jb + '</td>';

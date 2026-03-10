@@ -321,7 +321,7 @@
 
             {{-- ═══════ Tasdiqlash / Rad etish ═══════ --}}
             @if(in_array($appeal->status, ['pending', 'reviewing']))
-                <div class="flex justify-end mb-6" x-data="{ showReject: false }">
+                <div class="flex justify-end mb-6" x-data="{ showReject: {{ $errors->has('review_comment') ? 'true' : 'false' }} }">
                     <div class="flex flex-col items-end gap-3">
                         <div class="flex gap-3">
                             <form method="POST" action="{{ route('admin.exam-appeals.approve', $appeal->id) }}" id="approveForm"

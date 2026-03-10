@@ -85,6 +85,10 @@
                                     <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                                     Qidirish
                                 </button>
+                                <button type="button" id="btn-sync" class="btn-sync" onclick="syncContracts()">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    Sinxronizatsiya
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -299,6 +303,38 @@
             $('#pagination-area').html(html);
         }
 
+        function syncContracts() {
+            var btn = $('#btn-sync');
+            btn.prop('disabled', true).css('opacity', '0.6');
+            btn.html('<svg style="width:14px;height:14px;animation:spin 0.8s linear infinite;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Kutilmoqda...');
+
+            $.ajax({
+                url: '{{ route("admin.contracts.sync") }}',
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                timeout: 30000,
+                success: function(res) {
+                    showToast(res.message || 'Sinxronizatsiya boshlandi!', 'success');
+                },
+                error: function(xhr) {
+                    var msg = 'Xatolik yuz berdi';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    showToast(msg, 'error');
+                },
+                complete: function() {
+                    btn.prop('disabled', false).css('opacity', '1');
+                    btn.html('<svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Sinxronizatsiya');
+                }
+            });
+        }
+
+        function showToast(msg, type) {
+            var color = type === 'success' ? '#16a34a' : '#dc2626';
+            var toast = $('<div style="position:fixed;bottom:24px;right:24px;z-index:9999;background:' + color + ';color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.18);max-width:320px;">' + msg + '</div>');
+            $('body').append(toast);
+            setTimeout(function() { toast.fadeOut(400, function() { $(this).remove(); }); }, 4000);
+        }
+
         function downloadExcel() {
             if (allItems.length === 0) return;
             var csv = '\uFEFF#,Talaba,HEMIS ID,Shartnoma raqami,Shartnoma turi,Fakultet,Yo\'nalish,Kurs,Ta\'lim shakli,Kontrakt summasi,To\'langan,Qoldiq,Holat\n';
@@ -379,6 +415,9 @@
         .btn-excel { display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(22,163,74,0.3); height: 36px; white-space: nowrap; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); transform: translateY(-1px); }
         .btn-excel:disabled { cursor: not-allowed; opacity: 0.5; }
+        .btn-sync { display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px; background: linear-gradient(135deg, #0369a1, #0ea5e9); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(3,105,161,0.3); height: 36px; white-space: nowrap; }
+        .btn-sync:hover:not(:disabled) { background: linear-gradient(135deg, #075985, #0369a1); transform: translateY(-1px); }
+        .btn-sync:disabled { cursor: not-allowed; opacity: 0.6; }
 
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }

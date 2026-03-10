@@ -7,14 +7,17 @@ use App\Models\ContractList;
 use App\Models\Curriculum;
 use App\Models\Department;
 use App\Services\HemisService;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ContractController extends Controller
 {
     public function __construct(
-        protected HemisService $hemisService
+        protected HemisService $hemisService,
+        protected TelegramService $telegram
     ) {}
 
     public function index(): View
@@ -116,6 +119,19 @@ class ContractController extends Controller
                     'limit' => $limit,
                 ],
             ],
+        ]);
+    }
+
+    public function sync(Request $request)
+    {
+        $user = auth()->user();
+        $name = $user ? ($user->name ?? $user->login ?? 'Admin') : 'Admin';
+        $this->telegram->notify("👤 {$name} tomonidan Kontraktlar sinxronizatsiyasi boshlandi");
+        Artisan::queue('import:contracts');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Kontraktlar sinxronizatsiyasi boshlandi (fon rejimida).',
         ]);
     }
 }

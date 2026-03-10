@@ -47,6 +47,15 @@
                                 @endforeach
                             </select>
                         </div>
+                        <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Summa turi</label>
+                            <select id="sum_type" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($sumTypes as $st)
+                                    <option value="{{ $st->edu_contract_sum_type_code }}">{{ $st->edu_contract_sum_type_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                     </div>
                     <div class="filter-row">
                         <div class="filter-item" style="max-width:150px;">
@@ -55,6 +64,33 @@
                                 <option value="">Barchasi</option>
                                 @foreach($educationYears as $ey)
                                     <option value="{{ $ey->code }}" {{ ($currentEducationYear ?? '') == $ey->code ? 'selected' : '' }}>{{ $ey->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Ta'lim shakli</label>
+                            <select id="edu_form" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($eduForms as $ef)
+                                    <option value="{{ $ef }}">{{ $ef }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Holat</label>
+                            <select id="status_filter" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($statuses as $st)
+                                    <option value="{{ $st->status }}">{{ $st->status }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#a855f7;"></span> Tashkilot</label>
+                            <select id="organization" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($organizations as $org)
+                                    <option value="{{ $org }}">{{ $org }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -118,12 +154,14 @@
                                     <tr>
                                         <th class="th-num">#</th>
                                         <th>Talaba</th>
+                                        <th>Talaba ID</th>
                                         <th>Shartnoma raqami</th>
                                         <th>Shartnoma turi</th>
                                         <th>Summa turi</th>
                                         <th>Fakultet</th>
                                         <th>Yo'nalish</th>
                                         <th>Kurs</th>
+                                        <th>Guruh</th>
                                         <th>Ta'lim turi</th>
                                         <th>Ta'lim shakli</th>
                                         <th>O'quv yili</th>
@@ -192,6 +230,10 @@
                 _specialty: $('#specialty').val() || '',
                 _level: $('#level_code').val() || '',
                 _contract_type: $('#contract_type').val() || '',
+                _sum_type: $('#sum_type').val() || '',
+                _edu_form: $('#edu_form').val() || '',
+                _status: $('#status_filter').val() || '',
+                _organization: $('#organization').val() || '',
                 search: $('#search_input').val() || ''
             };
         }
@@ -281,10 +323,9 @@
                 html += '<tr>';
                 html += '<td class="td-num">' + (i + 1 + ((currentPage - 1) * limit)) + '</td>';
                 // Talaba
-                html += '<td style="min-width:160px;">';
-                html += '<div style="font-weight:600;color:#0f172a;font-size:12.5px;">' + esc(item.full_name) + '</div>';
-                html += '<div style="font-size:11px;color:#64748b;">ID: ' + esc(String(item.student_hemis_id)) + '</div>';
-                html += '</td>';
+                html += '<td style="min-width:160px;font-weight:600;color:#0f172a;font-size:12.5px;">' + esc(item.full_name) + '</td>';
+                // Talaba ID
+                html += '<td style="min-width:110px;font-size:11px;color:#64748b;white-space:nowrap;">' + esc(String(item.student_hemis_id)) + '</td>';
                 // Shartnoma raqami
                 html += '<td style="min-width:130px;"><span class="text-cell" style="font-weight:600;color:#2b5ea7;">' + esc(item.contract_number) + '</span></td>';
                 // Shartnoma turi
@@ -297,6 +338,8 @@
                 html += '<td style="min-width:200px;font-size:11px;color:#475569;">' + esc(item.edu_speciality_name) + '</td>';
                 // Kurs
                 html += '<td style="text-align:center;min-width:60px;"><span class="badge badge-violet">' + esc(item.edu_course) + '</span></td>';
+                // Guruh
+                html += '<td style="min-width:120px;font-size:12px;font-weight:500;color:#1e293b;">' + esc(item.group_name) + '</td>';
                 // Ta'lim turi
                 html += '<td style="min-width:120px;"><span class="badge badge-blue">' + esc(item.edu_type_name) + '</span></td>';
                 // Ta'lim shakli
@@ -383,51 +426,70 @@
         }
 
         function q(v) { return '"' + String(v || '').replace(/"/g, '""') + '"'; }
-        function downloadExcel() {
-            if (allItems.length === 0) return;
+
+        function buildCsv(items) {
             var headers = [
                 '#','Talaba','HEMIS ID','Shartnoma raqami','Shartnoma turi','Summa turi',
-                'Fakultet','Yo\'nalish','Kurs','Ta\'lim turi','Ta\'lim shakli','O\'quv yili',
+                'Fakultet','Yo\'nalish','Kurs','Guruh','Ta\'lim turi','Ta\'lim shakli','O\'quv yili',
                 'Tashkilot','Kontrakt summasi','Bosh. debet','Bosh. kredit',
                 'Shartnoma debet','To\'langan','Qaytarilgan','Oxirgi debet','Oxirgi kredit',
                 'To\'lanmagan','Holat','Yaratilgan'
             ];
             var csv = '\uFEFF' + headers.join(',') + '\n';
-            for (var i = 0; i < allItems.length; i++) {
-                var item = allItems[i];
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
                 var row = [
-                    i + 1,
-                    q(item.full_name),
-                    item.student_hemis_id || '',
-                    q(item.contract_number),
-                    q(item.edu_contract_type_name),
-                    q(item.edu_contract_sum_type_name),
-                    q(item.faculty_name),
-                    q(item.edu_speciality_name),
-                    q(item.edu_course),
-                    q(item.edu_type_name),
-                    q(item.edu_form),
-                    q(item.education_year),
-                    q(item.edu_organization),
-                    item.edu_contract_sum || 0,
-                    item.begin_rest_debet_amount || 0,
-                    item.begin_rest_credit_amount || 0,
-                    item.contract_debet_amount || 0,
-                    item.paid_credit_amount || 0,
-                    item.vozvrat_debet_amount || 0,
-                    item.end_rest_debet_amount || 0,
-                    item.end_rest_credit_amount || 0,
-                    item.unpaid_credit_amount || 0,
+                    i + 1, q(item.full_name), item.student_hemis_id || '',
+                    q(item.contract_number), q(item.edu_contract_type_name), q(item.edu_contract_sum_type_name),
+                    q(item.faculty_name), q(item.edu_speciality_name), q(item.edu_course), q(item.group_name),
+                    q(item.edu_type_name), q(item.edu_form), q(item.education_year), q(item.edu_organization),
+                    item.edu_contract_sum || 0, item.begin_rest_debet_amount || 0, item.begin_rest_credit_amount || 0,
+                    item.contract_debet_amount || 0, item.paid_credit_amount || 0, item.vozvrat_debet_amount || 0,
+                    item.end_rest_debet_amount || 0, item.end_rest_credit_amount || 0, item.unpaid_credit_amount || 0,
                     q(item.status),
                     item.hemis_created_at ? new Date(item.hemis_created_at * 1000).toLocaleDateString('uz-UZ') : ''
                 ];
                 csv += row.join(',') + '\n';
             }
+            return csv;
+        }
+
+        function saveCsv(csv) {
             var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
             var link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = 'kontraktlar_' + new Date().toISOString().slice(0,10) + '.csv';
             link.click();
+        }
+
+        function downloadExcel() {
+            var btn = $('#btn-excel');
+            btn.prop('disabled', true).text('Yuklanmoqda...');
+
+            var params = getFilters();
+            params.page = 1;
+            params.limit = 999999;
+
+            $.ajax({
+                url: '{{ route("admin.contracts.data") }}',
+                type: 'GET',
+                data: params,
+                timeout: 120000,
+                success: function(res) {
+                    if (res.success && res.data && res.data.items && res.data.items.length > 0) {
+                        saveCsv(buildCsv(res.data.items));
+                        showToast(res.data.items.length + ' ta kontrakt yuklandi!', 'success');
+                    } else {
+                        showToast('Yuklanadigan ma\'lumot yo\'q', 'error');
+                    }
+                },
+                error: function() {
+                    showToast('Xatolik yuz berdi, qayta urinib ko\'ring', 'error');
+                },
+                complete: function() {
+                    btn.prop('disabled', false).html('<svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> Excel');
+                }
+            });
         }
 
         $(document).ready(function() {

@@ -342,14 +342,15 @@
                         </div>
                         <div x-show="showReject" x-transition class="w-full max-w-md">
                             <form method="POST" action="{{ route('admin.exam-appeals.reject', $appeal->id) }}" id="rejectForm"
-                                  onsubmit="copyCommentToForm('rejectCommentText')"
+                                  onsubmit="return handleRejectSubmit()"
                                   class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
                                 @csrf
                                 <input type="hidden" name="comment_text" id="rejectCommentText">
                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Rad etish sababi</label>
-                                <textarea name="review_comment" rows="3" required minlength="5" maxlength="1000"
+                                <textarea name="review_comment" id="rejectReviewComment" rows="3" maxlength="1000"
                                           class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-red-500 focus:ring-red-500 text-sm mb-2"
                                           placeholder="Nima uchun rad etilyapti..."></textarea>
+                                <p id="rejectError" class="mb-2 text-sm text-red-600 hidden"></p>
                                 @error('review_comment')
                                     <p class="mb-2 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
@@ -371,11 +372,26 @@
                         }
                         return confirm('Apellyatsiyani qabul qilmoqchimisiz?');
                     }
-                    function copyCommentToForm(targetId) {
+                    function handleRejectSubmit() {
+                        var textarea = document.getElementById('rejectReviewComment');
+                        var errorEl = document.getElementById('rejectError');
+                        var value = textarea.value.trim();
+
+                        errorEl.classList.add('hidden');
+                        errorEl.textContent = '';
+
+                        if (value.length < 5) {
+                            errorEl.textContent = 'Rad etish sababini yozing (kamida 5 ta belgi).';
+                            errorEl.classList.remove('hidden');
+                            textarea.focus();
+                            return false;
+                        }
+
                         var input = document.getElementById('appeal-comment-input');
                         if (input) {
-                            document.getElementById(targetId).value = input.value;
+                            document.getElementById('rejectCommentText').value = input.value;
                         }
+                        return true;
                     }
                 </script>
             @endif

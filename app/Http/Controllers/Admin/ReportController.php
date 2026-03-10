@@ -2747,7 +2747,7 @@ class ReportController extends Controller
             $studentQuery = DB::table('students as s')
                 ->select('s.hemis_id', 's.full_name', 's.student_id_number', 's.group_id',
                     's.department_name', 's.specialty_name', 's.level_name',
-                    's.semester_name', 's.semester_id', 's.group_name', 's.level_code');
+                    's.semester_name', 's.semester_id', 's.semester_code', 's.group_name', 's.level_code');
 
             if ($request->filled('student_status')) {
                 $studentQuery->where('s.student_status_code', $request->student_status);
@@ -2860,6 +2860,18 @@ class ReportController extends Controller
             }
 
             $debtRecords = $debtRecords->concat($missingRecords);
+
+            // Joriy semestrni chiqarib tashlash (toggle OFF bo'lganda)
+            if (!$isCurrentSemester) {
+                $studentSemesterMap = $students->pluck('semester_code', 'hemis_id')
+                    ->map(fn($v) => (string) $v)
+                    ->toArray();
+
+                $debtRecords = $debtRecords->filter(function ($record) use ($studentSemesterMap) {
+                    $studentSemCode = $studentSemesterMap[$record->student_id] ?? null;
+                    return !$studentSemCode || (string) $record->semester_id !== $studentSemCode;
+                });
+            }
 
             if ($debtRecords->isEmpty()) {
                 return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);

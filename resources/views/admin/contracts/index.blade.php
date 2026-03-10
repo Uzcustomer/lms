@@ -118,15 +118,27 @@
                                     <tr>
                                         <th class="th-num">#</th>
                                         <th>Talaba</th>
-                                        <th>Shartnoma</th>
+                                        <th>Shartnoma raqami</th>
                                         <th>Shartnoma turi</th>
-                                        <th>Fakultet / Yo'nalish</th>
+                                        <th>Summa turi</th>
+                                        <th>Fakultet</th>
+                                        <th>Yo'nalish</th>
                                         <th>Kurs</th>
+                                        <th>Ta'lim turi</th>
                                         <th>Ta'lim shakli</th>
+                                        <th>O'quv yili</th>
+                                        <th>Tashkilot</th>
                                         <th>Kontrakt summasi</th>
+                                        <th>Bosh. debet</th>
+                                        <th>Bosh. kredit</th>
+                                        <th>Shartnoma debet</th>
                                         <th>To'langan</th>
-                                        <th>Qoldiq</th>
+                                        <th>Qaytarilgan</th>
+                                        <th>Oxirgi debet</th>
+                                        <th>Oxirgi kredit</th>
+                                        <th>To'lanmagan</th>
                                         <th>Holat</th>
+                                        <th>Yaratilgan</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -259,36 +271,63 @@
                 var item = items[i];
                 var unpaid = parseFloat(item.unpaid_credit_amount || 0);
 
-                html += '<tr>';
-                html += '<td class="td-num">' + (i + 1 + ((currentPage - 1) * limit)) + '</td>';
-                html += '<td>';
-                html += '<div style="font-weight:600;color:#0f172a;font-size:12.5px;">' + esc(item.full_name) + '</div>';
-                html += '<div style="font-size:11px;color:#64748b;">ID: ' + esc(String(item.student_hemis_id)) + '</div>';
-                html += '</td>';
-                html += '<td><span class="text-cell" style="font-weight:600;color:#2b5ea7;">' + esc(item.contract_number) + '</span></td>';
-                html += '<td><span class="badge badge-cyan">' + esc(item.edu_contract_type_name) + '</span></td>';
-                html += '<td>';
-                html += '<div style="font-size:12px;font-weight:500;">' + esc(item.faculty_name) + '</div>';
-                html += '<div style="font-size:11px;color:#64748b;">' + esc(item.edu_speciality_name) + '</div>';
-                html += '</td>';
-                html += '<td style="text-align:center;"><span class="badge badge-violet">' + esc(item.edu_course) + '</span></td>';
-                html += '<td><span class="badge badge-blue">' + esc(item.edu_form) + '</span></td>';
-                html += '<td style="text-align:right;font-weight:600;white-space:nowrap;">' + formatMoney(item.edu_contract_sum) + '</td>';
-                html += '<td style="text-align:right;color:#16a34a;font-weight:600;white-space:nowrap;">' + formatMoney(item.paid_credit_amount) + '</td>';
-
-                if (unpaid < 0) {
-                    html += '<td style="text-align:right;color:#dc2626;font-weight:600;white-space:nowrap;">' + formatMoney(unpaid) + '</td>';
-                } else {
-                    html += '<td style="text-align:right;color:#16a34a;font-weight:600;white-space:nowrap;">' + formatMoney(unpaid) + '</td>';
-                }
-
                 var statusClass = 'badge-green';
                 if (item.status && (item.status.toLowerCase().includes('отклон') || item.status_id === 17)) {
                     statusClass = 'badge-red';
                 } else if (item.status && item.status.toLowerCase().includes('ожид')) {
                     statusClass = 'badge-yellow';
                 }
-                html += '<td><span class="badge ' + statusClass + '">' + esc(item.status) + '</span></td>';
+
+                html += '<tr>';
+                html += '<td class="td-num">' + (i + 1 + ((currentPage - 1) * limit)) + '</td>';
+                // Talaba
+                html += '<td style="min-width:160px;">';
+                html += '<div style="font-weight:600;color:#0f172a;font-size:12.5px;">' + esc(item.full_name) + '</div>';
+                html += '<div style="font-size:11px;color:#64748b;">ID: ' + esc(String(item.student_hemis_id)) + '</div>';
+                html += '</td>';
+                // Shartnoma raqami
+                html += '<td style="min-width:130px;"><span class="text-cell" style="font-weight:600;color:#2b5ea7;">' + esc(item.contract_number) + '</span></td>';
+                // Shartnoma turi
+                html += '<td style="min-width:140px;"><span class="badge badge-cyan">' + esc(item.edu_contract_type_name) + '</span></td>';
+                // Summa turi
+                html += '<td style="min-width:130px;"><span class="badge badge-indigo">' + esc(item.edu_contract_sum_type_name) + '</span></td>';
+                // Fakultet
+                html += '<td style="min-width:160px;font-size:12px;font-weight:500;">' + esc(item.faculty_name) + '</td>';
+                // Yo'nalish
+                html += '<td style="min-width:200px;font-size:11px;color:#475569;">' + esc(item.edu_speciality_name) + '</td>';
+                // Kurs
+                html += '<td style="text-align:center;min-width:60px;"><span class="badge badge-violet">' + esc(item.edu_course) + '</span></td>';
+                // Ta'lim turi
+                html += '<td style="min-width:120px;"><span class="badge badge-blue">' + esc(item.edu_type_name) + '</span></td>';
+                // Ta'lim shakli
+                html += '<td style="min-width:100px;"><span class="badge badge-blue">' + esc(item.edu_form) + '</span></td>';
+                // O'quv yili
+                html += '<td style="min-width:90px;text-align:center;font-weight:600;font-size:12px;">' + esc(item.education_year) + '</td>';
+                // Tashkilot
+                html += '<td style="min-width:160px;font-size:11px;">' + esc(item.edu_organization) + '</td>';
+                // Kontrakt summasi
+                html += '<td style="text-align:right;font-weight:700;white-space:nowrap;min-width:120px;">' + formatMoney(item.edu_contract_sum) + '</td>';
+                // Boshlang'ich debet
+                html += '<td style="text-align:right;white-space:nowrap;min-width:110px;color:#64748b;">' + formatMoney(item.begin_rest_debet_amount) + '</td>';
+                // Boshlang'ich kredit
+                html += '<td style="text-align:right;white-space:nowrap;min-width:110px;color:#64748b;">' + formatMoney(item.begin_rest_credit_amount) + '</td>';
+                // Shartnoma debet
+                html += '<td style="text-align:right;white-space:nowrap;min-width:110px;color:#0369a1;">' + formatMoney(item.contract_debet_amount) + '</td>';
+                // To'langan
+                html += '<td style="text-align:right;color:#16a34a;font-weight:600;white-space:nowrap;min-width:110px;">' + formatMoney(item.paid_credit_amount) + '</td>';
+                // Qaytarilgan
+                html += '<td style="text-align:right;white-space:nowrap;min-width:110px;color:#7c3aed;">' + formatMoney(item.vozvrat_debet_amount) + '</td>';
+                // Oxirgi debet
+                html += '<td style="text-align:right;white-space:nowrap;min-width:110px;color:#64748b;">' + formatMoney(item.end_rest_debet_amount) + '</td>';
+                // Oxirgi kredit
+                html += '<td style="text-align:right;white-space:nowrap;min-width:110px;color:#64748b;">' + formatMoney(item.end_rest_credit_amount) + '</td>';
+                // To'lanmagan (qoldiq)
+                var unpaidColor = unpaid > 0 ? '#dc2626' : '#16a34a';
+                html += '<td style="text-align:right;font-weight:700;white-space:nowrap;min-width:110px;color:' + unpaidColor + ';">' + formatMoney(unpaid) + '</td>';
+                // Holat
+                html += '<td style="min-width:100px;"><span class="badge ' + statusClass + '">' + esc(item.status) + '</span></td>';
+                // Yaratilgan
+                html += '<td style="min-width:100px;font-size:11px;color:#64748b;white-space:nowrap;">' + formatTimestamp(item.hemis_created_at) + '</td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -343,25 +382,46 @@
             setTimeout(function() { toast.fadeOut(400, function() { $(this).remove(); }); }, 4000);
         }
 
+        function q(v) { return '"' + String(v || '').replace(/"/g, '""') + '"'; }
         function downloadExcel() {
             if (allItems.length === 0) return;
-            var csv = '\uFEFF#,Talaba,HEMIS ID,Shartnoma raqami,Shartnoma turi,Fakultet,Yo\'nalish,Kurs,Ta\'lim shakli,Kontrakt summasi,To\'langan,Qoldiq,Holat\n';
+            var headers = [
+                '#','Talaba','HEMIS ID','Shartnoma raqami','Shartnoma turi','Summa turi',
+                'Fakultet','Yo\'nalish','Kurs','Ta\'lim turi','Ta\'lim shakli','O\'quv yili',
+                'Tashkilot','Kontrakt summasi','Bosh. debet','Bosh. kredit',
+                'Shartnoma debet','To\'langan','Qaytarilgan','Oxirgi debet','Oxirgi kredit',
+                'To\'lanmagan','Holat','Yaratilgan'
+            ];
+            var csv = '\uFEFF' + headers.join(',') + '\n';
             for (var i = 0; i < allItems.length; i++) {
                 var item = allItems[i];
-                csv += (i+1) + ',';
-                csv += '"' + (item.full_name || '').replace(/"/g, '""') + '",';
-                csv += (item.student_hemis_id || '') + ',';
-                csv += '"' + (item.contract_number || '').replace(/"/g, '""') + '",';
-                csv += '"' + (item.edu_contract_type_name || '').replace(/"/g, '""') + '",';
-                csv += '"' + (item.faculty_name || '').replace(/"/g, '""') + '",';
-                csv += '"' + (item.edu_speciality_name || '').replace(/"/g, '""') + '",';
-                csv += '"' + (item.edu_course || '').replace(/"/g, '""') + '",';
-                csv += '"' + (item.edu_form || '').replace(/"/g, '""') + '",';
-                csv += (item.edu_contract_sum || 0) + ',';
-                csv += (item.paid_credit_amount || 0) + ',';
-                csv += (item.unpaid_credit_amount || 0) + ',';
-                csv += '"' + (item.status || '').replace(/"/g, '""') + '"';
-                csv += '\n';
+                var row = [
+                    i + 1,
+                    q(item.full_name),
+                    item.student_hemis_id || '',
+                    q(item.contract_number),
+                    q(item.edu_contract_type_name),
+                    q(item.edu_contract_sum_type_name),
+                    q(item.faculty_name),
+                    q(item.edu_speciality_name),
+                    q(item.edu_course),
+                    q(item.edu_type_name),
+                    q(item.edu_form),
+                    q(item.education_year),
+                    q(item.edu_organization),
+                    item.edu_contract_sum || 0,
+                    item.begin_rest_debet_amount || 0,
+                    item.begin_rest_credit_amount || 0,
+                    item.contract_debet_amount || 0,
+                    item.paid_credit_amount || 0,
+                    item.vozvrat_debet_amount || 0,
+                    item.end_rest_debet_amount || 0,
+                    item.end_rest_credit_amount || 0,
+                    item.unpaid_credit_amount || 0,
+                    q(item.status),
+                    item.hemis_created_at ? new Date(item.hemis_created_at * 1000).toLocaleDateString('uz-UZ') : ''
+                ];
+                csv += row.join(',') + '\n';
             }
             var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
             var link = document.createElement('a');

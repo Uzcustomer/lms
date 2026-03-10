@@ -3382,19 +3382,12 @@ class ReportController extends Controller
                     $allStudentResults[$hemis] = [];
                 }
 
-                // Kredit va soat ma'lumotlarini curriculum_subjects dan olish
-                $currHemisId = $groupCurriculumMap[$data['group_id']] ?? null;
-                $csKey = $currHemisId ? ($currHemisId . '|' . $data['subject_id'] . '|' . $data['semester_code']) : null;
-                $cs = $csKey ? ($curriculumSubjects[$csKey] ?? null) : null;
-
                 $allStudentResults[$hemis][] = [
                     'subject_id' => $data['subject_id'],
                     'subject_name' => $data['subject_name'],
                     'semester_code' => $data['semester_code'],
                     'semester_name' => $semesterNameMap[$data['semester_code']] ?? $data['semester_code'] . '-semestr',
                     'group_id' => $groupDbIdMap[$data['group_id']] ?? $data['group_id'],
-                    'credit' => $cs->credit ?? null,
-                    'total_acload' => $cs->total_acload ?? null,
                     'jb' => round($jbAvg),
                     'mt' => round($mtAvg),
                     'on' => $hasOn ? round($onAvg) : null,
@@ -3441,25 +3434,89 @@ class ReportController extends Controller
             }
             unset($debts);
 
-            // 5-QADAM: minDebtCount bo'yicha filtrlash
-            $studentDebts = array_filter($studentDebts, fn($debts) => count($debts) >= $minDebtCount);
+            // 5-QADAM: Academic records asosida haqiqiy qarzdorlik sonini hisoblash
+            $arHemisIds = array_keys($studentDebts);
+            $arStudentInfo = DB::table('students')
+                ->whereIn('hemis_id', $arHemisIds)
+                ->select('hemis_id', 'full_name', 'student_id_number', 'department_name',
+                    'specialty_name', 'level_name', 'semester_name', 'semester_code',
+                    'group_name', 'group_id', 'curriculum_id')
+                ->get()
+                ->keyBy('hemis_id');
+
+            $arCurrIds = $arStudentInfo->pluck('curriculum_id')->unique()->filter()->values()->toArray();
+
+            $arCurrSubjects = collect();
+            $arRecordsLookup = [];
+
+            if (!empty($arCurrIds)) {
+                $arCurrSubjects = DB::table('curriculum_subjects')
+                    ->whereIn('curricula_hemis_id', $arCurrIds)
+                    ->where('is_active', true)
+                    ->where('subject_code', 'not like', '%/%')
+                    ->select('curricula_hemis_id', 'semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
+                    ->get();
+
+                $arRecords = DB::table('academic_records')
+                    ->whereIn('student_id', $arHemisIds)
+                    ->select('student_id', 'subject_id', 'semester_id', 'total_point', 'grade', 'retraining_status')
+                    ->get();
+
+                foreach ($arRecords as $ar) {
+                    $arRecordsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = $ar;
+                }
+                unset($arRecords);
+            }
+
+            // Har bir talaba uchun academic_records asosida qarzdorlik hisoblash
+            $academicDebtCounts = [];
+            foreach ($arHemisIds as $hemisId) {
+                $st = $arStudentInfo[$hemisId] ?? null;
+                if (!$st || !$st->curriculum_id) {
+                    $academicDebtCounts[$hemisId] = 0;
+                    continue;
+                }
+
+                $studentSemCode = $st->semester_code ? (string) $st->semester_code : null;
+                $subjects = $arCurrSubjects->where('curricula_hemis_id', $st->curriculum_id);
+                $subjects = $this->filterSubjectsByGroupSuffix($subjects, $st->group_name ?? '');
+
+                $count = 0;
+                foreach ($subjects as $sub) {
+                    if ($studentSemCode && (string) $sub->semester_code === $studentSemCode) continue;
+
+                    $arKey = $hemisId . '|' . $sub->subject_id . '|' . $sub->semester_code;
+                    $ar = $arRecordsLookup[$arKey] ?? null;
+
+                    $totalPoint = $ar->total_point ?? null;
+                    $grade = $ar->grade ?? null;
+                    $retraining = $ar->retraining_status ?? null;
+
+                    $hasPassingGrade = !empty($totalPoint) && floatval($totalPoint) >= 60 && !empty($grade) && !in_array($grade, ['2', '0']);
+                    $isMissingGrade = empty($totalPoint) && empty($grade);
+                    $isFailedGrade = !empty($grade) && in_array($grade, ['2', '0']);
+                    $isRetraining = !empty($retraining);
+
+                    if (!$hasPassingGrade && ($isMissingGrade || $isFailedGrade || $isRetraining)) {
+                        $count++;
+                    }
+                }
+                $academicDebtCounts[$hemisId] = $count;
+            }
+
+            // minDebtCount bo'yicha filtrlash (academic_records asosida)
+            $studentDebts = array_filter($studentDebts, function ($debts, $hemisId) use ($academicDebtCounts, $minDebtCount) {
+                return ($academicDebtCounts[$hemisId] ?? 0) >= $minDebtCount;
+            }, ARRAY_FILTER_USE_BOTH);
 
             if (empty($studentDebts)) {
                 return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
             }
 
             // Talaba ma'lumotlarini biriktirish
-            $hemisIds = array_keys($studentDebts);
-            $studentInfo = DB::table('students')
-                ->whereIn('hemis_id', $hemisIds)
-                ->select('hemis_id', 'full_name', 'student_id_number', 'department_name',
-                    'specialty_name', 'level_name', 'semester_name', 'group_name', 'group_id')
-                ->get()
-                ->keyBy('hemis_id');
-
             $finalResults = [];
             foreach ($studentDebts as $hemisId => $debts) {
-                $st = $studentInfo[$hemisId] ?? null;
+                $st = $arStudentInfo[$hemisId] ?? null;
                 if (!$st) continue;
 
                 $finalResults[] = [
@@ -3472,7 +3529,7 @@ class ReportController extends Controller
                     'semester_name' => $st->semester_name ?? '-',
                     'group_name' => $st->group_name ?? '-',
                     'group_id' => $st->group_id ?? '',
-                    'debt_count' => count($debts),
+                    'debt_count' => $academicDebtCounts[$hemisId] ?? 0,
                     'lesson_days' => $lessonDayCounts[$st->group_id] ?? 0,
                     'debts' => $debts,
                 ];

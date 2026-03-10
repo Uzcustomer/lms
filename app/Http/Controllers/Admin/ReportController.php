@@ -3745,17 +3745,16 @@ class ReportController extends Controller
             }
 
             $groupName = $request->get('group_name', '');
+            $isCurrentSemester = $request->get('current_semester', '0') == '1';
 
-            // Talabaning joriy semester kodini aniqlash
-            $currentSemesterCode = null;
-            if ($student->semester_id) {
-                $currentSemesterCode = $student->semester_id;
-            } else {
-                $currentSem = DB::table('semesters')
-                    ->where('curriculum_hemis_id', $student->curriculum_id)
+            // Joriy semestr ID larini olish (toggle OFF bo'lsa chiqarib tashlash uchun)
+            $currentSemesterIds = [];
+            if (!$isCurrentSemester) {
+                $currentSemesterIds = DB::table('semesters')
                     ->where('current', true)
-                    ->value('semester_hemis_id');
-                $currentSemesterCode = $currentSem;
+                    ->pluck('code')
+                    ->map(fn($v) => (string) $v)
+                    ->toArray();
             }
 
             $records = DB::table('curriculum_subjects')
@@ -3789,7 +3788,9 @@ class ReportController extends Controller
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
                 ->where('cs.is_active', true)
                 ->where('cs.subject_code', 'not like', '%/%')
-                ->when($currentSemesterCode, fn($q) => $q->where('cs.semester_code', '!=', $currentSemesterCode))
+                ->when(!$isCurrentSemester && !empty($currentSemesterIds), function ($q) use ($currentSemesterIds) {
+                    $q->whereNotIn('cs.semester_code', $currentSemesterIds);
+                })
                 ->select(
                     'cs.semester_code',
                     'cs.semester_name',

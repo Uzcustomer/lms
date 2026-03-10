@@ -18,6 +18,9 @@ class ImportContracts extends Command
         $telegram->notify("Kontraktlar importi boshlandi");
         $this->info('Fetching contracts from HEMIS API...');
 
+        // 1-QADAM: HEMIS ning bank bilan sinxronizatsiyasini ishga tushirish
+        $this->triggerHemisBankSync($telegram);
+
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 200;
@@ -118,5 +121,34 @@ class ImportContracts extends Command
         $msg = "Kontraktlar importi tugadi. Jami: {$totalProcessed} ta";
         $telegram->notify($msg);
         $this->info($msg);
+    }
+
+    protected function triggerHemisBankSync(TelegramService $telegram): void
+    {
+        $webUrl = rtrim(config('services.hemis.web_url', 'https://hemis.ttatf.uz'), '/');
+        $cookie = config('services.hemis.web_cookie');
+
+        if (!$cookie) {
+            $this->warn('HEMIS_WEB_COOKIE sozlanmagan — bank sinxi o\'tkazib yuborildi');
+            return;
+        }
+
+        $this->info('HEMIS bank sinxronizatsiyasi boshlandi...');
+
+        try {
+            $response = Http::withoutVerifying()
+                ->timeout(30)
+                ->withHeaders(['Cookie' => $cookie])
+                ->get("{$webUrl}/student-data/contract", ['sync' => 1]);
+
+            if ($response->successful()) {
+                $this->info('HEMIS bank sinxi muvaffaqiyatli. 5 soniya kutilmoqda...');
+                sleep(5);
+            } else {
+                $this->warn('HEMIS bank sinxi HTTP ' . $response->status() . ' qaytardi — import davom ettiriladi');
+            }
+        } catch (\Exception $e) {
+            $this->warn('HEMIS bank sinxi xatosi: ' . $e->getMessage() . ' — import davom ettiriladi');
+        }
     }
 }

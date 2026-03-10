@@ -151,9 +151,9 @@ class KtrController extends Controller
             $query->where('cs.is_active', false);
         }
 
-        // Joriy semestr (adminlar uchun default ON, fan masuli uchun default OFF)
+        // Joriy semestr (barcha rollar uchun default ON)
         // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
-        $currentSemesterDefault = $isFanMasuli ? '0' : '1';
+        $currentSemesterDefault = '1';
         if ($request->get('current_semester', $currentSemesterDefault) == '1') {
             $query->whereIn('s.semester_hemis_id', function ($sub) {
                 $sub->select('semester_hemis_id')
@@ -696,21 +696,34 @@ class KtrController extends Controller
         $token = config('services.hemis.token');
 
         try {
-            $response = Http::withoutVerifying()
-                ->withToken($token)
-                ->timeout(15)
-                ->get($baseUrl . '/data/curriculum-subject-topic-list', [
-                    '_curriculum' => $cs->curricula_hemis_id,
-                    '_semester' => $cs->semester_code,
-                    'limit' => 200,
-                    'page' => 1,
-                ]);
+            // Barcha sahifalarni olish (ba'zi fanlar uchun 200 dan ortiq mavzu bo'lishi mumkin)
+            $allItems = [];
+            $page = 1;
+            $maxPages = 10; // Cheksiz loop oldini olish
 
-            if (!$response->successful()) {
-                return [];
-            }
+            do {
+                $response = Http::withoutVerifying()
+                    ->withToken($token)
+                    ->timeout(15)
+                    ->get($baseUrl . '/data/curriculum-subject-topic-list', [
+                        '_curriculum' => $cs->curricula_hemis_id,
+                        '_semester' => $cs->semester_code,
+                        'limit' => 200,
+                        'page' => $page,
+                    ]);
 
-            $items = $response->json('data.items') ?? [];
+                if (!$response->successful()) {
+                    break;
+                }
+
+                $items = $response->json('data.items') ?? [];
+                $allItems = array_merge($allItems, $items);
+
+                $totalCount = (int) ($response->json('data.pagination.totalCount') ?? $response->json('data.totalCount') ?? 0);
+                $page++;
+            } while (count($allItems) < $totalCount && $page <= $maxPages && !empty($items));
+
+            $items = $allItems;
 
             // Fan bo'yicha filtrlash
             $subjectId = (int) $cs->subject_id;
@@ -768,7 +781,7 @@ class KtrController extends Controller
             : null;
 
         $request->validate([
-            'week_count' => 'required|integer|min:1|max:18',
+            'week_count' => 'required|integer|min:1|max:100',
             'plan_data' => 'required|array',
         ]);
 

@@ -141,15 +141,6 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'buxgalteriya']))
-        <a href="{{ route('admin.contracts.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.contracts.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-            </svg>
-            Kontraktlar
-        </a>
-        @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
         <a href="{{ route('admin.users.index') }}"
@@ -231,6 +222,14 @@
             </svg>
             YN jadvali
         </a>
+
+        <a href="{{ route('admin.exam-appeals.index', ['status' => 'approved']) }}"
+           class="sidebar-link {{ request()->routeIs('admin.exam-appeals.*') ? 'sidebar-active' : '' }}" style="position: relative;">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+            </svg>
+            Apellyatsiyalar
+        </a>
         @elseif($hasActiveRole('oquv_bolimi'))
         {{-- O'quv bo'limi roli uchun --}}
         <div class="sidebar-section">O'quv bo'limi</div>
@@ -242,7 +241,7 @@
             </svg>
             YN kunini belgilash
         </a>
-        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi']))
+        @elseif(!$hasActiveRole(['oquv_bolimi', 'oqituvchi', 'fan_masuli']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         <div class="sidebar-section">Qo'shimcha</div>
 
@@ -363,6 +362,14 @@
             </svg>
             Faoliyat jurnali
         </a>
+
+        <a href="{{ route('admin.face-id.test') }}"
+           class="sidebar-link {{ request()->routeIs('admin.face-id.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"></path>
+            </svg>
+            Face ID Test
+        </a>
         @endif
 
         @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi', 'oqituvchi']))
@@ -467,16 +474,21 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
-        <a href="{{ route('admin.absence-excuses.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}" style="position: relative;">
+        <a href="{{ route('admin.reports.users-without-ratings') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.users-without-ratings') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+            </svg>
+            Baho qo'ymaganlar
+        </a>
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'buxgalteriya']))
+        <a href="{{ route('admin.contracts.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.contracts.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
-            Sababli arizalar
-            @if(($pendingExcusesCount ?? 0) > 0)
-                <span class="sidebar-badge">{{ $pendingExcusesCount }}</span>
-            @endif
+            Kontraktlar
         </a>
         @endif
 
@@ -500,6 +512,33 @@
             Test
         </a>
         @endif
+        @endif
+
+        {{-- ============ TALABA ARIZALARI SECTION ============ --}}
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        <div class="sidebar-section">Talaba arizalari</div>
+
+        <a href="{{ route('admin.absence-excuses.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}" style="position: relative;">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            Sababli arizalar
+            @if(($pendingExcusesCount ?? 0) > 0)
+                <span class="sidebar-badge">{{ $pendingExcusesCount }}</span>
+            @endif
+        </a>
+
+        <a href="{{ route('admin.exam-appeals.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.exam-appeals.*') ? 'sidebar-active' : '' }}" style="position: relative;">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285zm0 13.036h.008v.008H12v-.008z"></path>
+            </svg>
+            Apellyatsiyalar
+            @if(($pendingAppealsCount ?? 0) > 0)
+                <span class="sidebar-badge">{{ $pendingAppealsCount }}</span>
+            @endif
+        </a>
         @endif
 
     </nav>

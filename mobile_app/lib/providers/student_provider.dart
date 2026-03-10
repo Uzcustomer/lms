@@ -14,6 +14,8 @@ class StudentProvider extends ChangeNotifier {
   List<dynamic>? _subjects;
   Map<String, dynamic>? _attendance;
   List<dynamic>? _pendingLessons;
+  Map<String, dynamic>? _contract;
+  List<dynamic>? _contractList;
 
   StudentProvider(this._service);
 
@@ -25,6 +27,8 @@ class StudentProvider extends ChangeNotifier {
   List<dynamic>? get subjects => _subjects;
   Map<String, dynamic>? get attendance => _attendance;
   List<dynamic>? get pendingLessons => _pendingLessons;
+  Map<String, dynamic>? get contract => _contract;
+  List<dynamic>? get contractList => _contractList;
 
   Future<void> loadDashboard() async {
     _isLoading = true;
@@ -125,6 +129,19 @@ class StudentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> loadContract() async {
+    try {
+      final response = await _service.getContract();
+      _contract = response['data'] as Map<String, dynamic>?;
+      _contractList = _contract?['contracts'] as List<dynamic>?;
+    } on ApiException catch (e) {
+      // Contract data is optional, don't set error
+      _contract = null;
+      _contractList = null;
+    }
+    notifyListeners();
+  }
+
   Future<Map<String, dynamic>> saveTelegram(String telegramUsername) async {
     final response = await _service.saveTelegram(telegramUsername);
     return response;
@@ -142,6 +159,8 @@ class StudentProvider extends ChangeNotifier {
     _subjects = null;
     _attendance = null;
     _pendingLessons = null;
+    _contract = null;
+    _contractList = null;
     notifyListeners();
   }
 }

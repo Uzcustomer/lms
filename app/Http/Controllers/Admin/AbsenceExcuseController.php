@@ -2,20 +2,26 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\AbsenceExcuseTemplate;
 use App\Http\Controllers\Controller;
+use App\Imports\AbsenceExcuseImport;
 use App\Models\AbsenceExcuse;
 use App\Models\DocumentTemplate;
+use App\Models\ExcuseGradeOpening;
+use App\Models\StudentNotification;
+use App\Models\Setting;
 use App\Services\DocumentTemplateService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AbsenceExcuseController extends Controller
 {
     public function index(Request $request)
     {
-        $query = AbsenceExcuse::query()->orderByDesc('created_at');
+        $query = AbsenceExcuse::with('student')->orderByDesc('created_at');
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -189,7 +195,71 @@ class AbsenceExcuseController extends Controller
                 'approved_pdf_path' => $pdfPath,
             ]);
 
+            // Talabaga notification yuborish
+            $reasonLabel = $excuse->reason_label ?? $excuse->reason;
+            StudentNotification::create([
+                'student_id' => $excuse->student_id,
+                'type' => 'absence_excuse',
+                'title' => 'Sababli arizangiz qabul qilindi!',
+                'message' => "Sizning \"{$reasonLabel}\" sababi bilan yuborgan arizangiz tasdiqlandi.",
+                'link' => '/student/absence-excuses/' . $excuse->id,
+                'data' => [
+                    'excuse_id' => $excuse->id,
+                    'status' => 'approved',
+                    'reason_label' => $reasonLabel,
+                    'start_date' => $excuse->start_date->format('d.m.Y'),
+                    'end_date' => $excuse->end_date->format('d.m.Y'),
+                    'reviewer_name' => $reviewerName,
+                    'doc_number' => $excuse->doc_number,
+                    'has_pdf' => true,
+                ],
+            ]);
+
+            // Sababli ariza uchun baho ochish: ariza sana oralig'idagi baholar uchun
+            $openingsCreated = 0;
+            try {
+                $excuse->load('makeups');
+
+                // Ariza sana oralig'i = jurnalda ochiq bo'ladigan sanalar
+                $dateFrom = $excuse->start_date;
+                $dateTo = $excuse->end_date;
+                $rangeDays = $dateFrom->diffInDays($dateTo) + 1;
+                $jnOpeningDays = max((int) Setting::get('lesson_opening_days', 3), 1);
+                $deadline = now()->addDays($jnOpeningDays)->endOfDay();
+
+                // Har bir fan uchun faqat bitta opening yaratish (dublikat oldini olish)
+                $processedSubjects = [];
+
+                foreach ($excuse->makeups as $makeup) {
+                    if (!$makeup->subject_id) {
+                        continue;
+                    }
+                    // Bitta fan uchun bir marta ochish
+                    if (in_array($makeup->subject_id, $processedSubjects)) {
+                        continue;
+                    }
+                    $processedSubjects[] = $makeup->subject_id;
+
+                    ExcuseGradeOpening::create([
+                        'absence_excuse_id' => $excuse->id,
+                        'absence_excuse_makeup_id' => $makeup->id,
+                        'student_hemis_id' => $excuse->student_hemis_id,
+                        'subject_id' => $makeup->subject_id,
+                        'date_from' => $dateFrom,
+                        'date_to' => $dateTo,
+                        'deadline' => $deadline,
+                        'status' => 'active',
+                    ]);
+                    $openingsCreated++;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('ExcuseGradeOpening yaratishda xatolik: ' . $e->getMessage());
+            }
+
             $successMsg = 'Ariza muvaffaqiyatli tasdiqlandi. PDF hujjat yaratildi.';
+            if ($openingsCreated > 0) {
+                $successMsg .= " {$openingsCreated} ta fan uchun baho ochildi.";
+            }
             if (!$wordTemplateSuccess && isset($templateError)) {
                 $successMsg .= ' (Shablon xatosi: ' . $templateError . ' — Blade shablon ishlatildi)';
             }
@@ -198,6 +268,53 @@ class AbsenceExcuseController extends Controller
         } catch (\Throwable $e) {
             return back()->with('error', 'PDF generatsiyada xatolik: ' . $e->getMessage());
         }
+    }
+
+
+    public function bulkDelete(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'integer|exists:absence_excuses,id',
+        ]);
+
+        $excuses = AbsenceExcuse::whereIn('id', $request->ids)->get();
+        $deleted = 0;
+
+        foreach ($excuses as $excuse) {
+            if ($excuse->file_path && Storage::disk('public')->exists($excuse->file_path)) {
+                Storage::disk('public')->delete($excuse->file_path);
+            }
+            if ($excuse->approved_pdf_path && Storage::disk('public')->exists($excuse->approved_pdf_path)) {
+                Storage::disk('public')->delete($excuse->approved_pdf_path);
+            }
+            $excuse->delete();
+            $deleted++;
+        }
+
+        return back()->with('success', "{$deleted} ta ariza o'chirildi.");
+    }
+
+    public function destroy($id)
+    {
+        $excuse = AbsenceExcuse::findOrFail($id);
+
+        if (!in_array($excuse->status, ['pending', 'approved'], true)) {
+            return back()->with('error', "Faqat yangi yoki tasdiqlangan arizani o'chirish mumkin.");
+        }
+
+        if ($excuse->file_path && Storage::disk('public')->exists($excuse->file_path)) {
+            Storage::disk('public')->delete($excuse->file_path);
+        }
+
+        if ($excuse->approved_pdf_path && Storage::disk('public')->exists($excuse->approved_pdf_path)) {
+            Storage::disk('public')->delete($excuse->approved_pdf_path);
+        }
+
+        $excuse->delete();
+
+        return redirect()->route('admin.absence-excuses.index')
+            ->with('success', "Ariza o'chirildi.");
     }
 
     public function reject(Request $request, $id)
@@ -224,6 +341,27 @@ class AbsenceExcuseController extends Controller
             'reviewed_at' => now(),
         ]);
 
+        // Talabaga notification yuborish
+        $reasonLabel = $excuse->reason_label ?? $excuse->reason;
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name;
+        StudentNotification::create([
+            'student_id' => $excuse->student_id,
+            'type' => 'absence_excuse',
+            'title' => 'Sababli arizangiz rad etildi',
+            'message' => "Sizning \"{$reasonLabel}\" sababi bilan yuborgan arizangiz rad etildi.",
+            'link' => '/student/absence-excuses/' . $excuse->id,
+            'data' => [
+                'excuse_id' => $excuse->id,
+                'status' => 'rejected',
+                'reason_label' => $reasonLabel,
+                'start_date' => $excuse->start_date->format('d.m.Y'),
+                'end_date' => $excuse->end_date->format('d.m.Y'),
+                'reviewer_name' => $reviewerName,
+                'doc_number' => $excuse->doc_number,
+                'rejection_reason' => $request->rejection_reason,
+            ],
+        ]);
+
         return back()->with('success', 'Ariza rad etildi.');
     }
 
@@ -239,6 +377,53 @@ class AbsenceExcuseController extends Controller
         return response()->file($filePath, [
             'Content-Disposition' => 'inline; filename="' . $excuse->file_original_name . '"',
         ]);
+    }
+
+    public function importTemplate()
+    {
+        return Excel::download(new AbsenceExcuseTemplate(), 'sababli_ariza_shablon.xlsx');
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
+        ], [
+            'file.required' => 'Excel faylni tanlang.',
+            'file.mimes' => 'Faqat xlsx, xls yoki csv formatdagi fayllar qabul qilinadi.',
+            'file.max' => 'Fayl hajmi 10MB dan oshmasligi kerak.',
+        ]);
+
+        $user = Auth::user();
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name;
+
+        $import = new AbsenceExcuseImport($user->id, $reviewerName);
+
+        try {
+            Excel::import($import, $request->file('file'));
+        } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
+            $failures = $e->failures();
+            $errorMessages = [];
+            foreach ($failures as $failure) {
+                $errorMessages[] = "Qator {$failure->row()}: {$failure->errors()[0]}";
+            }
+            return back()->with('import_errors', $errorMessages)->with('error', 'Excelda validatsiya xatoliklari topildi.');
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Import xatolik: ' . $e->getMessage());
+        }
+
+        $message = "{$import->importedCount} ta ariza muvaffaqiyatli import qilindi.";
+        if ($import->skippedCount > 0) {
+            $message .= " {$import->skippedCount} ta dublikat o'tkazib yuborildi.";
+        }
+
+        if (count($import->errors) > 0) {
+            return back()
+                ->with('warning', $message)
+                ->with('import_errors', collect($import->errors)->map(fn($e) => "Qator {$e['row']}: {$e['error']}")->toArray());
+        }
+
+        return back()->with('success', $message);
     }
 
     public function downloadPdf($id)

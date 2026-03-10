@@ -51,6 +51,11 @@ class CurriculumSubject extends Model
         return $query->where('is_active', true);
     }
 
+    public function scopeExcludeSlashCodes($query)
+    {
+        return $query->where('subject_code', 'not like', '%/%');
+    }
+
     public function curriculum()
     {
         return $this->belongsTo(Curriculum::class, 'curricula_hemis_id', 'curricula_hemis_id');

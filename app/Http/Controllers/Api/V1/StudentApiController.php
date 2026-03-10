@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicRecord;
 use App\Models\Attendance;
 use App\Models\Curriculum;
+use App\Services\HemisService;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumWeek;
 use App\Models\Independent;
@@ -38,10 +40,20 @@ class StudentApiController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $debtSubjectsCount = StudentGrade::where('student_id', $student->id)
-            ->whereIn('status', ['pending'])
-            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
-            ->count();
+        $currentSemesterId = $student->semester_id;
+
+        $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
+            ->where(function ($q) {
+                $q->whereNull('grade')
+                  ->orWhereIn('grade', ['2', '0'])
+                  ->orWhere('retraining_status', true);
+            })
+            ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
+            ->orderBy('semester_name')
+            ->orderBy('subject_name')
+            ->get();
+
+        $debtSubjectsCount = $debtRecords->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
@@ -58,12 +70,24 @@ class StudentApiController extends Controller
                 'employee_name' => $g->employee_name,
             ]);
 
+        $debtBySemester = $debtRecords->groupBy('semester_name')->map(function ($records, $semesterName) {
+            return $records->map(fn($r) => [
+                'subject_name' => $r->subject_name,
+                'credit' => $r->credit,
+                'total_acload' => $r->total_acload,
+                'total_point' => $r->total_point,
+                'grade' => $r->grade,
+                'retraining_status' => $r->retraining_status,
+            ]);
+        });
+
         return response()->json([
             'data' => [
                 'student_name' => $student->full_name,
                 'gpa' => (float) $avgGpa,
                 'avg_grade' => $student->avg_grade ?? 0,
                 'debt_subjects' => $debtSubjectsCount,
+                'debt_by_semester' => $debtBySemester,
                 'total_absences' => $totalAbsent,
                 'recent_grades' => $recentGrades,
             ],
@@ -256,7 +280,7 @@ class StudentApiController extends Controller
 
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
-        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+        $gradingCutoffDate = Carbon::now('Asia/Tashkent')->endOfDay();
 
         $getEffectiveGrade = function ($row) {
             if ($row->status === 'pending') return null;
@@ -474,14 +498,10 @@ class StudentApiController extends Controller
                     $q2->where('education_year_code', $subjectEducationYearCode)
                         ->orWhere(function ($q3) use ($minScheduleDate) {
                             $q3->whereNull('education_year_code')
-                                ->when($minScheduleDate !== null, fn($q4) => $q4->where(function ($q5) use ($minScheduleDate) {
-                                    $q5->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-                                }));
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
                         });
                 }))
-                ->when($subjectEducationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where(function ($q2) use ($minScheduleDate) {
-                    $q2->where('lesson_date', '>=', $minScheduleDate)->orWhereNull('lesson_date');
-                }))
+                ->when($subjectEducationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
                 ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
                 ->get();
 
@@ -623,15 +643,50 @@ class StudentApiController extends Controller
     {
         $student = $request->user();
         $semester = $student->semester_code;
+        $groupHemisId = $student->group_id;
 
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
+
+        // Get education_year_code from schedule (like subjects endpoint)
+        $scheduleEducationYear = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semester)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('education_year_code')
+            ->orderBy('lesson_date', 'desc')
+            ->value('education_year_code');
+        if ($scheduleEducationYear) {
+            $educationYearCode = $scheduleEducationYear;
+        }
+
+        // Get minScheduleDate for education_year_code fallback (matches web journal)
+        $minScheduleDate = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semester)
+            ->whereNull('deleted_at')
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->whereNotNull('lesson_date')
+            ->min('lesson_date');
 
         $grades = DB::table('student_grades')
             ->where('student_hemis_id', $student->hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
-            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->whereNotNull('lesson_date')
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                $q2->where('education_year_code', $educationYearCode);
+                if ($minScheduleDate !== null) {
+                    $q2->orWhere(function ($q3) use ($minScheduleDate) {
+                        $q3->whereNull('education_year_code')
+                            ->where('lesson_date', '>=', $minScheduleDate);
+                    });
+                }
+            }))
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->orderBy('lesson_date', 'desc')
             ->get()
             ->map(fn($g) => [
@@ -1005,6 +1060,89 @@ class StudentApiController extends Controller
             'verified' => $student->isTelegramVerified(),
             'telegram_username' => $student->telegram_username,
             'telegram_days_left' => $student->telegramDaysLeft(),
+        ]);
+    }
+
+    /**
+     * Contract — shartnoma ma'lumotlari (lokal DB dan)
+     */
+    public function contract(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        $currentSemester = Semester::where('current', true)->first();
+        $educationYearCode = $currentSemester?->education_year ?? $student->education_year_code;
+
+        // edu_year formati: "2025-2026 o`quv yili"
+        $items = \App\Models\ContractList::where('student_hemis_id', $student->hemis_id)
+            ->where('edu_year', 'like', $educationYearCode . '%')
+            ->orderByDesc('education_year')
+            ->get();
+
+        $contracts = [];
+        $totalAmount = 0;
+        $paidAmount = 0;
+
+        // Kontrakt summa turi — ruscha -> o'zbekcha
+        $sumTypeTranslations = [
+            'С стипендией' => 'Stipendiya bilan',
+            'Без стипендии' => 'Stipendiyasiz',
+            'Со скидкой' => 'Chegirma bilan',
+            'Полная оплата' => "To'liq to'lov",
+            'Грант' => 'Grant',
+        ];
+
+        foreach ($items as $item) {
+            $amount = (float) ($item->edu_contract_sum ?? 0);
+            $paid = (float) ($item->paid_credit_amount ?? 0);
+            $unpaid = (float) ($item->unpaid_credit_amount ?? ($amount - $paid));
+
+            $totalAmount += $amount;
+            $paidAmount += $paid;
+
+            $status = $unpaid <= 0 ? 'paid' : 'unpaid';
+
+            $sumTypeName = $item->edu_contract_sum_type_name;
+            $sumTypeNameUz = $sumTypeTranslations[$sumTypeName] ?? $sumTypeName;
+
+            $contracts[] = [
+                'id' => $item->hemis_id,
+                'key' => $item->key,
+                'education_year' => $item->education_year,
+                'edu_year' => $item->edu_year,
+                'edu_course' => $item->edu_course,
+                'contract_amount' => $amount,
+                'paid_amount' => $paid,
+                'unpaid_amount' => $unpaid,
+                'status' => $status,
+                'contract_number' => $item->contract_number,
+                'edu_contract_type_name' => $item->edu_contract_type_name,
+                'edu_contract_sum_type_name' => $sumTypeNameUz,
+                'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
+                'updated_at' => $item->updated_at?->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        // Kurs va semestr
+        $course = null;
+        if ($student->semester_name && preg_match('/(\d+)/', $student->semester_name, $matches)) {
+            $semNum = (int) $matches[1];
+            $course = (int) ceil($semNum / 2);
+        }
+
+        return response()->json([
+            'data' => [
+                'contracts' => $contracts,
+                'summary' => [
+                    'total_amount' => $totalAmount,
+                    'paid_amount' => $paidAmount,
+                    'remaining_amount' => $totalAmount - $paidAmount,
+                ],
+                'student_name' => $student->full_name,
+                'education_year' => $educationYearCode,
+                'course' => $course,
+                'semester_name' => $student->semester_name,
+            ],
         ]);
     }
 }

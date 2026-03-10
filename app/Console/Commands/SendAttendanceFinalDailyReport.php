@@ -51,8 +51,8 @@ class SendAttendanceFinalDailyReport extends Command
 
         $this->info("Hisobot sanasi: {$reportDateStr} (yakuniy)");
 
-        // Progress reporter: bitta Telegram xabar yuborib, har bosqichda yangilab turadi
-        $progressChatId = $this->option('chat-id') ?: config('services.telegram.attendance_group_id');
+        // Progress reporter: admin chatga yuboriladi (guruhga emas)
+        $progressChatId = $this->option('chat-id') ?: config('services.telegram.chat_id');
         $reporter = new ImportProgressReporter($telegram, $progressChatId, "{$reportDateStr} (yakuniy)");
 
         if ($progressChatId) {
@@ -67,6 +67,7 @@ class SendAttendanceFinalDailyReport extends Command
             $importService->importBetween(
                 $reportDate->copy()->startOfDay(),
                 $reportDate->copy()->endOfDay(),
+                '',
                 fn(int $page, int $total) => $reporter->updateProgress($page, $total)
             );
             $reporter->completeStep();

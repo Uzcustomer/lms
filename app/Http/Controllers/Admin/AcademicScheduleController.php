@@ -15,9 +15,13 @@ use App\Models\Semester;
 use App\Models\Specialty;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\ContractList;
+use App\Models\Setting;
 use App\Models\DocumentVerification;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnStudentGrade;
+use App\Models\StudentNotification;
+use App\Services\TelegramService;
 use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -488,6 +492,7 @@ class AcademicScheduleController extends Controller
                     'oski_na' => (bool) $existing?->oski_na,
                     'test_date' => $existing?->test_date?->format('Y-m-d'),
                     'test_na' => (bool) $existing?->test_na,
+                    'test_time' => $existing?->test_time,
                     'schedule_id' => $existing?->id,
                 ];
 
@@ -809,7 +814,7 @@ class AcademicScheduleController extends Controller
                 $jbDatePairSet[$col['date'] . '_' . $col['pair']] = true;
             }
 
-            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->subDay()->startOfDay();
+            $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
             $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
                 return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
             }));
@@ -1129,22 +1134,41 @@ class AcademicScheduleController extends Controller
             $cellFont = ['size' => 10];
             $cellFontRed = ['size' => 10, 'color' => 'FF0000'];
             $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
-            $groupSeparatorBg = ['bgColor' => 'E2EFDA', 'valign' => 'center', 'gridSpan' => 7];
+            $groupSeparatorBg = ['bgColor' => 'E2EFDA', 'valign' => 'center', 'gridSpan' => 8];
             $cellCenter = ['alignment' => Jc::CENTER];
             $cellLeft = ['alignment' => Jc::START];
+            $cellFontOrange = ['size' => 10, 'color' => 'FF8C00'];
 
             $headerRow = $table->addRow(400);
             $headerRow->addCell(600, $headerBg)->addText('№', $headerFont, $cellCenter);
-            $headerRow->addCell(4500, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
+            $headerRow->addCell(4000, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
             $headerRow->addCell(1800, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
-            $headerRow->addCell(1200, $headerBg)->addText('JN', $headerFont, $cellCenter);
-            $headerRow->addCell(1200, $headerBg)->addText("O'N", $headerFont, $cellCenter);
-            $headerRow->addCell(1500, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
-            $headerRow->addCell(2000, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
+            $headerRow->addCell(1000, $headerBg)->addText('JN', $headerFont, $cellCenter);
+            $headerRow->addCell(1000, $headerBg)->addText('MT', $headerFont, $cellCenter);
+            $headerRow->addCell(1300, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
+            $headerRow->addCell(1300, $headerBg)->addText('Kontrakt', $headerFont, $cellCenter);
+            $headerRow->addCell(1800, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
 
             // Talabalar ro'yxati - barcha guruhlar uchun davom etadi
             $rowNum = 1;
             $multipleGroups = count($subjectData['entries']) > 1;
+
+            // Kontrakt to'lov muddatlari — sozlamalardan o'qish
+            $defaultCutoffs = json_encode([
+                ['deadline' => '2025-10-01', 'percent' => 25],
+                ['deadline' => '2026-01-01', 'percent' => 50],
+                ['deadline' => '2026-03-01', 'percent' => 75],
+                ['deadline' => '2026-05-01', 'percent' => 100],
+            ]);
+            $cutoffsRaw = json_decode(Setting::get('contract_cutoffs', $defaultCutoffs), true) ?: [];
+            $now = time();
+            $contractThreshold = 100; // default: barcha muddatlar o'tgan
+            foreach ($cutoffsRaw as $cutoff) {
+                if ($now <= strtotime($cutoff['deadline'] . ' 23:59:59')) {
+                    $contractThreshold = (int) $cutoff['percent'];
+                    break;
+                }
+            }
 
             foreach ($subjectData['entries'] as $entry) {
                 $entryGroup = $entry['group'];
@@ -1172,6 +1196,23 @@ class AcademicScheduleController extends Controller
                     $totalAcload = $entrySubject->total_acload ?: 1;
                     $qoldiq = round($qoldirgan * 100 / $totalAcload, 2);
 
+                    // Kontrakt qarzdorligi tekshiruvi
+                    $contract = ContractList::where('student_hemis_id', $student->hemis_id)
+                        ->where('year', '2025')
+                        ->where('edu_year', 'like', '2025-2026%')
+                        ->first();
+
+                    $contractPercent = 100; // default: kontrakt topilmasa ruxsat
+                    $contractText = '-';
+                    $contractFailed = false;
+                    if ($contract && $contract->edu_contract_sum > 0) {
+                        $contractPercent = round(($contract->paid_credit_amount / $contract->edu_contract_sum) * 100);
+                        $contractText = $contractPercent . '%';
+                        if ($contractPercent < $contractThreshold) {
+                            $contractFailed = true;
+                        }
+                    }
+
                     $holat = 'Ruxsat';
                     $jnFailed = false;
                     $mtFailed = false;
@@ -1189,27 +1230,42 @@ class AcademicScheduleController extends Controller
                         $davomatFailed = true;
                         $holat = 'X';
                     }
+                    // Kontrakt: "X" emas, "Shartli" holat beradi
+                    if ($contractFailed && $holat === 'Ruxsat') {
+                        $holat = 'Shartli';
+                    }
 
                     $dataRow = $table->addRow();
                     $dataRow->addCell(600)->addText($rowNum, $cellFont, $cellCenter);
-                    $dataRow->addCell(4500)->addText($student->student_name, $cellFont, $cellLeft);
+                    $dataRow->addCell(4000)->addText($student->student_name, $cellFont, $cellLeft);
                     $dataRow->addCell(1800)->addText($student->student_id, $cellFont, $cellCenter);
 
-                    $jnCell = $dataRow->addCell(1200);
+                    $jnCell = $dataRow->addCell(1000);
                     $jnCell->addText($student->jn ?? '0', $jnFailed ? $cellFontRed : $cellFont, $cellCenter);
 
-                    $mtCell = $dataRow->addCell(1200);
+                    $mtCell = $dataRow->addCell(1000);
                     $mtCell->addText($student->mt ?? '0', $mtFailed ? $cellFontRed : $cellFont, $cellCenter);
 
-                    $davomatCell = $dataRow->addCell(1500);
+                    $davomatCell = $dataRow->addCell(1300);
                     $davomatCell->addText(
                         ($qoldiq != 0 ? $qoldiq . '%' : '0%'),
                         $davomatFailed ? $cellFontRed : $cellFont,
                         $cellCenter
                     );
 
-                    $holatCell = $dataRow->addCell(2000);
-                    $holatCell->addText($holat, $holat === 'X' ? $cellFontRed : $cellFont, $cellCenter);
+                    $kontraktCell = $dataRow->addCell(1300);
+                    $kontraktCell->addText(
+                        $contractText,
+                        $contractFailed ? $cellFontOrange : $cellFont,
+                        $cellCenter
+                    );
+
+                    $holatCell = $dataRow->addCell(1800);
+                    if ($holat === 'Shartli') {
+                        $holatCell->addText($holat, $cellFontOrange, $cellCenter);
+                    } else {
+                        $holatCell->addText($holat, $holat === 'X' ? $cellFontRed : $cellFont, $cellCenter);
+                    }
 
                     $rowNum++;
                 }
@@ -1352,5 +1408,97 @@ class AcademicScheduleController extends Controller
                 'file' => $e->getFile() . ':' . $e->getLine(),
             ], 500);
         }
+    }
+
+    public function saveTestTime(Request $request)
+    {
+        $request->validate([
+            'group_hemis_id' => 'required|string',
+            'subject_id' => 'required|string',
+            'semester_code' => 'required|string',
+            'test_time' => 'required|date_format:H:i',
+        ]);
+
+        $examSchedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->first();
+
+        if (!$examSchedule) {
+            return response()->json(['success' => false, 'message' => 'Jadval topilmadi'], 404);
+        }
+
+        $oldTime = $examSchedule->test_time;
+        $timeChanged = $oldTime !== null && $oldTime !== $request->test_time;
+        $ynSubmitted = (bool) $request->input('yn_submitted', false);
+
+        $examSchedule->update(['test_time' => $request->test_time]);
+
+        // Shu guruhdagi Telegram tasdiqlangan talabalarga notification yuborish
+        $students = Student::where('group_id', $request->group_hemis_id)
+            ->whereNotNull('telegram_chat_id')
+            ->whereNotNull('telegram_verified_at')
+            ->get();
+
+        if ($students->isNotEmpty()) {
+            $telegram = app(TelegramService::class);
+            $subjectName = $examSchedule->subject_name ?? 'Fan';
+            $testDate = $examSchedule->test_date ? \Carbon\Carbon::parse($examSchedule->test_date)->format('d.m.Y') : '';
+            $timeFormatted = $request->test_time;
+
+            // Ogohlantirish faqat YN yuborilmagan holatlarda Telegram xabarga ham qo'shiladi
+            $warningText = !$ynSubmitted ? "\n\n⚠️ <i>Test vaqti o'zgarishi mumkin, habardor bo'lib turing!</i>" : '';
+            $warningPlain = !$ynSubmitted ? " Test vaqti o'zgarishi mumkin, habardor bo'lib turing!" : '';
+
+            if ($timeChanged) {
+                $oldTimeFormatted = $oldTime;
+                $message = "📋 <b>Test vaqti o'zgartirildi!</b>\n\n"
+                    . "📌 Fan: <b>{$subjectName}</b>\n"
+                    . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
+                    . "⏰ Eski vaqt: <s>{$oldTimeFormatted}</s>\n"
+                    . "⏰ Yangi vaqt: <b>{$timeFormatted}</b>"
+                    . $warningText;
+                $notifTitle = "Test vaqti o'zgartirildi: {$subjectName}";
+                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Eski vaqt: {$oldTimeFormatted}, Yangi vaqt: {$timeFormatted}." . $warningPlain;
+            } else {
+                $message = "📋 <b>Test vaqti belgilandi!</b>\n\n"
+                    . "📌 Fan: <b>{$subjectName}</b>\n"
+                    . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
+                    . "⏰ Vaqt: <b>{$timeFormatted}</b>"
+                    . $warningText;
+                $notifTitle = "Test vaqti belgilandi: {$subjectName}";
+                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Vaqt: {$timeFormatted}." . $warningPlain;
+            }
+
+            $notificationRecords = [];
+
+            foreach ($students as $student) {
+                $telegram->sendToUser($student->telegram_chat_id, $message);
+
+                $notificationRecords[] = [
+                    'student_id' => $student->id,
+                    'type' => 'exam_reminder',
+                    'title' => $notifTitle,
+                    'message' => $notifMessage,
+                    'link' => '/student/exam-schedule',
+                    'data' => json_encode(['subject' => $subjectName, 'test_time' => $timeFormatted, 'test_date' => $testDate, 'time_changed' => $timeChanged]),
+                    'read_at' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            if (!empty($notificationRecords)) {
+                StudentNotification::insert($notificationRecords);
+            }
+        }
+
+        $statusMsg = $timeChanged ? 'Test vaqti o\'zgartirildi' : 'Test vaqti saqlandi';
+
+        return response()->json([
+            'success' => true,
+            'time_changed' => $timeChanged,
+            'message' => $statusMsg . ($students->count() > 0 ? " va {$students->count()} ta talabaga xabar yuborildi" : ''),
+        ]);
     }
 }

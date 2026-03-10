@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\AcademicRecord;
+use App\Models\ContractList;
 use App\Models\Curriculum;
 use App\Models\Department;
 use App\Models\Group;
@@ -600,6 +602,194 @@ class HemisService
                 'gpa_limit' => $data['gpa_limit'] ?? 2.0,
             ]
         );
+    }
+
+    /**
+     * HEMIS dan kontraktlarni import qilish (lokal bazaga saqlash)
+     */
+    public function importContracts(callable $onProgress = null): int
+    {
+        $page = 1;
+        $totalImported = 0;
+
+        do {
+            $result = $this->fetchContracts(['page' => $page, 'limit' => 200]);
+
+            if (!($result['success'] ?? false) || empty($result['data']['items'])) {
+                break;
+            }
+
+            $items = $result['data']['items'];
+            $pagination = $result['data']['pagination'] ?? [];
+
+            foreach ($items as $item) {
+                $data = $item['_data'] ?? [];
+
+                ContractList::updateOrCreate(
+                    ['hemis_id' => $item['id']],
+                    [
+                        'key' => $item['key'] ?? null,
+                        'education_year' => $item['_education_year'] ?? null,
+                        'student_hemis_id' => $item['_student'] ?? null,
+                        'year' => $data['year'] ?? null,
+                        'status' => $data['status'] ?? null,
+                        'status_id' => $data['statusId'] ?? null,
+                        'edu_form' => $data['eduForm'] ?? null,
+                        'edu_form_id' => $data['eduFormId'] ?? null,
+                        'edu_year' => $data['eduYear'] ?? null,
+                        'full_name' => $data['fullName'] ?? null,
+                        'edu_course' => $data['eduCourse'] ?? null,
+                        'edu_cours_id' => $data['eduCoursId'] ?? null,
+                        'edu_type_code' => $data['eduTypeCode'] ?? null,
+                        'edu_type_name' => $data['eduTypeName'] ?? null,
+                        'faculty_code' => $data['facultyCode'] ?? null,
+                        'faculty_name' => $data['facultyName'] ?? null,
+                        'contract_number' => $data['contractNumber'] ?? null,
+                        'edu_contract_sum' => $data['eduContractSum'] ?? null,
+                        'edu_organization' => $data['eduOrganization'] ?? null,
+                        'edu_organization_code' => $data['eduOrganizationCode'] ?? null,
+                        'paid_credit_amount' => $data['paidCreditAmount'] ?? null,
+                        'edu_speciality_code' => $data['eduSpecialityCode'] ?? null,
+                        'edu_speciality_name' => $data['eduSpecialityName'] ?? null,
+                        'end_rest_debet_amount' => $data['endRestDebetAmount'] ?? null,
+                        'unpaid_credit_amount' => $data['unPaidCreditAmount'] ?? null,
+                        'vozvrat_debet_amount' => $data['vozvratDebetAmount'] ?? null,
+                        'contract_debet_amount' => $data['contractDebetAmount'] ?? null,
+                        'edu_contract_type_code' => $data['eduContractTypeCode'] ?? null,
+                        'edu_contract_type_name' => $data['eduContractTypeName'] ?? null,
+                        'end_rest_credit_amount' => $data['endRestCreditAmount'] ?? null,
+                        'begin_rest_debet_amount' => $data['beginRestDebetAmount'] ?? null,
+                        'begin_rest_credit_amount' => $data['beginRestCreditAmount'] ?? null,
+                        'edu_contract_sum_type_code' => $data['eduContractSumTypeCode'] ?? null,
+                        'edu_contract_sum_type_name' => $data['eduContractSumTypeName'] ?? null,
+                        'hemis_created_at' => $item['created_at'] ?? null,
+                        'hemis_updated_at' => $item['updated_at'] ?? null,
+                    ]
+                );
+
+                $totalImported++;
+            }
+
+            if ($onProgress) {
+                $onProgress($page, $totalImported, $pagination['totalCount'] ?? 0);
+            }
+
+            $pageCount = $pagination['pageCount'] ?? 1;
+            $page++;
+        } while ($page <= $pageCount);
+
+        return $totalImported;
+    }
+
+    /**
+     * HEMIS dan akademik qaydlar ro'yxatini import qilish (bulk upsert)
+     */
+    public function importAcademicRecords(?callable $onProgress = null): int
+    {
+        $page = 1;
+        $hasMore = true;
+        $totalImported = 0;
+
+        while ($hasMore) {
+            $response = $this->fetchAcademicRecords($page);
+
+            if ($response && ($response['success'] ?? false)) {
+                $items = $response['data']['items'];
+                $pagination = $response['data']['pagination'];
+
+                $records = array_map([$this, 'transformAcademicRecord'], $items);
+
+                AcademicRecord::upsert($records, ['hemis_id'], [
+                    'curriculum_id',
+                    'education_year',
+                    'semester_id',
+                    'student_id',
+                    'subject_id',
+                    'employee_id',
+                    'employee_name',
+                    'semester_name',
+                    'student_name',
+                    'subject_name',
+                    'total_acload',
+                    'credit',
+                    'total_point',
+                    'grade',
+                    'finish_credit_status',
+                    'retraining_status',
+                    'hemis_created_at',
+                    'hemis_updated_at',
+                ]);
+
+                $totalImported += count($items);
+                $hasMore = $pagination['page'] < $pagination['pageCount'];
+
+                if ($onProgress) {
+                    $onProgress($page, $pagination['pageCount'], $totalImported, $pagination['totalCount']);
+                }
+
+                $page++;
+            } else {
+                Log::error('Failed to fetch academic records from HEMIS', $response ?? []);
+                break;
+            }
+        }
+
+        return $totalImported;
+    }
+
+    protected function fetchAcademicRecords(int $page)
+    {
+        try {
+            $response = Http::withoutVerifying()
+                ->timeout(60)
+                ->withToken($this->token)
+                ->get($this->baseUrl . 'v1/data/academic-record-list', [
+                    'page' => $page,
+                    'limit' => 200,
+                ]);
+
+            if (!$response->successful()) {
+                Log::error('HEMIS academic-record-list request failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return ['success' => false, 'error' => 'API request failed'];
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('Exception fetching academic records', [
+                'message' => $e->getMessage(),
+            ]);
+            return ['success' => false, 'error' => 'Exception occurred'];
+        }
+    }
+
+    protected function transformAcademicRecord(array $data): array
+    {
+        return [
+            'hemis_id' => $data['id'],
+            'curriculum_id' => $data['_curriculum'] ?? null,
+            'education_year' => $data['_education_year'] ?? null,
+            'semester_id' => $data['_semester'] ?? null,
+            'student_id' => $data['_student'] ?? null,
+            'subject_id' => $data['_subject'] ?? null,
+            'employee_id' => $data['_employee'] ?? null,
+            'employee_name' => $data['employee_name'] ?? null,
+            'semester_name' => $data['semester_name'] ?? null,
+            'student_name' => $data['student_name'] ?? null,
+            'subject_name' => $data['subject_name'] ?? null,
+            'total_acload' => $data['total_acload'] ?? null,
+            'credit' => $data['credit'] ?? null,
+            'total_point' => $data['total_point'] ?? null,
+            'grade' => $data['grade'] ?? null,
+            'finish_credit_status' => $data['finish_credit_status'] ?? false,
+            'retraining_status' => $data['retraining_status'] ?? false,
+            'hemis_created_at' => isset($data['created_at']) ? date('Y-m-d H:i:s', $data['created_at']) : null,
+            'hemis_updated_at' => isset($data['updated_at']) ? date('Y-m-d H:i:s', $data['updated_at']) : null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
     }
 
     /**

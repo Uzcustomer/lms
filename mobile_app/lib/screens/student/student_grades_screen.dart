@@ -500,17 +500,16 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   ) {
     final subjectId = subject['subject_id'];
     if (subjectId == null) return;
+    final subjectName = subject['subject_name']?.toString() ?? '';
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _JnGradesSheet(
-        subjectId: subjectId is int ? subjectId : int.parse(subjectId.toString()),
-        label: label,
-        fullLabel: fullLabel,
-        isDark: isDark,
-        l: l,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _JnGradesPage(
+          subjectId: subjectId is int ? subjectId : int.parse(subjectId.toString()),
+          subjectName: subjectName,
+          fullLabel: fullLabel,
+        ),
       ),
     );
   }
@@ -828,31 +827,26 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   }
 }
 
-class _JnGradesSheet extends StatefulWidget {
+class _JnGradesPage extends StatefulWidget {
   final int subjectId;
-  final String label;
+  final String subjectName;
   final String fullLabel;
-  final bool isDark;
-  final AppLocalizations l;
 
-  const _JnGradesSheet({
+  const _JnGradesPage({
     required this.subjectId,
-    required this.label,
+    required this.subjectName,
     required this.fullLabel,
-    required this.isDark,
-    required this.l,
   });
 
   @override
-  State<_JnGradesSheet> createState() => _JnGradesSheetState();
+  State<_JnGradesPage> createState() => _JnGradesPageState();
 }
 
-class _JnGradesSheetState extends State<_JnGradesSheet> {
+class _JnGradesPageState extends State<_JnGradesPage> {
   bool _isLoading = true;
   String? _error;
-  String _debugInfo = '';
-  List<Map<String, dynamic>> _amaliyGrades = [];
-  List<Map<String, dynamic>> _maruzaGrades = [];
+  List<Map<String, dynamic>> _amaliyDaily = [];
+  List<Map<String, dynamic>> _maruzaDaily = [];
 
   @override
   void initState() {
@@ -865,7 +859,6 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
       final service = StudentService(ApiService());
       final response = await service.getSubjectGrades(widget.subjectId);
 
-      // Handle various API response structures
       List<dynamic> grades = [];
       final data = response['data'];
       if (data is Map<String, dynamic>) {
@@ -877,32 +870,25 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
         grades = (response['grades'] as List<dynamic>?) ?? [];
       }
 
-      // Debug: collect type codes for diagnostics
-      final typeCodes = <String>[];
-      final amaliy = <Map<String, dynamic>>[];
-      final maruza = <Map<String, dynamic>>[];
+      final amaliyRaw = <Map<String, dynamic>>[];
+      final maruzaRaw = <Map<String, dynamic>>[];
 
       for (final g in grades) {
         final grade = g as Map<String, dynamic>;
         final typeCode = grade['training_type_code'];
         final typeName = grade['training_type_name']?.toString() ?? '';
-        typeCodes.add('$typeCode:$typeName');
 
         if (typeCode == 11 || typeName.contains("Ma'ruza") || typeName.contains('Maruza')) {
-          maruza.add(grade);
+          maruzaRaw.add(grade);
         } else if (typeCode != 99 && typeCode != 100 && typeCode != 101 && typeCode != 102) {
-          amaliy.add(grade);
+          amaliyRaw.add(grade);
         }
       }
 
-      amaliy.sort((a, b) => (a['lesson_date'] ?? '').compareTo(b['lesson_date'] ?? ''));
-      maruza.sort((a, b) => (a['lesson_date'] ?? '').compareTo(b['lesson_date'] ?? ''));
-
       if (mounted) {
         setState(() {
-          _amaliyGrades = amaliy;
-          _maruzaGrades = maruza;
-          _debugInfo = 'API: ${grades.length} ta baho. Types: ${typeCodes.toSet().join(', ')}';
+          _amaliyDaily = _computeDailyAverages(amaliyRaw);
+          _maruzaDaily = _computeDailyAverages(maruzaRaw);
           _isLoading = false;
         });
       }
@@ -916,198 +902,202 @@ class _JnGradesSheetState extends State<_JnGradesSheet> {
     }
   }
 
+  List<Map<String, dynamic>> _computeDailyAverages(List<Map<String, dynamic>> grades) {
+    final byDate = <String, List<num>>{};
+    for (final g in grades) {
+      final date = g['lesson_date']?.toString() ?? '';
+      if (date.isEmpty) continue;
+
+      final retake = g['retake_grade'];
+      final grade = g['grade'];
+      final reason = g['reason']?.toString();
+      final status = g['status']?.toString();
+
+      if (status == 'pending' && reason == 'low_grade' && grade is num) {
+        byDate.putIfAbsent(date, () => []).add(grade);
+      } else if (status == 'pending') {
+        continue;
+      } else if (retake != null && retake is num && retake > 0) {
+        byDate.putIfAbsent(date, () => []).add(retake);
+      } else if (reason == 'absent' && (grade == null || grade == 0)) {
+        byDate.putIfAbsent(date, () => []);
+      } else if (grade != null && grade is num) {
+        byDate.putIfAbsent(date, () => []).add(grade);
+      }
+    }
+
+    final dates = byDate.keys.toList()..sort();
+    return dates.map((date) {
+      final vals = byDate[date]!;
+      final avg = vals.isNotEmpty
+          ? (vals.reduce((a, b) => a + b) / vals.length).round()
+          : 0;
+      return {'date': date, 'avg': avg, 'hasGrades': vals.isNotEmpty};
+    }).toList();
+  }
+
   String _formatDate(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return '-';
     try {
       final date = DateTime.parse(dateStr);
-      return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}';
+      return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
     } catch (_) {
       return dateStr;
     }
   }
 
-  Color _gradeColor(num val) {
-    if (val >= 86) return AppTheme.successColor;
-    if (val >= 71) return AppTheme.primaryColor;
-    if (val >= 56) return AppTheme.warningColor;
-    return AppTheme.errorColor;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final bgColor = widget.isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = widget.isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final secondaryText = widget.isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final headerBg = widget.isDark ? AppTheme.darkSurface : AppTheme.primaryColor;
-    final borderColor = widget.isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final secondaryText = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
-    return Container(
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+    return Scaffold(
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        title: Text(
+          widget.subjectName,
+          style: const TextStyle(fontSize: 15),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        centerTitle: true,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 8),
-            child: Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: widget.isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          // Title
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE3F2FD),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.assignment, color: Color(0xFF1565C0), size: 24),
-                ),
-                const SizedBox(width: 12),
-                Text(widget.fullLabel,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Content
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(32),
-              child: CircularProgressIndicator(),
-            )
-          else if (_error != null)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(_error!, style: TextStyle(color: secondaryText)),
-            )
-          else
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_amaliyGrades.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(widget.l.practicalClasses,
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textColor)),
-                      ),
-                      _buildGradesTable(_amaliyGrades, headerBg, bgColor, textColor, borderColor),
-                    ],
-                    if (_maruzaGrades.isNotEmpty) ...[
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(_error!, style: TextStyle(color: secondaryText)),
                       const SizedBox(height: 16),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(widget.l.lectures,
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textColor)),
+                      ElevatedButton(
+                        onPressed: _loadGrades,
+                        child: const Text('Qayta yuklash'),
                       ),
-                      _buildGradesTable(_maruzaGrades, headerBg, bgColor, textColor, borderColor),
                     ],
-                    if (_amaliyGrades.isEmpty && _maruzaGrades.isEmpty)
+                  ),
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (_amaliyDaily.isNotEmpty) ...[
+                      Text(
+                        'Amaliy mashg\'ulotlar',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildGradeGrid(_amaliyDaily, cardColor, textColor, secondaryText),
+                    ],
+                    if (_maruzaDaily.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      Text(
+                        'Ma\'ruzalar',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildGradeGrid(_maruzaDaily, cardColor, textColor, secondaryText),
+                    ],
+                    if (_amaliyDaily.isEmpty && _maruzaDaily.isEmpty)
                       Padding(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.only(top: 60),
                         child: Center(
                           child: Column(
                             children: [
-                              Text(widget.l.noData, style: TextStyle(color: secondaryText, fontSize: 14)),
-                              if (_debugInfo.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                Text(_debugInfo, style: TextStyle(color: secondaryText, fontSize: 11)),
-                              ],
+                              Icon(Icons.school_outlined, size: 48, color: secondaryText),
+                              const SizedBox(height: 12),
+                              Text('Ma\'lumot topilmadi', style: TextStyle(color: secondaryText)),
                             ],
                           ),
                         ),
                       ),
                   ],
                 ),
-              ),
-            ),
-        ],
-      ),
     );
   }
 
-  Widget _buildGradesTable(
-    List<Map<String, dynamic>> grades,
-    Color headerBg,
-    Color cellBg,
-    Color cellText,
-    Color borderColor,
+  Widget _buildGradeGrid(
+    List<Map<String, dynamic>> dailyData,
+    Color cardColor,
+    Color textColor,
+    Color secondaryText,
   ) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Table(
-        border: TableBorder.all(color: borderColor, width: 1),
-        defaultColumnWidth: const FixedColumnWidth(60),
-        children: [
-          // Header
-          TableRow(
-            decoration: BoxDecoration(color: headerBg),
-            children: grades.map((g) => Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final headerBg = AppTheme.primaryColor;
+    final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFDEDEDE);
+    final cellBg = isDark ? AppTheme.darkCard : Colors.white;
+
+    return Table(
+      border: TableBorder.all(color: borderColor, width: 1),
+      columnWidths: const {
+        0: FlexColumnWidth(1),
+        1: FixedColumnWidth(60),
+      },
+      children: [
+        // Header
+        TableRow(
+          decoration: BoxDecoration(color: headerBg),
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
               alignment: Alignment.center,
-              child: Text(
-                _formatDate(g['lesson_date']),
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
-                textAlign: TextAlign.center,
-              ),
-            )).toList(),
-          ),
-          // Values
-          TableRow(
+              child: const Text('Sana', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              alignment: Alignment.center,
+              child: const Text('Baho', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+            ),
+          ],
+        ),
+        // Data rows
+        ...dailyData.map((d) {
+          final avg = d['avg'] as int;
+          final hasGrades = d['hasGrades'] as bool;
+
+          String gradeText;
+          Color gradeColor;
+
+          if (!hasGrades) {
+            gradeText = 'NB';
+            gradeColor = AppTheme.errorColor;
+          } else if (avg >= 70) {
+            gradeText = avg.toString();
+            gradeColor = const Color(0xFF43A047);
+          } else if (avg > 0) {
+            gradeText = avg.toString();
+            gradeColor = const Color(0xFF1E88E5);
+          } else {
+            gradeText = '-';
+            gradeColor = secondaryText;
+          }
+
+          return TableRow(
             decoration: BoxDecoration(color: cellBg),
-            children: grades.map((g) {
-              final grade = g['grade'];
-              final retake = g['retake_grade'];
-              final reason = g['reason']?.toString();
-              final displayGrade = retake ?? grade;
-
-              String text;
-              Color color;
-
-              if (reason == 'absent' && (grade == null || grade == 0)) {
-                text = 'NB';
-                color = AppTheme.errorColor;
-              } else if (displayGrade != null && displayGrade is num) {
-                text = displayGrade % 1 == 0
-                    ? displayGrade.toInt().toString()
-                    : displayGrade.toStringAsFixed(1);
-                color = _gradeColor(displayGrade);
-              } else {
-                text = '-';
-                color = cellText;
-              }
-
-              return Container(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _formatDate(d['date'] as String?),
+                  style: TextStyle(fontSize: 13, color: textColor),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 alignment: Alignment.center,
                 child: Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: retake != null ? FontWeight.bold : FontWeight.w500,
-                    color: color,
-                  ),
-                  textAlign: TextAlign.center,
+                  gradeText,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: gradeColor),
                 ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
+              ),
+            ],
+          );
+        }),
+      ],
     );
   }
 }

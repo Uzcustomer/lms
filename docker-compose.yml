@@ -46,6 +46,21 @@ services:
     networks:
       - app-network
 
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: lmsttatf_phpmyadmin
+    restart: unless-stopped
+    environment:
+      - PMA_HOST=host.docker.internal
+      - PMA_PORT=3306
+      - PMA_USER=falcon
+      - PMA_PASSWORD=Password@123
+      - UPLOAD_LIMIT=100M
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-network
+
 
 networks:
   app-network:

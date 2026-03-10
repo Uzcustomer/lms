@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            Qarzdorlar hisoboti
+            {{ $reportTitle ?? 'Qarzdorlar hisoboti' }}
         </h2>
     </x-slot>
 
@@ -51,7 +51,7 @@
                             <select id="student_status" class="select2" style="width: 100%;">
                                 @foreach($studentStatuses as $status)
                                     <option value="{{ $status->student_status_code }}"
-                                        {{ str_contains(mb_strtolower($status->student_status_name ?? ''), 'qimoqda') ? 'selected' : '' }}>
+                                        {{ str_contains(mb_strtolower($status->student_status_name ?? ''), $defaultStatusKeyword ?? 'qimoqda') ? 'selected' : '' }}>
                                         {{ $status->student_status_name }}
                                     </option>
                                 @endforeach
@@ -65,6 +65,7 @@
                                 @endforeach
                             </select>
                         </div>
+                        @unless($isExpelledPage ?? false)
                         <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Min. qarzdorlik</label>
                             <select id="min_debt_count" class="select2" style="width: 100%;">
@@ -73,6 +74,7 @@
                                 @endforeach
                             </select>
                         </div>
+                        @endunless
                     </div>
                     <!-- Row 2 -->
                     <div class="filter-row">
@@ -88,6 +90,7 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                             <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
+                        @unless($isExpelledPage ?? false)
                         <div class="filter-item" style="flex: 1; min-width: 220px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Kafedra</label>
                             <select id="department" class="select2" style="width: 100%;">
@@ -97,13 +100,19 @@
                                 @endforeach
                             </select>
                         </div>
+                        @else
+                        <div class="filter-item" style="flex: 1; min-width: 220px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Talaba F.I.Sh</label>
+                            <input id="student_name" type="text" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm" placeholder="Talaba ismi..." />
+                        </div>
+                        @endunless
                         <div class="filter-item" style="flex: 1; min-width: 280px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
                         <div class="filter-item" style="min-width: 160px;">
                             <label class="filter-label">&nbsp;</label>
-                            <div class="toggle-switch active" id="current-semester-toggle" onclick="toggleSemester()">
+                            <div class="toggle-switch" id="current-semester-toggle" onclick="toggleSemester()">
                                 <div class="toggle-track"><div class="toggle-thumb"></div></div>
                                 <span class="toggle-label">Joriy semestr</span>
                             </div>
@@ -142,7 +151,7 @@
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">4 va undan ortiq fandan qarzdor talabalar ro'yxati</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">{{ $emptySubtitle ?? "4 va undan ortiq fandan qarzdor talabalar ro'yxati" }}</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
@@ -150,6 +159,28 @@
                         <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
                     </div>
                     <div id="table-area" style="display:none;">
+                        @if($isExpelledPage ?? false)
+                        <div id="summary-panel" style="display:none;padding:14px 20px;background:linear-gradient(135deg,#f0f4f8,#e8edf5);border-bottom:2px solid #dbe4ef;">
+                            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                <div class="summary-card">
+                                    <div class="summary-num" id="sum-students">0</div>
+                                    <div class="summary-label">Jami talabalar</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-num" id="sum-subjects" style="color:#dc2626;">0</div>
+                                    <div class="summary-label">Jami qarzdor fan</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-num" id="sum-credits" style="color:#7c3aed;">0</div>
+                                    <div class="summary-label">Jami kredit</div>
+                                </div>
+                                <div class="summary-card">
+                                    <div class="summary-num" id="sum-avg" style="color:#0891b2;">0</div>
+                                    <div class="summary-label">O'rtacha fan/talaba</div>
+                                </div>
+                            </div>
+                        </div>
+                        @endif
                         <div style="padding:10px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;align-items:center;gap:12px;">
                             <span id="total-badge" class="badge" style="background:#dc2626;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
@@ -164,8 +195,11 @@
                                         <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="debt_count">Qarzdor fanlar <span class="sort-icon active">&#9660;</span></a></th>
+                                        @unless($isExpelledPage ?? false)
                                         <th><a href="#" class="sort-link" data-sort="lesson_days">Darslar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        @endunless
                                         <th style="text-align:center;width:90px;">Batafsil</th>
                                     </tr>
                                 </thead>
@@ -179,14 +213,26 @@
         </div>
     </div>
 
-    <!-- Detail Modal -->
+    <!-- Detail Modal (1-chi modal — talaba tafsilotlari) -->
     <div id="detail-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal()">
-        <div class="modal-content">
+        <div class="modal-box">
             <div class="modal-header">
-                <h3 id="modal-title" style="margin:0;font-size:16px;font-weight:700;color:#0f172a;"></h3>
+                <h3 id="modal-title">Batafsil ma'lumot</h3>
                 <button onclick="closeModal()" class="modal-close">&times;</button>
             </div>
-            <div id="modal-body" class="modal-body"></div>
+            <div id="modal-student-info" class="modal-info"></div>
+            <div id="modal-body" style="max-height:60vh;overflow-y:auto;padding:0;"></div>
+        </div>
+    </div>
+
+    <!-- Semester Grades Modal (2-chi modal — semestr baholar, ustiga ochiladi) -->
+    <div id="semester-modal" class="modal-overlay" style="display:none;z-index:10001;" onclick="if(event.target===this)closeSemesterModal()">
+        <div class="modal-box" style="max-width:1100px;">
+            <div class="modal-header">
+                <h3 id="semester-modal-title">Semester baholar</h3>
+                <button onclick="closeSemesterModal()" class="modal-close">&times;</button>
+            </div>
+            <div id="semester-modal-body" style="max-height:60vh;overflow-y:auto;padding:0;"></div>
         </div>
     </div>
 
@@ -199,6 +245,7 @@
         let currentDirection = 'desc';
         let currentPage = 1;
         let reportData = [];
+        let isExpelledPage = {{ ($isExpelledPage ?? false) ? 'true' : 'false' }};
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
@@ -227,7 +274,8 @@
                 subject: $('#subject').val() || '',
                 student_status: $('#student_status').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
-                min_debt_count: $('#min_debt_count').val() || 4,
+                min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() || 4) : 4),
+                student_name: ($('#student_name').length ? ($('#student_name').val() || '') : ''),
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
                 direction: currentDirection,
@@ -247,7 +295,7 @@
             var startTime = performance.now();
 
             $.ajax({
-                url: '{{ route("admin.reports.debtors.data") }}',
+                url: '{{ route($dataRouteName ?? 'admin.reports.debtors.data') }}',
                 type: 'GET',
                 data: params,
                 timeout: 120000,
@@ -264,8 +312,18 @@
                     }
 
                     reportData = res.data;
-                    $('#total-badge').text('Jami: ' + res.total + ' ta qarzdor talaba');
+                    $('#total-badge').text('Jami: ' + res.total + (isExpelledPage ? ' ta talaba (academic record yo\'q)' : ' ta qarzdor talaba'));
                     $('#time-badge').text(elapsed + ' soniyada hisoblandi');
+
+                    if (isExpelledPage && res.summary) {
+                        var s = res.summary;
+                        $('#sum-students').text(s.total_students);
+                        $('#sum-subjects').text(s.total_debt_subjects);
+                        $('#sum-credits').text(s.total_credits);
+                        $('#sum-avg').text(s.avg_debts_per_student);
+                        $('#summary-panel').show();
+                    }
+
                     renderTable(res.data);
                     renderPagination(res);
                     $('#table-area').show();
@@ -300,8 +358,11 @@
                 html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td><span class="badge badge-violet">' + esc(r.semester_name) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-debt">' + r.debt_count + '</span></td>';
-                html += '<td style="text-align:center;"><span class="badge badge-violet">' + (r.lesson_days || 0) + ' kun</span></td>';
+                if (!isExpelledPage) {
+                    html += '<td style="text-align:center;"><span class="badge badge-violet">' + (r.lesson_days || 0) + ' kun</span></td>';
+                }
                 html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(' + i + ')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Batafsil</button></td>';
                 html += '</tr>';
             }
@@ -312,46 +373,196 @@
             var r = reportData[idx];
             if (!r) return;
 
-            $('#modal-title').text(r.full_name + ' - Qarzdorliklar (' + r.debt_count + ' ta fan)');
+            // Qarzdorlik fanlarini saqlash (2-chi modal uchun)
+            currentDebtSubjects = r.debts || [];
+
+            $('#modal-title').text(r.full_name + ' — Qarzdorliklar');
+
+            // Talaba info qismi
+            var info = '<div class="info-grid">';
+            info += '<div><div class="info-label">Talaba</div><div class="info-value">' + esc(r.full_name) + '</div></div>';
+            info += '<div><div class="info-label">ID raqam</div><div class="info-value">' + esc(r.student_id_number) + '</div></div>';
+            info += '<div><div class="info-label">Guruh</div><div class="info-value">' + esc(r.group_name) + '</div></div>';
+            info += '<div><div class="info-label">Fakultet</div><div class="info-value">' + esc(r.department_name) + '</div></div>';
+            info += '<div><div class="info-label">Yo\'nalish</div><div class="info-value">' + esc(r.specialty_name) + '</div></div>';
+            info += '<div><div class="info-label">Bosqich</div><div class="info-value">' + esc(r.level_name) + ' / ' + esc(r.semester_name) + '</div></div>';
+            info += '</div>';
+            $('#modal-student-info').html(info);
 
             var journalBase = '{{ url("/admin/journal/show") }}';
-            var html = '<table class="detail-table">';
-            html += '<thead><tr><th>#</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
-            html += '<tbody>';
+            var html = '';
 
-            if (r.debts && r.debts.length) {
-                for (var d = 0; d < r.debts.length; d++) {
-                    var debt = r.debts[d];
-                    html += '<tr>';
-                    html += '<td>' + (d + 1) + '</td>';
-                    html += '<td style="font-weight:600;color:#0f172a;min-width:160px;">' + esc(debt.subject_name) + '</td>';
-                    var minL = debt.minimum_limit || 60;
-                    html += '<td class="' + (debt.jb < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.jb + '</td>';
-                    html += '<td class="' + (debt.mt < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.mt + '</td>';
-                    html += '<td class="' + (debt.on !== null && debt.on < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.on !== null ? debt.on : '-') + '</td>';
-                    html += '<td class="' + (debt.jn_percent < minL ? 'cell-fail' : 'cell-pass') + '" style="font-weight:700;">' + debt.jn_percent + '</td>';
-                    html += '<td class="' + (debt.oski !== null && debt.oski < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.oski !== null ? debt.oski : '-') + '</td>';
-                    html += '<td class="' + (debt.test !== null && debt.test < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.test !== null ? debt.test : '-') + '</td>';
-                    html += '<td class="' + (debt.absence_percent > 25 ? 'cell-fail' : 'cell-pass') + '">' + debt.absence_percent + '%</td>';
-                    html += '<td>';
-                    var reasons = debt.reasons || [];
-                    for (var ri = 0; ri < reasons.length; ri++) {
-                        html += '<span class="reason-badge">' + esc(reasons[ri]) + '</span>';
-                    }
-                    html += '</td>';
-                    var jUrl = journalBase + '/' + encodeURIComponent(debt.group_id) + '/' + encodeURIComponent(debt.subject_id) + '/' + encodeURIComponent(debt.semester_code);
-                    html += '<td style="text-align:center;"><a href="' + jUrl + '" target="_blank" class="journal-link-modal">Jurnal</a></td>';
-                    html += '</tr>';
-                }
-            }
+            // Barcha semestrlar — har doim tepada
+            html += '<div style="padding:16px 20px 8px;font-weight:700;color:#1a3268;font-size:14px;">Semestrlar</div>';
+            html += '<div id="all-records-wrap" style="padding:0 20px 12px;"><div style="padding:20px;text-align:center;color:#94a3b8;"><i>Yuklanmoqda...</i></div></div>';
 
-            html += '</tbody></table>';
+            // Qarzdorliklar bo'limi — AJAX orqali yuklanadi
+            html += '<div id="grade-debts-wrap" style="display:none;"></div>';
+
             $('#modal-body').html(html);
             $('#detail-modal').fadeIn(150);
+
+            // Barcha semestrlarni AJAX bilan yuklash
+            loadAllAcademicRecords(r.hemis_id, r.full_name, r.group_name);
+        }
+
+        function loadAllAcademicRecords(studentId, studentName, groupName) {
+            $.ajax({
+                url: '{{ route("admin.reports.student-all-records") }}',
+                data: { student_id: studentId, group_name: groupName, current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' },
+                success: function(resp) {
+                    var semesters = resp.semesters || [];
+                    if (!semesters.length) {
+                        $('#all-records-wrap').html('<div style="padding:12px;color:#94a3b8;">Academic record topilmadi</div>');
+                        return;
+                    }
+                    var gh = '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+                    for (var s = 0; s < semesters.length; s++) {
+                        var sem = semesters[s];
+                        gh += '<div data-student="' + esc(studentId) + '" data-semester="' + esc(sem.semester_id) + '" data-student-name="' + esc(studentName) + '" data-sem-name="' + esc(sem.semester_name) + '" data-group="' + esc(groupName) + '" ';
+                        gh += 'onclick="openSemGradesModal(this)" class="sem-tab">';
+                        gh += esc(sem.semester_name);
+                        gh += '<span style="font-size:10px;color:#94a3b8;display:block;">' + sem.subject_count + ' ta fan</span>';
+                        gh += '</div>';
+                    }
+                    gh += '</div>';
+                    $('#all-records-wrap').html(gh);
+
+                    // Semestr baholaridan Qarzdorliklar ro'yxatini qurish
+                    var gradeDebts = resp.grade_debts || [];
+                    if (gradeDebts.length > 0) {
+                        var dh = '<div style="padding:8px 20px 4px;font-weight:700;color:#dc2626;font-size:14px;border-top:2px solid #fee2e2;">Qarzdorliklar (' + gradeDebts.length + ' ta fan)</div>';
+                        dh += '<table class="detail-table">';
+                        dh += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
+                        dh += '<tbody>';
+                        for (var d = 0; d < gradeDebts.length; d++) {
+                            var debt = gradeDebts[d];
+                            dh += '<tr>';
+                            dh += '<td>' + (d + 1) + '</td>';
+                            dh += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
+                            dh += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
+                            dh += '<td>' + esc(debt.credit) + '</td>';
+                            dh += '<td>' + esc(debt.total_acload) + '</td>';
+                            var statusText = '';
+                            if (debt.status === 'Qayta o\'qish') {
+                                statusText = '<span class="reason-badge" style="background:#fef3c7;color:#92400e;border-color:#fde68a;">Qayta o\'qish</span>';
+                            } else if (debt.status && debt.status.indexOf('Baho:') === 0) {
+                                statusText = '<span class="reason-badge">' + esc(debt.status) + '</span>';
+                            } else {
+                                statusText = '<span class="reason-badge">Qarzdor</span>';
+                            }
+                            dh += '<td>' + statusText + '</td>';
+                            dh += '</tr>';
+                        }
+                        dh += '</tbody></table>';
+
+                        var currentTitle = $('#modal-title').text().split(' — ')[0];
+                        $('#modal-title').text(currentTitle + ' — Qarzdorliklar (' + gradeDebts.length + ' ta fan)');
+
+                        $('#grade-debts-wrap').html(dh).show();
+                    } else {
+                        $('#grade-debts-wrap').html('<div style="padding:8px 20px 4px;font-weight:700;color:#16a34a;font-size:14px;border-top:2px solid #dcfce7;">Qarzdorlik yo\'q</div>').show();
+                        var currentTitle = $('#modal-title').text().split(' — ')[0];
+                        $('#modal-title').text(currentTitle + ' — Qarzdorliklar (0 ta fan)');
+                    }
+
+                    currentDebtSubjects = gradeDebts;
+                },
+                error: function() {
+                    $('#all-records-wrap').html('<div style="padding:12px;color:#ef4444;">Xatolik yuz berdi</div>');
+                }
+            });
         }
 
         function closeModal() {
             $('#detail-modal').fadeOut(150);
+        }
+
+        function closeSemesterModal() {
+            $('#semester-modal').fadeOut(150);
+        }
+
+        // 1-chi modaldagi qarzdorlik fanlari (showDetail dan saqlanadi)
+        var currentDebtSubjects = [];
+
+        function openSemGradesModal(headerRow) {
+            var $header = $(headerRow);
+            var studentId = $header.data('student');
+            var semesterCode = $header.data('semester');
+            var studentName = $header.data('student-name') || '';
+            var semesterName = $header.data('sem-name') || $header.find('td').text().trim().split('(')[0].trim();
+            var groupName = $header.data('group') || '';
+
+            // 2-chi modalni ochish (1-chi modal yopilmaydi)
+            $('#semester-modal-title').html(esc(studentName) + ' &mdash; <span style="color:#a5b4fc;">' + esc(groupName) + '</span> &mdash; ' + esc(semesterName));
+            $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#c7d2fe;"><i>Yuklanmoqda...</i></div>');
+            $('#semester-modal').fadeIn(150);
+
+            // 1-chi modaldagi shu semestrga tegishli qarzdorlik fan nomlari
+            var debtNamesForSemester = [];
+            for (var di = 0; di < currentDebtSubjects.length; di++) {
+                debtNamesForSemester.push(currentDebtSubjects[di].subject_name ? currentDebtSubjects[di].subject_name.trim().toLowerCase() : '');
+            }
+
+            $.ajax({
+                url: '{{ route("admin.reports.student-semester-grades") }}',
+                data: { student_id: studentId, semester_code: semesterCode, group_name: groupName },
+                success: function(resp) {
+                    var grades = resp.grades || [];
+                    if (!grades.length) {
+                        $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#94a3b8;">Bu semestrda academic record topilmadi</div>');
+                        return;
+                    }
+
+                    // Birinchi modaldagi fanlarni belgilash uchun
+                    var academicSubjectNames = [];
+                    for (var ag = 0; ag < grades.length; ag++) {
+                        academicSubjectNames.push((grades[ag].subject_name || '').trim().toLowerCase());
+                    }
+
+                    var gh = '<div style="padding:4px 0;">';
+                    gh += '<table class="detail-table" style="margin:0;">';
+                    gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th><th>Holat</th></tr></thead><tbody>';
+                    for (var g = 0; g < grades.length; g++) {
+                        var gr = grades[g];
+                        var point = gr.total_point || '-';
+                        var grade = gr.grade || '-';
+                        var gradeClass = (point !== '-' && parseFloat(point) >= 60) ? 'cell-pass' : 'cell-fail';
+                        var subNameLower = (gr.subject_name || '').trim().toLowerCase();
+                        var hasPassingGrade = point !== '-' && parseFloat(point) >= 60 && grade !== '-' && grade !== '2' && grade !== '0';
+                        var isMissingGrade = (point === '-' && grade === '-');
+                        var isFailedGrade = (grade !== '-' && (grade === '2' || grade === '0'));
+                        var isDebt = !hasPassingGrade && (isMissingGrade || isFailedGrade || (point !== '-' && parseFloat(point) < 60));
+                        var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';
+                        gh += '<tr style="' + rowBg + '">';
+                        gh += '<td>' + (g + 1) + '</td>';
+                        gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name) + '</td>';
+                        gh += '<td>' + esc(gr.credit) + '</td>';
+                        gh += '<td>' + esc(gr.total_acload) + '</td>';
+                        gh += '<td class="' + gradeClass + '">' + esc(point) + '</td>';
+                        gh += '<td><span class="badge badge-indigo">' + esc(grade) + '</span></td>';
+                        gh += '<td>';
+                        if (isDebt) {
+                            gh += '<span class="reason-badge">Qarzdor</span>';
+                        } else if (hasPassingGrade) {
+                            gh += '<span style="color:#16a34a;font-weight:600;font-size:12px;">&#10003;</span>';
+                        }
+                        gh += '</td>';
+                        gh += '</tr>';
+                    }
+                    gh += '</tbody></table>';
+
+                    gh += '</div>';
+                    $('#semester-modal-body').html(gh);
+                },
+                error: function(xhr) {
+                    var errMsg = 'Xatolik yuz berdi';
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errMsg += ': ' + xhr.responseJSON.error;
+                    }
+                    $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#ef4444;">' + esc(errMsg) + '</div>');
+                }
+            });
         }
 
         function toggleExcelMenu() {
@@ -372,7 +583,7 @@
             var params = getFilters();
             params.export = type;
             var query = $.param(params);
-            window.location.href = '{{ route("admin.reports.debtors.data") }}?' + query;
+            window.location.href = '{{ route($dataRouteName ?? 'admin.reports.debtors.data') }}?' + query;
         }
 
         function renderPagination(res) {
@@ -521,13 +732,20 @@
         .pg-btn:hover { background: #fef2f2; border-color: #dc2626; color: #dc2626; }
         .pg-active { background: linear-gradient(135deg, #dc2626, #ef4444) !important; color: #fff !important; border-color: #dc2626 !important; }
 
-        /* Modal */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-        .modal-content { background: #fff; border-radius: 16px; width: 95%; max-width: 1100px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.2); }
-        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-radius: 16px 16px 0 0; }
-        .modal-close { width: 32px; height: 32px; border-radius: 8px; border: none; background: #fee2e2; color: #dc2626; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
-        .modal-close:hover { background: #dc2626; color: #fff; }
-        .modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        /* Modal — sababli ariza stili */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+        .modal-box { background: #fff; border-radius: 16px; width: 100%; max-width: 1100px; box-shadow: 0 25px 60px rgba(0,0,0,0.25); overflow: hidden; }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; }
+        .modal-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #fff; }
+        .modal-close { width: 32px; height: 32px; border: none; background: rgba(255,255,255,0.15); color: #fff; border-radius: 8px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+        .modal-close:hover { background: rgba(255,255,255,0.3); }
+        .modal-info { padding: 14px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+        .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 20px; }
+        .info-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+        .info-value { font-size: 13px; font-weight: 600; color: #0f172a; }
+        .sem-tab { cursor: pointer; padding: 10px 16px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; font-weight: 700; color: #4338ca; font-size: 13px; text-align: center; min-width: 100px; transition: all 0.15s; }
+        .sem-tab:hover { background: #4338ca; color: #fff; border-color: #4338ca; }
+        .sem-tab:hover span { color: #e0e7ff !important; }
 
         .detail-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .detail-table thead tr { background: #f8fafc; }
@@ -544,5 +762,9 @@
         .reason-badge { display: inline-block; padding: 2px 8px; margin: 2px 3px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
         .journal-link-modal { display: inline-block; padding: 3px 10px; background: #eff6ff; color: #2b5ea7; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
         .journal-link-modal:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
+
+        .summary-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 20px; min-width: 140px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+        .summary-num { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.2; }
+        .summary-label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
     </style>
 </x-app-layout>

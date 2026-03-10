@@ -25,6 +25,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       final provider = context.read<StudentProvider>();
       provider.loadDashboard();
       provider.loadProfile();
+      provider.loadContract();
     });
   }
 
@@ -87,6 +88,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               await Future.wait([
                 provider.loadDashboard(),
                 provider.loadProfile(),
+                provider.loadContract(),
               ]);
             },
             child: SingleChildScrollView(
@@ -146,7 +148,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
-                        _buildTuitionFeeSection(context, profile, l, isDark),
+                        _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -642,9 +644,21 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return name.isNotEmpty ? name[0] : '?';
   }
 
+  String _formatMoney(num amount) {
+    final str = amount.toInt().toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) buf.write(' ');
+      buf.write(str[i]);
+    }
+    return buf.toString();
+  }
+
   Widget _buildTuitionFeeSection(
     BuildContext context,
     Map<String, dynamic>? profile,
+    Map<String, dynamic>? contractData,
+    List<dynamic>? contractList,
     AppLocalizations l,
     bool isDark,
   ) {
@@ -655,6 +669,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final cardColor = isDark ? AppTheme.darkCard : Colors.white;
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+
+    final summary = contractData?['summary'] as Map<String, dynamic>?;
+    final totalAmount = (summary?['total_amount'] ?? 0).toDouble();
+    final paidAmount = (summary?['paid_amount'] ?? 0).toDouble();
+    final remainingAmount = (summary?['remaining_amount'] ?? 0).toDouble();
+    final progress = totalAmount > 0 ? (paidAmount / totalAmount).clamp(0.0, 1.0) : 0.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -729,7 +749,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       style: TextStyle(fontSize: 13, color: subTextColor),
                     ),
                     Text(
-                      '-- / -- so\'m',
+                      '${_formatMoney(paidAmount)} / ${_formatMoney(totalAmount)} so\'m',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -742,14 +762,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: 0,
+                    value: progress,
                     backgroundColor: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
-                    valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.successColor),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      remainingAmount <= 0 ? AppTheme.successColor : AppTheme.warningColor,
+                    ),
                     minHeight: 6,
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Remaining & deadline
+                // Remaining
                 Row(
                   children: [
                     Expanded(
@@ -759,11 +781,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           Text(l.remaining, style: TextStyle(fontSize: 11, color: subTextColor)),
                           const SizedBox(height: 2),
                           Text(
-                            '-- so\'m',
+                            '${_formatMoney(remainingAmount)} so\'m',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: AppTheme.warningColor,
+                              color: remainingAmount <= 0 ? AppTheme.successColor : AppTheme.warningColor,
                             ),
                           ),
                         ],
@@ -776,7 +798,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           Text(l.deadline, style: TextStyle(fontSize: 11, color: subTextColor)),
                           const SizedBox(height: 2),
                           Text(
-                            '--',
+                            contractData?['education_year']?.toString() ?? '--',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -800,6 +822,124 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 ),
               ],
             ],
+          ),
+        ),
+        // Contract list section
+        if (isContract && contractList != null && contractList.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text(
+            l.contractList,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 12),
+          ...contractList.map((contract) {
+            final c = contract as Map<String, dynamic>;
+            final cAmount = (c['contract_amount'] ?? 0).toDouble();
+            final cPaid = (c['paid_amount'] ?? 0).toDouble();
+            final cUnpaid = (c['unpaid_amount'] ?? 0).toDouble();
+            final cStatus = c['status']?.toString() ?? '';
+            final educYear = c['education_year']?.toString() ?? '';
+            final isPaid = cStatus == 'paid';
+
+            return Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(isDark ? 30 : 8),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Education year & status row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (educYear.isNotEmpty)
+                        Text(
+                          educYear,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isPaid
+                              ? AppTheme.successColor.withAlpha(25)
+                              : AppTheme.errorColor.withAlpha(25),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          isPaid ? l.statusPaid : l.statusUnpaid,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isPaid ? AppTheme.successColor : AppTheme.errorColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Contract amount
+                  _buildContractRow(
+                    l.contractAmount,
+                    '${_formatMoney(cAmount)} so\'m',
+                    subTextColor,
+                    textColor,
+                  ),
+                  const SizedBox(height: 6),
+                  // Paid amount
+                  _buildContractRow(
+                    l.paidAmount,
+                    '${_formatMoney(cPaid)} so\'m',
+                    subTextColor,
+                    AppTheme.successColor,
+                  ),
+                  const SizedBox(height: 6),
+                  // Unpaid amount
+                  _buildContractRow(
+                    l.unpaidAmount,
+                    '${_formatMoney(cUnpaid)} so\'m',
+                    subTextColor,
+                    cUnpaid > 0 ? AppTheme.errorColor : AppTheme.successColor,
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildContractRow(String label, String value, Color labelColor, Color valueColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: labelColor),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: valueColor,
           ),
         ),
       ],

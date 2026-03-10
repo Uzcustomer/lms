@@ -70,16 +70,24 @@ class TelegramService
         }
 
         try {
-            Http::retry(2, 500)
+            $response = Http::retry(2, 500)
                 ->post("https://api.telegram.org/bot{$botToken}/editMessageText", [
                     'chat_id' => $chatId,
                     'message_id' => $messageId,
                     'text' => $newText,
                 ]);
 
+            if (!$response->successful()) {
+                $description = $response->json('description') ?? '';
+                // "message is not modified" — bu xato emas, o'tkazib yuborish
+                if (!str_contains($description, 'message is not modified')) {
+                    Log::warning('Telegram editMessage muvaffaqiyatsiz: ' . $description);
+                }
+                return false;
+            }
+
             return true;
         } catch (\Throwable $e) {
-            // "message is not modified" xatosini ignore qilish
             if (!str_contains($e->getMessage(), 'message is not modified')) {
                 Log::error('Telegram xabarni tahrirlashda xato: ' . $e->getMessage());
             }

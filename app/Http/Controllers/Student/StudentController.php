@@ -65,6 +65,7 @@ class StudentController extends Controller
 
         // Qarzdor fanlarni academic_records dan olish (joriy semestrdan tashqari)
         $currentSemesterId = $student->semester_id;
+        $currentSemesterNameForDebt = $student->semester_name;
 
         $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
             ->where(function ($q) {
@@ -73,6 +74,7 @@ class StudentController extends Controller
                   ->orWhere('retraining_status', true);
             })
             ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
+            ->when(!$currentSemesterId && $currentSemesterNameForDebt, fn($q) => $q->where('semester_name', '!=', $currentSemesterNameForDebt))
             ->orderBy('semester_name')
             ->orderBy('subject_name')
             ->get();
@@ -86,6 +88,9 @@ class StudentController extends Controller
             ->take(10)
             ->get();
 
+        $currentSemesterCode = $student->semester_code;
+        $currentSemesterName = $student->semester_name;
+
         $gradesBySubject = StudentGrade::where('student_id', $student->id)
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->orderBy('subject_name')
@@ -93,7 +98,12 @@ class StudentController extends Controller
             ->get()
             ->groupBy('subject_name');
 
-        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'debtBySemester', 'recentGrades', 'gradesBySubject'));
+        // Joriy semester fanlarini ajratish
+        $currentSemesterSubjects = $gradesBySubject->filter(function ($grades) use ($currentSemesterCode) {
+            return $grades->first()?->semester_code == $currentSemesterCode;
+        })->keys()->toArray();
+
+        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'debtBySemester', 'recentGrades', 'gradesBySubject', 'currentSemesterSubjects', 'currentSemesterName'));
     }
 
     public function getSchedule(Request $request)

@@ -3382,12 +3382,19 @@ class ReportController extends Controller
                     $allStudentResults[$hemis] = [];
                 }
 
+                // Kredit va soat ma'lumotlarini curriculum_subjects dan olish
+                $currHemisId = $groupCurriculumMap[$data['group_id']] ?? null;
+                $csKey = $currHemisId ? ($currHemisId . '|' . $data['subject_id'] . '|' . $data['semester_code']) : null;
+                $cs = $csKey ? ($curriculumSubjects[$csKey] ?? null) : null;
+
                 $allStudentResults[$hemis][] = [
                     'subject_id' => $data['subject_id'],
                     'subject_name' => $data['subject_name'],
                     'semester_code' => $data['semester_code'],
                     'semester_name' => $semesterNameMap[$data['semester_code']] ?? $data['semester_code'] . '-semestr',
                     'group_id' => $groupDbIdMap[$data['group_id']] ?? $data['group_id'],
+                    'credit' => $cs->credit ?? null,
+                    'total_acload' => $cs->total_acload ?? null,
                     'jb' => round($jbAvg),
                     'mt' => round($mtAvg),
                     'on' => $hasOn ? round($onAvg) : null,

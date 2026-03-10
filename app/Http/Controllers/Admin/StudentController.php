@@ -919,6 +919,8 @@ class StudentController extends Controller
 
     public function exportStudents(Request $request)
     {
+        ini_set('memory_limit', '512M');
+        set_time_limit(300);
         ActivityLogService::log('export', 'student', 'Talabalar ro\'yxati eksport qilindi');
         $filters = $request->only([
             'student_id_number', 'full_name', 'level_code', 'semester_code',

@@ -145,17 +145,47 @@ class ContractController extends Controller
 
         if ($request->filled('search')) {
             $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('full_name', 'like', "%{$search}%")
-                  ->orWhere('contract_number', 'like', "%{$search}%");
+            $tokens = array_filter(explode(' ', trim($search)));
+            $query->where(function ($q) use ($tokens, $search) {
+                // Shartnoma raqami bo'yicha to'g'ridan-to'g'ri qidiruv
+                $q->where('contract_number', 'like', "%{$search}%");
+                // Ism-familiya bo'yicha — har bir so'z alohida tekshiriladi (istalgan tartibda)
+                if (count($tokens) > 1) {
+                    $q->orWhere(function ($inner) use ($tokens) {
+                        foreach ($tokens as $token) {
+                            $inner->where('full_name', 'like', "%{$token}%");
+                        }
+                    });
+                } else {
+                    $q->orWhere('full_name', 'like', "%{$search}%");
+                }
             });
+        }
+
+        if ($request->filled('_group')) {
+            $query->whereExists(function ($sub) use ($request) {
+                $sub->select(DB::raw(1))
+                    ->from('students')
+                    ->whereColumn('students.hemis_id', 'contract_list.student_hemis_id')
+                    ->where('students.group_name', $request->input('_group'));
+            });
+        }
+
+        if ($request->filled('_debt')) {
+            $debt = $request->input('_debt');
+            $thresholds = ['25' => 0.25, '50' => 0.50, '75' => 0.75, '100' => 1.00];
+            if (isset($thresholds[$debt])) {
+                $t = $thresholds[$debt];
+                $query->where('edu_contract_sum', '>', 0)
+                      ->whereRaw('paid_credit_amount / edu_contract_sum < ?', [$t]);
+            }
         }
 
         $limit = (int) $request->input('limit', 50);
         $page = (int) $request->input('page', 1);
 
         $total = $query->count();
-        $items = $query->select('contract_list.*', 'students.group_name')
+        $items = $query->select('contract_list.*', 'students.group_name', 'students.student_id_number')
             ->leftJoin('students', 'students.hemis_id', '=', 'contract_list.student_hemis_id')
             ->orderByDesc('contract_list.hemis_created_at')
             ->offset(($page - 1) * $limit)
@@ -175,6 +205,24 @@ class ContractController extends Controller
                 ],
             ],
         ]);
+    }
+
+    public function getGroups(Request $request)
+    {
+        $query = DB::table('students')
+            ->whereNotNull('group_name')->where('group_name', '!=', '')
+            ->select('group_name')->distinct()->orderBy('group_name');
+
+        if ($request->filled('level_code')) {
+            $query->where('level_code', $request->input('level_code'));
+        }
+        if ($request->filled('faculty_id')) {
+            $dept = Department::find($request->input('faculty_id'));
+            if ($dept) $query->where('department_code', $dept->code);
+        }
+
+        $groups = $query->pluck('group_name');
+        return response()->json($groups);
     }
 
     public function sync(Request $request)

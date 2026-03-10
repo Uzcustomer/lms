@@ -39,6 +39,10 @@
                             <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
                         <div class="filter-item">
+                            <label class="filter-label"><span class="fl-dot" style="background:#059669;"></span> Guruh</label>
+                            <select id="group_filter" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item">
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Shartnoma turi</label>
                             <select id="contract_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -92,6 +96,16 @@
                                 @foreach($organizations as $org)
                                     <option value="{{ $org }}">{{ $org }}</option>
                                 @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item" style="max-width:170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Qarzdorlik</label>
+                            <select id="debt_filter" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="25">25% dan kam to'lagan</option>
+                                <option value="50">50% dan kam to'lagan</option>
+                                <option value="75">75% dan kam to'lagan</option>
+                                <option value="100">To'liq to'lamagan</option>
                             </select>
                         </div>
                         <div class="filter-item" style="max-width:200px;">
@@ -229,6 +243,8 @@
                 _department: $('#faculty').val() || '',
                 _specialty: $('#specialty').val() || '',
                 _level: $('#level_code').val() || '',
+                _group: $('#group_filter').val() || '',
+                _debt: $('#debt_filter').val() || '',
                 _contract_type: $('#contract_type').val() || '',
                 _sum_type: $('#sum_type').val() || '',
                 _edu_form: $('#edu_form').val() || '',
@@ -325,7 +341,7 @@
                 // Talaba
                 html += '<td style="min-width:160px;font-weight:600;color:#0f172a;font-size:12.5px;">' + esc(item.full_name) + '</td>';
                 // Talaba ID
-                html += '<td style="min-width:110px;font-size:11px;color:#64748b;white-space:nowrap;">' + esc(String(item.student_hemis_id)) + '</td>';
+                html += '<td style="min-width:110px;font-size:11px;color:#64748b;white-space:nowrap;">' + esc(String(item.student_id_number || item.student_hemis_id)) + '</td>';
                 // Shartnoma raqami
                 html += '<td style="min-width:130px;"><span class="text-cell" style="font-weight:600;color:#2b5ea7;">' + esc(item.contract_number) + '</span></td>';
                 // Shartnoma turi
@@ -516,13 +532,23 @@
             function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
 
             function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
+            function rGroups() {
+                var p = { level_code: $('#level_code').val() || '', faculty_id: $('#faculty').val() || '' };
+                rd('#group_filter');
+                $.get('{{ route("admin.contracts.get-groups") }}', p, function(d) {
+                    $.each(d, function(i, v) { $('#group_filter').append('<option value="'+v+'">'+v+'</option>'); });
+                    $('#group_filter').trigger('change.select2');
+                });
+            }
 
             $('#education_type').change(function() { rSpec(); });
-            $('#faculty').change(function() { rSpec(); });
+            $('#faculty').change(function() { rSpec(); rGroups(); });
+            $('#level_code').change(function() { rGroups(); });
 
             // Boshlang'ich yuklash
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code', function() {
+                rGroups();
                 // Sahifa ochilganda avtomatik qidiruv
                 loadContracts(1);
             });

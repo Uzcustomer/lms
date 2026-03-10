@@ -18,6 +18,9 @@ class ImportContracts extends Command
         $telegram->notify("Kontraktlar importi boshlandi");
         $this->info('Fetching contracts from HEMIS API...');
 
+        // 1-QADAM: HEMIS ning bank bilan sinxronizatsiyasini ishga tushirish
+        $this->triggerHemisBankSync($telegram);
+
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 200;
@@ -118,5 +121,115 @@ class ImportContracts extends Command
         $msg = "Kontraktlar importi tugadi. Jami: {$totalProcessed} ta";
         $telegram->notify($msg);
         $this->info($msg);
+    }
+
+    protected function triggerHemisBankSync(TelegramService $telegram): void
+    {
+        $webUrl   = rtrim(config('services.hemis.web_url', 'https://hemis.ttatf.uz'), '/');
+        $login    = config('services.hemis.web_login');
+        $password = config('services.hemis.web_password');
+
+        if (!$login || !$password) {
+            $this->warn('HEMIS_WEB_LOGIN yoki HEMIS_WEB_PASSWORD sozlanmagan — bank sinxi o\'tkazib yuborildi');
+            return;
+        }
+
+        $this->info('HEMIS ga login qilinmoqda...');
+
+        try {
+            // 1. Login sahifasidan CSRF token va cookie olish
+            $loginPage = Http::withoutVerifying()
+                ->timeout(15)
+                ->withOptions(['allow_redirects' => true])
+                ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; LMS-Sync/1.0)'])
+                ->get("{$webUrl}/site/login");
+
+            if (!$loginPage->successful()) {
+                $this->warn('HEMIS login sahifasi ochilmadi (HTTP ' . $loginPage->status() . ')');
+                return;
+            }
+
+            // Response cookie larini olish
+            $sessionCookie = $this->parseCookiesFromResponse($loginPage);
+
+            // CSRF tokenni HTML dan olish
+            preg_match('/name="_csrf-backend"\s+value="([^"]+)"/i', $loginPage->body(), $csrfMatch);
+            if (empty($csrfMatch[1])) {
+                preg_match('/<meta\s+name="csrf-token"\s+content="([^"]+)"/i', $loginPage->body(), $csrfMatch);
+            }
+            $csrfToken = $csrfMatch[1] ?? '';
+
+            // 2. Login POST
+            $loginResp = Http::withoutVerifying()
+                ->timeout(15)
+                ->withOptions(['allow_redirects' => ['max' => 5, 'track_redirects' => true]])
+                ->withHeaders([
+                    'Referer'    => "{$webUrl}/site/login",
+                    'Origin'     => $webUrl,
+                    'Cookie'     => $sessionCookie,
+                    'User-Agent' => 'Mozilla/5.0 (compatible; LMS-Sync/1.0)',
+                ])
+                ->asForm()
+                ->post("{$webUrl}/site/login", [
+                    'LoginForm[username]' => $login,
+                    'LoginForm[password]' => $password,
+                    '_csrf-backend'       => $csrfToken,
+                ]);
+
+            // Login muvaffaqiyatini tekshirish
+            $redirectHistory = $loginResp->transferStats?->getHandlerStats()['redirect_count'] ?? null;
+            $responseBody    = $loginResp->body();
+
+            if (str_contains($responseBody, 'LoginForm') && !str_contains($responseBody, 'logout')) {
+                $this->warn('HEMIS login muvaffaqiyatsiz (noto\'g\'ri login/parol)');
+                return;
+            }
+
+            // Login dan qaytgan yangi cookie larni olish
+            $sessionCookie = $this->parseCookiesFromResponse($loginResp) ?: $sessionCookie;
+
+            $this->info('HEMIS ga login muvaffaqiyatli. Bank sinxi boshlandi...');
+
+            // 3. Bank sync trigger
+            $syncResp = Http::withoutVerifying()
+                ->timeout(30)
+                ->withOptions(['allow_redirects' => true])
+                ->withHeaders([
+                    'Referer'    => "{$webUrl}/student-data/contract",
+                    'Cookie'     => $sessionCookie,
+                    'User-Agent' => 'Mozilla/5.0 (compatible; LMS-Sync/1.0)',
+                ])
+                ->get("{$webUrl}/student-data/contract", ['sync' => 1]);
+
+            if ($syncResp->successful()) {
+                $this->info('HEMIS bank sinxi muvaffaqiyatli. 5 soniya kutilmoqda...');
+                sleep(5);
+            } else {
+                $this->warn('HEMIS bank sinxi HTTP ' . $syncResp->status() . ' qaytardi — import davom ettiriladi');
+            }
+        } catch (\Exception $e) {
+            $this->warn('HEMIS bank sinxi xatosi: ' . $e->getMessage() . ' — import davom ettiriladi');
+        }
+    }
+
+    protected function parseCookiesFromResponse($response): string
+    {
+        $cookies = [];
+        $headers = $response->headers();
+        $setCookies = (array) ($headers['Set-Cookie'] ?? $headers['set-cookie'] ?? []);
+
+        if (is_string($setCookies)) {
+            $setCookies = [$setCookies];
+        }
+
+        foreach ($setCookies as $line) {
+            // "name=value; Path=/; ..." dan faqat name=value qismini olish
+            $parts = explode(';', $line);
+            if (!empty($parts[0])) {
+                $cookies[] = trim($parts[0]);
+            }
+        }
+
+        return implode('; ', $cookies);
     }
 }

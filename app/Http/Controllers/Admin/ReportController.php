@@ -3745,17 +3745,10 @@ class ReportController extends Controller
             }
 
             $groupName = $request->get('group_name', '');
-            $isCurrentSemester = $request->get('current_semester', '0') == '1';
+            $showCurrentSemester = $request->get('current_semester', '0') == '1';
 
-            // Joriy semestr ID larini olish (toggle ON bo'lsa faqat joriy semestr ko'rsatish uchun)
-            $currentSemesterIds = [];
-            if ($isCurrentSemester) {
-                $currentSemesterIds = DB::table('semesters')
-                    ->where('current', true)
-                    ->pluck('code')
-                    ->map(fn($v) => (string) $v)
-                    ->toArray();
-            }
+            // Talabaning joriy semester kodi
+            $studentSemesterCode = $student->semester_code ? (string) $student->semester_code : null;
 
             $records = DB::table('curriculum_subjects')
                 ->where('curricula_hemis_id', $student->curriculum_id)
@@ -3768,16 +3761,20 @@ class ReportController extends Controller
             // Guruh suffiksi bo'yicha filtr
             $records = $this->filterSubjectsByGroupSuffix($records, $groupName);
 
-            // Semestrlarga guruhlash
-            $semesters = $records->groupBy('semester_code')->map(function ($items, $semesterCode) {
-                return (object) [
-                    'semester_id' => $semesterCode,
-                    'semester_name' => $items->first()->semester_name,
-                    'subject_count' => $items->count(),
-                ];
-            })->values();
+            // Semestrlarga guruhlash (toggle OFF bo'lsa joriy semester cardni yashirish)
+            $semesters = $records->groupBy('semester_code')
+                ->when(!$showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
+                    return $collection->reject(fn($items, $code) => (string) $code === $studentSemesterCode);
+                })
+                ->map(function ($items, $semesterCode) {
+                    return (object) [
+                        'semester_id' => $semesterCode,
+                        'semester_name' => $items->first()->semester_name,
+                        'subject_count' => $items->count(),
+                    ];
+                })->values();
 
-            // Har bir semester ichidagi bahosi/balli yo'q fanlarni aniqlash (joriy semestrdan tashqari)
+            // Qarzdorliklar: joriy semester fanlari doim chiqariladi (baho semester oxirida qo'yiladi)
             $gradeDebts = [];
             $allSubjects = DB::table('curriculum_subjects as cs')
                 ->leftJoin('academic_records as ar', function ($join) use ($studentId) {
@@ -3788,8 +3785,8 @@ class ReportController extends Controller
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
                 ->where('cs.is_active', true)
                 ->where('cs.subject_code', 'not like', '%/%')
-                ->when($isCurrentSemester && !empty($currentSemesterIds), function ($q) use ($currentSemesterIds) {
-                    $q->whereIn('cs.semester_code', $currentSemesterIds);
+                ->when($studentSemesterCode, function ($q) use ($studentSemesterCode) {
+                    $q->where('cs.semester_code', '!=', $studentSemesterCode);
                 })
                 ->select(
                     'cs.semester_code',

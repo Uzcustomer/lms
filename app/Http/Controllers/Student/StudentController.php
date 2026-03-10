@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Services\StudentGradeService;
 use App\Models\MarkingSystemScore;
+use App\Models\AcademicRecord;
 use App\Models\ExamSchedule;
 use App\Models\YnConsent;
 use App\Models\YnSubmission;
@@ -62,10 +63,24 @@ class StudentController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $debtSubjectsCount = StudentGrade::where('student_id', $student->id)
-            ->whereIn('status', ["pending"])
-            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
-            ->count();
+        // Qarzdor fanlarni academic_records dan olish (joriy semestrdan tashqari)
+        $currentSemesterId = $student->semester_id;
+
+        $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
+            ->where(function ($q) {
+                $q->where('retraining_status', true)
+                  ->orWhere(function ($q2) {
+                      $q2->whereNotNull('grade')
+                         ->whereIn('grade', ['2', '0']);
+                  });
+            })
+            ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
+            ->orderBy('semester_name')
+            ->orderBy('subject_name')
+            ->get();
+
+        $debtBySemester = $debtRecords->groupBy('semester_name');
+        $debtSubjectsCount = $debtRecords->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
@@ -80,7 +95,7 @@ class StudentController extends Controller
             ->get()
             ->groupBy('subject_name');
 
-        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'recentGrades', 'gradesBySubject'));
+        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'debtBySemester', 'recentGrades', 'gradesBySubject'));
     }
 
     public function getSchedule(Request $request)

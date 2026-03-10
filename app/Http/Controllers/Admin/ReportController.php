@@ -2617,7 +2617,72 @@ class ReportController extends Controller
      */
     public function debtorsReport(Request $request)
     {
-        return view('admin.reports.debtors-empty');
+        $dekanFacultyId = get_dekan_faculty_id();
+
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $selectedEducationType = $request->get('education_type');
+        if (!$request->has('education_type')) {
+            $selectedEducationType = $educationTypes
+                ->first(fn($type) => str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr'))
+                ?->education_type_code;
+        }
+
+        $facultyQuery = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name');
+
+        if ($dekanFacultyId) {
+            $facultyQuery->where('id', $dekanFacultyId);
+        }
+
+        $faculties = $facultyQuery->get();
+
+        $studentStatuses = DB::table('students')
+            ->select('student_status_code', 'student_status_name')
+            ->whereNotNull('student_status_code')
+            ->groupBy('student_status_code', 'student_status_name')
+            ->orderBy('student_status_name')
+            ->get();
+
+        $kafedraQuery = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
+            ->whereNotNull('cs.department_id')
+            ->whereNotNull('cs.department_name');
+
+        if ($selectedEducationType) {
+            $kafedraQuery->where('c.education_type_code', $selectedEducationType);
+        }
+        if ($dekanFacultyId) {
+            $kafedraQuery->where('f.id', $dekanFacultyId);
+        }
+        $kafedraQuery->where('s.current', true);
+
+        $kafedras = $kafedraQuery
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
+            ->get();
+
+        return view('admin.reports.debtors', compact(
+            'educationTypes',
+            'selectedEducationType',
+            'faculties',
+            'studentStatuses',
+            'dekanFacultyId',
+            'kafedras'
+        ));
     }
 
     /**

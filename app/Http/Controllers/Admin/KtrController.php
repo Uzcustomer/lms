@@ -169,7 +169,7 @@ class KtrController extends Controller
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
             });
         }
 
@@ -312,7 +312,7 @@ class KtrController extends Controller
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
             });
         }
 
@@ -405,7 +405,7 @@ class KtrController extends Controller
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
             });
         }
 
@@ -480,7 +480,7 @@ class KtrController extends Controller
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
             });
         }
 

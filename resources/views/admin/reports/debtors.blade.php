@@ -90,25 +90,9 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                             <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        @unless($isExpelledPage ?? false)
                         <div class="filter-item" style="flex: 1; min-width: 220px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Kafedra</label>
-                            <select id="department" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                                @foreach($kafedras as $kafedra)
-                                    <option value="{{ $kafedra->department_id }}">{{ $kafedra->department_name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        @else
-                        <div class="filter-item" style="flex: 1; min-width: 220px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Talaba F.I.Sh</label>
-                            <input id="student_name" type="text" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm" placeholder="Talaba ismi..." />
-                        </div>
-                        @endunless
-                        <div class="filter-item" style="flex: 1; min-width: 280px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
-                            <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.SH</label>
+                            <input id="student_name" type="text" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm" placeholder="Talaba ismi..." style="height:36px;border-radius:8px;border:1px solid #cbd5e1;font-size:0.8rem;" />
                         </div>
                         <div class="filter-item" style="min-width: 160px;">
                             <label class="filter-label">&nbsp;</label>
@@ -270,12 +254,10 @@
                 level_code: $('#level_code').val() || '',
                 semester_code: $('#semester_code').val() || '',
                 group: $('#group').val() || '',
-                department: $('#department').val() || '',
-                subject: $('#subject').val() || '',
                 student_status: $('#student_status').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
                 min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() || 4) : 4),
-                student_name: ($('#student_name').length ? ($('#student_name').val() || '') : ''),
+                student_name: $('#student_name').val() || '',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
                 direction: currentDirection,
@@ -631,28 +613,24 @@
             });
 
             // Cascading dropdowns
-            function fp() { var df=document.getElementById('dekan_faculty_id'); return { education_type: $('#education_type').val()||'', faculty_id: df ? df.value : ($('#faculty').val()||''), specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
+            function fp() { var df=document.getElementById('dekan_faculty_id'); return { education_type: $('#education_type').val()||'', faculty_id: df ? df.value : ($('#faculty').val()||''), specialty_id: $('#specialty').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
             function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }
             function pd(url, p, el, cb) { $.get(url, p, function(d) { $.each(d, function(k,v){ $(el).append('<option value="'+k+'">'+v+'</option>'); }); if(cb) cb(); }); }
             function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
 
             function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
-            function rSubj() { rd('#subject'); pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject'); }
             function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
 
-            $('#education_type').change(function() { rSpec(); rSubj(); rGrp(); });
-            $('#faculty').change(function() { rSpec(); rSubj(); rGrp(); });
-            $('#department').change(function() { rSubj(); rGrp(); });
+            $('#education_type').change(function() { rSpec(); rGrp(); });
+            $('#faculty').change(function() { rSpec(); rGrp(); });
             $('#specialty').change(function() { rGrp(); });
-            $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("admin.journal.get-semesters") }}', {level_code:lc}, '#semester_code'); rSubj(); rGrp(); });
-            $('#semester_code').change(function() { rSubj(); rGrp(); });
-            $('#subject').change(function() { rGrp(); });
+            $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("admin.journal.get-semesters") }}', {level_code:lc}, '#semester_code'); rGrp(); });
+            $('#semester_code').change(function() { rGrp(); });
 
             // Init dropdowns
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
             pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code');
-            pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject');
             pd('{{ route("admin.journal.get-groups") }}', fp(), '#group');
         });
     </script>

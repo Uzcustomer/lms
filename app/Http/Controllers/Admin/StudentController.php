@@ -469,6 +469,29 @@ class StudentController extends Controller
 
     public function studentGradesWeek(Request $request)
     {
+        // Journal uslubidagi filtrlar uchun ma'lumotlar
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $faculties = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
+
+        $kafedras = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->whereNotNull('cs.department_id')
+            ->whereNotNull('cs.department_name')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
+            ->get();
+
         $departments = Department::where('structure_type_code', 11)->orderBy('id', 'desc')->get();
         $level_codes = collect(['11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs', '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs']);
         $groups = collect();
@@ -482,45 +505,33 @@ class StudentController extends Controller
 
         $viewType = $request->input('viewType', 'week');
 
-        if ($request->filled('department')) {
-            $department = Department::findOrFail($request->department);
-            $groups = $department->groups;
-        }
-        if (isset($request->level_code)) {
-            $level_code = $request->level_code;
-            $group_ids = Student::where('level_code', $level_code)
-                ->where('student_status_code', '11') // faqat "O'qimoqda" statusidagi talabalar
-                ->pluck('group_id')
-                ->unique()
-                ->toArray();
-            if ($groups->isNotEmpty() && count($groups)) {
-                $groups = $groups->whereIn('group_hemis_id', $group_ids);
-            }else{
-                $groups = Group::whereIn('group_hemis_id', $group_ids)->get();
+        if ($request->filled(['group', 'semester_code', 'subject'])) {
+            $group = Group::findOrFail($request->group);
+
+            // semester_code va group orqali semesterni topish
+            $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('code', $request->semester_code)
+                ->firstOrFail();
+
+            // subject = subject_id (hemis), CurriculumSubject ni topish
+            $subject = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->where('subject_id', $request->subject)
+                ->where('semester_code', $request->semester_code)
+                ->first();
+
+            if (!$subject) {
+                $subject = CurriculumSubject::where('subject_id', $request->subject)
+                    ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                    ->first();
             }
-        }
 
-        if ($request->filled('group')) {
-            $group = Group::findOrFail($request->group);
-            if ($semesters->isEmpty() && count($semesters)) {
-                $semesters = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)->get();
-            }else{
-                $semesters = $semesters->where('curriculum_hemis_id', $group->curriculum_hemis_id);
+            if (!$subject) {
+                return view('admin.students.week-grades', compact(
+                    'departments', 'educationTypes', 'faculties', 'kafedras',
+                    'level_codes', 'groups', 'semesters', 'subjects', 'students',
+                    'weeks', 'dates', 'subject', 'viewType', 'teacherName'
+                ));
             }
-        }
-
-        if ($request->filled('semester') && $request->filled('group')) {
-            $group = Group::findOrFail($request->group);
-            $semester = Semester::findOrFail($request->semester);
-            $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
-                ->where('semester_code', $semester->code)
-                ->get();
-        }
-
-        if ($request->filled(['group', 'semester', 'subject'])) {
-            $group = Group::findOrFail($request->group);
-            $semester = Semester::findOrFail($request->semester);
-            $subject = CurriculumSubject::findOrFail($request->subject);
 
             // Education year code aniqlash (jurnal bilan bir xil mantiq)
             $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
@@ -729,6 +740,9 @@ class StudentController extends Controller
             // dd($averageGradesForSubject);
             return view('admin.students.week-grades', compact(
                 'departments',
+                'educationTypes',
+                'faculties',
+                'kafedras',
                 'level_codes',
                 'groups',
                 'semesters',
@@ -746,6 +760,9 @@ class StudentController extends Controller
 
         return view('admin.students.week-grades', compact(
             'departments',
+            'educationTypes',
+            'faculties',
+            'kafedras',
             'level_codes',
             'groups',
             'semesters',
@@ -880,7 +897,7 @@ class StudentController extends Controller
     public function exportStudentGrades(Request $request)
     {
         ActivityLogService::log('export', 'student_grade', 'Talaba baholari eksport qilindi');
-        $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject']);
+        $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject', 'semester_code']);
         return Excel::download(new StudentGradesExportAdmin($filters), 'student_grades.xlsx');
     }
 
@@ -894,7 +911,7 @@ class StudentController extends Controller
     public function exportStudentGradesBox(Request $request)
     {
         ActivityLogService::log('export', 'student_grade', 'Talaba baholari (box) eksport qilindi');
-        $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject']);
+        $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject', 'semester_code']);
         $export = new StudentGradeBox($filters);
         return $export->export();
     }

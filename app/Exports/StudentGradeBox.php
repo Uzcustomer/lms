@@ -79,13 +79,15 @@ class StudentGradeBox
             $query->where('groups.id', $this->filters['group']);
         }
 
-        if (isset($this->filters['semester'])) {
+        if (isset($this->filters['semester_code'])) {
+            $query->where('student_grades.semester_code', $this->filters['semester_code']);
+        } elseif (isset($this->filters['semester'])) {
             $semester = Semester::findOrFail($this->filters['semester']);
             $query->where('student_grades.semester_code', $semester->code);
         }
 
         if (isset($this->filters['subject'])) {
-            $query->where('curriculum_subjects.id', $this->filters['subject']);
+            $query->where('curriculum_subjects.subject_id', $this->filters['subject']);
         }
 
         return $query->select(

@@ -2725,6 +2725,13 @@ class ReportController extends Controller
             $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
             $minDebtCount = (int) $request->get('min_debt_count', 1);
 
+            // Guruh ID ni group_hemis_id ga aylantirish (frontend groups.id yuboradi)
+            $groupHemisId = null;
+            if ($request->filled('group')) {
+                $groupModel = \App\Models\Group::find($request->group);
+                $groupHemisId = $groupModel ? $groupModel->group_hemis_id : $request->group;
+            }
+
             // 1-QADAM: Schedule dan unique (group, subject, semester) olish
             $scheduleQuery = DB::table('schedules as sch')
                 ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code')
@@ -2742,6 +2749,9 @@ class ReportController extends Controller
                     })
                     ->where('sem.current', true)
                     ->where('sch.education_year_current', true);
+            } else {
+                // Joriy semestr o'chirilganda — barcha semestrlar, lekin joriy o'quv yili
+                $scheduleQuery->where('sch.education_year_current', true);
             }
 
             if ($request->filled('education_type')) {
@@ -2757,8 +2767,8 @@ class ReportController extends Controller
             if ($request->filled('semester_code')) {
                 $scheduleQuery->where('sch.semester_code', $request->semester_code);
             }
-            if ($request->filled('group')) {
-                $scheduleQuery->where('sch.group_id', $request->group);
+            if ($groupHemisId) {
+                $scheduleQuery->where('sch.group_id', $groupHemisId);
             }
             if ($request->filled('subject')) {
                 $scheduleQuery->where('sch.subject_id', $request->subject);
@@ -2818,8 +2828,8 @@ class ReportController extends Controller
             if ($request->filled('level_code')) {
                 $studentQuery->where('s.level_code', $request->level_code);
             }
-            if ($request->filled('group')) {
-                $studentQuery->where('s.group_id', $request->group);
+            if ($groupHemisId) {
+                $studentQuery->where('s.group_id', $groupHemisId);
             }
             if ($request->filled('education_type')) {
                 $studentQuery->where('s.education_type_code', $request->education_type);
@@ -2855,7 +2865,6 @@ class ReportController extends Controller
 
             // 4-QADAM: Academic records — mavjud yozuvlarni aniqlash
             $arSet = [];
-            $arSetAny = []; // semester-agnostic: fan istalgan semestrlarda topshirilganmi
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $records = DB::table('academic_records')
                     ->whereIn('student_id', $chunk)
@@ -2865,7 +2874,6 @@ class ReportController extends Controller
 
                 foreach ($records as $ar) {
                     $arSet[$ar->student_id . '|' . $ar->subject_id . '|' . (string) $ar->semester_id] = true;
-                    $arSetAny[$ar->student_id . '|' . $ar->subject_id] = true;
                 }
             }
 
@@ -2901,10 +2909,9 @@ class ReportController extends Controller
                     // academic_records.semester_id = semesters.code (11,12,13...)
                     // semester_hemis_id (668,669,670...) EMAS!
                     $arKey = $student->hemis_id . '|' . $subjectCombo['subject_id'] . '|' . $subjectCombo['semester_code'];
-                    $arKeyAny = $student->hemis_id . '|' . $subjectCombo['subject_id'];
 
-                    // Fan shu semestrlarda YOKI oldingi semestrlarda topshirilgan bo'lsa — qarzdor emas
-                    if (!isset($arSet[$arKey]) && !isset($arSetAny[$arKeyAny])) {
+                    // Faqat shu semestrda topshirilganmi tekshirish
+                    if (!isset($arSet[$arKey])) {
                         $snKey = $subjectCombo['subject_id'] . '|' . $subjectCombo['semester_code'];
                         $csInfo = $subjectInfoMap[$snKey] ?? null;
                         $subjectName = $csInfo->subject_name ?? 'Noma\'lum fan';

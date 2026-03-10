@@ -9,9 +9,10 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMapping, WithStyles
+class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMapping, WithStyles, WithChunkReading
 {
     use Exportable;
 
@@ -151,6 +152,11 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             'HEMIS yaratilgan',
             'HEMIS yangilangan',
         ];
+    }
+
+    public function chunkSize(): int
+    {
+        return 500;
     }
 
     public function styles(Worksheet $sheet)

@@ -38,7 +38,8 @@ return [
         'base_url' => env('HEMIS_API_BASE_URL', 'https://student.ttatf.uz/rest/v1/'),
         'token' => env('HEMIS_API_TOKEN'),
         'web_url' => env('HEMIS_WEB_BASE_URL', 'https://hemis.ttatf.uz'),
-        'web_cookie' => env('HEMIS_WEB_COOKIE'),
+        'web_login' => env('HEMIS_WEB_LOGIN'),
+        'web_password' => env('HEMIS_WEB_PASSWORD'),
     ],
 
     'hemis_oauth' => [

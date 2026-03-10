@@ -2861,6 +2861,11 @@ class ReportController extends Controller
 
             $debtRecords = $debtRecords->concat($missingRecords);
 
+            // Dublikatlarni olib tashlash (ikkala so'rovdan bir xil fan tushishi mumkin)
+            $debtRecords = $debtRecords->unique(function ($record) {
+                return $record->student_id . '|' . $record->subject_id;
+            });
+
             // Joriy semestrni chiqarib tashlash (toggle OFF bo'lganda)
             if (!$isCurrentSemester) {
                 $studentSemesterMap = $students->pluck('semester_code', 'hemis_id')
@@ -2872,6 +2877,25 @@ class ReportController extends Controller
                     return !$studentSemCode || (string) $record->semester_id !== $studentSemCode;
                 });
             }
+
+            // Guruh suffiksi bo'yicha filtrlash (modal bilan bir xil mantiq)
+            $studentGroupMap = $students->pluck('group_name', 'hemis_id')->toArray();
+            $debtRecords = $debtRecords->filter(function ($record) use ($studentGroupMap) {
+                $groupName = $studentGroupMap[$record->student_id] ?? '';
+                if (empty($groupName)) return true;
+
+                $groupSuffix = '';
+                if (preg_match('/(\d+)([a-zA-Z])$/', trim($groupName), $m)) {
+                    $groupSuffix = mb_strtolower($m[2]);
+                }
+                if (empty($groupSuffix)) return true;
+
+                $name = $record->subject_name ?? '';
+                if (preg_match('/\(([a-zA-Zа-яА-Я])\)\s*$/u', $name, $m)) {
+                    return mb_strtolower($m[1]) === $groupSuffix;
+                }
+                return true; // suffixsiz fan — har doim ko'rsatiladi
+            });
 
             if ($debtRecords->isEmpty()) {
                 return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
@@ -2891,22 +2915,6 @@ class ReportController extends Controller
                     'retraining_status' => $record->retraining_status,
                 ];
             }
-
-            // 4-QADAM: Dublikat fanlarni filtrlash — "(a)", "(b)" kabi variantlar
-            foreach ($studentDebts as $hemisId => &$debts) {
-                $grouped = [];
-                foreach ($debts as $d) {
-                    $baseName = preg_replace('/\s*\([a-zA-Zа-яА-Яa-zа-я]\)\s*$/u', '', $d['subject_name']);
-                    $key = $baseName . '|' . $d['semester_code'];
-                    $grouped[$key][] = $d;
-                }
-                $filtered = [];
-                foreach ($grouped as $variants) {
-                    $filtered[] = $variants[0];
-                }
-                $debts = $filtered;
-            }
-            unset($debts);
 
             // 5-QADAM: minDebtCount bo'yicha filtrlash
             $studentDebts = array_filter($studentDebts, fn($debts) => count($debts) >= $minDebtCount);

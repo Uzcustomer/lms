@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
+use App\Http\Controllers\Api\V1\TutorApiController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -71,6 +72,14 @@ Route::prefix('v1')->group(function () {
             // Grade saving
             Route::post('/grades/lesson', [TeacherApiController::class, 'saveOpenedLessonGrade']);
             Route::post('/grades/mt', [TeacherApiController::class, 'saveMtGrade']);
+        });
+
+        // ── Tutor endpoints ───────────────────────────────
+        Route::prefix('tutor')->group(function () {
+            Route::get('/profile', [TeacherApiController::class, 'profile']);
+            Route::get('/profile/groups', [TutorApiController::class, 'groups']);
+            Route::get('/groups/{groupId}/students', [TutorApiController::class, 'groupStudents']);
+            Route::get('/students/{studentId}', [TutorApiController::class, 'studentProfile']);
         });
     });
 });

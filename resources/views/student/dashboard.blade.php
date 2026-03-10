@@ -83,6 +83,60 @@
                         </div>
                     </div>
 
+                    @if($debtBySemester->isNotEmpty())
+                    <div class="bg-white shadow rounded-lg p-6 mb-6">
+                        <h4 class="text-lg font-semibold mb-4 text-red-700">Qarzdor fanlar ({{ $debtSubjectsCount }} ta)</h4>
+                        <div class="space-y-4">
+                            @foreach($debtBySemester as $semesterName => $records)
+                                <div class="border border-red-200 rounded-lg overflow-hidden">
+                                    <div class="bg-red-50 px-4 py-3 flex items-center justify-between">
+                                        <h5 class="text-sm font-semibold text-red-800">{{ $semesterName }}</h5>
+                                        <span class="text-xs text-red-500">{{ $records->count() }} ta fan</span>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="min-w-full divide-y divide-gray-200">
+                                            <thead class="bg-gray-50/50">
+                                                <tr>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fan nomi</th>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kredit</th>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Soat</th>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ball</th>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Baho</th>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Holat</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="bg-white divide-y divide-gray-100">
+                                                @foreach($records as $record)
+                                                    <tr>
+                                                        <td class="px-4 py-2 text-sm text-gray-900">{{ $record->subject_name }}</td>
+                                                        <td class="px-4 py-2 text-sm text-gray-600">{{ $record->credit ?? '-' }}</td>
+                                                        <td class="px-4 py-2 text-sm text-gray-600">{{ $record->total_acload ?? '-' }}</td>
+                                                        <td class="px-4 py-2 text-sm text-gray-600">{{ $record->total_point ?? '-' }}</td>
+                                                        <td class="px-4 py-2 text-sm font-medium text-gray-900">{{ $record->grade ?? '-' }}</td>
+                                                        <td class="px-4 py-2 text-sm">
+                                                            @if($record->retraining_status)
+                                                                <span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                                                    <svg class="mr-1 h-2 w-2 text-red-400" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
+                                                                    Qayta o'qish
+                                                                </span>
+                                                            @else
+                                                                <span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                                                    <svg class="mr-1 h-2 w-2 text-yellow-400" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
+                                                                    Qarzdor
+                                                                </span>
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                    @endif
+
                     <div class="bg-white shadow rounded-lg p-6">
                         <h4 class="text-lg font-semibold mb-4">Fanlar bo'yicha baholar</h4>
                         @if($gradesBySubject->isEmpty())

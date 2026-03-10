@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicRecord;
 use App\Models\Attendance;
 use App\Models\Curriculum;
 use App\Services\HemisService;
@@ -39,10 +40,22 @@ class StudentApiController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $debtSubjectsCount = StudentGrade::where('student_id', $student->id)
-            ->whereIn('status', ['pending'])
-            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
-            ->count();
+        $currentSemesterId = $student->semester_id;
+
+        $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
+            ->where(function ($q) {
+                $q->where('retraining_status', true)
+                  ->orWhere(function ($q2) {
+                      $q2->whereNotNull('grade')
+                         ->whereIn('grade', ['2', '0']);
+                  });
+            })
+            ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
+            ->orderBy('semester_name')
+            ->orderBy('subject_name')
+            ->get();
+
+        $debtSubjectsCount = $debtRecords->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
@@ -59,12 +72,24 @@ class StudentApiController extends Controller
                 'employee_name' => $g->employee_name,
             ]);
 
+        $debtBySemester = $debtRecords->groupBy('semester_name')->map(function ($records, $semesterName) {
+            return $records->map(fn($r) => [
+                'subject_name' => $r->subject_name,
+                'credit' => $r->credit,
+                'total_acload' => $r->total_acload,
+                'total_point' => $r->total_point,
+                'grade' => $r->grade,
+                'retraining_status' => $r->retraining_status,
+            ]);
+        });
+
         return response()->json([
             'data' => [
                 'student_name' => $student->full_name,
                 'gpa' => (float) $avgGpa,
                 'avg_grade' => $student->avg_grade ?? 0,
                 'debt_subjects' => $debtSubjectsCount,
+                'debt_by_semester' => $debtBySemester,
                 'total_absences' => $totalAbsent,
                 'recent_grades' => $recentGrades,
             ],

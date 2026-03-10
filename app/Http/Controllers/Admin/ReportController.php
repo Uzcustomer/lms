@@ -3071,15 +3071,19 @@ class ReportController extends Controller
                 ->distinct();
 
             $isCurrentSemester = $request->get('current_semester', '1') == '1';
+            $scheduleQuery
+                ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.code', '=', 'sch.semester_code')
+                        ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
+                })
+                ->where('sch.education_year_current', true);
+
             if ($isCurrentSemester) {
-                $scheduleQuery
-                    ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
-                    ->join('semesters as sem', function ($join) {
-                        $join->on('sem.code', '=', 'sch.semester_code')
-                            ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
-                    })
-                    ->where('sem.current', true)
-                    ->where('sch.education_year_current', true);
+                $scheduleQuery->where('sem.current', true);
+            } else {
+                // Joriy semestr o'chirilganda — joriy semestrdan tashqari barcha semestrlar
+                $scheduleQuery->where('sem.current', false);
             }
 
             if ($request->filled('education_type')) {
@@ -3128,15 +3132,18 @@ class ReportController extends Controller
                 ->whereNotNull('sch2.lesson_date')
                 ->whereIn('sch2.group_id', $scheduleGroupIds);
 
+            $lessonDaysQuery
+                ->join('groups as gr2', 'gr2.group_hemis_id', '=', 'sch2.group_id')
+                ->join('semesters as sem2', function ($join) {
+                    $join->on('sem2.code', '=', 'sch2.semester_code')
+                        ->on('sem2.curriculum_hemis_id', '=', 'gr2.curriculum_hemis_id');
+                })
+                ->where('sch2.education_year_current', true);
+
             if ($isCurrentSemester) {
-                $lessonDaysQuery
-                    ->join('groups as gr2', 'gr2.group_hemis_id', '=', 'sch2.group_id')
-                    ->join('semesters as sem2', function ($join) {
-                        $join->on('sem2.code', '=', 'sch2.semester_code')
-                            ->on('sem2.curriculum_hemis_id', '=', 'gr2.curriculum_hemis_id');
-                    })
-                    ->where('sem2.current', true)
-                    ->where('sch2.education_year_current', true);
+                $lessonDaysQuery->where('sem2.current', true);
+            } else {
+                $lessonDaysQuery->where('sem2.current', false);
             }
 
             if ($request->filled('semester_code')) {
@@ -3161,6 +3168,15 @@ class ReportController extends Controller
                 $groupCurriculumMap[$g->group_hemis_id] = $g->curriculum_hemis_id;
                 $groupDbIdMap[$g->group_hemis_id] = $g->id;
             }
+
+            // Semester code → name mapping
+            $semesterNameMap = DB::table('semesters')
+                ->whereIn('code', $validSemesterCodes)
+                ->whereIn('curriculum_hemis_id', array_unique(array_values($groupCurriculumMap)))
+                ->select('code', 'name')
+                ->get()
+                ->pluck('name', 'code')
+                ->toArray();
 
             $comboKeys = [];
             foreach ($scheduleCombos as $row) {
@@ -3422,6 +3438,7 @@ class ReportController extends Controller
                     'subject_id' => $data['subject_id'],
                     'subject_name' => $data['subject_name'],
                     'semester_code' => $data['semester_code'],
+                    'semester_name' => $semesterNameMap[$data['semester_code']] ?? $data['semester_code'] . '-semestr',
                     'group_id' => $groupDbIdMap[$data['group_id']] ?? $data['group_id'],
                     'jb' => round($jbAvg),
                     'mt' => round($mtAvg),
@@ -3462,6 +3479,12 @@ class ReportController extends Controller
                 }
             }
             unset($allStudentResults);
+
+            // Qarzdorliklarni semestr bo'yicha tartiblash
+            foreach ($studentDebts as $hemisId => &$debts) {
+                usort($debts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+            }
+            unset($debts);
 
             // 5-QADAM: minDebtCount bo'yicha filtrlash
             $studentDebts = array_filter($studentDebts, fn($debts) => count($debts) >= $minDebtCount);

@@ -2683,7 +2683,7 @@ class ReportController extends Controller
         $dataRouteName = $isExpelledPage ? 'admin.reports.expelled-debtors.data' : 'admin.reports.debtors.data';
         $reportTitle = $isExpelledPage ? 'Akademik ma\'lumotnoma' : 'Qarzdorlar hisoboti';
         $emptySubtitle = $isExpelledPage
-            ? "Chetlatilgan talabalar orasida qarzdorlik ro'yxati"
+            ? ""
             : "4 va undan ortiq fandan qarzdor talabalar ro'yxati";
 
         return view('admin.reports.debtors', compact(
@@ -2733,6 +2733,16 @@ class ReportController extends Controller
 
             $isCurrentSemester = $request->get('current_semester', '1') == '1';
 
+            // Joriy semestr ID larini olish
+            $currentSemesterIds = [];
+            if ($isCurrentSemester) {
+                $currentSemesterIds = DB::table('semesters')
+                    ->where('current', true)
+                    ->pluck('code')
+                    ->map(fn($v) => (string) $v)
+                    ->toArray();
+            }
+
             // 1-QADAM: Talabalar ro'yxati
             $studentQuery = DB::table('students as s')
                 ->select('s.hemis_id', 's.full_name', 's.student_id_number', 's.group_id',
@@ -2771,16 +2781,6 @@ class ReportController extends Controller
 
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
 
-            // Joriy semestr ID larini olish (toggle OFF bo'lsa chiqarib tashlash uchun)
-            $currentSemesterIds = [];
-            if (!$isCurrentSemester) {
-                $currentSemesterIds = DB::table('semesters')
-                    ->where('current', true)
-                    ->pluck('code')
-                    ->map(fn($v) => (string) $v)
-                    ->toArray();
-            }
-
             // 2-QADAM: Academic records dan qarzdor fanlarni olish (grade NULL, grade IN ['2','0'], yoki retraining_status=true)
             $debtRecords = collect();
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
@@ -2791,8 +2791,8 @@ class ReportController extends Controller
                           ->orWhereIn('grade', ['2', '0'])
                           ->orWhere('retraining_status', true);
                     })
-                    ->when(!$isCurrentSemester && !empty($currentSemesterIds), function ($q) use ($currentSemesterIds) {
-                        $q->whereNotIn('semester_id', $currentSemesterIds);
+                    ->when($isCurrentSemester && !empty($currentSemesterIds), function ($q) use ($currentSemesterIds) {
+                        $q->whereIn('semester_id', $currentSemesterIds);
                     })
                     ->when($request->filled('semester_code'), function ($q) use ($request) {
                         $q->where('semester_id', $request->semester_code);
@@ -2837,8 +2837,8 @@ class ReportController extends Controller
                     ->whereIn('st.hemis_id', $chunk)
                     ->whereNotNull('st.curriculum_id')
                     ->whereNull('ar.id')
-                    ->when(!$isCurrentSemester && !empty($currentSemesterIds), function ($q) use ($currentSemesterIds) {
-                        $q->whereNotIn('cs.semester_code', $currentSemesterIds);
+                    ->when($isCurrentSemester && !empty($currentSemesterIds), function ($q) use ($currentSemesterIds) {
+                        $q->whereIn('cs.semester_code', $currentSemesterIds);
                     })
                     ->when($request->filled('semester_code'), function ($q) use ($request) {
                         $q->where('cs.semester_code', $request->semester_code);
@@ -3747,9 +3747,9 @@ class ReportController extends Controller
             $groupName = $request->get('group_name', '');
             $isCurrentSemester = $request->get('current_semester', '0') == '1';
 
-            // Joriy semestr ID larini olish (toggle OFF bo'lsa chiqarib tashlash uchun)
+            // Joriy semestr ID larini olish (toggle ON bo'lsa faqat joriy semestr ko'rsatish uchun)
             $currentSemesterIds = [];
-            if (!$isCurrentSemester) {
+            if ($isCurrentSemester) {
                 $currentSemesterIds = DB::table('semesters')
                     ->where('current', true)
                     ->pluck('code')
@@ -3788,8 +3788,8 @@ class ReportController extends Controller
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
                 ->where('cs.is_active', true)
                 ->where('cs.subject_code', 'not like', '%/%')
-                ->when(!$isCurrentSemester && !empty($currentSemesterIds), function ($q) use ($currentSemesterIds) {
-                    $q->whereNotIn('cs.semester_code', $currentSemesterIds);
+                ->when($isCurrentSemester && !empty($currentSemesterIds), function ($q) use ($currentSemesterIds) {
+                    $q->whereIn('cs.semester_code', $currentSemesterIds);
                 })
                 ->select(
                     'cs.semester_code',

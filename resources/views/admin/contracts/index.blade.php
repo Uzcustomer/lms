@@ -445,7 +445,7 @@
 
         function buildCsv(items) {
             var headers = [
-                '#','Talaba','HEMIS ID','Shartnoma raqami','Shartnoma turi','Summa turi',
+                '#','Talaba','Talaba ID','Shartnoma raqami','Shartnoma turi','Summa turi',
                 'Fakultet','Yo\'nalish','Kurs','Guruh','Ta\'lim turi','Ta\'lim shakli','O\'quv yili',
                 'Tashkilot','Kontrakt summasi','Bosh. debet','Bosh. kredit',
                 'Shartnoma debet','To\'langan','Qaytarilgan','Oxirgi debet','Oxirgi kredit',
@@ -455,7 +455,7 @@
             for (var i = 0; i < items.length; i++) {
                 var item = items[i];
                 var row = [
-                    i + 1, q(item.full_name), item.student_hemis_id || '',
+                    i + 1, q(item.full_name), item.student_id_number || item.student_hemis_id || '',
                     q(item.contract_number), q(item.edu_contract_type_name), q(item.edu_contract_sum_type_name),
                     q(item.faculty_name), q(item.edu_speciality_name), q(item.edu_course), q(item.group_name),
                     q(item.edu_type_name), q(item.edu_form), q(item.education_year), q(item.edu_organization),

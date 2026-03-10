@@ -414,7 +414,15 @@
                         html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
                         html += '<td>' + esc(debt.credit) + '</td>';
                         html += '<td>' + esc(debt.total_acload) + '</td>';
-                        html += '<td><span class="reason-badge">Academic record yo\'q</span></td>';
+                        var statusText = '';
+                        if (debt.retraining_status) {
+                            statusText = '<span class="reason-badge" style="background:#fef3c7;color:#92400e;border-color:#fde68a;">Qayta o\'qish</span>';
+                        } else if (debt.grade === '2' || debt.grade === '0') {
+                            statusText = '<span class="reason-badge">Baho: ' + esc(debt.grade) + '</span>';
+                        } else {
+                            statusText = '<span class="reason-badge">Qarzdor</span>';
+                        }
+                        html += '<td>' + statusText + '</td>';
                         html += '</tr>';
                     }
                     html += '</tbody></table>';

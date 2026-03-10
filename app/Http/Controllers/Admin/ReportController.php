@@ -2836,6 +2836,8 @@ class ReportController extends Controller
                     'semester_name' => $record->semester_name ?? $record->semester_id,
                     'credit' => $record->credit ?? '-',
                     'total_acload' => $record->total_acload ?? '-',
+                    'grade' => $record->grade,
+                    'retraining_status' => $record->retraining_status,
                 ];
             }
 

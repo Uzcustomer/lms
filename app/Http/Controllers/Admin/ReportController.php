@@ -2781,17 +2781,15 @@ class ReportController extends Controller
                     ->toArray();
             }
 
-            // 2-QADAM: Academic records dan qarzdor fanlarni olish (retraining_status=true YOKI grade IN ['2','0'])
+            // 2-QADAM: Academic records dan qarzdor fanlarni olish (grade NULL, grade IN ['2','0'], yoki retraining_status=true)
             $debtRecords = collect();
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $records = DB::table('academic_records')
                     ->whereIn('student_id', $chunk)
                     ->where(function ($q) {
-                        $q->where('retraining_status', true)
-                          ->orWhere(function ($q2) {
-                              $q2->whereNotNull('grade')
-                                 ->whereIn('grade', ['2', '0']);
-                          });
+                        $q->whereNull('grade')
+                          ->orWhereIn('grade', ['2', '0'])
+                          ->orWhere('retraining_status', true);
                     })
                     ->when(!$isCurrentSemester && !empty($currentSemesterIds), function ($q) use ($currentSemesterIds) {
                         $q->whereNotIn('semester_id', $currentSemesterIds);

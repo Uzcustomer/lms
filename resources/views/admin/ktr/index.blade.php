@@ -205,6 +205,8 @@
                                     @foreach($trainingTypes as $code => $name)
                                         <th class="ktr-type-th">{{ $name }}</th>
                                     @endforeach
+                                    <th style="min-width: 140px;">Tuzuvchi</th>
+                                    <th style="min-width: 110px; text-align: center;">Yaratilgan sana</th>
                                     <th style="min-width: 90px; text-align: center;">Holat</th>
                                 </tr>
                             </thead>
@@ -244,6 +246,20 @@
                                                 @endif
                                             </td>
                                         @endforeach
+                                        <td>
+                                            @if($item->ktr_creator_name ?? '')
+                                                <span class="text-cell" style="font-size: 12px;">{{ $item->ktr_creator_name }}</span>
+                                            @else
+                                                <span style="color: #cbd5e1;">-</span>
+                                            @endif
+                                        </td>
+                                        <td style="text-align: center;">
+                                            @if($item->ktr_created_at ?? false)
+                                                <span style="font-size: 11px; color: #64748b;">{{ \Carbon\Carbon::parse($item->ktr_created_at)->format('d.m.Y H:i') }}</span>
+                                            @else
+                                                <span style="color: #cbd5e1;">-</span>
+                                            @endif
+                                        </td>
                                         <td style="text-align: center;">
                                             @if($item->has_ktr ?? false)
                                                 <span class="badge" style="background:#dcfce7;color:#16a34a;font-size:11px;padding:2px 8px;border-radius:6px;">Yaratildi</span>

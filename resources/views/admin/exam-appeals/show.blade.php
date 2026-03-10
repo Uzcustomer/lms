@@ -37,6 +37,13 @@
                 </div>
             @endif
 
+            @if(session('error'))
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg mb-5 flex items-center">
+                    <svg class="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    {{ session('error') }}
+                </div>
+            @endif
+
             {{-- ═══════ 1-QATOR: Talaba | Imtihon | Baho ═══════ --}}
             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
 

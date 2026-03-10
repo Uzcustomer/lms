@@ -154,12 +154,14 @@
                                     <tr>
                                         <th class="th-num">#</th>
                                         <th>Talaba</th>
+                                        <th>Talaba ID</th>
                                         <th>Shartnoma raqami</th>
                                         <th>Shartnoma turi</th>
                                         <th>Summa turi</th>
                                         <th>Fakultet</th>
                                         <th>Yo'nalish</th>
                                         <th>Kurs</th>
+                                        <th>Guruh</th>
                                         <th>Ta'lim turi</th>
                                         <th>Ta'lim shakli</th>
                                         <th>O'quv yili</th>
@@ -321,10 +323,9 @@
                 html += '<tr>';
                 html += '<td class="td-num">' + (i + 1 + ((currentPage - 1) * limit)) + '</td>';
                 // Talaba
-                html += '<td style="min-width:160px;">';
-                html += '<div style="font-weight:600;color:#0f172a;font-size:12.5px;">' + esc(item.full_name) + '</div>';
-                html += '<div style="font-size:11px;color:#64748b;">ID: ' + esc(String(item.student_hemis_id)) + '</div>';
-                html += '</td>';
+                html += '<td style="min-width:160px;font-weight:600;color:#0f172a;font-size:12.5px;">' + esc(item.full_name) + '</td>';
+                // Talaba ID
+                html += '<td style="min-width:110px;font-size:11px;color:#64748b;white-space:nowrap;">' + esc(String(item.student_hemis_id)) + '</td>';
                 // Shartnoma raqami
                 html += '<td style="min-width:130px;"><span class="text-cell" style="font-weight:600;color:#2b5ea7;">' + esc(item.contract_number) + '</span></td>';
                 // Shartnoma turi
@@ -337,6 +338,8 @@
                 html += '<td style="min-width:200px;font-size:11px;color:#475569;">' + esc(item.edu_speciality_name) + '</td>';
                 // Kurs
                 html += '<td style="text-align:center;min-width:60px;"><span class="badge badge-violet">' + esc(item.edu_course) + '</span></td>';
+                // Guruh
+                html += '<td style="min-width:120px;font-size:12px;font-weight:500;color:#1e293b;">' + esc(item.group_name) + '</td>';
                 // Ta'lim turi
                 html += '<td style="min-width:120px;"><span class="badge badge-blue">' + esc(item.edu_type_name) + '</span></td>';
                 // Ta'lim shakli
@@ -427,7 +430,7 @@
         function buildCsv(items) {
             var headers = [
                 '#','Talaba','HEMIS ID','Shartnoma raqami','Shartnoma turi','Summa turi',
-                'Fakultet','Yo\'nalish','Kurs','Ta\'lim turi','Ta\'lim shakli','O\'quv yili',
+                'Fakultet','Yo\'nalish','Kurs','Guruh','Ta\'lim turi','Ta\'lim shakli','O\'quv yili',
                 'Tashkilot','Kontrakt summasi','Bosh. debet','Bosh. kredit',
                 'Shartnoma debet','To\'langan','Qaytarilgan','Oxirgi debet','Oxirgi kredit',
                 'To\'lanmagan','Holat','Yaratilgan'
@@ -438,7 +441,7 @@
                 var row = [
                     i + 1, q(item.full_name), item.student_hemis_id || '',
                     q(item.contract_number), q(item.edu_contract_type_name), q(item.edu_contract_sum_type_name),
-                    q(item.faculty_name), q(item.edu_speciality_name), q(item.edu_course),
+                    q(item.faculty_name), q(item.edu_speciality_name), q(item.edu_course), q(item.group_name),
                     q(item.edu_type_name), q(item.edu_form), q(item.education_year), q(item.edu_organization),
                     item.edu_contract_sum || 0, item.begin_rest_debet_amount || 0, item.begin_rest_credit_amount || 0,
                     item.contract_debet_amount || 0, item.paid_credit_amount || 0, item.vozvrat_debet_amount || 0,

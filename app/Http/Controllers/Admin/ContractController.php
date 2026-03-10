@@ -155,7 +155,9 @@ class ContractController extends Controller
         $page = (int) $request->input('page', 1);
 
         $total = $query->count();
-        $items = $query->orderByDesc('hemis_created_at')
+        $items = $query->select('contract_list.*', 'students.group_name')
+            ->leftJoin('students', 'students.hemis_id', '=', 'contract_list.student_hemis_id')
+            ->orderByDesc('contract_list.hemis_created_at')
             ->offset(($page - 1) * $limit)
             ->limit($limit)
             ->get();

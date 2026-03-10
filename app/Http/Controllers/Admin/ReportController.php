@@ -3859,47 +3859,51 @@ class ReportController extends Controller
                 })->values();
 
             // Qarzdorliklar: joriy semester fanlari doim chiqariladi (baho semester oxirida qo'yiladi)
+            // Ro'yxatdagi debt_count bilan bir xil natija berishi uchun lookup-based yondashuv
             $gradeDebts = [];
-            $allSubjects = DB::table('curriculum_subjects as cs')
-                ->leftJoin('academic_records as ar', function ($join) use ($studentId) {
-                    $join->on('ar.subject_id', '=', 'cs.subject_id')
-                        ->where('ar.student_id', '=', $studentId)
-                        ->on('ar.semester_id', '=', 'cs.semester_code');
-                })
-                ->where('cs.curricula_hemis_id', $student->curriculum_id)
-                ->where('cs.is_active', true)
-                ->where('cs.subject_code', 'not like', '%/%')
-                ->when($studentSemesterCode, function ($q) use ($studentSemesterCode) {
-                    $q->where('cs.semester_code', '!=', $studentSemesterCode);
-                })
-                ->select(
-                    'cs.semester_code',
-                    'cs.semester_name',
-                    'cs.subject_name',
-                    'cs.credit',
-                    'cs.total_acload',
-                    'ar.total_point',
-                    'ar.grade',
-                    'ar.retraining_status'
-                )
-                ->orderBy('cs.semester_code')
-                ->orderBy('cs.subject_name')
+
+            $currSubjects = DB::table('curriculum_subjects')
+                ->where('curricula_hemis_id', $student->curriculum_id)
+                ->where('is_active', true)
+                ->where('subject_code', 'not like', '%/%')
+                ->select('semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
+                ->orderBy('semester_code')
+                ->orderBy('subject_name')
                 ->get();
 
-            $allSubjects = $this->filterSubjectsByGroupSuffix($allSubjects, $groupName);
+            $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
 
-            foreach ($allSubjects as $sub) {
-                $hasPassingGrade = !empty($sub->total_point) && floatval($sub->total_point) >= 60 && !empty($sub->grade) && !in_array($sub->grade, ['2', '0']);
-                $isMissingGrade = empty($sub->total_point) && empty($sub->grade);
-                $isFailedGrade = (!empty($sub->grade) && in_array($sub->grade, ['2', '0']));
-                $isRetraining = !empty($sub->retraining_status);
+            // Academic records lookup (ro'yxatdagi hisoblash bilan bir xil)
+            $arRecords = DB::table('academic_records')
+                ->where('student_id', $studentId)
+                ->select('subject_id', 'semester_id', 'total_point', 'grade', 'retraining_status')
+                ->get();
+
+            $arLookup = [];
+            foreach ($arRecords as $ar) {
+                $arLookup[$ar->subject_id . '|' . $ar->semester_id] = $ar;
+            }
+
+            foreach ($currSubjects as $sub) {
+                if ($studentSemesterCode && (string) $sub->semester_code === $studentSemesterCode) continue;
+
+                $ar = $arLookup[$sub->subject_id . '|' . $sub->semester_code] ?? null;
+
+                $totalPoint = $ar->total_point ?? null;
+                $grade = $ar->grade ?? null;
+                $retraining = $ar->retraining_status ?? null;
+
+                $hasPassingGrade = !empty($totalPoint) && floatval($totalPoint) >= 60 && !empty($grade) && !in_array($grade, ['2', '0']);
+                $isMissingGrade = empty($totalPoint) && empty($grade);
+                $isFailedGrade = (!empty($grade) && in_array($grade, ['2', '0']));
+                $isRetraining = !empty($retraining);
 
                 if (!$hasPassingGrade && ($isMissingGrade || $isFailedGrade || $isRetraining)) {
                     $status = 'Qarzdor';
                     if ($isRetraining) {
                         $status = 'Qayta o\'qish';
                     } elseif ($isFailedGrade) {
-                        $status = 'Baho: ' . $sub->grade;
+                        $status = 'Baho: ' . $grade;
                     }
 
                     $gradeDebts[] = [
@@ -3908,8 +3912,8 @@ class ReportController extends Controller
                         'subject_name' => $sub->subject_name,
                         'credit' => $sub->credit,
                         'total_acload' => $sub->total_acload,
-                        'total_point' => $sub->total_point,
-                        'grade' => $sub->grade,
+                        'total_point' => $totalPoint,
+                        'grade' => $grade,
                         'status' => $status,
                     ];
                 }

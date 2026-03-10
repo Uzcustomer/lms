@@ -32,15 +32,30 @@ class ContractController extends Controller
             ->groupBy('education_type_code', 'education_type_name')
             ->get();
 
-        $educationYears = Curriculum::select('education_year_code as code', 'education_year_name as name')
-            ->whereNotNull('education_year_code')
+        // Education year qiymatlarini ContractList dan olish (filter mos kelishi uchun)
+        $yearCodeToName = Curriculum::whereNotNull('education_year_code')
             ->groupBy('education_year_code', 'education_year_name')
-            ->orderByDesc('education_year_code')
-            ->get();
+            ->pluck('education_year_name', 'education_year_code');
+
+        $educationYears = ContractList::select('education_year as code')
+            ->whereNotNull('education_year')
+            ->groupBy('education_year')
+            ->orderByDesc('education_year')
+            ->get()
+            ->map(fn($r) => (object)[
+                'code' => $r->code,
+                'name' => $yearCodeToName[$r->code] ?? $r->code,
+            ]);
 
         $currentEducationYear = DB::table('semesters')
             ->where('current', true)
             ->value('education_year');
+
+        // Agar contract_list da bu kod mavjud bo'lmasa, birinchi yilni tanlash
+        $availableYearCodes = $educationYears->pluck('code')->toArray();
+        if ($currentEducationYear && !in_array((string)$currentEducationYear, array_map('strval', $availableYearCodes))) {
+            $currentEducationYear = $educationYears->first()?->code;
+        }
 
         $contractTypes = ContractList::select('edu_contract_type_code', 'edu_contract_type_name')
             ->whereNotNull('edu_contract_type_code')

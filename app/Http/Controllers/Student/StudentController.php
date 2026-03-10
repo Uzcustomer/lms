@@ -68,11 +68,9 @@ class StudentController extends Controller
 
         $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
             ->where(function ($q) {
-                $q->where('retraining_status', true)
-                  ->orWhere(function ($q2) {
-                      $q2->whereNotNull('grade')
-                         ->whereIn('grade', ['2', '0']);
-                  });
+                $q->whereNull('grade')
+                  ->orWhereIn('grade', ['2', '0'])
+                  ->orWhere('retraining_status', true);
             })
             ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
             ->orderBy('semester_name')

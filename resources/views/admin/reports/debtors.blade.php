@@ -529,10 +529,11 @@
                         var grade = gr.grade || '-';
                         var gradeClass = (point !== '-' && parseFloat(point) >= 60) ? 'cell-pass' : 'cell-fail';
                         var subNameLower = (gr.subject_name || '').trim().toLowerCase();
-                        var hasPassingGrade = point !== '-' && parseFloat(point) >= 60 && grade !== '-';
-                        var isDebt = debtNamesForSemester.indexOf(subNameLower) > -1 && !hasPassingGrade;
+                        var hasPassingGrade = point !== '-' && parseFloat(point) >= 60 && grade !== '-' && grade !== '2' && grade !== '0';
                         var isMissingGrade = (point === '-' && grade === '-');
-                        var rowBg = (isDebt || isMissingGrade) ? 'background:#fef2f2;' : 'background:#fff;';
+                        var isFailedGrade = (grade !== '-' && (grade === '2' || grade === '0'));
+                        var isDebt = !hasPassingGrade && (isMissingGrade || isFailedGrade || (point !== '-' && parseFloat(point) < 60));
+                        var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';
                         gh += '<tr style="' + rowBg + '">';
                         gh += '<td>' + (g + 1) + '</td>';
                         gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name) + '</td>';
@@ -541,9 +542,9 @@
                         gh += '<td class="' + gradeClass + '">' + esc(point) + '</td>';
                         gh += '<td><span class="badge badge-indigo">' + esc(grade) + '</span></td>';
                         gh += '<td>';
-                        if (isDebt || isMissingGrade) {
+                        if (isDebt) {
                             gh += '<span class="reason-badge">Qarzdor</span>';
-                        } else if (point !== '-' && parseFloat(point) >= 60) {
+                        } else if (hasPassingGrade) {
                             gh += '<span style="color:#16a34a;font-weight:600;font-size:12px;">&#10003;</span>';
                         }
                         gh += '</td>';

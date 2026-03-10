@@ -3746,6 +3746,18 @@ class ReportController extends Controller
 
             $groupName = $request->get('group_name', '');
 
+            // Talabaning joriy semester kodini aniqlash
+            $currentSemesterCode = null;
+            if ($student->semester_id) {
+                $currentSemesterCode = $student->semester_id;
+            } else {
+                $currentSem = DB::table('semesters')
+                    ->where('curriculum_hemis_id', $student->curriculum_id)
+                    ->where('current', true)
+                    ->value('semester_hemis_id');
+                $currentSemesterCode = $currentSem;
+            }
+
             $records = DB::table('curriculum_subjects')
                 ->where('curricula_hemis_id', $student->curriculum_id)
                 ->where('is_active', true)
@@ -3766,7 +3778,7 @@ class ReportController extends Controller
                 ];
             })->values();
 
-            // Har bir semester ichidagi bahosi/balli yo'q fanlarni aniqlash
+            // Har bir semester ichidagi bahosi/balli yo'q fanlarni aniqlash (joriy semestrdan tashqari)
             $gradeDebts = [];
             $allSubjects = DB::table('curriculum_subjects as cs')
                 ->leftJoin('academic_records as ar', function ($join) use ($studentId) {
@@ -3777,6 +3789,7 @@ class ReportController extends Controller
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
                 ->where('cs.is_active', true)
                 ->where('cs.subject_code', 'not like', '%/%')
+                ->when($currentSemesterCode, fn($q) => $q->where('cs.semester_code', '!=', $currentSemesterCode))
                 ->select(
                     'cs.semester_code',
                     'cs.semester_name',

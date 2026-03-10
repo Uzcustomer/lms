@@ -206,7 +206,15 @@
                     $('#btn-search').prop('disabled', false).css('opacity', '1');
 
                     if (!res.success || !res.data || !res.data.items || res.data.items.length === 0) {
-                        $('#empty-state').show().find('p:first').text("Kontrakt topilmadi");
+                        var totalInDb = res.data ? (res.data.totalInDb || 0) : 0;
+                        if (totalInDb === 0) {
+                            $('#empty-state').show()
+                                .find('p:first').text("Ma'lumotlar bazasida kontrakt yo'q")
+                                .next().html('Iltimos, <strong>Sinxronizatsiya</strong> tugmasini bosib HEMIS dan ma\'lumotlarni yuklang');
+                        } else {
+                            $('#empty-state').show().find('p:first').text("Kontrakt topilmadi");
+                            $('#empty-state p:last').text("Filtrlani o'zgartirib qayta qidiring");
+                        }
                         $('#table-area').hide();
                         $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
                         allItems = [];
@@ -392,7 +400,10 @@
 
             // Boshlang'ich yuklash
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
-            pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
+            pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code', function() {
+                // Sahifa ochilganda avtomatik qidiruv
+                loadContracts(1);
+            });
         });
     </script>
 

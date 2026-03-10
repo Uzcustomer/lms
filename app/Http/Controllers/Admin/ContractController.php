@@ -58,6 +58,7 @@ class ContractController extends Controller
 
     public function data(Request $request)
     {
+        $totalInDb = ContractList::count();
         $query = ContractList::query();
 
         if ($request->filled('_student')) {
@@ -112,6 +113,7 @@ class ContractController extends Controller
             'success' => true,
             'data' => [
                 'items' => $items,
+                'totalInDb' => $totalInDb,
                 'pagination' => [
                     'totalCount' => $total,
                     'page' => $page,

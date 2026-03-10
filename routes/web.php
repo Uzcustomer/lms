@@ -170,6 +170,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [ContractController::class, 'index'])->name('index');
             Route::get('/data', [ContractController::class, 'data'])->name('data');
             Route::post('/sync', [ContractController::class, 'sync'])->name('sync');
+            Route::get('/get-groups', [ContractController::class, 'getGroups'])->name('get-groups');
         });
 
         Route::prefix('independent')->name('independent.')->group(function () {

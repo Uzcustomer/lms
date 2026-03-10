@@ -2820,6 +2820,47 @@ class ReportController extends Controller
                 $debtRecords = $debtRecords->concat($records);
             }
 
+            // 2.5-QADAM: curriculum_subjects da bor lekin academic_records da yozuvi yo'q fanlarni topish (ball va baho "-")
+            $missingRecords = collect();
+            foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                $missing = DB::table('students as st')
+                    ->join('curriculum_subjects as cs', function ($join) {
+                        $join->on('cs.curricula_hemis_id', '=', 'st.curriculum_id')
+                            ->where('cs.is_active', true)
+                            ->where('cs.subject_code', 'not like', '%/%');
+                    })
+                    ->leftJoin('academic_records as ar', function ($join) {
+                        $join->on('ar.subject_id', '=', 'cs.subject_id')
+                            ->on('ar.student_id', '=', 'st.hemis_id')
+                            ->on('ar.semester_id', '=', 'cs.semester_code');
+                    })
+                    ->whereIn('st.hemis_id', $chunk)
+                    ->whereNotNull('st.curriculum_id')
+                    ->whereNull('ar.id')
+                    ->when(!$isCurrentSemester && !empty($currentSemesterIds), function ($q) use ($currentSemesterIds) {
+                        $q->whereNotIn('cs.semester_code', $currentSemesterIds);
+                    })
+                    ->when($request->filled('semester_code'), function ($q) use ($request) {
+                        $q->where('cs.semester_code', $request->semester_code);
+                    })
+                    ->select(
+                        'st.hemis_id as student_id',
+                        'cs.subject_id',
+                        'cs.subject_name',
+                        'cs.semester_code as semester_id',
+                        'cs.semester_name',
+                        DB::raw('NULL as grade'),
+                        DB::raw('false as retraining_status'),
+                        'cs.credit',
+                        'cs.total_acload'
+                    )
+                    ->get();
+
+                $missingRecords = $missingRecords->concat($missing);
+            }
+
+            $debtRecords = $debtRecords->concat($missingRecords);
+
             if ($debtRecords->isEmpty()) {
                 return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
             }

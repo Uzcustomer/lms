@@ -112,7 +112,7 @@
                         </div>
                         <div class="filter-item" style="min-width: 160px;">
                             <label class="filter-label">&nbsp;</label>
-                            <div class="toggle-switch active" id="current-semester-toggle" onclick="toggleSemester()">
+                            <div class="toggle-switch" id="current-semester-toggle" onclick="toggleSemester()">
                                 <div class="toggle-track"><div class="toggle-thumb"></div></div>
                                 <span class="toggle-label">Joriy semestr</span>
                             </div>
@@ -409,7 +409,7 @@
         function loadAllAcademicRecords(studentId, studentName, groupName) {
             $.ajax({
                 url: '{{ route("admin.reports.student-all-records") }}',
-                data: { student_id: studentId, group_name: groupName },
+                data: { student_id: studentId, group_name: groupName, current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' },
                 success: function(resp) {
                     var semesters = resp.semesters || [];
                     if (!semesters.length) {

@@ -539,7 +539,8 @@
                         var grade = gr.grade || '-';
                         var gradeClass = (point !== '-' && parseFloat(point) >= 60) ? 'cell-pass' : 'cell-fail';
                         var subNameLower = (gr.subject_name || '').trim().toLowerCase();
-                        var isDebt = debtNamesForSemester.indexOf(subNameLower) > -1;
+                        var hasPassingGrade = point !== '-' && parseFloat(point) >= 60 && grade !== '-';
+                        var isDebt = debtNamesForSemester.indexOf(subNameLower) > -1 && !hasPassingGrade;
                         var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';
                         gh += '<tr style="' + rowBg + '">';
                         gh += '<td>' + (g + 1) + '</td>';

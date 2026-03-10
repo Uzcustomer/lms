@@ -231,6 +231,14 @@
             </svg>
             YN jadvali
         </a>
+
+        <a href="{{ route('admin.exam-appeals.index', ['status' => 'approved']) }}"
+           class="sidebar-link {{ request()->routeIs('admin.exam-appeals.*') ? 'sidebar-active' : '' }}" style="position: relative;">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+            </svg>
+            Apellyatsiyalar
+        </a>
         @elseif($hasActiveRole('oquv_bolimi'))
         {{-- O'quv bo'limi roli uchun --}}
         <div class="sidebar-section">O'quv bo'limi</div>
@@ -362,6 +370,14 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
             </svg>
             Faoliyat jurnali
+        </a>
+
+        <a href="{{ route('admin.face-id.test') }}"
+           class="sidebar-link {{ request()->routeIs('admin.face-id.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"></path>
+            </svg>
+            Face ID Test
         </a>
         @endif
 
@@ -525,7 +541,7 @@
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285zm0 13.036h.008v.008H12v-.008z"></path>
             </svg>
-            Imtihon apellyatsiyalari
+            Apellyatsiyalar
             @if(($pendingAppealsCount ?? 0) > 0)
                 <span class="sidebar-badge">{{ $pendingAppealsCount }}</span>
             @endif

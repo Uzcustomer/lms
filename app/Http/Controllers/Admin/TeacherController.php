@@ -272,27 +272,38 @@ class TeacherController extends Controller
         $levelCode = $request->input('level_code', '');
         $teacherId = $request->input('teacher_id');
         $filterDept = $request->input('filter_dept', '1') !== '0';
+        $currentSemester = $request->input('current_semester', '1');
 
         $teacher = $teacherId ? Teacher::find($teacherId) : null;
 
-        // O'qituvchining biriktirilgan fanlarini olish (subject_name + semester_code bo'yicha)
-        $assignedSubjectKeys = collect();
+        // O'qituvchining biriktirilgan fan ID larini olish
+        $assignedSubjectIds = collect();
         if ($teacher) {
-            $assignedSubjectKeys = $teacher->responsibleSubjects()
-                ->select('subject_name', 'semester_code')
-                ->get()
-                ->map(fn($s) => $s->subject_name . '|' . $s->semester_code);
+            $assignedSubjectIds = $teacher->responsibleSubjects()
+                ->pluck('curriculum_subjects.id');
         }
 
-        // KTR bilan bir xil usulda fanlarni olish (curricula va semesters bilan JOIN)
+        // KTR bilan bir xil query — GROUP BY siz, har bir qator alohida
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
             ->join('semesters as s', function ($join) {
                 $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
                     ->on('s.code', '=', 'cs.semester_code');
             })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
             ->where('cs.is_active', true)
             ->whereNotNull('cs.subject_name');
+
+        // Joriy semestr filtri (KTR kabi — curriculum_weeks asosida)
+        if ($currentSemester == '1') {
+            $query->whereIn('s.semester_hemis_id', function ($sub) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+            });
+        }
 
         // Kafedra bo'yicha filtrlash
         if ($filterDept && $teacher) {
@@ -319,22 +330,36 @@ class TeacherController extends Controller
 
         $subjects = $query
             ->select([
-                DB::raw('MIN(cs.id) as id'),
+                'cs.id',
                 'cs.subject_name',
-                DB::raw('MIN(cs.subject_code) as subject_code'),
+                'cs.subject_code',
                 'cs.semester_code',
                 'cs.semester_name',
-                DB::raw('MIN(cs.department_name) as department_name'),
-                DB::raw('1 as is_active'),
+                'cs.department_name',
+                'c.education_type_name',
+                'f.name as faculty_name',
+                'sp.name as specialty_name',
+                's.level_name',
+                's.level_code',
             ])
-            ->groupBy('cs.subject_name', 'cs.semester_code', 'cs.semester_name')
             ->orderBy('cs.subject_name')
             ->orderBy('cs.semester_code')
             ->get();
 
-        // Har bir fan uchun is_assigned flagini qo'shish
-        $subjects->transform(function ($subject) use ($assignedSubjectKeys) {
-            $subject->is_assigned = $assignedSubjectKeys->contains($subject->subject_name . '|' . $subject->semester_code);
+        // Har bir curriculum_subject_id uchun mas'ul o'qituvchilar ro'yxatini olish
+        $subjectIds = $subjects->pluck('id')->toArray();
+        $responsibleTeachers = DB::table('teacher_responsible_subjects as trs')
+            ->join('teachers as t', 't.id', '=', 'trs.teacher_id')
+            ->whereIn('trs.curriculum_subject_id', $subjectIds)
+            ->select('trs.curriculum_subject_id', 't.id as teacher_id', 't.full_name')
+            ->get()
+            ->groupBy('curriculum_subject_id');
+
+        // Har bir fan uchun is_assigned va responsible_teachers qo'shish
+        $subjects->transform(function ($subject) use ($assignedSubjectIds, $responsibleTeachers) {
+            $subject->is_assigned = $assignedSubjectIds->contains($subject->id);
+            $teachers = $responsibleTeachers->get($subject->id, collect());
+            $subject->responsible_teachers = $teachers->pluck('full_name')->values()->toArray();
             return $subject;
         });
 

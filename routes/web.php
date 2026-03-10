@@ -28,6 +28,8 @@ use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
+use App\Http\Controllers\Student\FaceIdController;
+use App\Http\Controllers\Admin\FaceIdAdminController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\LectureScheduleController;
 use App\Http\Controllers\Admin\TimetableViewController;
@@ -146,6 +148,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'show'])->name('show');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'reject'])->name('reject');
+            Route::post('/bulk-delete', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'bulkDelete'])->name('bulk-delete');
             Route::delete('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'destroy'])->name('destroy');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'download'])->name('download');
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
@@ -158,6 +161,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\ExamAppealController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\ExamAppealController::class, 'reject'])->name('reject');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\ExamAppealController::class, 'download'])->name('download');
+            Route::post('/{id}/comment', [\App\Http\Controllers\Admin\ExamAppealController::class, 'addComment'])->name('comment');
+            Route::get('/comment/{id}/download', [\App\Http\Controllers\Admin\ExamAppealController::class, 'downloadCommentFile'])->name('comment.download');
         });
 
         // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)
@@ -308,6 +313,28 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/notifications/{notification}/reply', [NotificationController::class, 'reply'])->name('notifications.reply');
         Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
         Route::get('/notifications-unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
+
+        // Face ID boshqaruvi
+        Route::prefix('face-id')->name('face-id.')->group(function () {
+            Route::get('/settings', [FaceIdAdminController::class, 'settings'])->name('settings');
+            Route::post('/settings', [FaceIdAdminController::class, 'updateSettings'])->name('settings.update');
+            Route::get('/logs', [FaceIdAdminController::class, 'logs'])->name('logs');
+            Route::get('/logs/{id}/snapshot', [FaceIdAdminController::class, 'showSnapshot'])->name('logs.snapshot');
+            Route::delete('/logs/{id}', [FaceIdAdminController::class, 'deleteLog'])->name('logs.delete');
+            Route::post('/logs/clear', [FaceIdAdminController::class, 'clearLogs'])->name('logs.clear');
+            Route::get('/students', [FaceIdAdminController::class, 'students'])->name('students');
+            Route::post('/students/{id}/toggle', [FaceIdAdminController::class, 'toggleStudent'])->name('students.toggle');
+            Route::get('/enrollment', [FaceIdAdminController::class, 'enrollment'])->name('enrollment');
+            Route::post('/descriptor', [FaceIdAdminController::class, 'saveDescriptor'])->name('descriptor.save');
+            Route::delete('/descriptor/{studentId}', [FaceIdAdminController::class, 'deleteDescriptor'])->name('descriptor.delete');
+            Route::get('/ping', fn() => response('pong:' . now()))->name('ping');
+            Route::get('/test', [FaceIdAdminController::class, 'testPage'])->name('test');
+            Route::post('/check-teacher', [FaceIdAdminController::class, 'checkTeacher'])->name('check-teacher');
+            Route::get('/teacher-photo/{id}', [FaceIdAdminController::class, 'teacherPhoto'])->name('teacher-photo');
+            Route::get('/all-descriptors', [FaceIdAdminController::class, 'allDescriptors'])->name('all-descriptors');
+            Route::post('/save-teacher-descriptor', [FaceIdAdminController::class, 'saveTeacherDescriptor'])->name('save-teacher-descriptor');
+            Route::get('/teachers-without-descriptor', [FaceIdAdminController::class, 'teachersWithoutDescriptor'])->name('teachers-without-descriptor');
+        });
 
         // Unified settings page
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
@@ -506,6 +533,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
+            Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
         });
 
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
@@ -563,6 +591,15 @@ Route::prefix('student')->name('student.')->group(function () {
     // logout qilmasa, eski sessiya yangi loginni bloklaydi
     Route::post('/login', [StudentAuthController::class, 'login'])->name('login.post');
 
+    // Face ID login (auth kerak emas)
+    Route::prefix('face-id')->name('face-id.')->group(function () {
+        Route::get('/login', [FaceIdController::class, 'showPage'])->name('login');
+        Route::post('/check-student', [FaceIdController::class, 'checkStudent'])->name('check-student');
+        Route::get('/photo/{id}', [FaceIdController::class, 'getPhoto'])->name('photo');
+        Route::post('/verify', [FaceIdController::class, 'verifyAndLogin'])->name('verify');
+        Route::post('/save-descriptor', [FaceIdController::class, 'saveDescriptor'])->name('save-descriptor');
+    });
+
     // Telegram 2FA login tasdiqlash (auth kerak emas)
     Route::get('/verify-login', [StudentAuthController::class, 'showVerifyLogin'])->name('verify-login');
     Route::post('/verify-login', [StudentAuthController::class, 'verifyLoginCode'])->name('verify-login.post');
@@ -618,6 +655,9 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/unread-count', [\App\Http\Controllers\Student\NotificationController::class, 'unreadCount'])->name('unread-count');
             Route::post('/{id}/read', [\App\Http\Controllers\Student\NotificationController::class, 'markAsRead'])->name('mark-read');
             Route::post('/read-all', [\App\Http\Controllers\Student\NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+            Route::post('/bulk-mark-read', [\App\Http\Controllers\Student\NotificationController::class, 'bulkMarkRead'])->name('bulk-mark-read');
+            Route::post('/bulk-delete', [\App\Http\Controllers\Student\NotificationController::class, 'bulkDelete'])->name('bulk-delete');
+            Route::post('/delete-all', [\App\Http\Controllers\Student\NotificationController::class, 'deleteAll'])->name('delete-all');
         });
 
         // Imtihon natijalari bo'yicha apellyatsiya
@@ -627,6 +667,8 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::post('/store', [\App\Http\Controllers\Student\ExamAppealController::class, 'store'])->name('store');
             Route::get('/{id}', [\App\Http\Controllers\Student\ExamAppealController::class, 'show'])->name('show');
             Route::get('/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'download'])->name('download');
+            Route::post('/{id}/comment', [\App\Http\Controllers\Student\ExamAppealController::class, 'addComment'])->name('comment');
+            Route::get('/comment/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'downloadCommentFile'])->name('comment.download');
         });
 
         // Sababli dars qoldirish arizasi
@@ -846,6 +888,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
+            Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
         });
     });
 });

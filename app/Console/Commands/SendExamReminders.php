@@ -25,20 +25,20 @@ class SendExamReminders extends Command
         $this->info("Imtihon eslatmalari tekshirilmoqda (bugundan 3 kungacha)...");
 
         // Bugundan 3 kungacha bo'lgan sanalar (bugun + 1, 2, 3 kun)
-        $dateRange = [];
-        for ($i = 0; $i <= 3; $i++) {
-            $dateRange[] = $today->copy()->addDays($i)->format('Y-m-d');
-        }
+        $todayStr = $today->format('Y-m-d');
+        $endDate = $today->copy()->addDays(3)->format('Y-m-d');
 
-        // 1-qadam: Yaqin 3 kunda imtihoni bor guruhlarni topish
-        $examSchedules = ExamSchedule::where(function ($query) use ($dateRange) {
-            $query->where(function ($q) use ($dateRange) {
-                $q->whereIn(DB::raw('DATE(oski_date)'), $dateRange)
+        // 1-qadam: Yaqin 3 kunda imtihoni bor guruhlarni topish (faqat bugundan boshlab)
+        $examSchedules = ExamSchedule::where(function ($query) use ($todayStr, $endDate) {
+            $query->where(function ($q) use ($todayStr, $endDate) {
+                $q->whereDate('oski_date', '>=', $todayStr)
+                    ->whereDate('oski_date', '<=', $endDate)
                     ->where(function ($q2) {
                         $q2->where('oski_na', false)->orWhereNull('oski_na');
                     });
-            })->orWhere(function ($q) use ($dateRange) {
-                $q->whereIn(DB::raw('DATE(test_date)'), $dateRange)
+            })->orWhere(function ($q) use ($todayStr, $endDate) {
+                $q->whereDate('test_date', '>=', $todayStr)
+                    ->whereDate('test_date', '<=', $endDate)
                     ->where(function ($q2) {
                         $q2->where('test_na', false)->orWhereNull('test_na');
                     });
@@ -177,8 +177,8 @@ class SendExamReminders extends Command
             }
 
             foreach ($dateInfo['exams'] as $exam) {
-                $timePart = !empty($exam['time']) ? " — soat {$exam['time']}" : '';
-                $lines[] = "  - {$exam['name']} ({$exam['type']}){$timePart}";
+                $timeStr = !empty($exam['time']) ? " — soat {$exam['time']}" : '';
+                $lines[] = "  - {$exam['name']} ({$exam['type']}){$timeStr}";
             }
         }
 
@@ -189,7 +189,7 @@ class SendExamReminders extends Command
     {
         $examsByDate = [];
         foreach ($schedules as $schedule) {
-            if ($schedule->oski_date && !$schedule->oski_na) {
+            if ($schedule->oski_date && !$schedule->oski_na && $schedule->oski_date->gte($today)) {
                 $dateKey = $schedule->oski_date->format('Y-m-d');
                 $daysLeft = $today->diffInDays($schedule->oski_date);
                 if ($daysLeft <= 3) {
@@ -198,11 +198,11 @@ class SendExamReminders extends Command
                     $examsByDate[$dateKey]['date'] = $schedule->oski_date->format('d.m.Y');
                 }
             }
-            if ($schedule->test_date && !$schedule->test_na) {
+            if ($schedule->test_date && !$schedule->test_na && $schedule->test_date->gte($today)) {
                 $dateKey = $schedule->test_date->format('Y-m-d');
                 $daysLeft = $today->diffInDays($schedule->test_date);
                 if ($daysLeft <= 3) {
-                    $testTime = $schedule->test_time ? substr($schedule->test_time, 0, 5) : null;
+                    $testTime = $schedule->test_time ? Carbon::parse($schedule->test_time)->format('H:i') : null;
                     $examsByDate[$dateKey]['exams'][] = ['name' => $schedule->subject_name, 'type' => 'Test', 'time' => $testTime];
                     $examsByDate[$dateKey]['days'] = $daysLeft;
                     $examsByDate[$dateKey]['date'] = $schedule->test_date->format('d.m.Y');
@@ -233,8 +233,8 @@ class SendExamReminders extends Command
             }
 
             foreach ($dateInfo['exams'] as $exam) {
-                $timePart = !empty($exam['time']) ? " — ⏰ {$exam['time']}" : '';
-                $lines[] = "  📌 <b>{$exam['name']}</b> ({$exam['type']}){$timePart}";
+                $timeStr = !empty($exam['time']) ? " — ⏰ {$exam['time']}" : '';
+                $lines[] = "  📌 <b>{$exam['name']}</b> ({$exam['type']}){$timeStr}";
             }
             $lines[] = "";
         }

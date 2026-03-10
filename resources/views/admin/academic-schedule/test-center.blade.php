@@ -219,14 +219,17 @@
                                                 @endif
                                             </td>
                                             <td style="text-align:center;padding:4px 6px;">
-                                                @if(($item['yn_submitted'] ?? false) && ($item['yn_type'] ?? '') === 'Test')
-                                                    <div style="display:flex;align-items:center;gap:4px;justify-content:center;">
-                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ?? '' }}" placeholder="HH:MM" maxlength="5" style="width:60px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;text-align:center;font-size:13px;cursor:pointer;" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name }}" oninput="formatTimeInput(this)">
-                                                        <button type="button" class="btn-save-time" onclick="saveTestTime(this)" style="padding:3px 8px;border:none;border-radius:6px;background:#2b5ea7;color:#fff;font-size:12px;cursor:pointer;white-space:nowrap;">Saqlash</button>
+                                                    <div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
+                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:pointer;" oninput="formatTimeInput(this)" onblur="validateTimeInput(this)">
+                                                        <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
+                                                            <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                        </button>
+                                                        @if(!($item['yn_submitted'] ?? false) && $item['test_time'])
+                                                            <div class="yn-time-note" style="width:100%;text-align:center;margin-top:2px;">
+                                                                <span style="font-size:10px;color:#d97706;font-style:italic;">⚠️ Vaqt o'zgarishi mumkin</span>
+                                                            </div>
+                                                        @endif
                                                     </div>
-                                                @else
-                                                    <span style="color:#cbd5e1;">—</span>
-                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach
@@ -258,85 +261,179 @@
     <link href="/css/scroll-calendar.css" rel="stylesheet" />
     <script src="/js/scroll-calendar.js"></script>
 
-    <!-- Toast container -->
-    <div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+    <style>
+        .toast-popup {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 99999;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+            padding: 18px 24px;
+            min-width: 320px;
+            max-width: 420px;
+            animation: toastSlideIn 0.3s ease-out;
+            border-left: 4px solid #16a34a;
+        }
+        .toast-popup.toast-error {
+            border-left-color: #dc2626;
+        }
+        .toast-popup .toast-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #16a34a;
+            margin-bottom: 6px;
+        }
+        .toast-popup.toast-error .toast-title {
+            color: #dc2626;
+        }
+        .toast-popup .toast-body {
+            font-size: 13px;
+            color: #334155;
+            line-height: 1.5;
+        }
+        .toast-popup .toast-close {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #94a3b8;
+            cursor: pointer;
+        }
+        @keyframes toastSlideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes toastSlideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+    </style>
 
     <script>
-        var saveTestTimeUrl = '{{ route($routePrefix . ".academic-schedule.test-center.save-test-time") }}';
+        function showToast(title, body, isError) {
+            var existing = document.querySelector('.toast-popup');
+            if (existing) existing.remove();
 
-        function formatTimeInput(el) {
-            var v = el.value.replace(/[^0-9]/g, '');
-            if (v.length >= 3) {
-                v = v.substring(0, 2) + ':' + v.substring(2, 4);
-            }
-            el.value = v.substring(0, 5);
+            var toast = document.createElement('div');
+            toast.className = 'toast-popup' + (isError ? ' toast-error' : '');
+            toast.innerHTML = '<button class="toast-close" onclick="this.parentElement.remove()">&times;</button>'
+                + '<div class="toast-title">' + title + '</div>'
+                + '<div class="toast-body">' + body + '</div>';
+            document.body.appendChild(toast);
+
+            setTimeout(function() {
+                toast.style.animation = 'toastSlideOut 0.3s ease-in forwards';
+                setTimeout(function() { toast.remove(); }, 300);
+            }, 4000);
         }
 
-        function showToast(html, type) {
-            var bg = type === 'success' ? '#10b981' : (type === 'warning' ? '#f59e0b' : '#ef4444');
-            var toast = document.createElement('div');
-            toast.style.cssText = 'background:' + bg + ';color:#fff;padding:12px 20px;border-radius:10px;margin-bottom:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);font-size:13px;max-width:350px;display:flex;align-items:flex-start;gap:8px;animation:slideIn .3s ease;';
-            toast.innerHTML = '<div style="flex:1;">' + html + '</div><span onclick="this.parentElement.remove()" style="cursor:pointer;font-size:16px;line-height:1;">&times;</span>';
-            document.getElementById('toast-container').appendChild(toast);
-            setTimeout(function() { toast.remove(); }, 5000);
+        function formatTimeInput(input) {
+            var val = input.value.replace(/[^0-9]/g, '');
+            if (val.length > 4) val = val.substring(0, 4);
+            if (val.length >= 3) {
+                val = val.substring(0, 2) + ':' + val.substring(2);
+            }
+            input.value = val;
+        }
+
+        function validateTimeInput(input) {
+            var val = input.value.trim();
+            if (!val) return;
+            var match = val.match(/^(\d{1,2}):(\d{2})$/);
+            if (!match) {
+                input.value = '';
+                showToast('Xatolik', 'Vaqt formati noto\'g\'ri. HH:MM formatida kiriting (masalan: 09:00, 14:30)', true);
+                return;
+            }
+            var h = parseInt(match[1], 10);
+            var m = parseInt(match[2], 10);
+            if (h > 23 || m > 59) {
+                input.value = '';
+                showToast('Xatolik', 'Vaqt noto\'g\'ri. Soat 0-23, daqiqa 0-59 oralig\'ida bo\'lishi kerak', true);
+                return;
+            }
+            input.value = (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
         }
 
         function saveTestTime(btn) {
-            var wrap = btn.parentElement;
-            var input = wrap.querySelector('.test-time-input');
-            var time = input.value.trim();
+            var container = btn.parentElement;
+            var input = container.querySelector('.test-time-input');
+            var timeVal = input.value.trim();
+            if (!timeVal) {
+                showToast('Xatolik', 'Iltimos, vaqtni kiriting', true);
+                return;
+            }
 
-            if (!/^\d{2}:\d{2}$/.test(time)) {
-                showToast('Vaqtni HH:MM formatida kiriting', 'error');
-                input.focus();
+            var match = timeVal.match(/^(\d{1,2}):(\d{2})$/);
+            if (!match || parseInt(match[1]) > 23 || parseInt(match[2]) > 59) {
+                showToast('Xatolik', 'Vaqt formati noto\'g\'ri. HH:MM formatida kiriting', true);
                 return;
             }
-            var h = parseInt(time.split(':')[0]), m = parseInt(time.split(':')[1]);
-            if (h > 23 || m > 59) {
-                showToast('Noto\'g\'ri vaqt', 'error');
-                input.focus();
-                return;
-            }
+
+            var subjectName = input.getAttribute('data-subject-name') || 'Fan';
 
             btn.disabled = true;
-            btn.textContent = '...';
+            btn.style.opacity = '0.6';
 
-            $.ajax({
-                url: saveTestTimeUrl,
+            var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            fetch('{{ route($routePrefix . ".academic-schedule.test-center.save-test-time") }}', {
                 method: 'POST',
-                data: {
-                    _token: '{{ csrf_token() }}',
-                    group_hemis_id: input.dataset.groupId,
-                    subject_id: input.dataset.subjectId,
-                    semester_code: input.dataset.semesterCode,
-                    test_time: time,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
                 },
-                success: function(res) {
-                    btn.disabled = false;
-                    if (res.success) {
-                        var subjectName = input.dataset.subjectName;
-                        btn.style.background = '#10b981';
-                        btn.textContent = '✓';
-                        setTimeout(function() { btn.style.background = '#2b5ea7'; btn.textContent = 'Saqlash'; }, 2000);
+                body: JSON.stringify({
+                    group_hemis_id: input.getAttribute('data-group-hemis-id'),
+                    subject_id: input.getAttribute('data-subject-id'),
+                    semester_code: input.getAttribute('data-semester-code'),
+                    test_time: timeVal,
+                    yn_submitted: input.getAttribute('data-yn-submitted') === '1'
+                })
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    var isChanged = data.time_changed;
+                    var title = isChanged ? 'O\'zgartirildi!' : 'Saqlandi!';
+                    var body = '<b>Fan:</b> ' + subjectName + '<br><b>Test vaqti ' + (isChanged ? 'o\'zgartirildi' : 'belgilandi') + ':</b> ' + timeVal;
+                    showToast(title, body, false);
+                    btn.style.background = '#16a34a';
+                    setTimeout(function() { btn.style.background = '#3b82f6'; }, 1500);
 
-                        if (res.time_changed) {
-                            showToast('<b>O\'zgartirildi!</b><br>Fan: ' + subjectName + '<br>Test vaqti: <s>' + res.old_time + '</s> → <b>' + time + '</b><br><small>Telegram: ' + res.telegram_sent + '/' + res.total_students + ' talabaga yuborildi</small>', 'warning');
-                        } else {
-                            showToast('<b>Saqlandi!</b><br>Fan: ' + subjectName + '<br>Test vaqti belgilandi: <b>' + time + '</b><br><small>Telegram: ' + res.telegram_sent + '/' + res.total_students + ' talabaga yuborildi</small>', 'success');
+                    // YN yuborilmagan bo'lsa izoh qo'shish/yangilash
+                    var wrapper = input.closest('div');
+                    var existingNote = wrapper.querySelector('.yn-time-note');
+                    if (input.getAttribute('data-yn-submitted') !== '1' && timeVal) {
+                        if (!existingNote) {
+                            var noteDiv = document.createElement('div');
+                            noteDiv.style.cssText = 'width:100%;text-align:center;margin-top:2px;';
+                            noteDiv.className = 'yn-time-note';
+                            noteDiv.innerHTML = '<span style="font-size:10px;color:#d97706;font-style:italic;">⚠️ Vaqt o\'zgarishi mumkin</span>';
+                            wrapper.appendChild(noteDiv);
                         }
-                    } else {
-                        btn.textContent = 'Saqlash';
-                        showToast(res.message || 'Xatolik yuz berdi', 'error');
+                    } else if (existingNote) {
+                        existingNote.remove();
                     }
-                },
-                error: function(xhr) {
-                    btn.disabled = false;
-                    btn.textContent = 'Saqlash';
-                    showToast('Xatolik: ' + (xhr.responseJSON?.message || 'Server xatosi'), 'error');
+                } else {
+                    showToast('Xatolik', data.message || 'Xatolik yuz berdi', true);
                 }
+            })
+            .catch(function() {
+                showToast('Xatolik', 'Xatolik yuz berdi', true);
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.style.opacity = '1';
             });
         }
+    </script>
 
+    <script>
         var isUpdatingFilters = false;
         var filterUrl = '{{ route($routePrefix . ".academic-schedule.get-filter-options") }}';
 

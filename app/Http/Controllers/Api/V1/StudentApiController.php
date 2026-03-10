@@ -1041,63 +1041,70 @@ class StudentApiController extends Controller
     }
 
     /**
-     * Contract — shartnoma ma'lumotlari (HEMIS dan)
+     * Contract — shartnoma ma'lumotlari (lokal DB dan)
      */
     public function contract(Request $request): JsonResponse
     {
         $student = $request->user();
-        $hemisService = app(HemisService::class);
 
         $currentSemester = Semester::where('current', true)->first();
         $educationYearCode = $currentSemester?->education_year ?? $student->education_year_code;
 
-        $result = $hemisService->fetchContracts([
-            '_student' => $student->hemis_id,
-            '_education_year' => $educationYearCode,
-            'limit' => 50,
-        ]);
+        // edu_year formati: "2025-2026 o`quv yili"
+        $items = \App\Models\ContractList::where('student_hemis_id', $student->hemis_id)
+            ->where('edu_year', 'like', $educationYearCode . '%')
+            ->orderByDesc('education_year')
+            ->get();
 
-        if (!($result['success'] ?? false)) {
-            return response()->json([
-                'data' => [
-                    'contracts' => [],
-                    'summary' => [
-                        'total_amount' => 0,
-                        'paid_amount' => 0,
-                        'remaining_amount' => 0,
-                    ],
-                ],
-                'message' => 'Shartnoma ma\'lumotlari topilmadi',
-            ]);
-        }
-
-        $items = $result['data']['items'] ?? [];
         $contracts = [];
         $totalAmount = 0;
         $paidAmount = 0;
 
-        foreach ($items as $item) {
-            $contractData = [];
-            foreach ($item['_data'] ?? [] as $attr) {
-                foreach ($attr as $key => $value) {
-                    $contractData[$key] = $value;
-                }
-            }
+        // Kontrakt summa turi — ruscha -> o'zbekcha
+        $sumTypeTranslations = [
+            'С стипендией' => 'Stipendiya bilan',
+            'Без стипендии' => 'Stipendiyasiz',
+            'Со скидкой' => 'Chegirma bilan',
+            'Полная оплата' => "To'liq to'lov",
+            'Грант' => 'Grant',
+        ];
 
-            $amount = (float) ($contractData['payment_amount'] ?? $contractData['amount'] ?? $contractData['summa'] ?? $contractData['contract_amount'] ?? 0);
-            $paid = (float) ($contractData['paid_amount'] ?? $contractData['paid'] ?? $contractData['tolangan'] ?? 0);
+        foreach ($items as $item) {
+            $amount = (float) ($item->edu_contract_sum ?? 0);
+            $paid = (float) ($item->paid_credit_amount ?? 0);
+            $unpaid = (float) ($item->unpaid_credit_amount ?? ($amount - $paid));
 
             $totalAmount += $amount;
             $paidAmount += $paid;
 
+            $status = $unpaid <= 0 ? 'paid' : 'unpaid';
+
+            $sumTypeName = $item->edu_contract_sum_type_name;
+            $sumTypeNameUz = $sumTypeTranslations[$sumTypeName] ?? $sumTypeName;
+
             $contracts[] = [
-                'id' => $item['id'] ?? null,
-                'key' => $item['key'] ?? null,
-                'education_year' => $item['_education_year'] ?? null,
-                'data' => $contractData,
-                'created_at' => isset($item['created_at']) ? date('Y-m-d H:i:s', $item['created_at']) : null,
-                'updated_at' => isset($item['updated_at']) ? date('Y-m-d H:i:s', $item['updated_at']) : null,
+                'id' => $item->hemis_id,
+                'key' => $item->key,
+                'education_year' => $item->education_year,
+                'edu_year' => $item->edu_year,
+                'edu_course' => $item->edu_course,
+                'contract_amount' => $amount,
+                'paid_amount' => $paid,
+                'unpaid_amount' => $unpaid,
+                'status' => $status,
+                'contract_number' => $item->contract_number,
+                'edu_contract_type_name' => $item->edu_contract_type_name,
+                'edu_contract_sum_type_name' => $sumTypeNameUz,
+                'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
+                'updated_at' => $item->updated_at?->format('Y-m-d H:i:s'),
             ];
+        }
+
+        // Kurs va semestr
+        $course = null;
+        if ($student->semester_name && preg_match('/(\d+)/', $student->semester_name, $matches)) {
+            $semNum = (int) $matches[1];
+            $course = (int) ceil($semNum / 2);
         }
 
         return response()->json([
@@ -1110,6 +1117,8 @@ class StudentApiController extends Controller
                 ],
                 'student_name' => $student->full_name,
                 'education_year' => $educationYearCode,
+                'course' => $course,
+                'semester_name' => $student->semester_name,
             ],
         ]);
     }

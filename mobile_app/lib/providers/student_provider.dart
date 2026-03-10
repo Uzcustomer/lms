@@ -15,6 +15,7 @@ class StudentProvider extends ChangeNotifier {
   Map<String, dynamic>? _attendance;
   List<dynamic>? _pendingLessons;
   Map<String, dynamic>? _contract;
+  List<dynamic>? _contractList;
 
   StudentProvider(this._service);
 
@@ -27,6 +28,7 @@ class StudentProvider extends ChangeNotifier {
   Map<String, dynamic>? get attendance => _attendance;
   List<dynamic>? get pendingLessons => _pendingLessons;
   Map<String, dynamic>? get contract => _contract;
+  List<dynamic>? get contractList => _contractList;
 
   Future<void> loadDashboard() async {
     _isLoading = true;
@@ -131,9 +133,11 @@ class StudentProvider extends ChangeNotifier {
     try {
       final response = await _service.getContract();
       _contract = response['data'] as Map<String, dynamic>?;
+      _contractList = _contract?['contracts'] as List<dynamic>?;
     } on ApiException catch (e) {
       // Contract data is optional, don't set error
       _contract = null;
+      _contractList = null;
     }
     notifyListeners();
   }
@@ -156,6 +160,7 @@ class StudentProvider extends ChangeNotifier {
     _attendance = null;
     _pendingLessons = null;
     _contract = null;
+    _contractList = null;
     notifyListeners();
   }
 }

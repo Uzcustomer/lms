@@ -47,4 +47,21 @@ class ContractList extends Model
         'hemis_created_at',
         'hemis_updated_at',
     ];
+
+    protected $casts = [
+        'edu_contract_sum' => 'decimal:2',
+        'paid_credit_amount' => 'decimal:2',
+        'end_rest_debet_amount' => 'decimal:2',
+        'unpaid_credit_amount' => 'decimal:2',
+        'vozvrat_debet_amount' => 'decimal:2',
+        'contract_debet_amount' => 'decimal:2',
+        'end_rest_credit_amount' => 'decimal:2',
+        'begin_rest_debet_amount' => 'decimal:2',
+        'begin_rest_credit_amount' => 'decimal:2',
+    ];
+
+    public function student()
+    {
+        return $this->belongsTo(Student::class, 'student_hemis_id', 'hemis_id');
+    }
 }

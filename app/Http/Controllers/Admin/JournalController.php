@@ -113,8 +113,7 @@ class JournalController extends Controller
                 ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
                 ->where('g.department_active', true)
-                ->where('g.active', true)
-                ->where('cs.is_active', true);
+                ->where('g.active', true);
         };
 
         // Kafedra dropdown uchun - faqat haqiqiy natija bor kafedralar
@@ -1263,24 +1262,53 @@ class JournalController extends Controller
             ], 429);
         }
 
-        $userName = auth()->user()?->name ?? auth()->guard('teacher')->user()?->name ?? 'Noma\'lum';
+        $userName = auth()->user()?->name ?? auth()->guard('teacher')->user()?->name ?? '';
+        $fish = $userName ? \App\Services\ScheduleImportService::fishName($userName) : 'Noma\'lum';
+
+        $existing = \App\Models\Schedule::where('group_id', $data['group_id'])
+            ->where('subject_id', $data['subject_id'])
+            ->first();
+        $groupName = $existing?->group_name ?? "Guruh#{$data['group_id']}";
+        $subjectName = $existing?->subject_name ?? "Fan#{$data['subject_id']}";
+        $tgPrefix = "Jurnal | {$fish} | {$groupName} · {$subjectName}";
+
+        $telegram = app(TelegramService::class);
+        $chatId = config('services.telegram.chat_id');
 
         try {
+            $startTime = microtime(true);
             $service = app(ScheduleImportService::class);
             $result = $service->importForGroupSubject((int) $data['group_id'], (int) $data['subject_id']);
 
             Cache::put($cacheKey, now()->addMinutes(5)->timestamp, 300);
+
+            $elapsed = microtime(true) - $startTime;
+            $min = (int) ($elapsed / 60);
+            $sec = (int) ($elapsed % 60);
+
+            // Agar import muvaffaqiyatli bo'lsa, yangi nomlarni olish
+            if (!($result['failed'] ?? false) && $result['count'] > 0) {
+                $fresh = \App\Models\Schedule::where('group_id', $data['group_id'])
+                    ->where('subject_id', $data['subject_id'])
+                    ->first();
+                $groupName = $fresh?->group_name ?? $groupName;
+                $subjectName = $fresh?->subject_name ?? $subjectName;
+                $tgPrefix = "Jurnal | {$fish} | {$groupName} · {$subjectName}";
+            }
 
             ActivityLogService::log('import', 'schedule',
                 "Jurnal orqali jadval sinxronizatsiyasi: {$userName} (guruh: {$data['group_id']}, fan: {$data['subject_id']}) — {$result['count']} ta yozuv"
             );
 
             if ($result['failed'] ?? false) {
+                $this->appendJournalLog($telegram, $chatId, "❌ {$tgPrefix} | API xato");
                 return response()->json([
                     'success' => false,
                     'message' => "HEMIS API xatolik berdi. Mavjud jadvallar saqlab qolindi. Keyinroq urinib ko'ring.",
                 ], 502);
             }
+
+            $this->appendJournalLog($telegram, $chatId, "✅ {$tgPrefix} | {$result['count']} yozuv | {$min}m {$sec}s");
 
             // Talabalar ro'yxatini sinxronlash (davomat va baholardan OLDIN)
             $hemisService = app(HemisService::class);
@@ -1334,6 +1362,31 @@ class JournalController extends Controller
                 'success' => false,
                 'message' => 'Sinxronizatsiyada xatolik: ' . $e->getMessage(),
             ], 500);
+        }
+    }
+
+    private function appendJournalLog(TelegramService $telegram, string $chatId, string $line): void
+    {
+        $cacheKey = 'telegram_journal_log';
+        $log = Cache::get($cacheKey, ['msg_id' => null, 'lines' => []]);
+
+        $lines = $log['lines'];
+        $lines[] = $line;
+        if (count($lines) > 20) {
+            $lines = array_slice($lines, -20);
+        }
+
+        $text = implode("\n", $lines);
+
+        if ($log['msg_id'] && $telegram->editMessage($chatId, $log['msg_id'], $text)) {
+            Cache::put($cacheKey, ['msg_id' => $log['msg_id'], 'lines' => $lines], 3600 * 8);
+            return;
+        }
+
+        // Xabar yo'q yoki edit muvaffaqiyatsiz — yangi xabar
+        $newId = $telegram->sendAndGetId($chatId, $line);
+        if ($newId) {
+            Cache::put($cacheKey, ['msg_id' => $newId, 'lines' => [$line]], 3600 * 8);
         }
     }
 
@@ -2855,8 +2908,7 @@ class JournalController extends Controller
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->where('g.department_active', true)
-            ->where('g.active', true)
-            ->where('cs.is_active', true);
+            ->where('g.active', true);
 
         // O'qituvchi uchun faqat o'zi o'tadigan fanlar
         // O'qituvchi uchun faqat o'zi o'tadigan fanlar/guruhlar
@@ -4220,15 +4272,18 @@ class JournalController extends Controller
             ], 404);
         }
 
-        // Check if auth user exists in users table (teacher guard may use different auth table)
-        $submittedByUserId = DB::table('users')->where('id', auth()->id())->exists() ? auth()->id() : null;
+        // Determine submitted_by ID and guard type
+        $submittedByUserId = null;
+        $submittedByGuard = 'web';
 
-        if (!$submittedByUserId) {
-            // Teacher guard orqali kirgan bo'lsa, teachers jadvalidan login bo'yicha users jadvalidan qidirish
-            $teacher = auth()->guard('teacher')->user();
-            if ($teacher) {
-                $submittedByUserId = DB::table('users')->where('email', $teacher->login)->value('id');
-            }
+        if (auth()->guard('teacher')->check()) {
+            // Teacher guard orqali kirgan bo'lsa, teacher ID ni saqlash
+            $submittedByUserId = auth()->guard('teacher')->id();
+            $submittedByGuard = 'teacher';
+        } elseif (auth()->guard('web')->check()) {
+            // Web guard orqali kirgan bo'lsa, user ID ni saqlash
+            $submittedByUserId = auth()->guard('web')->id();
+            $submittedByGuard = 'web';
         }
 
         // --- JN/MT hisoblash (jurnal logikasi bilan bir xil) ---
@@ -4423,6 +4478,7 @@ class JournalController extends Controller
                 'semester_code' => $semesterCode,
                 'group_hemis_id' => $groupHemisId,
                 'submitted_by' => $submittedByUserId,
+                'submitted_by_guard' => $submittedByGuard,
                 'submitted_at' => now(),
                 'exam_date' => $examDate,
             ]);

@@ -271,6 +271,30 @@ class AbsenceExcuseController extends Controller
     }
 
 
+    public function bulkDelete(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'integer|exists:absence_excuses,id',
+        ]);
+
+        $excuses = AbsenceExcuse::whereIn('id', $request->ids)->get();
+        $deleted = 0;
+
+        foreach ($excuses as $excuse) {
+            if ($excuse->file_path && Storage::disk('public')->exists($excuse->file_path)) {
+                Storage::disk('public')->delete($excuse->file_path);
+            }
+            if ($excuse->approved_pdf_path && Storage::disk('public')->exists($excuse->approved_pdf_path)) {
+                Storage::disk('public')->delete($excuse->approved_pdf_path);
+            }
+            $excuse->delete();
+            $deleted++;
+        }
+
+        return back()->with('success', "{$deleted} ta ariza o'chirildi.");
+    }
+
     public function destroy($id)
     {
         $excuse = AbsenceExcuse::findOrFail($id);

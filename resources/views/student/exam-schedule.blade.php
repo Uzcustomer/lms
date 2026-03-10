@@ -95,7 +95,7 @@
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
                                                 @if($schedule->test_time)
                                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                        {{ substr($schedule->test_time, 0, 5) }}
+                                                        {{ \Carbon\Carbon::parse($schedule->test_time)->format('H:i') }}
                                                     </span>
                                                 @else
                                                     <span class="text-gray-400">—</span>
@@ -207,8 +207,8 @@
                                         </div>
                                         @if($schedule->test_time)
                                         <div>
-                                            <span class="text-gray-500">Vaqt:</span>
-                                            <span class="font-medium ml-1 text-blue-700">{{ substr($schedule->test_time, 0, 5) }}</span>
+                                            <span class="text-gray-500">Test vaqti:</span>
+                                            <span class="font-medium ml-1 text-blue-700">{{ \Carbon\Carbon::parse($schedule->test_time)->format('H:i') }}</span>
                                         </div>
                                         @endif
                                     </div>

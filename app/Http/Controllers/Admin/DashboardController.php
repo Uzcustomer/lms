@@ -110,12 +110,13 @@ class DashboardController extends Controller
             'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
         ]);
 
-        $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Jadvallar sinxronizatsiyasi boshlandi ({$data['start_date']} — {$data['end_date']})");
+        $userName = Auth::user()?->name ?? Auth::user()?->full_name ?? '';
 
         ActivityLogService::log('import', 'schedule', "Jadvallar sinxronizatsiyasi boshlandi: {$data['start_date']} — {$data['end_date']}");
         ImportSchedulesPartiallyJob::dispatch(
             $data['start_date'],
-            $data['end_date']
+            $data['end_date'],
+            $userName
         );
 //            ->onQueue('imports');
 

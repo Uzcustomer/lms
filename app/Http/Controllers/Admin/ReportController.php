@@ -2725,6 +2725,12 @@ class ReportController extends Controller
                 ->get();
 
             // 3-QADAM: Academic records olish
+            // semester_hemis_id → semester code mapping (academic_records.semester_id = HEMIS ID, curriculum_subjects.semester_code = code)
+            $semesterIdToCode = DB::table('semesters')
+                ->whereIn('curriculum_hemis_id', $curriculumIds)
+                ->pluck('code', 'semester_hemis_id')
+                ->toArray();
+
             $arRecordsLookup = [];
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $arRecords = DB::table('academic_records')
@@ -2733,7 +2739,9 @@ class ReportController extends Controller
                     ->get();
 
                 foreach ($arRecords as $ar) {
-                    $arRecordsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
+                    // semester_id (HEMIS ID) ni semester code ga aylantirish
+                    $semCode = $semesterIdToCode[$ar->semester_id] ?? $ar->semester_id;
+                    $arRecordsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $semCode] = true;
                 }
                 unset($arRecords);
             }
@@ -3019,11 +3027,17 @@ class ReportController extends Controller
 
             $groupName = $request->get('group_name', '');
 
+            // semester_code → semester_hemis_id mapping (academic_records da HEMIS ID ishlatiladi)
+            $semesterHemisId = DB::table('semesters')
+                ->where('curriculum_hemis_id', $student->curriculum_id)
+                ->where('code', $semesterCode)
+                ->value('semester_hemis_id');
+
             $grades = DB::table('curriculum_subjects as cs')
-                ->leftJoin('academic_records as ar', function ($join) use ($studentId, $semesterCode) {
+                ->leftJoin('academic_records as ar', function ($join) use ($studentId, $semesterHemisId) {
                     $join->on('ar.subject_id', '=', 'cs.subject_id')
                         ->where('ar.student_id', '=', $studentId)
-                        ->where('ar.semester_id', '=', $semesterCode);
+                        ->where('ar.semester_id', '=', $semesterHemisId);
                 })
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
                 ->where('cs.semester_code', $semesterCode)
@@ -3114,6 +3128,12 @@ class ReportController extends Controller
             $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
 
             // Academic records lookup (ro'yxatdagi hisoblash bilan bir xil)
+            // semester_hemis_id → semester code mapping
+            $semesterIdToCode = DB::table('semesters')
+                ->where('curriculum_hemis_id', $student->curriculum_id)
+                ->pluck('code', 'semester_hemis_id')
+                ->toArray();
+
             $arRecords = DB::table('academic_records')
                 ->where('student_id', $studentId)
                 ->select('subject_id', 'semester_id', 'total_point', 'grade', 'retraining_status')
@@ -3121,7 +3141,9 @@ class ReportController extends Controller
 
             $arLookup = [];
             foreach ($arRecords as $ar) {
-                $arLookup[$ar->subject_id . '|' . $ar->semester_id] = $ar;
+                // semester_id (HEMIS ID) ni semester code ga aylantirish
+                $semCode = $semesterIdToCode[$ar->semester_id] ?? $ar->semester_id;
+                $arLookup[$ar->subject_id . '|' . $semCode] = $ar;
             }
 
             foreach ($currSubjects as $sub) {

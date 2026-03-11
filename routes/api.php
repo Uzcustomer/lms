@@ -80,6 +80,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/profile/groups', [TutorApiController::class, 'groups']);
             Route::get('/groups/{groupId}/students', [TutorApiController::class, 'groupStudents']);
             Route::get('/students/{studentId}', [TutorApiController::class, 'studentProfile']);
+            Route::get('/students/{studentId}/academic-records', [TutorApiController::class, 'studentAcademicRecords']);
         });
     });
 });

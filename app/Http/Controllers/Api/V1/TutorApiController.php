@@ -93,6 +93,65 @@ class TutorApiController extends Controller
     }
 
     /**
+     * Talabaning akademik yozuvlari (tyutor uchun)
+     * GET /api/v1/tutor/students/{studentId}/academic-records
+     */
+    public function studentAcademicRecords(Request $request, int $studentId): JsonResponse
+    {
+        $tutor = $request->user();
+
+        $student = Student::find($studentId);
+        if (!$student) {
+            return response()->json(['message' => 'Talaba topilmadi.'], 404);
+        }
+
+        // Tyutor faqat o'z guruhidagi talabalarni ko'rishi mumkin
+        $hasAccess = $tutor->groups()
+            ->where('group_hemis_id', $student->group_id)
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json(['message' => 'Ushbu talabaga ruxsatingiz yo\'q.'], 403);
+        }
+
+        $records = AcademicRecord::where('student_id', $student->hemis_id)
+            ->orderBy('semester_name')
+            ->orderBy('subject_name')
+            ->get()
+            ->map(fn($r) => [
+                'id'                   => $r->id,
+                'semester_name'        => $r->semester_name,
+                'subject_name'         => $r->subject_name,
+                'employee_name'        => $r->employee_name,
+                'credit'               => $r->credit,
+                'total_acload'         => $r->total_acload,
+                'total_point'          => $r->total_point,
+                'grade'                => $r->grade,
+                'finish_credit_status' => $r->finish_credit_status,
+                'retraining_status'    => $r->retraining_status,
+            ]);
+
+        return response()->json([
+            'data' => [
+                'student' => [
+                    'id'                => $student->id,
+                    'hemis_id'          => $student->hemis_id,
+                    'full_name'         => $student->full_name,
+                    'student_id_number' => $student->student_id_number,
+                    'group_name'        => $student->group_name,
+                    'specialty_name'    => $student->specialty_name,
+                    'semester_name'     => $student->semester_name,
+                    'avg_gpa'           => $student->avg_gpa,
+                    'avg_grade'         => $student->avg_grade,
+                    'total_credit'      => $student->total_credit,
+                ],
+                'academic_records'       => $records->values(),
+                'academic_records_count' => $records->count(),
+            ],
+        ]);
+    }
+
+    /**
      * Talaba profili (tyutor uchun)
      * GET /api/v1/tutor/students/{studentId}
      */

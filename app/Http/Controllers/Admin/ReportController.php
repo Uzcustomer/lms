@@ -2738,8 +2738,23 @@ class ReportController extends Controller
                 unset($arRecords);
             }
 
+            // 3b-QADAM: Talabaga biriktirilgan fanlar (student_subjects) lookup
+            // Mavjud bo'lsa — faqat biriktirilgan fanlarni debt sanaladi
+            $studentSubjectsLookup = [];  // student_hemis_id|subject_id|semester_id => true
+            $studentsWithSubjects = [];   // student_subjects da bor bo'lgan talabalar to'plami
+            foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
+                $ssRows = DB::table('student_subjects')
+                    ->whereIn('student_hemis_id', $chunk)
+                    ->select('student_hemis_id', 'subject_id', 'semester_id')
+                    ->get();
+                foreach ($ssRows as $ss) {
+                    $studentSubjectsLookup[$ss->student_hemis_id . '|' . $ss->subject_id . '|' . $ss->semester_id] = true;
+                    $studentsWithSubjects[$ss->student_hemis_id] = true;
+                }
+                unset($ssRows);
+            }
+
             // 4-QADAM: Har bir talaba uchun qarzdorlikni hisoblash
-            // curriculum_subjects da bor, lekin academic_records da yo'q = qarzdorlik
             $finalResults = [];
 
             foreach ($students as $st) {
@@ -2749,10 +2764,18 @@ class ReportController extends Controller
                 $subjects = $currSubjects->where('curricula_hemis_id', $st->curriculum_id);
                 $subjects = $this->filterSubjectsByGroupSuffix($subjects, $st->group_name ?? '');
 
+                $useStudentSubjects = isset($studentsWithSubjects[$st->hemis_id]);
+
                 $debts = [];
                 foreach ($subjects as $sub) {
                     // Joriy semestrni o'tkazib yuborish
                     if ($studentSemCode && (string) $sub->semester_code === $studentSemCode) continue;
+
+                    // Agar student_subjects bor bo'lsa — faqat biriktirilgan fanlarni ko'rsatamiz
+                    if ($useStudentSubjects) {
+                        $ssKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
+                        if (!isset($studentSubjectsLookup[$ssKey])) continue;
+                    }
 
                     $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
 
@@ -3102,6 +3125,24 @@ class ReportController extends Controller
             // Ro'yxatdagi debt_count bilan bir xil natija berishi uchun lookup-based yondashuv
             $gradeDebts = [];
 
+            // Talabaga biriktirilgan fanlarni aniqlash (student_subjects da bo'lsa)
+            $assignedSubjectKeys = null;
+            $hasStudentSubjects = DB::table('student_subjects')
+                ->where('student_hemis_id', $studentId)
+                ->exists();
+
+            if ($hasStudentSubjects) {
+                // Faqat biriktirilgan fanlar: (subject_id, semester_id) juftligi
+                $assigned = DB::table('student_subjects')
+                    ->where('student_hemis_id', $studentId)
+                    ->select('subject_id', 'semester_id')
+                    ->get();
+                $assignedSubjectKeys = [];
+                foreach ($assigned as $a) {
+                    $assignedSubjectKeys[$a->subject_id . '|' . $a->semester_id] = true;
+                }
+            }
+
             $currSubjects = DB::table('curriculum_subjects')
                 ->where('curricula_hemis_id', $student->curriculum_id)
                 ->where('is_active', true)
@@ -3113,7 +3154,7 @@ class ReportController extends Controller
 
             $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
 
-            // Academic records lookup (ro'yxatdagi hisoblash bilan bir xil)
+            // Academic records lookup
             $arRecords = DB::table('academic_records')
                 ->where('student_id', $studentId)
                 ->select('subject_id', 'semester_id', 'total_point', 'grade', 'retraining_status')
@@ -3127,18 +3168,28 @@ class ReportController extends Controller
             foreach ($currSubjects as $sub) {
                 if ($studentSemesterCode && (string) $sub->semester_code === $studentSemesterCode) continue;
 
+                // Agar student_subjects bor bo'lsa — faqat biriktirilgan fanlarni ko'rsatamiz
+                if ($assignedSubjectKeys !== null) {
+                    $key = $sub->subject_id . '|' . $sub->semester_code;
+                    if (!isset($assignedSubjectKeys[$key])) continue;
+                }
+
                 $ar = $arLookup[$sub->subject_id . '|' . $sub->semester_code] ?? null;
 
-                // Agar academic_records da ma'lumot bo'lmasa — qarzdorlik
-                if (!$ar) {
+                $isDebt = !$ar
+                    || $ar->grade === null
+                    || in_array($ar->grade, ['2', '0'])
+                    || $ar->retraining_status;
+
+                if ($isDebt) {
                     $gradeDebts[] = [
                         'semester_code' => $sub->semester_code,
                         'semester_name' => $sub->semester_name,
                         'subject_name' => $sub->subject_name,
                         'credit' => $sub->credit,
                         'total_acload' => $sub->total_acload,
-                        'total_point' => null,
-                        'grade' => null,
+                        'total_point' => $ar->total_point ?? null,
+                        'grade' => $ar->grade ?? null,
                         'status' => 'Qarzdor',
                     ];
                 }

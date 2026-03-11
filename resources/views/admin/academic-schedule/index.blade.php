@@ -154,10 +154,6 @@
                                 @php $rowIndex = 0; @endphp
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
-                                        @php
-                                            $oskiSaved = !empty($item['oski_date']) || $item['oski_na'];
-                                            $testSaved = !empty($item['test_date']) || $item['test_na'];
-                                        @endphp
                                         <tr class="data-row">
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
@@ -180,74 +176,36 @@
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
-                                                    @if($oskiSaved)
-                                                        {{-- Saqlangan: o'zgartirib bo'lmaydi --}}
-                                                        <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
-                                                            <input type="text" class="date-input-masked date-input-locked" placeholder="kk.oo.yyyy"
-                                                                   value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('d.m.Y') : '' }}"
-                                                                   maxlength="10" autocomplete="off" readonly
-                                                                   title="Saqlangan sana o'zgartirib bo'lmaydi" />
-                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="{{ $item['oski_date'] }}" />
-                                                        </div>
-                                                        <label class="na-toggle na-toggle-locked" title="Saqlangan holat o'zgartirib bo'lmaydi">
-                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
-                                                                   {{ $item['oski_na'] ? 'checked' : '' }} disabled>
-                                                            <span class="na-label">N/A</span>
-                                                        </label>
-                                                        @if($item['oski_na'])
-                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][oski_na]" value="1">
-                                                        @endif
-                                                        <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
-                                                    @else
-                                                        <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}">
-                                                            <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
-                                                                   value=""
-                                                                   data-hidden="oski_h_{{ $rowIndex }}"
-                                                                   maxlength="10" autocomplete="off" />
-                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="" />
-                                                        </div>
-                                                        <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
-                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
-                                                                   onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
-                                                            <span class="na-label">N/A</span>
-                                                        </label>
-                                                    @endif
+                                                    <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
+                                                        <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
+                                                               value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('d.m.Y') : '' }}"
+                                                               data-hidden="oski_h_{{ $rowIndex }}"
+                                                               maxlength="10" autocomplete="off" />
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="{{ $item['oski_date'] }}" />
+                                                    </div>
+                                                    <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
+                                                        <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
+                                                               {{ $item['oski_na'] ? 'checked' : '' }}
+                                                               onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
+                                                        <span class="na-label">N/A</span>
+                                                    </label>
                                                 </div>
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
-                                                    @if($testSaved)
-                                                        {{-- Saqlangan: o'zgartirib bo'lmaydi --}}
-                                                        <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
-                                                            <input type="text" class="date-input-masked date-input-locked" placeholder="kk.oo.yyyy"
-                                                                   value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('d.m.Y') : '' }}"
-                                                                   maxlength="10" autocomplete="off" readonly
-                                                                   title="Saqlangan sana o'zgartirib bo'lmaydi" />
-                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="{{ $item['test_date'] }}" />
-                                                        </div>
-                                                        <label class="na-toggle na-toggle-locked" title="Saqlangan holat o'zgartirib bo'lmaydi">
-                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
-                                                                   {{ $item['test_na'] ? 'checked' : '' }} disabled>
-                                                            <span class="na-label">N/A</span>
-                                                        </label>
-                                                        @if($item['test_na'])
-                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][test_na]" value="1">
-                                                        @endif
-                                                        <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
-                                                    @else
-                                                        <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}">
-                                                            <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
-                                                                   value=""
-                                                                   data-hidden="test_h_{{ $rowIndex }}"
-                                                                   maxlength="10" autocomplete="off" />
-                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="" />
-                                                        </div>
-                                                        <label class="na-toggle" title="Bu fan uchun Test yo'q">
-                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
-                                                                   onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
-                                                            <span class="na-label">N/A</span>
-                                                        </label>
-                                                    @endif
+                                                    <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
+                                                        <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
+                                                               value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('d.m.Y') : '' }}"
+                                                               data-hidden="test_h_{{ $rowIndex }}"
+                                                               maxlength="10" autocomplete="off" />
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="{{ $item['test_date'] }}" />
+                                                    </div>
+                                                    <label class="na-toggle" title="Bu fan uchun Test yo'q">
+                                                        <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
+                                                               {{ $item['test_na'] ? 'checked' : '' }}
+                                                               onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
+                                                        <span class="na-label">N/A</span>
+                                                    </label>
                                                 </div>
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
@@ -388,15 +346,6 @@
                 if (day > maxDay) err = month + '-oyda ' + maxDay + ' kun bor';
             }
             if (year < 2020 || year > 2040) err = 'Yil 2020-2040 orasida bo\'lishi kerak';
-            if (!err) {
-                // Cheklov 2: imtihon sanasi kamida ertadan bo'lishi kerak
-                var today = new Date();
-                today.setHours(0, 0, 0, 0);
-                var inputDate = new Date(year, month - 1, day);
-                if (inputDate <= today) {
-                    err = 'Imtihon sanasi kamida ertadan bo\'lishi kerak (bugun qo\'yib bo\'lmaydi)';
-                }
-            }
             if (err) {
                 inp.classList.add('date-error');
                 inp.title = err;
@@ -622,13 +571,12 @@
             // Form submit da validatsiya
             $('form').on('submit', function(e) {
                 var hasError = false;
-                // Faqat tahrirlash mumkin bo'lgan inputlarni tekshirish (readonly emas)
-                document.querySelectorAll('.date-input-masked:not([readonly])').forEach(function(inp) {
+                document.querySelectorAll('.date-input-masked').forEach(function(inp) {
                     if (!validateDateInput(inp)) hasError = true;
                 });
                 if (hasError) {
                     e.preventDefault();
-                    alert('Sana xatosi: format noto\'g\'ri yoki imtihon sanasi bugun/o\'tgan kun qo\'yilgan.\nImtihon sanasi kamida ertadan bo\'lishi kerak (kk.oo.yyyy).');
+                    alert('Sana formatida xatolik bor. Iltimos, tekshiring (kk.oo.yyyy).');
                 }
             });
         });
@@ -694,9 +642,5 @@
         .na-toggle input[type="checkbox"] { width: 14px; height: 14px; accent-color: #ef4444; cursor: pointer; margin: 0; }
         .na-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.03em; }
         .na-toggle input:checked + .na-label { color: #ef4444; }
-        .date-input-locked { background: #f1f5f9 !important; color: #64748b !important; cursor: not-allowed !important; border-color: #e2e8f0 !important; }
-        .date-input-locked:hover { border-color: #e2e8f0 !important; box-shadow: none !important; }
-        .na-toggle-locked { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
-        .lock-icon { font-size: 12px; flex-shrink: 0; opacity: 0.6; }
     </style>
 </x-app-layout>

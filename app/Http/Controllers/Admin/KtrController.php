@@ -217,7 +217,7 @@ class KtrController extends Controller
         $userNames = [];
         if (!empty($teacherIds)) {
             $teacherNames = Teacher::whereIn('id', array_unique($teacherIds))
-                ->pluck(DB::raw("COALESCE(full_name, name)"), 'id')
+                ->pluck('full_name', 'id')
                 ->toArray();
         }
         if (!empty($userIds)) {

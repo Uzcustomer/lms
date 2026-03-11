@@ -424,7 +424,28 @@ class AcademicScheduleController extends Controller
         // Fanlar
         $subjectQuery = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds)
             ->where('is_active', true);
-        if ($semesterCodes->isNotEmpty()) {
+        if ($currentSemesterToggle === '1' && !$selectedSemester) {
+            // Har bir curriculum uchun alohida joriy semestr kodi bo'yicha aniq filtr
+            // (global semesterCodes o'rniga, chunki har xil curriculum-lar har xil joriy semestrda bo'lishi mumkin)
+            $semQuery = Semester::where('current', true)->whereIn('curriculum_hemis_id', $curriculumIds);
+            if ($selectedLevelCode) {
+                $semQuery->where('level_code', $selectedLevelCode);
+            }
+            $curriculumSemCodes = $semQuery->get()
+                ->groupBy('curriculum_hemis_id')
+                ->map(fn($sems) => $sems->pluck('code')->unique()->values()->toArray());
+
+            if ($curriculumSemCodes->isNotEmpty()) {
+                $subjectQuery->where(function ($q) use ($curriculumSemCodes) {
+                    foreach ($curriculumSemCodes as $curriculumId => $codes) {
+                        $q->orWhere(function ($sub) use ($curriculumId, $codes) {
+                            $sub->where('curricula_hemis_id', $curriculumId)
+                                ->whereIn('semester_code', $codes);
+                        });
+                    }
+                });
+            }
+        } elseif ($semesterCodes->isNotEmpty()) {
             $subjectQuery->whereIn('semester_code', $semesterCodes);
         }
         if ($selectedSubject) {

@@ -8,6 +8,7 @@ use App\Models\Attendance;
 use App\Models\Curriculum;
 use App\Services\HemisService;
 use App\Models\CurriculumSubject;
+use App\Models\StudentSubject;
 use App\Models\CurriculumWeek;
 use App\Models\Independent;
 use App\Models\IndependentGradeHistory;
@@ -42,16 +43,53 @@ class StudentApiController extends Controller
 
         $currentSemesterId = $student->semester_id;
 
-        $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
-            ->where(function ($q) {
-                $q->whereNull('grade')
-                  ->orWhereIn('grade', ['2', '0'])
-                  ->orWhere('retraining_status', true);
-            })
-            ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
-            ->orderBy('semester_name')
-            ->orderBy('subject_name')
-            ->get();
+        // Talabaga biriktirilgan fanlar asosida qarzdorlikni hisoblash.
+        // student_subjects jadvali bo'sh bo'lsa (import qilinmagan), academic_records ga fallback qilinadi.
+        $hasStudentSubjects = StudentSubject::where('student_hemis_id', $student->hemis_id)->exists();
+
+        if ($hasStudentSubjects) {
+            // Biriktirilgan fanlar asosida: academic_records da yozuv yo'q YOKI baho past
+            $debtRecords = StudentSubject::from('student_subjects as ss')
+                ->select([
+                    'ss.subject_name',
+                    'ss.semester_id',
+                    \DB::raw('COALESCE(ar.semester_name, sem.name) as semester_name'),
+                    'ar.credit',
+                    'ar.total_acload',
+                    'ar.total_point',
+                    'ar.grade',
+                    'ar.retraining_status',
+                ])
+                ->leftJoin('academic_records as ar', function ($join) use ($student) {
+                    $join->on('ar.student_id', '=', \DB::raw((int) $student->hemis_id))
+                         ->on('ar.subject_id', '=', 'ss.subject_id')
+                         ->on('ar.semester_id', '=', 'ss.semester_id');
+                })
+                ->leftJoin('semesters as sem', 'sem.code', '=', 'ss.semester_id')
+                ->where('ss.student_hemis_id', $student->hemis_id)
+                ->when($currentSemesterId, fn($q) => $q->where('ss.semester_id', '!=', $currentSemesterId))
+                ->where(function ($q) {
+                    $q->whereNull('ar.id')                        // academic record umuman yo'q
+                      ->orWhereNull('ar.grade')                   // baho kiritilmagan
+                      ->orWhereIn('ar.grade', ['2', '0'])         // past baho
+                      ->orWhere('ar.retraining_status', true);    // qayta o'qish
+                })
+                ->orderBy('ss.semester_id')
+                ->orderBy('ss.subject_name')
+                ->get();
+        } else {
+            // Fallback: faqat academic_records dan (eski mantiq)
+            $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
+                ->where(function ($q) {
+                    $q->whereNull('grade')
+                      ->orWhereIn('grade', ['2', '0'])
+                      ->orWhere('retraining_status', true);
+                })
+                ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
+                ->orderBy('semester_name')
+                ->orderBy('subject_name')
+                ->get();
+        }
 
         $debtSubjectsCount = $debtRecords->count();
 

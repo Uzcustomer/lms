@@ -10,6 +10,7 @@ use App\Models\Group;
 use App\Models\MarkingSystemScore;
 use App\Models\Semester;
 use App\Models\Student;
+use App\Models\StudentSubject;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -830,5 +831,95 @@ class HemisService
             ]);
             return ['success' => false, 'error' => 'HEMIS bilan bog\'lanishda xatolik: ' . $e->getMessage()];
         }
+    }
+
+    /**
+     * Barcha talabalar uchun student-subject-list ni import qilish.
+     * Talabaga biriktirilgan fanlar — o'quv reja + elektiv tanlov hisobini to'g'ri olish uchun.
+     */
+    public function importStudentSubjects(?callable $onProgress = null): int
+    {
+        $totalImported = 0;
+        $students = Student::select('hemis_id')->whereNotNull('hemis_id')->pluck('hemis_id');
+        $total = $students->count();
+
+        foreach ($students as $index => $studentHemisId) {
+            $page = 1;
+            $hasMore = true;
+
+            while ($hasMore) {
+                try {
+                    $response = Http::withoutVerifying()
+                        ->timeout(30)
+                        ->withToken($this->token)
+                        ->get($this->baseUrl . 'v1/data/student-subject-list', [
+                            '_student' => $studentHemisId,
+                            'page'     => $page,
+                            'limit'    => 100,
+                        ]);
+
+                    if (!$response->successful()) {
+                        Log::warning('student-subject-list request failed', [
+                            'student_hemis_id' => $studentHemisId,
+                            'status' => $response->status(),
+                        ]);
+                        break;
+                    }
+
+                    $data = $response->json();
+
+                    if (!($data['success'] ?? false)) {
+                        break;
+                    }
+
+                    $items = $data['data']['items'] ?? [];
+                    $pagination = $data['data']['pagination'] ?? [];
+
+                    $records = [];
+                    foreach ($items as $item) {
+                        $cs = $item['curriculumSubject'] ?? [];
+                        $subjectId = $cs['subject']['id'] ?? null;
+                        $csId = $cs['id'] ?? null;
+                        if (!$csId) continue;
+
+                        $records[] = [
+                            'student_hemis_id'            => $studentHemisId,
+                            'curriculum_subject_hemis_id' => $csId,
+                            'subject_id'                  => $subjectId,
+                            'semester_id'                 => $item['_semester'] ?? null,
+                            'subject_name'                => $cs['subject']['name'] ?? null,
+                            'created_at'                  => now(),
+                            'updated_at'                  => now(),
+                        ];
+                    }
+
+                    if (!empty($records)) {
+                        StudentSubject::upsert(
+                            $records,
+                            ['student_hemis_id', 'curriculum_subject_hemis_id'],
+                            ['subject_id', 'semester_id', 'subject_name', 'updated_at']
+                        );
+                        $totalImported += count($records);
+                    }
+
+                    $currentPage = $pagination['page'] ?? 1;
+                    $pageCount = $pagination['pageCount'] ?? 1;
+                    $hasMore = $currentPage < $pageCount;
+                    $page++;
+                } catch (\Exception $e) {
+                    Log::error('Exception fetching student-subject-list', [
+                        'student_hemis_id' => $studentHemisId,
+                        'message' => $e->getMessage(),
+                    ]);
+                    break;
+                }
+            }
+
+            if ($onProgress) {
+                $onProgress($index + 1, $total, $totalImported);
+            }
+        }
+
+        return $totalImported;
     }
 }

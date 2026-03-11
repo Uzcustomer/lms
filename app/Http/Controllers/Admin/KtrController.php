@@ -873,8 +873,13 @@ class KtrController extends Controller
                 $table->unsignedSmallInteger('week_count');
                 $table->json('plan_data');
                 $table->unsignedBigInteger('created_by')->nullable();
+                $table->string('created_by_guard', 10)->default('teacher');
                 $table->timestamps();
                 $table->unique('curriculum_subject_id');
+            });
+        } elseif (!Schema::hasColumn('ktr_plans', 'created_by_guard')) {
+            Schema::table('ktr_plans', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->string('created_by_guard', 10)->default('teacher')->after('created_by');
             });
         }
 

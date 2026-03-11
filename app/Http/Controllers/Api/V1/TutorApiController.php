@@ -8,8 +8,10 @@ use App\Models\Student;
 use App\Models\Attendance;
 use App\Models\StudentGrade;
 use App\Models\AcademicRecord;
+use App\Models\StudentSubject;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TutorApiController extends Controller
 {
@@ -93,6 +95,65 @@ class TutorApiController extends Controller
     }
 
     /**
+     * Talabaning akademik yozuvlari (tyutor uchun)
+     * GET /api/v1/tutor/students/{studentId}/academic-records
+     */
+    public function studentAcademicRecords(Request $request, int $studentId): JsonResponse
+    {
+        $tutor = $request->user();
+
+        $student = Student::find($studentId);
+        if (!$student) {
+            return response()->json(['message' => 'Talaba topilmadi.'], 404);
+        }
+
+        // Tyutor faqat o'z guruhidagi talabalarni ko'rishi mumkin
+        $hasAccess = $tutor->groups()
+            ->where('group_hemis_id', $student->group_id)
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json(['message' => 'Ushbu talabaga ruxsatingiz yo\'q.'], 403);
+        }
+
+        $records = AcademicRecord::where('student_id', $student->hemis_id)
+            ->orderBy('semester_name')
+            ->orderBy('subject_name')
+            ->get()
+            ->map(fn($r) => [
+                'id'                   => $r->id,
+                'semester_name'        => $r->semester_name,
+                'subject_name'         => $r->subject_name,
+                'employee_name'        => $r->employee_name,
+                'credit'               => $r->credit,
+                'total_acload'         => $r->total_acload,
+                'total_point'          => $r->total_point,
+                'grade'                => $r->grade,
+                'finish_credit_status' => $r->finish_credit_status,
+                'retraining_status'    => $r->retraining_status,
+            ]);
+
+        return response()->json([
+            'data' => [
+                'student' => [
+                    'id'                => $student->id,
+                    'hemis_id'          => $student->hemis_id,
+                    'full_name'         => $student->full_name,
+                    'student_id_number' => $student->student_id_number,
+                    'group_name'        => $student->group_name,
+                    'specialty_name'    => $student->specialty_name,
+                    'semester_name'     => $student->semester_name,
+                    'avg_gpa'           => $student->avg_gpa,
+                    'avg_grade'         => $student->avg_grade,
+                    'total_credit'      => $student->total_credit,
+                ],
+                'academic_records'       => $records->values(),
+                'academic_records_count' => $records->count(),
+            ],
+        ]);
+    }
+
+    /**
      * Talaba profili (tyutor uchun)
      * GET /api/v1/tutor/students/{studentId}
      */
@@ -132,15 +193,35 @@ class TutorApiController extends Controller
         // Davomatlar (jami soni)
         $totalAbsent = Attendance::where('student_id', $student->id)->count();
 
-        // Qarzdor fanlar
-        $debtCount = AcademicRecord::where('student_id', $student->hemis_id)
-            ->where(function ($q) {
-                $q->whereNull('grade')
-                  ->orWhereIn('grade', ['2', '0'])
-                  ->orWhere('retraining_status', true);
-            })
-            ->when($student->semester_id, fn($q) => $q->where('semester_id', '!=', $student->semester_id))
-            ->count();
+        // Qarzdor fanlar: biriktirilgan fanlar asosida hisoblash
+        $hasStudentSubjects = StudentSubject::where('student_hemis_id', $student->hemis_id)->exists();
+
+        if ($hasStudentSubjects) {
+            $debtCount = StudentSubject::from('student_subjects as ss')
+                ->leftJoin('academic_records as ar', function ($join) use ($student) {
+                    $join->on('ar.student_id', '=', DB::raw((int) $student->hemis_id))
+                         ->on('ar.subject_id', '=', 'ss.subject_id')
+                         ->on('ar.semester_id', '=', 'ss.semester_id');
+                })
+                ->where('ss.student_hemis_id', $student->hemis_id)
+                ->when($student->semester_id, fn($q) => $q->where('ss.semester_id', '!=', $student->semester_id))
+                ->where(function ($q) {
+                    $q->whereNull('ar.id')
+                      ->orWhereNull('ar.grade')
+                      ->orWhereIn('ar.grade', ['2', '0'])
+                      ->orWhere('ar.retraining_status', true);
+                })
+                ->count();
+        } else {
+            $debtCount = AcademicRecord::where('student_id', $student->hemis_id)
+                ->where(function ($q) {
+                    $q->whereNull('grade')
+                      ->orWhereIn('grade', ['2', '0'])
+                      ->orWhere('retraining_status', true);
+                })
+                ->when($student->semester_id, fn($q) => $q->where('semester_id', '!=', $student->semester_id))
+                ->count();
+        }
 
         // So'ngi baholar
         $recentGrades = StudentGrade::where('student_id', $student->id)

@@ -9,6 +9,12 @@
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="overflow: visible;">
 
+                @if(isset($error))
+                    <div style="padding: 16px 20px; background: #fef2f2; border-bottom: 1px solid #fecaca; color: #dc2626; font-size: 14px;">
+                        <strong>Server xatolik:</strong> {{ $error }}
+                    </div>
+                @endif
+
                 <!-- Filters -->
                 <form id="filter-form" method="GET" action="{{ route('admin.ktr.index') }}">
                     <div class="filter-container">

@@ -43,6 +43,33 @@ class KtrController extends Controller
     {
         $this->checkKtrAccess();
 
+        try {
+            return $this->buildIndex($request);
+        } catch (\Throwable $e) {
+            Log::error('KTR index xatolik', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all(),
+            ]);
+
+            // Minimal sahifani ko'rsatish (xatolik bilan)
+            return view('admin.ktr.index', [
+                'subjects' => new \Illuminate\Pagination\LengthAwarePaginator([], 0, 50),
+                'educationTypes' => collect(),
+                'selectedEducationType' => null,
+                'faculties' => collect(),
+                'trainingTypes' => [],
+                'sortColumn' => 'faculty_name',
+                'sortDirection' => 'asc',
+                'isFanMasuli' => false,
+                'error' => 'Xatolik yuz berdi: ' . $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function buildIndex(Request $request)
+    {
         // Faol rolga qarab tekshirish
         $user = auth()->user();
         $activeRole = session('active_role', '');
@@ -153,12 +180,15 @@ class KtrController extends Controller
         }
 
         // Faol/nofaol fanlar filtri (adminlar uchun default: faol, fan masuli: barchasi)
+        $hasIsActive = Schema::hasColumn('curriculum_subjects', 'is_active');
         $activeFilterDefault = $isFanMasuli ? 'all' : 'active';
         $activeFilter = $request->get('active_filter', $activeFilterDefault);
-        if ($activeFilter === 'active') {
-            $query->where('cs.is_active', true);
-        } elseif ($activeFilter === 'inactive') {
-            $query->where('cs.is_active', false);
+        if ($hasIsActive) {
+            if ($activeFilter === 'active') {
+                $query->where('cs.is_active', true);
+            } elseif ($activeFilter === 'inactive') {
+                $query->where('cs.is_active', false);
+            }
         }
 
         // Joriy semestr (barcha rollar uchun default ON)
@@ -297,9 +327,12 @@ class KtrController extends Controller
             })
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
-            ->where('cs.is_active', true)
             ->whereNotNull('sp.specialty_hemis_id')
             ->whereNotNull('sp.name');
+
+        if (Schema::hasColumn('curriculum_subjects', 'is_active')) {
+            $query->where('cs.is_active', true);
+        }
 
         if ($request->filled('education_type')) {
             $query->where('c.education_type_code', $request->education_type);
@@ -394,8 +427,11 @@ class KtrController extends Controller
                 $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
                     ->on('s.code', '=', 'cs.semester_code');
             })
-            ->where('cs.is_active', true)
             ->whereNotNull('cs.subject_name');
+
+        if (Schema::hasColumn('curriculum_subjects', 'is_active')) {
+            $query->where('cs.is_active', true);
+        }
 
         if ($request->filled('education_type')) {
             $query->where('c.education_type_code', $request->education_type);
@@ -469,10 +505,12 @@ class KtrController extends Controller
         }
 
         $activeFilter = $request->get('active_filter', 'active');
-        if ($activeFilter === 'active') {
-            $query->where('cs.is_active', true);
-        } elseif ($activeFilter === 'inactive') {
-            $query->where('cs.is_active', false);
+        if (Schema::hasColumn('curriculum_subjects', 'is_active')) {
+            if ($activeFilter === 'active') {
+                $query->where('cs.is_active', true);
+            } elseif ($activeFilter === 'inactive') {
+                $query->where('cs.is_active', false);
+            }
         }
 
         if ($request->get('current_semester', '1') == '1') {

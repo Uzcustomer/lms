@@ -95,12 +95,19 @@
          x-data @click="if($event.target.closest('a')) { if(window.innerWidth < 768) $store.sidebar.close() }">
         <!-- Xabarnomalar (Notifications) -->
         @php
-            $sidebarUserType = get_class($user);
-            $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
-                ->where('recipient_type', $sidebarUserType)
-                ->where('is_draft', false)
-                ->where('is_read', false)
-                ->count();
+            $sidebarUserType = $user ? get_class($user) : 'App\\Models\\User';
+            $sidebarUnreadCount = 0;
+            if ($user) {
+                try {
+                    $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
+                        ->where('recipient_type', $sidebarUserType)
+                        ->where('is_draft', false)
+                        ->where('is_read', false)
+                        ->count();
+                } catch (\Exception $e) {
+                    $sidebarUnreadCount = 0;
+                }
+            }
         @endphp
         <a href="{{ route('admin.notifications.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.notifications.*') ? 'sidebar-active' : '' }}">

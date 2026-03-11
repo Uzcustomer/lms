@@ -68,6 +68,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 COPY . .
 RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+RUN npm install && npx vite build && rm -rf node_modules
 
 RUN chown -R $USER:www-data storage && \
     chown -R $USER:www-data bootstrap/cache && \

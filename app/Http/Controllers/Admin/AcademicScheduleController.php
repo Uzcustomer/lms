@@ -572,24 +572,6 @@ class AcademicScheduleController extends Controller
         $currentSemester = Semester::where('current', true)->first();
         $educationYear = $currentSemester?->education_year;
         $userId = auth()->id();
-        $today = \Carbon\Carbon::today();
-
-        // Cheklov 2: Yangi sana kamida ertadan bo'lishi kerak
-        $tomorrow = $today->copy()->addDay();
-        foreach ($validSchedules as $schedule) {
-            if (!empty($schedule['oski_date'])) {
-                $oskiDate = \Carbon\Carbon::parse($schedule['oski_date']);
-                if ($oskiDate->lt($tomorrow)) {
-                    return redirect()->back()->with('error', 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
-                }
-            }
-            if (!empty($schedule['test_date'])) {
-                $testDate = \Carbon\Carbon::parse($schedule['test_date']);
-                if ($testDate->lt($tomorrow)) {
-                    return redirect()->back()->with('error', 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
-                }
-            }
-        }
 
         DB::beginTransaction();
         try {
@@ -612,34 +594,15 @@ class AcademicScheduleController extends Controller
                     'semester_code' => $schedule['semester_code'],
                 ]);
 
-                // Cheklov 1: Allaqachon saqlangan sanani o'zgartirish mumkin emas
-                $newOskiDate = !empty($schedule['oski_date']) ? $schedule['oski_date'] : null;
-                $newOskiNa = $oskiNa;
-                $newTestDate = !empty($schedule['test_date']) ? $schedule['test_date'] : null;
-                $newTestNa = $testNa;
-
-                if ($record->exists) {
-                    // Agar OSKI sana yoki N/A allaqachon saqlangan bo'lsa — o'zgartirma
-                    if ($record->oski_date || $record->oski_na) {
-                        $newOskiDate = $record->oski_date?->format('Y-m-d');
-                        $newOskiNa = (bool) $record->oski_na;
-                    }
-                    // Agar Test sana yoki N/A allaqachon saqlangan bo'lsa — o'zgartirma
-                    if ($record->test_date || $record->test_na) {
-                        $newTestDate = $record->test_date?->format('Y-m-d');
-                        $newTestNa = (bool) $record->test_na;
-                    }
-                }
-
                 $record->fill([
                     'department_hemis_id' => $schedule['department_hemis_id'] ?? '',
                     'specialty_hemis_id' => $schedule['specialty_hemis_id'] ?? '',
                     'curriculum_hemis_id' => $schedule['curriculum_hemis_id'] ?? '',
                     'subject_name' => $schedule['subject_name'] ?? '',
-                    'oski_date' => $newOskiDate,
-                    'oski_na' => $newOskiNa,
-                    'test_date' => $newTestDate,
-                    'test_na' => $newTestNa,
+                    'oski_date' => !empty($schedule['oski_date']) ? $schedule['oski_date'] : null,
+                    'oski_na' => $oskiNa,
+                    'test_date' => !empty($schedule['test_date']) ? $schedule['test_date'] : null,
+                    'test_na' => $testNa,
                     'education_year' => $educationYear,
                     'updated_by' => $userId,
                 ]);

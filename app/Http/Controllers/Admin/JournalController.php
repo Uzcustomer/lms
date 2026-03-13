@@ -1037,33 +1037,16 @@ class JournalController extends Controller
         // Kun "missed" (dars ochish kerak) hisoblanadi faqat kamida bitta talabada
         // na baho, na NB bo'lmasa. NB qo'yilgan talabaga baho qo'yib bo'lmaydi,
         // shuning uchun u "hisobga olingan" deb hisoblanadi.
-        // Har bir kun uchun "hisobga olingan" talabalar ro'yxatini tuzish:
-        // talaba "hisobga olingan" deb hisoblanadi agar unga:
-        //   a) haqiqiy (effective) baho qo'yilgan bo'lsa, YOKI
-        //   b) NB (absent) belgilangan bo'lsa — NB qo'yilgan talabaga baho qo'yib bo'lmaydi
-        $jbAccountedByDate = [];
-        foreach ($jbGradesRaw as $_g) {
-            $_dateStr = \Carbon\Carbon::parse($_g->lesson_date)->format('Y-m-d');
-            if ($getEffectiveGrade($_g) !== null || $_g->reason === 'absent') {
-                $jbAccountedByDate[$_dateStr][$_g->student_hemis_id] = true;
-            }
-        }
-
-        // Kun "missed emas" (dars ochish ko'rsatilmaydi) →
-        // o'sha kunda barcha talaba uchun yoki baho bor yoki NB bor.
-        // Kun "missed" (dars ochish kerak) →
-        // kamida bitta talabada na baho, na NB yo'q.
-        $jbGradeDates = [];
-        foreach ($jbLessonDates as $_d) {
-            $_ds = \Carbon\Carbon::parse($_d)->format('Y-m-d');
-            $covered = $jbAccountedByDate[$_ds] ?? [];
-            // $students — journalda ko'rsatiladigan talabalar (faollar + yozuvi borlar).
-            // $studentHemisIds — so'rov filtr uchun (chiqarilganlar ham bor), u katta bo'ladi.
-            // Shuning uchun $students->count() dan foydalanamiz.
-            if (!empty($covered) && count($covered) >= $students->count()) {
-                $jbGradeDates[] = $_ds;
-            }
-        }
+        // Kun "missed" (dars ochish kerak) — faqat o'sha kunga HECH BIR talabada
+        // na baho, na NB yo'q bo'lganda.
+        // Kamida bitta talabada baho yoki NB bo'lsa — o'qituvchi dars o'tgan,
+        // shuning uchun dars ochish ko'rsatilmaydi.
+        $jbGradeDates = collect($jbGradesRaw)
+            ->filter(fn($g) => $getEffectiveGrade($g) !== null || $g->reason === 'absent')
+            ->pluck('lesson_date')
+            ->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))
+            ->unique()
+            ->toArray();
 
         $jbAttendanceDates = collect($jbAttendanceRaw)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
 

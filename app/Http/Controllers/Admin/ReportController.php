@@ -2740,9 +2740,9 @@ class ReportController extends Controller
             }
 
             // 3b-QADAM: Talabaga biriktirilgan fanlar (student_subjects) lookup
-            // Mavjud bo'lsa — faqat biriktirilgan fanlarni debt sanaladi
-            $studentSubjectsLookup = [];  // student_hemis_id|subject_id|semester_id => true
-            $studentsWithSubjects = [];   // student_subjects da bor bo'lgan talabalar to'plami
+            // Faqat shu semestrda student_subjects yozuvi bor bo'lsa filtr ishlatiladi
+            $studentSubjectsLookup = [];      // student_hemis_id|subject_id|semester_id => true
+            $studentSemestersWithSS = [];     // student_hemis_id|semester_id => true (qaysi semestrlarda yozuv bor)
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $ssRows = DB::table('student_subjects')
                     ->whereIn('student_hemis_id', $chunk)
@@ -2750,7 +2750,7 @@ class ReportController extends Controller
                     ->get();
                 foreach ($ssRows as $ss) {
                     $studentSubjectsLookup[$ss->student_hemis_id . '|' . $ss->subject_id . '|' . $ss->semester_id] = true;
-                    $studentsWithSubjects[$ss->student_hemis_id] = true;
+                    $studentSemestersWithSS[$ss->student_hemis_id . '|' . $ss->semester_id] = true;
                 }
                 unset($ssRows);
             }
@@ -2765,16 +2765,16 @@ class ReportController extends Controller
                 $subjects = $currSubjects->where('curricula_hemis_id', $st->curriculum_id);
                 $subjects = $this->filterSubjectsByGroupSuffix($subjects, $st->group_name ?? '');
 
-                $useStudentSubjects = isset($studentsWithSubjects[$st->hemis_id]);
-
                 $debts = [];
                 foreach ($subjects as $sub) {
                     // Toggle ON: faqat joriy semestr fanlarini hisoblash
                     // Toggle OFF: barcha semestrlar (o'tgan + joriy)
                     if ($showCurrentSemester && $studentSemCode && (string) $sub->semester_code !== $studentSemCode) continue;
 
-                    // Agar student_subjects bor bo'lsa — faqat biriktirilgan fanlarni ko'rsatamiz
-                    if ($useStudentSubjects) {
+                    // student_subjects filtrini FAQAT shu semestrda yozuv mavjud bo'lsa qo'llash
+                    // Eski semestrlar uchun student_subjects bo'lmasa — curriculum_subjects dan olish
+                    $semHasSS = isset($studentSemestersWithSS[$st->hemis_id . '|' . $sub->semester_code]);
+                    if ($semHasSS) {
                         $ssKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
                         if (!isset($studentSubjectsLookup[$ssKey])) continue;
                     }
@@ -3136,21 +3136,16 @@ class ReportController extends Controller
             $gradeDebts = [];
 
             // Talabaga biriktirilgan fanlarni aniqlash (student_subjects da bo'lsa)
-            $assignedSubjectKeys = null;
-            $hasStudentSubjects = DB::table('student_subjects')
+            // Filtr faqat shu semestrda yozuv mavjud bo'lsa qo'llanadi
+            $assignedSubjectKeys = [];
+            $semestersHavingSS = [];  // semester_id => true
+            $ssRows = DB::table('student_subjects')
                 ->where('student_hemis_id', $studentId)
-                ->exists();
-
-            if ($hasStudentSubjects) {
-                // Faqat biriktirilgan fanlar: (subject_id, semester_id) juftligi
-                $assigned = DB::table('student_subjects')
-                    ->where('student_hemis_id', $studentId)
-                    ->select('subject_id', 'semester_id')
-                    ->get();
-                $assignedSubjectKeys = [];
-                foreach ($assigned as $a) {
-                    $assignedSubjectKeys[$a->subject_id . '|' . $a->semester_id] = true;
-                }
+                ->select('subject_id', 'semester_id')
+                ->get();
+            foreach ($ssRows as $a) {
+                $assignedSubjectKeys[$a->subject_id . '|' . $a->semester_id] = true;
+                $semestersHavingSS[$a->semester_id] = true;
             }
 
             $currSubjects = DB::table('curriculum_subjects')
@@ -3180,8 +3175,8 @@ class ReportController extends Controller
                 // Toggle OFF: barcha semestrlar (o'tgan + joriy)
                 if ($showCurrentSemester && $studentSemesterCode && (string) $sub->semester_code !== $studentSemesterCode) continue;
 
-                // Agar student_subjects bor bo'lsa — faqat biriktirilgan fanlarni ko'rsatamiz
-                if ($assignedSubjectKeys !== null) {
+                // student_subjects filtrini FAQAT shu semestrda yozuv mavjud bo'lsa qo'llash
+                if (isset($semestersHavingSS[$sub->semester_code])) {
                     $key = $sub->subject_id . '|' . $sub->semester_code;
                     if (!isset($assignedSubjectKeys[$key])) continue;
                 }

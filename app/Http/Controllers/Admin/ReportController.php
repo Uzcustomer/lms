@@ -2739,10 +2739,22 @@ class ReportController extends Controller
                 unset($arRecords);
             }
 
-            // 3b-QADAM: student_subjects endi qarzdorlik hisoblashda ISHLATILMAYDI
-            // Sabab: majburiy fanlar curriculum_subjects da bor, lekin student_subjects da yo'q bo'lishi mumkin
-            // (HEMIS ham curriculum_subjects asosida qarzdorlikni hisoblaydi)
-            // student_subjects faqat tanlov fanlar uchun ma'lumot, debt uchun curriculum yetarli
+            // 3b-QADAM: student_subjects lookup — "Biriktirilgan" ustuni uchun
+            $studentSubjectsLookup = [];   // student_hemis_id|subject_id|semester_id => true
+            $studentSemestersWithSS = [];  // student_hemis_id|semester_id => true
+            foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
+                $ssRows = DB::table('student_subjects')
+                    ->whereIn('student_hemis_id', $chunk)
+                    ->select('student_hemis_id', 'subject_id', 'semester_id')
+                    ->get();
+                foreach ($ssRows as $ss) {
+                    $studentSubjectsLookup[$ss->student_hemis_id . '|' . $ss->subject_id . '|' . $ss->semester_id] = true;
+                    $studentSemestersWithSS[$ss->student_hemis_id . '|' . $ss->semester_id] = true;
+                }
+                unset($ssRows);
+            }
+
+            $filterDebtStatus = $request->get('debt_status', ''); // 'teng' | 'teng_emas' | ''
 
             // 4-QADAM: Har bir talaba uchun qarzdorlikni hisoblash
             $finalResults = [];
@@ -2754,52 +2766,75 @@ class ReportController extends Controller
                 $subjects = $currSubjects->where('curricula_hemis_id', $st->curriculum_id);
                 $subjects = $this->filterSubjectsByGroupSuffix($subjects, $st->group_name ?? '');
 
-                $debts = [];
+                // Ikki xil hisoblash:
+                // debt_curr  — o'quv reja (curriculum_subjects) asosida, majburiy fanlar ham kiritiladi
+                // debt_ss    — fanga biriktirilgan (student_subjects) asosida
+                $debtsCurr = [];
+                $debtsAssigned = [];
+
                 foreach ($subjects as $sub) {
-                    // Toggle ON: faqat joriy semestr fanlarini hisoblash
-                    // Toggle OFF: barcha semestrlar (o'tgan + joriy)
                     if ($showCurrentSemester && $studentSemCode && (string) $sub->semester_code !== $studentSemCode) continue;
 
                     $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
                     $ar = $arRecordsLookup[$arKey] ?? null;
 
-                    // studentAllRecords bilan bir xil mantiq: yozuv yo'q, baho null, '2'/'0', yoki qayta o'qish
                     $isDebt = !$ar
                         || $ar->grade === null
                         || in_array($ar->grade, ['2', '0'])
                         || $ar->retraining_status;
 
-                    if ($isDebt) {
-                        $debts[] = [
-                            'subject_id' => $sub->subject_id,
-                            'subject_name' => $sub->subject_name,
-                            'semester_code' => $sub->semester_code,
-                            'semester_name' => $sub->semester_name,
-                            'credit' => $sub->credit,
-                            'total_acload' => $sub->total_acload,
-                        ];
+                    if (!$isDebt) continue;
+
+                    $debtItem = [
+                        'subject_id'    => $sub->subject_id,
+                        'subject_name'  => $sub->subject_name,
+                        'semester_code' => $sub->semester_code,
+                        'semester_name' => $sub->semester_name,
+                        'credit'        => $sub->credit,
+                        'total_acload'  => $sub->total_acload,
+                    ];
+
+                    // Majburiy (curriculum) hisobiga
+                    $debtsCurr[] = $debtItem;
+
+                    // Biriktirilgan hisobiga: shu semestrda student_subjects bor bo'lsa faqat
+                    // biriktirilgan fanlar, yo'q bo'lsa — curriculum dan olish
+                    $semKey = $st->hemis_id . '|' . $sub->semester_code;
+                    $semHasSS = isset($studentSemestersWithSS[$semKey]);
+                    if (!$semHasSS || isset($studentSubjectsLookup[$st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code])) {
+                        $debtsAssigned[] = $debtItem;
                     }
                 }
 
-                $debtCount = count($debts);
-                if ($debtCount < $minDebtCount) continue;
+                $debtCountCurr     = count($debtsCurr);
+                $debtCountAssigned = count($debtsAssigned);
+                $debtStatus        = ($debtCountCurr === $debtCountAssigned) ? 'teng' : 'teng_emas';
+
+                // min_debt_count filtrini curriculum asosida qo'llash
+                if ($debtCountCurr < $minDebtCount) continue;
+
+                // Status filtr
+                if ($filterDebtStatus && $debtStatus !== $filterDebtStatus) continue;
 
                 // Semestr bo'yicha tartiblash
-                usort($debts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+                usort($debtsCurr, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
 
                 $finalResults[] = [
-                    'hemis_id' => $st->hemis_id,
-                    'full_name' => $st->full_name ?? 'Noma\'lum',
+                    'hemis_id'          => $st->hemis_id,
+                    'full_name'         => $st->full_name ?? 'Noma\'lum',
                     'student_id_number' => $st->student_id_number ?? '-',
-                    'department_name' => $st->department_name ?? '-',
-                    'specialty_name' => $st->specialty_name ?? '-',
-                    'level_name' => $st->level_name ?? '-',
-                    'semester_name' => $st->semester_name ?? '-',
-                    'group_name' => $st->group_name ?? '-',
-                    'group_id' => $st->group_id ?? '',
-                    'debt_count' => $debtCount,
-                    'lesson_days' => 0,
-                    'debts' => $debts,
+                    'department_name'   => $st->department_name ?? '-',
+                    'specialty_name'    => $st->specialty_name ?? '-',
+                    'level_name'        => $st->level_name ?? '-',
+                    'semester_name'     => $st->semester_name ?? '-',
+                    'group_name'        => $st->group_name ?? '-',
+                    'group_id'          => $st->group_id ?? '',
+                    'debt_count'        => $debtCountCurr,      // asosiy sort uchun
+                    'debt_count_curr'   => $debtCountCurr,      // majburiy (curriculum)
+                    'debt_count_ss'     => $debtCountAssigned,  // biriktirilgan (student_subjects)
+                    'debt_status'       => $debtStatus,
+                    'lesson_days'       => 0,
+                    'debts'             => $debtsCurr,
                 ];
             }
 

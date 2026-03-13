@@ -2742,6 +2742,7 @@ class ReportController extends Controller
             // 3b-QADAM: student_subjects lookup — "Biriktirilgan" ustuni uchun
             $studentSubjectsLookup = [];   // student_hemis_id|subject_id|semester_id => true
             $studentSemestersWithSS = [];  // student_hemis_id|semester_id => true
+            $studentsWithAnySS = [];       // student_hemis_id => true (umuman SS yozuvi bor)
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $ssRows = DB::table('student_subjects')
                     ->whereIn('student_hemis_id', $chunk)
@@ -2750,6 +2751,7 @@ class ReportController extends Controller
                 foreach ($ssRows as $ss) {
                     $studentSubjectsLookup[$ss->student_hemis_id . '|' . $ss->subject_id . '|' . $ss->semester_id] = true;
                     $studentSemestersWithSS[$ss->student_hemis_id . '|' . $ss->semester_id] = true;
+                    $studentsWithAnySS[$ss->student_hemis_id] = true;
                 }
                 unset($ssRows);
             }
@@ -2806,15 +2808,21 @@ class ReportController extends Controller
                     }
                 }
 
-                $debtCountCurr     = count($debtsCurr);
-                $debtCountAssigned = count($debtsAssigned);
-                $debtStatus        = ($debtCountCurr === $debtCountAssigned) ? 'teng' : 'teng_emas';
+                $debtCountCurr = count($debtsCurr);
+
+                // Agar talabaning student_subjects yozuvi umuman yo'q bo'lsa —
+                // "biriktirilgan" ma'lumot noma'lum (null), status ham noma'lum
+                $hasSS = isset($studentsWithAnySS[$st->hemis_id]);
+                $debtCountAssigned = $hasSS ? count($debtsAssigned) : null;
+                $debtStatus = !$hasSS ? 'noma\'lum'
+                    : ($debtCountCurr === $debtCountAssigned ? 'teng' : 'teng_emas');
 
                 // min_debt_count filtrini curriculum asosida qo'llash
                 if ($debtCountCurr < $minDebtCount) continue;
 
-                // Status filtr
-                if ($filterDebtStatus && $debtStatus !== $filterDebtStatus) continue;
+                // Status filtr (noma'lum har doim ko'rsatiladi, filter faqat teng/teng_emas uchun)
+                if ($filterDebtStatus && $filterDebtStatus !== 'noma\'lum' && $debtStatus !== $filterDebtStatus) continue;
+                if ($filterDebtStatus === 'noma\'lum' && $debtStatus !== 'noma\'lum') continue;
 
                 // Semestr bo'yicha tartiblash
                 usort($debtsCurr, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
@@ -2829,9 +2837,9 @@ class ReportController extends Controller
                     'semester_name'     => $st->semester_name ?? '-',
                     'group_name'        => $st->group_name ?? '-',
                     'group_id'          => $st->group_id ?? '',
-                    'debt_count'        => $debtCountCurr,      // asosiy sort uchun
-                    'debt_count_curr'   => $debtCountCurr,      // majburiy (curriculum)
-                    'debt_count_ss'     => $debtCountAssigned,  // biriktirilgan (student_subjects)
+                    'debt_count'        => $debtCountCurr,
+                    'debt_count_curr'   => $debtCountCurr,
+                    'debt_count_ss'     => $debtCountAssigned, // null = ma'lumot yo'q
                     'debt_status'       => $debtStatus,
                     'lesson_days'       => 0,
                     'debts'             => $debtsCurr,
@@ -3176,6 +3184,7 @@ class ReportController extends Controller
                 ->get();
             $assignedKeys = [];
             $semestersHavingSS = [];
+            $hasAnySS = $ssRows->isNotEmpty();
             foreach ($ssRows as $s) {
                 $assignedKeys[$s->subject_id . '|' . $s->semester_id] = true;
                 $semestersHavingSS[$s->semester_id] = true;
@@ -3183,7 +3192,7 @@ class ReportController extends Controller
 
             // Ikkita ro'yxat: majburiy (curriculum) va biriktirilgan (student_subjects)
             $debtsAll      = []; // majburiy
-            $debtsAssigned = []; // biriktirilgan
+            $debtsAssigned = []; // biriktirilgan (null = ma'lumot yo'q)
 
             foreach ($currSubjects as $sub) {
                 if ($showCurrentSemester && $studentSemesterCode && (string) $sub->semester_code !== $studentSemesterCode) continue;
@@ -3210,18 +3219,20 @@ class ReportController extends Controller
 
                 $debtsAll[] = $item;
 
-                // Biriktirilgan: shu semestrda SS bor bo'lsa faqat biriktirilganlar,
-                // yo'q bo'lsa curriculum dan olish
-                $semHasSS = isset($semestersHavingSS[$sub->semester_code]);
-                if (!$semHasSS || isset($assignedKeys[$sub->subject_id . '|' . $sub->semester_code])) {
-                    $debtsAssigned[] = $item;
+                // Biriktirilgan: faqat student_subjects mavjud bo'lsa hisoblash
+                if ($hasAnySS) {
+                    $semHasSS = isset($semestersHavingSS[$sub->semester_code]);
+                    if (!$semHasSS || isset($assignedKeys[$sub->subject_id . '|' . $sub->semester_code])) {
+                        $debtsAssigned[] = $item;
+                    }
                 }
             }
 
             return response()->json([
-                'semesters'       => $semesters,
-                'grade_debts'     => $debtsAll,      // majburiy (curriculum)
-                'grade_debts_ss'  => $debtsAssigned, // biriktirilgan (student_subjects)
+                'semesters'      => $semesters,
+                'grade_debts'    => $debtsAll,                        // majburiy (curriculum)
+                'grade_debts_ss' => $hasAnySS ? $debtsAssigned : null, // null = SS ma'lumoti yo'q
+                'has_ss_data'    => $hasAnySS,
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage(), 'semesters' => [], 'grade_debts' => []], 500);
